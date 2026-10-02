@@ -1,12 +1,16 @@
+mod create;
+
 use axum::Extension;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use entity_access::domain::models::TeamRole;
+use entity_registry::NonUserOwners;
 use http_body_util::BodyExt;
 use macro_authorization::{
-    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
-    MacroAuthorizationState,
+    BotActingUserClaims, BotAuthentication, BotScope, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
+    MacroUserAuthentication,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
@@ -14,8 +18,9 @@ use model::response::StringIDResponse;
 use model::user::UserContext;
 use model_owner::Owner;
 use rootcause::Report;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tower::util::ServiceExt;
+use uuid::Uuid;
 
 use crate::domain::models::{
     ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
@@ -33,14 +38,26 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
 
-struct MockService;
+#[derive(Clone, Default)]
+struct MockService {
+    created_owners: Arc<Mutex<Vec<Owner>>>,
+}
+
+impl MockService {
+    fn created_owners(&self) -> Vec<Owner> {
+        self.created_owners
+            .lock()
+            .expect("created owners lock poisoned")
+            .clone()
+    }
+}
 
 impl ChatService for MockService {
-    async fn create(
-        &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, owner: Owner, _args: CreateChatArgs) -> Result<String> {
+        self.created_owners
+            .lock()
+            .expect("created owners lock poisoned")
+            .push(owner);
         Ok("test-chat-id".to_string())
     }
 
@@ -161,11 +178,7 @@ impl ChatService for MockService {
 struct ErrorService;
 
 impl ChatService for ErrorService {
-    async fn create(
-        &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -269,11 +282,7 @@ impl ChatService for ErrorService {
 struct NotFoundService;
 
 impl ChatService for NotFoundService {
-    async fn create(
-        &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -485,8 +494,9 @@ impl EntityAccessService for MockAccessService {
     }
 }
 
-/// Fake authorization service accepting the `valid` bearer token as the test
-/// user.
+const BOT_TOKEN: &str = "bot-valid";
+const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
+
 #[derive(Clone)]
 struct FakeAuthorizationService;
 
@@ -513,6 +523,36 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         _claims: InternalIdentityClaims,
     ) -> std::result::Result<Option<UserContext>, Report<MacroAuthorizationError>> {
         Err(Report::new(MacroAuthorizationError::InvalidCredentials))
+    }
+
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: BotScope,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> std::result::Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if bot_token != BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+
+        Ok(BotAuthentication {
+            bot_id: BotId::TEST_A,
+            token_id: Uuid::nil(),
+            bot_scope,
+            team_id: Some(TEAM_ID),
+            acting_user: acting_user
+                .and_then(|claims| claims.user_id)
+                .map(|user_id| MacroUserAuthentication {
+                    macro_user_id: MacroUserIdStr::try_from(user_id.clone())
+                        .expect("test user id should be valid"),
+                    user_context: UserContext {
+                        user_id,
+                        fusion_user_id: "1234".to_string(),
+                        permissions: None,
+                        organization_id: None,
+                    },
+                }),
+        })
     }
 }
 
@@ -602,10 +642,11 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 
 fn mock_id_router() -> Router {
     let state = ChatRouterState::new(
-        MockService,
+        MockService::default(),
         MockAccessService,
         authorization_state(),
         permissions_service(),
+        NonUserOwners::Disabled,
     );
     chat_view_router(state.clone())
         .merge(chat_id_router(state))
@@ -619,6 +660,7 @@ fn error_id_router() -> Router {
         MockAccessService,
         authorization_state(),
         permissions_service(),
+        NonUserOwners::Disabled,
     );
     chat_view_router(state.clone())
         .merge(chat_id_router(state))
@@ -632,40 +674,12 @@ fn not_found_id_router() -> Router {
         MockAccessService,
         authorization_state(),
         permissions_service(),
+        NonUserOwners::Disabled,
     );
     chat_view_router(state.clone())
         .merge(chat_id_router(state))
         .layer(chat_basic_extension())
         .layer(axum::middleware::map_request(attach_bearer))
-}
-
-fn mock_create_router() -> Router {
-    chat_create_router(ChatRouterState::new(
-        MockService,
-        MockAccessService,
-        authorization_state(),
-        permissions_service(),
-    ))
-    .layer(axum::middleware::map_request(attach_bearer))
-}
-
-// -- create_chat tests --
-
-#[tokio::test]
-async fn create_chat_returns_id() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/")
-        .header("content-type", "application/json")
-        .body(Body::from(r#"{"name": "My Chat"}"#))
-        .unwrap();
-
-    let res = mock_create_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let response: StringIDResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(response.id, "test-chat-id");
 }
 
 // -- get_chat tests --

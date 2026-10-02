@@ -46,6 +46,7 @@ const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',
+  [Model.gemini38Flash]: 'Fast answers over data and documents',
 };
 
 export function ModelSelector(props: ModelSelectorProps) {
@@ -71,9 +72,9 @@ export function ModelSelector(props: ModelSelectorProps) {
             variant="ghost"
             size={props.compact ? 'icon-sm' : 'sm'}
             class={cn(
-              'rounded-lg text-sm text-ink-subtle',
+              'text-sm text-ink-subtle',
               !props.compact && 'gap-1.5',
-              'not-touch:h-[33.75px] not-touch:rounded-full not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:[&_svg]:size-[15px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
+              'not-touch:h-[33.75px] not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:[&_svg]:size-[15px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
               props.compact && 'not-touch:p-[3.75px]'
             )}
             label={props.compact ? MODEL_PRETTYNAME[model()] : undefined}

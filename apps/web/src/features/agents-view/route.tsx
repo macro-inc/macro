@@ -1,4 +1,5 @@
 import { changesSearch } from '@app/features/agent-changes/changes-search';
+import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -59,7 +60,7 @@ export const AgentsRouteView = withAuth(() => {
   };
   usePageViewTracking('agents');
   const flag = useFeatureFlag(enableChatV3Agents);
-  const enabled = () => flag().enabled && !isTouchDevice();
+  const enabled = () => flag().enabled;
   createRenderEffect(() => {
     if (flag().loading) return;
     panel.handle.updateMeta?.({
@@ -100,7 +101,23 @@ export const AgentsRouteView = withAuth(() => {
           </Show>
         }
       >
-        <AgentsView initialRoute={route()} />
+        <Show
+          when={isTouchDevice() && route()}
+          fallback={<AgentsView initialRoute={route()} />}
+        >
+          {(current) => (
+            <RedirectSplit
+              mergeHistory
+              to={{
+                type:
+                  current().conversation.type === 'agent_session'
+                    ? 'agent'
+                    : 'chat',
+                id: current().conversation.id,
+              }}
+            />
+          )}
+        </Show>
       </Show>
     </Show>
   );
@@ -113,7 +130,7 @@ export const agentsRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace],
+  search: [changesSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -124,7 +141,7 @@ export const codersRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace],
+  search: [changesSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 

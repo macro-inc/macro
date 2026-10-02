@@ -1075,6 +1075,43 @@ describe('optimisticInsertNotification', () => {
     ).not.toHaveBeenCalledWith('channel-1');
   });
 
+  it.each([undefined, 'thread-1'])(
+    'restores the correct inbox row for a reaction (threadId: %s)',
+    (threadId) => {
+      mockHasSoupEntity.mockImplementation((id) => id === 'channel-1');
+      seedQueryCache([createMockNotificationPage([])]);
+      const reaction = createMockNotification({
+        entity_type: 'channel',
+        entity_id: 'channel-1',
+        notification_event_type: 'channel_message_reaction',
+        notification_metadata: {
+          tag: 'channel_message_reaction',
+          content: {
+            messageId: 'message-1',
+            threadId,
+            messageContent: 'A message',
+            emoji: '👍',
+            channelType: 'public',
+          },
+        },
+      });
+
+      optimisticInsertNotification(reaction);
+
+      const rootId = threadId ?? 'message-1';
+      expect(
+        vi.mocked(bumpSoupEntityNotifiedAt)
+      ).toHaveBeenCalledExactlyOnceWith(rootId, reaction.created_at);
+      expect(mockRefetchSoupEntity).toHaveBeenCalledExactlyOnceWith(
+        rootId,
+        'channelThread'
+      );
+      expect(
+        vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+      ).toHaveBeenCalledExactlyOnceWith(rootId, 'unseen');
+    }
+  );
+
   it('should bump the updatedAt of an already-cached email thread', () => {
     mockHasSoupEntity.mockReturnValue(true);
     seedQueryCache([createMockNotificationPage([])]);
@@ -1165,17 +1202,20 @@ describe('optimisticInsertNotification', () => {
     ).toHaveBeenCalledWith('session-1', 'unseen');
   });
 
-  it('should skip soup update for unsupported entity types', () => {
-    seedQueryCache([createMockNotificationPage([])]);
+  it.each(['user', 'database'] as const)(
+    'should skip soup update for %s entities',
+    (entityType) => {
+      seedQueryCache([createMockNotificationPage([])]);
 
-    const userNotification = createMockNotification({
-      entity_type: 'user',
-      created_at: '2024-01-01T00:00:00.000Z',
-    });
+      const userNotification = createMockNotification({
+        entity_type: entityType,
+        created_at: '2024-01-01T00:00:00.000Z',
+      });
 
-    optimisticInsertNotification(userNotification);
+      optimisticInsertNotification(userNotification);
 
-    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
-    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
-  });
+      expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+      expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
+    }
+  );
 });

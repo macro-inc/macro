@@ -3,11 +3,14 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
+import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { notificationKeys } from '@queries/notification/keys';
 import { propertiesKeys } from '@queries/properties/keys';
+import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
@@ -41,6 +44,8 @@ export async function clearLocalAuthSession() {
   clearDocumentQueryCache(queryClient);
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
+  queryClient.removeQueries({ queryKey: notificationKeys._def });
+  resetGraphqlSoupDoneSession();
   queryClient.removeQueries({ queryKey: propertiesKeys._def });
   // The billing position (usage, credits, overage settings) belongs to the
   // account that fetched it; never let it render for the next sign-in.
@@ -57,6 +62,7 @@ export function useLogout() {
   const navigate = useNavigate();
 
   return createCallback(async () => {
+    clearPostLoginRedirect();
     // Must run before the session is torn down — the unregister call is
     // authenticated. Time-boxed so a hung request can't block logout.
     await raceTimeout(unregisterPushRegistrationsForLogout(), 3000);

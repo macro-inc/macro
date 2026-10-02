@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
 initiative_documents = { path = "../initiative_documents" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
@@ -15,6 +16,7 @@ agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 anthropic = { path = "../anthropic", features = ["toolset"] }
 attachment = { path = "../attachment" }
+static_file = { path = "../static_file", features = ["attachment"] }
 non_empty = { path = "../non_empty" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
@@ -37,7 +39,9 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
-documents = { path = "../documents", features = ["ai_tools", "purge"] }
+databases = { path = "../databases", default-features = false, features = ["ai_tools", "gateway", "postgres"] }
+databases_sql = { path = "../databases_sql", features = ["ai_tools"] }
+documents = { path = "../documents", features = ["ai_tools", "attachment", "purge"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
@@ -47,6 +51,7 @@ entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils
 foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures.workspace = true
+image_generation = { path = "../image_generation" }
 import = { path = "../import" }
 item_filters = { path = "../item_filters" }
 lazy_static.workspace = true
@@ -92,6 +97,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = ["em
 teams = { path = "../teams", default-features = false, features = ["ai_tools", "outbound"] }
 sqlx.workspace = true
 strum.workspace = true
+static_file_service_client = { path = "../static_file_service_client" }
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
 thiserror.workspace = true

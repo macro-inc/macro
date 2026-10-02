@@ -9,7 +9,6 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { projectRouteId } from '@app/features/projects/core/route';
 import { useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {
   ContextMenuContent,
@@ -34,7 +33,6 @@ import CaretLeft from '@phosphor/caret-left.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import SplitIcon from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -115,12 +113,19 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
             'email',
             'project',
             'call',
-            'automation'
+            'automation',
+            'database'
           ),
         },
         (entity) => ({ type: entity.type, id: entity.id })
       )
       .exhaustive()
+  );
+}
+
+function hasAgentsBackFallback(content: SplitContent) {
+  return (
+    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
   );
 }
 
@@ -131,52 +136,28 @@ function SplitBackButton() {
     <Button
       square
       size="sm"
-      class="p-1 rounded-lg touch:active:bg-transparent"
+      class="p-1 touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
-      disabled={!context.handle.canGoBack()}
+      disabled={
+        !context.handle.canGoBack() &&
+        !hasAgentsBackFallback(context.handle.content())
+      }
       onClick={() => {
         if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
+        if (
+          !context.handle.canGoBack() &&
+          hasAgentsBackFallback(context.handle.content())
+        ) {
+          context.handle.replace({
+            next: { type: 'component', id: 'agents' },
+            mergeHistory: true,
+          });
+        } else context.handle.goBack();
       }}
     >
       <CaretLeft />
     </Button>
-  );
-}
-
-function SidebarExpandButton() {
-  const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  const sidebar = useSidebarCollapse();
-
-  const isLeftmostSplit = () =>
-    layout?.manager.splits()[0]?.id === panel?.handle.id;
-  const visible = () => sidebar.isCollapsed() && isLeftmostSplit();
-
-  return (
-    <div
-      class={cn(
-        'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible()
-          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
-          : 'w-0 opacity-0 mr-0'
-      )}
-      aria-hidden={!visible()}
-    >
-      <Button
-        class="rounded-lg"
-        square
-        size="sm"
-        label="Expand Sidebar"
-        hotkey={TOKENS.global.toggleSidebar}
-        disabled={!visible()}
-        tabindex={visible() ? undefined : -1}
-        onClick={() => sidebar.expand()}
-      >
-        <SidebarIcon class="size-4" />
-      </Button>
-    </div>
   );
 }
 
@@ -187,7 +168,7 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-lg hidden"
+        class="p-1 hidden"
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
@@ -225,7 +206,6 @@ function SplitCloseButton() {
       <Button
         square
         size="icon-sm"
-        class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
@@ -629,7 +609,6 @@ export function SplitHeader(props: {
             when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
-                <SidebarExpandButton />
                 <SplitCloseButton />
                 <SplitDriveReturnButton />
               </div>
@@ -641,7 +620,8 @@ export function SplitHeader(props: {
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                (!panel.handle.canGoBack() ||
+                ((!panel.handle.canGoBack() &&
+                  !hasAgentsBackFallback(panel.handle.content())) ||
                   isListViewID(panel.handle.content().id)) &&
                   'hidden'
               )}

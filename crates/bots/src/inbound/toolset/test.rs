@@ -1,15 +1,19 @@
 use super::{
-    BotOwnerSummary, BotSummary, BotToolContext, bot_tool_error,
+    AgentChannelScopeSummary, AgentMcpScopeSummary, AgentMcpServerSummary, BotOwnerSummary,
+    BotSummary, BotToolContext, bot_tool_error,
+    configure_agent::{AgentHarnessOption, ConfigureAgent},
     create_bot::CreateBot,
     get_bot_webhooks::GetBotWebhooks,
     issue_bot_credential::IssueBotCredential,
+    list_agents::ListAgents,
     manage_bot_channel_access::{BotChannelAccessAction, ManageBotChannelAccess},
 };
 use crate::domain::models::{
-    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotToken,
-    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
-    UpdateAgentRequest,
+    Agent, AgentChannelScope, AgentChannelSelection, AgentHarnessSelection, AgentMcpServer,
+    AgentMcpServers, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType,
+    BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    HarnessId, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
 };
 use crate::domain::{
     models::{Bot, BotKind, BotOwner},
@@ -72,6 +76,21 @@ fn sample_token(bot_id: BotId, label: Option<String>) -> BotToken {
     }
 }
 
+fn sample_agent(handle: &str) -> Agent {
+    Agent {
+        bot: sample_bot(handle),
+        instructions: "Fix the root cause and add tests.".to_string(),
+        harness: "cursor".to_string(),
+        harness_id: None,
+        default_model: "cursor-small".to_string(),
+        channel_scope: AgentChannelScope::All,
+        channel_ids: Vec::new(),
+        mcp: AgentMcpServers::OwnerConnections,
+        auto_accept_permissions: None,
+        is_coding: true,
+    }
+}
+
 #[derive(Clone, Default)]
 struct ToolTestBotService {
     channels: Vec<BotChannel>,
@@ -80,7 +99,9 @@ struct ToolTestBotService {
     scoped: Arc<Mutex<Option<(Uuid, CreateChannelScopedBotRequest)>>>,
     added: Arc<Mutex<Option<BotId>>>,
     deleted: Arc<Mutex<Option<BotId>>>,
+    patched: Arc<Mutex<Option<(BotId, PatchAgentRequest)>>>,
     add_error: Option<String>,
+    patch_error: Option<String>,
 }
 
 impl BotService for ToolTestBotService {
@@ -101,8 +122,33 @@ impl BotService for ToolTestBotService {
         unimplemented!()
     }
 
+    async fn patch_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        if let Some(message) = &self.patch_error {
+            return Err(BotError::BadRequest(message.clone()));
+        }
+        let mut agent = sample_agent("bug-fixer");
+        agent.bot.id = bot_id;
+        let update = req.clone().apply_to(&agent);
+        *self.patched.lock().expect("patch lock") = Some((bot_id, req));
+        agent.instructions = update.instructions;
+        agent.harness = update.harness;
+        agent.harness_id = update.harness_id;
+        agent.default_model = update.default_model;
+        agent.channel_scope = update.channel_scope;
+        agent.channel_ids = update.channel_ids;
+        agent.mcp = update.mcp;
+        agent.auto_accept_permissions = update.auto_accept_permissions;
+        agent.is_coding = update.is_coding;
+        Ok(agent)
+    }
+
     async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
-        unimplemented!()
+        Ok(vec![sample_agent("bug-fixer")])
     }
 
     async fn create_bot(
@@ -142,6 +188,10 @@ impl BotService for ToolTestBotService {
         let mut bot = sample_bot("build-bot");
         bot.id = bot_id;
         Ok(bot)
+    }
+
+    async fn get_owner_profiles(&self, _ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        Ok(Vec::new())
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
@@ -675,5 +725,235 @@ async fn webhook_response_uses_preferred_bot_authentication_headers() {
     assert_eq!(
         response.webhooks[0].webhook_url,
         format!("https://storage.example.com/channels/{channel_id}/webhook")
+    );
+}
+
+#[tokio::test]
+async fn list_agents_returns_instructions_and_settings() {
+    let context = BotToolContext::new(
+        ToolTestBotService::default(),
+        NoOpEntityAccessService,
+        "https://storage.example.com".to_string(),
+    );
+
+    let response = ListAgents {}
+        .call(ServiceContext(context), RequestContext::new(user_id()))
+        .await
+        .expect("listing needs no entity access");
+
+    assert_eq!(response.summary, "Found 1 manageable agent.");
+    let agent = &response.agents[0];
+    assert_eq!(agent.bot.handle, "bug-fixer");
+    assert_eq!(agent.instructions, "Fix the root cause and add tests.");
+    assert_eq!(agent.harness, "cursor");
+    assert_eq!(agent.default_model, "cursor-small");
+    assert_eq!(agent.channel_scope, AgentChannelScopeSummary::All);
+    assert_eq!(agent.mcp_scope, AgentMcpScopeSummary::OwnerConnections);
+    assert!(agent.mcp_servers.is_empty());
+    assert_eq!(agent.auto_accept_permissions, None);
+    assert!(agent.is_coding);
+}
+
+#[tokio::test]
+async fn configure_agent_patches_only_named_fields() {
+    let service = ToolTestBotService::default();
+    let patched = service.patched.clone();
+    let context = BotToolContext::new(
+        service,
+        NoOpEntityAccessService,
+        "https://storage.example.com".to_string(),
+    );
+    let bot_id = Uuid::new_v4();
+
+    let response = ConfigureAgent {
+        bot_id,
+        instructions: Some("Diagnose first, then make the smallest tested fix.".to_string()),
+        default_model: Some("claude-sonnet-4-5".to_string()),
+        ..ConfigureAgent::default()
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("instructions and model are a valid patch");
+
+    let (patched_id, patch) = patched
+        .lock()
+        .expect("patch lock")
+        .clone()
+        .expect("service should receive the patch");
+    assert_eq!(patched_id, BotId::new_from_uuid(bot_id));
+    assert_eq!(
+        patch,
+        PatchAgentRequest {
+            instructions: Some("Diagnose first, then make the smallest tested fix.".to_string()),
+            default_model: Some("claude-sonnet-4-5".to_string()),
+            ..PatchAgentRequest::default()
+        }
+    );
+    assert_eq!(
+        response.agent.instructions,
+        "Diagnose first, then make the smallest tested fix."
+    );
+    assert_eq!(response.agent.default_model, "claude-sonnet-4-5");
+    assert_eq!(response.agent.harness, "cursor");
+    assert!(
+        response
+            .summary
+            .starts_with("Updated @bug-fixer: instructions, model.")
+    );
+}
+
+#[tokio::test]
+async fn configure_agent_translates_scoped_selections() {
+    let service = ToolTestBotService::default();
+    let patched = service.patched.clone();
+    let context = BotToolContext::new(
+        service,
+        NoOpEntityAccessService,
+        "https://storage.example.com".to_string(),
+    );
+    let channel_id = Uuid::new_v4();
+    let harness_id = Uuid::new_v4();
+
+    let response = ConfigureAgent {
+        bot_id: Uuid::new_v4(),
+        harness: Some(AgentHarnessOption::Macrod),
+        harness_id: Some(harness_id),
+        channel_ids: Some(vec![channel_id]),
+        mcp_servers: Some(vec![AgentMcpServerSummary {
+            app_slug: "linear".to_string(),
+            server_name: "Linear".to_string(),
+        }]),
+        auto_accept_permissions: Some(true),
+        is_coding: Some(false),
+        ..ConfigureAgent::default()
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("ids alone select the `selected` scopes");
+
+    let (_, patch) = patched
+        .lock()
+        .expect("patch lock")
+        .clone()
+        .expect("service should receive the patch");
+    assert_eq!(
+        patch.harness,
+        Some(AgentHarnessSelection {
+            harness: "macrod".to_string(),
+            harness_id: Some(HarnessId::new_from_uuid(harness_id)),
+        })
+    );
+    assert_eq!(
+        patch.channels,
+        Some(AgentChannelSelection {
+            channel_scope: AgentChannelScope::Selected,
+            channel_ids: vec![channel_id],
+        })
+    );
+    assert_eq!(
+        patch.mcp,
+        Some(AgentMcpServers::Selected {
+            servers: vec![AgentMcpServer {
+                app_slug: "linear".to_string(),
+                server_name: "Linear".to_string(),
+            }],
+        })
+    );
+    assert_eq!(patch.auto_accept_permissions, Some(true));
+    assert_eq!(patch.is_coding, Some(false));
+    assert_eq!(
+        response.agent.channel_scope,
+        AgentChannelScopeSummary::Selected
+    );
+    assert_eq!(response.agent.channel_ids, vec![channel_id]);
+    assert_eq!(response.agent.mcp_scope, AgentMcpScopeSummary::Selected);
+    assert_eq!(response.agent.harness_id, Some(harness_id));
+}
+
+#[tokio::test]
+async fn configure_agent_rejects_incoherent_arguments() {
+    let cases = [
+        (
+            ConfigureAgent {
+                bot_id: Uuid::new_v4(),
+                ..ConfigureAgent::default()
+            },
+            "nothing to change",
+        ),
+        (
+            ConfigureAgent {
+                bot_id: Uuid::new_v4(),
+                harness_id: Some(Uuid::new_v4()),
+                ..ConfigureAgent::default()
+            },
+            "pass harness too",
+        ),
+        (
+            ConfigureAgent {
+                bot_id: Uuid::new_v4(),
+                channel_scope: Some(AgentChannelScopeSummary::All),
+                channel_ids: Some(vec![Uuid::new_v4()]),
+                ..ConfigureAgent::default()
+            },
+            "omit them for `all`",
+        ),
+        (
+            ConfigureAgent {
+                bot_id: Uuid::new_v4(),
+                mcp_scope: Some(AgentMcpScopeSummary::OwnerConnections),
+                mcp_servers: Some(vec![AgentMcpServerSummary {
+                    app_slug: "linear".to_string(),
+                    server_name: "Linear".to_string(),
+                }]),
+                ..ConfigureAgent::default()
+            },
+            "omit them for `owner_connections`",
+        ),
+    ];
+
+    for (call, expected) in cases {
+        let service = ToolTestBotService::default();
+        let patched = service.patched.clone();
+        let context = BotToolContext::new(
+            service,
+            NoOpEntityAccessService,
+            "https://storage.example.com".to_string(),
+        );
+        let error = call
+            .call(ServiceContext(context), RequestContext::new(user_id()))
+            .await
+            .expect_err("incoherent arguments never reach the service");
+        assert!(
+            error.description.contains(expected),
+            "{expected:?} not in {:?}",
+            error.description
+        );
+        assert!(patched.lock().expect("patch lock").is_none());
+    }
+}
+
+#[tokio::test]
+async fn configure_agent_surfaces_domain_rejections() {
+    let context = BotToolContext::new(
+        ToolTestBotService {
+            patch_error: Some("channel-specific agents require at least one channel".to_string()),
+            ..ToolTestBotService::default()
+        },
+        NoOpEntityAccessService,
+        "https://storage.example.com".to_string(),
+    );
+
+    let error = ConfigureAgent {
+        bot_id: Uuid::new_v4(),
+        channel_scope: Some(AgentChannelScopeSummary::Selected),
+        ..ConfigureAgent::default()
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("the domain's validation message reaches the model");
+
+    assert_eq!(
+        error.description,
+        "channel-specific agents require at least one channel"
     );
 }

@@ -1,3 +1,4 @@
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHeadlessEditor } from '@lexical/headless';
 import {
   $convertFromMarkdownString,
@@ -9,47 +10,49 @@ import { $getRoot } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createChat: vi.fn(),
+  startPendingSession: vi.fn(),
+  manager: true,
+  failure: vi.fn(),
   openWithSplit: vi.fn(),
-  storeChatStateImmediate: vi.fn(),
-  setPendingSendData: vi.fn(),
 }));
 
 vi.mock('@app/signal/splitLayout', () => ({
-  globalSplitManager: () => ({ openWithSplit: mocks.openWithSplit }),
+  globalSplitManager: () =>
+    mocks.manager ? { openWithSplit: mocks.openWithSplit } : undefined,
 }));
-vi.mock('@core/component/AI/signal/pendingSend', () => ({
-  setPendingSendData: mocks.setPendingSendData,
+vi.mock('@app/features/block-agent/context/pending-session', () => ({
+  startPendingSession: mocks.startPendingSession,
 }));
 vi.mock('@core/component/LexicalMarkdown/plugins/mentions', () => ({
   INSERT_DOCUMENT_MENTION_COMMAND: {},
 }));
-vi.mock('@core/component/AI/util/storage', () => ({
-  storeChatStateImmediate: mocks.storeChatStateImmediate,
-}));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: vi.fn() },
+  toast: { failure: mocks.failure },
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (fileType: string | null | undefined) =>
     fileType ?? 'unknown',
 }));
-vi.mock('@core/util/create', () => ({
-  createChat: mocks.createChat,
-}));
 vi.mock('@ui', () => ({
   Button: () => null,
 }));
 
-import { openChatWithAgent } from './ChatWithAgentButton';
+import {
+  openChatWithAgent,
+  openChatWithInput,
+  openChatWithInputReplacingSplit,
+  openChatWithMessage,
+  openChatWithMessageReplacingSplit,
+} from './ChatWithAgentButton';
 
 describe('openChatWithAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createChat.mockResolvedValue({ chatId: 'chat-id' });
+    mocks.startPendingSession.mockReturnValue('session-id');
+    mocks.manager = true;
   });
 
-  it('seeds and opens a new chat with a visible mention and attachment', async () => {
+  it('opens an agent session with an unsent visible mention', async () => {
     await openChatWithAgent({
       type: 'document',
       id: 'document-id',
@@ -57,13 +60,13 @@ describe('openChatWithAgent', () => {
       fileType: 'md',
     });
 
-    expect(mocks.storeChatStateImmediate).toHaveBeenCalledWith('chat-id', {
-      input:
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: undefined,
+      initialInput:
         '<m-document-mention>{"documentId":"document-id","documentName":"Project plan","blockName":"md","blockParams":{}}</m-document-mention> ',
-      attachments: [{ entity_id: 'document-id', entity_type: 'document' }],
     });
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
-      { type: 'chat', id: 'chat-id' },
+      { type: 'component', id: 'agents-session~agents~session-id' },
       { activate: true, preferNewSplit: true }
     );
   });
@@ -81,13 +84,13 @@ describe('openChatWithAgent', () => {
       },
     });
     expect(opened).toBe(true);
-    expect(mocks.storeChatStateImmediate).toHaveBeenCalledWith('chat-id', {
-      input:
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: undefined,
+      initialInput:
         '<m-document-mention>{"documentId":"sheet-id","documentName":"Budget","blockName":"spreadsheet","blockParams":{"sheetId":"sheet-2","sheetName":"Annual budget","range":"B4:E9"}}</m-document-mention> ',
-      attachments: [{ entity_id: 'sheet-id', entity_type: 'document' }],
     });
-    expect(mocks.setPendingSendData).not.toHaveBeenCalled();
-    const input: string = mocks.storeChatStateImmediate.mock.calls[0][1].input;
+    const input: string =
+      mocks.startPendingSession.mock.calls[0][0].initialInput;
     const editor = createHeadlessEditor({ nodes: SupportedNodeTypes });
     editor.update(() => $convertFromMarkdownString(input, ALL_TRANSFORMERS), {
       discrete: true,
@@ -101,8 +104,8 @@ describe('openChatWithAgent', () => {
     });
   });
 
-  it('does not open a split or lose the draft when chat creation fails', async () => {
-    mocks.createChat.mockResolvedValueOnce({ error: 'Unavailable' });
+  it('does not start a session when navigation is unavailable', async () => {
+    mocks.manager = false;
     expect(
       await openChatWithAgent({
         type: 'document',
@@ -112,6 +115,77 @@ describe('openChatWithAgent', () => {
       })
     ).toBe(false);
     expect(mocks.openWithSplit).not.toHaveBeenCalled();
-    expect(mocks.storeChatStateImmediate).not.toHaveBeenCalled();
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+    expect(mocks.failure).toHaveBeenCalledWith('Unable to open chat');
   });
+  it.each([
+    { type: 'email' as const, id: 'email-id', name: 'Subject' },
+    { type: 'project' as const, id: 'project-id', name: 'Launch' },
+    {
+      type: 'channel' as const,
+      id: 'channel-id',
+      name: 'Team',
+      channelType: 'public' as const,
+    },
+  ])('preserves context for $type actions', async (entity) => {
+    await openChatWithAgent(entity);
+    const seed = mocks.startPendingSession.mock.calls[0][0];
+    expect(seed.prompt).toBeUndefined();
+    expect(seed.initialInput).toContain(entity.id);
+    expect(seed.initialInput).toContain(entity.name);
+    if (entity.type === 'channel')
+      expect(seed.initialInput).toContain('"channelType":"public"');
+  });
+
+  it('hands a submitted query to the agent as the first prompt', async () => {
+    await openChatWithMessage('Find my latest invoices');
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: 'Find my latest invoices',
+      initialInput: undefined,
+    });
+    expect(mocks.openWithSplit).toHaveBeenCalledWith(
+      { type: 'component', id: 'agents-session~agents~session-id' },
+      { activate: true, preferNewSplit: true }
+    );
+  });
+
+  it('preserves a channel-message draft without sending it', async () => {
+    await openChatWithInput('A message reference\n\n');
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: undefined,
+      initialInput: 'A message reference\n\n',
+    });
+  });
+
+  it('starts a session with hidden instructions on the chosen model, the draft left unsent', async () => {
+    await openChatWithInput('<m-document-mention>{}</m-document-mention> ', {
+      model: 'database-model',
+      instructions: 'Use this database by default.',
+    });
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: undefined,
+      initialInput: '<m-document-mention>{}</m-document-mention> ',
+      modelOverride: 'database-model',
+      instructions: 'Use this database by default.',
+    });
+  });
+
+  it.each(['Find invoices', ''])(
+    'replaces the search split for query %j',
+    async (query) => {
+      mocks.manager = false;
+      const replace = vi.fn();
+      const split = { replace } as unknown as SplitHandle;
+      if (query) await openChatWithMessageReplacingSplit(query, split);
+      else await openChatWithInputReplacingSplit('', split);
+      expect(mocks.startPendingSession).toHaveBeenCalledWith({
+        prompt: query || undefined,
+        initialInput: query ? undefined : '',
+      });
+      expect(replace).toHaveBeenCalledWith({
+        next: { type: 'component', id: 'agents-session~agents~session-id' },
+      });
+      expect(mocks.openWithSplit).not.toHaveBeenCalled();
+    }
+  );
 });

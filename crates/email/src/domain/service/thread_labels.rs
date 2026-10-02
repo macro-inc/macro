@@ -125,14 +125,9 @@ where
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
             .ok_or(EmailErr::ThreadNotFound)?;
-        let thread = self
-            .email_repo
-            .thread_by_id(thread_id)
-            .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
-            .ok_or(EmailErr::ThreadNotFound)?;
-        if !archived && thread.latest_inbound_message_ts.is_none() {
-            return Err(EmailErr::ThreadHasNoInboundMessages);
+        if !archived {
+            self.ensure_thread_has_received_messages(thread_id, link.id)
+                .await?;
         }
         let label = self
             .email_repo
@@ -145,6 +140,63 @@ where
         self.update_thread_labels_with_actor(&link, thread_id, label.id, !archived, Some(macro_id))
             .await?;
         Ok(())
+    }
+
+    /// Inbox sorting timestamps disappear after archive/provider sync. Determine
+    /// whether a thread can be restored from its messages, not current labels.
+    async fn ensure_thread_has_received_messages(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        let messages = self
+            .email_repo
+            .get_thread_label_messages(thread_id, link_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        if messages
+            .iter()
+            .any(|message| !message.is_draft && !message.is_sent)
+        {
+            return Ok(());
+        }
+
+        // A sent message addressed back to its sender is also received mail.
+        // Drafts never establish received-message history, even if self-addressed.
+        let sent_ids: Vec<_> = messages
+            .iter()
+            .filter(|message| message.is_sent && !message.is_draft)
+            .map(|message| message.db_id)
+            .collect();
+        if sent_ids.is_empty() {
+            return Err(EmailErr::ThreadHasNoInboundMessages);
+        }
+        let (senders, recipients) = tokio::try_join!(
+            async {
+                self.email_repo
+                    .senders_by_message_ids(&sent_ids)
+                    .await
+                    .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))
+            },
+            async {
+                self.email_repo
+                    .recipients_by_message_ids(&sent_ids)
+                    .await
+                    .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))
+            },
+        )?;
+        if sent_ids.iter().any(|id| {
+            senders.get(id).is_some_and(|sender| {
+                recipients.get(id).is_some_and(|recipients| {
+                    recipients
+                        .iter()
+                        .any(|(recipient, _)| recipient.email.eq_ignore_ascii_case(&sender.email))
+                })
+            })
+        }) {
+            return Ok(());
+        }
+        Err(EmailErr::ThreadHasNoInboundMessages)
     }
 
     #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
@@ -179,7 +231,7 @@ where
     }
 
     #[tracing::instrument(err, skip(self, link))]
-    async fn update_thread_labels_with_actor(
+    pub(super) async fn update_thread_labels_with_actor(
         &self,
         link: &Link,
         thread_id: Uuid,

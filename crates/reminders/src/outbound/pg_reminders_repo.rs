@@ -1,5 +1,7 @@
 //! PostgreSQL implementation of the [`RemindersRepo`] port.
 
+mod collection;
+mod email_followup;
 #[cfg(test)]
 mod test;
 
@@ -24,12 +26,29 @@ use crate::domain::ports::{ReminderDispatchRepo, RemindersRepo};
 #[derive(Debug, Clone)]
 pub struct PgRemindersRepo {
     pool: PgPool,
+    followup_locks: PgPool,
 }
 
 impl PgRemindersRepo {
     /// Create a repository backed by the provided pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self::with_followup_lock_capacity(pool, 4)
+    }
+
+    /// Create a repository with a separate connection budget for concurrent
+    /// follow-up operations. HTTP and dispatch users should share this instance.
+    /// `lock_capacity` must be greater than zero.
+    pub fn with_followup_lock_capacity(pool: PgPool, lock_capacity: u32) -> Self {
+        // Lock holders span email operations. Keep their connections separate
+        // from the data pool; unsuccessful lock attempts release their connection
+        // before backoff so waiters do not occupy this pool either.
+        let followup_locks = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(lock_capacity)
+            .connect_lazy_with(pool.connect_options().as_ref().clone());
+        Self {
+            pool,
+            followup_locks,
+        }
     }
 }
 
@@ -230,6 +249,15 @@ fn schedule_columns(
 }
 
 impl RemindersRepo for PgRemindersRepo {
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: &crate::domain::collection::CollectionQuery,
+        as_of: DateTime<Utc>,
+        limit: i64,
+    ) -> Result<crate::domain::collection::CollectionBatch, Self::Err> {
+        self.read_collection(user, query, as_of, limit).await
+    }
     type Err = RemindersRepoErr;
 
     #[tracing::instrument(err, skip(self, user_id, new))]

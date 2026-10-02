@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT channel_id AS \"channel_id!\", id AS message_id, created_at\n        FROM comms_messages\n        WHERE channel_id IS NOT NULL\n          AND ($2::timestamptz IS NULL OR (created_at, id) > ($2, $3::uuid))\n          AND ($4::uuid[] IS NULL OR channel_id = ANY($4))\n          AND (\n              $5::bool IS NULL\n              OR ($5 AND deleted_at IS NOT NULL)\n              OR (NOT $5 AND deleted_at IS NULL)\n          )\n        ORDER BY created_at ASC, id ASC\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "0d0b3ef3f9f49f24dd11513be24ad93b12fd6c16c6265aaf9afcb9089a01c674"
+}

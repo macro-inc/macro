@@ -56,6 +56,8 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
                     description: self.description.clone(),
                     member_ids: self.member_ids.clone(),
                     share_with_team: self.share_with_team,
+                    // Properties are set with SetEntityProperty after the create.
+                    property_values: Vec::new(),
                 },
                 activity::Attribution::delegated(
                     activity::Actor::new_from_bot(context.actor),

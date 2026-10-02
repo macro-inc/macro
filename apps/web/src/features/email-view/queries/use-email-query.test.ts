@@ -27,6 +27,7 @@ const scheduledRows = vi.hoisted(() => ({
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   ...(await import('@app/features/soup/search/create-search-state')),
 }));
 // Exercise query transitions without loading UI barrels or the local-search provider.
@@ -184,6 +185,9 @@ function mount(search = '') {
         if (loading()) throw new Error('Read pending query data');
         return { entities: entities(), groups: undefined };
       },
+      get isPending() {
+        return loading();
+      },
       get isLoading() {
         return loading();
       },
@@ -220,6 +224,9 @@ function mount(search = '') {
         get data() {
           if (retentionLoading()) throw new Error('Read pending retained mail');
           return { entities: retainedEntities(), groups: undefined };
+        },
+        get isPending() {
+          return retentionLoading();
         },
         get isLoading() {
           return retentionLoading();

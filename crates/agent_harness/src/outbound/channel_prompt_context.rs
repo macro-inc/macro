@@ -57,6 +57,7 @@ impl<Access: EntityAccessService> ContextAuthorizer for Access {
                 MessageParent::Initiative(_) => EntityType::Initiative,
                 MessageParent::CrmCompany(_) => EntityType::CrmCompany,
                 MessageParent::CrmContact(_) => EntityType::CrmContact,
+                MessageParent::Call(_) => EntityType::Call,
             },
         )
         .await
@@ -260,6 +261,17 @@ async fn anchor(
     anchor: Option<ThreadAnchor>,
 ) -> Option<CommentAnchor> {
     let (mark_id, marked_text) = match anchor? {
+        ThreadAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        } => {
+            return Some(CommentAnchor::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            });
+        }
         ThreadAnchor::PdfHighlight {
             anchor_id,
             marked_text,

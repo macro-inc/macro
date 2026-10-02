@@ -79,6 +79,7 @@ fn scheduled_meetings_require_ordered_complete_times() {
     let start = Utc::now();
     let end = start + chrono::Duration::hours(1);
     let request = |scheduled_start, scheduled_end| CreateMeetingRequest {
+        preparation_id: None,
         title: None,
         scheduled_start,
         scheduled_end,

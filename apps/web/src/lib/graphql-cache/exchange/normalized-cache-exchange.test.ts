@@ -1,4 +1,8 @@
-import { SaveEmailDraftDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  SaveEmailDraftDocument,
+  SetEmailThreadArchivedDocument,
+  UpdateNotificationsDocument,
+} from '@service-storage/graphql/generated/graphql';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
@@ -33,6 +37,7 @@ import {
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
+  OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   type ReadResult,
   type WriteResult,
 } from '../protocol';
@@ -237,6 +242,7 @@ function makeFakeHost(): FakeHost {
       transactionId: head.transactionId,
       uuid: head.args.uuid,
       superseded: false,
+      requiresConfirmation: false,
       leaseGeneration: String(head.attemptCount),
       query: head.args.query,
       operationName: head.args.operationName,
@@ -396,9 +402,11 @@ function makeFakeHost(): FakeHost {
     },
     async rollbackOptimisticWrite(transactionId, _claim) {
       host.rollbacks.push(transactionId);
+      const revalidations = queue[0]?.args.revalidations;
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
         kind: 'rolled-back' as const,
+        revalidations,
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: true,
         changed: [],
@@ -663,6 +671,42 @@ describe('normalizedCacheExchange', () => {
     host = makeFakeHost();
   });
 
+  it('evicts inferred missing records after writing the network response', async () => {
+    const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:gone']);
+    const { ops, results } = harness(
+      host,
+      () => ({ data: { user: { emailThread: null } } }),
+      { deletedRecordKeys }
+    );
+    ops.next(makeOp(901, 'network-only'));
+    await tick();
+    expect(host.cacheActions.map((action) => action.kind)).toEqual([
+      'write',
+      'delete',
+    ]);
+    expect(host.invalidations).toEqual([['GraphqlSoupEmailThread:gone']]);
+    expect(results.at(-1)?.data).toEqual({ user: { emailThread: null } });
+  });
+
+  it('does not infer deletions from GraphQL errors with partial data', async () => {
+    const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:keep']);
+    const { ops } = harness(
+      host,
+      () => ({
+        data: { user: { emailThread: null } },
+        error: new CombinedError({
+          graphQLErrors: [{ message: 'database unavailable' }],
+        }),
+      }),
+      { deletedRecordKeys }
+    );
+    ops.next(makeOp(902, 'network-only'));
+    await tick();
+    expect(deletedRecordKeys).not.toHaveBeenCalled();
+    expect(host.invalidations).toEqual([]);
+    expect(host.writes).toEqual([]);
+  });
+
   it('normalizes ordinary buffered subscription data without inspecting event types', async () => {
     const patches = ['document-1', 'document-2'].map((id) => ({
       __typename: 'SoupUpdated',
@@ -684,6 +728,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.writes[0]?.data).toBe(data);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
   });
 
   it('deletes the exact normalized key from subscription patches', async () => {
@@ -929,6 +977,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-2']]);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: false,
+    });
   });
 
   it('cache-first miss forwards to network and writes through', async () => {
@@ -2509,6 +2561,228 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
 
+    it.each([true, false])(
+      'only advances past an unavailable archived thread when its error is terminal (retryable=%s)',
+      async (retryable) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(SetEmailThreadArchivedDocument),
+            operationName: 'SetEmailThreadArchived',
+            variables: {
+              input: { threadId: 'trashed-thread', archived: true },
+            },
+            data: {
+              setEmailThreadArchived: {
+                __typename: 'GraphqlSoupEmailThread',
+                id: 'trashed-thread',
+                inboxVisible: false,
+              },
+            },
+          });
+          const readResult = {
+            updateNotifications: [
+              {
+                __typename: 'GraphqlNotification',
+                id: 'notification',
+                state: 'SEEN',
+              },
+            ],
+          };
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000002',
+            query: stringifyDocument(UpdateNotificationsDocument),
+            operationName: 'UpdateNotifications',
+            variables: {
+              input: {
+                notificationIds: ['notification'],
+                operation: 'MARK_SEEN',
+              },
+            },
+            data: {
+              updateNotifications: [
+                { __typename: 'GraphqlNotification', id: 'notification' },
+              ],
+            },
+          });
+          const { forwarded } = harness(
+            host,
+            (op) =>
+              'threadId' in op.variables!.input
+                ? {
+                    data: undefined,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: 'updated email thread is unavailable',
+                          extensions: retryable
+                            ? { code: 'INTERNAL', retryable: true }
+                            : { code: 'NOT_FOUND' },
+                        },
+                      ],
+                    }),
+                  }
+                : { data: readResult },
+            { shouldRetryMutation: shouldRetryGraphqlMutation }
+          );
+          await vi.advanceTimersByTimeAsync(10);
+          if (retryable) {
+            expect(forwarded).toHaveLength(1);
+            expect(host.defers).toHaveLength(1);
+            expect(host.commits).toHaveLength(0);
+          } else {
+            expect(forwarded).toHaveLength(2);
+            expect(host.rollbacks).toEqual(['restored-1']);
+            expect(host.commits).toMatchObject([
+              { transactionId: 'restored-2', data: readResult },
+            ]);
+          }
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([
+      'terminal',
+      'superseded',
+      'retryable',
+      'unhandled replay',
+    ] as const)(
+      'revalidates persisted recovery queries only after a terminal failure (%s)',
+      async (outcome) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft-handle', subject: 'Reply' } },
+            data: optimistic,
+            revalidations: [
+              {
+                query: stringifyDocument(QUERY),
+                operationName: 'Soup',
+                variablesJson: '{"input":{"limit":2}}',
+              },
+            ],
+          });
+          if (outcome === 'superseded') {
+            const rollback = host.rollbackOptimisticWrite.bind(host);
+            host.rollbackOptimisticWrite = async (...args) => ({
+              ...(await rollback(...args)),
+              kind: 'discarded-superseded',
+              replacementTransactionId: 'newer-intent',
+            });
+          }
+          const error = new CombinedError({
+            graphQLErrors: [
+              {
+                message: 'Draft rejected',
+                extensions:
+                  outcome === 'retryable'
+                    ? { code: 'INTERNAL', retryable: true }
+                    : { code: 'DRAFT_ALREADY_SENT' },
+              },
+            ],
+          });
+          const { client, forwarded } = harness(
+            host,
+            () => ({ error, data: undefined }),
+            {
+              shouldRetryMutation: shouldRetryGraphqlMutation,
+            }
+          );
+          if (outcome === 'unhandled replay') {
+            vi.mocked(client.mutation).mockReturnValue({
+              toPromise: async () => ({ error }),
+            } as never);
+          }
+          await vi.advanceTimersByTimeAsync(0);
+          expect(host.begins).toHaveLength(0);
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.rollbacks).toHaveLength(outcome === 'retryable' ? 0 : 1);
+          expect(host.defers).toHaveLength(outcome === 'retryable' ? 1 : 0);
+          const repairs =
+            outcome === 'terminal' || outcome === 'unhandled replay';
+          expect(vi.mocked(client.query)).toHaveBeenCalledTimes(
+            repairs ? 1 : 0
+          );
+          if (repairs) {
+            expect(vi.mocked(client.query)).toHaveBeenCalledWith(
+              expect.anything(),
+              { input: { limit: 2 } },
+              { requestPolicy: 'network-only' }
+            );
+          }
+          if (outcome !== 'unhandled replay')
+            expect(optimisticContextOf(forwarded[0])).toBeUndefined();
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([true, undefined])(
+      'settles a restored superseded identity write before its replacement (confirmation=%s)',
+      async (requiresConfirmation) => {
+        for (const version of ['create', 'edit']) {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: { version } },
+            data: optimistic,
+          });
+        }
+        const claimNext = host.claimNextMutation.bind(host);
+        host.claimNextMutation = async (...args) => {
+          const claimed = await claimNext(...args);
+          if (claimed?.transactionId === 'restored-1') {
+            claimed.superseded = true;
+            if (requiresConfirmation === undefined) {
+              // Old deployed hosts have no flag. They must also recover.
+              delete (claimed as Partial<ClaimedMutation>).requiresConfirmation;
+            } else {
+              claimed.requiresConfirmation = requiresConfirmation;
+            }
+          }
+          return claimed;
+        };
+        const onCacheError = vi.fn();
+        const { forwarded } = harness(host, undefined, { onCacheError });
+        await tick();
+        expect(forwarded.map((op) => op.variables?.input.version)).toEqual([
+          'create',
+          'edit',
+        ]);
+        expect(host.commits.map((commit) => commit.transactionId)).toEqual([
+          'restored-1',
+          'restored-2',
+        ]);
+        expect(host.defers).toEqual([]);
+        expect(onCacheError).not.toHaveBeenCalled();
+      }
+    );
+
+    it('evicts deleted threads when a persisted mutation replays without its caller', async () => {
+      host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000003',
+        query: stringifyDocument(MUTATION),
+        operationName: 'SetEntityProperty',
+        variables: { input: {} },
+        data: optimistic,
+      });
+      const deletedRecordKeys = vi.fn(() => {
+        expect(host.commits).toHaveLength(1);
+        return ['GraphqlSoupEmailThread:gone'];
+      });
+      harness(host, undefined, { deletedRecordKeys });
+      await tick();
+      expect(host.invalidations).toEqual([['GraphqlSoupEmailThread:gone']]);
+    });
+
     describe('mutation drain after cache restoration', () => {
       beforeEach(() => vi.useFakeTimers());
       afterEach(() => {
@@ -2717,6 +2991,65 @@ describe('normalizedCacheExchange', () => {
 
       expect(host.rollbacks).toEqual(['restored-1']);
     });
+
+    it.each(['foreground', 'restored', 'unhandled replay'] as const)(
+      'preserves an already-sent rejection across the %s boundary',
+      async (path) => {
+        const variables = {
+          input: { draftId: 'draft-handle', subject: 'Reply' },
+        };
+        const rejection = new CombinedError({
+          graphQLErrors: [
+            {
+              message: 'Draft was sent elsewhere',
+              extensions: { code: 'DRAFT_ALREADY_SENT' },
+            },
+          ],
+        });
+        const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+        if (path !== 'foreground') {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000002',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables,
+            data: optimistic,
+          });
+        }
+        const { ops, client, forwarded } = harness(host, () => ({
+          error: rejection,
+          data: undefined,
+        }));
+        if (path === 'foreground') {
+          ops.next(
+            makeOperation(
+              'mutation',
+              createRequest(SaveEmailDraftDocument, variables),
+              makeMutationOp(1, optimistic).context
+            )
+          );
+        } else if (path === 'unhandled replay') {
+          // A reconstructed client may return an error without traversing
+          // writeThrough; the queue drain's fallback also preserves its code.
+          vi.mocked(client.mutation).mockReturnValue({
+            toPromise: async () => ({ error: rejection }),
+          } as never);
+        }
+        await tick();
+        expect(rollback).toHaveBeenCalledExactlyOnceWith(
+          path === 'foreground' ? 'txn-1' : 'restored-1',
+          expect.any(Object),
+          rejection.message,
+          'DRAFT_ALREADY_SENT'
+        );
+        expect(host.begins).toHaveLength(path === 'foreground' ? 1 : 0);
+        if (path === 'restored') {
+          expect(host.claims).toEqual(['restored-1']);
+          expect(forwarded[0]?.variables).toEqual(variables);
+          expect(optimisticContextOf(forwarded[0])).toBeUndefined();
+        }
+      }
+    );
 
     it('forwards optimistic mutations without cache work when the host is disabled', async () => {
       const disabledHost: CacheHost = { ...host, disabled: true };
@@ -3059,6 +3392,110 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(1);
     });
 
+    it('sends a patched mutation directly while another context owns the database', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'query Group { user { groupSoup { bins { items { id } } } } }',
+              operationName: 'Group',
+              variablesJson: '{}',
+              path: [
+                { field: 'user' },
+                { field: 'groupSoup' },
+                { field: 'bins' },
+              ],
+              operation: {
+                kind: 'remove',
+                entityKey: 'GraphqlSoupItem:task-1',
+              },
+            },
+          ],
+          revalidations: [],
+        },
+      });
+      host.enqueueOptimisticMutation = vi.fn().mockRejectedValue(
+        Object.assign(new Error('owner lock is held by another build'), {
+          errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
+        })
+      );
+      const warn = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
+      const onCacheError = vi.fn();
+      const { ops, results, forwarded } = harness(host, undefined, {
+        onCacheError,
+      });
+      try {
+        ops.next(op);
+        await tick();
+
+        // No link-patch degradation retry: the refusal says nothing about
+        // the patches, and nothing was admitted to a durable queue.
+        expect(host.enqueueOptimisticMutation).toHaveBeenCalledOnce();
+        expect(forwarded.map((forwardedOp) => forwardedOp.kind)).toEqual([
+          'mutation',
+        ]);
+        expect(results[0]?.data).toEqual({ from: 'network' });
+        expect(onCacheError).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('uses only explicit recovery queries when a record-rooted parent is missing', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const recovery = {
+        query: 'query Target { user { id } }',
+        operationName: 'Target',
+        variablesJson: '{}',
+      };
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'fragment Parent on GraphqlSoupDocument { properties { id } }',
+              recordRoot: {
+                fragmentName: 'Parent',
+                entityKey: 'GraphqlSoupDocument:missing',
+              },
+              variablesJson: '{}',
+              path: [{ field: 'properties' }],
+              operation: {
+                kind: 'prependUnique',
+                entityKey: 'GraphqlProperty:temporary',
+              },
+            },
+          ],
+          revalidations: [recovery],
+        },
+      });
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
+        if (args.linkPatches?.length) throw new Error('missing parent');
+        return enqueue(args, claim);
+      });
+      const { ops } = harness(host);
+      ops.next(op);
+      await tick();
+      expect(host.begins[0]?.linkPatches).toEqual([]);
+      expect(host.enqueueOptimisticMutation).toHaveBeenLastCalledWith(
+        expect.objectContaining({ linkPatches: [], revalidations: [recovery] }),
+        expect.anything()
+      );
+      expect(host.commits).toHaveLength(1);
+    });
+
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
       const existingSignal = new AbortController().signal;
@@ -3263,6 +3700,101 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each([false, true])(
+      'preserves a committed response when identity diagnostics are reported (callback throws=%s)',
+      async (callbackThrows) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          identityErrors: ['missing identity response object'],
+        });
+        const onCacheError = vi.fn(() => {
+          if (callbackThrows) throw new Error('diagnostic failed');
+        });
+        const { ops, results, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+
+        expect(onCacheError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'missing identity response object',
+          }),
+          expect.anything()
+        );
+        expect(host.commits).toHaveLength(1);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(host.defers).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(optimisticMutationDispositionOf(results[0])).toEqual({
+          kind: 'committed',
+          data: results[0]?.data,
+        });
+        expect(results[0]?.data).toBeDefined();
+      }
+    );
+
+    it.each([
+      { replacementTransactionId: undefined, callbackThrows: false },
+      { replacementTransactionId: undefined, callbackThrows: true },
+      { replacementTransactionId: 'txn-2', callbackThrows: false },
+      { replacementTransactionId: 'txn-2', callbackThrows: true },
+    ])(
+      'settles an identity failure without replaying the failed attempt (replacement $replacementTransactionId, callback throws=$callbackThrows)',
+      async ({ replacementTransactionId, callbackThrows }) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          kind: 'failed',
+          error: 'missing identity response id',
+          replacementTransactionId,
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
+        });
+        const onCacheError = vi.fn(() => {
+          if (callbackThrows) throw new Error('diagnostic failed');
+        });
+        const { ops, results, client, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+
+        expect(onCacheError).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'missing identity response id' }),
+          expect.anything()
+        );
+        expect(onCacheError).toHaveBeenCalledTimes(1);
+        expect(host.commits).toHaveLength(1);
+        expect(host.defers).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(
+          replacementTransactionId ? 0 : 1
+        );
+        expect(results[0]?.data).toBeUndefined();
+        if (replacementTransactionId) {
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'queued',
+            transactionId: replacementTransactionId,
+          });
+        } else {
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'permanently-failed',
+            error: expect.objectContaining({
+              message: expect.stringContaining('missing identity response id'),
+            }),
+          });
+        }
+      }
+    );
+
     it('fires commit revalidations with network-only policy', async () => {
       const commit = host.commitOptimisticWrite.bind(host);
       host.commitOptimisticWrite = async (transactionId, claim, args) => ({
@@ -3285,6 +3817,64 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each([true, false])(
+      'delegates persisted commit revalidations only when an owner accepts: %s',
+      async (handled) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
+        });
+        const delegateRevalidation = vi.fn(() => handled);
+        const { ops, client, results } = harness(host, undefined, {
+          delegateRevalidation,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+        expect(delegateRevalidation).toHaveBeenCalledWith(client, {
+          document: expect.any(Object),
+          variables: { input: { limit: 2 } },
+        });
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(handled ? 0 : 1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(host.commits).toHaveLength(1);
+      }
+    );
+
+    it('preserves a committed mutation when delegated reconciliation fails', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{}',
+          },
+        ],
+      });
+      const error = new Error('refresh owner unavailable');
+      const onCacheError = vi.fn();
+      const { ops, results } = harness(host, undefined, {
+        delegateRevalidation: () => {
+          throw error;
+        },
+        onCacheError,
+      });
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+      expect(onCacheError).toHaveBeenCalledWith(error, expect.any(Object));
+      expect(results[0]?.error).toBeUndefined();
+      expect(host.commits).toHaveLength(1);
+      expect(host.rollbacks).toHaveLength(0);
+    });
+
     it('rolls back on a GraphQL error result', async () => {
       const error = new CombinedError({ graphQLErrors: ['nope'] });
       const { ops, results } = harness(host, (op) =>
@@ -3301,6 +3891,59 @@ describe('normalizedCacheExchange', () => {
         error,
       });
     });
+
+    it.each([
+      {
+        code: 'DRAFT_ALREADY_SENT',
+        network: false,
+        expected: 'DRAFT_ALREADY_SENT',
+      },
+      { code: 'INTERNAL', network: false, expected: 'INTERNAL' },
+      { code: 42, network: false, expected: undefined },
+      { code: 'DRAFT_ALREADY_SENT', network: true, expected: undefined },
+    ])(
+      'retains authoritative string error codes on background replay: %j',
+      async ({ code, network, expected }) => {
+        vi.useFakeTimers();
+        try {
+          const rejection = new CombinedError({
+            graphQLErrors: [
+              { message: 'server rejection', extensions: { code } },
+            ],
+            ...(network ? { networkError: new Error('transport failed') } : {}),
+          });
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          let attempts = 0;
+          const { ops } = harness(
+            host,
+            () => {
+              attempts += 1;
+              return {
+                error:
+                  attempts === 1
+                    ? new CombinedError({ networkError: new Error('offline') })
+                    : rejection,
+                data: undefined,
+              };
+            },
+            { shouldRetryMutation: () => attempts === 1 }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          expect(rollback).not.toHaveBeenCalled();
+          await vi.advanceTimersByTimeAsync(1_000);
+          expect(attempts).toBe(2);
+          expect(rollback).toHaveBeenCalledExactlyOnceWith(
+            'txn-1',
+            expect.any(Object),
+            rejection.message,
+            expected
+          );
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it('keeps the disposition queued when permanent settlement is uncertain', async () => {
       const error = new CombinedError({ graphQLErrors: ['nope'] });

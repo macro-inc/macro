@@ -51,6 +51,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   enabled?: Accessor<boolean>;
   /** Visible fallback rows; duplicates do not grow the combined menu. */
   existingItems?: Accessor<readonly T[]>;
+  /** Keep already-materialized matches visible while a new query is pending. */
+  filterPreviousItems?: (items: T[], query: string) => T[];
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
 }) {
   const buckets = () => {
@@ -170,7 +172,16 @@ export function createProjectedList<T extends { id: string }>(options: {
     // obsolete responses and their queued refreshes.
     current = undefined;
     setHasMore(false);
-    setItems([]);
+    const sameBuckets =
+      previous?.buckets.length === activeBuckets.length &&
+      previous.buckets.every(
+        (bucket, index) => bucket === activeBuckets[index]
+      );
+    setItems(
+      enabled && sameBuckets
+        ? (options.filterPreviousItems?.(untrack(items), query) ?? [])
+        : []
+    );
     if (!enabled) {
       setLoading('idle');
       return;

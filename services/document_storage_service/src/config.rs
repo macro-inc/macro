@@ -6,9 +6,6 @@ pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
-#[cfg(test)]
-mod test;
-
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
 /// Allow long recordings to play and seek without the signed URL expiring mid-session.
 pub const CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 6 * 60 * 60;
@@ -88,6 +85,9 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     pub database_url: DatabaseUrl,
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
@@ -139,6 +139,11 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_search_enabled: bool,
 
+    /// Enable Slack import creation and uploads. Existing receipts remain
+    /// readable, finalizable and cancellable when this switch is off.
+    #[macro_config_default(false)]
+    pub slack_import_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,
@@ -162,14 +167,6 @@ pub struct Config {
     /// synced reminder schedules produce no notifications until enabled.
     #[macro_config_default(false)]
     pub calendar_reminder_dispatch_enabled: bool,
-
-    /// Master switch for the legacy document comment writers: comment create,
-    /// edit and delete, and anchor delete, which also deletes the thread.
-    /// Set to `false` for the final pass of the legacy comment importer, before
-    /// the new document discussion UI is enabled; those handlers then answer
-    /// 503 and the importer works from a frozen source.
-    #[macro_config_default(true)]
-    pub legacy_comment_writes_enabled: bool,
 
     /// Lets a team-scoped bot with no acting user own the documents it creates.
     pub enable_non_user_owners: EnableNonUserOwners,
@@ -199,22 +196,16 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config =
+            macro_config::ConfigLoader::load::<Config>().context("failed to load config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
-        parse_non_user_owners(self.enable_non_user_owners.value())
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
-}
-
-fn parse_non_user_owners(value: Option<&str>) -> anyhow::Result<NonUserOwners> {
-    let enabled = value
-        .unwrap_or("false")
-        .parse::<bool>()
-        .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")?;
-    Ok(if enabled {
-        NonUserOwners::Enabled
-    } else {
-        NonUserOwners::Disabled
-    })
 }

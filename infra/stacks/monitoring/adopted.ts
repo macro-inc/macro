@@ -13,5 +13,13 @@ export function adopted(
   name: string,
   args: datadog.MonitorArgs
 ): datadog.Monitor {
-  return new datadog.Monitor(name, args, { protect: true });
+  // All imported monitors allow partial evaluation windows. The provider
+  // defaults to true when omitted, which would change their alert behavior.
+  // Datadog omits host delay when group delay applies. Keep the provider's
+  // default explicit after normalizing imported state; group delay wins.
+  return new datadog.Monitor(
+    name,
+    { requireFullWindow: false, newHostDelay: 300, ...args },
+    { protect: true }
+  );
 }

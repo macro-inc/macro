@@ -14,11 +14,14 @@ agent_preview = { path = "../../crates/agent_preview" }
 agent_egress = { path = "../../crates/agent_egress" }
 agent_session = { path = "../../crates/agent_session" }
 async-trait = { workspace = true }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
 axum = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = ["axum", "outbound", "postgres"] }
 macro_aws_config = { path = "../../crates/macro_aws_config" }

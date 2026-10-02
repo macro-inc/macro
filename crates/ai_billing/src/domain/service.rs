@@ -6,19 +6,21 @@ mod test;
 
 use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
-    AllowanceDecision, AllowanceStore, BillingError, BillingPeriod, BillingSettings,
-    CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS,
-    OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PlanTier, Result,
-    SeatAllowance, SeatUsage, UsageSnapshot,
+    AiUsageBilling, AllowanceDecision, AllowanceStore, BillingError, BillingPeriod,
+    BillingSettings, CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS,
+    OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope,
+    PeriodAllowance, PlanTier, Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
+use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
     PaymentGateway, PendingCharge, UsageReader,
 };
+use ai_usage::AiUsageEnforcement;
 use chrono::{DateTime, Utc};
-use macro_env::Environment;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
+use std::sync::Arc;
 use teams::domain::open_seat_release::OpenSeatRelease;
 
 /// The billing service over its four ports.
@@ -28,19 +30,44 @@ pub struct BillingServiceImpl<E, U, R, P> {
     usage: U,
     repo: R,
     payments: P,
-    environment: Environment,
+    enforcement: AiUsageEnforcement,
+    billing: AiUsageBilling,
+    period_sync: Option<Arc<dyn PeriodSync>>,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
-    /// Construct the service. Allowance enforcement and settlement run only in dev.
-    pub fn new(entitlements: E, usage: U, repo: R, payments: P, environment: Environment) -> Self {
+    /// Construct with quota enforcement and settlement both disabled. Production
+    /// composition must explicitly install each configured policy.
+    pub fn new(entitlements: E, usage: U, repo: R, payments: P) -> Self {
         Self {
             entitlements,
             usage,
             repo,
             payments,
-            environment,
+            enforcement: AiUsageEnforcement::Disabled,
+            billing: AiUsageBilling::Disabled,
+            period_sync: None,
         }
+    }
+
+    /// Configure quota enforcement independently of settlement.
+    pub fn with_enforcement(mut self, enforcement: AiUsageEnforcement) -> Self {
+        self.enforcement = enforcement;
+        self
+    }
+
+    /// Configure settlement (credit consumption and overage collection) from
+    /// the host's `ENABLE_AI_USAGE_BILLING` policy, independently of admission.
+    pub fn with_billing(mut self, billing: AiUsageBilling) -> Self {
+        self.billing = billing;
+        self
+    }
+
+    /// Install verified renewal activation at the composition root only after the
+    /// producer and rollout gates pass. Absence never authorizes the new policy.
+    pub fn with_period_sync(mut self, period_sync: Arc<dyn PeriodSync>) -> Self {
+        self.period_sync = Some(period_sync);
+        self
     }
 }
 
@@ -184,7 +211,15 @@ where
                     .usage
                     .list_rate_usage_cents_by_user(&users, *period)
                     .await?;
-                let used = usage_for(user, &usage);
+                let seats = self
+                    .repo
+                    .legacy_seats(&entitlement.payer, *period, seats)
+                    .await?;
+                let used = if seats.iter().any(|seat| seat.user.as_ref() == user.as_ref()) {
+                    usage_for(user, &usage)
+                } else {
+                    0
+                };
                 let chargeable = chargeable_usage_cents(&seats, &usage);
                 let ledger = self
                     .repo
@@ -252,6 +287,13 @@ where
             .usage
             .list_rate_usage_cents_by_user(&users, period)
             .await?;
+        // Read policy AFTER analytics. V1 execution requires a committed binding,
+        // so any V1 analytics just observed must now be excluded. Filtering before
+        // the usage read would race renewal activation and could double bill.
+        let seats = self
+            .repo
+            .legacy_seats(&entitlement.payer, period, seats)
+            .await?;
         let chargeable_cents = chargeable_usage_cents(&seats, &usage);
         if chargeable_cents == 0 {
             return Ok(());
@@ -299,6 +341,7 @@ where
         charge: PendingCharge,
     ) -> Result<()> {
         let payer = &entitlement.payer;
+        let scope = SubscriptionScope::from(&entitlement.scope);
         let customer_id = match self.entitlements.stripe_customer_id(payer).await {
             Ok(Some(customer_id)) => customer_id,
             Ok(None) => {
@@ -329,6 +372,7 @@ where
                         charge_id: charge.id,
                         amount_cents: charge.amount_cents,
                         description,
+                        scope,
                     })
                     .await
                 {
@@ -353,7 +397,7 @@ where
 
         match self
             .payments
-            .pay_overage_invoice(charge.id, &invoice_id)
+            .pay_overage_invoice(charge.id, &invoice_id, scope)
             .await
         {
             Ok(true) => {
@@ -445,7 +489,7 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> Result<AllowanceDecision> {
-        if !matches!(self.environment, Environment::Develop) {
+        if !self.enforcement.is_enabled() {
             return Ok(AllowanceDecision::Allow);
         }
         let position = self.position(user, Utc::now()).await?;
@@ -460,8 +504,8 @@ where
     async fn snapshot(&self, user: &MacroUserIdStr<'_>) -> Result<UsageSnapshot> {
         let position = self.position(user, Utc::now()).await?;
         let mut snapshot = self.snapshot_at(user, &position).await?;
-        // Keep the summary consistent with the allowance gate outside dev.
-        if !matches!(self.environment, Environment::Develop) {
+        // Keep the summary consistent with the configured allowance gate.
+        if !self.enforcement.is_enabled() {
             snapshot.blocked_reason = None;
         }
         Ok(snapshot)
@@ -470,7 +514,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn settle(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
         // Guard every caller: summary reads, settings, purchases, and internal settlement.
-        if !matches!(self.environment, Environment::Develop) {
+        if !self.billing.is_enabled() {
             return Ok(());
         }
         let now = Utc::now();
@@ -574,9 +618,21 @@ where
         payer: &MacroUserIdStr<'_>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        verified: Option<SubscriptionPeriod>,
     ) -> Result<()> {
         if start >= end {
             tracing::warn!("ignoring inverted subscription period");
+            return Ok(());
+        }
+        if let Some(facts) = verified {
+            if facts.period != (BillingPeriod { start, end }) {
+                tracing::warn!("ignoring mismatched verified subscription period");
+                return Ok(());
+            }
+            if let Some(sync) = &self.period_sync {
+                sync.sync(payer.clone().into_owned(), facts).await?;
+            }
+            // Item-level policy periods do not change the legacy payer anchor.
             return Ok(());
         }
         self.repo.set_period(payer, start, end).await

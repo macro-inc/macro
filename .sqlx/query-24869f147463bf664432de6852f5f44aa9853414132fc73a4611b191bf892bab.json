@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id AS message_id, m.channel_id AS \"channel_id!\", t.root_id\n               FROM comms_messages m\n               JOIN comms_message_threads t ON t.root_id = coalesce(m.thread_id, m.id)\n               JOIN comms_messages root ON root.id = t.root_id\n               WHERE m.id = ANY($1) AND m.deleted_at IS NULL AND t.deleted_at IS NULL\n                 AND root.deleted_at IS NULL AND root.thread_id IS NULL\n                 AND m.parent_entity_type = 'channel' AND m.parent_entity_id = m.channel_id::text\n                 AND t.parent_entity_type = 'channel' AND t.parent_entity_id = m.channel_id::text\n                 AND root.channel_id = m.channel_id AND root.parent_entity_type = 'channel'\n                 AND root.parent_entity_id = m.channel_id::text",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "root_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "24869f147463bf664432de6852f5f44aa9853414132fc73a4611b191bf892bab"
+}

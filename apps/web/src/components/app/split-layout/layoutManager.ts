@@ -1,5 +1,6 @@
 import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import type { SplitSearchUpdate } from '@app/lib/split-router';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -29,6 +30,7 @@ import {
   type ComponentMetaMap,
   resolveComponent,
 } from './componentRegistry';
+import { contentReference } from './content-reference';
 import {
   type ContentInstance,
   createContentInstanceRegistry,
@@ -168,6 +170,10 @@ export type CreateNewSplitOptions = {
 };
 
 export type OpenWithSplitOptions = {
+  /** Route-owned targets must pass through middleware and content claims before opening. */
+  search?: Record<string, SplitSearchUpdate>;
+  /** Runs after a cooperating navigator applies or reuses its destination. */
+  onApplied?: () => void;
   mergeHistory?: boolean;
   activate?: boolean;
   referredFrom?: ReferredFrom;
@@ -195,6 +201,7 @@ export type OpenSplitResult = {
   | { status: 'opened'; split: SplitHandle }
   | { status: 'reused'; owner: ContentInstance['owner']; split?: SplitHandle }
   | { status: 'unavailable'; split?: undefined }
+  | { status: 'navigating'; split?: undefined }
 );
 
 /** Return an outcome to consume navigation, or undefined to use normal split navigation. */
@@ -269,6 +276,16 @@ export type OpenView = ContentInstance & {
 };
 
 export type SplitManager = {
+  /** Bound by the app router; keeps imperative callers on the same navigation path. */
+  setContentNavigator: (
+    navigate:
+      | ((content: SplitContent, options: OpenWithSplitOptions) => void)
+      | undefined
+  ) => void;
+  /** Whether the app router is currently bound for route-owned imperative opens. */
+  readonly contentNavigationReady: Accessor<boolean>;
+  /** Changes whenever the app router binding is installed, replaced, or removed. */
+  readonly contentNavigationVersion: Accessor<number>;
   /** Find the view owning this content without activating it. */
   findOpenView: (content: SplitContent) => OpenView | undefined;
   /** Register live inline views; call the returned function when the host is disposed. */
@@ -648,6 +665,11 @@ export function createSplitLayout(
 
   let exclusionFilter: ((split: SplitState) => boolean) | undefined;
   let splitNavigationInterceptor: SplitNavigationInterceptor | undefined;
+  const [contentNavigator, setContentNavigatorBinding] = createSignal<
+    ((content: SplitContent, options: OpenWithSplitOptions) => void) | undefined
+  >();
+  const [contentNavigationVersion, setContentNavigationVersion] =
+    createSignal(0);
   const isExcluded = (split: SplitState) => exclusionFilter?.(split) ?? false;
 
   const canAppendSplit = createMemo(
@@ -1396,7 +1418,9 @@ export function createSplitLayout(
     type: SplitContentType,
     id: string
   ): SplitHandle | undefined {
-    const instance = contentInstances.find(contentIdentity({ type, id }));
+    const instance = contentInstances.find(
+      contentIdentity(contentReference(type, id))
+    );
     const match = state.splits.find(
       (s) =>
         (s.id === instance?.owner ||
@@ -1654,6 +1678,13 @@ export function createSplitLayout(
     options: OpenWithSplitOptions = {}
   ): OpenSplitResult {
     const sourceOwner = options.handle?.id;
+    if (options.search) {
+      const navigate = contentNavigator();
+      if (!navigate)
+        throw new Error('Split content navigation requires the app router');
+      navigate(content, options);
+      return { status: 'navigating', sourceOwner };
+    }
     const existing = findOpenView(content);
 
     if (options.reopen === 'latest') {
@@ -1848,11 +1879,19 @@ export function createSplitLayout(
     canAppendSplit,
     getVisibleSplits,
     getVisibleSplitCount: () => getVisibleSplits().length,
+    contentNavigationReady: () => contentNavigator() !== undefined,
+    contentNavigationVersion,
     setExclusionFilter: (fn) => {
       exclusionFilter = fn;
     },
     setSplitNavigationInterceptor: (fn) => {
       splitNavigationInterceptor = fn;
+    },
+    setContentNavigator: (navigate) => {
+      batch(() => {
+        setContentNavigatorBinding(() => navigate);
+        setContentNavigationVersion((version) => version + 1);
+      });
     },
   };
 }

@@ -24,6 +24,8 @@ use uuid::Uuid;
 
 mod active_meetings;
 mod meeting_invites;
+mod meeting_participants;
+mod meeting_startup;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -92,6 +94,9 @@ impl MockRtcClient {
 }
 
 impl CallRtcClient for MockRtcClient {
+    async fn prepare_room(&self, room_name: &str) -> anyhow::Result<()> {
+        self.create_room(room_name).await
+    }
     async fn generate_guest_token(
         &self,
         room: &str,
@@ -169,6 +174,13 @@ impl CallRtcClient for MockRtcClient {
             participant_identity.as_ref().to_string(),
         ));
         Ok(())
+    }
+
+    async fn list_meeting_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
     }
 
     async fn list_participant_identities(
@@ -3905,9 +3917,7 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
                 room: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
             })
         });
-    rtc.expect_remove_guest()
-        .times(1)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+    rtc.expect_remove_guest().never();
     rtc.expect_stop_egress().times(1).returning(|id| {
         assert_eq!(id, "recording");
         Box::pin(async { Ok(()) })
@@ -4007,4 +4017,33 @@ async fn sharing_a_cancelled_standalone_meeting_rejects_the_revoked_link() {
         service.share_call(receipt).await,
         Err(CallError::NotFound(_))
     ));
+}
+
+#[tokio::test]
+async fn call_record_query_service_reads_the_people_on_a_call() {
+    use crate::domain::models::CallPeople;
+    use crate::domain::ports::CallRecordQueryService;
+
+    let people = CallPeople {
+        user_ids: vec![user("rep@ours.com")],
+        invitee_emails: vec!["buyer@acme.com".to_string()],
+    };
+    let mut repo = MockCallRepository::new();
+    let stored = people.clone();
+    repo.expect_get_call_record_people()
+        .withf(|call_record_id| *call_record_id == SUMMARIZED_EVENT_CALL_ID)
+        .returning(move |_| {
+            let stored = stored.clone();
+            Box::pin(async move { Ok(stored) })
+        });
+
+    let service = super::CallRecordQueryServiceImpl::new(repo);
+
+    assert_eq!(
+        service
+            .get_call_record_people(SUMMARIZED_EVENT_CALL_ID)
+            .await
+            .unwrap(),
+        people
+    );
 }

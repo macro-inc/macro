@@ -372,8 +372,8 @@ export function CommandMenuInner(props: {
     }
 
     if (isAskAiItem(item)) {
-      // Opens a new chat split and sends the query immediately.
-      openChatWithMessage(item.query);
+      // Opens a new agent session and sends the query when ready.
+      void openChatWithMessage(item.query);
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -682,11 +682,6 @@ export function CommandMenuInner(props: {
       </Show>
 
       <CommandMenuShell.Body>
-        <Show when={isLoadingEntities() && filteredItems().length > 0}>
-          <div role="status" class="px-4 py-2 text-xs text-ink-muted">
-            Loading results…
-          </div>
-        </Show>
         <div
           class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
@@ -695,9 +690,7 @@ export function CommandMenuInner(props: {
             when={filteredItems().length > 0}
             fallback={
               <CommandMenuEmptyState>
-                <Show when={isLoadingEntities()} fallback="No results found">
-                  <span role="status">Loading results…</span>
-                </Show>
+                <Show when={!isLoadingEntities()}>No results found</Show>
               </CommandMenuEmptyState>
             }
           >

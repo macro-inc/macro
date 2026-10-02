@@ -30,13 +30,7 @@ import { match } from 'ts-pattern';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
 
-type NewAppViewsState = {
-  enabled: boolean;
-  loading: boolean;
-};
-
 type AppMiddlewareState = {
-  newAppViews: () => NewAppViewsState;
   isTouchDevice: () => boolean;
 };
 
@@ -92,11 +86,7 @@ function redirectLegacyRoutes(
         : undefined
     )
     .when(
-      () => {
-        if (isTouch) return true;
-        const flag = options.newAppViews();
-        return flag.loading || !flag.enabled;
-      },
+      () => isTouch,
       () => undefined
     )
     .with({ type: 'email' }, ({ id }) => `/mail/${encodeURIComponent(id)}`)
@@ -105,6 +95,14 @@ function redirectLegacyRoutes(
       ({ id }) => `/channels/${encodeURIComponent(id)}`
     )
     .with({ type: 'task' }, ({ id }) => `/tasks/${encodeURIComponent(id)}`)
+    // Like a task, a project opens in Tasks, under its Projects tab.
+    .with({ type: 'initiative' }, ({ id }) => {
+      const query = new URLSearchParams();
+      replaceSplitSearchParams(query, [
+        { location: { search: { tasks: { tab: ['projects'] } } } },
+      ]);
+      return `/tasks/projects/${encodeURIComponent(id)}/overview?${query}`;
+    })
     .otherwise((content) => {
       const document = driveDocumentFromContent(content);
       return document
@@ -185,7 +183,10 @@ function migrateLegacySearch({
     }))
     .with('call-detail', 'drive-call', () => ({
       namespace: 'call-detail',
-      fields: [[CALL_URL_PARAMS.transcriptId, 'transcriptId']] as const,
+      fields: [
+        [CALL_URL_PARAMS.transcriptId, 'transcriptId'],
+        [CALL_URL_PARAMS.messageId, 'messageId'],
+      ] as const,
     }))
     .otherwise(() => undefined);
 

@@ -4,6 +4,10 @@ name = "ai_billing"
 publish = false
 version = "0.1.0"
 
+[features]
+# Host composition only; admission consumers can keep depending on domain ports.
+pg-admission = ["roles_and_permissions/outbound", "teams/outbound"]
+
 [dependencies]
 ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }
@@ -18,7 +22,6 @@ chrono = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }
-macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 macro_uuid = { path = "../macro_uuid" }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
@@ -38,3 +41,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+wiremock = { workspace = true }

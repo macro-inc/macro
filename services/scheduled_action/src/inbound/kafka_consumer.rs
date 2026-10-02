@@ -9,25 +9,33 @@ use std::time::Duration;
 
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     EventBrokerError, EventConsumer, KafkaConsumerAdapter, MacroEvent as _,
     MacroEventCollection as _, MacroEventConsumerService, MessageWrapper,
 };
+use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message};
 use rootcause::Report;
 use tracing::Instrument as _;
 
 use crate::domain::event_runs::{EventIngestion, EventIngestionResult};
-use crate::domain::event_trigger::{EventPayload, IncomingEvent};
+use crate::domain::event_trigger::{EventPayload, IncomingEvent, MessageFact};
 
-macro_event_broker::declare_topics!(DeclaredMacroEvent: DocumentMacroEvent, ChannelMacroEvent);
+macro_event_broker::declare_topics!(
+    DeclaredMacroEvent: DocumentMacroEvent,
+    ChannelMacroEvent,
+    MessageMacroEvent
+);
 
 struct ScheduledActionEventIngestionGroup;
 
 impl GroupName for ScheduledActionEventIngestionGroup {
     const GROUP_NAME: &'static str = "scheduled-action-event-ingestion";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type ScheduledActionKafkaAdapter =
@@ -68,6 +76,26 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
                 schema_version: envelope.schema_version,
                 payload: EventPayload::Channel(envelope.event.clone()),
             }
+        }
+        DeclaredMacroEvent::MessageMacroEvent(event) => {
+            let envelope = event.event();
+            IncomingEvent {
+                event_id: envelope.event_id,
+                schema_version: envelope.schema_version,
+                payload: EventPayload::Message(message_fact(&envelope.event)),
+            }
+        }
+    }
+}
+
+fn message_fact(event: &MessageTopicEvent) -> MessageFact {
+    match event {
+        MessageTopicEvent::Posted(data) => MessageFact::Posted(data.clone()),
+        MessageTopicEvent::Mentioned(data) => MessageFact::Mentioned(data.clone()),
+        MessageTopicEvent::Patched(data) => MessageFact::Patched(data.clone()),
+        MessageTopicEvent::AttachmentCreated(data) => MessageFact::AttachmentCreated(data.clone()),
+        MessageTopicEvent::Deleted(_) | MessageTopicEvent::AttachmentRemoved(_) => {
+            MessageFact::Other
         }
     }
 }

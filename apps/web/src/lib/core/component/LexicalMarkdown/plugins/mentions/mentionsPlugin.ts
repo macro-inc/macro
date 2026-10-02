@@ -76,6 +76,7 @@ import {
 import type { Setter } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import { registerInlineMenuTrigger } from '../../shared/registerInlineMenuTrigger';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
 import { mapRegisterDelete } from '../shared';
 
@@ -145,7 +146,9 @@ export type ItemMention = {
     | 'color'
     | 'call'
     | 'calendar_event'
+    | 'database'
     | 'agent_session'
+    | 'initiative'
     | 'foreign'
     | 'group'
     | 'automation'
@@ -210,6 +213,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'initiative') {
+      // A task project, never a document id.
+      fileType = 'initiative';
+      itemType = 'initiative';
     } else if (blockName === 'chat') {
       fileType = 'chat';
       itemType = 'chat';
@@ -316,9 +323,11 @@ const getDocumentMentionItemType = (
     .with('email', () => 'thread')
     .with('document', () => 'document')
     .with('agent_session', () => 'agent_session')
+    .with('database', () => 'database')
     .with('chat', () => 'chat')
     .with('channel', () => 'channel')
     .with('project', () => 'project')
+    .with('initiative', () => 'initiative')
     .with('channel_message', () => 'channel')
     .with('channel_thread', () => 'channel')
     .with('automation', () => 'automation')
@@ -375,27 +384,6 @@ function registerMentionsPlugin(
    * delete a mention viq a node selection.
    */
   let consumeDelete = false;
-
-  /**
-   * Register a manual DOM listener for the @ symbol.
-   * TODO (seamus) : Find a more Lexical-y way to do this.
-   */
-  function registerSymbolListener() {
-    const listener = (e: KeyboardEvent) => {
-      if (e.key === '@') {
-        editor.dispatchCommand(TYPE_AT_SYMBOL_COMMAND, undefined);
-      }
-    };
-
-    return editor.registerRootListener((root, prev) => {
-      if (root) {
-        root.addEventListener('keydown', listener);
-      }
-      if (prev) {
-        prev.removeEventListener('keydown', listener);
-      }
-    });
-  }
 
   function updateMentionsSignal() {
     if (props.setMentions === undefined) return;
@@ -640,7 +628,9 @@ function registerMentionsPlugin(
       COMMAND_PRIORITY_NORMAL
     ),
 
-    registerSymbolListener(),
+    registerInlineMenuTrigger(editor, '@', () => {
+      editor.dispatchCommand(TYPE_AT_SYMBOL_COMMAND, undefined);
+    }),
 
     editor.registerCommand(
       TYPE_AT_SYMBOL_COMMAND,

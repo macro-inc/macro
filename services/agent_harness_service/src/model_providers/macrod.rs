@@ -1,6 +1,8 @@
 //! Model discovery over the existing Redis runtime bus.
 
+use agent_harness::domain::capability_discovery::{CapabilityProbeError, RawCapabilityProbe};
 use std::sync::Arc;
+
 use std::time::Duration;
 
 use agent_harness::domain::model_load::{MacrodModelProbe, ModelProbeError, RawModelProbe};
@@ -119,6 +121,26 @@ impl MacrodModelProbe for MacrodModels {
                 }
                 ModelProbeResult::Error { message } => Err(ModelProbeError::Failed(message)),
             };
+        }
+    }
+}
+
+impl agent_harness::domain::capability_discovery::CapabilityProbe for MacrodModels {
+    type Target = HarnessId;
+    async fn probe(
+        &self,
+        harness: &HarnessId,
+        model: Option<&str>,
+    ) -> Result<RawCapabilityProbe, CapabilityProbeError> {
+        // Model-specific discovery requires a live session for external ACP runtimes.
+        if model.is_some() {
+            return Ok(RawCapabilityProbe::Unsupported);
+        }
+        match MacrodModelProbe::probe(self, *harness).await {
+            Ok(RawModelProbe::Options(options)) => Ok(RawCapabilityProbe::Options(options)),
+            Ok(RawModelProbe::Unsupported) => Ok(RawCapabilityProbe::Unsupported),
+            Err(ModelProbeError::Disconnected) => Err(CapabilityProbeError::Disconnected),
+            Err(error) => Err(CapabilityProbeError::Failed(error.to_string())),
         }
     }
 }

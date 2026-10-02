@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.default_link_share AS \"default_link_share?: LinkShare\"\n            FROM owner_team($1) ot\n            JOIN team t ON t.id = ot.team_id\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "default_link_share?: LinkShare",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "6b7cddc66bafd8797da9d38914f81b52cb654143cff1bbdf1858a13a75003cce"
+}

@@ -71,6 +71,43 @@ for (const succeeds of [true, false]) {
   });
 }
 
+for (const succeeds of [true, false]) {
+  test(`grouped bulk moves ignore 130 historical pages and reconcile ${succeeds ? 'success' : 'partial failure'}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      '/src/features/tasks-view/browser-test/property-optimism.html?grouped=1'
+    );
+    await expect(page.getByLabel('Historical grouped pages')).toHaveText(
+      '130 ready'
+    );
+    await expect(page.getByLabel('Unset group')).toHaveText('1,2');
+    await page.getByRole('button', { name: 'Set both Urgent' }).click();
+    await expect(page.getByLabel('Urgent group')).toHaveText('1,2');
+    await expect(page.getByLabel('Unset group')).toHaveText('');
+    await expect(page.getByLabel('Membership reads')).toHaveText('1');
+    await expect(page.getByLabel('Cache inspections')).toHaveText('0');
+    await expect(page.getByText('HTTP requests: 1 · Settled: 0')).toBeVisible();
+    await page.getByRole('button', { name: 'Commit next request' }).click();
+    await expect(page.getByText('HTTP requests: 2 · Settled: 1')).toBeVisible();
+    await page
+      .getByRole('button', {
+        name: succeeds ? 'Commit next request' : 'Fail next request',
+      })
+      .click();
+    await expect(page.getByLabel('Save status')).toContainText('Pending: no');
+    await expect(page.getByLabel('Urgent group')).toHaveText(
+      succeeds ? '1,2' : '1'
+    );
+    await expect(page.getByLabel('Unset group')).toHaveText(
+      succeeds ? '' : '2'
+    );
+    // Active-query cache misses may fetch too; no historical page may be fetched.
+    await expect(page.getByLabel('Historical group fetches')).toHaveText('0');
+    await expect(page.getByLabel('Cache inspections')).toHaveText('0');
+  });
+}
+
 test('bulk layers appear before the first response and rollback stays task-scoped', async ({
   page,
 }) => {

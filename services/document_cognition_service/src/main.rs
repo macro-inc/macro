@@ -77,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
+    let non_user_owners = config.non_user_owners()?;
 
     tracing::info!("initialized config");
 
@@ -273,10 +274,9 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_bucket.to_string(),
         config.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(
-        db.clone(),
-        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone()))),
-    );
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
 
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
@@ -372,7 +372,10 @@ async fn main() -> anyhow::Result<()> {
             entity_access_service.clone(),
         ),
         chat: chat::inbound::attachment::ChatAttachmentService::new(
-            Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
+            Arc::new(chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            )),
             entity_access_service.clone(),
         ),
         channel: channels::inbound::attachment::ChannelAttachmentService::new(
@@ -385,7 +388,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let message_service = Arc::new(
         chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             attachment_provider,
         )
         .with_event_broker(macro_event_broker.clone()),
@@ -445,7 +448,7 @@ async fn main() -> anyhow::Result<()> {
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -471,30 +474,46 @@ async fn main() -> anyhow::Result<()> {
 
     // The AI billing gate reads allowances, credits, and overage state here;
     // collection (Stripe) lives in the authentication service, which the
-    // recorder below asks to settle once a payer runs past their allowance.
-    let ai_billing = Arc::new(ai_billing::domain::BillingServiceImpl::new(
-        ai_billing::outbound::RolesTeamsEntitlementSource::new(
-            (*user_permissions_service).clone(),
-            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-        ),
-        ai_billing::outbound::PgUsageReader::new(db.clone()),
-        ai_billing::outbound::PgBillingRepo::new(db.clone()),
-        ai_billing::outbound::NoOpPaymentGateway,
-        config.environment,
-    ));
+    // recorder below asks to settle once a payer runs past their allowance
+    // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
+    let ai_billing = Arc::new(
+        ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                (*user_permissions_service).clone(),
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            ),
+            ai_billing::outbound::PgUsageReader::new(db.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone()),
+            ai_billing::outbound::NoOpPaymentGateway,
+        )
+        .with_enforcement(config.enable_ai_usage_enforcement),
+    );
+    let admission: Arc<dyn ai_billing::AiAdmissionService> =
+        Arc::new(ai_billing::BillingAdmissionService::new(
+            ai_billing.clone(),
+            config.enable_ai_usage_enforcement,
+        ));
     let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
         internal_api_key.clone(),
         AuthServiceUrl::new()?.to_string(),
     ));
     let recorder: Arc<dyn ai_usage::UsageRecorder> =
         Arc::new(ai_billing::outbound::SettlingUsageRecorder::new(
-            Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
-                ai_usage::outbound::PgUsageRepo::new(db.clone()),
-            )),
+            Arc::new(
+                ai_usage::domain::service::UsageServiceImpl::new(
+                    ai_usage::outbound::PgUsageRepo::new(db.clone()),
+                )
+                .with_enforcement(config.enable_ai_usage_enforcement),
+            ),
             ai_billing.clone(),
             ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
-            config.environment,
+            config.enable_ai_usage_billing,
         ));
+
+    // Per-attempt observations use a separate journal and never feed the
+    // legacy settlement trigger, which remains counted-usage-only and gated by
+    // ENABLE_AI_USAGE_BILLING.
+    let recorder = ai_usage::with_tracking(recorder, ai_usage::pg_tracking(db.clone()));
 
     // The import pipeline: staged/imported external items, gather jobs over
     // the user's connectors, and the Haiku import job. Built before the tool
@@ -596,8 +615,9 @@ async fn main() -> anyhow::Result<()> {
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
     // poll (see import::outbound::gateway_notifier).
-    let import_notify =
-        import::outbound::gateway_notifier::gateway_import_notify(channels_connection_gateway);
+    let import_notify = import::outbound::gateway_notifier::gateway_import_notify(
+        channels_connection_gateway.clone(),
+    );
 
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
@@ -614,6 +634,7 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(entity_creator),
             recorder.clone(),
         )
+        .with_admission(admission.clone())
         .with_notifier(import_notify),
     );
 
@@ -628,7 +649,7 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service.clone(),
         document_tool_context.service.clone(),
         chat_tool_context.service.clone(),
-        user_email_service,
+        user_email_service.clone(),
     );
 
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
@@ -638,6 +659,22 @@ async fn main() -> anyhow::Result<()> {
         entity_access_service.clone(),
         aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker.clone(),
+    );
+
+    let databases_tool_context = ai_tools::build_databases_tool_context(
+        db.clone(),
+        entity_access_service.clone(),
+        ai_tools::ToolTableEventPublisher::Gateway(
+            databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                channels_connection_gateway.as_ref().clone(),
+            ),
+        ),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
+        &databases_tool_context,
+        soup_service.clone(),
+        db.clone(),
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
@@ -650,6 +687,10 @@ async fn main() -> anyhow::Result<()> {
             properties_service,
             entity_access_service.clone(),
         ),
+        image_generation_tool_context: ai_tools::build_image_generation_tool_context(
+            &document_tool_context,
+            ai_tools::build_image_generator_from_env(),
+        )?,
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -662,8 +703,11 @@ async fn main() -> anyhow::Result<()> {
         notification_tool_context: notification_tool_context.clone(),
         reminders_tool_context: ai_tools::build_reminders_tool_context(
             db.clone(),
+            user_email_service.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context,
+        databases_sql_tool_context,
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
@@ -671,9 +715,10 @@ async fn main() -> anyhow::Result<()> {
         channel_tool_context,
         bot_tool_context: ai_tools::build_bot_tool_context(
             db.clone(),
-            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             DocumentStorageServiceUrl::new()?.to_string(),
+            pipedream_client.clone(),
         ),
         project_tool_context,
         initiative_tool_context,
@@ -682,9 +727,11 @@ async fn main() -> anyhow::Result<()> {
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
+            &document_tool_context,
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
@@ -705,9 +752,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Build the AI cost service. It backs both the admin query/pricing router
     // and the usage recorder threaded through the tool service context.
-    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
-        ai_usage::outbound::PgUsageRepo::new(db.clone()),
-    ));
+    let usage_service = Arc::new(
+        ai_usage::domain::service::UsageServiceImpl::new(ai_usage::outbound::PgUsageRepo::new(
+            db.clone(),
+        ))
+        .with_enforcement(config.enable_ai_usage_enforcement),
+    );
 
     tracing::info!("initialized ai cost service");
 
@@ -839,6 +889,8 @@ async fn main() -> anyhow::Result<()> {
         search_service_client,
         authorization_state,
         user_permissions_service,
+        non_user_owners,
+        ai_admission: tool_service_context.admission.clone(),
         ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),

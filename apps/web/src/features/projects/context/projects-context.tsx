@@ -38,6 +38,12 @@ export type ProjectPropertyDraft = {
   value: PropertyApiValues;
 };
 
+export type ProjectCreationInput = {
+  name: string;
+  shareWithTeam: boolean;
+  properties: readonly ProjectPropertyDraft[];
+};
+
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
   userId: Accessor<string | undefined>;
@@ -62,10 +68,8 @@ export type ProjectsContext = {
       ...args: Parameters<typeof createTaskWithProperties>
     ): ReturnType<typeof createTaskWithProperties>;
     pending: Accessor<boolean>;
-    create(input: {
-      name: string;
-      shareWithTeam: boolean;
-    }): Promise<ProjectDetail>;
+    /** One request creates the project with its property values. */
+    create(input: ProjectCreationInput): Promise<ProjectDetail>;
     rename(id: string, name: string): Promise<void>;
     setMembers(id: string, memberIds: string[]): Promise<void>;
     assignTasks(
@@ -73,10 +77,16 @@ export type ProjectsContext = {
       taskIds: readonly string[]
     ): Promise<ProjectAssignmentResult[]>;
     delete(id: string): Promise<void>;
+    /** Deletes each project and refreshes once; resolves with the ids that failed. */
+    deleteMany(ids: readonly string[]): Promise<string[]>;
     saveProperty(
       id: string,
       property: Property,
       value: PropertyApiValues
+    ): Promise<void>;
+    /** Saves every value as one batch; rejects when any of them fails. */
+    saveProperties(
+      updates: readonly (ProjectPropertyDraft & { id: string })[]
     ): Promise<void>;
   };
 };

@@ -36,6 +36,7 @@ export type SettingsTab =
   | 'Tags'
   | 'CRM'
   | 'Connected'
+  | 'Connections'
   | 'Email'
   | 'GitHub'
   | 'Admin';

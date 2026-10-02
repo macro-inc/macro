@@ -1,3 +1,4 @@
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import ArrowsInSimpleIcon from '@phosphor/arrows-in-simple.svg';
 import ArrowsOutSimpleIcon from '@phosphor/arrows-out-simple.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
@@ -13,6 +14,7 @@ import { pullRequestNumber } from '../core/pull-request';
  * diffs themselves live in the toolbar below.
  */
 export function ChangesHeader(props: {
+  mobile?: boolean;
   /** The pane fills the width; the session is off screen. */
   spotlit: boolean;
   /** `head → base`, when known. */
@@ -29,6 +31,16 @@ export function ChangesHeader(props: {
   };
   return (
     <>
+      <Show when={props.mobile}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label="Back to conversation"
+          onClick={props.onClose}
+        >
+          <ArrowLeftIcon />
+        </Button>
+      </Show>
       <h2 class="shrink-0 px-1 text-sm font-semibold text-ink">Changes</h2>
       <Show when={props.pullRequestUrl}>
         <Button
@@ -56,27 +68,29 @@ export function ChangesHeader(props: {
         )}
       </Show>
       <span class="flex-1" />
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-pressed={props.spotlit}
-        label={
-          props.spotlit
-            ? 'Back to the split'
-            : 'Expand changes to the full width'
-        }
-        onClick={() => props.onSpotlight()}
-      >
-        {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        label="Close the changes pane"
-        onClick={() => props.onClose()}
-      >
-        <XIcon />
-      </Button>
+      <Show when={!props.mobile}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.spotlit}
+          label={
+            props.spotlit
+              ? 'Back to the split'
+              : 'Expand changes to the full width'
+          }
+          onClick={() => props.onSpotlight()}
+        >
+          {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label="Close the changes pane"
+          onClick={() => props.onClose()}
+        >
+          <XIcon />
+        </Button>
+      </Show>
     </>
   );
 }

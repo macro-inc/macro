@@ -15,6 +15,19 @@ note: |-
   `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
+  - apps/web/src/features/crm/queries/**
+  - apps/web/src/features/crm/primitives/**
+  - apps/web/src/features/crm/components/**
+  - apps/web/src/features/crm/views/**
+  - apps/web/src/features/crm/context/**
+  - apps/web/src/features/slack-import/queries/**
+  - apps/web/src/features/slack-import/primitives/**
+  - apps/web/src/features/slack-import/components/**
+  - apps/web/src/features/slack-import/views/**
+  - apps/web/src/features/channels-view/queries/channel-detail-source*
+  - apps/web/src/features/channels-view/primitives/create-channel-detail*
+  - apps/web/src/features/channels-view/context/channel-detail-source*
+  - apps/web/src/features/channels-view/components/ChannelDetailView*
   - apps/web/src/features/channel/queries/channel-invite*
   - apps/web/src/features/channel/primitives/create-channel-invites*
   - apps/web/src/features/channel/components/channel-invite*
@@ -24,6 +37,10 @@ files:
   - apps/web/src/features/projects/components/**
   - apps/web/src/features/projects/views/**
   - apps/web/src/features/projects/context/**
+  - apps/web/src/features/channel/Call/chat/queries/**
+  - apps/web/src/features/channel/Call/chat/primitives/**
+  - apps/web/src/features/channel/Call/chat/components/**
+  - apps/web/src/features/channel/Call/chat/views/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/block-agent/ui/**

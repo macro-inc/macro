@@ -69,7 +69,11 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             <div class="size-full touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
               <EmailComposeView
                 context={viewContext.compose}
-                host={viewContext.composeHost}
+                host={{
+                  ...viewContext.composeHost,
+                  goBack:
+                    props.host?.returnToList ?? viewContext.composeHost?.goBack,
+                }}
                 draft={draft()}
                 recipientOptions={context.recipientOptions}
                 onRecipientsChange={context.onRecipientsChange}

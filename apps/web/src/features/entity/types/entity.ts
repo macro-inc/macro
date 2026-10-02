@@ -11,6 +11,7 @@ import type {
   SoupThreadReply,
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
+import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 
 export type EntityBase = {
   id: string;
@@ -182,6 +183,7 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
+  isArchived?: boolean;
   botId: string;
   harness?: string;
   repoUrl?: string | null;
@@ -276,6 +278,8 @@ export type EmailEntity = EntityBase & {
   isDraft: boolean;
   snippet?: string;
   isImportant: boolean;
+  /** Server-computed Signal membership; unavailable on some search results. */
+  isSignal?: boolean;
   done: boolean;
   projectId?: string;
   participants?: EmailThreadParticipants;
@@ -321,20 +325,36 @@ export type CallEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/**
+ * What a routine is doing now. A run in progress outranks activation, and a
+ * paused routine keeps its stale `next_run_at`, so pause outranks the schedule.
+ */
+export type RoutineStatus =
+  | { kind: 'running' }
+  | { kind: 'paused' }
+  | { kind: 'scheduled'; nextRunAt: string }
+  | { kind: 'unscheduled' };
+
+export function routineStatus(facts: {
+  enabled: boolean;
+  isRunning: boolean;
+  nextRunAt?: string | null;
+}): RoutineStatus {
+  if (facts.isRunning) return { kind: 'running' };
+  if (!facts.enabled) return { kind: 'paused' };
+  if (facts.nextRunAt) return { kind: 'scheduled', nextRunAt: facts.nextRunAt };
+  return { kind: 'unscheduled' };
+}
+
 export type AutomationEntity = EntityBase & {
   type: 'automation';
   /** Cron expression controlling when the automation runs. */
   cron: string;
-  /** Whether the automation is currently enabled. */
-  enabled: boolean;
-  /** ISO timestamp of the next scheduled run, or null when paused / unscheduled. */
-  nextRunAt?: string | null;
+  /** Running is derived from the server claim and the backend's stale-claim
+   *  window; claims update live via the connection-gateway websocket. */
+  status: RoutineStatus;
   /** ISO timestamp of the last completed run. */
   lastRunAt?: string | null;
-  /** True when a run is actively claimed on the server. Derived from the
-   *  scheduled action's `claimed` timestamp + the backend's stale-claim
-   *  window; updated live via the connection-gateway websocket. */
-  isRunning?: boolean;
 };
 
 export type CrmCompanyDomain = {
@@ -374,6 +394,13 @@ export type CrmContactEntity = EntityBase & {
   hidden: boolean;
 };
 
+/** A Macro Database. Not a Soup entity: it has no view history, so `createdAt` is its only timestamp. */
+export type DatabaseEntity = EntityBase & {
+  type: 'database';
+  /** What the viewer may do with the database. */
+  grant: AccessLevel;
+};
+
 export type ReminderEntity = EntityBase & {
   type: 'reminder';
   /** What to remind the user about. Doubles as {@link EntityBase.name}. */
@@ -395,7 +422,11 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'initiative'>;
+    // Databases are not Soup entities, so nothing can point a reminder at one.
+    type: Exclude<
+      EntityType,
+      'reminder' | 'calendar_event' | 'initiative' | 'database'
+    >;
     fileType?: string;
     subType?: string;
   };
@@ -409,8 +440,10 @@ export type ReminderEntity = EntityBase & {
   nextRunAt: DateValue;
   /** When false, the dispatcher skips this reminder. */
   enabled: boolean;
-  /** Set once a one-shot reminder has fired. */
+  /** When the owner acknowledged the occurrence; recurring schedules can remain enabled. */
   completedAt?: DateValue | null;
+  /** Owning email workflow; these mirrors must be rescheduled through Remind me. */
+  emailFollowup?: import('@service-storage/generated/schemas/emailFollowup').EmailFollowup;
 };
 
 /** Normalized time shape of a calendar event soup row. */
@@ -468,6 +501,7 @@ export type EntityData =
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
+  | DatabaseEntity
   | AutomationEntity
   | ReminderEntity
   | CalendarEventEntity
@@ -486,6 +520,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'call',
   'crm_company',
   'crm_contact',
+  'database',
   'automation',
   'reminder',
   'calendar_event',

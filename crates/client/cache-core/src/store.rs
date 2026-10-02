@@ -82,11 +82,12 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Loads the compact catalog for text search. This must read only the
-    /// derived search table, never normalized record payloads.
+    /// Loads one compact bucket for text search. Must use the profile/bucket
+    /// index, never unrelated buckets or normalized record payloads.
     fn load_search_documents(
         &self,
         _profile: SearchProfile,
+        _bucket: &str,
     ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
         async { Ok(Vec::new()) }
     }
@@ -282,6 +283,7 @@ pub struct InMemoryStorage {
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
     search_catalog_load_count: Arc<AtomicUsize>,
+    search_catalog_rows_loaded: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
 }
 
@@ -351,6 +353,11 @@ impl InMemoryStorage {
         self.search_catalog_load_count.load(Ordering::Relaxed)
     }
 
+    /// Number of compact rows loaded across bucket reads (test diagnostics).
+    pub fn search_catalog_rows_loaded(&self) -> usize {
+        self.search_catalog_rows_loaded.load(Ordering::Relaxed)
+    }
+
     /// Number of full mutation-queue loads (test diagnostics).
     pub fn mutation_queue_load_count(&self) -> usize {
         self.mutation_queue_load_count.load(Ordering::Relaxed)
@@ -408,15 +415,19 @@ impl Storage for InMemoryStorage {
     async fn load_search_documents(
         &self,
         profile: SearchProfile,
+        bucket: &str,
     ) -> Result<Vec<SearchDocument>, Self::Error> {
         self.search_catalog_load_count
             .fetch_add(1, Ordering::Relaxed);
-        Ok(self
+        let documents: Vec<_> = self
             .search_documents
-            .iter()
-            .filter(|((candidate, _), _)| *candidate == profile)
-            .map(|(_, document)| document.clone())
-            .collect())
+            .values()
+            .filter(|document| document.profile == profile && document.bucket == bucket)
+            .cloned()
+            .collect();
+        self.search_catalog_rows_loaded
+            .fetch_add(documents.len(), Ordering::Relaxed);
+        Ok(documents)
     }
 
     async fn browse_search_documents(
@@ -479,10 +490,12 @@ impl Storage for InMemoryStorage {
             .map(|(id, queued)| {
                 (
                     *id,
-                    queued
-                        .mutation
-                        .lease_expires_at_ms
-                        .is_some_and(|expiry| expiry > now_ms),
+                    crate::queue::collision_stays_active(
+                        queued.mutation.lease_expires_at_ms,
+                        now_ms,
+                        queued.mutation.attempt_count > 0,
+                        &queued.optimistic.optimistic_data_json,
+                    ),
                 )
             });
         let kind = match collision {

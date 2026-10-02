@@ -1,0 +1,16 @@
+---
+title: GenerateImage
+description: "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, embed the returned URL as a Markdown image. Do not cite it as a document. Generation takes several seconds."
+---
+
+# GenerateImage
+
+Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, embed the returned URL as a Markdown image. Do not cite it as a document. Generation takes several seconds.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `prompt` | string | Yes | Detailed description of the image to generate: subject, style (photo, illustration, flat vector...), composition, colours, mood, and any text that must appear. |
+| `aspectRatio` | `"square"` \| `"landscape"` \| `"portrait"` \| `"widescreen"` \| `"tall"` | No | Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories. |
+| `referenceImages` | ImageReferenceInput[] | No | Up to three reference photos, in the order used by the prompt. Use type document with a Macro image document ID, or type staticFile with the UUID from /file/<id> in an uploaded attachment's source URL or the staticFileId of a previous generation. Use the actual IDs supplied in the conversation or by tools; do not invent IDs. Omit for text-only generation. |

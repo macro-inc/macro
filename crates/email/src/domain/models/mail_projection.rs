@@ -9,6 +9,8 @@ pub struct EmailThreadMailProjection {
     pub cache_facts: EmailThreadMailCacheFacts,
     /// Canonical body-free previews used to materialize each Mail tab.
     pub previews: EmailThreadMailPreviews,
+    /// Complete draft contributions and a body-free non-draft baseline.
+    pub draft_state: Option<EmailThreadDraftState>,
 }
 
 /// Server-only facts used to filter and order cached Mail threads.
@@ -52,4 +54,49 @@ pub struct EmailPreview {
     pub sender_name: Option<String>,
     /// Sender profile photo URL.
     pub sender_photo_url: Option<String>,
+}
+
+/// Sufficient metadata to recompute Mail membership after a local draft edit.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EmailThreadDraftState {
+    /// Aggregate of every non-draft message, including messages outside cached pages.
+    pub baseline: EmailDraftAggregate,
+    /// All drafts, including trashed drafts whose previews are ineligible.
+    pub drafts: Vec<EmailDraftEntry>,
+}
+
+/// One independently replaceable draft contribution.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EmailDraftEntry {
+    /// Global message identity.
+    pub id: uuid::Uuid,
+    /// Whether edits contribute their update time to Mail recency.
+    pub macro_draft: bool,
+    /// This draft's contribution to thread metadata.
+    pub facts: EmailDraftAggregate,
+}
+
+/// Associative Mail aggregate; preview ties use message identity descending.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EmailDraftAggregate {
+    /// Number of messages, including trashed messages.
+    pub message_count: i32,
+    /// Any message makes the thread inbox-visible.
+    pub inbox_visible: bool,
+    /// Every message is read.
+    pub is_read: bool,
+    /// Any eligible message is Signal.
+    pub is_signal: bool,
+    /// Any message has a calendar attachment.
+    pub has_calendar_attachment: bool,
+    /// Maximum inbound or Macro-draft timestamp.
+    pub latest_inbound_message_ts: Option<DateTime<Utc>>,
+    /// Maximum non-spam or Macro-draft timestamp.
+    pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
+    /// Maximum outbound timestamp.
+    pub latest_outbound_message_ts: Option<DateTime<Utc>>,
+    /// Latest non-trashed preview.
+    pub preview: Option<EmailPreview>,
+    /// Preview ordering uses internal date or creation date, never edit time.
+    pub preview_ts: Option<DateTime<Utc>>,
 }

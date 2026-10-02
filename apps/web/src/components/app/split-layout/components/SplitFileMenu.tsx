@@ -322,6 +322,7 @@ function MobileRender(
 }
 
 export type SplitFileMenuProps = {
+  onEmailReminderSaved?: () => void | Promise<void>;
   id: string;
   itemType: ItemType;
   name: string;
@@ -367,6 +368,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   // reminder brings the entity back, so it is marked done now. No soup list is
   // behind this menu, so nothing advances.
   const createReminderAction = makeCreateReminderAction({
+    onEmailSaved: props.onEmailReminderSaved,
     onCreated: markReminderTargetDone(markDone),
   });
   const addTagAction = makeAddTagAction();

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM call_meeting_preparations WHERE expires_at <= now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a043b6596229f70fd5bf38f4e8d05c086b929a22d3831f5ea316161fbae27736"
+}

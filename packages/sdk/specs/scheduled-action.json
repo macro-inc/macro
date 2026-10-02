@@ -134,6 +134,16 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -286,6 +296,95 @@
         }
       }
     },
+    "/scheduled-actions/{id}/enabled": {
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "set_scheduled_action_enabled",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetScheduledActionEnabled"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Configuration changed or execution is active",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/execute": {
       "post": {
         "tags": ["scheduled actions"],
@@ -332,6 +431,16 @@
               }
             }
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -358,6 +467,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -453,6 +572,31 @@
         },
         "additionalProperties": false
       },
+      "ActionConfigurationUpdate": {
+        "type": "object",
+        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value.",
+        "required": ["name", "trigger", "kind", "task"],
+        "properties": {
+          "enabled": {
+            "type": ["boolean", "null"],
+            "description": "Still sent by clients deployed before the activation endpoint.",
+            "deprecated": true
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActionKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "task": {
+            "type": "object"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger"
+          }
+        },
+        "additionalProperties": false
+      },
       "ActionExecutionRecord": {
         "type": "object",
         "required": [
@@ -485,7 +629,7 @@
           },
           "resource_id": {
             "type": ["string", "null"],
-            "description": "ID of the primary resource produced by this run (e.g. a chat thread).\nOpaque to the scheduler; the UI interprets it based on the action kind."
+            "description": "ID of the primary resource produced by this run. Its type is recorded in\n`result`, independently of the routine's current configuration."
           },
           "result": {
             "type": "object"
@@ -536,16 +680,61 @@
       },
       "AgentTask": {
         "type": "object",
-        "required": ["model", "prompt", "user_prompt"],
+        "required": ["prompt", "user_prompt"],
         "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentTaskAgent",
+                "description": "Absent for legacy model-only tasks."
+              }
+            ]
+          },
           "model": {
-            "type": "string"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineModelId",
+                "description": "Required for model targets; overrides the persona default for agent targets."
+              }
+            ]
           },
           "prompt": {
             "type": "string"
           },
           "user_prompt": {
             "type": "string"
+          }
+        }
+      },
+      "AgentTaskAgent": {
+        "type": "object",
+        "description": "A persona selection, independent of its runtime and current default model.",
+        "required": ["bot_id"],
+        "properties": {
+          "bot_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
           }
         }
       },
@@ -603,6 +792,49 @@
           "channel.message_attachment_created"
         ]
       },
+      "ExecutionResource": {
+        "type": "object",
+        "description": "Transcript resource created by a run. Never infer this from current task configuration.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ExecutionResourceType"
+          }
+        }
+      },
+      "ExecutionResourceType": {
+        "type": "string",
+        "description": "Closed set of transcript destinations understood by routine clients.",
+        "enum": ["chat", "agent"]
+      },
+      "ExecutionResult": {
+        "type": "object",
+        "description": "Version 1 execution metadata stored in the existing JSON result column.\nNull/string column values predate this envelope and refer to legacy chats.",
+        "required": ["version"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"]
+          },
+          "resource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionResource"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
       "InProgressExecution": {
         "type": "object",
         "required": ["action_id"],
@@ -613,6 +845,17 @@
           },
           "chat_id": {
             "type": ["string", "null"]
+          },
+          "resource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionResource",
+                "description": "Absent only in responses from legacy workers."
+              }
+            ]
           }
         }
       },
@@ -641,6 +884,10 @@
           }
         },
         "additionalProperties": false
+      },
+      "RoutineModelId": {
+        "type": "string",
+        "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
       },
       "Schedule": {
         "type": "string"
@@ -739,17 +986,27 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["owner", "action_id", "chat_id", "type"],
+            "required": ["owner", "action_id", "type"],
             "properties": {
               "action_id": {
                 "type": "string",
                 "format": "uuid"
               },
               "chat_id": {
-                "type": "string"
+                "type": ["string", "null"]
               },
               "owner": {
                 "type": "string"
+              },
+              "resource": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionResource"
+                  }
+                ]
               },
               "type": {
                 "type": "string",
@@ -759,20 +1016,30 @@
           },
           {
             "type": "object",
-            "required": ["owner", "action_id", "chat_id", "is_success", "type"],
+            "required": ["owner", "action_id", "is_success", "type"],
             "properties": {
               "action_id": {
                 "type": "string",
                 "format": "uuid"
               },
               "chat_id": {
-                "type": "string"
+                "type": ["string", "null"]
               },
               "is_success": {
                 "type": "boolean"
               },
               "owner": {
                 "type": "string"
+              },
+              "resource": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExecutionResource"
+                  }
+                ]
               },
               "type": {
                 "type": "string",
@@ -781,12 +1048,22 @@
             }
           }
         ],
-        "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the `chat_id` to navigate to the run\ntranscript and the variant tag to toggle the running indicator.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
+        "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the typed resource to navigate to the run\ntranscript and the variant tag to toggle the running indicator. `chat_id`\nremains populated only for chat runs, for older clients.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
+      },
+      "SetScheduledActionEnabled": {
+        "type": "object",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateScheduledAction": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/ActionConfiguration"
+            "$ref": "#/components/schemas/ActionConfigurationUpdate"
           },
           {
             "$ref": "#/components/schemas/LegacyActionConfiguration"

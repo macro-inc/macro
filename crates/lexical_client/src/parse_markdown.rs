@@ -171,7 +171,8 @@ pub struct AgentAnnouncementReplyTarget {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    reply_target: &'a AgentAnnouncementReplyTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_target: Option<&'a AgentAnnouncementReplyTarget>,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -326,6 +327,16 @@ pub struct AgentContext<'a> {
     rename_all_fields = "camelCase"
 )]
 pub enum AgentContextAnchor<'a> {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: &'a str,
+        /// Sheet name when the discussion was created.
+        sheet_name: &'a str,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: &'a str,
+    },
+
     /// A comment mark in a markdown document.
     Markdown {
         /// Lexical mark the comment is attached to.
@@ -359,6 +370,8 @@ pub enum AgentContextAnchor<'a> {
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    instructions: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
@@ -609,7 +622,7 @@ impl LexicalClient {
     #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        reply_target: &AgentAnnouncementReplyTarget,
+        reply_target: Option<&AgentAnnouncementReplyTarget>,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
@@ -673,6 +686,7 @@ impl LexicalClient {
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
+        instructions: Option<&str>,
         parent: Option<&MessageParent>,
         context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
@@ -682,6 +696,7 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
+                    instructions,
                     parent,
                     context,
                 })

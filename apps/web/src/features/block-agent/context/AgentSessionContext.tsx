@@ -12,6 +12,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
 import type { InteractionController } from './interaction';
@@ -28,6 +29,8 @@ export type AgentSessionState = {
   /** The session is still being created — everything else is empty because
    *  there is nothing to show yet, not because the load failed. */
   pending: Accessor<boolean>;
+  /** Unsent context from the action that opened this session. */
+  initialInput?: string;
   startupError: Accessor<string | undefined>;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
@@ -61,6 +64,8 @@ export type AgentSessionState = {
    * has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /** Resolve only after the runtime confirms the selected model and effort. */
+  selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
    * Send the next queued message now: stop the running turn, and show the
    * queue head as sent under the id the server already holds it by. The

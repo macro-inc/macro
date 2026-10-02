@@ -22,6 +22,7 @@
             NULL::boolean as "is_completed",
             NULL::timestamptz as "deleted_at",
             NULL::jsonb as "calendar_event",
+            NULL::jsonb as "database_row",
             gi.group_key as "group_key",
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"

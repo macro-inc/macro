@@ -13,7 +13,10 @@ import { match } from 'ts-pattern';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
-import { SpreadsheetGrid } from '../components/SpreadsheetGrid';
+import {
+  renderedSelectionCell,
+  SpreadsheetGrid,
+} from '../components/SpreadsheetGrid';
 import type { HeaderAction } from '../components/SpreadsheetHeaderMenu';
 import { SpreadsheetSheetTabs } from '../components/SpreadsheetSheetTabs';
 import {
@@ -149,11 +152,7 @@ export function SpreadsheetEditor(props: {
   );
   const addComment = () => {
     grid.commit();
-    props.comments?.add(
-      gridElement?.querySelector<HTMLElement>(
-        `[data-address="${grid.activeAddress()}"]`
-      ) ?? undefined
-    );
+    props.comments?.add(renderedSelectionCell(gridElement, grid.selection()));
   };
   const restoreEditorFocus = () => {
     const pending = pendingMenuAction;
@@ -500,10 +499,14 @@ export function SpreadsheetEditor(props: {
             class="w-full rounded border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
           />
           <div class="mt-4 flex justify-end gap-2">
-            <Button type="button" onClick={() => setResize(undefined)}>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setResize(undefined)}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="accent">
+            <Button type="submit" variant="strong">
               Apply
             </Button>
           </div>

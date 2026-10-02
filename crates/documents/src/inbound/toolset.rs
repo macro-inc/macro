@@ -1,12 +1,11 @@
 //! Toolset inbound adapter for Documents.
 
-mod comment_on_document_text;
+mod comment_on_document;
 mod create_document;
 mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
-mod reply_to_document_comment;
 mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
@@ -24,13 +23,12 @@ use crate::{
     domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
-        comment_on_document_text::CommentOnDocumentText,
+        comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
         edit_document::EditDocument,
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
-        reply_to_document_comment::ReplyToDocumentComment,
         resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
@@ -97,6 +95,9 @@ pub struct DocumentToolContext<
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
+    /// Shared admission used by the domain AI-editing use case.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
@@ -131,6 +132,7 @@ impl<
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            admission: self.admission.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
@@ -188,10 +190,29 @@ impl<
             messages,
             spreadsheet,
             document_permission_jwt_secret,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
         }
+    }
+
+    /// Configure admission for AI edits; deterministic operations do not use it.
+    pub fn with_admission(
+        mut self,
+        admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    ) -> Self {
+        self.admission = admission;
+        self
+    }
+
+    /// The AI-editing use case using the currently injected services.
+    pub fn ai_editing(&self) -> crate::domain::ai_editing::AiEditingService<EDSvc> {
+        crate::domain::ai_editing::AiEditingService::new(
+            self.editing.clone(),
+            self.admission.clone(),
+            self.recorder.clone(),
+        )
     }
 
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
@@ -265,8 +286,7 @@ where
         .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<ReplyToDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<CommentOnDocumentText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ResolveDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()

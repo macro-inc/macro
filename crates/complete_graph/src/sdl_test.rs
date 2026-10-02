@@ -291,6 +291,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupForeignEntity",
         "GraphqlSoupReminder",
         "GraphqlSoupAgentSession",
+        "GraphqlSoupDatabaseRow",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {
@@ -464,6 +465,235 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
             "duplicate initiative field remains: {duplicate}"
         );
     }
+}
+
+#[test]
+fn database_rows_are_an_opt_in_soup_entity_named_by_table() {
+    let sdl = crate::build_schema().sdl();
+    let block = |declaration: &str| {
+        sdl.split_once(declaration)
+            .unwrap_or_else(|| panic!("schema has no `{declaration}`"))
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+            .to_owned()
+    };
+    let row = block("type GraphqlSoupDatabaseRow implements GraphqlSoupEntity {");
+    for field in [
+        "id: ID!",
+        "entityType: GraphqlSoupEntityType!",
+        "tableId: ID!",
+        "databaseId: ID!",
+        "position: String!",
+        "ownerId: String!",
+        "creatorId: String",
+        "createdAt: String!",
+        "updatedAt: String!",
+        "properties: [GraphqlProperty!]!",
+    ] {
+        assert_sdl_line(&row, field);
+    }
+    assert_sdl_line(
+        &block("input GraphqlEntityFilterAst {"),
+        "databaseRowFilter: GraphqlDatabaseRowExpr",
+    );
+    let literal = block("input GraphqlDatabaseRowLiteral @oneOf {");
+    assert_sdl_line(&literal, "tableId: ID");
+    assert_sdl_line(&literal, "id: ID");
+    assert_sdl_line(&block("enum GraphqlSoupEntityType {"), "DATABASE_ROW");
+}
+
+#[test]
+fn scheduled_actions_hang_off_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    assert_sdl_line(&sdl, "scheduledActions: [GraphqlScheduledAction!]!");
+    assert_sdl_line(
+        &sdl,
+        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger",
+    );
+    assert!(sdl.contains("AI routines the authenticated user can access."));
+    for value in [
+        "DOCUMENT_CREATED",
+        "DOCUMENT_UPDATED",
+        "CHANNEL_CREATED",
+        "CHANNEL_MESSAGE_POSTED",
+        "CHANNEL_MENTIONED",
+        "CHANNEL_MESSAGE_PATCHED",
+        "CHANNEL_MESSAGE_ATTACHMENT_CREATED",
+    ] {
+        assert_sdl_line(&sdl, value);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(user) = schema.types.get("GraphqlUser").expect("user type") else {
+        panic!("GraphqlUser must be an object");
+    };
+    assert!(user.fields.contains_key("scheduledActions"));
+    assert!(
+        user.fields["scheduledActions"]
+            .description
+            .as_ref()
+            .expect("scheduledActions documentation")
+            .to_string()
+            .contains("authenticated user")
+    );
+
+    let ExtendedType::Object(root) = schema.types.get("SoupQueryRoot").expect("query root") else {
+        panic!("SoupQueryRoot must be an object");
+    };
+    assert!(!root.fields.contains_key("scheduledActions"));
+
+    let ExtendedType::Interface(soup) = schema
+        .types
+        .get("GraphqlSoupEntity")
+        .expect("soup entity interface")
+    else {
+        panic!("GraphqlSoupEntity must be an interface");
+    };
+    assert!(!soup.fields.contains_key("scheduledActions"));
+
+    let ExtendedType::Enum(soup_types) = schema
+        .types
+        .get("GraphqlSoupEntityType")
+        .expect("soup entity type enum")
+    else {
+        panic!("GraphqlSoupEntityType must be an enum");
+    };
+    assert!(!soup_types.values.contains_key("SCHEDULED_ACTION"));
+    let ExtendedType::Enum(entity_types) = schema
+        .types
+        .get("GraphqlEntityType")
+        .expect("entity type enum")
+    else {
+        panic!("GraphqlEntityType must be an enum");
+    };
+    assert!(entity_types.values.contains_key("SCHEDULED_ACTION"));
+
+    let ExtendedType::Object(action) = schema
+        .types
+        .get("GraphqlScheduledAction")
+        .expect("routine object")
+    else {
+        panic!("GraphqlScheduledAction must be an object");
+    };
+    assert_eq!(action.fields["id"].ty.to_string(), "ID!");
+    assert_eq!(
+        action
+            .fields
+            .keys()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>(),
+        vec![
+            "id",
+            "name",
+            "enabled",
+            "trigger",
+            "agentTask",
+            "claimExpiresAt",
+            "createdAt",
+            "updatedAt",
+        ]
+    );
+    for absent in [
+        "owner",
+        "kind",
+        "task",
+        "configurationRevision",
+        "eventActivatedAt",
+        "isRunning",
+        "nextRunAt",
+    ] {
+        assert!(
+            !action.fields.contains_key(absent),
+            "{absent} must stay off the routine object"
+        );
+    }
+    assert!(
+        action.fields["claimExpiresAt"]
+            .description
+            .as_ref()
+            .expect("claimExpiresAt documentation")
+            .to_string()
+            .contains("after that instant")
+    );
+
+    let ExtendedType::Object(cron) = schema
+        .types
+        .get("GraphqlScheduledActionCronTrigger")
+        .expect("cron trigger")
+    else {
+        panic!("cron trigger must be an object");
+    };
+    assert!(!cron.fields.contains_key("id"));
+    assert_eq!(cron.fields["nextRunAt"].ty.to_string(), "String");
+    assert!(
+        cron.fields["nextRunAt"]
+            .description
+            .as_ref()
+            .expect("nextRunAt documentation")
+            .to_string()
+            .contains("disabled")
+    );
+
+    let ExtendedType::Object(task) = schema
+        .types
+        .get("GraphqlScheduledActionAgentTask")
+        .expect("agent task")
+    else {
+        panic!("agent task must be an object");
+    };
+    assert_eq!(task.fields["model"].ty.to_string(), "String");
+    assert_eq!(
+        task.fields["agent"].ty.to_string(),
+        "GraphqlScheduledActionAgent"
+    );
+
+    for embedded in [
+        "GraphqlScheduledActionEventsTrigger",
+        "GraphqlScheduledActionEventFilter",
+        "GraphqlScheduledActionAgentTask",
+        "GraphqlScheduledActionAgent",
+    ] {
+        let ExtendedType::Object(value) = schema.types.get(embedded).expect(embedded) else {
+            panic!("{embedded} must be an object");
+        };
+        assert!(
+            !value.fields.contains_key("id"),
+            "{embedded} must stay embedded"
+        );
+    }
+
+    let ExtendedType::Object(agent) = schema
+        .types
+        .get("GraphqlScheduledActionAgent")
+        .expect("scheduled action agent")
+    else {
+        panic!("scheduled action agent must be an object");
+    };
+    assert_eq!(agent.fields["botId"].ty.to_string(), "ID!");
+
+    let ExtendedType::Object(filter) = schema
+        .types
+        .get("GraphqlScheduledActionEventFilter")
+        .expect("event filter")
+    else {
+        panic!("event filter must be an object");
+    };
+    assert_eq!(filter.fields["entityIds"].ty.to_string(), "[ID!]");
+    let entity_ids = filter.fields["entityIds"]
+        .description
+        .as_ref()
+        .expect("entityIds documentation")
+        .to_string();
+    assert!(entity_ids.contains("Null matches every id"), "{entity_ids}");
+    assert!(
+        entity_ids.contains("empty list matches nothing"),
+        "{entity_ids}"
+    );
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

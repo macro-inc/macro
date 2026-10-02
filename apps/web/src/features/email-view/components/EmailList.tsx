@@ -30,6 +30,7 @@ import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
+import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
   createMemo,
@@ -57,6 +58,7 @@ import {
 } from '../persistence';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
+import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
@@ -413,11 +415,13 @@ export function EmailList(props: EmailListProps) {
     }
   }
 
+  const listTarget = tourTarget(EMAIL_TOUR.list);
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
+          listTarget(element);
           props.ref?.(element);
         }}
         role="grid"
@@ -476,7 +480,6 @@ export function EmailList(props: EmailListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-lg"
                     onClick={() => void source.refresh()}
                   >
                     Try again

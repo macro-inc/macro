@@ -160,6 +160,8 @@ pub enum ChannelThreadLiteral {
     Participant(MacroUserIdStr<'static>),
     /// An entity has a non-deleted notification in this exact state.
     NotificationState(crate::NotificationState),
+    /// Whether the thread has at least one undeleted reply.
+    HasReplies(bool),
 }
 
 impl ExpandFrame<ChannelThreadLiteral> for ChannelThreadFilters {

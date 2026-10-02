@@ -67,8 +67,10 @@ and every 30 seconds, so missed events and gateway restarts recover automaticall
   lease replacement accumulated across reloads until every stream was cut.
   Expiry, idle timeout and one-preview-per-session are the controls that bound
   cost.
-- Per preview: 512 concurrent HTTP streams and eight WebSockets; 16 MiB request
-  bodies, 30-second upstream response-header timeout. Traffic is streamed.
+- Per preview: 4096 concurrent HTTP streams (queued, not refused) and eight
+  WebSockets; 16 MiB request bodies, 30-second upstream response-header timeout.
+  Traffic is streamed. Excess HTTP streams wait for a slot so a Vite cold load
+  is not served `text/plain` refusals that browsers report as corrupted modules.
 - 1,024 SSH connections, bounded SSH authentication time, 128 concurrent control
   requests, 64 KiB control bodies, 15-second control timeout. Tickets and browser
   credentials also have bounded registries and expiry.
@@ -87,35 +89,23 @@ runs **one replica**, with non-overlapping replacements and no autoscaling:
 SSH, HTTP, and control requests must reach the same in-memory registry. Scaling
 requires explicit ownership/routing across gateways first.
 
-Before first deployment:
+Bootstrap (done 2026-09-28):
 
-The service has a `bootstrap_pending` reason in `.github/services-config.json`
-until these prerequisites are ready. CI still builds, lints, and tests its Rust
-and TypeScript, but explicitly defers live Doppler validation and Pulumi preview;
-automatic deployment excludes it and the manual service deployment workflow
-rejects it. Direct Pulumi commands remain available for bootstrap. Other services'
-checks remain strict, including failures caused by missing configuration.
+- Domain: `macro-agent-gateway.com` (Route 53 zone `Z02409452IBB8642CNAGC`).
+  Prod serves `*.macro-agent-gateway.com` and `ssh.macro-agent-gateway.com`; dev
+  serves `*.dev.macro-agent-gateway.com` and `ssh.dev.macro-agent-gateway.com`.
+- Pulumi stacks `macro-inc/preview-gateway/{dev,prod}` carry `preview_domain`,
+  `preview_zone_id` and the encrypted `doppler:dopplerToken` the stack's Doppler
+  writes need.
+- Doppler project `preview-gateway` (created by the `doppler-projects` stack) has
+  `DATABASE_URL`, `INTERNAL_API_KEY` and a persistent ed25519
+  `PREVIEW_SSH_HOST_KEY` in `dev`/`prd`; the preview stack manages `PORT`,
+  `ENVIRONMENT`, `PREVIEW_DOMAIN`, `PREVIEW_SSH_HOST`, `PREVIEW_APP_ORIGIN` and
+  `PREVIEW_CONTROL_HOSTS`. MacroConfig reads `APP_SECRETS_JSON` as the complete
+  configuration, so those keys must be synced before a task can become healthy.
 
-1. Initialize `macro-inc/preview-gateway/dev` and `macro-inc/preview-gateway/prod`
-   Pulumi stacks. Choose a separate preview domain and its Route 53 zone. Set Pulumi
-   `preview_domain` and `preview_zone_id` for the dev or prod stack. Dev and prod
-   should use distinct DNS suffixes.
-2. Deploy the Doppler projects stack to create `preview-gateway` and its secret
-   sync. In its `dev` / `prd` config, set `DATABASE_URL` and `INTERNAL_API_KEY`
-   using the existing service secret references. Generate a persistent ed25519
-   key with `ssh-keygen -t ed25519 -N '' -f <private-temporary-path>` and store
-   its private PEM as `PREVIEW_SSH_HOST_KEY` in Doppler. Do not commit the key.
-3. The preview stack manages `PORT`, `ENVIRONMENT`, `PREVIEW_DOMAIN`,
-   `PREVIEW_SSH_HOST`, `PREVIEW_APP_ORIGIN`, and `PREVIEW_CONTROL_HOSTS` in Doppler.
-   They must be present in the synced `APP_SECRETS_JSON` before a task can become
-   healthy. MacroConfig does not merge missing JSON keys from ECS environment
-   variables. Run `preview_gateway_doppler_config` to validate service config.
-4. Remove `bootstrap_pending` from the service inventory and open a PR. This
-   inventory-only change triggers live Doppler validation and Pulumi previews
-   before enabling the normal deployment pipeline; do not remove it before dev
-   and prod configuration are ready. Deploy gateway, harness, and web changes.
-   Confirm `/preview/health`, call SharePreview,
-   execute the script, and verify a page edit over HMR and Stop sharing.
+After a deploy, confirm `/preview/health`, call SharePreview, execute the script,
+and verify a page edit over HMR and Stop sharing.
 
 A domain, DNS zone, and production secrets are deployment prerequisites, not
 embedded defaults. Rotating the host key invalidates previously issued scripts;

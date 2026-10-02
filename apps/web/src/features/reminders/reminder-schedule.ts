@@ -2,7 +2,6 @@ import { formatDateAndTime } from '@app/features/entity/utils/timestamp';
 import {
   buildCron,
   type CronParts,
-  describeCron,
   getDefaultTimezone,
   normalizeCron,
   parseCron,
@@ -11,6 +10,8 @@ import {
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
+import { describeReminderRecurrence } from './core/recurrence-label';
+import { formatReminderOccurrence } from './core/schedule-instant';
 
 /**
  * The time of day a bare date resolves to.
@@ -23,6 +24,129 @@ export const REMINDER_DEFAULT_TIME = { hours: 9, minutes: 0 } as const;
 
 /** Longest description the API accepts, mirroring the service's own limit. */
 export const REMINDER_DESCRIPTION_MAX_LENGTH = 2000;
+
+/**
+ * Parse native date/time control values without accepting DST normalization.
+ *
+ * `new Date('2026-03-08T02:30')` in New York silently becomes 03:30 because
+ * 02:30 never occurs on the spring-forward day. A reminder must not save at a
+ * different time than the controls display, so round-trip every component.
+ */
+export function parseLocalReminderDateTime(
+  dateValue: string,
+  timeValue: string
+): Date | undefined {
+  const dateMatch = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  // Native time values are minute-only with the form's default step, but the
+  // HTML serialization also permits seconds and fractional seconds. Accept the
+  // full shape so a valid value is never mislabeled as a DST gap.
+  const timeMatch = timeValue.match(
+    /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
+  );
+  if (!dateMatch || !timeMatch) return undefined;
+
+  const [, year, month, day] = dateMatch.map(Number);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const second = Number(timeMatch[3] ?? 0);
+  const millisecond = Number((timeMatch[4] ?? '').padEnd(3, '0'));
+  const parsed = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    millisecond
+  );
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day ||
+    parsed.getHours() !== hour ||
+    parsed.getMinutes() !== minute ||
+    parsed.getSeconds() !== second ||
+    parsed.getMilliseconds() !== millisecond
+  ) {
+    return undefined;
+  }
+  return parsed;
+}
+
+export interface ReminderQuickPreset {
+  id: 'in-30-minutes' | 'later-today' | 'tomorrow-morning' | 'next-week';
+  label: string;
+  date: Date;
+}
+
+/** Common one-shot choices, computed when the form opens so labels are exact. */
+export function reminderQuickPresets(now: Date): ReminderQuickPreset[] {
+  // Elapsed time, not a local wall-clock mutation: adding 30 via setMinutes
+  // becomes 90 elapsed minutes when daylight saving time falls back.
+  const inThirtyMinutes = new Date(now.getTime() + 30 * 60 * 1000);
+
+  const laterToday = new Date(now);
+  laterToday.setHours(17, 0, 0, 0);
+
+  const tomorrowMorning = new Date(now);
+  tomorrowMorning.setDate(tomorrowMorning.getDate() + 1);
+  tomorrowMorning.setHours(
+    REMINDER_DEFAULT_TIME.hours,
+    REMINDER_DEFAULT_TIME.minutes,
+    0,
+    0
+  );
+
+  const nextWeek = new Date(now);
+  const daysUntilNextMonday = (8 - nextWeek.getDay()) % 7 || 7;
+  nextWeek.setDate(nextWeek.getDate() + daysUntilNextMonday);
+  nextWeek.setHours(
+    REMINDER_DEFAULT_TIME.hours,
+    REMINDER_DEFAULT_TIME.minutes,
+    0,
+    0
+  );
+
+  return [
+    { id: 'in-30-minutes', label: 'In 30m', date: inThirtyMinutes },
+    ...(laterToday > now
+      ? ([
+          { id: 'later-today', label: 'Later today', date: laterToday },
+        ] satisfies ReminderQuickPreset[])
+      : []),
+    {
+      id: 'tomorrow-morning',
+      label: 'Tomorrow',
+      date: tomorrowMorning,
+    },
+    { id: 'next-week', label: 'Next week', date: nextWeek },
+  ];
+}
+
+/** An exact, human-readable instant for previews and save confirmation. */
+export function formatReminderInstant(
+  date: Date,
+  timezone: string = getDefaultTimezone()
+): string {
+  return formatReminderOccurrence(date, timezone) ?? 'Schedule unavailable';
+}
+
+/** The schedule wording shown after persistence succeeds. */
+export function describeReminderConfirmation(
+  schedule: ReminderSchedule,
+  nextRunAt?: string
+): string {
+  if (isRecurring(schedule)) {
+    if (nextRunAt) {
+      const instant = formatReminderOccurrence(nextRunAt, schedule.timezone);
+      return instant
+        ? `${instant} · ${describeReminderRecurrence(schedule.cron).cadence}`
+        : 'Schedule unavailable';
+    }
+    return describeReminderSchedule(schedule) ?? 'Repeating reminder';
+  }
+  return formatReminderOccurrence(schedule.remindAt) ?? 'Schedule unavailable';
+}
 
 /** A one-shot schedule firing at `date`. */
 export function onceSchedule(date: Date): ReminderSchedule {
@@ -113,8 +237,7 @@ export function scheduleFromRow(row: {
  *
  * A recurring reminder reads as its cadence ("Every weekday at 9:00 AM"), which
  * is what says it fires again at all; a one-shot reads as the single instant it
- * fires, date and time together. Both answer "when?" without repeating what the
- * recurrence badge beside them already says.
+ * fires, date and time together. Any seasonal zone is taken from that occurrence.
  */
 export function describeReminderWhen(row: {
   scheduleType: 'once' | 'recurring';
@@ -123,7 +246,7 @@ export function describeReminderWhen(row: {
   nextRunAt: string | Date;
 }): string {
   return (
-    describeReminderSchedule(scheduleFromRow(row)) ??
+    describeReminderSchedule(scheduleFromRow(row), new Date(row.nextRunAt)) ??
     formatDateAndTime(row.nextRunAt)
   );
 }
@@ -156,14 +279,26 @@ export function repeatPartsFromSchedule(schedule: ReminderSchedule): CronParts {
  * in words would just be the same thing twice.
  */
 export function describeReminderSchedule(
-  schedule: ReminderSchedule
+  schedule: ReminderSchedule,
+  occurrence?: Date
 ): string | undefined {
   if (!isRecurring(schedule)) return undefined;
-  // The zone is part of the schedule, not decoration: "every day at 9:00 AM"
-  // means a different instant in Denver than in Berlin, and a reminder built in
-  // one and read in the other has to say which it fires by.
-  const described = describeCron(parseCron(schedule.cron), schedule.timezone);
-  return described.charAt(0).toUpperCase() + described.slice(1);
+  const { cadence, time } = describeReminderRecurrence(schedule.cron);
+  if (!time) return cadence;
+  try {
+    const zone =
+      schedule.timezone === getDefaultTimezone()
+        ? undefined
+        : new Intl.DateTimeFormat(undefined, {
+            timeZone: schedule.timezone,
+            timeZoneName: occurrence ? 'short' : 'longGeneric',
+          })
+            .formatToParts(occurrence ?? new Date())
+            .find((part) => part.type === 'timeZoneName')?.value;
+    return `${cadence} at ${time}${zone ? ` ${zone}` : ''}`;
+  } catch {
+    return 'Schedule unavailable';
+  }
 }
 
 /** Whether two schedules are the same, so an unchanged one is not re-sent. */

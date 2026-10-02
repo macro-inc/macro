@@ -212,10 +212,9 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         config.document_storage_bucket.as_ref(),
         config.docx_document_upload_bucket.as_ref(),
     );
-    let document_repo = PgDocumentRepo::new(
-        db.clone(),
-        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone()))),
-    );
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
     let cloudfront_private_key = LocalOrRemoteSecret::new_from_secret_manager(
         config
             .document_storage_service_cloudfront_signer_private_key_secret_name
@@ -283,6 +282,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         sqs: queue_aws_client,
         macro_event_broker: macro_event_broker.clone(),
     };
+    let databases_gateway = side_effect_clients.connection_gateway.as_ref().clone();
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
@@ -355,7 +355,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -377,12 +377,15 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         entity_access_service.clone(),
         document_tool_context.service.clone(),
         chat_tool_context.service.clone(),
-        user_email_service,
+        user_email_service.clone(),
     );
 
     let search_service_client = Arc::new(search_service_client);
-    let skill_tool_context =
-        ai_tools::build_skill_tool_context(search_service_client.clone(), soup_service.clone());
+    let skill_tool_context = ai_tools::build_skill_tool_context(
+        search_service_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
         db.clone(),
         &document_tool_context,
@@ -390,6 +393,22 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         entity_access_service.clone(),
         side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
+    );
+
+    let databases_tool_context = ai_tools::build_databases_tool_context(
+        db.clone(),
+        entity_access_service.clone(),
+        ai_tools::ToolTableEventPublisher::Gateway(
+            databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                databases_gateway,
+            ),
+        ),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
+        &databases_tool_context,
+        soup_service.clone(),
+        db.clone(),
     );
 
     let tool_context = ToolServiceContext {
@@ -404,6 +423,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             properties_service,
             entity_access_service.clone(),
         ),
+        image_generation_tool_context: ai_tools::build_image_generation_tool_context(
+            &document_tool_context,
+            ai_tools::build_image_generator_from_env(),
+        )?,
         document_tool_context,
         properties_tool_context,
         email_tool_context,
@@ -416,16 +439,20 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         notification_tool_context,
         reminders_tool_context: ai_tools::build_reminders_tool_context(
             db.clone(),
+            user_email_service.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context,
+        databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         bot_tool_context: ai_tools::build_bot_tool_context(
             db.clone(),
-            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             dss_url,
+            ai_tools::pipedream_client_from_env()?,
         ),
         project_tool_context,
         initiative_tool_context,
@@ -434,7 +461,14 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         skill_tool_context,
         schedule_tool_context: NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
-        recorder: ai_usage::pg_recorder(db.clone()),
+        admission: ai_billing::composition::pg_admission_service(
+            db.clone(),
+            config.enable_ai_usage_enforcement,
+        ),
+        recorder: ai_usage::pg_recorder_with_enforcement(
+            db.clone(),
+            config.enable_ai_usage_enforcement,
+        ),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
 

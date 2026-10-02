@@ -11,7 +11,10 @@ use item_filter_index::mail as vocabulary;
 use predicate_index::{ExactFact, IntegerFact};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use soup_filter_projection::decode_cache_projection_supplement;
+use soup_filter_projection::{
+    MailCacheProjectionFacts, SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
+    decode_cache_projection_supplement,
+};
 use std::borrow::Cow;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -99,17 +102,31 @@ fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
     }
 }
 
+/// Decodes a record's server capsule when it describes this record's Mail facts.
+fn verified_supplement(
+    key: &RecordKey,
+    encoded: &str,
+) -> Result<Option<SoupCacheProjectionSupplement>, SoupCacheProjectionWireError> {
+    let supplement = decode_cache_projection_supplement(encoded)?;
+    Ok((supplement.record_key() == key
+        && supplement.target_profile() == &vocabulary::profile()
+        && supplement.partition() == &vocabulary::partition())
+        .then_some(supplement))
+}
+
 fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
-    let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
     let encoded = opaque_string(record, "cacheProjection")?;
-    let supplement = decode_cache_projection_supplement(&encoded).ok()?;
-    if supplement.record_key() != &key
-        || supplement.target_profile() != &vocabulary::profile()
-        || supplement.partition() != &vocabulary::partition()
-    {
-        return None;
-    }
+    let supplement = verified_supplement(&key, &encoded).ok()??;
     let cache_facts = supplement.mail_facts()?;
+    project_with_facts(key, record, cache_facts)
+}
+
+fn project_with_facts(
+    key: RecordKey,
+    record: &Record,
+    cache_facts: &MailCacheProjectionFacts,
+) -> Option<IndexDocument> {
+    let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
     let owner = string(record, "ownerId")?;
     if owner.is_empty() {
         return None;
@@ -171,6 +188,120 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     })
 }
 
+/// Compact contribution fields needed by the shared Mail projection adapter.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DraftFacts {
+    message_count: u32,
+    latest_non_spam_message_ts: Option<chrono::DateTime<chrono::Utc>>,
+    latest_outbound_message_ts: Option<chrono::DateTime<chrono::Utc>>,
+    has_calendar_attachment: bool,
+}
+#[derive(Deserialize)]
+struct DraftEntry {
+    facts: DraftFacts,
+}
+#[derive(Deserialize)]
+struct DraftState {
+    baseline: DraftFacts,
+    drafts: Vec<DraftEntry>,
+}
+
+/// Apply complete draft contributions without fabricating server capsules.
+/// This is shared by browser and desktop and independent of cached query pages.
+pub async fn draft_optimistic_updates<S: Storage>(
+    storage: &S,
+    query: &str,
+    operation: Option<&str>,
+    variables: &Map<String, Value>,
+    data: &Value,
+) -> Result<Vec<OptimisticProjectionMutation>, ProjectionError<S::Error>> {
+    let field = match operation {
+        Some("SaveEmailDraft") => "saveEmailDraft",
+        Some("DeleteEmailDraft") => "deleteEmailDraft",
+        _ => return Ok(vec![]),
+    };
+    let Some(thread) = data.get(field).and_then(|payload| payload.get("thread")) else {
+        return Ok(vec![]);
+    };
+    let Some(state) = thread
+        .get("mailDraftState")
+        .filter(|state| !state.is_null())
+    else {
+        return Ok(vec![]);
+    };
+    let state: DraftState = serde_json::from_value(state.clone()).map_err(error)?;
+    let Some(id) = thread.get("id").and_then(Value::as_str) else {
+        return Ok(vec![]);
+    };
+    let key = EntityKey::entity(TYPE, &[id]);
+    let record_key = RecordKey::new(key.to_string()).map_err(error)?;
+    let parsed = Document::parse(query).map_err(error)?;
+    let op = parsed.operation(operation).map_err(error)?;
+    let records = normalize(op, variables, data).map_err(error)?;
+    let Some(record) = records.get(&key).filter(|record| {
+        FIELDS
+            .iter()
+            .all(|field| record.fields.contains_key(*field))
+    }) else {
+        return Ok(vec![]);
+    };
+    let shared = if let Some(encoded) = opaque_string(record, "cacheProjection") {
+        let supplement = verified_supplement(&record_key, &encoded).map_err(error)?;
+        let Some(facts) = supplement.as_ref().and_then(|s| s.mail_facts()) else {
+            return Ok(vec![]);
+        };
+        facts.has_thread_share()
+    } else {
+        // Only a newly created thread may establish facts without a server capsule.
+        if storage
+            .get_batch(std::slice::from_ref(&key))
+            .await
+            .map_err(ProjectionError::Storage)?
+            .into_iter()
+            .next()
+            .flatten()
+            .is_some()
+        {
+            return Ok(vec![]);
+        }
+        if state.baseline.message_count != 0 {
+            return Ok(vec![]);
+        }
+        false
+    };
+    let contributions = std::iter::once(&state.baseline)
+        .chain(state.drafts.iter().map(|entry| &entry.facts))
+        .collect::<Vec<_>>();
+    if contributions.iter().all(|facts| facts.message_count == 0) {
+        return Ok(vec![OptimisticProjectionMutation::Delete {
+            record_key,
+            profile: vocabulary::profile(),
+            partition: vocabulary::partition(),
+        }]);
+    }
+    let facts = MailCacheProjectionFacts::new(
+        contributions
+            .iter()
+            .filter_map(|facts| facts.latest_non_spam_message_ts)
+            .max()
+            .map(|ts| ts.timestamp_micros()),
+        contributions
+            .iter()
+            .filter_map(|facts| facts.latest_outbound_message_ts)
+            .max()
+            .map(|ts| ts.timestamp_micros()),
+        contributions
+            .iter()
+            .any(|facts| facts.has_calendar_attachment),
+        shared,
+    );
+    Ok(project_with_facts(record_key, record, &facts)
+        .map(OptimisticProjectionMutation::Replace)
+        .into_iter()
+        .collect())
+}
+
 /// Mail projection extraction failures retain storage errors for host recovery.
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectionError<S: std::error::Error + 'static> {
@@ -207,6 +338,30 @@ pub async fn projection_updates_for_write<S: Storage>(
     data: &Value,
     reuse_stored_identity: bool,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    // A revalidation of an absent/inaccessible thread must also revoke its
+    // local membership. This includes retrying an already-committed delete,
+    // whose idempotent response can no longer identify the removed thread.
+    // A deleted standalone thread likewise has no object to normalize.
+    let removed_thread_id = if operation == Some("EmailThreadPage")
+        && data.pointer("/user/emailThread") == Some(&Value::Null)
+    {
+        variables.get("threadId").and_then(Value::as_str)
+    } else if operation == Some("DeleteEmailDraft")
+        && data
+            .pointer("/deleteEmailDraft/threadDeleted")
+            .and_then(Value::as_bool)
+            == Some(true)
+    {
+        data.pointer("/deleteEmailDraft/threadId")
+            .and_then(Value::as_str)
+    } else {
+        None
+    };
+    if let Some(id) = removed_thread_id {
+        return Ok(vec![ProjectionMutation::Delete(
+            RecordKey::new(format!("{TYPE}:{id}")).map_err(error)?,
+        )]);
+    }
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
     let updates = normalize(op, variables, data)
@@ -427,6 +582,11 @@ pub fn optimistic_updates(updates: Vec<ProjectionMutation>) -> Vec<OptimisticPro
                     profile,
                     partition,
                     affected_attributes: vec![],
+                },
+                ProjectionMutation::Delete(record_key) => OptimisticProjectionMutation::Delete {
+                    record_key,
+                    profile: vocabulary::profile(),
+                    partition: vocabulary::partition(),
                 },
                 _ => unreachable!("Mail projection update family"),
             };

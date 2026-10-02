@@ -1,0 +1,19 @@
+---
+title: DeleteTable
+description: "Delete a table — a tab of a database — with every row and column in it. This cannot be undone, so only do it when the user asked for that table to go.  A database keeps at least one table, so its last table cannot be deleted. A table that a relation column of another table points at cannot be deleted until that column is.  Requires edit access. The response is the schema after the change."
+---
+
+# DeleteTable
+
+Delete a table — a tab of a database — with every row and column in it. This cannot be undone, so only do it when the user asked for that table to go.
+
+A database keeps at least one table, so its last table cannot be deleted. A table that a relation column of another table points at cannot be deleted until that column is.
+
+Requires edit access. The response is the schema after the change.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Id of the database containing the table, from ListDatabases. |
+| `tableId` | string | Yes | Id of the table to delete, from DescribeDatabase. |

@@ -1,5 +1,6 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { isPlatform } from '@core/util/platform';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { createEffect, createSignal, For, onCleanup } from 'solid-js';
@@ -45,6 +46,8 @@ export function FloatRegionHost() {
           // reply bars) keep rem sizing.
           'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-(--mobile-chrome-gutter) pb-(--mobile-chrome-gutter)',
           isNativeMobilePlatform() && 'pb-[28px]',
+          isPlatform('android') &&
+            'pb-[calc(var(--safe-bottom,0px)+var(--mobile-chrome-gutter))]',
           virtualKeyboardVisible() && 'pb-(--mobile-chrome-gutter)'
         )}
       >

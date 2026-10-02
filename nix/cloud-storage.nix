@@ -55,10 +55,13 @@
       # `.sh` is required so `include_str!` of
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
       assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
+      # Rust local HTTP clients embed only the public proxy CA, never its keys.
+      localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
         (sqlxFilter path type)
+        || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
@@ -117,7 +120,11 @@
           let
             rel = pkgs.lib.removePrefix ((toString ../.) + "/") (toString path);
           in
-          (rel == ".sqlx")
+          (rel == "infra")
+          || (rel == "infra/local")
+          || (rel == "infra/local/certs")
+          || (localCaFilter path type)
+          || (rel == ".sqlx")
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)

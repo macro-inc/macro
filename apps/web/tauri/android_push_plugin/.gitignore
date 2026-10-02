@@ -1,0 +1,4 @@
+# Tauri-generated Android API sources and local build artifacts.
+.tauri/
+build/
+.gradle/

@@ -86,8 +86,15 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
+  const channelReactions = notifications.filter(
+    (n) => n.notification_metadata.tag === 'channel_message_reaction'
+  );
   const channelViews = notifications
-    .filter(isChannelNotification)
+    .filter(
+      (n) =>
+        isChannelNotification(n) &&
+        n.notification_metadata.tag !== 'channel_message_reaction'
+    )
     .map(toChannelView)
     .filter((v): v is NormalizedView => v !== null);
 
@@ -131,6 +138,7 @@ export function stackNotifications(
       makeStack(items[0].notification_metadata.tag, items)
     ),
     ...channelStacks,
+    ...makeStack('channel_message_reaction', channelReactions),
     ...docCommentStacks,
     ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),

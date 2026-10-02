@@ -26,6 +26,7 @@ use item_filters::{
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         crm_company::CrmCompanyLiteral,
+        database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
         email::{Email, EmailLiteral},
@@ -242,9 +243,10 @@ struct GraphqlFilterPropertiesLiteral {
     value: GraphqlFilterPropertyMatchValue,
 }
 
-impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
-    fn into_expr(self) -> InputResult<Expr<PropertiesLiteral>> {
-        Ok(Expr::val(PropertiesLiteral {
+impl GraphqlFilterPropertiesLiteral {
+    /// Convert this input into the domain literal.
+    fn into_literal(self) -> InputResult<PropertiesLiteral> {
+        Ok(PropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
                 .entity_type
@@ -254,7 +256,13 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
                     InputError::new(format!("unsupported entityType {entity_type:?}"))
                 })?,
             value: self.value.into_ast()?,
-        }))
+        })
+    }
+}
+
+impl IntoFilterExpr<PropertiesLiteral> for GraphqlFilterPropertiesLiteral {
+    fn into_expr(self) -> InputResult<Expr<PropertiesLiteral>> {
+        self.into_literal().map(Expr::val)
     }
 }
 
@@ -299,6 +307,10 @@ enum GraphqlPropertyEntityType {
     Chat,
     /// Company entity.
     Company,
+    /// Database row entity.
+    DatabaseRow,
+    /// CRM contact entity.
+    Contact,
     /// Document entity.
     Document,
     /// Initiative entity.
@@ -323,13 +335,17 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
+            GraphqlPropertyEntityType::DatabaseRow => Self::DatabaseRow,
             GraphqlPropertyEntityType::Document => Self::Document,
             GraphqlPropertyEntityType::Project => Self::Project,
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
             GraphqlPropertyEntityType::Initiative => Self::Initiative,
-            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+            other
+            @ (GraphqlPropertyEntityType::CallRecord | GraphqlPropertyEntityType::Contact) => {
+                return Err(other);
+            }
         })
     }
 }
@@ -367,6 +383,8 @@ pub struct GraphqlEntityFilterAst {
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.
     initiative_filter: Option<GraphqlInitiativeExpr>,
+    /// The database row filter to apply. Rows are opt-in: name a table.
+    database_row_filter: Option<GraphqlDatabaseRowExpr>,
     /// The properties filter to apply.
     properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
@@ -403,6 +421,7 @@ impl GraphqlEntityFilterAst {
             agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
             initiative_filter: optional_tree(self.initiative_filter)?,
+            database_row_filter: optional_tree(self.database_row_filter)?,
         })
     }
 }
@@ -645,6 +664,10 @@ enum GraphqlDocumentLiteral {
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
+    /// An entity-property condition on the document or task.
+    Property(GraphqlFilterPropertiesLiteral),
+    /// Uploaded from an email attachment sent by, or to, a matching address.
+    EmailAttachmentParticipant(GraphqlEmailValue),
 }
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
@@ -673,6 +696,10 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             Self::IsEmailAttachment(value) => DocumentLiteral::IsEmailAttachment(value),
             Self::CreatedAt(date) => DocumentLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => DocumentLiteral::UpdatedAt(date.into_ast()?),
+            Self::Property(property) => DocumentLiteral::Property(property.into_literal()?),
+            Self::EmailAttachmentParticipant(value) => {
+                DocumentLiteral::EmailAttachmentParticipant(value.into_ast()?)
+            }
         };
         Ok(Expr::val(literal))
     }
@@ -1022,6 +1049,8 @@ enum GraphqlChannelThreadLiteral {
     Participant(String),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),
+    /// Whether the thread has at least one undeleted reply.
+    HasReplies(bool),
 }
 
 impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
@@ -1037,6 +1066,7 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
                 ChannelThreadLiteral::Participant(parse_macro_user_id(participant, "participant")?)
             }
             Self::NotificationState(state) => ChannelThreadLiteral::NotificationState(state.into()),
+            Self::HasReplies(has_replies) => ChannelThreadLiteral::HasReplies(has_replies),
         };
         Ok(Expr::val(literal))
     }
@@ -1277,5 +1307,33 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
         };
         Ok(Expr::val(literal))
+    }
+}
+
+filter_expr_input!(
+    GraphqlDatabaseRowExpr,
+    GraphqlDatabaseRowBinaryExpr,
+    GraphqlDatabaseRowLiteral,
+    DatabaseRowLiteral,
+    "DatabaseRowFilterExpr"
+);
+
+/// GraphQL input for selecting database rows through Soup.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlDatabaseRowLiteral {
+    /// Match the rows of a table.
+    TableId(ID),
+    /// Match one row.
+    Id(ID),
+}
+
+impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
+    fn into_expr(self) -> InputResult<Expr<DatabaseRowLiteral>> {
+        Ok(Expr::val(match self {
+            Self::TableId(id) => DatabaseRowLiteral::TableId(parse_id(id, "tableId")?),
+            Self::Id(id) => DatabaseRowLiteral::Id(parse_id(id, "id")?),
+        }))
     }
 }

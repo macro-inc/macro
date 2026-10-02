@@ -6,11 +6,11 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::MacroAuthorizationService;
 use model::document::{DocumentBasic, FileTypeExt};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 
-use super::creation_principal::CreationPrincipalExtractor;
 use super::{DocumentRouterState, Params};
 use crate::domain::models::{
     CopyDocumentQueryParams, CopyDocumentRequest, CopyDocumentResponse, DocumentError,

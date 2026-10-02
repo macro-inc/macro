@@ -80,7 +80,9 @@ describe('GraphQL email archive writes', () => {
       expect(mocks.refresh).not.toHaveBeenCalled();
       finish();
       await expect(result).resolves.toBe('committed');
-      expect(mocks.refresh).toHaveBeenCalledOnce();
+      expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+        target: { kind: 'email-archive', threadId: 'thread' },
+      });
     }
   );
 

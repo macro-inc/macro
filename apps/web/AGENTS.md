@@ -17,7 +17,7 @@ A frontend dev server runs against the **dev** backend, so this needs no local s
 cd apps/web && PORT=3003 bun run dev   # any free port in 3000-3009
 ```
 
-`import.meta.env.MODE === 'development'` resolves the service clients to `https://dev.macro.com` and the browser's existing dev cookies authenticate, so `http://localhost:<port>/app` loads the real workspace. Notes:
+`import.meta.env.MODE === 'development'` resolves the service clients to `https://dev.macro.com` through Vite’s same-origin development proxy. Sign in on the development hostname; existing `.macro.com` cookies are separate. Vite prints `https://<hostname>:<port>/app/`; `https://localhost:<port>/app/` also works. Trust `infra/local/certs/ca.pem` once in the visiting browser (see `infra/local/certs/README.md`). `MACRO_DEV_HTTPS=false` restores HTTP for workflows that require it. Notes:
 
 - Never assume port 3000 or 3002 is yours. Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN -t` and confirm the owner's worktree via `lsof -p <pid> | awk '$4=="cwd"'`. Take a free port instead of killing another session's server, and reuse one only if its cwd is this worktree.
 - The `.cursor/*.sh` scripts and the `run-app` skill are **Cursor Cloud** entry points. On a local machine they prompt for sudo and are the wrong tool. Only backend (Rust) changes need the local stack.
@@ -66,6 +66,7 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - When adding or changing a feature flag, follow the `define-feature-flag` skill.
+- When adding or changing a view's feature tour, follow the `add-tour` skill.
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.

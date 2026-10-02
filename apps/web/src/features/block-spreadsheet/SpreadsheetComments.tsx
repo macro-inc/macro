@@ -1,25 +1,40 @@
+import type { InputSnapshot } from '@channel/Input';
+import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
-import {
-  Discussion,
-  DiscussionComposer,
-  DiscussionProvider,
-} from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useUrlParams } from '@core/component/ParamsProvider';
+import {
+  useParamNavigationCount,
+  useUrlParams,
+} from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
-import { useCanComment } from '@core/signal/permissions';
+import { EntityDiscussion } from '@core/messages/EntityDiscussion';
+import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
+import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import XIcon from '@phosphor/x.svg';
+import {
+  useMessageLink,
+  useMessageRootsQuery,
+} from '@queries/messages/document-messages';
+import {
+  newMessageId,
+  usePatchThreadMutation,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
+import type { MessageListItem } from '@service-storage/messages';
 import { Button } from '@ui/components/Button';
+import { SegmentedControl } from '@ui/components/SegmentedControl';
 import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   type JSX,
   on,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { SpreadsheetCommentCard } from './components/SpreadsheetCommentCard';
 import type { SpreadsheetCommentsCapability } from './context/spreadsheet-comments';
@@ -34,11 +49,22 @@ import {
   type SpreadsheetCommentAnchor,
   spreadsheetCommentAnchor,
 } from './core/spreadsheet-comments';
-import { createSpreadsheetDiscussion } from './primitives/create-spreadsheet-discussion';
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
-import { useSpreadsheetComments } from './queries/spreadsheet-comments';
+import { SpreadsheetCommentComposer } from './views/SpreadsheetCommentComposer';
+import { SpreadsheetCommentThread } from './views/SpreadsheetCommentThread';
 
-/** Production wiring: shared discussions + the document annotation service. */
+type CommentFilter = 'open' | 'resolved' | 'all';
+
+const COMMENT_FILTER_OPTIONS: Array<{
+  value: CommentFilter;
+  label: string;
+}> = [
+  { value: 'open', label: 'Open' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'all', label: 'All' },
+];
+
+/** Production wiring for spreadsheet discussions on the shared message store. */
 export function SpreadsheetComments(props: {
   documentId: string;
   store: SpreadsheetStore;
@@ -49,17 +75,32 @@ export function SpreadsheetComments(props: {
 }) {
   const userId = useUserId();
   const canComment = useCanComment();
+  const isOwner = useIsDocumentOwner();
   const params = useUrlParams(SPREADSHEET_COMMENT_PARAMS);
-  const { query, api, refresh } = useSpreadsheetComments(props.documentId);
+  const parent = () => ({ type: 'document' as const, id: props.documentId });
+  const query = useMessageRootsQuery(parent);
+  const send = useSendMessageMutation();
+  const patchThread = usePatchThreadMutation();
+  const linkedMessageId = () =>
+    /^\d+$/.test(params.commentId() ?? '') ? undefined : params.commentId();
+  const target = useMessageLink(parent, linkedMessageId);
+  const navigationCount = useParamNavigationCount('comment_id');
   const [open, setOpen] = createSignal(false);
-  const [anchor, setAnchor] = createSignal<SpreadsheetCommentAnchor>();
   const [location, setLocation] = createSignal<SpreadsheetCommentAnchor>();
   const [error, setError] = createSignal('');
+  const [commentFilter, setCommentFilter] = createSignal<CommentFilter>('open');
   const threads = () => (query.isSuccess ? query.data : []);
-  const request = createMemo(() => ({ id: params.commentId() }), undefined, {
-    equals: false,
-  });
-  const target = () => request().id ?? null;
+  const discussionTarget = () =>
+    threads().find((thread) => thread.id === target.rootId())?.state.anchor ===
+    null
+      ? target.messageId()
+      : null;
+  const request = createMemo(() => ({
+    id: linkedMessageId(),
+    revision: navigationCount(),
+  }));
+  const [clearedTarget, setClearedTarget] =
+    createSignal<ReturnType<typeof request>>();
   const [card, setCard] = createSignal<{
     element: HTMLElement;
     anchor: SpreadsheetCommentAnchor;
@@ -77,49 +118,59 @@ export function SpreadsheetComments(props: {
     setCard(undefined);
   };
   onCleanup(clearHover);
-  const makeSource = (
-    getAnchor: () => SpreadsheetCommentAnchor | undefined,
-    operations = api
-  ) =>
-    createSpreadsheetDiscussion({
-      threads,
-      canComment,
-      userId,
-      anchor: getAnchor,
-      targetCommentId: target,
-      targetRevision: request,
-      api: operations,
-      refresh,
-      buildLink: (id) =>
-        buildSimpleEntityUrl(
-          { type: 'spreadsheet', id: props.documentId },
-          { comment_id: id }
-        ),
+  const post = async (
+    value: SpreadsheetCommentAnchor,
+    snapshot: InputSnapshot
+  ) => {
+    const senderId = userId();
+    if (!senderId || !canComment())
+      throw new Error('Sign in with comment access to post');
+    const payload = buildPostMessageSendPayload({ snapshot });
+    return send.mutateAsync({
+      parent: parent(),
+      senderId,
+      optimisticId: newMessageId(),
+      ...payload,
+      message: {
+        ...payload.message,
+        anchor: { type: 'spreadsheet', ...value },
+      },
     });
-  const source = makeSource(anchor);
-  const cardSource = makeSource(() => card()?.anchor, {
-    ...api,
-    create: async (body) => {
-      const postingCard = card();
-      const result = await api.create(body);
-      if (!body.threadId && postingCard?.creating && card() === postingCard) {
-        setCard({
-          ...postingCard,
-          creating: false,
-          threadIds: [String(result.thread.threadId)],
-        });
-      }
-      return result;
-    },
-  });
+  };
   const count = () =>
-    source
-      .threads()
+    threads()
+      .filter((thread) => !thread.state.deleted_at)
       .reduce(
         (sum, thread) =>
-          sum + thread.comments.filter((comment) => !comment.deletedAt).length,
+          sum + (thread.deleted_at ? 0 : 1) + thread.thread.reply_count,
         0
       );
+  const renderThread = (thread: () => MessageListItem) => (
+    <SpreadsheetCommentThread
+      data={thread()}
+      canWrite={canComment()}
+      canModerate={isOwner()}
+      targetId={
+        target.rootId() === thread().id && clearedTarget() !== request()
+          ? target.messageId()
+          : null
+      }
+      onClearTarget={() => setClearedTarget(request())}
+      buildLink={(message) =>
+        buildSimpleEntityUrl(
+          { type: 'spreadsheet', id: props.documentId },
+          { comment_id: message.id }
+        )
+      }
+      onResolve={(resolved) =>
+        patchThread.mutate({
+          parent: parent(),
+          rootId: thread().id,
+          patch: { resolved },
+        })
+      }
+    />
+  );
   const navigate = (value: SpreadsheetCommentAnchor) => {
     const sheet = props.store
       .workbook()
@@ -128,8 +179,15 @@ export function SpreadsheetComments(props: {
       setError('This comment refers to a sheet that has been deleted.');
       return;
     }
-    const last = positionFromAddress(value.range.split(':').at(-1)!);
-    if (!last || last.row >= sheet.layout.rowCount) {
+    const [start, end = start] = value.range.split(':');
+    const first = positionFromAddress(start);
+    const last = positionFromAddress(end);
+    if (
+      !first ||
+      !last ||
+      first.row >= sheet.layout.rowCount ||
+      last.row >= sheet.layout.rowCount
+    ) {
       setError('The cells referenced by this comment are no longer available.');
       return;
     }
@@ -147,27 +205,42 @@ export function SpreadsheetComments(props: {
       range: context.range,
     };
   };
-  const selectAnchor = () => setAnchor(currentAnchor());
   const toggle = () => {
-    if (!open()) selectAnchor();
     closeCard();
     setOpen(!open());
   };
+  const selectionThreads = createMemo(() =>
+    threads().filter(
+      (thread) =>
+        !thread.state.deleted_at &&
+        (!thread.deleted_at || thread.thread.reply_count > 0) &&
+        spreadsheetCommentAnchor(thread.state.anchor)
+    )
+  );
+  const filteredSelectionThreads = createMemo(() =>
+    selectionThreads().filter((thread) => {
+      if (commentFilter() === 'all') return true;
+      return commentFilter() === 'resolved'
+        ? thread.state.resolved
+        : !thread.state.resolved;
+    })
+  );
   const anchoredThreads = createMemo(() =>
     threads().flatMap((thread) => {
-      const value = spreadsheetCommentAnchor(thread.thread.metadata);
+      const value = spreadsheetCommentAnchor(thread.state.anchor);
       if (
         !value ||
-        thread.thread.deletedAt ||
-        !thread.comments.some((comment) => !comment.deletedAt) ||
+        thread.state.deleted_at ||
+        (thread.deleted_at && thread.thread.reply_count === 0) ||
         value.sheetId !== props.store.activeSheetId()
       )
         return [];
       const [start, end = start] = value.range.split(':');
-      const first = positionFromAddress(start)!;
-      const last = positionFromAddress(end)!;
+      const first = positionFromAddress(start);
+      const last = positionFromAddress(end);
+      if (!first || !last) return [];
       const bounds = selectionBounds({ anchor: first, focus: last });
-      return [{ id: String(thread.thread.threadId), anchor: value, bounds }];
+      return [{ id: thread.id, anchor: value, bounds }];
     })
   );
   const markers = createMemo(
@@ -206,12 +279,11 @@ export function SpreadsheetComments(props: {
     add: (element) => {
       if (!canComment()) return;
       clearHover();
-      const selected = currentAnchor();
       if (!element) {
-        setAnchor(selected);
         setOpen(true);
         return;
       }
+      const selected = currentAnchor();
       setCard({
         element,
         anchor: selected,
@@ -237,27 +309,52 @@ export function SpreadsheetComments(props: {
   };
   // Tab changes invalidate the floating DOM anchor.
   createEffect(on(props.store.activeSheetId, closeCard, { defer: true }));
+  let panel: HTMLElement | undefined;
+  createEffect(
+    on([request, open, target.messageId], ([value, visible, messageId]) => {
+      if (value.id && visible && messageId && panel) {
+        onCleanup(scrollToRenderedTarget(panel, messageId));
+      }
+    })
+  );
+  let openedRequest: ReturnType<typeof request> | undefined;
+  let navigatedRequest: ReturnType<typeof request> | undefined;
   // URL navigation is an external event, including repeated inbox opens of the same comment.
   createEffect(
     on(
-      [request, () => query.isSuccess, props.store.ready],
+      [
+        request,
+        () => query.isSuccess,
+        props.store.ready,
+        target.rootId,
+        threads,
+      ],
       ([value, loaded, ready]) => {
-        if (!value.id) return;
-        closeCard();
-        setOpen(true);
-        if (!loaded || !ready) return;
-        const thread = threads().find((thread) =>
-          thread.comments.some(
-            (comment) => String(comment.commentId) === value.id
-          )
+        if (!value.id || navigatedRequest === value) return;
+        if (openedRequest !== value) {
+          openedRequest = value;
+          closeCard();
+          setLocation(undefined);
+          setError('');
+          setOpen(true);
+        }
+        if (!ready) return;
+        if (!loaded) return;
+        const thread = threads().find(
+          (thread) => thread.id === target.rootId()
         );
-        const linked = spreadsheetCommentAnchor(thread?.thread.metadata);
-        if (linked) navigate(linked);
+        if (!thread) return;
+        navigatedRequest = value;
+        const linked = spreadsheetCommentAnchor(thread.state.anchor);
+        if (linked) {
+          setCommentFilter(thread.state.resolved ? 'resolved' : 'open');
+          navigate(linked);
+        }
       }
     )
   );
   return (
-    <DiscussionProvider source={source}>
+    <StaticMarkdownContext>
       <SplitHeaderRight>
         <Button
           size="sm"
@@ -279,6 +376,7 @@ export function SpreadsheetComments(props: {
         </div>
         <Show when={open()}>
           <aside
+            ref={panel}
             aria-label="Spreadsheet comments"
             class="absolute inset-0 z-30 flex flex-col bg-panel border-l border-edge-muted sm:static sm:w-96 sm:shrink-0"
           >
@@ -313,73 +411,87 @@ export function SpreadsheetComments(props: {
                   {error()}
                 </p>
               </Show>
-              <Show when={query.isSuccess && !count()}>
-                <p class="py-4 text-sm text-ink-muted">
-                  No comments yet. Start a discussion about the selected cells.
-                </p>
-              </Show>
-              <Discussion
-                hideComposer
-                threadHeader={(thread) => {
-                  const linked = () =>
-                    spreadsheetCommentAnchor(
-                      threads().find(
-                        (item) => String(item.thread.threadId) === thread.id
-                      )?.thread.metadata
-                    );
-                  const label = () => {
-                    const value = linked();
-                    if (!value) return 'Workbook';
-                    const sheet = props.store
-                      .workbook()
-                      .find((sheet) => sheet.id === value.sheetId);
-                    return `${sheet?.name ?? value.sheetName} · ${value.range}${sheet ? '' : ' (deleted sheet)'}`;
-                  };
-                  return (
-                    <button
-                      class="mt-3 mb-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover"
-                      disabled={!linked()}
-                      onClick={() => {
+              <Suspense
+                fallback={
+                  <p class="text-sm text-ink-muted">Loading comments…</p>
+                }
+              >
+                <section aria-label="Cell comments">
+                  <div class="mb-3">
+                    <SegmentedControl
+                      value={commentFilter()}
+                      options={COMMENT_FILTER_OPTIONS}
+                      onChange={setCommentFilter}
+                      size="sm"
+                      aria-label="Filter cell comments"
+                    />
+                  </div>
+                  <Show when={selectionThreads().length === 0}>
+                    <p class="py-3 text-sm text-ink-muted">
+                      No cell comments yet. Select cells in the sheet to add
+                      one.
+                    </p>
+                  </Show>
+                  <Show
+                    when={
+                      selectionThreads().length > 0 &&
+                      filteredSelectionThreads().length === 0
+                    }
+                  >
+                    <p class="py-3 text-sm text-ink-muted">
+                      No {commentFilter()} cell comments.
+                    </p>
+                  </Show>
+                  <For
+                    each={filteredSelectionThreads().map((thread) => thread.id)}
+                  >
+                    {(id) => {
+                      const thread = () =>
+                        threads().find((item) => item.id === id)!;
+                      const linked = () =>
+                        spreadsheetCommentAnchor(thread().state.anchor)!;
+                      const label = () => {
                         const value = linked();
-                        if (value) navigate(value);
-                      }}
-                    >
-                      {label()}
-                    </button>
-                  );
-                }}
-              />
-            </div>
-            <Show when={canComment()}>
-              <div class="shrink-0 border-t border-edge-muted p-3">
-                <div class="mb-2 flex items-center justify-between gap-2 text-xs text-ink-muted">
-                  <span>
-                    {anchor()
-                      ? `${anchor()!.sheetName} · ${anchor()!.range}`
-                      : 'Workbook comment'}
-                  </span>
-                  <button class="underline" onClick={selectAnchor}>
-                    Use selection
-                  </button>
+                        const sheet = props.store
+                          .workbook()
+                          .find((sheet) => sheet.id === value.sheetId);
+                        return `${sheet?.name ?? value.sheetName} · ${value.range}${sheet ? '' : ' (deleted sheet)'}`;
+                      };
+                      return (
+                        <>
+                          <button
+                            class="mt-3 mb-1 rounded px-2 py-1 text-xs text-accent hover:bg-hover"
+                            onClick={() => navigate(linked())}
+                          >
+                            {label()}
+                          </button>
+                          {renderThread(thread)}
+                        </>
+                      );
+                    }}
+                  </For>
+                </section>
+                <div class="mt-5 border-t border-edge-muted pt-1">
+                  <EntityDiscussion
+                    parent={parent()}
+                    canWrite={canComment()}
+                    canModerate={isOwner()}
+                    link={{ type: 'spreadsheet', id: props.documentId }}
+                    targetId={discussionTarget()}
+                    label="Discussion"
+                  />
                 </div>
-                <StaticMarkdownContext>
-                  <DiscussionComposer />
-                </StaticMarkdownContext>
-              </div>
-            </Show>
+              </Suspense>
+            </div>
           </aside>
         </Show>
       </div>
       <Show when={card()}>
         {(value) => (
-          <DiscussionProvider source={cardSource}>
+          <Suspense>
             <SpreadsheetCommentCard
               element={value().element}
               label={`${props.store.workbook().find((sheet) => sheet.id === value().anchor.sheetId)?.name ?? value().anchor.sheetName} · ${value().anchor.range}`}
-              creating={value().creating}
-              threads={source
-                .threads()
-                .filter((thread) => value().threadIds.includes(thread.id))}
               onEnter={clearHover}
               onLeave={comments.leave}
               onInteract={() => {
@@ -390,10 +502,43 @@ export function SpreadsheetComments(props: {
                   );
               }}
               onClose={closeCard}
-            />
-          </DiscussionProvider>
+            >
+              <For
+                each={threads()
+                  .filter(
+                    (thread) =>
+                      !thread.state.deleted_at &&
+                      value().threadIds.includes(thread.id)
+                  )
+                  .map((thread) => thread.id)}
+              >
+                {(id) =>
+                  renderThread(
+                    () => threads().find((thread) => thread.id === id)!
+                  )
+                }
+              </For>
+              <Show when={value().creating && canComment()}>
+                <SpreadsheetCommentComposer
+                  parent={parent()}
+                  autofocus
+                  onSend={async (snapshot) => {
+                    const postingCard = card();
+                    if (!postingCard) return;
+                    const message = await post(postingCard.anchor, snapshot);
+                    if (card() === postingCard)
+                      setCard({
+                        ...postingCard,
+                        creating: false,
+                        threadIds: [message.id],
+                      });
+                  }}
+                />
+              </Show>
+            </SpreadsheetCommentCard>
+          </Suspense>
         )}
       </Show>
-    </DiscussionProvider>
+    </StaticMarkdownContext>
   );
 }

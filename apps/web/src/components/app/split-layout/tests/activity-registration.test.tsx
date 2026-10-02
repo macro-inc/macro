@@ -27,6 +27,10 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
 }));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  useSplitRouter: () => ({ location: () => undefined }),
+}));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
 }));
@@ -125,7 +129,7 @@ vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
 vi.mock('@block-md/component/ComposeSkill', () => ({}));
 vi.mock('@block-md/component/ComposeTask', () => ({}));
-vi.mock('@companies/crm/saved-views', () => ({}));
+vi.mock('@app/features/crm/queries/saved-views', () => ({}));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch(),
@@ -164,7 +168,7 @@ describe('activity registration', () => {
     renderActivity();
 
     expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-      next: { type: 'component', id: 'home' },
+      next: { type: 'component', id: 'home', entryMetadata: { search: {} } },
     });
     expect(state.mountActivity).not.toHaveBeenCalled();
     expect(state.pageView).not.toHaveBeenCalled();
@@ -192,7 +196,11 @@ describe('activity registration', () => {
         expect(state.pageView).toHaveBeenCalledExactlyOnceWith('activity');
       } else {
         expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-          next: { type: 'component', id: 'home' },
+          next: {
+            type: 'component',
+            id: 'home',
+            entryMetadata: { search: {} },
+          },
         });
         expect(state.mountActivity).not.toHaveBeenCalled();
         expect(state.pageView).not.toHaveBeenCalled();

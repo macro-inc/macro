@@ -34,6 +34,7 @@ import {
 import { nanoid } from 'nanoid';
 import { createLexicalWrapper } from '../../context/LexicalWrapperContext';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import { registerInlineMenuTrigger } from '../../shared/registerInlineMenuTrigger';
 import {
   editorStateAsMarkdown,
   initializeEditorWithState,
@@ -116,23 +117,6 @@ function registerSnippetsPlugin(
   editor: LexicalEditor,
   props: SnippetsPluginProps
 ) {
-  function registerSymbolListener() {
-    const listener = (e: KeyboardEvent) => {
-      if (e.key === ';') {
-        editor.dispatchCommand(TYPE_SNIPPET_SYMBOL_COMMAND, undefined);
-      }
-    };
-
-    return editor.registerRootListener((root, prev) => {
-      if (root) {
-        root.addEventListener('keydown', listener);
-      }
-      if (prev) {
-        prev.removeEventListener('keydown', listener);
-      }
-    });
-  }
-
   const { menu } = props;
   const parseEditor = createEditor({
     namespace: 'snippet-parser',
@@ -230,7 +214,9 @@ function registerSnippetsPlugin(
   }
 
   const cleanup = mergeRegister(
-    registerSymbolListener(),
+    registerInlineMenuTrigger(editor, ';', () => {
+      editor.dispatchCommand(TYPE_SNIPPET_SYMBOL_COMMAND, undefined);
+    }),
     // When you type ;
     editor.registerCommand(
       TYPE_SNIPPET_SYMBOL_COMMAND,

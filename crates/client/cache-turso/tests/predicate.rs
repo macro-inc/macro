@@ -131,6 +131,7 @@ async fn begin_optimistic_projection(
                 link_patches: &[],
                 revalidations: &[],
                 created_at_ms: 1,
+                identity_bindings: &[],
             },
             projection_mutations,
         )
@@ -488,6 +489,7 @@ fn turso_rehydrates_and_queries_durable_optimistic_projection_layers() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
                 vec![OptimisticProjectionMutation::Replace(document(
                     "GraphqlSoupDocument:1",

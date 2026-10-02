@@ -105,16 +105,20 @@ export function isFeatureEnabled(flag: Flag): boolean {
   return flag.enabled;
 }
 
+/** Databases rollout. Local HMR is on; deployed environments defer to PostHog. */
+export const enableDatabases = defineFlag({
+  key: 'enable-databases',
+  env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
 /**
- * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. On everywhere without waiting
- * for PostHog: a late PostHog answer swaps the app shell after first paint.
- * Override locally with VITE_ENABLE_NEW_APP_VIEWS=false.
+ * Shows the SQL behind database answers and tool results. Off everywhere;
+ * turn on locally with VITE_SHOW_DATABASE_SQL=true.
  */
-export const enableNewAppViews = defineFlag({
-  key: 'enable-new-app-views',
-  env: 'ENABLE_NEW_APP_VIEWS',
-  default: true,
+export const showDatabaseSql = defineFlag({
+  env: 'SHOW_DATABASE_SQL',
+  default: false,
 });
 
 /**
@@ -125,6 +129,13 @@ export const enableNewAppViews = defineFlag({
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+// Leave the production PostHog flag disabled until archive-import rollout.
+export const enableSlackArchiveImport = defineFlag({
+  key: 'enable-slack-archive-import',
+  env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
+  default: onInDev,
+});
 
 /** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
 export const enableTasksReviews = defineFlag({
@@ -537,12 +548,6 @@ export function isAutoUpdateUiEnabled(): boolean {
   return !isFeatureEnabled(disableAutoUpdateUi);
 }
 
-export const enableNewPricing = defineFlag({
-  key: 'enable-new-pricing',
-  env: 'ENABLE_NEW_PRICING',
-  default: onInDev,
-});
-
 // Bot management in Settings, channels, and the command menu. Override locally
 // with VITE_BOT_MANAGEMENT.
 export const botManagement = defineFlag({
@@ -643,6 +648,15 @@ export const enableChannelTags = defineFlag({
   env: 'ENABLE_CHANNEL_TAGS',
 });
 
+// The Chat view's Threads tab: channel threads filtered by conversation.
+// On in development; PostHog decides elsewhere. Override with
+// VITE_ENABLE_CHANNEL_THREADS_PREVIEW.
+export const enableChannelThreadsPreview = defineFlag({
+  key: 'enable-channel-threads-preview',
+  env: 'ENABLE_CHANNEL_THREADS_PREVIEW',
+  default: onInDev,
+});
+
 // The "Activity" section in the entity side panel: the entity's recent
 // activity timeline from the GraphQL activity log (who did what, when).
 // Purely additive — when off, the section never mounts and no activity
@@ -731,15 +745,11 @@ export const enableDictation = defineFlag({
 });
 
 /**
- * Document comments read and write through the shared message API and render
- * with the channel message components; the legacy annotation comment stores
- * stay in place while this is off. Channels are not gated. On in dev, where the
- * legacy comments have already been imported into the message store; production
- * follows PostHog and stays off until its own import has run. Override locally
- * with VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
+ * Automatic in-app feature tours on desktop views (`features/tours`). Follows
+ * PostHog everywhere, including the local dev server; set
+ * VITE_ENABLE_IN_APP_TOURS=true to turn tours on locally.
  */
-export const enableUnifiedDocumentDiscussions = defineFlag({
-  key: 'enable-unified-document-discussions',
-  env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
-  default: onInDev,
+export const enableInAppTours = defineFlag({
+  key: 'enable-in-app-tours',
+  env: 'ENABLE_IN_APP_TOURS',
 });

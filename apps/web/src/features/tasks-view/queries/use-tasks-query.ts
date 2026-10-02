@@ -3,6 +3,7 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
+  createSoupRowStore,
   createTagFacetContext,
   deduplicateSoupEntities,
   isSoupRowVisible,
@@ -16,6 +17,7 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   type EntityData,
+  getTaskReferencedEntityIds,
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
@@ -30,7 +32,7 @@ import {
   type TaskViewContext,
   taskMatchesView,
 } from '../filters/task-predicates';
-import type { TasksViewState } from '../types';
+import type { TaskReferenceScope, TasksViewState } from '../types';
 import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -45,6 +47,8 @@ export type UseTasksDataSourceOptions = {
   tagSetsReady: Accessor<boolean>;
   isGroupExpanded: (groupId: string) => boolean;
   taskIds?: Accessor<readonly string[]>;
+  /** Only tasks whose property references this entity. */
+  reference?: Accessor<TaskReferenceScope>;
   enabled?: Accessor<boolean>;
   networkPaused?: Accessor<boolean>;
 };
@@ -61,6 +65,16 @@ type TaskGroupContinuationReader = {
   isLoading: (groupId: string) => boolean;
   loadMore: (groupId: string) => Promise<void>;
 };
+
+function referencesEntity(
+  task: TaskEntityWithProperties,
+  reference: TaskReferenceScope
+) {
+  return getTaskReferencedEntityIds(
+    task,
+    reference.propertyDefinitionId
+  ).includes(reference.entityId);
+}
 
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
@@ -88,19 +102,24 @@ export function useTasksDataSource(
       groupBy: state.groupBy,
       sort: state.sort,
       taskIds: options.taskIds?.(),
+      reference: options.reference?.(),
     });
 
+  const scoped = Boolean(options.taskIds || options.reference);
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: facetOptionsReady(),
     networkPaused: options.networkPaused?.(),
-    keepPreviousData: Boolean(options.taskIds),
-    // Project lists admit optimistic rows only where this view shows them.
-    meta: options.taskIds
+    keepPreviousData: scoped,
+    // Scoped lists admit optimistic rows only where this view shows them.
+    meta: scoped
       ? {
           insertFilter: (item) => {
             const entity = mapApiSoupItemToEntity(item);
+            const reference = options.reference?.();
             return (
-              isTaskEntity(entity) && taskMatchesView(entity, viewContext())
+              isTaskEntity(entity) &&
+              taskMatchesView(entity, viewContext()) &&
+              (!reference || referencesEntity(entity, reference))
             );
           },
         }
@@ -118,9 +137,11 @@ export function useTasksDataSource(
     const selected: TaskEntityWithProperties[] = [];
     const context = viewContext();
     const memberIds = options.taskIds ? new Set(options.taskIds()) : undefined;
+    const reference = options.reference?.();
     for (const entity of entities) {
       if (!isTaskEntity(entity)) continue;
       if (memberIds && !memberIds.has(entity.id)) continue;
+      if (reference && !referencesEntity(entity, reference)) continue;
       if (!taskMatchesView(entity, context)) continue;
 
       selected.push(attachNotifications(entity));
@@ -165,6 +186,7 @@ export function useTasksDataSource(
         facets: state.facets,
         facetContext: facetContext(),
         taskIds: options.taskIds?.(),
+        reference: options.reference?.(),
       }),
   });
 
@@ -218,60 +240,66 @@ export function useTasksDataSource(
     return results;
   }, []);
 
-  const rows = createMemo<SoupRow<TaskEntityWithProperties>[]>((previous) => {
-    if (
-      !search.isSearching() &&
-      (query.isLoading ||
-        (!options.taskIds && query.isPlaceholderData && previous.length > 0))
-    ) {
-      return previous;
-    }
-
-    const groups = search.isSearching() ? undefined : query.data?.groups;
-    const currentTasks = tasks();
-    if (!groups || state.groupBy === 'none') {
-      return buildFlatSoupRows(currentTasks);
-    }
-
-    const tasksById = new Map(currentTasks.map((task) => [task.id, task]));
-    const taskGroups: SoupGroup<TaskEntityWithProperties>[] = [];
-
-    for (const group of groups) {
-      const initialTasks = group.itemIds.flatMap((id) => {
-        const task = tasksById.get(id);
-        return task ? [task] : [];
-      });
-      const continuationTasks = continuations
-        .entities(group.key)
-        .filter(
-          (task) =>
-            (!options.taskIds || options.taskIds().includes(task.id)) &&
-            taskMatchesView(task, viewContext())
-        );
-      const entities = sortItems(
-        deduplicateSoupEntities([...initialTasks, ...continuationTasks]),
-        state.sort,
-        TASK_SORT_DEFINITIONS
-      );
-      const taskGroup: SoupGroup<TaskEntityWithProperties> = {
-        id: group.key,
-        label: group.label,
-        entities,
-        count: group.totalCount,
-      };
-
-      if (continuations.hasMore(group.key)) {
-        taskGroup.loadMore = {
-          scopeId: `tasks:${group.key}`,
-          isLoading: continuations.isLoading(group.key),
-        };
+  const builtRows = createMemo<SoupRow<TaskEntityWithProperties>[]>(
+    (previous) => {
+      if (
+        !search.isSearching() &&
+        (query.isLoading ||
+          (!options.taskIds && query.isPlaceholderData && previous.length > 0))
+      ) {
+        return previous;
       }
 
-      taskGroups.push(taskGroup);
-    }
+      const groups = search.isSearching() ? undefined : query.data?.groups;
+      const currentTasks = tasks();
+      if (!groups || state.groupBy === 'none') {
+        return buildFlatSoupRows(currentTasks);
+      }
 
-    return buildGroupedSoupRows(taskGroups);
-  }, []);
+      const tasksById = new Map(currentTasks.map((task) => [task.id, task]));
+      const taskGroups: SoupGroup<TaskEntityWithProperties>[] = [];
+
+      for (const group of groups) {
+        const initialTasks = group.itemIds.flatMap((id) => {
+          const task = tasksById.get(id);
+          return task ? [task] : [];
+        });
+        const reference = options.reference?.();
+        const continuationTasks = continuations
+          .entities(group.key)
+          .filter(
+            (task) =>
+              (!options.taskIds || options.taskIds().includes(task.id)) &&
+              (!reference || referencesEntity(task, reference)) &&
+              taskMatchesView(task, viewContext())
+          );
+        const entities = sortItems(
+          deduplicateSoupEntities([...initialTasks, ...continuationTasks]),
+          state.sort,
+          TASK_SORT_DEFINITIONS
+        );
+        const taskGroup: SoupGroup<TaskEntityWithProperties> = {
+          id: group.key,
+          label: group.label,
+          entities,
+          count: group.totalCount,
+        };
+
+        if (continuations.hasMore(group.key)) {
+          taskGroup.loadMore = {
+            scopeId: `tasks:${group.key}`,
+            isLoading: continuations.isLoading(group.key),
+          };
+        }
+
+        taskGroups.push(taskGroup);
+      }
+
+      return buildGroupedSoupRows(taskGroups);
+    },
+    []
+  );
+  const rows = createSoupRowStore(builtRows);
 
   const items = createMemo(() => {
     if (options.enabled?.() === false) return [];

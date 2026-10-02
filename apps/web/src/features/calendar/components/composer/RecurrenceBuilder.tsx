@@ -140,7 +140,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                       props.value.byDay.includes(code) ? 'accent' : 'ghost'
                     }
                     size="icon-sm"
-                    class="rounded-full text-xxs"
+                    class="text-xxs"
                     aria-label={code}
                     aria-pressed={props.value.byDay.includes(code)}
                     disabled={props.disabled}

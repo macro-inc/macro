@@ -12,14 +12,8 @@ vi.mock('@macro-inc/lexical-core', () => ({
   markdownToPlainText: (content: string) => content,
 }));
 
-vi.mock('../../theme/signals/themeReactive', () => ({
-  themeReactive: {
-    a0: {
-      l: [() => '0.8'],
-      c: [() => '0.1'],
-      h: [() => '100'],
-    },
-  },
+vi.mock('../../theme/signals/themeSignals', () => ({
+  committedThemeAccent: () => 'oklch(0.8 0.1 100deg)',
 }));
 
 vi.mock('../notification-navigation', () => ({
@@ -141,6 +135,21 @@ function createAgentSettledNotification(): UnifiedNotification {
   });
 }
 
+function createReminderNotification(): UnifiedNotification {
+  return baseNotification({
+    entity_id: 'reminder-1',
+    entity_type: 'reminder',
+    notification_event_type: 'reminder',
+    notification_metadata: {
+      tag: 'reminder',
+      content: {
+        description: '**Review** the reminder flow',
+        reminderId: 'reminder-1',
+      },
+    },
+  });
+}
+
 function createNotificationInterface(
   showNotification: PlatformNotificationState['showNotification']
 ): PlatformNotificationState {
@@ -161,6 +170,27 @@ function createNotificationHandle(): PlatformNotificationHandle {
 }
 
 describe('maybeHandlePlatformNotification', () => {
+  it('formats a sender-less reminder without actor or document resolution', async () => {
+    const resolveUserName = vi.fn(async () => 'Unexpected actor');
+    const resolveDocumentName = vi.fn(async () => 'Unexpected document');
+
+    const result = await toPlatformNotificationData(
+      createReminderNotification(),
+      resolveUserName,
+      resolveDocumentName
+    );
+
+    expect(result).toEqual({
+      title: 'Reminder',
+      options: {
+        body: '**Review** the reminder flow',
+        icon: 'favicon.ico',
+      },
+    });
+    expect(resolveUserName).not.toHaveBeenCalled();
+    expect(resolveDocumentName).not.toHaveBeenCalled();
+  });
+
   it('skips GitHub PR events so they do not render as browser notifications', async () => {
     const showNotification = vi.fn<
       PlatformNotificationState['showNotification']

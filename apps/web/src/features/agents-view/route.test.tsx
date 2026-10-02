@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
     enabled: false,
     loading: true,
   }),
+  routeId: 'agents',
+  redirect: vi.fn(),
   updateMeta: vi.fn(),
   touch: false,
 }));
@@ -15,7 +17,8 @@ const state = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => state.flag,
 }));
-vi.mock('@app/lib/split-router', () => ({
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   defineRoute: (route: unknown) => route,
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -23,7 +26,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: {
       content: () => ({
         type: 'component',
-        id: 'agents',
+        id: state.routeId,
         params: { agentPage: 'connections' },
       }),
       updateMeta: state.updateMeta,
@@ -33,7 +36,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   withAuth: (view: unknown) => view,
   usePageViewTracking: () => {},
-  RedirectSplit: () => null,
+  RedirectSplit: (props: { to: unknown; mergeHistory?: boolean }) => {
+    state.redirect(props.to, props.mergeHistory);
+    return null;
+  },
 }));
 vi.mock('@core/component/LoadingBlock', () => ({ LoadingBlock: () => null }));
 vi.mock('@core/constant/featureFlags', () => ({
@@ -51,6 +57,7 @@ vi.mock('../settings/McpConnections', () => ({ McpConnections: () => null }));
 beforeEach(() => {
   vi.clearAllMocks();
   state.touch = false;
+  state.routeId = 'agents';
 });
 afterEach(cleanup);
 
@@ -76,7 +83,7 @@ it('updates Agents layout metadata after the remote flag loads and changes', () 
   });
 });
 
-it('keeps the legacy layout on touch devices when Agents is enabled', () => {
+it('uses the new Agents layout on touch devices when enabled', () => {
   state.touch = true;
   state.flag = () => ({ enabled: true, loading: false });
   render(() => (
@@ -86,6 +93,21 @@ it('keeps the legacy layout on touch devices when Agents is enabled', () => {
   ));
 
   expect(state.updateMeta).toHaveBeenCalledWith({
-    splitPanelLayout: 'legacy',
+    splitPanelLayout: 'composable',
   });
+});
+
+it('replaces the mobile conversation alias instead of trapping Back in a redirect', () => {
+  state.touch = true;
+  state.routeId = 'agents-session~agents~session-id';
+  state.flag = () => ({ enabled: true, loading: false });
+  render(() => (
+    <Suspense fallback={null}>
+      <AgentsRouteView />
+    </Suspense>
+  ));
+  expect(state.redirect).toHaveBeenCalledWith(
+    { type: 'agent', id: 'session-id' },
+    true
+  );
 });

@@ -1,3 +1,4 @@
+import type { IdentityBindingWire } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
@@ -20,6 +21,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationSearchChanges,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -72,6 +74,7 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
+  identityBindings?: IdentityBindingWire[];
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
@@ -83,6 +86,12 @@ export interface InitialMutationClaimArgs {
   nowMs: number;
   leaseExpiresAtMs: number;
 }
+
+export type CacheChangeListener = (
+  revision: CacheRevision,
+  /** Undefined for ordinary writes/resets and older runtimes: refresh conservatively. */
+  searchChanges?: HydrationSearchChanges
+) => void;
 
 export type CacheChangeOptions = {
   /** Also observe background hydration without re-executing foreground queries. */
@@ -156,7 +165,8 @@ export interface CacheHost {
   rollbackOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
-    error: string
+    error: string,
+    errorCode?: string
   ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
@@ -176,7 +186,7 @@ export interface CacheHost {
 
   /** Subscribes whenever the effective normalized-cache view changes. */
   onCacheChanged(
-    cb: (revision: CacheRevision) => void,
+    cb: CacheChangeListener,
     options?: CacheChangeOptions
   ): () => void;
 

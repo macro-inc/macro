@@ -55,12 +55,6 @@ export const TASK_GROUP_OPTIONS: GroupOption[] = [
   { value: 'date', label: 'Date' },
 ];
 
-export const COMPANY_GROUP_OPTIONS: GroupOption[] = [
-  { value: 'none', label: 'None' },
-  { value: `property:${SYSTEM_PROPERTY_IDS.STAGE}`, label: 'Stage' },
-  { value: `property:${SYSTEM_PROPERTY_IDS.COMPANY_OWNER}`, label: 'Owner' },
-];
-
 export const TAG_VIEW_GROUP_OPTIONS: GroupOption[] = [
   { value: 'none', label: 'None' },
   { value: 'entity_type', label: 'Type' },

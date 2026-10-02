@@ -23,6 +23,8 @@ pub enum PropertyEntityType {
     Chat,
     /// Company entity
     Company,
+    /// Database row entity
+    DatabaseRow,
     /// Document entity
     Document,
     /// Initiative entity
@@ -50,6 +52,7 @@ impl FromStr for PropertyEntityType {
             "CHANNEL" => Ok(Self::Channel),
             "CHAT" => Ok(Self::Chat),
             "COMPANY" => Ok(Self::Company),
+            "DATABASE_ROW" => Ok(Self::DatabaseRow),
             "DOCUMENT" => Ok(Self::Document),
             "INITIATIVE" => Ok(Self::Initiative),
             "PROJECT" => Ok(Self::Project),
@@ -68,6 +71,7 @@ impl fmt::Display for PropertyEntityType {
             Self::Channel => write!(f, "CHANNEL"),
             Self::Chat => write!(f, "CHAT"),
             Self::Company => write!(f, "COMPANY"),
+            Self::DatabaseRow => write!(f, "DATABASE_ROW"),
             Self::Document => write!(f, "DOCUMENT"),
             Self::Initiative => write!(f, "INITIATIVE"),
             Self::Project => write!(f, "PROJECT"),
@@ -126,7 +130,7 @@ impl<'de> Deserialize<'de> for EntityRefId {
 }
 
 /// Describes how to match against a property value in the entity_properties table.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum PropertyMatchValue {
     /// Match a select option by its UUID. Uses the `?` jsonb operator on `values->'value'`.
     #[serde(rename = "so")]
@@ -140,7 +144,7 @@ pub enum PropertyMatchValue {
 ///
 /// When converted to SQL, this generates an EXISTS subquery against the
 /// `entity_properties` table, checking that the given property has a matching value.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct PropertiesLiteral {
     /// The property definition UUID to filter on.
     #[serde(rename = "pd")]

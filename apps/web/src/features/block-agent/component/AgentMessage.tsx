@@ -21,6 +21,7 @@ import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
+import { isNotificationMessage } from '../state/notification-message';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
@@ -36,7 +37,7 @@ import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import type { ToolUsePart } from './parts/shared';
+import { type ToolUsePart, toolUsedAfter } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
@@ -88,6 +89,7 @@ function AgentMessagePart(props: {
               messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
               partIndex: props.index,
               inFlight: props.inFlight,
+              followedBy: toolUsedAfter(props.message.parts, props.index),
             }}
           />
         )}
@@ -281,9 +283,14 @@ export function Message(props: {
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
   return (
+    // A control and an event notification are both user-authored by the
+    // fold's account and neither is a prompt: they take the full-width
+    // treatment, where the notification renders as its own card.
     <Show
       when={
-        props.message.author.kind === 'user' && !isControlMessage(props.message)
+        props.message.author.kind === 'user' &&
+        !isControlMessage(props.message) &&
+        !isNotificationMessage(props.message)
       }
       fallback={
         <div class="flex flex-col gap-1 min-w-0">

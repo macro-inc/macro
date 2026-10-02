@@ -822,11 +822,12 @@ const KEYS: KeyDef[] = [
 ];
 
 function KeyRect(props: { def: KeyDef; active: boolean }) {
-  const stroke = () => (props.active ? 'var(--a0)' : 'var(--b4)');
+  const stroke = () =>
+    props.active ? 'var(--color-accent)' : 'var(--color-edge)';
   const fill = () =>
     props.active
-      ? 'oklch(from var(--a0) l c h / 0.1)'
-      : 'oklch(from var(--b2) l c h / 0.1)';
+      ? 'oklch(from var(--color-accent) l c h / 0.1)'
+      : 'oklch(from var(--color-surface-2) l c h / 0.1)';
 
   return (
     <>
@@ -994,6 +995,11 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['shift+u'],
         codes: ['ShiftLeft', 'KeyU'],
         description: 'Mark read',
+      },
+      {
+        keys: ['#'],
+        codes: ['ShiftLeft', 'Digit3'],
+        description: 'Delete email',
       },
     ],
   },

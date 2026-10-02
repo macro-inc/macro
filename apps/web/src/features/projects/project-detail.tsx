@@ -8,18 +8,16 @@ import {
 import { useNavigate } from '@app/lib/split-router';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { getPermissions } from '@core/component/SharePermissions';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { TabsInset } from '@core/component/TabsInset';
-import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getDisplayName, tryMacroId } from '@core/user';
 import StackIcon from '@phosphor/stack.svg';
 import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { ProjectCollaborators } from './components/project-collaborators';
 import {
   type ProjectsContext,
   useProjectsContext,
@@ -33,6 +31,7 @@ import {
 import type { ProjectRoute } from './core/route';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
+import { useProjectShareModal } from './project-share';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
 
@@ -85,45 +84,12 @@ type ProjectDetailProps = {
   onDelete?(): void;
 };
 
-const userName = (id: string) => getDisplayName(tryMacroId(id));
-
-/** The standard Share menu; collaborators are the project's direct grants. */
 function ProjectShareTrigger(props: {
   project: ProjectDetailData;
   commands: ReturnType<ProjectsContext['createCommands']>;
 }) {
   const panel = useSplitPanelOrThrow();
-  const setMembers = async (ids: string[]) => {
-    try {
-      await props.commands.setMembers(props.project.id, ids);
-    } catch (error) {
-      toast.failure('Could not update collaborators', {
-        subtext: 'Please try again',
-      });
-      throw error;
-    }
-  };
-  // Stable, so the open dialog keeps the picker's draft across refreshes.
-  const Collaborators = () => (
-    <ProjectCollaborators
-      project={props.project}
-      getUserName={userName}
-      pending={props.commands.pending()}
-      onMembers={setMembers}
-    />
-  );
-  const openShare = useShareModal(() => ({
-    id: props.project.id,
-    blockAlias: 'initiative',
-    itemType: 'initiative',
-    name: props.project.name,
-    owner: props.project.ownerId,
-    userPermissions: getPermissions(props.project.access),
-    people: Collaborators,
-    hasDirectShares: props.project.memberIds.some(
-      (id) => id !== props.project.ownerId
-    ),
-  }));
+  const openShare = useProjectShareModal(() => props.project, props.commands);
   return (
     <ShareTrigger
       onClick={openShare}
@@ -137,6 +103,7 @@ function ProjectShareTrigger(props: {
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
+  useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
   const layout = useSplitLayout();
   const navigate = useNavigate();

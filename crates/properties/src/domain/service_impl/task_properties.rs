@@ -1,7 +1,11 @@
 //! Task-specific property handlers.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
+use bot_id::BotIdStr;
 use entity_access::domain::models::EntityAccessAuth;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
@@ -36,19 +40,24 @@ where
         let Some(PropertyValue::EntityRef(references)) = value else {
             return Ok(());
         };
-        let assignee_ids = references
-            .iter()
-            .map(|reference| {
-                if reference.entity_type != EntityType::User {
-                    return Err(PropertiesErr::Validation(
-                        "Assignees must reference users".to_string(),
-                    ));
-                }
+        let mut assignee_ids = Vec::new();
+        for reference in references {
+            if reference.entity_type != EntityType::User {
+                return Err(PropertiesErr::Validation(
+                    "Assignees must reference users or agents".to_string(),
+                ));
+            }
+            // Agents act with the delegating user's access; only human
+            // assignees receive direct project collaboration grants.
+            if BotIdStr::parse_from_str(&reference.entity_id).is_ok() {
+                continue;
+            }
+            assignee_ids.push(
                 MacroUserIdStr::parse_from_str(&reference.entity_id)
                     .map(|user_id| user_id.into_owned())
-                    .map_err(|error| PropertiesErr::Validation(error.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                    .map_err(|error| PropertiesErr::Validation(error.to_string()))?,
+            );
+        }
         if assignee_ids.is_empty() {
             return Ok(());
         }
@@ -193,11 +202,25 @@ where
             return Ok(());
         };
 
-        let assignee_ids = references
-            .iter()
-            .map(|r| MacroUserIdStr::parse_from_str(&r.entity_id))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
+        let mut assignee_ids = Vec::new();
+        for reference in references {
+            if reference.entity_type != EntityType::User {
+                return Err(PropertiesErr::Validation(
+                    "Assignees must reference users or agents".to_string(),
+                ));
+            }
+
+            // Agent identities share the User reference namespace. Their
+            // sessions run with the assigning user's access, so only humans
+            // receive direct task permissions and assignment notifications.
+            if BotIdStr::parse_from_str(&reference.entity_id).is_ok() {
+                continue;
+            }
+            assignee_ids.push(
+                MacroUserIdStr::parse_from_str(&reference.entity_id)
+                    .map_err(|error| PropertiesErr::Validation(error.to_string()))?,
+            );
+        }
         if assignee_ids.is_empty() {
             return Ok(());
         }

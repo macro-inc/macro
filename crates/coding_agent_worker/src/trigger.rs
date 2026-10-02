@@ -28,6 +28,8 @@ pub enum TriggerWork {
     /// Open a session for a mention, serve it, and forward the mention as
     /// its first prompt.
     OpenAndPrompt {
+        /// Update the bot response reserved by a task assignment.
+        reuse_origin_message: bool,
         /// The mentioned agent the session runs for. One harness serves many
         /// agents, so the daemon must name the bot when creating the session.
         bot: BotId,
@@ -96,6 +98,17 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 sender,
             })
         }
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
+            Ok(TriggerWork::OpenAndPrompt {
+                reuse_origin_message: true,
+                bot: assigned.bot_id,
+                sender: assigned.actor,
+                parent: assigned.parent,
+                thread_id: assigned.discussion_id,
+                message_id: assigned.discussion_id,
+                content: assigned.prompt,
+            })
+        }
         AgentTriggerTopicEvent::New(event) => {
             let Some(OpeningMention { bot_id, message }) = event.mention() else {
                 return Err(Skipped::Unrecognized);
@@ -106,6 +119,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
+                reuse_origin_message: false,
                 bot: bot_id,
                 sender,
                 parent: message.parent,

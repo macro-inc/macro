@@ -1,0 +1,33 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  fill="none"
+  display="block"
+>
+  <path
+    d="M32 4.5C24.2 10.8 15.9 13 8 13.4v15.1C8 45.2 18.4 55.4 32 60.5 45.6 55.4 56 45.2 56 28.5V13.4C48.1 13 39.8 10.8 32 4.5Z"
+    stroke="currentColor"
+    stroke-width="2.7"
+    stroke-linejoin="round"
+  />
+  <text
+    x="32"
+    y="32.5"
+    fill="currentColor"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="12.5"
+    font-weight="800"
+    letter-spacing="1"
+    text-anchor="middle"
+  >CASA</text>
+  <text
+    x="32"
+    y="45"
+    fill="currentColor"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="8.4"
+    font-weight="800"
+    letter-spacing="0.65"
+    text-anchor="middle"
+  >TIER 2</text>
+</svg>

@@ -11,7 +11,7 @@ import { SearchState } from './mobileSearchState';
 import { openMobileAskAi } from './open-mobile-ask-ai';
 
 // This component only writes the global session state. The active split's
-// bridge effect (see soup-view-context) mirrors the session into its own
+// search accessor (useMobileSearchText) overlays the session on its own
 // search text — the input lives in the app chrome outside every split and
 // stays mounted for the whole session, so switching scope views never
 // remounts (and thereby blurs) it. It mounts and unmounts only with the
@@ -23,7 +23,7 @@ import { openMobileAskAi } from './open-mobile-ask-ai';
 function submitAskAi() {
   const query = SearchState.query().trim();
   if (!query) return;
-  openMobileAskAi(query);
+  void openMobileAskAi(query);
   SearchState.close();
 }
 

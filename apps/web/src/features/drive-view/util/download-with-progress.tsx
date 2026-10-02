@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { isPlatform } from '@core/util/platform';
 import { downloadFile } from '@filesystem/download';
 import Spinner from '@phosphor/spinner.svg';
 import type { FetchProgress } from '@service-storage/util/fetchPresigned';
@@ -65,9 +66,13 @@ export async function downloadWithProgress(
 
   try {
     const blob = await load(setProgress);
-    downloadFile(blob, fileName);
     toast.dismiss(toastId);
-    toast.success(`Downloaded ${fileName}`);
+    const { saved } = await downloadFile(blob, fileName);
+    if (saved) {
+      toast.success(
+        isPlatform('android') ? `Saved ${fileName}` : `Downloaded ${fileName}`
+      );
+    }
   } catch (error) {
     toast.dismiss(toastId);
     console.error('error downloading file', error);

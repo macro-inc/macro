@@ -26,7 +26,9 @@
 //! is patched when the turn stops to ask a question, so `waiting_for_input`
 //! is suppressed for it likewise. A coding agent's chip notifies nobody,
 //! and a chat turn nobody announced - one driven from the session view -
-//! has no message to speak through, so both keep every notification.
+//! has no message to speak through, so both keep every notification. Assignment
+//! announcements also keep notifications: they reuse the originating message as
+//! a session link and never patch it into a discussion answer.
 //!
 //! A mention has the same shape of exception, and the fact does carry it: a
 //! prompt that arrived as a channel or document message names its users in
@@ -150,11 +152,23 @@ pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedN
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
+        | AgentSessionLifecycleEvent::CommandRejected(_)
         | AgentSessionLifecycleEvent::InputReceived(_)
         | AgentSessionLifecycleEvent::Stopped(_)
         | AgentSessionLifecycleEvent::Renamed(_)
         | AgentSessionLifecycleEvent::Deleted(_) => Vec::new(),
     }
+}
+
+fn has_discussion_reply(identity: &SessionIdentity, announcement: Option<Uuid>) -> bool {
+    announcement.is_some_and(|message_id| {
+        // Assignment announcements reuse the originating root. A mention or
+        // later discussion prompt creates a separate reply message instead.
+        identity
+            .origin
+            .as_ref()
+            .is_none_or(|origin| origin.originating_message_id != message_id)
+    })
 }
 
 fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<PlannedNotification> {
@@ -165,7 +179,7 @@ fn plan_settled(settled: &SessionSettledMetadata, is_coding: bool) -> Vec<Planne
     };
     // A chat agent's announced turn already told the thread: its pending
     // reply was patched into the answer, and that patch notifies as a post.
-    if !is_coding && turn.announcement_message_id.is_some() {
+    if !is_coding && has_discussion_reply(&settled.identity, turn.announcement_message_id) {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&settled.identity);
@@ -188,7 +202,7 @@ fn plan_waiting(waiting: &WaitingForInputMetadata, is_coding: bool) -> Vec<Plann
     // A chat agent's announced turn tells its thread it is waiting the same
     // way it tells it the answer: by patching its pending reply, which
     // notifies as a post.
-    if !is_coding && waiting.announcement_message_id.is_some() {
+    if !is_coding && has_discussion_reply(&waiting.identity, waiting.announcement_message_id) {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&waiting.identity);

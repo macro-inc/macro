@@ -20,6 +20,7 @@ import { SplitFileMenu } from '@components/app/split-layout/components/SplitFile
 import { ListNavigationButtons } from '@components/app/split-layout/components/SplitHeader';
 import {
   useCanAutofocusSplitContent,
+  useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
@@ -48,6 +49,7 @@ function EmailDetailHeader(
     value: string;
     focusThread: () => void;
     controlsMount: HTMLDivElement | undefined;
+    onEmailReminderSaved: () => void | Promise<void>;
   }
 ) {
   const { emailEntity, permissions, menuTools, controls } =
@@ -83,6 +85,7 @@ function EmailDetailHeader(
                 permissions={permissions()}
                 ops={[]}
                 tools={menuTools}
+                onEmailReminderSaved={props.onEmailReminderSaved}
               />
             </div>
           </div>
@@ -102,6 +105,7 @@ function EmailDetailHeader(
 export function EmailDetailView(props: {
   thread: EmailThreadTarget;
   targetMessageId?: string;
+  targetRequest?: string;
 }) {
   const { closeThread, selectedThread } = useEmailView();
   const panel = useSplitPanelOrThrow();
@@ -113,12 +117,9 @@ export function EmailDetailView(props: {
     enabled: !!threadId(),
   }));
   const source = createEmailThreadSource(threadId, threadQuery);
-  const threadData = createMemo(
-    (previous: typeof threadQuery.data | undefined) =>
-      threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
-  );
+  const threadData = source.thread;
   const title = () => {
-    const thread = threadData()?.thread;
+    const thread = threadData();
     return (
       (thread &&
         displaySubject(
@@ -128,8 +129,9 @@ export function EmailDetailView(props: {
       'Email'
     );
   };
+  useSplitDisplayName(title);
   const openShare = useShareModal(() => {
-    const thread = threadData()?.thread;
+    const thread = threadData();
     if (!thread) return;
     return {
       id: props.thread.id,
@@ -141,7 +143,7 @@ export function EmailDetailView(props: {
   });
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
-    const thread = threadQuery.data?.thread;
+    const thread = threadData();
     if (!thread) return undefined;
     return buildEntityData({
       id: thread.db_id,
@@ -158,6 +160,9 @@ export function EmailDetailView(props: {
     scopeId: panel.splitHotkeyScope,
     resolveEntity: commandEntity,
     onDeleted: closeThread,
+    onEmailReminderSaved: async () => {
+      await listNavigation.afterReminderSaved?.();
+    },
   });
 
   let container: HTMLDivElement | undefined;
@@ -169,9 +174,11 @@ export function EmailDetailView(props: {
   const listNavigation = useEmailDetailListNavigation(threadId);
   const hotkeyScope = () => panel.splitHotkeyScope;
   const host: EmailThreadHost = {
+    returnToList: closeThread,
     listNavigation,
     focusContainer,
     targetMessageId: () => props.targetMessageId,
+    targetRequest: () => props.targetRequest,
     isActive: panel.isPanelActive,
     registerKeyboard: (handlers) => {
       registerEmailHotkeys(hotkeyScope(), handlers);
@@ -247,7 +254,7 @@ export function EmailDetailView(props: {
             result={loadResult}
             notificationSource={notificationSource}
             threadId={props.thread.id}
-            linkId={threadData()?.thread?.link_id}
+            linkId={threadData()?.link_id}
             debounceTime={100}
             onRetry={() => void threadQuery.refetch()}
           >
@@ -259,6 +266,9 @@ export function EmailDetailView(props: {
               host={host}
               chrome={({ createTask }) => (
                 <EmailDetailHeader
+                  onEmailReminderSaved={async () => {
+                    await listNavigation.afterReminderSaved?.();
+                  }}
                   id={props.thread.id}
                   title={title()}
                   onCreateTask={createTask}
@@ -287,6 +297,7 @@ export function EmailDetailRouteView() {
     <EmailDetailView
       thread={{ id: params.threadId }}
       targetMessageId={search.messageId || undefined}
+      targetRequest={search.seek}
     />
   );
 }

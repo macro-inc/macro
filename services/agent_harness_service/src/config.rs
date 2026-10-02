@@ -7,12 +7,17 @@
 
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use entity_registry::NonUserOwners;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
 use secretsmanager_client::LocalOrRemoteSecret;
 
 macro_env_var::env_vars!(
+    /// Browser-facing static file base, read only when using local AWS.
+    pub struct StaticFileServiceUrl;
+    /// Local static file bucket, read only when using local AWS.
+    pub struct StaticStorageBucket;
     /// Comma-separated Kafka bootstrap servers.
     #[derive(Clone)]
     pub struct KafkaBrokers;
@@ -40,6 +45,8 @@ macro_env_var::maybe_env_vars!(
     pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
+    /// Rollout gate for sessions owned by a bot.
+    pub struct EnableNonUserOwners;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -55,6 +62,9 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     /// OAuth encryption key; deployments without a key do not advertise sign-in.
     pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
@@ -64,13 +74,6 @@ pub struct Config {
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
-    /// Which committed-post topic feeds the in-process trigger: `messages`
-    /// (the default, channel and document posts) or `channels` (the
-    /// pre-parent channel event, kept until its producer retires it). Never
-    /// both: every channel post is on both topics, so both would evaluate
-    /// each mention twice.
-    #[macro_config_default(agent_trigger::domain::sources::TriggerEventSource::default())]
-    pub agent_trigger_event_source: agent_trigger::domain::sources::TriggerEventSource,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
     /// Shared Redis used for cross-replica command forwarding.
@@ -147,6 +150,8 @@ pub struct Config {
     pub inmem_harness_slug: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
+    /// Key required by document storage's internal endpoints.
+    pub document_storage_service_auth_key: String,
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
@@ -186,6 +191,8 @@ pub struct Config {
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
+    /// Lets a team-scoped bot with no acting user own the sessions it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
 }
 
 impl Config {
@@ -220,9 +227,19 @@ impl Config {
             .filter(|value| !value.trim().is_empty())
     }
 
+    /// The parsed `ENABLE_NON_USER_OWNERS` gate. Missing is disabled.
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
+    }
+
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load agent harness service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load agent harness service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
     }
 }

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id FROM ai_billing_usage_period WHERE user_id = ANY($1)\n             AND policy = 'public_allowance_v1' AND period_start < $3 AND period_end > $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6a3b43433310b498c8eb24ebf0870ff6017a7491c1f0491d75c56735977812a3"
+}

@@ -143,6 +143,9 @@
       "@block-calendar/*": [
         "./src/features/block-calendar/*"
       ],
+      "@block-database/*": [
+        "./src/features/block-database/*"
+      ],
       "@block-code/*": [
         "./src/features/block-code/*"
       ],
@@ -158,14 +161,8 @@
       "@channel/*": [
         "./src/features/channel/*"
       ],
-      "@companies/*": [
-        "./src/features/companies/*"
-      ],
       "@block-company/*": [
         "./src/features/block-company/*"
-      ],
-      "@contacts/*": [
-        "./src/features/contacts/*"
       ],
       "@block-contact/*": [
         "./src/features/block-contact/*"

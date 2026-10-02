@@ -3,6 +3,328 @@
  */
 import { z } from 'zod/v3';
 
+export const AddColumn = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  name: z.string(),
+  dataType: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('text'),
+      z.literal('number'),
+      z.literal('boolean'),
+      z.literal('date'),
+      z.literal('link'),
+      z.literal('select'),
+      z.literal('select_number'),
+      z.literal('tag'),
+      z.literal('entity'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  isMultiSelect: z.boolean().optional(),
+  options: z.union([z.array(z.string()), z.null()]).optional(),
+  specificEntityType: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('USER'),
+          z.literal('DOCUMENT'),
+          z.literal('TASK'),
+          z.literal('COMPANY'),
+          z.literal('CALL_RECORD'),
+          z.literal('CHANNEL'),
+          z.literal('CHAT'),
+          z.literal('PROJECT'),
+          z.literal('THREAD'),
+          z.literal('CALENDAR_EVENT'),
+          z.literal('INITIATIVE'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  linkToTableId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const AddColumnResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const AddColumnOptions = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  labels: z.array(z.string()),
+});
+
+export const AddColumnOptionsResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  options: z.array(z.string()),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const AssignTasksToInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskIds: z.array(z.string()),
+});
+
+export const AssignTasksToInitiativeResponse = z.object({
+  initiativeId: z.string().uuid(),
+  results: z.array(
+    z.object({
+      taskId: z.string(),
+      status: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('assigned'),
+          z.literal('moved'),
+          z.literal('not_a_task'),
+          z.literal('not_found'),
+          z.literal('skipped_no_permission'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
+});
+
 export const BashCodeExecution = z.object({ input: z.string() });
 
 export const BashCodeExecutionResponse = z.object({
@@ -602,18 +924,364 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
   }
 });
 
-export const CommentOnDocumentText = z.object({
-  documentId: z.string().uuid(),
-  text: z.string(),
-  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
-  content: z.string(),
+export const ChangeColumnType = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  dataType: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('text'),
+      z.literal('number'),
+      z.literal('boolean'),
+      z.literal('date'),
+      z.literal('link'),
+      z.literal('select'),
+      z.literal('select_number'),
+      z.literal('tag'),
+      z.literal('entity'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  isMultiSelect: z.boolean().optional(),
+  options: z.union([z.array(z.string()), z.null()]).optional(),
+  specificEntityType: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('USER'),
+          z.literal('DOCUMENT'),
+          z.literal('TASK'),
+          z.literal('COMPANY'),
+          z.literal('CALL_RECORD'),
+          z.literal('CHANNEL'),
+          z.literal('CHAT'),
+          z.literal('PROJECT'),
+          z.literal('THREAD'),
+          z.literal('CALENDAR_EVENT'),
+          z.literal('INITIATIVE'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  linkToTableId: z.union([z.string().uuid(), z.null()]).optional(),
 });
 
-export const CommentOnDocumentTextResponse = z.object({
+export const ChangeColumnTypeResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const CommentOnDocument = z.object({
+  documentId: z.string().uuid(),
+  content: z.string(),
+  threadId: z.union([z.string().uuid(), z.null()]).optional(),
+  quote: z.union([z.string(), z.null()]).optional(),
+  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
+});
+
+export const CommentOnDocumentResponse = z.object({
   documentId: z.string().uuid(),
   threadId: z.string().uuid(),
   commentId: z.string().uuid(),
-  markedText: z.string(),
+  markedText: z.union([z.string(), z.null()]).optional(),
+});
+
+export const ConfigureAgent = z.object({
+  botId: z.string().uuid(),
+  instructions: z.union([z.string(), z.null()]).optional(),
+  harness: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('in-memory'),
+          z.literal('cursor'),
+          z.literal('claude-cloud'),
+          z.literal('macrod'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  harnessId: z.union([z.string().uuid(), z.null()]).optional(),
+  defaultModel: z.union([z.string(), z.null()]).optional(),
+  channelScope: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('all'), z.literal('selected')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  channelIds: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+  mcpScope: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('owner_connections'), z.literal('selected')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  mcpServers: z
+    .union([
+      z.array(z.object({ appSlug: z.string(), serverName: z.string() })),
+      z.null(),
+    ])
+    .optional(),
+  autoAcceptPermissions: z.union([z.boolean(), z.null()]).optional(),
+  isCoding: z.union([z.boolean(), z.null()]).optional(),
+});
+
+export const ConfigureAgentResponse = z.object({
+  agent: z.object({
+    bot: z.object({
+      botId: z.string().uuid(),
+      owner: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.object({ user_id: z.string(), type: z.literal('user') }),
+          z.object({ team_id: z.string().uuid(), type: z.literal('team') }),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      name: z.string(),
+      handle: z.string(),
+      description: z.union([z.string(), z.null()]).optional(),
+      avatarUrl: z.union([z.string(), z.null()]).optional(),
+      hasAgent: z.boolean(),
+    }),
+    instructions: z.string(),
+    harness: z.string(),
+    harnessId: z.union([z.string().uuid(), z.null()]).optional(),
+    defaultModel: z.string(),
+    channelScope: z.any().superRefine((x, ctx) => {
+      const schemas = [z.literal('all'), z.literal('selected')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    channelIds: z.array(z.string().uuid()),
+    mcpScope: z.any().superRefine((x, ctx) => {
+      const schemas = [z.literal('owner_connections'), z.literal('selected')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    mcpServers: z.array(
+      z.object({ appSlug: z.string(), serverName: z.string() })
+    ),
+    autoAcceptPermissions: z.union([z.boolean(), z.null()]).optional(),
+    isCoding: z.boolean(),
+  }),
+  summary: z.string(),
 });
 
 export const ConfigureBot = z.object({
@@ -1664,6 +2332,109 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
+export const CreateDatabase = z.object({ name: z.string() });
+
+export const CreateDatabaseResponse = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
 export const CreateDocument = z.object({
   documentName: z.string(),
   fileContent: z.string(),
@@ -1894,6 +2665,112 @@ export const ToolReminder = z.object({
   enabled: z.boolean(),
 });
 
+export const CreateTable = z.object({
+  databaseId: z.string().uuid(),
+  name: z.string(),
+});
+
+export const CreateTableResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
 export const CreateTag = z.object({
   label: z.string(),
   color: z.any().superRefine((x, ctx) => {
@@ -2022,6 +2899,126 @@ export const DeleteCalendarEventResponse = z.object({
   summary: z.string(),
 });
 
+export const DeleteColumn = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+});
+
+export const DeleteColumnResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const DeleteDatabaseView = z.object({
+  databaseId: z.string().uuid(),
+  viewId: z.string().uuid(),
+});
+
+export const DeletedDatabaseView = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  viewId: z.string().uuid(),
+  name: z.string(),
+});
+
 export const DeleteImportEntity = z.object({ id: z.string().uuid() });
 
 export const DeleteImportEntityResponse = z.object({
@@ -2040,6 +3037,112 @@ export const DeleteReminderResponse = z.object({
   summary: z.string(),
 });
 
+export const DeleteTable = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+});
+
+export const DeleteTableResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
 export const DeleteTag = z.object({
   id: z.string().uuid(),
   property_definition_id: z.string().uuid(),
@@ -2048,6 +3151,99 @@ export const DeleteTag = z.object({
 export const DeleteTagResponse = z.object({
   success: z.boolean(),
   message: z.string(),
+});
+
+export const DescribeDatabase = z.object({ databaseId: z.string().uuid() });
+
+export const ToolDatabaseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  grant: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('view'),
+      z.literal('comment'),
+      z.literal('edit'),
+      z.literal('owner'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  tables: z.array(
+    z.object({
+      id: z.string().uuid(),
+      sqlName: z.string(),
+      version: z.number().int(),
+      name: z.string(),
+      writable: z.boolean(),
+      columns: z.array(
+        z.object({
+          id: z.string().uuid(),
+          sqlName: z.string(),
+          name: z.string(),
+          dataType: z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('text'),
+              z.literal('number'),
+              z.literal('boolean'),
+              z.literal('date'),
+              z.literal('link'),
+              z.literal('select'),
+              z.literal('select_number'),
+              z.literal('tag'),
+              z.literal('entity'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+          specificEntityType: z.union([z.string(), z.null()]).optional(),
+          isMultiSelect: z.boolean(),
+          options: z
+            .array(z.object({ id: z.string().uuid(), label: z.string() }))
+            .optional(),
+          writable: z.boolean(),
+          relation: z
+            .union([
+              z.object({
+                databaseId: z.string().uuid(),
+                tableId: z.string().uuid(),
+              }),
+              z.null(),
+            ])
+            .optional(),
+          safeTypes: z.array(z.string()),
+          checkedTypes: z.array(z.string()),
+        })
+      ),
+      views: z.array(z.any()),
+    })
+  ),
 });
 
 export const DisplayResults = z.object({ view: z.any() });
@@ -2513,6 +3709,58 @@ export const EditTagResponse = z.object({
   summary: z.string(),
 });
 
+export const GenerateImage = z.object({
+  prompt: z.string(),
+  aspectRatio: z
+    .union([
+      z.enum(['square', 'landscape', 'portrait', 'widescreen', 'tall']),
+      z.null(),
+    ])
+    .optional(),
+  referenceImages: z
+    .union([
+      z
+        .array(
+          z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.object({ id: z.string().uuid(), type: z.literal('document') }),
+              z.object({
+                id: z.string().uuid(),
+                type: z.literal('staticFile'),
+              }),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          })
+        )
+        .max(3),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const GenerateImageResponse = z.object({
+  staticFileId: z.string(),
+  url: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int().gte(0),
+  note: z.union([z.string(), z.null()]).optional(),
+});
+
 export const GetBotWebhooks = z.object({ botId: z.string().uuid() });
 
 export const GetBotWebhooksResponse = z.object({
@@ -2755,6 +4003,91 @@ export const IssueBotCredentialResponse = z.object({
   summary: z.string(),
 });
 
+export const ListAgents = z.record(z.any());
+
+export const ListAgentsResponse = z.object({
+  agents: z.array(
+    z.object({
+      bot: z.object({
+        botId: z.string().uuid(),
+        owner: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.object({ user_id: z.string(), type: z.literal('user') }),
+            z.object({ team_id: z.string().uuid(), type: z.literal('team') }),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        name: z.string(),
+        handle: z.string(),
+        description: z.union([z.string(), z.null()]).optional(),
+        avatarUrl: z.union([z.string(), z.null()]).optional(),
+        hasAgent: z.boolean(),
+      }),
+      instructions: z.string(),
+      harness: z.string(),
+      harnessId: z.union([z.string().uuid(), z.null()]).optional(),
+      defaultModel: z.string(),
+      channelScope: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('all'), z.literal('selected')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      channelIds: z.array(z.string().uuid()),
+      mcpScope: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('owner_connections'), z.literal('selected')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      mcpServers: z.array(
+        z.object({ appSlug: z.string(), serverName: z.string() })
+      ),
+      autoAcceptPermissions: z.union([z.boolean(), z.null()]).optional(),
+      isCoding: z.boolean(),
+    })
+  ),
+  summary: z.string(),
+});
+
 export const ListBots = z.record(z.any());
 
 export const ListBotsResponse = z.object({
@@ -2881,6 +4214,48 @@ export const ListCompaniesResponse = z.object({
         .optional(),
       ownerUserId: z.union([z.string(), z.null()]).optional(),
       revenue: z.union([z.number(), z.null()]).optional(),
+    })
+  ),
+  summary: z.string(),
+});
+
+export const ListDatabases = z.record(z.any());
+
+export const ListDatabasesResponse = z.object({
+  databases: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      grant: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('view'),
+          z.literal('comment'),
+          z.literal('edit'),
+          z.literal('owner'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      tables: z.array(
+        z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          sqlName: z.string(),
+        })
+      ),
     })
   ),
   summary: z.string(),
@@ -3947,6 +5322,226 @@ export const NameSearch = z.object({
     .optional(),
 });
 
+export const QueryDatabase = z.object({
+  sql: z.string(),
+  databaseId: z.union([z.string().uuid(), z.null()]).optional(),
+  baseVersions: z
+    .union([
+      z.array(
+        z.object({ tableId: z.string().uuid(), version: z.number().int() })
+      ),
+      z.null(),
+    ])
+    .optional(),
+  display: z
+    .union([
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('table'),
+          z.literal('scalar'),
+          z.literal('bar'),
+          z.literal('line'),
+          z.literal('area'),
+          z.literal('scatter'),
+          z.literal('pie'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const QueryDatabaseResponse = z.object({
+  results: z.array(
+    z.object({
+      columns: z.array(
+        z.object({
+          name: z.string(),
+          kind: z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.literal('text'),
+              z.literal('number'),
+              z.literal('boolean'),
+              z.literal('date'),
+              z.literal('select'),
+              z.literal('entity'),
+              z.literal('row'),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          }),
+          options: z
+            .array(z.object({ id: z.string().uuid(), label: z.string() }))
+            .optional(),
+          target: z
+            .union([
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('USER'),
+                  z.literal('DOCUMENT'),
+                  z.literal('TASK'),
+                  z.literal('COMPANY'),
+                  z.literal('CONTACT'),
+                  z.literal('CALL_RECORD'),
+                  z.literal('CHANNEL'),
+                  z.literal('CHAT'),
+                  z.literal('PROJECT'),
+                  z.literal('THREAD'),
+                  z.literal('CALENDAR_EVENT'),
+                  z.literal('INITIATIVE'),
+                  z.literal('DATABASE_ROW'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              z.null(),
+            ])
+            .optional(),
+          relatedTable: z.union([z.string().uuid(), z.null()]).optional(),
+        })
+      ),
+      rows: z.array(
+        z.array(
+          z.union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.object({ type: z.literal('text'), value: z.string() }),
+                z.object({ type: z.literal('number'), value: z.number() }),
+                z.object({ type: z.literal('bool'), value: z.boolean() }),
+                z.object({
+                  type: z.literal('date'),
+                  value: z.string().datetime({ offset: true }),
+                }),
+                z.object({
+                  type: z.literal('options'),
+                  value: z.array(z.string().uuid()),
+                }),
+                z.object({
+                  type: z.literal('entities'),
+                  value: z.array(z.string()),
+                }),
+                z.object({ type: z.literal('row'), value: z.string().uuid() }),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ])
+        )
+      ),
+      rowIds: z.array(z.string().uuid()),
+    })
+  ),
+  changesApplied: z.number().int().gte(0),
+  insertedRowIds: z.array(z.string().uuid()).optional(),
+  newVersions: z.record(z.number().int()).optional(),
+  readVersions: z.array(
+    z.object({ tableId: z.string().uuid(), version: z.number().int() })
+  ),
+  truncatedTables: z.array(z.string()).optional(),
+  statement: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({ kind: z.literal('select') }),
+      z.object({
+        tableId: z.string().uuid(),
+        tableName: z.string(),
+        kind: z.literal('insert'),
+      }),
+      z.object({
+        tableId: z.string().uuid(),
+        tableName: z.string(),
+        kind: z.literal('update'),
+      }),
+      z.object({
+        tableId: z.string().uuid(),
+        tableName: z.string(),
+        kind: z.literal('delete'),
+      }),
+      z.object({
+        tableId: z.string().uuid(),
+        tableName: z.string(),
+        columnId: z.string().uuid(),
+        columnName: z.string(),
+        to: z.string(),
+        kind: z.literal('alterColumnType'),
+      }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  summary: z.string(),
+});
+
 export const ReadActivity = z.object({
   from: z.string().datetime({ offset: true }),
   to: z.string().datetime({ offset: true }),
@@ -4942,6 +6537,12 @@ export const ReadContentResponse = z.object({
       resolved: z.boolean(),
       anchor: z.any().superRefine((x, ctx) => {
         const schemas = [
+          z.object({
+            sheetId: z.string(),
+            sheetName: z.string(),
+            range: z.string(),
+            type: z.literal('spreadsheet'),
+          }),
           z.object({ type: z.literal('document') }),
           z.object({
             markId: z.string().uuid(),
@@ -5219,6 +6820,14 @@ export const ReadProjectResponse = z.object({
   ),
 });
 
+export const ReadSkill = z.object({ documentId: z.string().uuid() });
+
+export const ReadSkillResponse = z.object({
+  documentId: z.string().uuid(),
+  name: z.string(),
+  content: z.string(),
+});
+
 export const ReadSpreadsheet = z.object({
   documentId: z.string(),
   sheetId: z.union([z.string(), z.null()]).optional(),
@@ -5272,6 +6881,222 @@ export const RenameChannelResponse = z.object({
   summary: z.string(),
 });
 
+export const RenameColumn = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  name: z.string(),
+});
+
+export const RenameColumnResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  name: z.string(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const RenameDatabase = z.object({
+  databaseId: z.string().uuid(),
+  name: z.string(),
+});
+
+export const RenameDatabaseResponse = z.object({
+  databaseId: z.string().uuid(),
+  name: z.string(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
 export const RenameDocument = z.object({
   documentId: z.string().uuid(),
   documentName: z.string(),
@@ -5283,16 +7108,325 @@ export const RenameDocumentResponse = z.object({
   message: z.string(),
 });
 
-export const ReplyToDocumentComment = z.object({
-  documentId: z.string().uuid(),
-  content: z.string(),
-  threadId: z.union([z.string().uuid(), z.null()]).optional(),
+export const RenameTable = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  name: z.string(),
 });
 
-export const ReplyToDocumentCommentResponse = z.object({
-  documentId: z.string().uuid(),
-  threadId: z.string().uuid(),
-  commentId: z.string().uuid(),
+export const RenameTableResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  name: z.string(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const ReorderColumns = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  columnIds: z.array(z.string().uuid()),
+});
+
+export const ReorderColumnsResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
+});
+
+export const ReorderTables = z.object({
+  databaseId: z.string().uuid(),
+  tableIds: z.array(z.string().uuid()),
+});
+
+export const ReorderTablesResponse = z.object({
+  databaseId: z.string().uuid(),
+  tableIds: z.array(z.string().uuid()),
+  database: z
+    .union([
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        grant: z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('view'),
+            z.literal('comment'),
+            z.literal('edit'),
+            z.literal('owner'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        tables: z.array(
+          z.object({
+            id: z.string().uuid(),
+            sqlName: z.string(),
+            version: z.number().int(),
+            name: z.string(),
+            writable: z.boolean(),
+            columns: z.array(
+              z.object({
+                id: z.string().uuid(),
+                sqlName: z.string(),
+                name: z.string(),
+                dataType: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.literal('text'),
+                    z.literal('number'),
+                    z.literal('boolean'),
+                    z.literal('date'),
+                    z.literal('link'),
+                    z.literal('select'),
+                    z.literal('select_number'),
+                    z.literal('tag'),
+                    z.literal('entity'),
+                  ];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                specificEntityType: z.union([z.string(), z.null()]).optional(),
+                isMultiSelect: z.boolean(),
+                options: z
+                  .array(z.object({ id: z.string().uuid(), label: z.string() }))
+                  .optional(),
+                writable: z.boolean(),
+                relation: z
+                  .union([
+                    z.object({
+                      databaseId: z.string().uuid(),
+                      tableId: z.string().uuid(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                safeTypes: z.array(z.string()),
+                checkedTypes: z.array(z.string()),
+              })
+            ),
+            views: z.array(z.any()),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  warning: z.union([z.string(), z.null()]).optional(),
 });
 
 export const ResolveDocumentComment = z.object({
@@ -5305,6 +7439,377 @@ export const ResolveDocumentCommentResponse = z.object({
   documentId: z.string().uuid(),
   threadId: z.string().uuid(),
   resolved: z.boolean(),
+});
+
+export const SaveDatabaseQuery = z.object({
+  databaseId: z.union([z.string().uuid(), z.null()]).optional(),
+  sql: z.string(),
+  title: z.string(),
+  displayMode: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('table'),
+      z.literal('scalar'),
+      z.literal('bar'),
+      z.literal('line'),
+      z.literal('area'),
+      z.literal('scatter'),
+      z.literal('pie'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  chart: z
+    .union([
+      z.object({
+        x: z.string(),
+        y: z.array(z.string()),
+        title: z.union([z.string(), z.null()]).optional(),
+        color: z.union([z.string(), z.null()]).optional(),
+        stack: z.union([z.boolean(), z.null()]).optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  prompt: z.union([z.string(), z.null()]).optional(),
+});
+
+export const SaveDatabaseQueryResponse = z.object({
+  queryId: z.string().uuid(),
+  markdown: z.string(),
+});
+
+export const SaveDatabaseView = z.object({
+  databaseId: z.string().uuid(),
+  tableId: z.string().uuid(),
+  name: z.string(),
+  filter: z
+    .union([
+      z.object({
+        conjunction: z.any().superRefine((x, ctx) => {
+          const schemas = [z.literal('and'), z.literal('or')];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        conditions: z.array(
+          z.object({
+            column: z.string().uuid(),
+            test: z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.object({
+                  operator: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('isEmpty'),
+                      z.literal('isNotEmpty'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  kind: z.literal('presence'),
+                }),
+                z.object({
+                  operator: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('is'),
+                      z.literal('isNot'),
+                      z.literal('contains'),
+                      z.literal('doesNotContain'),
+                      z.literal('startsWith'),
+                      z.literal('endsWith'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  value: z.string(),
+                  kind: z.literal('text'),
+                }),
+                z.object({
+                  operator: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('is'),
+                      z.literal('isNot'),
+                      z.literal('greaterThan'),
+                      z.literal('greaterThanOrEqual'),
+                      z.literal('lessThan'),
+                      z.literal('lessThanOrEqual'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  value: z.number(),
+                  kind: z.literal('number'),
+                }),
+                z.object({
+                  operator: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('before'),
+                      z.literal('after'),
+                      z.literal('onOrBefore'),
+                      z.literal('onOrAfter'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  value: z.string().datetime({ offset: true }),
+                  kind: z.literal('date'),
+                }),
+                z.object({ checked: z.boolean(), kind: z.literal('checkbox') }),
+                z.object({
+                  operator: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('isAnyOf'),
+                      z.literal('isNoneOf'),
+                      z.literal('hasAny'),
+                      z.literal('hasAll'),
+                      z.literal('hasNone'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  options: z.array(z.string().uuid()),
+                  kind: z.literal('options'),
+                }),
+                z.object({
+                  operator: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('isAnyOf'),
+                      z.literal('isNoneOf'),
+                      z.literal('hasAny'),
+                      z.literal('hasAll'),
+                      z.literal('hasNone'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  entities: z.array(z.string()),
+                  kind: z.literal('entities'),
+                }),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+          })
+        ),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  sort: z
+    .array(
+      z.object({
+        column: z.string().uuid(),
+        direction: z.any().superRefine((x, ctx) => {
+          const schemas = [z.literal('ascending'), z.literal('descending')];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+      })
+    )
+    .optional(),
+  layout: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({
+        columns: z.array(
+          z.object({
+            column: z.string().uuid(),
+            width: z.union([z.number().int().gte(0), z.null()]).optional(),
+          })
+        ),
+        kind: z.literal('table'),
+      }),
+      z.object({
+        groupBy: z.string().uuid(),
+        title: z.union([z.string().uuid(), z.null()]).optional(),
+        lanes: z.array(
+          z.object({
+            key: z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.object({ kind: z.literal('option'), id: z.string().uuid() }),
+                z.object({ kind: z.literal('user'), id: z.string() }),
+                z.object({ kind: z.literal('none') }),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            hidden: z.boolean().optional(),
+          })
+        ),
+        cardFields: z.array(z.string().uuid()),
+        hideEmptyLanes: z.boolean(),
+        kind: z.literal('board'),
+      }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+});
+
+export const SavedDatabaseView = z.object({
+  view: z.any(),
+  created: z.boolean(),
 });
 
 export const SearchSkills = z.object({
@@ -5559,6 +8064,7 @@ export const SetEntityProperty = z.object({
           'call',
           'user',
           'company',
+          'contact',
         ]),
         entityId: z.string(),
       }),
@@ -5580,6 +8086,7 @@ export const SetEntityProperty = z.object({
             'call',
             'user',
             'company',
+            'contact',
           ]),
           entityId: z.string(),
         })
@@ -5774,6 +8281,38 @@ export const TextEditorCodeExecutionResponse = z.object({
       });
     }
   }),
+});
+
+export const UnassignTasksFromInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskIds: z.array(z.string()),
+});
+
+export const UnassignTasksFromInitiativeResponse = z.object({
+  initiativeId: z.string().uuid(),
+  results: z.array(
+    z.object({
+      taskId: z.string(),
+      status: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('unassigned'), z.literal('not_assigned')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
 });
 
 export const UpdateCalendarEvent = z.object({

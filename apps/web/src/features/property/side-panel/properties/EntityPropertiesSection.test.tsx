@@ -183,3 +183,26 @@ it('refreshes native projections after successful add, remove, and save, never b
   await expect(mocks.context.addProperty!('other')).rejects.toThrow('denied');
   expect(changed).toHaveBeenCalledTimes(3);
 });
+
+it('pins a definition the entity already carries instead of attaching it again', async () => {
+  const pinned = vi.fn();
+  // Set when the task was created from a CRM record, but never pinned.
+  mocks.properties = [field('Companies', 'Acme')];
+  render(() => (
+    <EntityPropertiesSection
+      entityId="task"
+      entityType="TASK"
+      canEdit
+      showTags={false}
+      pinnedPropertyIds={() => []}
+      onPropertyPinned={pinned}
+    />
+  ));
+  expect(screen.queryByText('"Acme"')).toBeNull();
+
+  mocks.context.onPropertyAdded(['Companies']);
+  await mocks.context.addProperty!('Companies');
+
+  expect(mocks.add).not.toHaveBeenCalled();
+  expect(pinned).toHaveBeenCalledWith('instance-Companies');
+});

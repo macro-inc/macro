@@ -169,8 +169,19 @@ pub struct InitiativeDetail {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A property value set on a new initiative as part of its create.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct InitialPropertyValue {
+    /// Property definition to set.
+    pub property_definition_id: Uuid,
+    /// Value, validated by the properties service like any other property write.
+    pub value: models_properties::api::requests::SetPropertyValue,
+}
+
 /// Create-initiative HTTP body.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateInitiativeRequest {
@@ -187,6 +198,10 @@ pub struct CreateInitiativeRequest {
     /// a team create an unshared initiative. Explicit false skips the team grant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub share_with_team: Option<bool>,
+    /// Property values set as the owner within the create. A value the properties
+    /// service rejects fails the whole create; no initiative is left behind.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub property_values: Vec<InitialPropertyValue>,
 }
 
 /// Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`

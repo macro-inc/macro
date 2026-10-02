@@ -18,7 +18,7 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
     WithProjectId,
 };
-use model_owner::Owner;
+use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -345,16 +345,17 @@ where
 
     async fn create_project(
         &self,
-        actor: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
         validate_project_name(&args.name)?;
 
+        let owner = principal.owner();
         // The owner's team default link-share preference decides the initial
         // share permission; without a team, projects default to link sharing off.
         let team_default = self
             .repo
-            .get_team_default_link_share(actor.as_ref())
+            .get_team_default_link_share(&owner)
             .await
             .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
 
@@ -362,7 +363,7 @@ where
         let project = self
             .repo
             .create_project(CreateProjectArgs {
-                user_id: actor.to_string(),
+                owner: owner.clone(),
                 name: args.name,
                 parent_id: parent_id.clone(),
                 share_permission: SharePermissionV2::new_project_share_permission(team_default),
@@ -395,7 +396,7 @@ where
             project.id.clone(),
             ProjectCreatedMetadata {
                 project_id: project.id.clone(),
-                owner: Owner::User(actor),
+                owner,
                 name: project.name.clone(),
                 parent_project_id: project.parent_id.clone(),
                 created_at: project.created_at,
@@ -667,7 +668,7 @@ where
         // permission; without a team, link sharing defaults to off.
         let team_default = self
             .repo
-            .get_team_default_link_share(actor.as_ref())
+            .get_team_default_link_share(&Owner::User(actor.clone()))
             .await
             .map_err(|error| internal_error(error, "unable to resolve team default link share"))?;
 

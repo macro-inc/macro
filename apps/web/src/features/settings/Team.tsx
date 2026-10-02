@@ -1,4 +1,5 @@
 import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
+import { SlackImport } from '@app/features/slack-import/slack-import';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -286,7 +287,7 @@ function InviteEntryRow(props: {
             <Button
               variant="outline"
               size="icon-sm"
-              class="rounded-xs shrink-0 focus:border-accent"
+              class="shrink-0 focus:border-accent"
               tabIndex={0}
               onClick={props.onRemove}
             >
@@ -403,7 +404,7 @@ function InviteEmailsInput(props: {
       </Show>
       <Button
         variant="outline"
-        class="rounded-xs w-full justify-center focus:border-accent"
+        class="w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
         onClick={addRow}
@@ -500,7 +501,7 @@ function MemberRow(props: {
                   variant="ghost"
                   size="sm"
                   disabled
-                  class="rounded-xs opacity-50 cursor-not-allowed"
+                  class="opacity-50 cursor-not-allowed"
                 >
                   <TrashIcon class="size-4" />
                 </Button>
@@ -619,7 +620,7 @@ function UserInviteRow(props: {
       <div class="flex items-center gap-2 shrink-0">
         <Button
           variant="outline"
-          class="px-2 py-1 rounded-xs"
+          class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
         >
@@ -629,7 +630,7 @@ function UserInviteRow(props: {
         </Button>
         <Button
           variant="accent"
-          class="px-2 py-1 rounded-xs"
+          class="px-2 py-1"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
         >
@@ -816,15 +817,13 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
               disabled={createTeamMutation.isPending}
               onClick={props.onClose}
             >
               Cancel
             </Button>
             <Button
-              variant="accent"
-              class="rounded-xs"
+              variant="strong"
               disabled={
                 createTeamMutation.isPending ||
                 !!teamNameError() ||
@@ -859,11 +858,7 @@ function EmptyTeamState() {
               Create a team to collaborate with others and manage access
               together.
             </p>
-            <Button
-              variant="accent"
-              class="rounded-xs"
-              onClick={() => setShowCreateModal(true)}
-            >
+            <Button variant="accent" onClick={() => setShowCreateModal(true)}>
               <PlusIcon class="size-4" />
               Create Team
             </Button>
@@ -915,7 +910,6 @@ function SaveCancelButtons(props: {
         <Button
           variant="accent"
           size="icon-sm"
-          class="rounded-xs"
           disabled={props.saveDisabled}
           onClick={props.onSave}
         >
@@ -928,7 +922,6 @@ function SaveCancelButtons(props: {
         <Button
           variant="ghost"
           size="icon-sm"
-          class="rounded-xs"
           disabled={props.pending}
           onClick={props.onCancel}
         >
@@ -1306,7 +1299,6 @@ function TeamManagement(props: {
             <Button
               variant="danger"
               size="sm"
-              class="rounded-xs"
               onClick={() => setShowDeleteTeamModal(true)}
             >
               <TrashIcon class="size-4" />
@@ -1434,7 +1426,6 @@ function TeamManagement(props: {
               <Button
                 variant="outline"
                 size="sm"
-                class="rounded-xs"
                 onClick={handleCopyGithubAutolinkUrl}
               >
                 <CopyIcon class="size-4" />
@@ -1496,6 +1487,7 @@ function TeamManagement(props: {
         </SettingsSection>
 
         <SettingsSection title="Connections">
+          <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
           <SettingsCard>
             <IntegrationRow
               icon={<GithubIcon />}
@@ -1538,7 +1530,6 @@ function TeamManagement(props: {
               <Button
                 variant="outline"
                 size="sm"
-                class="rounded-xs"
                 onClick={() => setShowInviteModal(true)}
               >
                 <PlusIcon class="size-4" />
@@ -1694,15 +1685,13 @@ function TeamManagement(props: {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={deleteTeamMutation.isPending}
                 onClick={() => handleDeleteTeamModalClose(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="danger"
-                class="rounded-xs"
+                variant="strong"
                 disabled={!canDeleteTeam() || deleteTeamMutation.isPending}
                 onClick={handleDeleteTeam}
               >
@@ -1774,15 +1763,13 @@ function TeamManagement(props: {
             <div class="flex justify-end gap-1 pt-2">
               <Button
                 variant="ghost"
-                class="rounded-xs"
                 disabled={inviteToTeamMutation.isPending}
                 onClick={() => handleInviteModalClose(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant={hasValidInvites() ? 'accent' : 'ghost'}
-                class="rounded-xs"
+                variant="strong"
                 disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
                 onClick={handleInvite}
               >

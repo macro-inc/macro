@@ -20,12 +20,14 @@ import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import type { ProjectDetail, TaskProjectReference } from '../core/project';
+import { createProjectMutation } from './create-project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
-import { toProjectDetail } from './project-model';
 import { projectDefinitionProperties } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
+
+type ProjectCommands = ReturnType<ProjectsContext['createCommands']>;
 
 const accessLost = (error: unknown) =>
   ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
@@ -198,14 +200,7 @@ export function createProjectSources(
           ]);
         }
       );
-      const create = useMutation(
-        () => ({
-          mutationFn: async (input: { name: string; shareWithTeam: boolean }) =>
-            toProjectDetail(await throwOnErr(() => client.create(input))),
-          onSuccess: refresh,
-        }),
-        () => cache
-      );
+      const create = createProjectMutation(client, cache, userId);
       const update = useMutation(
         () => ({
           mutationFn: ({
@@ -220,10 +215,25 @@ export function createProjectSources(
         }),
         () => cache
       );
+      // Deletes resolve with their failures so a batch refreshes the list once.
       const remove = useMutation(
         () => ({
-          mutationFn: (id: string) => throwOnErr(() => client.delete(id)),
-          onSuccess: refresh,
+          mutationFn: async (ids: readonly string[]) => {
+            const failures: { id: string; error: unknown }[] = [];
+            await Promise.all(
+              ids.map(async (id) => {
+                try {
+                  await throwOnErr(() => client.delete(id));
+                } catch (error) {
+                  failures.push({ id, error });
+                }
+              })
+            );
+            return failures;
+          },
+          onSuccess: async (failures, ids) => {
+            if (failures.length < ids.length) await refresh();
+          },
         }),
         () => cache
       );
@@ -289,6 +299,19 @@ export function createProjectSources(
         }),
         () => cache
       );
+      const saveProperties: ProjectCommands['saveProperties'] = async (
+        updates
+      ) => {
+        const result = await property.mutateAsync({
+          properties: updates.map(({ id, property, value }) => ({
+            entityType: 'INITIATIVE',
+            entityId: id,
+            property,
+            apiValues: value,
+          })),
+        });
+        if (result.error) throw result.error;
+      };
       return {
         createTask,
         pending: () =>
@@ -305,21 +328,14 @@ export function createProjectSources(
           await update.mutateAsync({ id, memberIds });
         },
         delete: async (id) => {
-          await remove.mutateAsync(id);
+          const [failure] = await remove.mutateAsync([id]);
+          if (failure) throw failure.error;
         },
-        saveProperty: async (id, input, value) => {
-          const result = await property.mutateAsync({
-            properties: [
-              {
-                entityType: 'INITIATIVE',
-                entityId: id,
-                property: input,
-                apiValues: value,
-              },
-            ],
-          });
-          if (result.error) throw result.error;
-        },
+        deleteMany: async (ids) =>
+          (await remove.mutateAsync(ids)).map(({ id }) => id),
+        saveProperty: (id, property, value) =>
+          saveProperties([{ id, property, value }]),
+        saveProperties,
         assignTasks: (projectId, taskIds) =>
           assign.mutateAsync({ projectId, taskIds }),
       };

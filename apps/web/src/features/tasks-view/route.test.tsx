@@ -23,14 +23,10 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@components/app/side-panel', () => ({ SidePanel: {} }));
 vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   withAuth: (value: unknown) => value,
-  NewAppView: () => null,
+  AppView: () => null,
   RedirectSplit: () => null,
 }));
 vi.mock('@core/component/LoadingBlock', () => ({ LoadingBlock: () => null }));
-vi.mock('@core/context/user', () => ({ useUserContext: () => ({}) }));
-vi.mock('../next-soup/sidebar/soup-filter-presets', () => ({
-  getViewPreset: () => undefined,
-}));
 vi.mock('./components/TasksDetailView', () => ({
   TasksDetailView: () => null,
   TasksDetailRouteView: () => null,
@@ -52,10 +48,15 @@ describe('project routes in Tasks', () => {
         'tasks-project',
       ]);
       expect(routeParams(entry.location.route)).toEqual({ projectId, section });
+      // The same claim as the initiative block, so either view is reused.
       expect(getRouteClaim(manifest, entry.location.route)).toEqual({
-        namespace: 'initiative',
-        id: projectId,
+        namespace: 'block',
+        id: `initiative:${projectId}`,
       });
+      const leaf = entry.location.route.matches.at(-1)!;
+      expect(
+        manifest.byId.get(leaf.id)?.definition.toReference?.(leaf.params)
+      ).toEqual({ type: 'initiative', id: projectId });
     }
   );
 

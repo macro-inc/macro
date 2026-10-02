@@ -16,48 +16,26 @@ import {
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
 import { SidePanel } from '@components/app/side-panel';
 import {
-  NewAppView,
+  AppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
-import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { lazy, onMount, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import { z } from 'zod';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import {
   TasksDetailRouteView,
   TasksDetailView,
 } from './components/TasksDetailView';
 import { TasksView } from './tasks-view';
 
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-
-function LegacyTasksView() {
-  const user = useUserContext();
-  const preset = getViewPreset('tasks', undefined, {
-    userId: user.userId(),
-    isTeamAdmin: false,
-  });
-  return (
-    <SoupView
-      viewName="Tasks"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-    />
-  );
-}
-
 function TasksLegacyRouteView() {
   const params = useParams<{ taskId?: string; projectId?: string }>();
   return (
-    <Show when={params.taskId} fallback={<LegacyTasksView />}>
+    <Show when={params.taskId}>
       {(taskId) => <RedirectSplit to={{ type: 'task', id: taskId() }} />}
     </Show>
   );
@@ -66,18 +44,16 @@ function TasksLegacyRouteView() {
 export const TasksRouteView = withAuth(() => {
   const params = useParams<{ taskId?: string; projectId?: string }>();
   return (
-    <NewAppView
+    <AppView
       id="tasks"
-      composableOnTouch
       detailDesktopOnly
       detailRequested={() =>
         typeof params.taskId === 'string' && !params.projectId
       }
       detailFallback={<TasksLegacyRouteView />}
-      fallback={<LegacyTasksView />}
     >
       <TasksView />
-    </NewAppView>
+    </AppView>
   );
 });
 
@@ -219,7 +195,11 @@ export const projectDetailRoute = defineRoute({
   }),
   component: ProjectDetailRouteView,
   remountKey: ({ projectId }) => projectId,
-  claim: ({ projectId }) => ({ namespace: 'initiative', id: projectId }),
+  claim: ({ projectId }) => ({
+    namespace: 'block',
+    id: `initiative:${projectId}`,
+  }),
+  toReference: ({ projectId }) => uuidRouteReference(projectId, 'initiative'),
   children: [projectTaskRoute],
 });
 

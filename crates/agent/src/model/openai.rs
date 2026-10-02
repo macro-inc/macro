@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use crate::model::ReasoningEffort;
 use crate::model::types::Model;
-use rig_core::{client::CompletionClient, providers::openai};
+use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::openai};
 
 /// Fireworks' Chat Completions `model` field is the account-scoped path, not
 /// the short catalog slug. Routing ids stay `fireworks/<slug>` so the picker,
@@ -23,14 +24,16 @@ fn completion_model_id(model: &Model<'_>) -> String {
 /// segment). Fireworks is the one exception on the wire: its API wants the
 /// account-scoped path, which [`completion_model_id`] derives from the
 /// catalog slug.
-pub struct OpenAiChatCompletionsModel<'a> {
+pub struct OpenAiChatCompletionsModel<'a, H = rig_core::http_client::ReqwestClient> {
     model: Model<'a>,
-    client: Arc<openai::CompletionsClient>,
+    client: Arc<openai::CompletionsClient<H>>,
 }
 
-impl<'a> OpenAiChatCompletionsModel<'a> {
+impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
+    OpenAiChatCompletionsModel<'a, H>
+{
     /// Bind `model` to the client that serves it.
-    pub fn new(model: Model<'a>, client: Arc<openai::CompletionsClient>) -> Self {
+    pub fn new(model: Model<'a>, client: Arc<openai::CompletionsClient<H>>) -> Self {
         Self { model, client }
     }
 
@@ -43,7 +46,7 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
     ///
     /// Unlike the Responses API, the Chat Completions API does not coerce tools
     /// into a strict subset, so tools are already sent verbatim.
-    pub fn completion(&self) -> openai::completion::CompletionModel {
+    pub fn completion(&self) -> openai::completion::CompletionModel<H> {
         self.client
             .completion_model(completion_model_id(&self.model))
     }
@@ -57,7 +60,10 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
     /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano`
     /// variants get a lower effort. `temperature` is never set (reasoning models
     /// reject it).
-    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+    pub fn thinking_params(
+        &self,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Option<serde_json::Value> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
@@ -69,11 +75,18 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
             return None;
         }
 
-        let effort = if model.contains("mini") || model.contains("nano") {
-            "low"
-        } else {
-            "high"
-        };
+        let effort = reasoning_effort
+            .and_then(|effort| effort.explicit_for(&self.model.to_string()))
+            .map_or_else(
+                || {
+                    if model.contains("mini") || model.contains("nano") {
+                        "low"
+                    } else {
+                        "high"
+                    }
+                },
+                ReasoningEffort::as_str,
+            );
 
         Some(serde_json::json!({ "reasoning_effort": effort }))
     }
@@ -84,14 +97,16 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
 /// This is intentionally separate from OpenAI-compatible Chat Completions:
 /// OpenAI GPT reasoning models expect Responses-shaped request fields, while
 /// many compatible OSS endpoints only promise `/v1/chat/completions`.
-pub struct OpenAiResponsesModel<'a> {
+pub struct OpenAiResponsesModel<'a, H = rig_core::http_client::ReqwestClient> {
     model: Model<'a>,
-    client: Arc<openai::Client>,
+    client: Arc<openai::Client<H>>,
 }
 
-impl<'a> OpenAiResponsesModel<'a> {
+impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
+    OpenAiResponsesModel<'a, H>
+{
     /// Bind `model` to the Responses API client that serves it.
-    pub fn new(model: Model<'a>, client: Arc<openai::Client>) -> Self {
+    pub fn new(model: Model<'a>, client: Arc<openai::Client<H>>) -> Self {
         Self { model, client }
     }
 
@@ -106,13 +121,16 @@ impl<'a> OpenAiResponsesModel<'a> {
     /// `max_output_tokens`, avoiding the Chat Completions `max_tokens` 400s on
     /// GPT reasoning models. Tools are sent verbatim (non-strict is rig's
     /// default since 0.41) rather than coerced into OpenAI's strict subset.
-    pub fn completion(&self) -> openai::responses_api::ResponsesCompletionModel {
+    pub fn completion(&self) -> openai::responses_api::ResponsesCompletionModel<H> {
         self.client.completion_model(self.model.name().to_string())
     }
 
     /// Best-effort reasoning config for OpenAI Responses models, or `None` if
     /// the model doesn't support it.
-    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+    pub fn thinking_params(
+        &self,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Option<serde_json::Value> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
@@ -124,11 +142,18 @@ impl<'a> OpenAiResponsesModel<'a> {
             return None;
         }
 
-        let effort = if model.contains("mini") || model.contains("nano") {
-            "low"
-        } else {
-            "high"
-        };
+        let effort = reasoning_effort
+            .and_then(|effort| effort.explicit_for(&self.model.to_string()))
+            .map_or_else(
+                || {
+                    if model.contains("mini") || model.contains("nano") {
+                        "low"
+                    } else {
+                        "high"
+                    }
+                },
+                ReasoningEffort::as_str,
+            );
 
         Some(serde_json::json!({
             "reasoning": {

@@ -110,12 +110,7 @@ pub fn build_grouped_response(
         // overwriting an already-populated entry.
         items_pool
             .entry(item_id)
-            .or_insert_with(|| EnrichedSoupItem {
-                item: grouped_item.item,
-                frecency_score: None,
-                touched_at: None,
-                notified_at: None,
-            });
+            .or_insert_with(|| EnrichedSoupItem::from(grouped_item.item));
     }
 
     let mut groups: Vec<GroupMeta> = group_stats

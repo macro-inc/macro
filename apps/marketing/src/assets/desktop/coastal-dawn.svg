@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1300" viewBox="0 0 2000 1300" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="1000" y1="0" x2="1000" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d6d4c9"/><stop offset=".48" stop-color="#e4dbc2"/><stop offset="1" stop-color="#a7b6b5"/>
+    </linearGradient>
+    <linearGradient id="water" x1="1030" y1="670" x2="950" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c4cecb"/><stop offset="1" stop-color="#7f9d9f"/>
+    </linearGradient>
+    <linearGradient id="coast" x1="100" y1="600" x2="350" y2="1300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a3a48d"/><stop offset=".5" stop-color="#828e78"/><stop offset="1" stop-color="#626f65"/>
+    </linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".12"/></feComponentTransfer><feBlend in="SourceGraphic" mode="soft-light"/></filter>
+  </defs>
+  <g filter="url(#grain)">
+    <path fill="url(#sky)" d="M0 0h2000v1300H0z"/>
+    <g filter="url(#soft)">
+      <path fill="#b1b8b1" d="m0 608 95-62 97 19 120-124 138 70 131 152 127 28 188 88H0z"/>
+      <path fill="#b5b0a2" d="m1290 731 141-70 84-103 87 27 123-167 115 86 160-29v453z"/>
+      <path fill="#989f98" d="m1505 829 121-164 92-5 97-85 113 36 72-71v454z"/>
+      <path fill="url(#water)" d="M0 779c411-32 778 56 1153-15s605-31 847 18v518H0z"/>
+      <path fill="#d9d4bb" opacity=".6" d="M740 904c345-22 716 34 1260-42v38c-520 86-949 55-1260 4Z"/>
+      <path fill="url(#coast)" d="M0 625c101 26 180 112 260 130s130 2 207 88c69 79 149 70 258 118s236 120 329 176c-316-23-349-9-515 35S128 1275 0 1300z"/>
+      <path fill="#bcc0ac" opacity=".7" d="M0 879c172 10 309 58 446 118s305 61 456 125c-279-17-302-43-475-96S177 969 0 975z"/>
+      <path fill="#a7b4b1" opacity=".7" d="M937 1253c305-69 609-76 1063-57v104H796z"/>
+    </g>
+  </g>
+</svg>

@@ -39,7 +39,6 @@ const config: KnipConfig = {
   ignoreDependencies: [
     '@fontsource-variable/inter',
     '@fontsource-variable/roboto-mono',
-    'tauri-plugin-safe-area-insets',
     '@inkibra/tauri-plugins',
     '@types/facebook-pixel',
     '@types/gtag.js',

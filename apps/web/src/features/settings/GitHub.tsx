@@ -1,3 +1,4 @@
+import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import GithubIcon from '@icon/mcp-github.svg';
@@ -38,8 +39,9 @@ export function GitHubCard() {
 
   const handleGithubEnable = async () => {
     try {
-      window.location.href = await initGithubLink.mutateAsync(
-        window.location.href
+      await authorizeGithub(
+        (callbackUrl) => initGithubLink.mutateAsync(callbackUrl),
+        'Failed to connect GitHub'
       );
     } catch {
       toast.failure('Failed to start GitHub connect flow');
@@ -56,8 +58,9 @@ export function GitHubCard() {
 
   const handleGithubReconnect = async () => {
     try {
-      window.location.href = await reauthenticateGithub.mutateAsync(
-        window.location.href
+      await authorizeGithub(
+        (callbackUrl) => reauthenticateGithub.mutateAsync(callbackUrl),
+        'Failed to reconnect GitHub'
       );
     } catch {
       toast.failure('Failed to start GitHub reconnect flow');

@@ -27,7 +27,6 @@ import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -40,7 +39,7 @@ import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
 } from '../context';
-import { useSplitPanelOrThrow } from '../layoutUtils';
+import { useSplitDisplayName, useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
 
 export function StaticSplitLabel(props: {
@@ -57,9 +56,7 @@ export function StaticSplitLabel(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const [renaming, setRenaming] = createSignal(false);
-  createEffect(() => {
-    panel.handle.setDisplayName(props.label);
-  });
+  useSplitDisplayName(() => props.label);
   const startRename = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -163,9 +160,7 @@ export function SplitLabel(props: {
 }) {
   const panel = useSplitPanelOrThrow();
 
-  createEffect(() => {
-    panel.handle.setDisplayName(props.label);
-  });
+  useSplitDisplayName(() => props.label);
 
   const truncatedLabel = () => {
     if (!props.maxDisplayLength) return props.label;
@@ -237,6 +232,8 @@ export function BlockItemSplitLabel(props: {
   badges?: JSX.Element;
   /** Rendered after the file name. */
   trailingBadges?: JSX.Element;
+  /** Replaces the static name, e.g. with an inline title editor. */
+  title?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   if (!isInBlock())
@@ -258,9 +255,7 @@ export function BlockItemSplitLabel(props: {
     return blockName;
   };
 
-  createEffect(() => {
-    panel.handle.setDisplayName(displayName());
-  });
+  useSplitDisplayName(displayName);
 
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
@@ -288,10 +283,17 @@ export function BlockItemSplitLabel(props: {
             {props.icon}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
-          <SplitLabel
-            label={displayName() ?? ''}
-            lockRename={!isOwner() || props.lockRename}
-          />
+          <Show
+            when={props.title}
+            fallback={
+              <SplitLabel
+                label={displayName() ?? ''}
+                lockRename={!isOwner() || props.lockRename}
+              />
+            }
+          >
+            {props.title}
+          </Show>
           {props.trailingBadges}
           <div
             class="shrink-0 flex items-center h-full"

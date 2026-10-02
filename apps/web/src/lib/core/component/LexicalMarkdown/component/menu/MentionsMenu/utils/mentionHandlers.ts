@@ -2,6 +2,7 @@ import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
   INSERT_AGENT_SESSION_MENTION_COMMAND,
@@ -83,16 +84,18 @@ async function handleEntityMention(
 
   let mentionId: string | undefined;
   if (blockId && tracksMentions(dependencies)) {
-    const trackType =
-      item.bucket === 'channel' || item.bucket === 'dm'
-        ? 'channel'
-        : 'document';
+    const trackType = match(item.bucket)
+      .with('channel', 'dm', () => 'channel' as const)
+      .with('initiative', () => 'initiative' as const)
+      .with('database', () => 'database' as const)
+      .otherwise(() => 'document' as const);
     mentionId = await trackMention(blockId, trackType, entity.id);
   }
 
   if (item.bucket === 'email') {
     onEmailMention?.(entity as unknown as EmailEntity);
-  } else {
+  } else if (item.bucket !== 'initiative') {
+    // Callers share or attach mentioned files; a project is neither.
     onDocumentMention?.(entity as unknown as any);
   }
 

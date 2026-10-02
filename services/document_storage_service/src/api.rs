@@ -252,12 +252,24 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/slack",
+            slack_integration::inbound::axum_router::slack_router(state.slack_state.clone()),
+        )
+        .nest(
             "/reminders",
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )
         .nest(
             "/initiatives",
             initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+        )
+        .nest(
+            "/databases",
+            databases::inbound::axum_router::databases_router(state.databases_state.clone()).merge(
+                databases::inbound::starter_router::starter_router(
+                    state.database_starter_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/collab_surfaces",

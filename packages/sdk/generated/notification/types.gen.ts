@@ -282,6 +282,32 @@ export type ChannelMentionMetadata = CommonChannelMetadata & {
     threadId?: string | null;
 };
 
+/**
+ * Metadata for a reaction added to one of the recipient's channel messages.
+ */
+export type ChannelMessageReactionMetadata = CommonChannelMetadata & {
+    /**
+     * The emoji added by the reactor.
+     */
+    emoji: string;
+    /**
+     * The reacted-to message content.
+     */
+    messageContent: string;
+    /**
+     * The reacted-to message id.
+     */
+    messageId: string;
+    /**
+     * Optional reactor profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * The thread root id when the reacted-to message is a reply.
+     */
+    threadId?: string | null;
+};
+
 export type ChannelMessageSendMetadata = CommonChannelMetadata & {
     /**
      * The content of the message
@@ -506,7 +532,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
 
 /**
  * A plain old json error response for use with axum.
@@ -1106,6 +1132,12 @@ export type NotifEvent = {
      */
     content: AgentSessionMentionedMetadata;
     tag: 'agent_session_mentioned';
+} | {
+    /**
+     * Someone reacted to one of the user's channel messages.
+     */
+    content: ChannelMessageReactionMetadata;
+    tag: 'channel_message_reaction';
 };
 
 /**

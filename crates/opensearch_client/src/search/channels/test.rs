@@ -47,6 +47,22 @@ fn millis_timestamps_are_distinct_within_a_second() {
 }
 
 #[test]
+fn author_only_match_without_highlight_keeps_message_and_thread_deep_links() {
+    for thread in [None, Some(uuid::Uuid::now_v7())] {
+        let mut source = channel_index(Some(1_700_000_000_123));
+        let message_id = source.message_id;
+        source.thread_id = thread.unwrap_or(message_id);
+        let result = channel_hit_to_search_hit(hit_for(source));
+        let Some(SearchGotoContent::Channels(goto)) = result.goto else {
+            panic!("channel hit must retain a deep link without highlights");
+        };
+        assert_eq!(goto.channel_message_id, message_id);
+        assert_eq!(goto.thread_id, thread);
+        assert_eq!(goto.sender_id, "macro|gab@macro.com");
+    }
+}
+
+#[test]
 fn test_build_bool_query() -> anyhow::Result<()> {
     let builder = ChannelMessageQueryBuilder::new(vec!["test".to_string()])
         .match_type("exact")

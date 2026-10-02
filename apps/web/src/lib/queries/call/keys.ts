@@ -14,6 +14,14 @@ export const callKeys = {
     }),
     { _def: meeting }
   ),
+  meetingParticipants: (shareToken: string, viewerId: string | undefined) => ({
+    queryKey: [
+      ...meeting,
+      shareToken,
+      'participants',
+      viewerId ?? 'guest',
+    ] as const,
+  }),
   link: Object.assign(
     (callId: string) => ({
       queryKey: [...link, callId] as const,

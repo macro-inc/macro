@@ -2,7 +2,6 @@ import { DEFAULT_COLOR, type IColor } from '@block-pdf/model/Color';
 import { PageModel } from '@block-pdf/model/Page';
 import { useIsPopup } from '@block-pdf/signal/pdfViewer';
 import {
-  useDeleteComment,
   useDeleteMessageCommentThread,
   useDeleteNewComments,
 } from '@block-pdf/store/comments/commentOperations';
@@ -679,7 +678,6 @@ export function useDeletePlaceable() {
   const pdf = usePdfDocument();
   const modificationData = pdf.model.modificationData;
   const placeableIdMap = usePlaceableIdMap();
-  const deleteComment = useDeleteComment();
   const deleteMessageCommentThread = useDeleteMessageCommentThread();
   const deleteNewComments = useDeleteNewComments();
 
@@ -690,23 +688,13 @@ export function useDeletePlaceable() {
       return;
     }
 
-    if (isThreadPlaceable(placeable) && pdf.annotations.unified) {
+    if (isThreadPlaceable(placeable)) {
       const threadId = placeable.payload?.threadId;
       if (threadId == null) {
         deleteNewComments();
         return;
       }
       void deleteMessageCommentThread(threadId);
-      return;
-    }
-
-    if (isThreadPlaceable(placeable)) {
-      let rootId = placeable.payload?.rootId;
-      if (!rootId) {
-        deleteComment({ commentId: -1 });
-        return;
-      }
-      deleteComment({ commentId: rootId });
       return;
     }
 

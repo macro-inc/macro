@@ -14,10 +14,12 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:entity_registry",
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
   "entity_access/axum",
+  "entity_registry/axum",
 ]
 default = ["axum", "inbound", "outbound", "ports", "service"]
 inbound = ["axum", "ports"]
@@ -116,6 +118,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 aws-sdk-sqs = { workspace = true }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
 dotenvy = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { path = "../kafka_util" }
