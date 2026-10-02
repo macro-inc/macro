@@ -46,7 +46,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
-import { splitBackInterceptor } from '../back-interceptor';
+import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent, SplitId } from '../layoutManager';
 import {
@@ -133,10 +133,7 @@ function SplitBackButton() {
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
-      onClick={() => {
-        if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
-      }}
+      onClick={() => runSplitBack(context.handle)}
     >
       <CaretLeft />
     </Button>

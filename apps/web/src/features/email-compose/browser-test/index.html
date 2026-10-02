@@ -7,6 +7,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Platform detection caches on first read, so the Android Back fixture
+      // needs the Tauri Android globals in place before any module runs.
+      if (new URLSearchParams(location.search).has('android-back')) {
+        window.__TAURI_INTERNALS__ = {};
+        window.__TAURI_OS_PLUGIN_INTERNALS__ = {
+          os_type: 'android',
+          platform: 'android',
+        };
+      }
+    </script>
     <script type="module" src="/fixture.tsx"></script>
   </body>
 </html>

@@ -14,9 +14,12 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 ## Android system navigation and sharing
 
 In the Android app, Back first hides the keyboard, then dismisses the active
-menu/drawer, then returns through mobile pane history. Root Back backgrounds the
-app. Check that a canceled predictive Back gesture leaves the current screen and
-draft untouched. After changing orientation or window size, focused inputs and
+menu/drawer, then offers the press to the active view, then returns through
+mobile pane history. Root Back backgrounds the app. A view that claims Back gets
+it before history: in the mobile email composer, Back on an edited draft opens
+**Draft options** with **Delete Draft** and **Save Draft** rather than leaving,
+exactly as the pane's back button does. Check that a canceled predictive Back
+gesture leaves the current screen and draft untouched. After changing orientation or window size, focused inputs and
 sheet actions should stay above the keyboard without an extra blank keyboard-sized
 gap. Font-size and display-size changes should retain the active draft and update
 safe areas. Also change display size with the keyboard hidden: bottom composers
