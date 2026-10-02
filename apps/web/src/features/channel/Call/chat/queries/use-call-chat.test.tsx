@@ -106,3 +106,26 @@ it('retains readable messages through a failed background refresh', async () => 
   await waitFor(() => expect(source.failed()).toBe(true));
   expect(source.thread()?.root.content).toBe('First message');
 });
+
+it.each(['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'])(
+  'hides cached messages after a %s refresh and restores them on recovery',
+  async (code) => {
+    mocks.thread.mockResolvedValueOnce(thread);
+    const source = mount();
+    await waitFor(() => expect(source.thread()).toBeDefined());
+    mocks.thread.mockRejectedValue(failure(code));
+
+    await source.refresh();
+
+    await waitFor(() => expect(source.failed()).toBe(true));
+    expect(source.empty()).toBe(false);
+    expect(source.loading()).toBe(false);
+    expect(source.thread()).toBeUndefined();
+
+    mocks.thread.mockResolvedValue(thread);
+    await source.refresh();
+    await waitFor(() => expect(source.failed()).toBe(false));
+    expect(source.empty()).toBe(false);
+    expect(source.thread()?.root.content).toBe('First message');
+  }
+);

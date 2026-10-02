@@ -783,7 +783,17 @@ the transcript. A copied chat message link opens
 the recording's chat. Clicking the highlighted message clears the target from
 the pane's route while leaving chat expanded; verify this on standalone and
 Drive recording pages. A transcript search result clears any earlier chat
-target in that pane. A new call in the same channel starts a separate thread.
+target in that pane. In an already-open Home call preview, follow a second
+message link and then open the call without a message target: the highlight
+must move to the second message and then clear without remounting the preview.
+A new call in the same channel starts a separate thread.
+
+An initial missing thread means the call has no messages yet. If a later chat
+refresh reports the thread missing or access denied after messages loaded,
+show the retry error and hide the stale thread. Verify that it never shows
+the empty-conversation prompt alongside cached messages. A transient server
+error may retain readable messages; Retry restores the thread when access
+and the request recover.
 
 For recovery checks, keep another participant connected and briefly interrupt
 the first participant's network. Recovery may rejoin that same live call. It

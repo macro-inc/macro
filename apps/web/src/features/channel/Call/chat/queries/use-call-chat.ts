@@ -15,15 +15,22 @@ export function useCallChat(callId: Accessor<string>) {
     retry: false,
     refetchOnMount: 'always' as const,
   }));
+  const empty = () =>
+    query.isLoadingError && thrownResultErrorHasCode(query.error, 'NOT_FOUND');
+  const unavailable = () =>
+    query.isError &&
+    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].some((code) =>
+      thrownResultErrorHasCode(query.error, code)
+    );
   return {
     parent,
     thread: () =>
-      query.isSuccess || query.isRefetchError ? query.data : undefined,
-    empty: () =>
-      query.isError && thrownResultErrorHasCode(query.error, 'NOT_FOUND'),
+      query.isSuccess || (query.isRefetchError && !unavailable())
+        ? query.data
+        : undefined,
+    empty,
     loading: () => query.isPending,
-    failed: () =>
-      query.isError && !thrownResultErrorHasCode(query.error, 'NOT_FOUND'),
+    failed: () => query.isError && !empty(),
     refresh: () => query.refetch(),
   };
 }

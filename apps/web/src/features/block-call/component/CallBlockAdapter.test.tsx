@@ -1,16 +1,17 @@
 import type { CallBlockProps } from '@block-call/constants';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CallBlockAdapter } from './CallBlockAdapter';
 
 const state = vi.hoisted(() => ({
-  search: {} as { transcriptId: string; seek: string },
+  search: {} as { transcriptId: string; messageId?: string; seek: string },
+  setSearch: vi.fn(),
   navigate: (_params: CallBlockProps) => {},
 }));
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
-  createSearchParams: () => [state.search],
+  createSearchParams: () => [state.search, state.setSearch],
 }));
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => undefined,
@@ -46,9 +47,20 @@ vi.mock('./sidepanel/CallSidePanelSections', () => ({
 vi.mock('./CallRecording/CallRecordingBody', () => ({
   CallRecordingBody: (props: {
     transcriptTarget?: { transcriptId: string; gen: number };
-  }) => <output>{JSON.stringify(props.transcriptTarget)}</output>,
+    messageTarget?: string;
+    onClearMessageTarget?: () => void;
+  }) => (
+    <>
+      <output>{JSON.stringify(props.transcriptTarget)}</output>
+      <output data-message-target>{props.messageTarget}</output>
+      <button onClick={props.onClearMessageTarget}>Clear message target</button>
+    </>
+  ),
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 it('delivers and clears transcript requests in the legacy call body', () => {
   const [search, setSearch] = createStore({
@@ -89,4 +101,75 @@ it('preserves an imperative transcript target across Home route cleanup', () => 
   expect(target().transcriptId).toBe('new-route-segment');
   setSearch({ transcriptId: '', seek: '' });
   expect(view.container.querySelector('output')!.textContent).toBe('');
+});
+
+it('delivers updated route message targets and clears them without remounting', () => {
+  const [search, setSearch] = createStore({
+    transcriptId: '',
+    messageId: 'route-message',
+    seek: 'first',
+  });
+  state.search = search;
+  const view = render(() => <CallBlockAdapter call_message_id="old-message" />);
+  const target = () =>
+    view.container.querySelector('[data-message-target]')!.textContent;
+
+  expect(target()).toBe('route-message');
+  setSearch({ messageId: 'another-message', seek: 'next' });
+  expect(target()).toBe('another-message');
+  setSearch({ messageId: '', seek: '' });
+  expect(target()).toBe('');
+  setSearch({ messageId: 'route-message', seek: 'reopen' });
+  expect(target()).toBe('route-message');
+});
+
+it('preserves imperative message targets during route cleanup and clears on untargeted navigation', () => {
+  const [search, setSearch] = createStore({
+    transcriptId: '',
+    messageId: 'route-message',
+    seek: 'first',
+  });
+  state.search = search;
+  const view = render(() => <CallBlockAdapter />);
+  const target = () =>
+    view.container.querySelector('[data-message-target]')!.textContent;
+
+  state.navigate({ call_message_id: 'linked-message' });
+  setSearch({ messageId: '', seek: '' });
+  expect(target()).toBe('linked-message');
+  state.navigate({});
+  expect(target()).toBe('');
+  state.navigate({ call_message_id: 'linked-message' });
+  state.navigate({ call_transcript_id: 'segment' });
+  expect(target()).toBe('');
+  setSearch({ messageId: 'another-message', seek: 'next' });
+  expect(target()).toBe('another-message');
+  setSearch({ messageId: '', seek: '' });
+  expect(target()).toBe('');
+});
+
+it('clears the route message target when its highlight is released', () => {
+  const [search, setSearch] = createStore({
+    transcriptId: 'segment',
+    messageId: 'route-message',
+    seek: 'first',
+  });
+  state.search = search;
+  state.setSearch.mockImplementation((patch) => {
+    setSearch({ ...patch, messageId: patch.messageId ?? '' });
+  });
+  const view = render(() => <CallBlockAdapter />);
+
+  fireEvent.click(view.getByRole('button', { name: 'Clear message target' }));
+
+  expect(state.setSearch).toHaveBeenCalledWith(
+    { messageId: undefined },
+    { history: 'replace' }
+  );
+  expect(search.messageId).toBe('');
+  expect(search.transcriptId).toBe('segment');
+  setSearch('seek', 'next');
+  expect(
+    view.container.querySelector('[data-message-target]')!.textContent
+  ).toBe('');
 });
