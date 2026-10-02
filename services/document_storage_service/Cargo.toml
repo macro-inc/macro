@@ -130,6 +130,7 @@ graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
+import = { path = "../../crates/import" }
 initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
@@ -206,6 +207,12 @@ search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+slack_integration = { path = "../../crates/slack_integration", features = [
+  "gateway",
+  "inbound",
+  "postgres",
+  "s3",
+] }
 soup = { path = "../../crates/soup", features = [
   "axum",
   "inbound",

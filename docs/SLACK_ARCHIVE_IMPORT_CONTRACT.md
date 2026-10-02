@@ -2,9 +2,8 @@
 
 This is repository interface documentation, not an execution plan. The Rust
 source of truth is `crates/slack_integration/src/domain/{models,ports}.rs`.
-The initial package defines contracts and value validation only: no HTTP routes,
-SQL persistence, AWS adapters or queue consumer are implemented yet.
-`services/slack_import_worker` is an inert composition-root skeleton.
+The browser, administrator API, PostgreSQL repository and independent worker share
+these contracts. Persisted selection, not browser state or queue input, owns job scope.
 
 ## Boundaries and authorization
 
@@ -28,7 +27,7 @@ SQL persistence, AWS adapters or queue consumer are implemented yet.
 
 Default features expose models only. `ports` adds capability interfaces;
 `inbound`, `outbound`, `postgres`, `s3`, `sqs`, and `worker` enable their respective
-integration dependencies without implementing adapters. Versions of every
+integration dependencies. Versions of every
 third-party dependency are inherited from the root workspace; none require a
 new third-party version or library. Both packages participate in Hakari and test
 environment setup. The default model dependency graph still includes the shared
@@ -103,13 +102,40 @@ nulls. Missing creation time is resolved once from earliest source message when
 available, otherwise the persisted job creation time; record the corresponding
 warning. Never change a reused target's creation time.
 
-The client generates and durably retains the create token before sending.
+The client generates and retains the create token with its frozen in-memory
+confirmation snapshot before sending.
 Uniqueness is `(team, requesting human admin, token)`. An identical semantic
 payload returns the original job, even after it settles. A different payload
 with the same scoped token conflicts; it never replaces the original selection.
-JSON field ordering does not matter; array ordering is part of the payload, so
-clients retain the original selection/member order on retries. A lost response
-is retried with the same token, not a second create.
+The repository canonicalizes conversation/member ordering (including duplicate
+members) for semantic comparison; clients retry the exact snapshot rather than
+rebuilding it from mutable UI state. A lost response is retried with the same token,
+not a second create. The browser snapshot is not persisted across a page reload;
+job history can recover existing server jobs but cannot resume local uploads.
+
+### Popup confirmation and immutable scope
+
+Choosing a ZIP discovers metadata locally before any create, grant or upload.
+The existing dialog then presents grouped searchable checkboxes keyed by Slack ID,
+including the ID beside duplicate names, archived state and available advisory
+counts. Keyboard focus moves from the disabled file input to the filter. Bulk
+selection/clearing applies only to visible supported rows; filtering and hiding
+archived rows preserve hidden selections. Unsupported DMs are unavailable choices,
+not skipped selected work.
+
+**Import selected channels (N)** requires a nonempty selection and explicit source
+confirmation; history defaults on. This action freezes full selected metadata and
+options in `CreateImport.conversations`, allocates one token, and disables further
+review edits. Repeated clicks cannot create another request. Preparation, bounded
+parts and seals use only that snapshot, while shared users metadata remains required.
+Close/Escape or cancel before confirmation disposes scratch state without server
+writes. Closing after confirmation retains the active session while Settings stays
+mounted. Changing selection requires choosing an archive and confirming a new token.
+
+Only persisted conversation rows authorize registration, completion/sealing and
+worker claims. Unselected IDs have no manifest, outbox event or imported messages;
+links to them never reserve targets or implicitly import them (see reference policy).
+Shape-only imports retain the same selected rows with zero-part seals plus users.
 
 ## Registration and immutable uploads
 
@@ -279,14 +305,15 @@ Cancellation closes registration and atomically stops future claims/publication,
 skips unclaimed work, and enters `cancelling`. Running fenced workers may finish.
 If a running worker dies after cancellation, settle its expired lease without
 restarting; retain committed history and schedule its indexing. `cancelled` is
-terminal only when all active leases settle. Cancellation is **not rollback**.
+terminal only when active leases, committed reference intents and required search
+publication settle. Cancellation is **not rollback**.
 Finalize, cancel and completion share one job lock/CAS. A publication already in
 flight can still arrive; claim rejects it. Repeated cancel/finalize of a terminal
 job returns its existing receipt, not a new lifecycle.
 
 Job states are `uploading` while registration remains open, then `processing`
-while queued/importing work remains. Once registration is closed and all work is
-settled: `completed` if no failures (including deliberate skips),
+while queued/importing work, body reconciliation or required search publication
+remains. Once registration is closed and all work is settled: `completed` if no failures (including deliberate skips),
 `completed_with_errors` if failures coexist with completed conversations, or
 `failed` if failures exist without a completed conversation. Cancellation takes
 precedence while settling and becomes `cancelled`. Failed/cancelled imports may
@@ -298,13 +325,24 @@ work only after persisting failure and recomputing the job. A stale dead-letter
 generation must not fail newer work or a current active lease.
 
 `ImportProgress` exposes job ID/status/revision, creation/update/registration
-closure times, users verification, limits, and bounded per-conversation progress.
-Conversation progress includes source ID, authorized target ID or null, seal
+closure times, users verification, limits, immutable `source` confirmation and
+`includeMessageHistory`, and bounded per-selected-conversation progress.
+Conversation progress includes persisted source ID, `name`, `kind`, `archived`,
+target ID or null, seal
 partCount (null = not sealed), verified parts, committed counters, sanitized
 error/warnings and search state. No internal keys, grants, leases or raw errors.
 Counters are cumulative committed `processed`, `imported`, `duplicates`, `skipped`
 and `reactions`; processed equals imported + duplicates + skipped, not reactions.
-Replays/checkpoint retries cannot inflate them.
+Replays/checkpoint retries cannot inflate them. Selected failures/skips remain in
+receipts; unselected channels are never counted as skipped. Names/kinds come from
+persisted source metadata, not inaccessible Macro targets or locally retained ZIPs.
+Polling, reconnect and job history render this same immutable server snapshot.
+The administrator service independently gates target disclosure through a read-only
+port using the **viewing** admin, not the original requester or import-write provenance.
+IDs are conservatively returned only for current active participants (even for
+team-visible channels), never for skipped work. Checks are deduplicated in batches
+of 500; a disclosure failure hides target IDs without failing an already committed
+mutation or hiding source receipts. No access grants or membership changes occur.
 
 `slack_import_updated` notifications carry only team/job/revision/status hints to
 the requesting administrator's gateway entity after access revalidation. Other
@@ -372,6 +410,161 @@ not sufficient. Existing search authorization still applies.
 Staging may expire after 14 days. Job/staging cleanup must not delete user-visible
 history, long-lived dedupe mappings, canonical reservations or source bindings.
 Team/channel deletion semantics belong to owning schema migrations.
+
+## Native links and deferred source references
+
+The pure `slack::mrkdwn::MrkdwnConverter` retains its existing `message`/`convert`
+interfaces. The additive `convert_with_references(source, italic)` returns
+`ConvertedText`: an initially safe `body`, explicit `user_mentions` (occurrences
+actively emitted outside code), and typed `ReferenceIntent` occurrences. It accepts
+at most 1 MiB source text, 1 MiB cumulative generated token/fallback bytes,
+256 references, and 256 emitted user mentions per body. Metadata expansion and
+occurrence budgets are checked as tokens are emitted; excess is an explicit
+`LimitExceeded`, not silent truncation. `italic` is used for
+Slack `me_message`. The importer uses `message_with_references` and carries this
+evidence to its atomic historical sink.
+
+Native representations match Lexical `INTERNAL_TRANSFORMERS`:
+
+```text
+<m-link>{"url":"https://example.com","text":"Example","title":""}</m-link>
+<m-user-mention>{"userId":"macro|a@example.com","email":"a@example.com"}</m-user-mention>
+<m-document-mention>{"documentId":"<channel UUID>","blockName":"channel","documentName":"general","blockParams":{},"collapsed":false}</m-document-mention>
+<m-document-mention>{"documentId":"<channel UUID>","blockName":"channel","documentName":"general","blockParams":{"channel_message_id":"<message UUID>","channel_thread_id":"<persisted root UUID>"},"collapsed":false}</m-document-mention>
+```
+
+`channel_thread_id` is optional; `channel_message_id` is the canonical message UUID,
+never a Slack timestamp. `documentId` is always the channel UUID. There is no
+`m-channel-mention`. The renderer may show the accessible entity name, not the
+original arbitrary link label. Shared typed serializers live in `mention_utils`;
+the existing markdown-document serializer's API and behavior remain unchanged.
+New native serialization JSON-escapes literal `<`/`>` delimiters, restoring labels
+exactly on JSON decoding (including quotes, backslashes, newlines and Unicode).
+This prevents closing/nested tag injection without HTML-encoding decoded labels.
+URL scheme policy (HTTP/HTTPS/mailto only) is validated separately from URL syntax
+using the URL parser; malformed authorities/ports and literal controls, whitespace,
+backslashes or tag delimiters are rejected. Original accepted URLs are retained,
+not rewritten to a hardcoded Macro origin.
+
+Safe Slack labeled/unlabeled angle links and protocol-prefixed bare HTTP(S)/mailto
+URLs outside code become `m-link`. Unlabeled mailto displays its address. Bare URL
+boundaries follow the frontend's protocol-mode autolink convention: terminal
+punctuation and unmatched closing parentheses are outside the URL; balanced path
+parentheses remain inside. Host-only/fuzzy links are not guessed. Entities decode
+once. Formatting is applied around generated nodes, never recursively through
+serialized JSON. Source-supplied Macro tags are escaped display text; recognized
+inline/fenced code remains literal. Never feed the entire output to the XML-only
+Rust parser to extract mention rows: it is not code-aware. Use `user_mentions`.
+Channel/group broadcasts and subteams are always inert text.
+
+Reference evidence and fallback policy:
+
+- Channel tokens carry a validated exact Slack channel ID. Fallback is the escaped
+  original `#label`, archive-provided channel name, or original Slack ID; no Macro
+  metadata is added to a fallback.
+- Supported permalinks are HTTPS `<workspace>.slack.com/archives/<C/G/D ID>/p<seconds><six microseconds>`
+  root links and reply links with optional `thread_ts=<seconds>.<six microseconds>`
+  and matching `cid`. Message identity always comes from the path, not `thread_ts`.
+  Credentials, non-default ports, fragments, extra path segments, duplicate/unknown
+  query keys, malformed IDs/timestamps and other Slack URL forms stay external links.
+- A parsed hostname is only source evidence to check, **not proof** of the bound
+  workspace. Resolution requires team + bound source + exact channel/message
+  identity and independently established matching source/domain evidence. Unknown
+  source confirmation supplies no domain evidence. Do not infer associations,
+  fetch URLs, call Slack, reserve IDs, create channels, or invent message mappings.
+- `ResolvedTarget` distinguishes authorized canonical channels from messages and
+  carries UUIDs (plus an optional persisted root). The resolver must require
+  requester **read** access, separate from import-write provenance. Prior same-source
+  imports may resolve even if not selected. Per-viewer runtime access checks remain.
+- Missing, unauthorized, skipped, deleted, incompatible or source-mismatched targets
+  retain their original safe fallback: external `m-link` for a permalink, source-only
+  display text for a channel. A message can never downgrade to a channel mention.
+
+### Read-only resolver boundary
+
+`references::resolve::resolve_batch` returns typed `Resolved`, `Pending`, or
+`Fallback` outcomes, in record/occurrence order. Pending/fallback contain no target
+IDs or labels. It deduplicates exact source identities within a batch, caps each
+record at 256 reference occurrences, caps records and serialized template bytes at
+the configured database ceilings (never above 500/4 MiB), and chunks lookup calls
+at that same record ceiling. No per-token queries or archive-wide reference map.
+
+`ImportTargetReader` reads canonical reservations and unambiguous explicitly
+team-scoped legacy mappings without reserving, locking, or deriving scope from a
+user's current team. It validates binding, existence, type and team compatibility;
+name-only legacy mappings are not evidence. Prior compatible imports and archived
+source channels remain eligible. Pending reservations expose no candidate UUID.
+`SourceMessageReader` reads exact integer-microsecond mappings; `HistoricalMessageReader`
+checks live message/root state and actual channel/parent ownership. A persisted
+orphan-imported reply links to its own root, not a guessed Slack parent.
+
+The worker's `WorkerReferenceLookup::context` loads the requester and source from
+the team-owned job. V1 has **no persisted domain-association evidence**, so its
+`domains` is empty and all Slack permalinks remain external, even with a known T ID.
+The domain resolver supports independently established exact workspace/hostname
+pairs, but there is no public/archive input or implicit alias-binding flow for
+those pairs. URL userinfo (including empty userinfo), contradictory `cid`, and a
+`thread_ts` later than the path message are not accepted source references.
+
+Disclosure requires current active participation for Private/DM, or current
+membership in the owning team for Team channels. Import provenance and admin role
+alone do not grant read access. Missing mappings in selected nonterminal work stay
+pending; deleted/inconsistent mapped messages do not become speculative targets.
+The sink persists user mention rows only from converter-emitted `user_mentions`,
+never by parsing tags in the resulting body. Code-contained tags remain inert.
+
+The resolver is a read-only capability for deferred reconciliation; persistence,
+settlement-time retries, guarded body updates and search publication remain the
+separate reconciliation boundary described below.
+
+Each intent stores its exact fallback and UTF-8 byte range in the immutable initial
+body. `ConvertedText::render` reconstructs by occurrence with typed targets; it
+validates ordered, non-overlapping ranges/fallback equality and never searches or
+regex-replaces serialized bodies. Duplicate, self, forward and cyclic occurrences
+are independent of import order. Persist the template/intents atomically with the
+imported body/mapping/checkpoint. Subsequent reconciliation must fence body updates
+against live edits/deletion and atomically complete intents with search-dirty/outbox
+work. Close unresolved intents to fallback when the job's opportunity ends, including
+cancellation, without restarting imports or adding members/mention effects. This is
+within-job reconciliation, not cross-job edit synchronization.
+
+The sink records one job-owned `slack_import_message_reference` template per newly
+won source mapping, plus `slack_import_job` and `body_version` in message import
+metadata. Duplicate-import losers never write intents or replace the winning body.
+No speculative UUID is rendered: all body references, including same-batch links,
+wait until canonical arbitration and selected-conversation settlement.
+
+Maintenance uses a transaction-held job row lock (`SKIP LOCKED`) as its fence,
+not a reclaimed conversation lease. It processes at most 50 templates per tick,
+one bounded template (at most 4 MiB) per transaction. A process crash rolls back
+body, completion checkpoint and search writes together; a competing process cannot
+patch the same job concurrently. No S3 object is needed to finish. The read-only
+resolver rechecks source proof and current disclosure access immediately before a
+message-owned compare-and-set. Body, owning job/version, unchanged timestamps,
+absence of edits and deletion must still match. Live edits/deletions are skipped;
+a successful patch changes only content, not author, timestamps, counters,
+reactions, thread structure, membership or live-message effects.
+
+Missing/pending targets at this final opportunity retain source-only fallbacks.
+Unsupported template versions close without a rewrite. Expired/abandoned/failed
+and cancelled partial imports follow the same rule after their conversations
+settle, without reclaiming cancelled import work. Completion clears bulky template
+data and retains a small checkpoint until job cleanup. Later exports or restored
+access never reopen it. Job deletion cascades only into these temporary intents,
+never into messages or long-lived dedupe mappings.
+
+Changed bodies increment the conversation's durable search generation in the same
+transaction. Scoped search publication waits for the job's pending templates to
+close, then uses the existing receipt/retry path. Job completion waits for required
+publication (not eventual OpenSearch refresh); terminal jobs never oscillate. These
+are internal settlement rules, with no new public progress enum.
+
+`tests/fixtures/native-message-links.json` in `slack_integration` is shared with
+`packages/lexical-core/tests/slack-import-links.test.ts`. Rust checks converter/shared
+serializer output with the real `mention_utils` parser; frontend tests import using
+real `INTERNAL_TRANSFORMERS` and round-trip Lexical state, including hostile labels
+and code. Ordinary mentions/mailto also round-trip native markdown. Lexical's own
+markdown export normalizes URL parentheses and is not the import serializer.
 
 ## Bounds and browser obligations
 
