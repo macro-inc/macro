@@ -19,6 +19,13 @@ pub trait UserDeletionGateway: Send + Sync {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Delete the teams the user owns and leave the rest through the teams
+    /// service, so subscriptions, member roles, and team events are handled
+    /// instead of the membership silently cascading away with the profile.
+    fn leave_teams(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Delete documents, chats, and projects through their owning service.
     fn delete_items(
         &self,
@@ -44,6 +51,7 @@ pub async fn delete_user_data(
     for user in users {
         gateway.delete_scheduled_actions(user).await?;
         gateway.delete_agent_sessions(user).await?;
+        gateway.leave_teams(user).await?;
         gateway.delete_items(user).await?;
         gateway.delete_profile(user, account).await?;
     }
