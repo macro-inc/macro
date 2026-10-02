@@ -228,6 +228,11 @@ export function createGraphqlDoneOperation(args: Args) {
   return {
     hasAccepted,
     hasFailures: () => attempts.some(({ state }) => state === 'failed'),
+    // Ancillary notification no-ops do not undo an accepted archive.
+    hasNoopRows: () =>
+      attempts.some(
+        ({ state, rowIds }) => state === 'noop' && rowIds.length > 0
+      ),
     completedCount: () =>
       new Set(
         attempts

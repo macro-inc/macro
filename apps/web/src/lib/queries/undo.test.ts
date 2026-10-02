@@ -80,6 +80,63 @@ describe('MutationUndoProvider', () => {
     });
   });
 
+  for (const failure of [false, true]) {
+    it.each([false, true])(
+      `retires an in-flight redo after a new action (failure=${failure}, newer undone=%s)`,
+      async (undoNewer) => {
+        await createRoot(async (dispose) => {
+          let ctx!: ReturnType<typeof useMutationUndoContext>;
+          MutationUndoProvider({
+            get children() {
+              ctx = useMutationUndoContext();
+              return null;
+            },
+          });
+          const pending = Promise.withResolvers<void>();
+          const oldUndo = vi.fn();
+          const onRedone = vi.fn();
+          ctx.pushUndo({
+            undo: oldUndo,
+            redo: () => pending.promise,
+            onRedone,
+          });
+          await ctx.undo();
+          oldUndo.mockClear();
+          const callbacks = {
+            onSuccess: vi.fn(),
+            onError: vi.fn(),
+            onSettled: vi.fn(),
+          };
+          const redo = ctx.redo(callbacks);
+          const newerUndo = vi.fn();
+          const newerRedo = vi.fn();
+          ctx.pushUndo({ undo: newerUndo, redo: newerRedo });
+          if (undoNewer) await ctx.undo();
+          if (failure) pending.reject(new Error('old redo failed'));
+          else pending.resolve();
+          await redo;
+          expect(onRedone).not.toHaveBeenCalled();
+          expect(callbacks.onSuccess).not.toHaveBeenCalled();
+          expect(callbacks.onError).not.toHaveBeenCalled();
+          expect(callbacks.onSettled).toHaveBeenCalledOnce();
+          if (undoNewer) {
+            expect(ctx.canUndo()).toBe(false);
+            await ctx.redo();
+            expect(newerRedo).toHaveBeenCalledOnce();
+            await ctx.undo();
+          } else {
+            expect(ctx.canRedo()).toBe(false);
+            await ctx.undo();
+          }
+          expect(newerUndo).toHaveBeenCalledTimes(undoNewer ? 2 : 1);
+          expect(oldUndo).not.toHaveBeenCalled();
+          expect(ctx.canUndo()).toBe(false);
+          dispose();
+        });
+      }
+    );
+  }
+
   it('no-ops when stacks are empty', async () => {
     await createRoot(async (dispose) => {
       let ctx!: ReturnType<typeof useMutationUndoContext>;

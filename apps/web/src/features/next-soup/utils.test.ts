@@ -912,7 +912,6 @@ describe('mark-done orchestration', () => {
         expect(operationMocks.refreshGraphqlSoup).not.toHaveBeenCalled();
       }
     );
-
   }
 
   it.each([false, true])(

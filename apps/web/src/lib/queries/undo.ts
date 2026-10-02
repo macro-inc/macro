@@ -130,16 +130,23 @@ export const [MutationUndoProvider, useMutationUndoContext] =
         callbacks?: UndoCallbacks
       ): Promise<void> => {
         const startedGeneration = generation;
+        const startedRedoGeneration = redoGeneration;
+        // A new action retires the redo branch, including requests already in
+        // flight. Their completion must not repopulate either stack or UI.
+        const isRetired = () =>
+          disposed.has(entry) ||
+          generation !== startedGeneration ||
+          redoGeneration !== startedRedoGeneration;
         try {
           if (entry.redo) {
             await entry.redo();
           }
-          if (disposed.has(entry) || generation !== startedGeneration) return;
+          if (isRetired()) return;
           setUndoStack((prev) => [...prev, entry]);
           entry.onRedone?.();
           callbacks?.onSuccess?.();
         } catch (err) {
-          if (disposed.has(entry) || generation !== startedGeneration) return;
+          if (isRetired()) return;
           setRedoStack((prev) => [...prev, entry]);
           callbacks?.onError?.(
             err instanceof Error ? err : new Error(String(err))

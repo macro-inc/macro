@@ -563,13 +563,29 @@ describe('pending GraphQL Done undo', () => {
     expect(mocks.apply.mock.results[0].value.rollback).toHaveBeenCalledOnce();
   });
 
-  it('does not restore or redo a no-op row using a sibling notification receipt', async () => {
-    mocks.done.mockResolvedValueOnce(['changed']);
+  it('reports mixed no-op results accurately without restoring or redoing the no-op row', async () => {
+    const write = Promise.withResolvers<string[]>();
+    mocks.done.mockReturnValueOnce(write.promise);
     const { action, undo } = mount();
-    await action.execute([
+    const done = action.execute([
       { type: 'document', id: 'changed-doc' } as EntityData,
       { type: 'document', id: 'unchanged-doc' } as EntityData,
     ]);
+    await vi.waitFor(() => expect(undo.canUndo()).toBe(true));
+    expect(mocks.toast.success).toHaveBeenCalledExactlyOnceWith(
+      'Marked 2 items as done',
+      expect.any(Object)
+    );
+    expect(mocks.toast.alert).not.toHaveBeenCalled();
+    write.resolve(['changed']);
+    await done;
+    expect(mocks.toast.dismiss).toHaveBeenCalledWith(1);
+    expect(mocks.toast.alert).toHaveBeenCalledExactlyOnceWith(
+      'Marked 1 of 2 items as done',
+      expect.objectContaining({
+        actions: [expect.objectContaining({ label: 'Undo' })],
+      })
+    );
     await undo.undo();
     const changed = mocks.apply.mock.results[0].value;
     const unchanged = mocks.apply.mock.results[1].value;
@@ -581,11 +597,46 @@ describe('pending GraphQL Done undo', () => {
     await undo.redo();
     expect(changed.reapply).toHaveBeenCalledOnce();
     expect(unchanged.reapply).not.toHaveBeenCalled();
+    expect(mocks.toast.alert).toHaveBeenCalledTimes(2);
+    expect(mocks.toast.alert).toHaveBeenLastCalledWith(
+      'Marked 1 of 2 items as done',
+      expect.any(Object)
+    );
     expect(mocks.done).toHaveBeenLastCalledWith({
       emailIds: [],
       notificationIds: ['changed'],
       onWriteSettled: expect.any(Function),
     });
+  });
+
+  it('does not announce late Done/no-op counts after the user already requested Undo', async () => {
+    const write = Promise.withResolvers<string[]>();
+    mocks.done.mockReturnValueOnce(write.promise);
+    const { action, undo } = mount();
+    const done = action.execute([
+      { type: 'document', id: 'changed' } as EntityData,
+      { type: 'document', id: 'unchanged' } as EntityData,
+    ]);
+    await vi.waitFor(() => expect(undo.canUndo()).toBe(true));
+    const reversal = undo.undo();
+    write.resolve(['exact']);
+    await done;
+    await reversal;
+    expect(mocks.toast.success).toHaveBeenCalledOnce();
+    expect(mocks.toast.alert).not.toHaveBeenCalled();
+    expect(undo.canRedo()).toBe(true);
+  });
+
+  it('does not report partial success when only an archived email\u2019s notifications are a no-op', async () => {
+    const { action, undo } = mount();
+    await action.execute([email('accepted')]);
+    expect(mocks.toast.success).toHaveBeenCalledExactlyOnceWith(
+      'Marked as done',
+      expect.any(Object)
+    );
+    expect(mocks.toast.alert).not.toHaveBeenCalled();
+    expect(mocks.toast.dismiss).not.toHaveBeenCalled();
+    expect(undo.canUndo()).toBe(true);
   });
 
   it('matches thread receipts by their thread, not just their shared channel', async () => {

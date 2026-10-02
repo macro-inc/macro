@@ -164,9 +164,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const showToast = () => {
       if (variables.silent || disposed) return;
       const total = variables.entities.length;
-      const partial = context.operation?.hasFailures();
+      const failed = context.operation?.hasFailures();
+      const partial = failed || context.operation?.hasNoopRows();
       const message = partial
-        ? `Marked ${context.operation?.completedCount()} of ${total} items as done. Some changes could not be saved.`
+        ? `Marked ${context.operation?.completedCount()} of ${total} items as done${failed ? '. Some changes could not be saved.' : ''}`
         : total > 1
           ? `Marked ${total} items as done`
           : 'Marked as done';
@@ -302,13 +303,18 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           if (!accepted) {
             context.registration?.handle.dispose();
             context.registration?.dismiss();
-          } else if (context.operation?.hasFailures()) {
+          } else if (
+            context.operation?.hasFailures() ||
+            context.operation?.hasNoopRows()
+          ) {
             context.registration?.dismiss();
-            if (context.pendingUndo.requested) {
+            if (!context.pendingUndo.requested)
+              context.registration?.showToast();
+            else if (context.operation?.hasFailures()) {
               toast.alert(
                 'Some changes could not be saved. Undo will reverse the accepted changes.'
               );
-            } else context.registration?.showToast();
+            }
           }
           context.pendingUndo.finish(accepted);
         } else registerUndo(variables, context);
