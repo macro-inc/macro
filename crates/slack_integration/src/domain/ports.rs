@@ -15,6 +15,13 @@ use super::models::*;
 /// Internal failures retain diagnostic causes without serializing them into progress.
 pub type PortResult<T> = Result<T, rootcause::Report<ImportError>>;
 
+/// Atomic, fenced reconciliation supplied by the worker composition root.
+pub trait ReferenceReconciler: Send + Sync {
+    /// Settle at most this many bounded templates, including cancelled/partial work.
+    /// Each body patch, completion checkpoint and search marker commits together.
+    fn reconcile_references(&self, limit: u32) -> impl Future<Output = PortResult<()>> + Send;
+}
+
 /// Bounded chunks, not a buffered whole object. Adapters cap chunk size and stop at
 /// the descriptor byte limit; consumers additionally enforce NDJSON line/record bounds.
 pub type ByteStream = Pin<Box<dyn Stream<Item = PortResult<Vec<u8>>> + Send>>;
@@ -375,6 +382,53 @@ pub trait ImportLedger: Send + Sync + 'static {
         reservation: &TargetReservation,
         kind: ConversationKind,
     ) -> impl Future<Output = PortResult<()>> + Send;
+}
+
+/// Import-owned read-only source-message mapping capability.
+pub trait SourceMessageReader: Send + Sync {
+    /// Explicit team namespace, bounded exact identities; mapping alone proves
+    /// neither message existence nor read access. Reject mixed-team inputs.
+    fn reference_mappings(
+        &self,
+        team: TeamId,
+        sources: &[SourceMessageId],
+    ) -> impl Future<
+        Output = PortResult<Vec<super::slack::references::resolve::StoredMessageMapping>>,
+    > + Send;
+}
+
+/// Batched read-only reference capabilities. Every method is bounded by the
+/// database record/byte ceilings; none may reserve targets or mutate membership.
+/// Context must come from persisted job ownership, not a client-supplied requester.
+pub trait ReferenceLookup: Send + Sync {
+    /// Load canonical channel facts in input order, without authorizing disclosure.
+    fn channels(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[ConversationId],
+    ) -> impl Future<Output = PortResult<Vec<super::slack::references::resolve::ChannelMapping>>> + Send;
+
+    /// Selected nonterminal conversations in this job which may supply references.
+    fn pending_channels(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[ConversationId],
+    ) -> impl Future<Output = PortResult<Vec<ConversationId>>> + Send;
+
+    /// Read source mappings and validate actual message ownership/deletion and root
+    /// state through the message owner. Results correspond exactly to input order.
+    fn messages(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        sources: &[SourceMessageId],
+    ) -> impl Future<Output = PortResult<Vec<super::slack::references::resolve::MessageMapping>>> + Send;
+
+    /// Current read-access facts, never the import-write provenance shortcut.
+    fn disclosure_access(
+        &self,
+        context: &super::slack::references::resolve::ReferenceContext,
+        channels: &[Uuid],
+    ) -> impl Future<Output = PortResult<super::slack::references::resolve::DisclosureAccess>> + Send;
 }
 
 /// Worker composition-root coordinator for a transaction spanning owning-crate helpers.

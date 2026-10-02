@@ -1,4 +1,5 @@
 import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
+import { SlackImport } from '@app/features/slack-import/slack-import';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -1486,6 +1487,7 @@ function TeamManagement(props: {
         </SettingsSection>
 
         <SettingsSection title="Connections">
+          <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
           <SettingsCard>
             <IntegrationRow
               icon={<GithubIcon />}

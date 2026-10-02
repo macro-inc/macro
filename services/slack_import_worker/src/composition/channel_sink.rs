@@ -16,7 +16,7 @@ use channels::{
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
 use import::outbound::pg_import_repo::targets as ledger;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use messages::{
     domain::historical as messages_model, outbound::pg_message_repo::PgMessageRepository,
 };
@@ -28,8 +28,12 @@ use slack_integration::{
         },
         models::*,
         ports::{HistoricalSink, ImportAuthorizer, PortResult},
+        reference_reconciliation::IMPORTER_BODY_VERSION,
     },
-    outbound::pg_slack_import_repo::batches::{self, BatchStart, WriteContext},
+    outbound::pg_slack_import_repo::{
+        batches::{self, BatchStart, WriteContext},
+        references,
+    },
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -125,16 +129,20 @@ impl<A: EntityAccessService> HistoricalSink for ChannelImportSink<A> {
             .await?
             .into_iter()
             .collect();
-        let mut remapped = HashMap::new();
+        let original_ids: Vec<_> = batch.messages.iter().map(|message| message.id).collect();
         for message in &mut batch.messages {
             let id = existing
                 .get(&message.source)
                 .copied()
                 .unwrap_or_else(Uuid::now_v7);
-            remapped.insert(message.id, id);
             message.id = id;
         }
         let mappings = fenced.reserve_mappings(&batch.messages).await?;
+        // Reservation arbitration, not the earlier read, determines final IDs.
+        let remapped: HashMap<_, _> = original_ids
+            .into_iter()
+            .zip(mappings.iter().map(|mapping| mapping.message_id))
+            .collect();
         let missing_parents: Vec<_> = batch
             .messages
             .iter()
@@ -169,7 +177,8 @@ impl<A: EntityAccessService> HistoricalSink for ChannelImportSink<A> {
                 message.parent_id = Some(*parent);
                 message.orphaned_thread_ts = None;
             }
-            let message = convert(message)?;
+            references::insert_in(fenced.transaction(), &batch.lease, &message).await?;
+            let message = convert(message, batch.lease.event.job_id)?;
             reactions += message.reactions.len() as u64;
             messages.push(message);
         }
@@ -394,8 +403,10 @@ fn timestamp(ts: SlackTimestamp) -> PortResult<DateTime<Utc>> {
         .ok_or_else(|| ImportError::InvalidInput.into())
 }
 
-fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalMessage> {
-    use mention_utils::parse::{ParsedXmlText, TextSegment, XmlTag};
+fn convert(
+    message: HistoricalMessage,
+    job: JobId,
+) -> PortResult<messages_model::HistoricalMessage> {
     let created_at = timestamp(message.source.ts)?;
     let mut seen = HashSet::new();
     let mut reactions = Vec::new();
@@ -408,21 +419,19 @@ fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalM
             });
         }
     }
-    let mut mentions = Vec::new();
-    if let Ok(parsed) = ParsedXmlText::parse(&message.content) {
-        let mut users = HashSet::new();
-        for segment in parsed.0 {
-            if let TextSegment::Xml(XmlTag::User(mention)) = segment
-                && let Some(user) = mention.user_id.into_user()
-                && users.insert(user.clone())
-            {
-                mentions.push(messages_model::HistoricalUserMention {
-                    id: Uuid::now_v7(),
-                    user_id: user.into_owned(),
-                });
-            }
-        }
+    if message.user_mentions.len() > slack_integration::domain::slack::references::MAX_REFERENCES {
+        return Err(ImportError::LimitExceeded.into());
     }
+    let mut users = HashSet::new();
+    let mentions = message
+        .user_mentions
+        .into_iter()
+        .filter(|user| users.insert(user.clone()))
+        .map(|user_id| messages_model::HistoricalUserMention {
+            id: Uuid::now_v7(),
+            user_id,
+        })
+        .collect();
     Ok(messages_model::HistoricalMessage {
         id: message.id,
         thread_id: message.parent_id,
@@ -435,7 +444,14 @@ fn convert(message: HistoricalMessage) -> PortResult<messages_model::HistoricalM
         created_at,
         updated_at: created_at,
         edited_at: None,
-        import_metadata: serde_json::json!({ "source": "slack", "slack_channel_id": message.source.slack_channel_id, "slack_ts": message.source.ts, "orphaned_thread_ts": message.orphaned_thread_ts }),
+        import_metadata: serde_json::json!({
+            "source": "slack",
+            "slack_channel_id": message.source.slack_channel_id,
+            "slack_ts": message.source.ts,
+            "orphaned_thread_ts": message.orphaned_thread_ts,
+            "slack_import_job": Uuid::from(job),
+            "body_version": IMPORTER_BODY_VERSION,
+        }),
         import_order: i64::try_from(message.import_order).map_err(|_| ImportError::InvalidInput)?,
         reactions,
         mentions,

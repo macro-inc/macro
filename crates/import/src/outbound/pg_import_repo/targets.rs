@@ -32,6 +32,79 @@ impl TryFrom<BindingRow> for ImportSourceBinding {
     }
 }
 
+impl crate::domain::ports::ImportTargetReader for PgImportRepo {
+    async fn lookup_targets(
+        &self,
+        team: Uuid,
+        binding: &ImportSourceBinding,
+        channels: &[crate::domain::models::SlackConversationId],
+    ) -> Result<Vec<crate::domain::models::ImportTargetLookup>> {
+        use crate::domain::models::ImportTargetLookup;
+        if channels.len() > crate::domain::models::MAX_TARGET_LOOKUP {
+            return Err(ImportError::TargetConflict);
+        }
+        let ids: Vec<_> = channels.iter().map(|id| id.as_str()).collect();
+        let workspace = binding.workspace_id.as_ref().map(SlackWorkspaceId::as_str);
+        let rows = sqlx::query!(
+            r#"SELECT s.ordinality AS "position!", r.state AS "state?", c.id AS "id?", c.name AS "name?",
+                      c.channel_type::text AS "kind?"
+               FROM unnest($1::text[]) WITH ORDINALITY AS s(id, ordinality)
+               JOIN import_source_binding b ON b.team_id = $2
+                 AND b.slack_workspace_id IS NOT DISTINCT FROM $3
+                 AND b.confirmed_unknown_at IS NOT DISTINCT FROM $4
+               LEFT JOIN import_target_reservation r
+                 ON r.team_id = $2 AND r.source = 'slack' AND r.foreign_id = s.id
+               LEFT JOIN LATERAL (
+                 SELECT count(*) AS count, min(entity_id) AS id,
+                        bool_and(entity_type = 'channel' AND entity_id IS NOT NULL) AS valid
+                 FROM (SELECT DISTINCT entity_id, entity_type FROM import_entity
+                       WHERE team_id = $2 AND source = 'slack' AND foreign_id = s.id
+                         AND status = 'imported' LIMIT 2) mappings
+               ) legacy ON true
+               LEFT JOIN comms_channels c ON c.id =
+                 CASE WHEN r.state = 'ready' AND r.channel_id = r.candidate_channel_id
+                           AND (legacy.count = 0 OR (legacy.count = 1 AND legacy.valid
+                                AND legacy.id = r.channel_id::text)) THEN r.channel_id
+                      WHEN r.state IS NULL AND legacy.count = 1 AND legacy.valid
+                           AND legacy.id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                      THEN legacy.id::uuid END
+                 AND ((c.channel_type = 'team' AND c.team_id = $2)
+                      OR (r.state = 'ready' AND c.channel_type IN ('private', 'direct_message')
+                          AND c.team_id IS NULL))
+                 AND NOT EXISTS (SELECT 1 FROM import_target_reservation other
+                                 WHERE other.channel_id = c.id AND other.team_id <> $2)
+                 AND NOT EXISTS (SELECT 1 FROM import_entity other
+                                 WHERE other.source = 'slack' AND other.status = 'imported'
+                                   AND other.entity_type = 'channel' AND other.entity_id = c.id::text
+                                   AND other.team_id <> $2)
+               ORDER BY s.ordinality"#,
+            &ids as _, team, workspace, binding.confirmed_unknown_at,
+        ).fetch_all(&self.pool).await?;
+        let mut result = vec![ImportTargetLookup::Missing; channels.len()];
+        for row in rows {
+            let outcome = match (row.state.as_deref(), row.id, row.kind.as_deref()) {
+                (Some("pending"), _, _) => ImportTargetLookup::Pending,
+                (_, Some(channel_id), Some(kind)) => {
+                    let kind = match kind {
+                        "team" => ImportTargetKind::Team,
+                        "private" => ImportTargetKind::Private,
+                        "direct_message" => ImportTargetKind::DirectMessage,
+                        _ => continue,
+                    };
+                    ImportTargetLookup::Ready {
+                        channel_id,
+                        kind,
+                        name: row.name.unwrap_or_default(),
+                    }
+                }
+                _ => ImportTargetLookup::Missing,
+            };
+            result[(row.position - 1) as usize] = outcome;
+        }
+        Ok(result)
+    }
+}
+
 struct ReservationRow {
     candidate_channel_id: Uuid,
     state: String,

@@ -11593,6 +11593,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "url",
  "workspace-hack",
 ]
 
@@ -17061,6 +17062,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 name = "slack_import_worker"
 version = "0.1.0"
 dependencies = [
+ "aws-sdk-s3",
  "aws-sdk-sqs",
  "bot_id",
  "channel_sender",
@@ -17077,9 +17079,11 @@ dependencies = [
  "macro_user_id",
  "mention_utils",
  "messages",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "slack_integration",
  "sqlx",
  "tokio",
@@ -17119,6 +17123,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "url",
  "utoipa",
  "uuid",
  "workspace-hack",

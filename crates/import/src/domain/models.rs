@@ -280,6 +280,28 @@ pub struct ImportTargetReservation {
     pub ready: bool,
 }
 
+/// Maximum exact source IDs per canonical read; validated IDs bound input bytes
+/// to 32 KiB, below the archive database batch byte ceiling.
+pub const MAX_TARGET_LOOKUP: usize = 500;
+
+/// Read-only canonical mapping state. Pending candidates are deliberately hidden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportTargetLookup {
+    /// No unambiguous, compatible target exists.
+    Missing,
+    /// Creation has not durably completed.
+    Pending,
+    /// Existing compatible channel; provenance is not a read-access grant.
+    Ready {
+        /// Canonical channel identity.
+        channel_id: Uuid,
+        /// Persisted channel kind.
+        kind: ImportTargetKind,
+        /// Persisted name, disclose only after authorization.
+        name: String,
+    },
+}
+
 // ---------------------------------------------------------------------------
 // Per-source metadata
 // ---------------------------------------------------------------------------

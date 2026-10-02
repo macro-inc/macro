@@ -31,6 +31,8 @@ fn message(team: TeamId, channel: Uuid, seconds: u32) -> HistoricalMessage {
         ),
         imported_author: None,
         content: "historical".into(),
+        user_mentions: vec![],
+        body_references: vec![],
         import_order: 0,
         reactions: vec![],
     }
@@ -163,6 +165,33 @@ async fn concurrent_jobs_share_first_committed_message_mapping(pool: PgPool) {
     assert_eq!(left.0, right.0);
     assert_eq!(left.1.imported + right.1.imported, 1);
     assert_eq!(left.1.duplicates + right.1.duplicates, 1);
+    use crate::domain::ports::SourceMessageReader;
+    let sources = [
+        first_message.source.clone(),
+        SourceMessageId {
+            ts: "1.000002".parse().unwrap(),
+            ..first_message.source.clone()
+        },
+    ];
+    let before = repo.progress(team, event.job_id).await.unwrap();
+    let found = repo.reference_mappings(team, &sources).await.unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].message, left.0);
+    assert_eq!(found[0].channel, channel);
+    assert_eq!(found[0].source.ts.to_string(), "1.000001");
+    assert_eq!(before, repo.progress(team, event.job_id).await.unwrap());
+    let other_team = Uuid::now_v7().try_into().unwrap();
+    assert!(repo.reference_mappings(other_team, &sources).await.is_err());
+    let foreign = SourceMessageId {
+        team_id: other_team,
+        ..sources[0].clone()
+    };
+    assert!(
+        repo.reference_mappings(other_team, &[foreign])
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrations = "../macro_db_client/migrations")]
@@ -414,10 +443,21 @@ async fn duplicates_keep_first_mapping_and_partial_failure_keeps_search(pool: Pg
     .await
     .unwrap();
     let progress = repo.finalize(team, event.job_id).await.unwrap();
-    assert_eq!(progress.status, JobStatus::CompletedWithErrors);
+    assert_eq!(progress.status, JobStatus::Processing);
     assert_eq!(progress.conversations[0].counters.imported, 1);
     assert_eq!(progress.conversations[0].counters.duplicates, 1);
-    assert_eq!(repo.pending_search(50).await.unwrap().len(), 1);
+    let request = repo.pending_search(50).await.unwrap().pop().unwrap();
+    repo.record_search(&request, SearchState::Completed)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.progress(team, event.job_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        JobStatus::CompletedWithErrors
+    );
 }
 
 #[sqlx::test(migrations = "../macro_db_client/migrations")]

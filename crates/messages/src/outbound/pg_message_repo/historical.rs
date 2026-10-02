@@ -11,6 +11,35 @@ use crate::domain::{
 #[cfg(test)]
 mod test;
 
+impl crate::domain::ports::HistoricalMessageReader for PgMessageRepository {
+    async fn lookup_historical_targets(
+        &self,
+        ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::historical::HistoricalMessageTarget>, MessageError> {
+        use crate::domain::historical::{HistoricalMessageTarget, MAX_HISTORICAL_MESSAGES};
+        if ids.len() > MAX_HISTORICAL_MESSAGES {
+            return Err(MessageError::Invalid("too many reference targets"));
+        }
+        sqlx::query_as!(
+            HistoricalMessageTarget,
+            r#"SELECT m.id AS message_id, m.channel_id AS "channel_id!", t.root_id
+               FROM comms_messages m
+               JOIN comms_message_threads t ON t.root_id = coalesce(m.thread_id, m.id)
+               JOIN comms_messages root ON root.id = t.root_id
+               WHERE m.id = ANY($1) AND m.deleted_at IS NULL AND t.deleted_at IS NULL
+                 AND root.deleted_at IS NULL AND root.thread_id IS NULL
+                 AND m.parent_entity_type = 'channel' AND m.parent_entity_id = m.channel_id::text
+                 AND t.parent_entity_type = 'channel' AND t.parent_entity_id = m.channel_id::text
+                 AND root.channel_id = m.channel_id AND root.parent_entity_type = 'channel'
+                 AND root.parent_entity_id = m.channel_id::text"#,
+            ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(database_error)
+    }
+}
+
 impl HistoricalMessageRepository for PgMessageRepository {
     async fn insert_historical(&self, batch: &HistoricalBatch) -> Result<(), MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
@@ -20,6 +49,44 @@ impl HistoricalMessageRepository for PgMessageRepository {
 }
 
 impl PgMessageRepository {
+    /// Patch only an unchanged, undeleted importer-written body. Live edits (even
+    /// edit/revert) invalidate the timestamp guard. No timestamp, thread, reaction,
+    /// author or activity is changed and no live-message effects are emitted.
+    pub async fn patch_historical_body_in(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        patch: &crate::domain::historical::HistoricalBodyPatch,
+    ) -> Result<bool, MessageError> {
+        if patch.body.trim().is_empty()
+            || patch.body.len() > crate::domain::historical::MAX_HISTORICAL_MESSAGE_BYTES
+        {
+            return Err(MessageError::Invalid("invalid historical body patch"));
+        }
+        let guard = serde_json::json!({
+            "slack_import_job": patch.job_id,
+            "body_version": patch.importer_version,
+        });
+        Ok(sqlx::query!(
+            r#"UPDATE comms_messages SET content = $5
+               WHERE id = $1 AND channel_id = $2
+                 AND parent_entity_type = 'channel' AND parent_entity_id = $2::text
+                 AND content = $3 AND content <> $5 AND import_metadata @> $4
+                 AND deleted_at IS NULL AND edited_at IS NULL AND updated_at = created_at
+                 AND NOT EXISTS (SELECT 1 FROM comms_message_threads t
+                     WHERE t.root_id = coalesce(comms_messages.thread_id, comms_messages.id)
+                       AND t.deleted_at IS NOT NULL)"#,
+            patch.message_id,
+            patch.channel_id,
+            patch.expected_body,
+            guard,
+            patch.body,
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(database_error)?
+        .rows_affected()
+            == 1)
+    }
+
     /// Persist historical channel messages in a caller-owned transaction without
     /// publishing effects or committing that transaction. The composition root
     /// must authorize the channel and atomically persist its source mappings,
