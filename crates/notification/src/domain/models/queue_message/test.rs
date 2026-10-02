@@ -100,3 +100,78 @@ fn test_ingress_queue_message_round_trip() {
         "hello"
     );
 }
+
+#[test]
+fn mobile_publication_filter_preserves_both_platforms_for_active_recipient() {
+    let active = MacroUserIdStr::try_from_email("active@example.com").unwrap();
+    let dismissed = MacroUserIdStr::try_from_email("dismissed@example.com").unwrap();
+    let message: QueueMessage<'static, serde_json::Value, serde_json::Value> =
+        serde_json::from_value(serde_json::json!({
+            "message_type": "test_notification",
+            "content": {
+                "Ios": {
+                    "notif": {
+                        "aps": {
+                            "alert": {"title": "Test", "body": "Body"},
+                            "sound": "default"
+                        },
+                        "notificationId": "550e8400-e29b-41d4-a716-446655440000"
+                    },
+                    "attributes": {
+                        "push_type": "Alert",
+                        "collapse_key": "test-collapse-key"
+                    },
+                    "ios_device_endpoints": {
+                        (active.as_ref()): {
+                            "endpoints": ["active-ios"],
+                            "android_endpoints": ["active-android"]
+                        },
+                        (dismissed.as_ref()): {
+                            "endpoints": ["dismissed-ios"],
+                            "android_endpoints": ["dismissed-android"]
+                        }
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+    let filtered = message
+        .retain_active_recipients(&HashSet::from([active.clone()]))
+        .unwrap();
+    let value = serde_json::to_value(filtered).unwrap();
+    let targets = &value["content"]["Ios"]["ios_device_endpoints"];
+    assert_eq!(targets.as_object().unwrap().len(), 1);
+    assert_eq!(
+        targets[active.as_ref()]["endpoints"],
+        serde_json::json!(["active-ios"])
+    );
+    assert_eq!(
+        targets[active.as_ref()]["android_endpoints"],
+        serde_json::json!(["active-android"])
+    );
+    assert!(targets.get(dismissed.as_ref()).is_none());
+}
+
+#[test]
+fn email_publication_filter_drops_intent_for_inactive_recipient() {
+    let recipient = MacroUserIdStr::try_from_email("dismissed-email@example.com").unwrap();
+    let message: QueueMessage<'static, serde_json::Value, serde_json::Value> =
+        QueueMessage::new_test(
+            "test_notification".to_string(),
+            NotificationChannel::Email(EmailNotification {
+                to: recipient,
+                content: EmailContent {
+                    subject: "subject".to_string(),
+                    body: "body".to_string(),
+                },
+                rate_limit_config: RateLimitConfig {
+                    max_count: 1,
+                    window: std::time::Duration::from_secs(60),
+                },
+                rate_limit_key: RateLimitKey::from_str_hashed(&"email-filter"),
+            }),
+        );
+
+    assert!(message.retain_active_recipients(&HashSet::new()).is_none());
+}

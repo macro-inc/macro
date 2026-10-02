@@ -2,12 +2,16 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
+use notification::domain::models::delivery_outbox::{
+    ClaimedDeliveryIntent, ClaimedDeliveryRequest, ClaimedDigestReceiptCleanup, DeliveryClaimToken,
+    DeliveryLease,
+};
 use notification::domain::models::request::{NotificationListFilters, NotificationStatus};
 use notification::domain::models::{
-    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
-    UserNotificationRow, device::DeviceType,
+    DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequest,
+    SendNotificationRequestBuilder, UserNotificationRow, device::DeviceType,
 };
-use notification::domain::ports::NotificationRepository;
+use notification::domain::ports::{NotificationDeliveryRepository, NotificationRepository};
 use notification::outbound::repository::DbNotificationRepository;
 use rootcause::Report;
 use serde::Serialize;
@@ -296,6 +300,154 @@ impl NotificationRepository for SandboxNotificationRepository {
     ) -> Result<(), Report> {
         self.inner
             .enable_notification_type(user_id, notification_event_type)
+            .await
+    }
+}
+
+impl NotificationDeliveryRepository for SandboxNotificationRepository {
+    async fn restore_existing_delivery_request<
+        'a,
+        T: Serialize + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: &SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<HashSet<MacroUserIdStr<'static>>>, Report> {
+        self.inner.restore_existing_delivery_request(request).await
+    }
+
+    async fn persist_notification_with_delivery_request<
+        'a,
+        T: Serialize + DeserializeOwned + Send + Sync,
+        U: Serialize + Send + Sync,
+    >(
+        &self,
+        request: SendNotificationRequest<'a, T, U>,
+        service_sender: &str,
+    ) -> Result<Vec<UserNotificationRow<Arc<T>>>, Report> {
+        self.inner
+            .persist_notification_with_delivery_request(request, service_sender)
+            .await
+    }
+
+    async fn claim_delivery_request(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryRequest>, Report> {
+        self.inner
+            .claim_delivery_request(notification_id, claim_token, lease)
+            .await
+    }
+
+    async fn prepare_delivery_intents(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+        expected_active_recipients: &[MacroUserIdStr<'_>],
+        apns_collapse_key: Option<&str>,
+        payloads: &[serde_json::Value],
+        digest_receipt_cleanup_after: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool, Report> {
+        self.inner
+            .prepare_delivery_intents(
+                notification_id,
+                claim_token,
+                expected_active_recipients,
+                apns_collapse_key,
+                payloads,
+                digest_receipt_cleanup_after,
+            )
+            .await
+    }
+
+    async fn get_active_delivery_recipients(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        self.inner
+            .get_active_delivery_recipients(notification_id, position, claim_token)
+            .await
+    }
+
+    async fn release_delivery_request(
+        &self,
+        notification_id: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        self.inner
+            .release_delivery_request(notification_id, claim_token)
+            .await
+    }
+
+    async fn claim_delivery_intent(
+        &self,
+        notification_id: Option<Uuid>,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+    ) -> Result<Option<ClaimedDeliveryIntent>, Report> {
+        self.inner
+            .claim_delivery_intent(notification_id, claim_token, lease)
+            .await
+    }
+
+    async fn complete_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        self.inner
+            .complete_delivery_intent(notification_id, position, claim_token)
+            .await
+    }
+
+    async fn release_delivery_intent(
+        &self,
+        notification_id: Uuid,
+        position: i32,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        self.inner
+            .release_delivery_intent(notification_id, position, claim_token)
+            .await
+    }
+
+    async fn claim_digest_receipt_cleanup(
+        &self,
+        claim_token: DeliveryClaimToken,
+        lease: DeliveryLease,
+        orphan_cleanup_after: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<ClaimedDigestReceiptCleanup>, Report> {
+        self.inner
+            .claim_digest_receipt_cleanup(claim_token, lease, orphan_cleanup_after)
+            .await
+    }
+
+    async fn complete_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<bool, Report> {
+        self.inner
+            .complete_digest_receipt_cleanup(notification_id, user_id, generation, claim_token)
+            .await
+    }
+
+    async fn release_digest_receipt_cleanup(
+        &self,
+        notification_id: Uuid,
+        user_id: MacroUserIdStr<'_>,
+        generation: Uuid,
+        claim_token: DeliveryClaimToken,
+    ) -> Result<(), Report> {
+        self.inner
+            .release_digest_receipt_cleanup(notification_id, user_id, generation, claim_token)
             .await
     }
 }

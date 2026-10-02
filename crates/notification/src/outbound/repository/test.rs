@@ -61,6 +61,23 @@ fn test_user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
 }
 
+fn delivery_request(
+    notification_id: Uuid,
+    recipient: MacroUserIdStr<'static>,
+) -> SendNotificationRequest<'static, TestNotification, ()> {
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_string("outbox-test".to_string()),
+        secondary_notification_entity: None,
+        notification: TestNotification {
+            message: "durable".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient]),
+    }
+    .into_request_with_id(notification_id)
+    .with_conn_gateway()
+}
+
 async fn create_message_notification(
     pool: &Pool<Postgres>,
     recipient: &MacroUserIdStr<'static>,
@@ -1507,4 +1524,551 @@ async fn test_delete_all_user_notifications_does_not_affect_other_users(pool: Po
     .unwrap()
     .unwrap();
     assert_eq!(other_count, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delivery_request_backoff_allows_newer_preparation(pool: Pool<Postgres>) {
+    let repository = DbNotificationRepository::new(pool.clone());
+    let first_id = Uuid::now_v7();
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(first_id, test_user("poison-first@example.com")),
+            "test",
+        )
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    let second_id = Uuid::now_v7();
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(second_id, test_user("poison-second@example.com")),
+            "test",
+        )
+        .await
+        .unwrap();
+
+    let first_token = DeliveryClaimToken::new();
+    let first = repository
+        .claim_delivery_request(
+            None,
+            first_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first.notification_id, first_id);
+    repository
+        .release_delivery_request(first_id, first_token)
+        .await
+        .unwrap();
+
+    let second = repository
+        .claim_delivery_request(
+            None,
+            DeliveryClaimToken::new(),
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.notification_id, second_id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_expired_claims_keep_acquisition_backoff_for_all_delivery_phases(
+    pool: Pool<Postgres>,
+) {
+    let repository = DbNotificationRepository::new(pool.clone());
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user("cancelled-claim-backoff@example.com");
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+
+    let request_lease = Utc::now() + chrono::Duration::milliseconds(100);
+    repository
+        .claim_delivery_request(
+            Some(notification_id),
+            DeliveryClaimToken::new(),
+            DeliveryLease::until(request_lease),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let request_retry_at: chrono::DateTime<Utc> = sqlx::query_scalar(
+        "SELECT next_attempt_at FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(request_retry_at > request_lease);
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    assert!(
+        repository
+            .claim_delivery_request(
+                Some(notification_id),
+                DeliveryClaimToken::new(),
+                DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+            )
+            .await
+            .unwrap()
+            .is_none(),
+        "cancelled preparation must not reclaim immediately at lease expiry"
+    );
+
+    sqlx::query(
+        "UPDATE notification_delivery_outbox SET claim_token = NULL, claim_expires_at = NULL, next_attempt_at = now() WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let preparation_token = DeliveryClaimToken::new();
+    repository
+        .claim_delivery_request(
+            Some(notification_id),
+            preparation_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repository
+            .prepare_delivery_intents(
+                notification_id,
+                preparation_token,
+                std::slice::from_ref(&recipient),
+                None,
+                &[serde_json::json!({"channel": "test"})],
+                Utc::now() - chrono::Duration::seconds(1),
+            )
+            .await
+            .unwrap()
+    );
+
+    let intent_lease = Utc::now() + chrono::Duration::milliseconds(100);
+    let intent_token = DeliveryClaimToken::new();
+    repository
+        .claim_delivery_intent(
+            Some(notification_id),
+            intent_token,
+            DeliveryLease::until(intent_lease),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        repository
+            .get_active_delivery_recipients(notification_id, 0, intent_token)
+            .await
+            .unwrap(),
+        HashSet::from([recipient.clone()])
+    );
+    let intent_retry_at: chrono::DateTime<Utc> = sqlx::query_scalar(
+        "SELECT next_attempt_at FROM notification_delivery_outbox_intent WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(intent_retry_at > intent_lease);
+
+    let cleanup_lease = Utc::now() + chrono::Duration::milliseconds(100);
+    repository
+        .claim_digest_receipt_cleanup(
+            DeliveryClaimToken::new(),
+            DeliveryLease::until(cleanup_lease),
+            Utc::now() - chrono::Duration::seconds(1),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let cleanup_retry_at: chrono::DateTime<Utc> = sqlx::query_scalar(
+        "SELECT safe_after FROM notification_digest_receipt_cleanup WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(cleanup_retry_at > cleanup_lease);
+
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    assert!(
+        repository
+            .get_active_delivery_recipients(notification_id, 0, intent_token)
+            .await
+            .unwrap()
+            .is_empty(),
+        "an expired claim must not authorize recipient lookup"
+    );
+    assert!(
+        repository
+            .claim_delivery_intent(
+                Some(notification_id),
+                DeliveryClaimToken::new(),
+                DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+            )
+            .await
+            .unwrap()
+            .is_none(),
+        "cancelled publication must not reclaim immediately at lease expiry"
+    );
+    sqlx::query(
+        "UPDATE notification_delivery_outbox_intent SET next_attempt_at = now() WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let replacement_token = DeliveryClaimToken::new();
+    repository
+        .claim_delivery_intent(
+            Some(notification_id),
+            replacement_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repository
+            .get_active_delivery_recipients(notification_id, 0, intent_token)
+            .await
+            .unwrap()
+            .is_empty(),
+        "a reclaimed row must reject its prior token"
+    );
+    assert_eq!(
+        repository
+            .get_active_delivery_recipients(notification_id, 0, replacement_token)
+            .await
+            .unwrap(),
+        HashSet::from([recipient])
+    );
+    assert!(
+        repository
+            .claim_digest_receipt_cleanup(
+                DeliveryClaimToken::new(),
+                DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+                Utc::now() - chrono::Duration::seconds(1),
+            )
+            .await
+            .unwrap()
+            .is_none(),
+        "cancelled cleanup must not reclaim immediately at lease expiry"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delivery_preparation_records_apns_collapse_key(pool: Pool<Postgres>) {
+    let repository = DbNotificationRepository::new(pool.clone());
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user("apns-collapse@example.com");
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+
+    let before: Option<String> =
+        sqlx::query_scalar("SELECT apns_collapse_key FROM notification WHERE id = $1")
+            .bind(notification_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(before, None);
+
+    let claim_token = DeliveryClaimToken::new();
+    repository
+        .claim_delivery_request(
+            Some(notification_id),
+            claim_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repository
+            .prepare_delivery_intents(
+                notification_id,
+                claim_token,
+                &[recipient],
+                Some("collapse-key"),
+                &[],
+                Utc::now() + chrono::Duration::seconds(30),
+            )
+            .await
+            .unwrap()
+    );
+
+    let after: Option<String> =
+        sqlx::query_scalar("SELECT apns_collapse_key FROM notification WHERE id = $1")
+            .bind(notification_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(after.as_deref(), Some("collapse-key"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_delivery_preparation_rejects_recipient_dismissed_after_claim(pool: Pool<Postgres>) {
+    let repository = DbNotificationRepository::new(pool.clone());
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user("dismissed-after-claim@example.com");
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    let claim_token = DeliveryClaimToken::new();
+    repository
+        .claim_delivery_request(
+            Some(notification_id),
+            claim_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    repository
+        .mark_notifications_seen(recipient.clone(), &[notification_id])
+        .await
+        .unwrap();
+    assert!(
+        !repository
+            .prepare_delivery_intents(
+                notification_id,
+                claim_token,
+                std::slice::from_ref(&recipient),
+                Some("must-not-persist"),
+                &[serde_json::json!({"channel": "must-not-persist"})],
+                Utc::now() + chrono::Duration::seconds(30),
+            )
+            .await
+            .unwrap()
+    );
+
+    let prepared_at: Option<chrono::DateTime<Utc>> = sqlx::query_scalar(
+        "SELECT prepared_at FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let intent_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_delivery_outbox_intent WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let collapse_key: Option<String> =
+        sqlx::query_scalar("SELECT apns_collapse_key FROM notification WHERE id = $1")
+            .bind(notification_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(prepared_at.is_none());
+    assert_eq!(intent_count, 0);
+    assert!(collapse_key.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_concurrent_final_intents_complete_parent(pool: Pool<Postgres>) {
+    let repository = DbNotificationRepository::new(pool.clone());
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user("final-intents@example.com");
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    let preparation_token = DeliveryClaimToken::new();
+    repository
+        .claim_delivery_request(
+            Some(notification_id),
+            preparation_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repository
+            .prepare_delivery_intents(
+                notification_id,
+                preparation_token,
+                &[recipient],
+                None,
+                &[
+                    serde_json::json!({"position": 0}),
+                    serde_json::json!({"position": 1})
+                ],
+                Utc::now() + chrono::Duration::seconds(30),
+            )
+            .await
+            .unwrap()
+    );
+
+    let first_token = DeliveryClaimToken::new();
+    let first = repository
+        .claim_delivery_intent(
+            Some(notification_id),
+            first_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let second_token = DeliveryClaimToken::new();
+    let second = repository
+        .claim_delivery_intent(
+            Some(notification_id),
+            second_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    let (first_completed, second_completed) = tokio::join!(
+        repository.complete_delivery_intent(notification_id, first.position, first_token),
+        repository.complete_delivery_intent(notification_id, second.position, second_token),
+    );
+    assert!(first_completed.unwrap());
+    assert!(second_completed.unwrap());
+
+    let completed: bool = sqlx::query_scalar(
+        "SELECT completed_at IS NOT NULL FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(completed);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_notification_delete_cancels_delivery_and_retains_cleanup_obligation(
+    pool: Pool<Postgres>,
+) {
+    let repository = DbNotificationRepository::new(pool.clone());
+    let notification_id = Uuid::now_v7();
+    let recipient = test_user("delete-cancellation@example.com");
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    let first_generation: Uuid = sqlx::query_scalar(
+        "SELECT generation FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query("DELETE FROM notification WHERE id = $1")
+        .bind(notification_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let outbox_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(outbox_count, 0, "notification deletion cancels delivery");
+    let cleanup_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_digest_receipt_cleanup WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(cleanup_count, 1, "external cleanup must not be orphaned");
+
+    repository
+        .persist_notification_with_delivery_request(
+            delivery_request(notification_id, recipient.clone()),
+            "test",
+        )
+        .await
+        .unwrap();
+    let second_generation: Uuid = sqlx::query_scalar(
+        "SELECT generation FROM notification_delivery_outbox WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_ne!(first_generation, second_generation);
+
+    let cleanup_token = DeliveryClaimToken::new();
+    let cleanup = repository
+        .claim_digest_receipt_cleanup(
+            cleanup_token,
+            DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+            Utc::now() - chrono::Duration::seconds(1),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(cleanup.notification_id, notification_id);
+    assert_eq!(cleanup.user_id, recipient);
+    assert_eq!(cleanup.generation, first_generation);
+    assert!(
+        repository
+            .complete_digest_receipt_cleanup(
+                notification_id,
+                cleanup.user_id,
+                cleanup.generation,
+                cleanup_token,
+            )
+            .await
+            .unwrap()
+    );
+    let cleanup_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM notification_digest_receipt_cleanup WHERE notification_id = $1",
+    )
+    .bind(notification_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        cleanup_count, 1,
+        "recreated generation keeps its own cleanup obligation"
+    );
+    assert!(
+        repository
+            .claim_digest_receipt_cleanup(
+                DeliveryClaimToken::new(),
+                DeliveryLease::until(Utc::now() + chrono::Duration::seconds(30)),
+                Utc::now() - chrono::Duration::seconds(1),
+            )
+            .await
+            .unwrap()
+            .is_none(),
+        "cleanup cannot claim the recreated generation before preparation"
+    );
 }

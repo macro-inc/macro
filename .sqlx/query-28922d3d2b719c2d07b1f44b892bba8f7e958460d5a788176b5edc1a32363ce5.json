@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id\n            FROM user_notification\n            WHERE notification_id = $1\n              AND state = 'unseen'::notification_state\n              AND deleted_at IS NULL\n            ORDER BY user_id\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "28922d3d2b719c2d07b1f44b892bba8f7e958460d5a788176b5edc1a32363ce5"
+}

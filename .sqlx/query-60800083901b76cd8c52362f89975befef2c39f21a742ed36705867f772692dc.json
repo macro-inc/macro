@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notification_delivery_outbox\n            SET prepared_at = now(),\n                completed_at = CASE WHEN $3 = 0 THEN now() ELSE completed_at END,\n                claim_token = NULL,\n                claim_expires_at = NULL,\n                updated_at = now()\n            WHERE notification_id = $1\n              AND claim_token = $2\n              AND claim_expires_at > now()\n              AND prepared_at IS NULL\n            RETURNING notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "60800083901b76cd8c52362f89975befef2c39f21a742ed36705867f772692dc"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_notification.user_id\n            FROM notification_delivery_outbox_intent intent\n            JOIN user_notification\n              ON user_notification.notification_id = intent.notification_id\n            WHERE intent.notification_id = $1\n              AND intent.position = $2\n              AND intent.claim_token = $3\n              AND intent.claim_expires_at > now()\n              AND intent.published_at IS NULL\n              AND user_notification.state = 'unseen'::notification_state\n              AND user_notification.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d4dce18534df6f80f4b76960ed77418924c78b317657883d128e97e430199d10"
+}

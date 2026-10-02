@@ -52,6 +52,41 @@ async fn queues_android_and_ios_together_after_recipient_filtering() {
 }
 
 #[tokio::test]
+async fn durable_retry_preserves_android_and_ios_targets() {
+    let notification_id = Uuid::now_v7();
+    let user = test_user_id("durable-mobile@example.com");
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_device_endpoint(user.clone(), DeviceEndpoint::Ios("ios".into()))
+            .with_device_endpoint(user.clone(), DeviceEndpoint::Android("android".into())),
+    );
+    let queue = Arc::new(FaultQueue::failing_on([1]));
+    let service = NotificationIngressService::new(repo, queue.clone(), MockStateMachine);
+    let request = || {
+        SendNotificationRequestBuilder {
+            notification_entity: EntityType::Document.with_entity_str("doc"),
+            secondary_notification_entity: None,
+            notification: TestNotification {
+                message: "Hello".into(),
+            },
+            sender_id: None,
+            recipient_ids: HashSet::from([user.clone()]),
+        }
+        .into_request_with_id(notification_id)
+        .with_apns()
+    };
+
+    assert!(service.send_notification(request()).await.is_err());
+    service.send_notification(request()).await.unwrap();
+
+    let published = queue.published();
+    assert_eq!(published.len(), 1);
+    let targets = &published[0]["content"]["Ios"]["ios_device_endpoints"][user.as_ref()];
+    assert_eq!(targets["endpoints"], json!(["ios"]));
+    assert_eq!(targets["android_endpoints"], json!(["android"]));
+}
+
+#[tokio::test]
 async fn android_only_alerts_keep_the_identifier_needed_for_clearing() {
     let user = test_user_id("alice@example.com");
     let repo = Arc::new(

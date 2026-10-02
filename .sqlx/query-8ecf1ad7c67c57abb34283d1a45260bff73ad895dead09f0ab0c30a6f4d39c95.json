@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO notification_delivery_outbox_intent (\n                    notification_id,\n                    position,\n                    payload\n                )\n                VALUES ($1, $2, $3)\n                ON CONFLICT (notification_id, position) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ecf1ad7c67c57abb34283d1a45260bff73ad895dead09f0ab0c30a6f4d39c95"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO notification_digest_receipt_cleanup (\n                    notification_id,\n                    user_id,\n                    generation\n                )\n                SELECT notification_id, user_id, $2\n                FROM user_notification\n                WHERE notification_id = $1\n                ON CONFLICT (notification_id, user_id, generation) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "df9a72bcce7211286013e27c18b78f52b93f94742ac8cfcec1166d1d0adfaae9"
+}

@@ -64,6 +64,30 @@ pub trait DigestBatcher: Send + Sync + 'static {
         send_after: Duration,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
+    /// Add a notification during durable ingress preparation.
+    ///
+    /// The generation scopes replay idempotency across hard deletion and
+    /// recreation of the same notification id.
+    fn add_to_digest_for_delivery_generation(
+        &self,
+        notification: &UserNotificationRow<serde_json::Value>,
+        _delivery_generation: Uuid,
+        send_after: Duration,
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        self.add_to_digest(notification, send_after)
+    }
+
+    /// Remove the durable idempotency receipt for one notification.
+    ///
+    /// Callers must only do this after notification preparation is terminal and
+    /// every bounded preparation claimant that could replay has stopped.
+    fn remove_notification_receipt(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+        delivery_generation: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Claim and return one digest batch that is ready to be sent.
     ///
     /// Returns:

@@ -13,9 +13,8 @@ use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rate_limit::RateLimitExceeded;
-use rootcause::Report;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -339,6 +338,34 @@ impl<'a, T, U> QueueMessage<'a, T, U> {
     pub(crate) fn into_inner(self) -> NotificationChannel<'a, T, U> {
         self.content
     }
+
+    /// Remove recipients whose persisted lifecycle no longer permits delivery.
+    ///
+    /// Durable intents retain their original filtered audience, but a user may
+    /// dismiss a notification after preparation and before queue publication.
+    /// Return `None` when no recipient remains for this channel.
+    pub(crate) fn retain_active_recipients(
+        mut self,
+        active_recipients: &HashSet<MacroUserIdStr<'_>>,
+    ) -> Option<Self> {
+        let has_recipient = match &mut self.content {
+            NotificationChannel::Ios(targets) => {
+                targets
+                    .ios_device_endpoints
+                    .retain(|user_id, _| active_recipients.contains(user_id));
+                !targets.ios_device_endpoints.is_empty()
+            }
+            NotificationChannel::Email(email) => active_recipients.contains(&email.to),
+            NotificationChannel::ConnGateway(notification) => {
+                notification
+                    .recipients
+                    .retain(|user_id| active_recipients.contains(user_id));
+                !notification.recipients.is_empty()
+            }
+        };
+
+        has_recipient.then_some(self)
+    }
 }
 
 #[cfg(test)]
@@ -363,7 +390,7 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
     /// open the inner container by applying the state machine output to the necessary fields
     pub fn with_state_decisions(
         self,
-        states: Vec<Result<StateMachineDecisionA, Report>>,
+        states: Vec<StateMachineDecisionA>,
     ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
         // Collect indeterminate decisions keyed by owner_id
         let indeterminates: HashMap<
@@ -372,10 +399,10 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
         > = states
             .into_iter()
             .filter_map(|v| match v {
-                Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
-                Err(_)
-                | Ok(StateMachineDecisionA::DontSend(_))
-                | Ok(StateMachineDecisionA::BatchWasQueued(_)) => None,
+                StateMachineDecisionA::Indeterminate(indeterminate) => Some(indeterminate),
+                StateMachineDecisionA::DontSend(_) | StateMachineDecisionA::BatchWasQueued(_) => {
+                    None
+                }
             })
             .map(|batch| {
                 let owner = batch.inner().owner_id().clone();

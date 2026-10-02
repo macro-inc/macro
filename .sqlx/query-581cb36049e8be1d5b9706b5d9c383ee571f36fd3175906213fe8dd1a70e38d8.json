@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notification_digest_receipt_cleanup cleanup\n            SET safe_after = $2,\n                claim_token = NULL,\n                claim_expires_at = NULL,\n                updated_at = now()\n            FROM notification_delivery_outbox outbox\n            WHERE cleanup.notification_id = $1\n              AND outbox.notification_id = cleanup.notification_id\n              AND outbox.generation = cleanup.generation\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "581cb36049e8be1d5b9706b5d9c383ee571f36fd3175906213fe8dd1a70e38d8"
+}
