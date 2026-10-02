@@ -17,6 +17,7 @@ env:
     - ready_for_review
     branches:
     - main
+    - wolf/database-sql-parse
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small
@@ -309,10 +310,10 @@ jobs:
   test:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
-      RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
+      RUST_PACKAGES: all
       NEXTEST_TEST_THREADS: '32'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
     services:
@@ -401,6 +402,11 @@ jobs:
     - name: run tests
       run: |
         set -euo pipefail
+
+        # Temporary isolated probe: override the wrapper after BASH_ENV loads Nix.
+        export RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=
+        printf 'sccache probe: RUSTC_WRAPPER=%s RUSTC_WORKSPACE_WRAPPER=%s RUST_PACKAGES=%s\n' \
+          "$RUSTC_WRAPPER" "$RUSTC_WORKSPACE_WRAPPER" "$RUST_PACKAGES"
 
         # --no-tests=pass: a package filter can legitimately select a crate with no
         # tests; treat that as success, not nextest's default error.

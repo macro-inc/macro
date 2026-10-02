@@ -1,5 +1,10 @@
 set -euo pipefail
 
+# Temporary isolated probe: override the wrapper after BASH_ENV loads Nix.
+export RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=
+printf 'sccache probe: RUSTC_WRAPPER=%s RUSTC_WORKSPACE_WRAPPER=%s RUST_PACKAGES=%s\n' \
+  "$RUSTC_WRAPPER" "$RUSTC_WORKSPACE_WRAPPER" "$RUST_PACKAGES"
+
 # --no-tests=pass: a package filter can legitimately select a crate with no
 # tests; treat that as success, not nextest's default error.
 # sync-service is not part of this suite, and its storage backends are mutually

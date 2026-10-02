@@ -25,6 +25,7 @@ pub fn code_check_cloud_storage() -> Workflow {
         .on(Event::default().pull_request(
             PullRequest::default()
                 .add_branch("main")
+                .add_branch("wolf/database-sql-parse")
                 .add_type(PullRequestType::Opened)
                 .add_type(PullRequestType::Synchronize)
                 .add_type(PullRequestType::Reopened)
@@ -93,13 +94,10 @@ fn check() -> Job {
 fn test() -> Job {
     steps::gated_job()
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
+            "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env((
-            "RUST_PACKAGES",
-            "${{ needs.path-check.outputs.rust_packages }}",
-        ))
+        .add_env(("RUST_PACKAGES", "all"))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         .add_service("postgres", postgres_service())
