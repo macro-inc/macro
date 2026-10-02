@@ -89,7 +89,6 @@ use initiative::domain::models::{
     CreateInitiativeRequest, InitiativeDetail, InitiativeId, InitiativeList, InitiativeSummary,
     UpdateInitiativeRequest,
 };
-use initiative::domain::reads::{InitiativePreview, InitiativePreviews, InitiativePreviewsRequest};
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -381,7 +380,6 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::list::list_initiatives_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
         initiative::inbound::axum_router::get::get_initiative_handler,
-        initiative::inbound::axum_router::preview::get_initiative_previews_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         initiative::inbound::axum_router::assign_tasks::assign_initiative_tasks_handler,
@@ -551,9 +549,6 @@ use utoipa::OpenApi;
             InitiativeSummary,
             InitiativeDetail,
             InitiativeList,
-            InitiativePreviewsRequest,
-            InitiativePreview,
-            InitiativePreviews,
             CreateInitiativeRequest,
             UpdateInitiativeRequest,
             AssignTasksRequest,

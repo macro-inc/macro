@@ -4,8 +4,6 @@ export type Project = {
   name: string;
   descriptionDocumentId: string;
   updatedAt: string;
-  /** When the viewer last opened it, where the source reports it. */
-  viewedAt?: string;
   access?: ProjectAccess;
   taskCount?: number;
   completedTaskCount?: number;

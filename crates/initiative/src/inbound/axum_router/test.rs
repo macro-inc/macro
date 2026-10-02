@@ -297,7 +297,6 @@ enum ServiceCall {
     Unassign { task_id: String },
     Clear { task_id: String },
     Delete,
-    Previews(Vec<String>),
 }
 
 #[derive(Clone, Default)]
@@ -370,31 +369,6 @@ impl InitiativeService for FakeInitiativeService {
     ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
         Ok(crate::domain::reads::TaskInitiativeReferences {
             references: Vec::new(),
-        })
-    }
-
-    async fn previews(
-        &self,
-        _user_id: &MacroUserIdStr<'_>,
-        request: crate::domain::reads::InitiativePreviewsRequest,
-    ) -> Result<crate::domain::reads::InitiativePreviews, InitiativeError> {
-        self.record(ServiceCall::Previews(request.initiative_ids.clone()));
-        Ok(crate::domain::reads::InitiativePreviews {
-            previews: request
-                .initiative_ids
-                .into_iter()
-                .map(|id| {
-                    if id == existing_id().to_string() {
-                        crate::domain::reads::InitiativePreview::Access {
-                            id,
-                            name: "Launch".to_string(),
-                            owner_id: user(),
-                        }
-                    } else {
-                        crate::domain::reads::InitiativePreview::DoesNotExist { id }
-                    }
-                })
-                .collect(),
         })
     }
 
@@ -605,60 +579,6 @@ async fn no_access_on_an_existing_id_is_401() {
             "message": "User does not have access to the requested resource"
         })
     );
-    assert!(service.calls().is_empty());
-}
-
-#[tokio::test]
-async fn preview_is_a_static_route_that_skips_the_existence_check() {
-    let service = FakeInitiativeService::default();
-    let response = send(
-        build_router(service.clone(), FakeEntityAccessService::default()),
-        authed(axum::http::Request::post("/preview"))
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(json_body(serde_json::json!({
-                "initiativeIds": [existing_id().to_string(), unknown_id().to_string()]
-            })))
-            .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({
-            "previews": [
-                {
-                    "type": "access",
-                    "id": existing_id().to_string(),
-                    "name": "Launch",
-                    "ownerId": USER_ID,
-                },
-                { "type": "does_not_exist", "id": unknown_id().to_string() },
-            ]
-        })
-    );
-    assert_eq!(
-        service.calls(),
-        vec![ServiceCall::Previews(vec![
-            existing_id().to_string(),
-            unknown_id().to_string()
-        ])]
-    );
-}
-
-#[tokio::test]
-async fn preview_requires_credentials() {
-    let service = FakeInitiativeService::default();
-    let response = send(
-        build_router(service.clone(), FakeEntityAccessService::default()),
-        axum::http::Request::post("/preview")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(json_body(serde_json::json!({ "initiativeIds": [] })))
-            .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert!(service.calls().is_empty());
 }
 

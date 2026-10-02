@@ -22,6 +22,7 @@ export function getBlockNameFromEntity(
     .with('skill', () => 'skill' as const)
     .with('note', () => 'md' as const)
     .with('crm_company', () => 'company' as const)
+    .with('initiative', () => 'initiative' as const)
     .otherwise(() => {
       const entity = item.data;
       if ('fileType' in entity && typeof entity.fileType === 'string') {
@@ -52,8 +53,6 @@ export function getMentionItemName(item: MentionItem): string {
       ]
         .filter(Boolean)
         .join(' ');
-    case 'project':
-      return item.data.name || 'Project';
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
   }

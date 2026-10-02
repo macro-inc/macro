@@ -345,7 +345,8 @@ function useCommandsList(
 const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   Record<CategoryFilter, Bucket[]>
 > = {
-  all: exclude('person'),
+  // Projects come from the command menu's own server search.
+  all: exclude('person', 'initiative'),
   channels: ['channel'],
   dms: ['dm'],
   documents: ['note', 'document', 'snippet', 'project'],

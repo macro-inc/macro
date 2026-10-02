@@ -5,7 +5,11 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
-import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
+import {
+  type EntityBucket,
+  type EntityItem,
+  useQuickAccess,
+} from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -50,12 +54,11 @@ import {
   useEntityMention,
   useEntityMentionFromList,
 } from './hooks/useEntityMention';
-import { useProjectMention } from './hooks/useProjectMention';
 import { useUsersMention } from './hooks/useUsersMention';
 import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
 import { createItemHandler } from './utils/mentionHandlers';
-import { mergeIntoDocuments, sortMobileMentions } from './utils/mobileSort';
+import { sortMobileMentions } from './utils/mobileSort';
 
 const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
@@ -93,6 +96,17 @@ export function MentionsMenu(props: MentionsMenuProps) {
     </Suspense>
   );
 }
+
+/** The entity buckets listed under "Documents, Agents, & Tasks". */
+const DOCUMENT_MENTION_BUCKETS: EntityBucket[] = [
+  'note',
+  'task',
+  'snippet',
+  'document',
+  'project',
+  'chat',
+  'initiative',
+];
 
 function MentionsMenuInner(props: MentionsMenuProps) {
   const analytics = useAnalytics();
@@ -133,7 +147,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const customDocs = props.entities
     ? useEntityMentionFromList({
         items: props.entities,
-        buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
+        buckets: DOCUMENT_MENTION_BUCKETS,
         searchTerm,
       })
     : undefined;
@@ -158,25 +172,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const docsMention =
     customDocs ??
     useEntityMention({
-      buckets: ['note', 'task', 'snippet', 'document', 'project', 'chat'],
+      buckets: DOCUMENT_MENTION_BUCKETS,
       searchTerm: activeSearchTerm,
     });
   const docs = docsMention.entities;
-
-  // Projects share the documents section. `onPick` hosts (spreadsheet cells)
-  // cannot encode a project chip, so only editor hosts search them.
-  const projectMention = useProjectMention({
-    searchTerm: activeSearchTerm,
-    enabled: () =>
-      props.menu.isOpen() &&
-      !!props.editor &&
-      !hasCustomEntities() &&
-      (!props.sources || props.sources.includes('documents')),
-  });
-  const projects = projectMention.projects;
-  const docsAndProjects = createLazyMemo(() =>
-    mergeIntoDocuments(docs() ?? [], projects(), searchTerm())
-  );
 
   const channelsMention =
     customChannels ??
@@ -277,7 +276,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const combined: MentionItem[] = [
       ...users,
       ...(docs() ?? []),
-      ...projects(),
       ...(channels() ?? []),
       ...agentSessions(),
       ...(companies() ?? []),
@@ -297,7 +295,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           getFullCount: () =>
             (usersAndGroups()?.length ?? 0) +
             docsMention.totalCount() +
-            projectMention.totalCount() +
             agentSessions().length +
             channelsMention.totalCount() +
             (companyMention?.totalCount() ?? 0) +
@@ -305,20 +302,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (dates()?.length ?? 0),
           hasMore: () =>
             docsMention.hasMore() ||
-            projectMention.hasMore() ||
             channelsMention.hasMore() ||
             (companyMention?.hasMore() ?? false) ||
             hasMoreEmails(),
           isLoadingMore: () =>
             docsMention.isLoadingMore() ||
-            projectMention.isLoadingMore() ||
             channelsMention.isLoadingMore() ||
             (companyMention?.isLoadingMore() ?? false) ||
             isLoadingMoreEmails(),
           loadMore: async () => {
             await Promise.all([
               docsMention.loadMore(),
-              projectMention.loadMore(),
               channelsMention.loadMore(),
               companyMention?.loadMore(),
               loadMoreEmails(),
@@ -338,18 +332,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       {
         id: 'documents',
         label: 'Documents, Agents, & Tasks',
-        getData: docsAndProjects,
-        getFullCount: () =>
-          docsMention.totalCount() + projectMention.totalCount(),
-        hasMore: () => docsMention.hasMore() || projectMention.hasMore(),
-        isLoadingMore: () =>
-          docsMention.isLoadingMore() || projectMention.isLoadingMore(),
-        loadMore: async () => {
-          await Promise.all([
-            docsMention.loadMore(),
-            projectMention.loadMore(),
-          ]);
-        },
+        getData: () => docs() ?? [],
+        getFullCount: docsMention.totalCount,
+        hasMore: docsMention.hasMore,
+        isLoadingMore: docsMention.isLoadingMore,
+        loadMore: docsMention.loadMore,
       },
       {
         id: 'channels',

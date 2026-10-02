@@ -8770,58 +8770,6 @@ export const createInitiativeResponse = zod
   );
 
 /**
- * @summary Preview a batch of initiatives for the caller, e.g. to render project mentions.
- */
-export const getBatchInitiativePreviewBody = zod
-  .object({
-    initiativeIds: zod
-      .array(zod.string())
-      .describe(
-        'At most one hundred initiative ids, each one to 128 bytes long.'
-      ),
-  })
-  .describe(
-    'Bounded batch of initiative ids to preview, such as the projects mentioned in a document.'
-  );
-
-export const getBatchInitiativePreviewResponse = zod
-  .object({
-    previews: zod
-      .array(
-        zod
-          .union([
-            zod
-              .object({
-                id: zod.string().describe('Requested initiative id.'),
-                name: zod.string().describe('Display name.'),
-                ownerId: zod.string(),
-                type: zod.enum(['access']),
-              })
-              .describe('The caller can view the initiative.'),
-            zod
-              .object({
-                id: zod.string().describe('Requested initiative id.'),
-                type: zod.enum(['no_access']),
-              })
-              .describe(
-                'The initiative exists, but the caller cannot view it.'
-              ),
-            zod
-              .object({
-                id: zod.string().describe('Requested initiative id.'),
-                type: zod.enum(['does_not_exist']),
-              })
-              .describe('No initiative has the requested id.'),
-          ])
-          .describe(
-            'Viewer-relative preview of one requested initiative. Only a viewable initiative\nexposes its name and owner.'
-          )
-      )
-      .describe('One preview per distinct requested id.'),
-  })
-  .describe('Previews in deduplicated request order.');
-
-/**
  * @summary Fetch one initiative the caller can view.
  */
 export const getInitiativeParams = zod.object({

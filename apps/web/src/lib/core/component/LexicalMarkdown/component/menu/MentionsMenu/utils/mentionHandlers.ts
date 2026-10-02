@@ -65,27 +65,6 @@ async function handleAgentSessionMention(
 }
 
 /**
- * Insert a task project as a document mention with the `initiative` block,
- * tracked against the initiative like other document references.
- */
-async function handleProjectMention(
-  project: { id: string; name: string },
-  dependencies: HandlerDependencies
-): Promise<void> {
-  const { editor, blockId } = dependencies;
-  const mentionUuid =
-    blockId && tracksMentions(dependencies)
-      ? await trackMention(blockId, 'initiative', project.id)
-      : undefined;
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: project.id,
-    documentName: project.name,
-    blockName: 'initiative',
-    ...(mentionUuid ? { mentionUuid } : {}),
-  });
-}
-
-/**
  * Handle entity mention (documents, channels, emails, etc.).
  */
 async function handleEntityMention(
@@ -107,13 +86,16 @@ async function handleEntityMention(
     const trackType =
       item.bucket === 'channel' || item.bucket === 'dm'
         ? 'channel'
-        : 'document';
+        : item.bucket === 'initiative'
+          ? 'initiative'
+          : 'document';
     mentionId = await trackMention(blockId, trackType, entity.id);
   }
 
   if (item.bucket === 'email') {
     onEmailMention?.(entity as unknown as EmailEntity);
-  } else {
+  } else if (item.bucket !== 'initiative') {
+    // Callers share or attach mentioned files; a project is neither.
     onDocumentMention?.(entity as unknown as any);
   }
 
@@ -175,11 +157,6 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleGroupMentionItem(item.data, dependencies);
       case 'agentSession':
         return await handleAgentSessionMention(
-          { id: item.id, name: item.data.name },
-          dependencies
-        );
-      case 'project':
-        return await handleProjectMention(
           { id: item.id, name: item.data.name },
           dependencies
         );

@@ -1,9 +1,8 @@
 //! Ports (trait contracts) for the initiative domain.
 
 use super::reads::{
-    InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativePreviews,
-    InitiativePreviewsRequest, InitiativeTasksPage, InitiativeTasksRequest,
-    TaskInitiativeReferences, TaskInitiativeReferencesRequest,
+    InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeTasksPage,
+    InitiativeTasksRequest, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
 };
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -66,12 +65,6 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         &self,
         id: InitiativeId,
     ) -> impl Future<Output = Result<Option<InitiativeBasic>, Self::Err>> + Send;
-
-    /// Load identity rows for many initiatives in one read. Missing ids are absent.
-    fn get_basics(
-        &self,
-        ids: Vec<InitiativeId>,
-    ) -> impl Future<Output = Result<Vec<InitiativeBasic>, Self::Err>> + Send;
 
     /// Load the full initiative, including members, tasks, and share state.
     fn get_detail(
@@ -170,15 +163,6 @@ pub trait InitiativeService: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         request: TaskInitiativeReferencesRequest,
     ) -> impl Future<Output = Result<TaskInitiativeReferences, InitiativeError>> + Send;
-
-    /// Preview requested initiatives for display, such as mention chips. An initiative the
-    /// user cannot view reports only that it exists, never its name or owner.
-    fn previews(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        request: InitiativePreviewsRequest,
-    ) -> impl Future<Output = Result<InitiativePreviews, InitiativeError>> + Send;
-
     /// Create an initiative owned by `user_id`.
     fn create(
         &self,

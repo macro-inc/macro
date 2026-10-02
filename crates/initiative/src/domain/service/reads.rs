@@ -11,49 +11,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{InitiativeServiceImpl, receipt_access_level};
 use crate::domain::{
-    models::{InitiativeBasic, InitiativeError, InitiativeId, MAX_TASKS_PER_ASSIGN},
+    models::{InitiativeError, InitiativeId, MAX_TASKS_PER_ASSIGN},
     ports::{InitiativeDescriptionDocuments, InitiativeRepo, InitiativeService},
     reads::{
-        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativePreview,
-        InitiativePreviews, InitiativePreviewsRequest, InitiativeReference, InitiativeSort,
-        InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH, MAX_PREVIEW_IDS,
+        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeReference,
+        InitiativeSort, InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH,
         TaskInitiativeReference, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
         page_size as limit,
     },
 };
-
-/// Longest id a batched read accepts: initiative ids are UUIDs, task ids document ids.
-const MAX_BATCH_ID_BYTES: usize = 128;
-
-fn too_many_ids(limit: usize, noun: &str) -> InitiativeError {
-    InitiativeError::BadRequest(format!("at most {limit} {noun} ids are allowed"))
-}
-
-/// Validate and deduplicate a batch of ids in request order. Rejects empty or over-long ids,
-/// and stops at the first distinct id past `limit`, so an oversized request is rejected
-/// after at most `limit` insertions of bounded ids.
-fn distinct_batch_ids(
-    ids: Vec<String>,
-    limit: usize,
-    noun: &str,
-) -> Result<Vec<String>, InitiativeError> {
-    let mut seen = std::collections::HashSet::new();
-    let mut distinct = Vec::new();
-    for id in ids {
-        if id.is_empty() || id.len() > MAX_BATCH_ID_BYTES {
-            return Err(InitiativeError::BadRequest(format!("invalid {noun} id")));
-        }
-        if seen.contains(&id) {
-            continue;
-        }
-        if distinct.len() == limit {
-            return Err(too_many_ids(limit, noun));
-        }
-        seen.insert(id.clone());
-        distinct.push(id);
-    }
-    Ok(distinct)
-}
 
 struct Position {
     id: InitiativeId,
@@ -443,7 +409,21 @@ impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments> InitiativeServiceImpl
         user_id: &MacroUserIdStr<'_>,
         request: TaskInitiativeReferencesRequest,
     ) -> Result<TaskInitiativeReferences, InitiativeError> {
-        let ids = distinct_batch_ids(request.task_ids, MAX_TASKS_PER_ASSIGN, "task")?;
+        let mut seen = std::collections::HashSet::new();
+        let mut ids = Vec::new();
+        for id in request.task_ids {
+            if id.is_empty() || id.len() > 128 {
+                return Err(InitiativeError::BadRequest("invalid task id".into()));
+            }
+            if seen.insert(id.clone()) {
+                if ids.len() == MAX_TASKS_PER_ASSIGN {
+                    return Err(InitiativeError::BadRequest(
+                        "at most 100 task ids are allowed".into(),
+                    ));
+                }
+                ids.push(id);
+            }
+        }
         let auth = EntityAccessAuth::Authenticated(user_id.clone().into_owned());
         let visible = self.visible_tasks(&auth, ids.clone()).await?;
         let memberships = self
@@ -496,58 +476,5 @@ impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments> InitiativeServiceImpl
             })
             .collect();
         Ok(TaskInitiativeReferences { references })
-    }
-
-    /// Existence is reported before access, like the document, channel and folder preview
-    /// endpoints (and `GET /initiatives/{id}`): a deleted project reads as deleted, while an
-    /// inaccessible one reveals nothing beyond the id the caller already holds.
-    pub(super) async fn read_previews(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        request: InitiativePreviewsRequest,
-    ) -> Result<InitiativePreviews, InitiativeError> {
-        // Bound the raw payload too, so repeated ids cost nothing before rejection.
-        if request.initiative_ids.len() > MAX_PREVIEW_IDS {
-            return Err(too_many_ids(MAX_PREVIEW_IDS, "initiative"));
-        }
-        let ids = distinct_batch_ids(request.initiative_ids, MAX_PREVIEW_IDS, "initiative")?;
-        let parsed = |id: &str| id.parse::<InitiativeId>().ok();
-        let existing: HashMap<InitiativeId, InitiativeBasic> = self
-            .repo
-            .get_basics(ids.iter().filter_map(|id| parsed(id)).collect())
-            .await
-            .map_err(Into::into)?
-            .into_iter()
-            .map(|basic| (basic.id, basic))
-            .collect();
-        let auth = EntityAccessAuth::Authenticated(user_id.clone().into_owned());
-        let visible: std::collections::HashSet<InitiativeId> =
-            futures::future::try_join_all(existing.keys().map(|&id| {
-                let auth = auth.clone();
-                async move {
-                    let entity = Entity {
-                        entity_id: id.to_string(),
-                        entity_type: EntityType::Initiative,
-                    };
-                    Ok::<_, InitiativeError>(self.resources.view(auth, entity).await?.map(|_| id))
-                }
-            }))
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
-        let previews = ids
-            .into_iter()
-            .map(|id| match parsed(&id).and_then(|key| existing.get(&key)) {
-                None => InitiativePreview::DoesNotExist { id },
-                Some(basic) if visible.contains(&basic.id) => InitiativePreview::Access {
-                    id,
-                    name: basic.name.clone(),
-                    owner_id: basic.owner_id.clone(),
-                },
-                Some(_) => InitiativePreview::NoAccess { id },
-            })
-            .collect();
-        Ok(InitiativePreviews { previews })
     }
 }

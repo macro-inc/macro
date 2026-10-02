@@ -3,7 +3,6 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { ChannelEntity } from '@entity';
 import ClockIcon from '@phosphor/clock.svg';
 import EmailIcon from '@phosphor/envelope.svg';
-import StackIcon from '@phosphor/stack.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
@@ -62,8 +61,6 @@ export function MentionsMenuItem(props: {
 
       case 'agentSession':
         return <EntityIcon targetType="agent" size="xs" />;
-      case 'project':
-        return <StackIcon class="size-4 text-ink-muted" />;
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;
 

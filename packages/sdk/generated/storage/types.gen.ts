@@ -6104,58 +6104,6 @@ export type InitiativeList = {
 };
 
 /**
- * Viewer-relative preview of one requested initiative. Only a viewable initiative
- * exposes its name and owner.
- */
-export type InitiativePreview = {
-    /**
-     * Requested initiative id.
-     */
-    id: string;
-    /**
-     * Display name.
-     */
-    name: string;
-    /**
-     * Owner of the initiative.
-     */
-    ownerId: MacroUserIdStr;
-    type: 'access';
-} | {
-    /**
-     * Requested initiative id.
-     */
-    id: string;
-    type: 'no_access';
-} | {
-    /**
-     * Requested initiative id.
-     */
-    id: string;
-    type: 'does_not_exist';
-};
-
-/**
- * Previews in deduplicated request order.
- */
-export type InitiativePreviews = {
-    /**
-     * One preview per distinct requested id.
-     */
-    previews: Array<InitiativePreview>;
-};
-
-/**
- * Bounded batch of initiative ids to preview, such as the projects mentioned in a document.
- */
-export type InitiativePreviewsRequest = {
-    /**
-     * At most one hundred initiative ids, each one to 128 bytes long.
-     */
-    initiativeIds: Array<string>;
-};
-
-/**
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
@@ -14803,30 +14751,6 @@ export type CreateInitiativeResponses = {
 };
 
 export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
-
-export type GetBatchInitiativePreviewData = {
-    body: InitiativePreviewsRequest;
-    path?: never;
-    query?: never;
-    url: '/initiatives/preview';
-};
-
-export type GetBatchInitiativePreviewErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetBatchInitiativePreviewError = GetBatchInitiativePreviewErrors[keyof GetBatchInitiativePreviewErrors];
-
-export type GetBatchInitiativePreviewResponses = {
-    200: InitiativePreviews;
-};
-
-export type GetBatchInitiativePreviewResponse = GetBatchInitiativePreviewResponses[keyof GetBatchInitiativePreviewResponses];
 
 export type DeleteInitiativeData = {
     body?: never;

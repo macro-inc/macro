@@ -305,7 +305,6 @@ export const storageExcluded = [
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
-  'getBatchInitiativePreview',
   'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',

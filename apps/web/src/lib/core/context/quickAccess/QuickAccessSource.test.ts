@@ -1,4 +1,4 @@
-import type { CrmCompanyEntity } from '@entity';
+import type { CrmCompanyEntity, InitiativeEntity } from '@entity';
 import type {
   CacheChangeListener,
   CacheChangeOptions,
@@ -51,6 +51,7 @@ const mocks = vi.hoisted(() => ({
   onCacheChanged: vi.fn(),
   readRecordsByKeys: vi.fn(),
   companies: [] as CrmCompanyEntity[],
+  initiatives: [] as InitiativeEntity[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
@@ -130,6 +131,12 @@ vi.mock('@queries/history/graphql', () => ({
 vi.mock('@queries/soup/quick-access-agent-sessions', () => ({
   useQuickAccessAgentSessionsQuery: () => ({ query: {}, sessions: () => [] }),
 }));
+vi.mock('@queries/soup/quick-access-initiatives', () => ({
+  useQuickAccessInitiativesQuery: () => ({
+    query: { refetch: vi.fn() },
+    initiatives: () => mocks.initiatives,
+  }),
+}));
 vi.mock('@app/features/crm/crm-search', async () => ({
   ...(await import('@app/features/crm/queries/graphql')),
   useQuickAccessCrmCompaniesQuery: () => ({
@@ -199,6 +206,7 @@ beforeEach(() => {
   mocks.cachedChannels = () => [];
   mocks.projectedChannels = [];
   mocks.companies = [];
+  mocks.initiatives = [];
   mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
@@ -1048,6 +1056,51 @@ describe('Quick Access source integration', () => {
         .map((item) => item.id)
         .sort()
     ).toEqual(['folder', 'note', 'task']);
+  });
+
+  it('lists task projects with document search hits without searching the cache for them', async () => {
+    mocks.initiatives = [
+      {
+        type: 'initiative',
+        id: 'initiative-1',
+        name: 'Roadmap',
+        ownerId: 'owner',
+        descriptionDocumentId: 'description-1',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+      },
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [
+        {
+          profile: 'quick-access-v1',
+          recordKey: 'GraphqlSoupDocument:note-1',
+          bucket: 'note',
+          searchText: 'Roadmap notes',
+          timestampMs: 1,
+          sourceHash: 'hash',
+        },
+      ],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({
+        buckets: BUCKET_COMBINATIONS.documents,
+        searchTerm: () => 'roadmap',
+      })
+    );
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual(
+        expect.arrayContaining(['note-1', 'initiative-1'])
+      )
+    );
+    expect(
+      list.items().find((item) => item.id === 'initiative-1')
+    ).toMatchObject({ bucket: 'initiative', data: { type: 'initiative' } });
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buckets: expect.not.arrayContaining(['initiative']),
+      })
+    );
   });
 
   it('ignores email hydration and refreshes only the affected open list and source', async () => {

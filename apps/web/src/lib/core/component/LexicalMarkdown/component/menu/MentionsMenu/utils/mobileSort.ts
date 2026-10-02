@@ -1,10 +1,5 @@
-import type { EntityItem } from '@core/context/quickAccess';
-import { searchLikeQuickAccess } from '@core/context/quickAccess/entity-search';
 import { createFreshSearch, type FreshSortConfig } from '@core/util/freshSort';
-import type {
-  MentionItem,
-  ProjectMentionItem,
-} from '../../../../utils/mentionsUtils';
+import type { MentionItem } from '../../../../utils/mentionsUtils';
 
 function getMentionName(item: MentionItem): string {
   if (item.kind === 'date') return item.data.displayText;
@@ -82,55 +77,4 @@ export function sortMobileMentions(
     .filter((item) => !pinnedIds.has(item.id));
 
   return [...pinned, ...rest];
-}
-
-type RecencyRankable = Extract<
-  MentionItem,
-  { searchText: string; sortTimestamp: number }
->;
-
-/**
- * Rank with the documents' own ordering: recency (viewed, else updated) with
- * no query, otherwise the quick access fuzzy ranking.
- */
-function rankLikeDocuments(
-  items: RecencyRankable[],
-  query: string
-): RecencyRankable[] {
-  if (query.trim()) return searchLikeQuickAccess(items, query);
-  return [...items].sort((a, b) => b.sortTimestamp - a.sortTimestamp);
-}
-
-/**
- * Slot projects into the ranked documents list without reordering it: each
- * project follows exactly as many documents as outrank it in the shared
- * ranking. When `docs` came from that same ranking this is their combined
- * order; server-ranked documents keep the server's order.
- */
-export function mergeIntoDocuments(
-  docs: EntityItem[],
-  projects: ProjectMentionItem[],
-  query: string
-): MentionItem[] {
-  if (projects.length === 0) return docs;
-  const docIds = new Set(docs.map((doc) => doc.id));
-  const slots = new Map<number, MentionItem[]>();
-  const placed = new Set<string>();
-  let docsAbove = 0;
-  for (const item of rankLikeDocuments([...docs, ...projects], query)) {
-    if (docIds.has(item.id)) {
-      docsAbove++;
-      continue;
-    }
-    slots.set(docsAbove, [...(slots.get(docsAbove) ?? []), item]);
-    placed.add(item.id);
-  }
-  const out: MentionItem[] = [];
-  docs.forEach((doc, index) => {
-    out.push(...(slots.get(index) ?? []), doc);
-  });
-  out.push(...(slots.get(docs.length) ?? []));
-  // The server matched these even if the fuzzy ranking dropped them.
-  out.push(...projects.filter((project) => !placed.has(project.id)));
-  return out;
 }

@@ -389,11 +389,11 @@ Discard unsent test drafts rather than sending them.
 
 ## Project mentions
 
-With Projects enabled, type `@` followed by a project name in an editor or
-composer. Projects (not folders) appear alongside documents and tasks in the
-**Documents, Agents, & Tasks** section, searched on the server like the command
-menu, and ranked in without reordering the documents. Spreadsheet cell mentions
-do not list projects. Selecting one inserts a document mention with the
+With Projects enabled, type `@` followed by a project name in an editor,
+composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
+they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
+section and in entity property pickers that accept projects. The command menu
+keeps its own project search. Selecting one inserts a document mention with the
 project's icon and current name, like a channel mention; clicking it or
 pressing Enter on it opens the project in a split (the `initiative` block,
 which shows the same project view as Tasks), and a project you cannot read

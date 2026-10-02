@@ -118,8 +118,6 @@ import type { GithubPullRequestsResponse } from './generated/schemas/githubPullR
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
-import type { InitiativePreviews } from './generated/schemas/initiativePreviews';
-import type { InitiativePreviewsRequest } from './generated/schemas/initiativePreviewsRequest';
 import type { Item } from './generated/schemas/item';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
@@ -433,14 +431,6 @@ export const storageServiceClient = {
         { method: 'GET', signal }
       )
     ).map((result) => result);
-  },
-
-  /** Task project previews; `/projects/preview` is folders. */
-  async getBatchInitiativePreviews(args: InitiativePreviewsRequest) {
-    return await dssFetch<InitiativePreviews>(`/initiatives/preview`, {
-      method: 'POST',
-      body: JSON.stringify(args),
-    });
   },
 
   async getBatchCalendarEventPreviews(args: CalendarMentionPreviewRequest) {
