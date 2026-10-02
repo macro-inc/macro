@@ -9,7 +9,7 @@ fn advertised_commands_reach_macro_metadata_for_each_provider() {
         (TuiAgent::Claude, vec!["compact", "init", "fast", "effort"]),
         (
             TuiAgent::Codex,
-            vec!["compact", "init", "fast", "ultrafast", "model"],
+            vec!["compact", "init", "fast", "ultrafast", "effort", "model"],
         ),
     ] {
         let mut fold = FoldMachineImpl::new();
