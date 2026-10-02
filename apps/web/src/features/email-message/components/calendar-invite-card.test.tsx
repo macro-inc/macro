@@ -158,4 +158,31 @@ describe('native invitation card', () => {
     expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
     expect(screen.getByText(/Responses are paused/)).toBeTruthy();
   });
+  it('renders HTML descriptions safely', () => {
+    const htmlInvitation = {
+      ...invitationFixture,
+      description:
+        '<p>Meeting details with <strong>bold</strong> and <a href="https://example.com">link</a></p><ul><li>First item</li><li>Second item</li></ul>',
+    };
+    render(() => <CalendarInviteCard invitation={htmlInvitation} />);
+    const description = screen.getByText(/Meeting details/);
+    // HTML should be rendered, not shown as raw text
+    expect(description.innerHTML).toContain('<strong>');
+    expect(description.innerHTML).toContain('<a');
+    expect(description.innerHTML).toContain('<ul');
+    // Text content should not contain raw HTML tags
+    expect(description.textContent).not.toContain('<strong>');
+  });
+  it('escapes angle brackets in plain text descriptions', () => {
+    const plainTextInvitation = {
+      ...invitationFixture,
+      description: 'Email <bob@example.com> for questions',
+    };
+    render(() => <CalendarInviteCard invitation={plainTextInvitation} />);
+    const description = screen.getByText(/Email/);
+    // Angle brackets should be visible as text
+    expect(description.textContent).toContain('<bob@example.com>');
+    // But not as actual HTML tags
+    expect(description.querySelector('bob')).toBeNull();
+  });
 });

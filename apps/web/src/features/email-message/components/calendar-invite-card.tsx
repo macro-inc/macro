@@ -10,6 +10,7 @@ import X from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description';
 import {
   type CalendarInvitation,
   type CalendarInvitationActions,
@@ -236,12 +237,13 @@ export function CalendarInviteCard(props: {
         </ul>
         <Show when={!cancelled() && invite().description}>
           <div class="flex flex-col items-start gap-1.5">
-            <p
-              class="whitespace-pre-wrap break-words text-ink-muted [overflow-wrap:anywhere]"
+            <div
+              class="whitespace-pre-wrap break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:text-accent [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
               classList={{ 'line-clamp-2': !descriptionExpanded() }}
-            >
-              {invite().description}
-            </p>
+              innerHTML={sanitizeCalendarDescription(
+                invite().description ?? ''
+              )}
+            />
             <Button
               variant="ghost"
               class="h-auto border-0 p-0 text-xs font-medium text-accent"
