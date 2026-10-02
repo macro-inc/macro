@@ -4,14 +4,14 @@
 /* The homepage hero and constellation sit in OnboardingShell, which uses the
    site's system font stack; .homepage-sections and .feature-page would
    otherwise give them slab and Inter. */
-.tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
+.tour-hero, .tour-constellation .feature-flow, .tour-page .unification-subtext, .tour-footer { font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
 .feature-page .tour-cta { color: #000; }
 /* Pull the CTA up to the subtitle: 16px instead of the homepage's 36px
    (24px row gap + 12px margin from homepage-scroll-cue.css). */
 .tour-hero .ob-welcome:has(.homepage-hero-cta) > [data-welcome-copy] > .homepage-hero-action { margin-top: -8px; }
-/* The shared header's "Talk to us" link leaves the page for cal.com; here the
-   booker is inline, so hide it while this page is mounted. */
-body:has(.tour-page) .site-nav-demo { display: none; }
+/* The shared header's "Talk to us" and "Open app" buttons lead off the page;
+   the booker is inline here, so hide them while this page is mounted. */
+body:has(.tour-page) .site-header-actions { display: none; }
 /* The desktop line break orphans a word on phones; balance the lines instead. */
 @media (max-width: 767px) { .tour-hero h1 { text-wrap: balance; } .tour-hero h1 br { display: none; } }
 /* `.feature-page p` also cancels the hero subtitle's `mx-auto` centering. */
@@ -37,3 +37,12 @@ body:has(.tour-page) .site-nav-demo { display: none; }
 .tour-section { scroll-margin-top: 80px; }
 .tour-booking { display: flex; flex-direction: column; align-items: center; padding-bottom: 0; }
 .sales-booking-embed { width: 100%; max-width: 760px; min-height: 560px; overflow: hidden; border-radius: 24px; background: var(--color-panel); }
+/* The full 15-feature grid on desktop, the compact ring on phones. */
+.tour-constellation-mobile { display: none; }
+@media (max-width: 767px) {
+  .tour-constellation-desktop { display: none; }
+  .tour-constellation-mobile { display: block; }
+}
+/* The homepage's a16z and security badges close the page. */
+.tour-footer { padding: 72px 0 96px; }
+.tour-footer .homepage-open-source-badges { margin: 0; }
