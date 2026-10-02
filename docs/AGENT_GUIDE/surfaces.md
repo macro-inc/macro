@@ -1479,6 +1479,11 @@ its domains. Tasks is the Tasks list scoped to the `Companies` property; its
 `New task` composer pre-fills the company. Calls lists calls linked to the
 company, including those linked automatically from their participants. The side
 panel keeps Properties and Sharing.
+A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks` and
+`Calls`: Overview pills show the email, the company (opens it) and `Last
+interacted`. Files and Calls match on the contact's `Contacts` property and, for
+files, attachments of emails with its address. Tasks created from a contact also
+reference its company. The side panel keeps Sharing (admins only).
 
 Company and contact pages have a **Discussion** section built from the same
 message conversation as a document's Discussion: threaded replies, reactions,

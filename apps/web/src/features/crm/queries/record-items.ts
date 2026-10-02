@@ -13,16 +13,6 @@ export function crmRecordPropertyId(scope: CrmRecordScope): string {
     .exhaustive();
 }
 
-/** The entity type of a reference to this kind of record. */
-export function crmRecordReferenceType(
-  scope: CrmRecordScope
-): 'COMPANY' | 'CONTACT' {
-  return match(scope.type)
-    .with('company', () => 'COMPANY' as const)
-    .with('contact', () => 'CONTACT' as const)
-    .exhaustive();
-}
-
 type AstNode = Record<string, unknown>;
 
 const leaf = (literal: AstNode): AstNode => ({ l: literal });

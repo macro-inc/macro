@@ -1,7 +1,7 @@
 /** A CRM record whose associated files, tasks and calls a record tab lists. */
 export type CrmRecordScope =
   | { type: 'company'; id: string; domains: string[] }
-  | { type: 'contact'; id: string; email: string };
+  | { type: 'contact'; id: string; email: string; companyId: string };
 
 /**
  * Whether two scopes describe the same record. Record views keep their
@@ -16,7 +16,7 @@ export function sameRecordScope(
     return a.id === b.id && a.domains.join('\n') === b.domains.join('\n');
   }
   if (a.type === 'contact' && b.type === 'contact') {
-    return a.id === b.id && a.email === b.email;
+    return a.id === b.id && a.email === b.email && a.companyId === b.companyId;
   }
   return false;
 }
