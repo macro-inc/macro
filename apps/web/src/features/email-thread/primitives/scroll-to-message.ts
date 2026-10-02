@@ -152,13 +152,17 @@ export function revealDelta(
 ): number {
   const port = scrollportRect(container);
   const elementBox = element.getBoundingClientRect();
-  if (elementBox.height >= port.height) {
+  const topInset = scrollPaddingInset(container, 'top');
+  const bottomInset = scrollPaddingInset(container, 'bottom');
+  // "Fits" and "is off screen" are judged against the area the floating
+  // chrome leaves visible, not the raw scrollport.
+  if (elementBox.height >= port.height - topInset - bottomInset) {
     return alignmentDelta(container, element, 'start');
   }
-  if (elementBox.top < port.top) {
+  if (elementBox.top < port.top + topInset) {
     return alignmentDelta(container, element, 'start');
   }
-  if (elementBox.bottom > port.bottom) {
+  if (elementBox.bottom > port.bottom - bottomInset) {
     return alignmentDelta(container, element, 'end');
   }
   return 0;
