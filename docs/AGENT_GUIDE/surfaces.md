@@ -294,6 +294,11 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
 
+Document previews opened from Home expose **Share** and **Copy Share Link** before
+the details toggle, including tasks, snippets, skills, canvases, PDFs, images,
+code, and videos. Share uses the selected item's permissions and updates when
+switching items; copied links point to the entity rather than the Home feed.
+
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
 surface: a muted dark fill or a white light-mode surface with a soft shadow,
