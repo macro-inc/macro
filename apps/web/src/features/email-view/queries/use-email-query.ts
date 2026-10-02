@@ -151,7 +151,7 @@ export function useEmailDataSource(
     enabled: sourceEnabled(),
   }));
   const isListPending = () =>
-    !filtersReady() || query.isLoading || query.isPlaceholderData;
+    !filtersReady() || query.isPending || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
@@ -181,8 +181,10 @@ export function useEmailDataSource(
   });
 
   const rawEntities = createMemo<EntityData[]>(() => {
-    // Disabled searches can retain placeholder data for the previous facets.
-    if (!filtersReady()) return [];
+    // Scheduled/Reminders disable native discovery. Reading its pending data
+    // would suspend the whole split even though that query is not fetching.
+    // Disabled searches can also retain previous-facet placeholder data.
+    if (!sourceEnabled() || !filtersReady()) return [];
 
     if (!search.isSearching()) {
       // Previous-tab/inbox rows are not valid results for the new query.
