@@ -3670,6 +3670,10 @@ export type CreateDatabaseRequest = {
      * Display name.
      */
     name: string;
+    /**
+     * The template that builds the database; left out, it starts blank.
+     */
+    template?: DatabaseTemplateId;
 };
 
 export type CreateDocumentRequest = {
@@ -4651,6 +4655,38 @@ export type DatabaseOp = {
      */
     order: Array<string>;
 };
+
+/**
+ * What a template builds into a new database.
+ */
+export type DatabaseTemplate = {
+    /**
+     * What it is for, in a sentence.
+     */
+    description: string;
+    /**
+     * Its icon.
+     */
+    icon: DatabaseTemplateIcon;
+    /**
+     * Its stable slug.
+     */
+    id: DatabaseTemplateId;
+    /**
+     * Its name, which a database made from it takes by default.
+     */
+    name: string;
+};
+
+/**
+ * The icon a template is shown with.
+ */
+export type DatabaseTemplateIcon = 'sparkle' | 'kanban' | 'handshake' | 'confetti' | 'calendar' | 'books';
+
+/**
+ * Which template, by its stable slug.
+ */
+export type DatabaseTemplateId = 'getting_started' | 'project_tracker' | 'crm' | 'event_planner' | 'content_calendar' | 'reading_list';
 
 /**
  * A view of one table, as stored.
@@ -16214,6 +16250,28 @@ export type EnsureStarterHandlerResponses = {
 };
 
 export type EnsureStarterHandlerResponse = EnsureStarterHandlerResponses[keyof EnsureStarterHandlerResponses];
+
+export type ListDatabaseTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/databases/templates';
+};
+
+export type ListDatabaseTemplatesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+};
+
+export type ListDatabaseTemplatesError = ListDatabaseTemplatesErrors[keyof ListDatabaseTemplatesErrors];
+
+export type ListDatabaseTemplatesResponses = {
+    200: Array<DatabaseTemplate>;
+};
+
+export type ListDatabaseTemplatesResponse = ListDatabaseTemplatesResponses[keyof ListDatabaseTemplatesResponses];
 
 export type GetDatabaseData = {
     body?: never;

@@ -1109,3 +1109,57 @@ describe('Database', () => {
     ]);
   });
 });
+
+describe('database templates', () => {
+  test('creates a database from a template and lists the templates', async () => {
+    const requests: { method: string; path: string; body: unknown }[] = [];
+    intercept(async (request) => {
+      const path = new URL(request.url).pathname;
+      requests.push({
+        method: request.method,
+        path,
+        body: request.method === 'POST' ? await request.json() : undefined,
+      });
+      if (path === '/databases/templates')
+        return Response.json([
+          {
+            id: 'project_tracker',
+            name: 'Project tracker',
+            description:
+              'Tasks with a status, an owner, a due date and a priority, on a board by status.',
+            icon: 'kanban',
+          },
+        ]);
+      return Response.json(support.database, { status: 201 });
+    });
+    const macro = client();
+
+    const templates = await macro.databases.templates();
+    const database = await macro.databases.create({
+      name: 'Launch',
+      template: 'project_tracker',
+    });
+    const blank = await macro.databases.create({ name: 'Blank' });
+
+    expect(templates).toEqual([
+      {
+        id: 'project_tracker',
+        name: 'Project tracker',
+        description:
+          'Tasks with a status, an owner, a due date and a priority, on a board by status.',
+        icon: 'kanban',
+      },
+    ]);
+    expect(database.id).toBe(databaseId);
+    expect(blank.id).toBe(databaseId);
+    expect(requests).toEqual([
+      { method: 'GET', path: '/databases/templates', body: undefined },
+      {
+        method: 'POST',
+        path: '/databases',
+        body: { name: 'Launch', template: 'project_tracker' },
+      },
+      { method: 'POST', path: '/databases', body: { name: 'Blank' } },
+    ]);
+  });
+});
