@@ -1018,7 +1018,9 @@ After a harness server crashes and its lease expires, the session stops showing
 Working and becomes disconnected without requiring a new message. Its transcript
 is preserved; recovery does not replay the prompt or retry tool calls. Open chats
 refresh the durable history while preserving live events arriving during the read,
-so a session that has already resumed stays active.
+so a session that has already resumed stays active. Verify that a transient history
+read failure retries automatically while live messages continue, and that closing
+the chat cancels pending retries.
 
 When a session reconnects using ACP load, the last committed conversation stays
 visible while history is reconstructed. A successful load replaces the transcript

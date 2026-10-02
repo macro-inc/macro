@@ -397,6 +397,87 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it.each(['result', 'transport'])(
+    'retries a failed refresh without blocking live frames (%s)',
+    async (failure) => {
+      vi.useFakeTimers();
+      const live = AgentSession.acquire(SESSION);
+      try {
+        await live.load();
+        if (failure === 'result')
+          harness.getLog.mockResolvedValueOnce(err([{ code: 'INTERNAL' }]));
+        else harness.getLog.mockRejectedValueOnce(new Error('network down'));
+        harness.getLog.mockResolvedValueOnce(logOf([row(1), row(2), row(3)]));
+        invalidate();
+        await vi.advanceTimersByTimeAsync(0);
+        AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+        await live.snapshot();
+        expect(inputs().at(-1)).toEqual({ kind: 'confirmed', row: row(2) });
+        expect(harness.getLog).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(inputs().at(-1)).toEqual({
+          kind: 'snapshot',
+          rows: [row(1), row(2), row(3)],
+        });
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(harness.getLog).toHaveBeenCalledTimes(3);
+      } finally {
+        live.release();
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it('bounds failed refresh retries and gives a new invalidation a fresh budget', async () => {
+    vi.useFakeTimers();
+    const live = AgentSession.acquire(SESSION);
+    try {
+      await live.load();
+      harness.getLog.mockResolvedValue(err([{ code: 'INTERNAL' }]));
+      invalidate();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(harness.getLog).toHaveBeenCalledTimes(5);
+      invalidate();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(harness.getLog).toHaveBeenCalledTimes(9);
+    } finally {
+      live.release();
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a scheduled refresh retry when the last view releases it', async () => {
+    vi.useFakeTimers();
+    const live = AgentSession.acquire(SESSION);
+    try {
+      await live.load();
+      harness.getLog.mockResolvedValue(err([{ code: 'INTERNAL' }]));
+      invalidate();
+      await vi.advanceTimersByTimeAsync(0);
+      live.release();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(harness.getLog).toHaveBeenCalledTimes(2);
+    } finally {
+      if (AgentSession.get(SESSION)) live.release();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry an access-denied refresh', async () => {
+    vi.useFakeTimers();
+    const live = AgentSession.acquire(SESSION);
+    try {
+      await live.load();
+      harness.getLog.mockResolvedValue(err([{ code: 'FORBIDDEN' }]));
+      invalidate();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(harness.getLog).toHaveBeenCalledTimes(2);
+    } finally {
+      live.release();
+      vi.useRealTimers();
+    }
+  });
+
   it.each([false, true])(
     'retains optimistic actions during refresh (replacement ID=%s)',
     async (replacement) => {
