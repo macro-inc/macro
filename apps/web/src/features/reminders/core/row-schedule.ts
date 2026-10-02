@@ -12,7 +12,13 @@ export function reminderScheduleState(
 ): 'scheduled' | 'due' | 'paused' | 'completed' {
   if (reminder.completedAt && reminder.scheduleType === 'once')
     return 'completed';
-  if (!reminder.completedAt && new Date(reminder.nextRunAt).getTime() <= now)
+  // Fired one-shots are disabled but remain due until acknowledged. A disabled
+  // recurring series is paused instead, even when its stored occurrence is past.
+  if (
+    !reminder.completedAt &&
+    (reminder.enabled || reminder.scheduleType === 'once') &&
+    new Date(reminder.nextRunAt).getTime() <= now
+  )
     return 'due';
   if (!reminder.enabled) return reminder.completedAt ? 'completed' : 'paused';
   return new Date(reminder.nextRunAt).getTime() > now ? 'scheduled' : 'due';
