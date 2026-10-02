@@ -30,3 +30,8 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+aws-sdk-s3 = { workspace = true }
+reqwest = { workspace = true }
+sha2 = { workspace = true }
