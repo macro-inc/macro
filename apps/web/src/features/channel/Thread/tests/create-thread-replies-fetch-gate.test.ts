@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createThreadRepliesFetchGate,
@@ -52,12 +52,30 @@ describe('createThreadRepliesFetchGate', () => {
     expect(fixture.enabled()).toBe(false);
   });
 
-  it('also debounces expansion and non-find-bar reply navigation', async () => {
-    const expanded = createFixture({ isExpanded: true });
-    await flushEffects();
-    expect(expanded.enabled()).toBe(false);
+  it('enables immediately when the thread is expanded', async () => {
+    const [isExpanded, setIsExpanded] = createSignal(false);
+    let enabled!: () => boolean;
 
-    dispose();
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      enabled = createThreadRepliesFetchGate({
+        threadId: () => 'thread-1',
+        isExpanded,
+        isFindBarOpen: () => false,
+        targetThreadId: () => undefined,
+        targetReplyId: () => undefined,
+      });
+    });
+
+    await flushEffects();
+    expect(enabled()).toBe(false);
+
+    setIsExpanded(true);
+    await flushEffects();
+    expect(enabled()).toBe(true);
+  });
+
+  it('debounces non-find-bar reply navigation', async () => {
     const targeted = createFixture({
       targetThreadId: 'thread-1',
       targetReplyId: 'reply-1',
@@ -69,7 +87,7 @@ describe('createThreadRepliesFetchGate', () => {
     expect(targeted.enabled()).toBe(true);
   });
 
-  it('enables only the Cmd+F targeted reply immediately', async () => {
+  it('enables Cmd+F targeted replies and expansion immediately', async () => {
     const targeted = createFixture({
       isFindBarOpen: true,
       targetThreadId: 'thread-1',
@@ -84,11 +102,14 @@ describe('createThreadRepliesFetchGate', () => {
       isExpanded: true,
     });
     await flushEffects();
-    expect(expanded.enabled()).toBe(false);
+    expect(expanded.enabled()).toBe(true);
   });
 
-  it('cancels the pending fetch when a transient thread unmounts', async () => {
-    const fixture = createFixture({ isExpanded: true });
+  it('cancels the pending navigation fetch when a transient thread unmounts', async () => {
+    const fixture = createFixture({
+      targetThreadId: 'thread-1',
+      targetReplyId: 'reply-1',
+    });
     await flushEffects();
     vi.advanceTimersByTime(THREAD_REPLIES_FETCH_DEBOUNCE_MS - 1);
 

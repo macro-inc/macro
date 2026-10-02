@@ -4,8 +4,12 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
+import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
-import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
+import {
+  threadRepliesQueryOptions,
+  useThreadRepliesQuery,
+} from '@queries/messages/thread-replies';
 import type { Message as EntityMessage } from '@service-storage/messages';
 import {
   createEffect,
@@ -429,6 +433,14 @@ export function ChannelThread(props: ThreadProps) {
                           collapsedRepliesCount={collapsedRepliesCount()}
                           participants={collapsedReplyUsers()}
                           latestReplyAt={collapsedLatestReplyAt()}
+                          onPointerEnter={() => {
+                            void queryClient.prefetchQuery(
+                              threadRepliesQueryOptions(
+                                props.parent(),
+                                props.data().id
+                              )
+                            );
+                          }}
                           onClick={() => props.setIsExpanded(true)}
                           hasNewMessages={collapsedRepliesContainsNewMessages()}
                         />

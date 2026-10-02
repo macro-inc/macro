@@ -13,9 +13,9 @@ type CreateThreadRepliesFetchGateOptions = {
 
 /**
  * Collapsed threads use their timeline preview without fetching full replies.
- * Delays explicit expansion/navigation fetches while transient rows unmount.
- * Cmd+F navigation is the only immediate path because it needs the targeted
- * reply list before it can position the active search result.
+ * Debounces reply-target navigation while transient virtualized rows unmount.
+ * Explicit expansion and Cmd+F targeting enable immediately — those are user
+ * intent, not transient mounts.
  */
 export function createThreadRepliesFetchGate(
   options: CreateThreadRepliesFetchGateOptions
@@ -30,5 +30,7 @@ export function createThreadRepliesFetchGate(
   );
 
   return () =>
-    (options.isFindBarOpen() && isTargetedReply()) || debouncedFetchReplies();
+    options.isExpanded() ||
+    (options.isFindBarOpen() && isTargetedReply()) ||
+    debouncedFetchReplies();
 }
