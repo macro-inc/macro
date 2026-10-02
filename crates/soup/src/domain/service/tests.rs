@@ -2931,6 +2931,17 @@ struct RecordingRemindersService {
 }
 
 impl RemindersService for RecordingRemindersService {
+    async fn list_collection(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _query: reminders::domain::collection::CollectionQuery,
+    ) -> Result<reminders::domain::collection::ReminderCollectionPage, ReminderError> {
+        Ok(reminders::domain::collection::ReminderCollectionPage {
+            items: vec![],
+            next_cursor: None,
+        })
+    }
+
     async fn create_reminder(
         &self,
         _user_id: &MacroUserIdStr<'_>,

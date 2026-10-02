@@ -101,14 +101,29 @@ other entity partitions, and notified-at sorting still use the network path.
 
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting
-for the server. Lists that show done items, such as Email All, keep the row. Undo
-or a failed write brings the row back, and so does a new active notification on the
-entity. To verify, mark a row done and watch it for a few seconds. It must not
-reappear once the server reply lands, and it must stay gone after a reload.
+for the server. Email All keeps the row and flips its done indicator immediately.
+Undo restores a previously admitted row even after the cache has removed it,
+without waiting for the reversal's server reply; changing filters/sort clears
+those view-local restoration snapshots. Home's separate recent-activity inclusion
+rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
+and grouped rows/counts. A failure must roll back only its own local intent.
+Newer in-scope activity can re-admit a row, but loading an older notification or
+activity in a separate channel thread must not. Redo targets the original exact
+notification IDs, not notifications received since the original action. A newer
+Done must win over an older retained overlay. Delay reconciliation past a minute:
+pending/stale state must not simply expire and resurrect the row. Once committed,
+mounted cache readers must acknowledge the intent before its overlay is released.
+GraphQL display intents are scoped to the authenticated viewer and login session.
+Login/logout retires old buckets; even same-account native reauthentication must
+not let old overlay Undo/Redo handles or a late refresh republish old intent.
+Verify account changes with overlapping entity IDs and a pending/failed refresh.
+After a successful Done, verify that the row stays gone after a reload.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding
 every visible row. To verify, watch the row nodes with a `MutationObserver` while
-editing: only moved or removed rows should be added or removed.
+editing: only moved or removed rows should be added or removed. Rename a row and
+then drag it: its drag label/payload must use the new fields without another
+registration/layout measurement.
 
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
@@ -426,6 +441,16 @@ show the previous email. A failed load must still show its error and Retry actio
 reconciling an already-open offline draft must preserve its composer and text.
 If local cache initialization fails, ordinary server threads must still load
 through the session's uncached GraphQL client, including the thread being opened.
+In that fallback, leave a thread open and mark it Done/Not Done from its list:
+only the matching open thread refreshes through GraphQL after the committed archive
+mutation, including its loaded message pages. Mark Seen/Unread and generic Soup
+refreshes must not refetch open threads. Disabled/unmounted readers must not refetch.
+Also delay cache initialization failure until after the first identity lookup fails:
+an uncertain server route must then load and participate in archive refreshes,
+while a positively identified unsynced local draft must never be sent to the server.
+Keep already-resolved server aliases through that fallback. With the normalized
+cache active, the shared email record updates the thread without an extra network
+refresh. Neither path relies on REST thread-cache invalidation.
 
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or
@@ -477,7 +502,23 @@ skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
 Check Signal/Noise removal and All's done indicator, then Undo/Redo, including an
-offline action followed by reconnect. Sent-only threads cannot be unarchived.
+offline action followed by reconnect. Also wait for provider/metadata synchronization
+before Undo, and repeat after reloading: an archived received thread can lose its
+inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
+unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
+With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
+sent-only/draft thread stays done, while successful and durably queued siblings
+remain restored. Only accepted
+threads get their notifications restored. Notification or list-refresh failures
+warn without rolling back accepted unarchives. Verify mixed committed/queued/
+rejected selections, partial-success counts, and that a queued sibling prevents
+shared-list refetch even when notification restoration fails. GraphQL reversals
+rely on normalized writes and their durable revalidation, not an extra REST Soup
+refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+Mark Not Done remains available for an archived thread whose inbox timestamp is
+missing; the server decides whether its received-message history allows restoration.
+The REST path retains its timestamp preflight, whole-batch handling, notification
+ordering, and existing cache reconciliation.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary
@@ -1953,6 +1994,11 @@ has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
 
 ### Email reminders
+
+The global Reminders workspace uses one continuous collection with completion
+and schedule shown independently on the existing entity rows. Its persistent
+clock exposes the full schedule on hover/focus and opens the existing editor;
+see [collection verification](reminders.md#one-collection-independent-completion-and-schedule).
 
 Use **H** on one selected email or its open conversation, **Remind me** in the
 menu, or the header bell. These share the email-specific, time-first workflow

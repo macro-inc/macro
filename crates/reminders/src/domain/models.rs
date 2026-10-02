@@ -247,7 +247,9 @@ impl Reminder {
 ///
 /// Only documents populate these; every other entity type is identified by its
 /// [`EntityType`] alone.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct ReminderReference {
     /// The referenced document's file type, e.g. `md` or `pdf`.
     pub file_type: Option<String>,

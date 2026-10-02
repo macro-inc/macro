@@ -440,8 +440,10 @@ export type ReminderEntity = EntityBase & {
   nextRunAt: DateValue;
   /** When false, the dispatcher skips this reminder. */
   enabled: boolean;
-  /** Set once a one-shot reminder has fired. */
+  /** When the owner acknowledged the occurrence; recurring schedules can remain enabled. */
   completedAt?: DateValue | null;
+  /** Owning email workflow; these mirrors must be rescheduled through Remind me. */
+  emailFollowup?: import('@service-storage/generated/schemas/emailFollowup').EmailFollowup;
 };
 
 /** Normalized time shape of a calendar event soup row. */

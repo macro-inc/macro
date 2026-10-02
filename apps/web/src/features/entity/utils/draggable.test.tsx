@@ -5,6 +5,7 @@ import {
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
 import { type Accessor, createSignal, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelEntity } from '../types/entity';
 import { createEntityDraggable } from './draggable';
@@ -21,12 +22,15 @@ const entity: ChannelEntity = {
   ownerId: 'owner',
 };
 
-function setup(deferUntilInteraction?: Accessor<boolean>) {
+function setup(
+  deferUntilInteraction?: Accessor<boolean>,
+  rowEntity: ChannelEntity = entity
+) {
   let state!: NonNullable<ReturnType<typeof useDragDropContext>>[0];
   let removeRow!: () => void;
   function Row() {
     const draggable = createEntityDraggable({
-      entity,
+      entity: rowEntity,
       splitId: 'split',
       deferUntilInteraction,
     });
@@ -73,6 +77,31 @@ describe('createEntityDraggable', () => {
       const { state } = setup(deferred);
       expect(state.draggables['row-split']).toBeDefined();
       expect(rect).toHaveBeenCalled();
+    }
+  );
+
+  it.each([false, true])(
+    'keeps drag data current without another layout read (deferred=%s)',
+    (deferred) => {
+      const [row, setRow] = createStore({ ...entity });
+      const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+      const { state, getByTestId } = setup(() => deferred, row);
+      if (deferred) {
+        fireEvent.mouseDown(getByTestId('child'), { button: 0 });
+        fireEvent.mouseUp(document, { button: 0 });
+      }
+      const data = state.draggables['row-split']!.data;
+      rect.mockClear();
+
+      setRow({ name: 'Renamed channel', channelType: 'public' });
+      expect(data.name).toBe('Renamed channel');
+      expect(data.channelType).toBe('public');
+      expect(data.dragType).toBe('entity');
+      expect(data.splitId).toBe('split');
+      expect(state.draggables['row-split']!.data).toBe(data);
+      expect(rect).not.toHaveBeenCalled();
+      // Registering the merged payload must not add DnD fields to the query store.
+      expect('dragType' in row).toBe(false);
     }
   );
 

@@ -22,6 +22,8 @@ type TooltipProps = ParentProps<{
   /** Allows non-interactive tooltip targets, such as disabled actions, to receive keyboard focus. */
   tabIndex?: number;
   disabled?: boolean;
+  /** Override visibility, for example while a nested control has keyboard focus. */
+  open?: boolean;
 }>;
 
 export type TooltipClassOptions = {
@@ -45,6 +47,7 @@ export function tooltipClasses(options: TooltipClassOptions = {}): string {
 export function Tooltip(props: TooltipProps) {
   const [triggerRef, setTriggerRef] = createSignal<HTMLElement>();
   const [open, setOpen] = createSignal(false);
+  const isOpen = () => props.open ?? open();
 
   if (import.meta.env.MODE === 'test') {
     return <>{props.children}</>;
@@ -106,7 +109,7 @@ export function Tooltip(props: TooltipProps) {
   );
 
   onCleanup(() => setOpen(false));
-  const visible = () => open() && !props.disabled && tooltipsEnabled();
+  const visible = () => isOpen() && !props.disabled && tooltipsEnabled();
 
   return (
     <KobalteTooltip

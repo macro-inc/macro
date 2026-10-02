@@ -14160,6 +14160,86 @@
         }
       }
     },
+    "/reminders/collection": {
+      "get": {
+        "tags": ["reminders"],
+        "summary": "Native reminder rows, ordered and paginated by the owning domain.",
+        "operationId": "list_reminder_collection",
+        "parameters": [
+          {
+            "name": "completed",
+            "in": "query",
+            "description": "Omit to include both done and not-done occurrences.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, bounded to 1–500.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Position returned by the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderCollectionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/reminders/email/{thread_id}": {
       "get": {
         "tags": ["reminders"],
@@ -29990,6 +30070,57 @@
           }
         }
       },
+      "ReminderCollectionPage": {
+        "type": "object",
+        "description": "One continuous collection, including completed recurring reminders that still fire.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReminderCollectionRow"
+            },
+            "description": "Rows in server order."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Absent only on the final page."
+          }
+        }
+      },
+      "ReminderCollectionRow": {
+        "type": "object",
+        "description": "A native reminder row with its source and workflow capabilities resolved in bulk.",
+        "required": ["reminder"],
+        "properties": {
+          "emailFollowup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailFollowup",
+                "description": "Present only for an email-follow-up mirror, never inferred from its target type."
+              }
+            ]
+          },
+          "reference": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReminderReference",
+                "description": "Document display metadata, if applicable."
+              }
+            ]
+          },
+          "reminder": {
+            "$ref": "#/components/schemas/Reminder",
+            "description": "The caller's private reminder."
+          }
+        }
+      },
       "ReminderFilters": {
         "type": "object",
         "description": "Filters for reminders.",
@@ -30019,6 +30150,20 @@
           "include": {
             "type": "boolean",
             "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
+      },
+      "ReminderReference": {
+        "type": "object",
+        "description": "Display details of the entity a reminder is about, resolved alongside the\nreminder itself.\n\nA reminder has no block of its own — it opens, and is iconed as, whatever it\nreferences. Which block that is depends on the referenced document's file\ntype, so resolving it client-side would mean a second fetch per row against\na synchronous icon path. Reading it here keeps Soup to one round trip.\n\nOnly documents populate these; every other entity type is identified by its\n[`EntityType`] alone.",
+        "properties": {
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The referenced document's file type, e.g. `md` or `pdf`."
+          },
+          "subType": {
+            "type": ["string", "null"],
+            "description": "The referenced document's sub type, e.g. `task` or `snippet`."
           }
         }
       },
@@ -33194,7 +33339,7 @@
               "completedAt": {
                 "type": ["string", "null"],
                 "format": "date-time",
-                "description": "Set once a one-shot reminder has fired."
+                "description": "When the owner acknowledged the occurrence; independent of future scheduling."
               },
               "createdAt": {
                 "type": "string",

@@ -81,6 +81,7 @@ export function WideLayout(props: LayoutProps) {
         // content isn't indented by an empty gutter.
         // A scheduled send's badge is wider than a date, so it sizes its column.
         props.actions ||
+          props.scheduleStatus ||
           (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
           ? props.hideCheckbox
             ? 'grid-cols-[1fr_auto_auto]'
@@ -309,8 +310,9 @@ export function WideLayout(props: LayoutProps) {
       </Entity.Slot>
       <Entity.Slot
         placement="timestamp"
-        class="text-xs text-right text-ink-extra-muted font-medium"
+        class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-medium"
       >
+        {props.scheduleStatus}
         <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
           <Show
             when={

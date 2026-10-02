@@ -65,15 +65,10 @@ import {
 } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlSoupInput } from './ast';
+import { createGraphqlSoupDoneProjection } from './done-projection';
 import { isCachedMailView, materializeMailView } from './mail-view';
-import {
-  usePendingGraphqlSoupDeleteIds,
-  withoutPendingGraphqlSoupDeletes,
-} from './optimistic-deletions';
-import {
-  usePendingGraphqlSoupDone,
-  withPendingDoneIds,
-} from './optimistic-done';
+import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDone } from './optimistic-done';
 import {
   materializeReconciledSoup,
   soupItemKey,
@@ -132,6 +127,7 @@ export function createGraphqlSoupAstItemsQuery(
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const pendingDone = usePendingGraphqlSoupDone();
+  const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
@@ -855,18 +851,15 @@ export function createGraphqlSoupAstItemsQuery(
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
     data: createMemo(() => {
       const data = displayData();
-      return withoutPendingGraphqlSoupDeletes(
+      return projectDone(
+        JSON.stringify([firstPageInput(), cacheGeneration]),
         data && {
           ...data,
           oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
         },
-        excludesDone()
-          ? withPendingDoneIds(
-              pendingDeleteIds(),
-              data?.entities ?? [],
-              pendingDone()
-            )
-          : pendingDeleteIds()
+        pendingDone(),
+        excludesDone(),
+        pendingDeleteIds()
       );
     }),
     error,

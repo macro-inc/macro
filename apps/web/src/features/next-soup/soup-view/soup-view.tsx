@@ -119,6 +119,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
 import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
@@ -304,7 +305,10 @@ export const SoupView = (props: SoupViewProps) => {
         : undefined;
       let initialActiveTab = persistedActiveTab ?? persistedViewActiveTab;
 
-      if (initialActiveTab === undefined && isListViewID(contentId)) {
+      if (
+        (initialActiveTab === undefined || contentId === 'reminders') &&
+        isListViewID(contentId)
+      ) {
         initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
       }
 
@@ -804,6 +808,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const markDoneAction = makeMarkDoneAction({
     userId,
+    notificationSource: () => notificationSource,
+  });
+  const markNotDoneAction = makeMarkNotDoneAction({
     notificationSource: () => notificationSource,
   });
 
@@ -1378,6 +1385,24 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         source.deferRowInteractions?.() === true
                                       }
                                       entity={row.original}
+                                      onToggleReminderDone={
+                                        row.original.type === 'reminder'
+                                          ? async () => {
+                                              if (
+                                                row.original.type !== 'reminder'
+                                              )
+                                                return;
+                                              if (row.original.completedAt)
+                                                await markNotDoneAction.execute(
+                                                  [row.original]
+                                                );
+                                              else
+                                                await markDoneAction.execute([
+                                                  row.original,
+                                                ]);
+                                            }
+                                          : undefined
+                                      }
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {

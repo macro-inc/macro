@@ -41,18 +41,13 @@ import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
+import { createGraphqlSoupDoneProjection } from './done-projection';
 import {
   createGraphqlSoupAstItemsQuery,
   type GraphqlSoupAstItemsQuery,
 } from './items';
-import {
-  usePendingGraphqlSoupDeleteIds,
-  withoutPendingGraphqlSoupDeletes,
-} from './optimistic-deletions';
-import {
-  usePendingGraphqlSoupDone,
-  withPendingDoneIds,
-} from './optimistic-done';
+import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDone } from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -113,6 +108,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const pendingDone = usePendingGraphqlSoupDone();
+  const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
   const [now, setNow] = createSignal(new Date());
   const dateTimer = setInterval(() => setNow(new Date()), 60_000);
@@ -171,7 +167,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const query = createUrqlQuery<
     GroupSoupQuery,
     GroupSoupQueryVariables,
-    SoupAstItemsData
+    { viewerId: string; data: SoupAstItemsData }
   >(() => {
     const queryOptions = options();
     const groupBy = args().groupBy;
@@ -201,12 +197,14 @@ export function createGraphqlGroupedSoupAstItemsQuery(
           version
         );
       },
-      select: (data: GroupSoupQuery) =>
-        mapGraphqlGroupedSoupData(data, groupBy!, {
+      select: (data: GroupSoupQuery) => ({
+        viewerId: data.user.id,
+        data: mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,
           showSupportedForeignEntities:
             queryOptions.showSupportedForeignEntities,
         }),
+      }),
     };
 
     if (!queryOptions.enabled || !groupBy || queryInput === undefined) {
@@ -219,6 +217,13 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       enabled: true,
     };
   });
+
+  // Missing data during a refetch does not itself switch identities. A new
+  // viewer's first response still invalidates every old restoration snapshot.
+  const viewerId = createMemo<string | undefined>(
+    (previous) => query.data?.viewerId ?? previous,
+    undefined
+  );
 
   onCleanup(
     registerGraphqlSoupRevalidations(() => {
@@ -257,19 +262,15 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   return {
-    data: () => {
-      const data = cachedMail() ?? query.data;
-      return withoutPendingGraphqlSoupDeletes(
-        data,
-        excludesDone()
-          ? withPendingDoneIds(
-              pendingDeleteIds(),
-              data?.entities ?? [],
-              pendingDone()
-            )
-          : pendingDeleteIds()
-      );
-    },
+    data: createMemo(() =>
+      projectDone(
+        JSON.stringify([input(), viewerId()]),
+        cachedMail() ?? query.data?.data,
+        pendingDone(),
+        excludesDone(),
+        pendingDeleteIds()
+      )
+    ),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,

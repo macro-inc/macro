@@ -121,6 +121,7 @@ import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
+import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
@@ -135,6 +136,7 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
 import type { Reminder } from './generated/schemas/reminder';
+import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
 import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
@@ -2413,6 +2415,18 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async listCollection(params: ListReminderCollectionParams) {
+      const query = new URLSearchParams();
+      if (params.completed !== undefined)
+        query.set('completed', String(params.completed));
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.cursor) query.set('cursor', params.cursor);
+      return await dssFetch<ReminderCollectionPage>(
+        `/reminders/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+
     async getEmailFollowup(threadId: string) {
       return (
         await dssFetch<{ followup: EmailFollowup | null }>(

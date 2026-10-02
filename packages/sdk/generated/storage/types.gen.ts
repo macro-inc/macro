@@ -9007,6 +9007,32 @@ export type Reminder = {
 };
 
 /**
+ * One continuous collection, including completed recurring reminders that still fire.
+ */
+export type ReminderCollectionPage = {
+    /**
+     * Rows in server order.
+     */
+    items: Array<ReminderCollectionRow>;
+    /**
+     * Absent only on the final page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * A native reminder row with its source and workflow capabilities resolved in bulk.
+ */
+export type ReminderCollectionRow = {
+    emailFollowup?: null | EmailFollowup;
+    reference?: null | ReminderReference;
+    /**
+     * The caller's private reminder.
+     */
+    reminder: Reminder;
+};
+
+/**
  * Filters for reminders.
  */
 export type ReminderFilters = {
@@ -9038,6 +9064,29 @@ export type ReminderFilters = {
      * specific `ids` or `entities` also opts in.
      */
     include?: boolean;
+};
+
+/**
+ * Display details of the entity a reminder is about, resolved alongside the
+ * reminder itself.
+ *
+ * A reminder has no block of its own — it opens, and is iconed as, whatever it
+ * references. Which block that is depends on the referenced document's file
+ * type, so resolving it client-side would mean a second fetch per row against
+ * a synchronous icon path. Reading it here keeps Soup to one round trip.
+ *
+ * Only documents populate these; every other entity type is identified by its
+ * [`EntityType`] alone.
+ */
+export type ReminderReference = {
+    /**
+     * The referenced document's file type, e.g. `md` or `pdf`.
+     */
+    fileType?: string | null;
+    /**
+     * The referenced document's sub type, e.g. `task` or `snippet`.
+     */
+    subType?: string | null;
 };
 
 /**
@@ -11121,7 +11170,7 @@ export type SoupReminderSoupPropertiesField = {
     properties: Array<SoupProperty>;
 } & {
     /**
-     * Set once a one-shot reminder has fired.
+     * When the owner acknowledged the occurrence; independent of future scheduling.
      */
     completedAt?: string | null;
     /**
@@ -18469,6 +18518,40 @@ export type CreateReminderResponses = {
 };
 
 export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+
+export type ListReminderCollectionData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Omit to include both done and not-done occurrences.
+         */
+        completed?: boolean;
+        /**
+         * Page size, bounded to 1–500.
+         */
+        limit?: number;
+        /**
+         * Position returned by the previous page.
+         */
+        cursor?: string;
+    };
+    url: '/reminders/collection';
+};
+
+export type ListReminderCollectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListReminderCollectionError = ListReminderCollectionErrors[keyof ListReminderCollectionErrors];
+
+export type ListReminderCollectionResponses = {
+    200: ReminderCollectionPage;
+};
+
+export type ListReminderCollectionResponse = ListReminderCollectionResponses[keyof ListReminderCollectionResponses];
 
 export type GetEmailFollowupData = {
     body?: never;
