@@ -2063,6 +2063,14 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
+Codex, macrod, in-memory) alongside connected apps, through the same session
+egress path: the sandbox sees the server under its name and a URL key, never the
+server's address or token. A disabled server is not offered. If a server's
+connection has expired, its tool calls return a message telling the agent to
+have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
+custom servers. Agents configured with a fixed app selection do not receive the
+owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
 featured or offered in the Connections catalog. Personal Gmail and GitHub account
