@@ -104,6 +104,14 @@ export const MAX_RECONCILIATION_BASELINE = 5_000;
 
 /** Initial-page candidates, optionally reconciled with same-query server pages. */
 export type EntityFilterCacheArgs = {
+  /** Opt into an engine-maintained fragment view and incremental results. */
+  liveQuery?: {
+    id: string;
+    document: string;
+    fragmentName: string;
+    since?: CacheRevision;
+    release?: boolean;
+  };
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
   sortDirection: 'ASC' | 'DESC';
@@ -115,6 +123,7 @@ export type EntityFilterCacheArgs = {
 };
 
 export type EntityFilterCacheResult =
+  | LiveQueryUpdate
   | {
       kind: 'mail-page';
       revision: CacheRevision;
@@ -141,6 +150,23 @@ export type EntityFilterCacheResult =
     }
   | { kind: 'unsupported' }
   | { kind: 'incomplete'; revision: CacheRevision };
+
+export type LiveQueryUpdate = {
+  kind: 'live-query';
+  revision: CacheRevision;
+  reset: boolean;
+  /** Omitted when the existing order remains valid. */
+  keys?: string[];
+  upserts: SelectedRecordByKeyWire[];
+  patches: Array<{
+    recordKey: string;
+    fields: Array<{ path: Array<string | number>; value: unknown }>;
+    identity: { mutationUuid: string | null; pending: boolean };
+  }>;
+  removed: string[];
+  retainedKeys: string[];
+  optimistic: boolean;
+};
 
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */

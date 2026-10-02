@@ -30,7 +30,7 @@ pub enum DocumentError {
 
 /// Argument value: constant JSON or a variable reference resolved at
 /// read/write time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArgValue {
     Const(Json),
     Variable(String),
@@ -38,7 +38,7 @@ pub enum ArgValue {
     Object(Vec<(String, ArgValue)>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldNode {
     /// Response key (alias if present, else name).
     pub response_key: String,
@@ -50,7 +50,7 @@ pub struct FieldNode {
     pub selection_set: Vec<Selection>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selection {
     Field(FieldNode),
     /// Inline fragment or named-fragment spread, already flattened to a type

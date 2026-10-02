@@ -94,5 +94,45 @@ fn record_change(
     }
 }
 
+/// Capture a partial merge without cloning the existing record or its lists.
+pub(crate) fn from_update(
+    key: &EntityKey<'static>,
+    before: &Record,
+    update: &Record,
+) -> Option<RecordFieldChange> {
+    let mut fields = BTreeMap::new();
+    for (name, value) in &update.fields {
+        if before.fields.get(name) == Some(value) {
+            continue;
+        }
+        if name == "id"
+            || name == "__typename"
+            || !matches!(
+                before.fields.get(name),
+                Some(
+                    CacheValue::Null
+                        | CacheValue::Bool(_)
+                        | CacheValue::Number(_)
+                        | CacheValue::String(_)
+                )
+            )
+        {
+            return Some(RecordFieldChange::Invalidate { key: key.clone() });
+        }
+        let value = match value {
+            CacheValue::Null => Value::Null,
+            CacheValue::Bool(value) => Value::Bool(*value),
+            CacheValue::Number(value) => Value::Number(value.to_json()),
+            CacheValue::String(value) => Value::String(value.clone()),
+            _ => return Some(RecordFieldChange::Invalidate { key: key.clone() }),
+        };
+        fields.insert(name.clone(), value);
+    }
+    (!fields.is_empty()).then(|| RecordFieldChange::Fields {
+        key: key.clone(),
+        fields,
+    })
+}
+
 #[cfg(test)]
 mod test;

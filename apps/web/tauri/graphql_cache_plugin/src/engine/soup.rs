@@ -18,6 +18,8 @@ use soup_filter_cache_adapter::{
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EntityFilterRequest {
+    /// Optional engine-owned row projection and delta cursor.
+    pub live_query: Option<soup_filter_cache_adapter::live_query::LiveQueryRequest>,
     /// GraphQL Soup filter AST; policy/validation belongs to the Soup adapter.
     pub filters: Value,
     /// Requested Soup sort method.
@@ -47,10 +49,24 @@ pub struct PredicateBaselineEntry {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum EntityFilterResult {
+    /// Maintained record deltas for a live query subscription.
+    Live(LiveQueryResult),
     /// Canonical cached Mail pagination result.
     Mail(mail::PageResult),
     /// Generic Soup predicate-index result.
     Predicate(PredicateFilterResult),
+}
+
+/// Tagged live-view response shared with the browser host.
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum LiveQueryResult {
+    /// Coherent ordered membership and changed selected records.
+    LiveQuery {
+        /// Core-maintained view delta.
+        #[serde(flatten)]
+        update: cache_core::engine::live_query::LiveQueryUpdate,
+    },
 }
 
 /// Generic Soup results matching the browser shell's tagged wire contract.
@@ -92,9 +108,23 @@ pub enum PredicateFilterResult {
 
 pub(super) async fn filter(
     engine: &mut Engine<TursoStorage>,
+    selections: &mut cache_core::record_selection::cache::RecordSelectionCache,
     generation: &str,
     request: EntityFilterRequest,
 ) -> Result<EntityFilterResult, String> {
+    if let Some(live) = &request.live_query {
+        if live.release {
+            engine.release_live_query(&live.id);
+            return Ok(EntityFilterResult::Predicate(
+                PredicateFilterResult::Unsupported,
+            ));
+        }
+        if request.mail.is_some() || request.baseline.is_none() {
+            return Err(
+                "live queries require a reconciled baseline and do not accept mail cursors".into(),
+            );
+        }
+    }
     if let Some(mail_request) = request.mail {
         return mail::page_current(
             engine,
@@ -133,6 +163,31 @@ pub(super) async fn filter(
                 })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|error| error.to_string())?;
+            if let Some(live) = request.live_query {
+                let selection = selections
+                    .get(live.document, live.fragment_name)
+                    .map_err(|error| error.to_string())?;
+                let since = live
+                    .since
+                    .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
+                    .transpose()
+                    .map_err(|error| error.to_string())?;
+                let update = engine
+                    .read_live_query(
+                        &live.id,
+                        cache_core::engine::live_query::LiveQuerySpec {
+                            query,
+                            baseline,
+                            selection,
+                        },
+                        since,
+                    )
+                    .await
+                    .map_err(|error| error.to_string())?;
+                return Ok(EntityFilterResult::Live(LiveQueryResult::LiveQuery {
+                    update,
+                }));
+            }
             let result = engine
                 .reconcile_predicate_index(&query, &baseline)
                 .await

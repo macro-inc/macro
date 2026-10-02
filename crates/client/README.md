@@ -83,6 +83,46 @@ Missing records, incomplete response registrations, explicit invalidations/delet
 and resets retain conservative behavior. Page-retention eviction wakes readers of
 the removed page. This is in-memory dependency tracking, not a storage migration.
 
+## Maintained query views
+
+`Engine::read_live_query` combines a validated predicate query, same-query server
+membership evidence, and a generated fragment selection. The first read returns
+ordered keys and selected records. Later reads return insertions/removals and
+field-path patches, including nested normalized entities and response aliases.
+One engine lock covers membership and projection, so callers do not coordinate
+filter calls, chunked record reads, and revision retries.
+
+Views track the normalized dependencies of each selected row. Record changes
+reproject only dependent rows; projection changes reevaluate membership through
+the existing predicate index. Ordinary network writes, hydration, optimistic
+writes and settlement share the engine change journal. Resets, external
+invalidations and gaps in that bounded journal conservatively rebuild the view.
+Views are released on unsubscribe and bounded by an LRU; eviction is safe because
+a subscriber with an unavailable cursor receives a full replacement.
+
+The Solid `createLiveQuery` binding owns subscription, coalescing, cleanup and
+engine-generation recovery, preserving keyed row stores and applying patches in
+one batch. Its first source adapter is a reconciled flat Soup filter:
+
+```ts
+const items = createLiveQuery({
+  host: getGraphqlSoupCacheHost,
+  query: () => ({
+    source: { filters: filters(), sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC', limit: 50, baseline: serverMembership() },
+    select: selectRecords(SoupItemFieldsFragmentDoc),
+  }),
+});
+```
+
+Mutations still use ordinary GraphQL execution and the registered local resolver.
+The view requires no per-mutation update callback. This is an incremental row
+projection layer, not a general local SQL engine: membership changes still run
+the indexed predicate query, and arbitrary joins/aggregates are not compiled.
+Unknown membership retains server baseline evidence. Mail cursor pagination and
+older hosts keep the existing reconciliation path. All views remain limited to
+data known to the cache; remote changes require the existing network feeds.
+
 ## Entity-rooted optimistic relations
 
 Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).

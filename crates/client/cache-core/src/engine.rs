@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod test;
 
+pub mod live_query;
+
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
 use crate::deps::{
     DepIndex, OpId, QueryDependencies, ViewerFieldUpdate, ViewerFields, changed_viewer_fields,
@@ -170,6 +172,7 @@ pub struct WriteResult {
 
 /// Internal durable deltas; viewer field proof is never sent across host boundaries.
 struct PersistedChanges {
+    field_changes: Vec<crate::field_changes::RecordFieldChange>,
     changed: BTreeSet<EntityKey<'static>>,
     revision: CacheRevision,
     revision_advanced: bool,
@@ -341,6 +344,7 @@ pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
 const DOCUMENT_CACHE_CAPACITY: usize = 128;
 
 pub struct Engine<S: Storage> {
+    live_queries: live_query::LiveQueries,
     storage: S,
     revision: CacheRevision,
     hot: LruCache<EntityKey<'static>, Record>,
@@ -362,6 +366,7 @@ impl<S: Storage> Engine<S> {
 
     pub fn with_capacity(storage: S, hot_capacity: usize) -> Self {
         Engine {
+            live_queries: live_query::LiveQueries::default(),
             storage,
             revision: CacheRevision::ZERO,
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
@@ -428,6 +433,7 @@ impl<S: Storage> Engine<S> {
             .checked_successor()
             .ok_or(EngineError::RevisionOverflow)?;
         self.revision = next;
+        self.live_queries.advance(next);
         Ok(next)
     }
 
@@ -460,6 +466,7 @@ impl<S: Storage> Engine<S> {
     /// changed.
     pub async fn refresh_optimistic_queue(&mut self) -> Result<WriteResult, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         let queued = self
             .storage
             .load_mutation_queue()
@@ -476,6 +483,8 @@ impl<S: Storage> Engine<S> {
         before_all.extend(before);
         let after = effective_records(&bases, &replacement, &candidates);
         self.optimistic = replacement;
+        live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
+        let live_records = candidates.clone();
         self.optimistic_hydrated = true;
         let changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
@@ -483,6 +492,13 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
+        self.live_queries.record(
+            revision,
+            live_query::Changes {
+                records: live_records,
+                projections: live_projection_keys,
+            },
+        );
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before_all, &after)),
             identity_errors: Vec::new(),
@@ -840,6 +856,15 @@ impl<S: Storage> Engine<S> {
         selection: &RecordSelection,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<Vec<SelectedRecord>>, EngineError<S::Error>> {
+        let (records, _) = self.read_records_tracked(selection, keys).await?;
+        Ok(self.revisioned(records))
+    }
+
+    async fn read_records_tracked(
+        &mut self,
+        selection: &RecordSelection,
+        keys: &[EntityKey<'static>],
+    ) -> Result<(Vec<SelectedRecord>, live_query::RowDependencies), EngineError<S::Error>> {
         if keys.len() > MAX_RECORD_SELECTION_KEYS {
             return Err(RecordSelectionError::TooManyKeys {
                 count: keys.len(),
@@ -861,7 +886,7 @@ impl<S: Storage> Engine<S> {
             return Err(RecordSelectionError::InvalidKey.into());
         }
         if keys.is_empty() {
-            return Ok(self.revisioned(Vec::new()));
+            return Ok((Vec::new(), BTreeMap::new()));
         }
         self.hydrate_optimistic().await?;
 
@@ -878,7 +903,7 @@ impl<S: Storage> Engine<S> {
             .cloned()
             .collect();
         let optimistic = merged_optimistic(&self.optimistic);
-        let projected = self
+        let (projected, dependencies) = self
             .project_record_batch(selection, &ordered_keys, &optimistic)
             .await?;
         let records = projected;
@@ -943,7 +968,7 @@ impl<S: Storage> Engine<S> {
                 }
             })
             .collect();
-        Ok(self.revisioned(records))
+        Ok((records, dependencies))
     }
 
     async fn project_record_batch(
@@ -951,7 +976,8 @@ impl<S: Storage> Engine<S> {
         selection: &RecordSelection,
         candidate_keys: &[EntityKey<'static>],
         optimistic: &BTreeMap<EntityKey<'static>, Record>,
-    ) -> Result<Vec<(EntityKey<'static>, Json)>, EngineError<S::Error>> {
+    ) -> Result<(Vec<(EntityKey<'static>, Json)>, live_query::RowDependencies), EngineError<S::Error>>
+    {
         // Borrow hot bases through EngineSource, just like ordinary query reads.
         // Only cold records and optimistic compositions need owned snapshots.
         let mut fetched_base = HashMap::new();
@@ -981,7 +1007,7 @@ impl<S: Storage> Engine<S> {
         let mut plans = ReadPlans::default();
         let mut completed = BTreeMap::new();
         let mut known_absent = BTreeSet::new();
-        let mut dependencies = BTreeSet::new();
+        let mut dependencies = live_query::RowDependencies::new();
         while !pending.is_empty() {
             let mut missing = BTreeSet::new();
             let source = EngineSource {
@@ -994,7 +1020,7 @@ impl<S: Storage> Engine<S> {
                 match pending.get_mut(&key).expect("pending record").resume(
                     &variables,
                     &source,
-                    &mut dependencies,
+                    dependencies.entry(key.clone()).or_default(),
                     &EntityResolverLookup::default(),
                     &mut plans,
                 )? {
@@ -1050,16 +1076,19 @@ impl<S: Storage> Engine<S> {
         }
 
         // Keep this read's working set ahead of unrelated hot records.
-        for key in &dependencies {
+        for key in dependencies.values().flatten() {
             let _ = self.hot.get(key);
         }
         for (key, record) in fetched_base {
             self.hot.put(key, record);
         }
-        Ok(candidate_keys
-            .iter()
-            .filter_map(|key| completed.remove(key).map(|record| (key.clone(), record)))
-            .collect())
+        Ok((
+            candidate_keys
+                .iter()
+                .filter_map(|key| completed.remove(key).map(|record| (key.clone(), record)))
+                .collect(),
+            dependencies,
+        ))
     }
 
     /// Searches the compact materialized projection without scanning or
@@ -1283,6 +1312,7 @@ impl<S: Storage> Engine<S> {
                 IdentityState::Bound(bound) if bound == observed => {}
                 IdentityState::Bound(_) => {
                     self.hot.clear();
+                    self.live_queries = live_query::LiveQueries::default();
                     // A different user's session: in-flight optimistic
                     // mutations belong to the old identity — discard them.
                     self.optimistic.clear();
@@ -1308,6 +1338,7 @@ impl<S: Storage> Engine<S> {
             Some((candidates, before))
         };
         let PersistedChanges {
+            mut field_changes,
             changed,
             mut revision,
             mut revision_advanced,
@@ -1329,6 +1360,14 @@ impl<S: Storage> Engine<S> {
             candidates.extend(layer_keys(&self.optimistic));
             let bases_after = self.load_bases(&candidates).await?;
             let after = effective_records(&bases_after, &self.optimistic, &candidates);
+            field_changes = crate::field_changes::between(&before, &after);
+            if revision_advanced {
+                self.live_queries.extend(
+                    revision,
+                    candidates.iter().cloned(),
+                    live_query::projection_keys(&self.optimistic),
+                );
+            }
             // Compare the composed view: a hydration hidden beneath a pending
             // edit must not invalidate the search projection it did not change.
             search_changed_buckets.clear();
@@ -1378,7 +1417,7 @@ impl<S: Storage> Engine<S> {
         }
         Ok((
             WriteResult {
-                field_changes: None,
+                field_changes: (!reset).then_some(field_changes),
                 identity_errors: Vec::new(),
                 mutation_uuid: None,
                 revision,
@@ -1470,6 +1509,10 @@ impl<S: Storage> Engine<S> {
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
+        let projection_keys = projections
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect();
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
@@ -1498,6 +1541,7 @@ impl<S: Storage> Engine<S> {
         }
 
         let mut changed = BTreeSet::new();
+        let mut field_changes = Vec::new();
         let mut search_changed_buckets = BTreeSet::new();
         let mut viewer_fields = ViewerFields::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
@@ -1509,6 +1553,8 @@ impl<S: Storage> Engine<S> {
                     // overlaid onto the existing row, without cloning its body.
                     let before = snapshot_search_fields(&key, &existing);
                     let viewer_update = ViewerFieldUpdate::capture(&existing, &update);
+                    field_changes
+                        .extend(crate::field_changes::from_update(&key, &existing, &update));
                     let did_change = existing.merge(update);
                     if let Some(fields) = viewer_update.and_then(|update| update.finish(&existing))
                     {
@@ -1525,6 +1571,9 @@ impl<S: Storage> Engine<S> {
                     (existing, did_change)
                 }
                 None => {
+                    field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
+                        key: key.clone(),
+                    });
                     collect_search_changes(&key, None, Some(&update), &mut search_changed_buckets);
                     (update, true)
                 }
@@ -1553,6 +1602,15 @@ impl<S: Storage> Engine<S> {
         } else {
             self.revision
         };
+        if revision_advanced {
+            self.live_queries.record(
+                revision,
+                live_query::Changes {
+                    records: changed.clone(),
+                    projections: projection_keys,
+                },
+            );
+        }
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
         self.update_loaded_search_catalogs(&touched);
@@ -1560,6 +1618,7 @@ impl<S: Storage> Engine<S> {
             self.hot.put(key, record);
         }
         Ok(PersistedChanges {
+            field_changes,
             changed,
             revision,
             revision_advanced,
@@ -1631,6 +1690,7 @@ impl<S: Storage> Engine<S> {
         let uuid = Uuid::parse_str(input.uuid)
             .map_err(|_| EngineError::InvalidMutationUuid(input.uuid.to_owned()))?;
         self.ensure_revision_can_advance()?;
+        let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         let BeginOptimisticWrite {
             uuid: _,
             query,
@@ -1821,6 +1881,8 @@ impl<S: Storage> Engine<S> {
             .expect("proposed queue contains the new tail")
             .id = upsert.id;
         self.optimistic = proposed_layers;
+        live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
+        let live_records = candidates.clone();
 
         let changed = candidates
             .into_iter()
@@ -1831,6 +1893,13 @@ impl<S: Storage> Engine<S> {
             affected_ops.remove(&origin);
         }
         let revision = self.advance_revision()?;
+        self.live_queries.record(
+            revision,
+            live_query::Changes {
+                records: live_records,
+                projections: live_projection_keys,
+            },
+        );
         Ok(BegunOptimisticWrite {
             transaction_id: upsert.id,
             upsert_kind: upsert.kind,
@@ -2230,6 +2299,12 @@ impl<S: Storage> Engine<S> {
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
+        live_projection_keys.extend(
+            projections
+                .iter()
+                .map(|projection| projection.record_key().clone()),
+        );
         self.hydrate_optimistic().await?;
         let index = self
             .optimistic
@@ -2372,11 +2447,20 @@ impl<S: Storage> Engine<S> {
         let settled_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&settled_bases, &replacement, &candidates);
         self.optimistic = replacement;
+        live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
+        let live_records = candidates.clone();
         let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        self.live_queries.record(
+            revision,
+            live_query::Changes {
+                records: live_records,
+                projections: live_projection_keys,
+            },
+        );
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors,
@@ -2434,6 +2518,7 @@ impl<S: Storage> Engine<S> {
         claim: MutationClaimToken,
     ) -> Result<WriteResult, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         self.hydrate_optimistic().await?;
         let layer = self
             .optimistic
@@ -2469,11 +2554,20 @@ impl<S: Storage> Engine<S> {
         let current_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&current_bases, &replacement, &candidates);
         self.optimistic = replacement;
+        live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
+        let live_records = candidates.clone();
         let visible_changed: BTreeSet<EntityKey<'static>> = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        self.live_queries.record(
+            revision,
+            live_query::Changes {
+                records: live_records,
+                projections: live_projection_keys,
+            },
+        );
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors: Vec::new(),
@@ -2634,6 +2728,7 @@ impl<S: Storage> Engine<S> {
     pub fn external_reset(&mut self) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
+        self.live_queries = live_query::LiveQueries::default();
         self.docs.clear();
         self.optimistic.clear();
         self.search_catalogs.clear();
@@ -2710,6 +2805,7 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
+        self.live_queries = live_query::LiveQueries::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
         self.search_catalogs.clear();
@@ -2770,6 +2866,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             updates.entry(key).or_default().merge(record);
         }
         let PersistedChanges {
+            field_changes,
             changed,
             revision,
             revision_advanced,
@@ -2780,7 +2877,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             affected_ops.remove(&origin_op);
         }
         Ok(WriteResult {
-            field_changes: None,
+            field_changes: self.optimistic.is_empty().then_some(field_changes),
             identity_errors: Vec::new(),
             revision,
             revision_advanced,

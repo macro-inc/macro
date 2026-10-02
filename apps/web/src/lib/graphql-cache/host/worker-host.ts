@@ -1159,6 +1159,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   return {
     clientId,
+    liveQueries: true,
 
     async currentRevision(): Promise<CacheRevision> {
       return (await initializedRequest({

@@ -246,6 +246,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   return {
     clientId,
+    liveQueries: true,
 
     async currentRevision(): Promise<CacheRevision> {
       await ready;

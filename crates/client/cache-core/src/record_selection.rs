@@ -18,7 +18,7 @@ use thiserror::Error;
 pub const MAX_RECORD_SELECTION_KEYS: usize = 500;
 
 /// A validated named fragment that can be applied to normalized records.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordSelection {
     type_names: Vec<String>,
     selection_set: Vec<Selection>,

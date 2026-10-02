@@ -110,6 +110,8 @@ export type AffectedOperationsListener = (
 ) => void;
 
 export interface CacheHost {
+  /** The host understands engine-maintained fragment query requests. */
+  readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
   /** True for the storage-free fallback when browser cache APIs are unsupported. */

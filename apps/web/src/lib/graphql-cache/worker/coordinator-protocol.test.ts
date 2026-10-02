@@ -245,6 +245,36 @@ describe('coordinator runtime protocol', () => {
     expect(valid([{ ...entry, unexpected: true }])).toBe(false);
   });
 
+  it('validates live query cursors and requires a reconciled source', () => {
+    const liveQuery = {
+      id: 'view',
+      document: 'fragment Item on GraphqlSoupDocument { id }',
+      fragmentName: 'Item',
+      since: '1',
+    };
+    const request = {
+      filters: {},
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 20,
+      baseline: [],
+      liveQuery,
+    };
+    const valid = (value: unknown) =>
+      isCacheRequest({ id: 1, kind: 'entity-filter', request: value });
+    expect(valid(request)).toBe(true);
+    expect(
+      valid({ ...request, liveQuery: { ...liveQuery, release: true } })
+    ).toBe(true);
+    expect(valid({ ...request, baseline: undefined })).toBe(false);
+    expect(
+      valid({ ...request, liveQuery: { ...liveQuery, since: '01' } })
+    ).toBe(false);
+    expect(valid({ ...request, liveQuery: { ...liveQuery, id: '' } })).toBe(
+      false
+    );
+  });
+
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);

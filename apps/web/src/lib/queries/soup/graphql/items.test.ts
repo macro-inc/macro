@@ -183,6 +183,90 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it('uses maintained record deltas without rereading the list or its fragments', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let revision = REVISION_1;
+    const listeners = new Set<(revision: string) => void>();
+    const record = {
+      __typename: 'GraphqlSoupDocument',
+      id: 'task',
+      type: 'document',
+      name: 'Before',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    };
+    const key = 'GraphqlSoupDocument:task';
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => revision,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        listeners.add(callback);
+        return () => listeners.delete(callback);
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockImplementation(async (args) =>
+      args.liveQuery?.release
+        ? { kind: 'unsupported' }
+        : {
+            kind: 'live-query',
+            revision,
+            reset: !args.liveQuery?.since,
+            ...(!args.liveQuery?.since ? { keys: [key] } : {}),
+            upserts: !args.liveQuery?.since ? [{ recordKey: key, record }] : [],
+            patches: args.liveQuery?.since
+              ? [
+                  {
+                    recordKey: key,
+                    fields: [{ path: ['name'], value: 'After' }],
+                    identity: { mutationUuid: null, pending: false },
+                  },
+                ]
+              : [],
+            removed: [],
+            retainedKeys: [],
+            optimistic: false,
+          }
+    );
+    const state = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ ...record, name: 'Server' }],
+          next_cursor: null,
+        }),
+        { source: 'normalized-cache-hit', revision: REVISION_1 }
+      );
+      await vi.waitFor(() =>
+        expect(state.query.data()?.entities[0]?.name).toBe('Before')
+      );
+      await vi.waitFor(() =>
+        expect(
+          entityFilterMock.mock.calls.some(([args]) => args.liveQuery)
+        ).toBe(true)
+      );
+      const entity = state.query.data()?.entities[0];
+      revision = REVISION_2;
+      listeners.forEach((listener) => listener(revision));
+      await vi.waitFor(() =>
+        expect(state.query.data()?.entities[0]?.name).toBe('After')
+      );
+      expect(state.query.data()?.entities[0]).toBe(entity);
+      expect(readRecordsByKeysMock).not.toHaveBeenCalled();
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      state.dispose();
+    }
+  });
+
   describe('mixed folder contents', () => {
     const excludedId = '00000000-0000-0000-0000-000000000000';
     const item = (id: string, __typename = 'GraphqlSoupDocument') => ({

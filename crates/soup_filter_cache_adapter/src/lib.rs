@@ -24,6 +24,7 @@ use soup_filter_projection::{
 use std::collections::HashSet;
 
 mod channels;
+pub mod live_query;
 pub mod mail;
 mod notifications;
 pub mod properties;

@@ -55,6 +55,7 @@ import {
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
+import { createLiveQuery } from '../../../graphql-cache/solid/create-live-query';
 import { createKeyedProjection } from '../../../urql-solid/create-keyed-projection';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import { soupQueryExcludesDone } from '../excludes-done';
@@ -184,9 +185,13 @@ export function createGraphqlSoupAstItemsQuery(
   const [networkAuthorityRevision, setNetworkAuthorityRevision] = createSignal<
     CacheRevision | undefined
   >();
-  const [localProjection, setLocalProjection] = createSignal<
+  const [legacyLocalProjection, setLocalProjection] = createSignal<
     LocalProjection | undefined
   >();
+  let maintainedProjection: Accessor<LocalProjection | undefined> | undefined;
+  let maintainedQueryAvailable: Accessor<boolean> = () => false;
+  const localProjection = () =>
+    maintainedProjection?.() ?? legacyLocalProjection();
   const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
   const queryDocument = () =>
     options().projection === 'channel-list'
@@ -386,6 +391,9 @@ export function createGraphqlSoupAstItemsQuery(
       !withoutEmail && isCachedMailView(initial.emailView)
         ? initial.emailView
         : undefined;
+    // Maintained queries own non-Mail reconciliation on current hosts. The
+    // existing path also supports native binaries predating this capability.
+    if (!mailView && maintainedQueryAvailable()) return;
     const sortMethod = initial.sortMethod;
     if (sortMethod !== 'CREATED_AT' && sortMethod !== 'UPDATED_AT') {
       localEvaluationPending = false;
@@ -811,6 +819,127 @@ export function createGraphqlSoupAstItemsQuery(
   const serverRecordKeys = createMemo(
     () => new Set(serverRecords().map(soupItemKey))
   );
+
+  const live = createLiveQuery<GraphqlSoupItem>({
+    host: getGraphqlSoupCacheHost,
+    query: () => {
+      if (!getGraphqlSoupCacheHost()?.liveQueries) return;
+      const input = firstPageInput();
+      const queryOptions = options();
+      if (
+        !queryOptions.enabled ||
+        !graphqlSoupProjectionSupported() ||
+        !input ||
+        !('initial' in input) ||
+        !input.initial ||
+        hasUnpersistedPages(input)
+      )
+        return;
+      const initial = input.initial;
+      const withoutEmail = queryOptions.localReconciliation === 'without-email';
+      if (!withoutEmail && isCachedMailView(initial.emailView)) return;
+      if (
+        initial.sortMethod !== 'CREATED_AT' &&
+        initial.sortMethod !== 'UPDATED_AT'
+      )
+        return;
+      const records = withoutEmail
+        ? serverRecords().filter(
+            (record) => record.__typename !== 'GraphqlSoupEmailThread'
+          )
+        : serverRecords();
+      const baseline = soupReconciliationBaseline(records, initial.sortMethod);
+      if (!baseline) return;
+      return {
+        source: {
+          filters: withoutEmail
+            ? {
+                ...initial.filters,
+                emailFilter: { tree: { literal: { threadId: NIL_UUID } } },
+              }
+            : (initial.filters ?? {}),
+          sortMethod: initial.sortMethod,
+          sortDirection: initial.sortDirection ?? 'DESC',
+          limit: initial.limit ?? 20,
+          baseline,
+        },
+        select:
+          queryOptions.projection === 'channel-list'
+            ? channelListItemSelection
+            : soupItemSelection,
+      };
+    },
+  });
+  maintainedQueryAvailable = () =>
+    live.status() !== 'idle' &&
+    live.status() !== 'unsupported' &&
+    live.status() !== 'error';
+  const liveRecords = createMemo(() => {
+    const snapshot = live.data();
+    return snapshot
+      ? materializeReconciledSoup(
+          snapshot.keys,
+          snapshot.records,
+          serverRecords()
+        )
+      : [];
+  });
+  const liveItems = createKeyedProjection(
+    liveRecords,
+    soupItemKey,
+    (record) => {
+      const item = mapGraphqlSoupItem(record);
+      return {
+        id: soupItemKey(record),
+        item,
+        entity: item
+          ? mapSoupPageToEntityList(
+              { items: [item], next_cursor: undefined },
+              {
+                instructionsIdQuery,
+                showSupportedForeignEntities:
+                  options().showSupportedForeignEntities,
+              }
+            )[0]
+          : undefined,
+      };
+    }
+  );
+  const liveEntities = createMemo(() =>
+    liveItems().flatMap((row) => (row.entity ? [row.entity] : []))
+  );
+  maintainedProjection = createMemo(() => {
+    const snapshot = live.data();
+    const input = firstPageInput();
+    if (!snapshot || !input || !maintainedQueryAvailable()) return;
+    const withoutEmail = options().localReconciliation === 'without-email';
+    return {
+      input,
+      generation: cacheGeneration,
+      baselineKeys: new Set(
+        serverRecords()
+          .filter(
+            (record) =>
+              !withoutEmail || record.__typename !== 'GraphqlSoupEmailThread'
+          )
+          .map(soupItemKey)
+      ),
+      displayedKeys: new Set(liveRecords().map(soupItemKey)),
+      withoutEmail,
+      data: {
+        cachedMail: false,
+        get itemsById() {
+          return itemsById(
+            liveItems().flatMap((row) => (row.item ? [row.item] : []))
+          );
+        },
+        get entities() {
+          return liveEntities();
+        },
+        groups: undefined,
+      },
+    };
+  });
 
   // Retain same-query rows across revisions and page additions, not across a
   // query/generation change or removal of the baseline they were built from.

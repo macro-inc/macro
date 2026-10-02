@@ -539,7 +539,14 @@ impl EngineHandle {
         request: EntityFilterRequest,
     ) -> Result<EntityFilterResult, String> {
         let mut state = self.inner.lock().await;
-        soup::filter(&mut state.engine, &self.mail_generation, request).await
+        let state = &mut *state;
+        soup::filter(
+            &mut state.engine,
+            &mut state.selections,
+            &self.mail_generation,
+            request,
+        )
+        .await
     }
 
     /// Recovers cached query variables without materializing each variant.

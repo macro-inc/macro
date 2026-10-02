@@ -4,6 +4,7 @@ import {
   type CacheResponse,
   isCachePush,
   isCacheResponse,
+  isCacheRevision,
   isValidCacheSearchBucket,
   isValidCacheSearchCursor,
   isValidCacheSearchLimit,
@@ -20,7 +21,7 @@ import {
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 7 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 8 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -700,6 +701,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'limit',
           'baseline',
           'mail',
+          'liveQuery',
         ]) &&
         isRecord(request.filters) &&
         ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
@@ -707,6 +709,28 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         ) &&
         (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
         isValidCacheSearchLimit(request.limit) &&
+        (request.liveQuery === undefined ||
+          (isRecord(request.liveQuery) &&
+            hasOnlyKeys(request.liveQuery, [
+              'id',
+              'document',
+              'fragmentName',
+              'since',
+              'release',
+            ]) &&
+            typeof request.liveQuery.id === 'string' &&
+            request.liveQuery.id.length > 0 &&
+            request.liveQuery.id.length <= 128 &&
+            typeof request.liveQuery.document === 'string' &&
+            request.liveQuery.document.length > 0 &&
+            typeof request.liveQuery.fragmentName === 'string' &&
+            request.liveQuery.fragmentName.length > 0 &&
+            (request.liveQuery.since === undefined ||
+              isCacheRevision(request.liveQuery.since)) &&
+            (request.liveQuery.release === undefined ||
+              typeof request.liveQuery.release === 'boolean') &&
+            request.mail === undefined &&
+            request.baseline !== undefined)) &&
         (request.mail === undefined ||
           (isRecord(request.mail) &&
             hasOnlyKeys(request.mail, ['view', 'cursor']) &&

@@ -323,6 +323,7 @@ fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JsEntityFilterRequest {
+    live_query: Option<soup_filter_cache_adapter::live_query::LiveQueryRequest>,
     filters: serde_json::Value,
     sort_method: String,
     sort_direction: String,
@@ -341,6 +342,10 @@ struct JsPredicateBaselineEntry {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 enum JsEntityFilterResult {
+    LiveQuery {
+        #[serde(flatten)]
+        update: cache_core::engine::live_query::LiveQueryUpdate,
+    },
     Reconciled {
         revision: String,
         keys: Vec<String>,
@@ -1362,6 +1367,17 @@ impl CacheEngine {
             state.ensure_callable()?;
             let request: JsEntityFilterRequest =
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            if let Some(live) = &request.live_query {
+                if live.release {
+                    state.engine_mut()?.release_live_query(&live.id);
+                    return to_js(&JsEntityFilterResult::Unsupported);
+                }
+                if request.mail.is_some() || request.baseline.is_none() {
+                    return Err(err_js(
+                        "live queries require a reconciled baseline and do not accept mail cursors",
+                    ));
+                }
+            }
             if let Some(mail) = request.mail {
                 let generation = state.mail_generation.clone();
                 let result = soup_filter_cache_adapter::mail::page_current(
@@ -1408,6 +1424,31 @@ impl CacheEngine {
                         })
                         .collect::<Result<Vec<_>, _>>()
                         .map_err(err_js)?;
+                    if let Some(live) = request.live_query {
+                        let selection = state
+                            .selections
+                            .get(live.document, live.fragment_name)
+                            .map_err(err_js)?;
+                        let since = live
+                            .since
+                            .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
+                            .transpose()
+                            .map_err(err_js)?;
+                        let result = state
+                            .engine_mut()?
+                            .read_live_query(
+                                &live.id,
+                                cache_core::engine::live_query::LiveQuerySpec {
+                                    query,
+                                    baseline,
+                                    selection,
+                                },
+                                since,
+                            )
+                            .await;
+                        let update = state.engine_result(result)?;
+                        return to_js(&JsEntityFilterResult::LiveQuery { update });
+                    }
                     let result = state
                         .engine_mut()?
                         .reconcile_predicate_index(&query, &baseline)
