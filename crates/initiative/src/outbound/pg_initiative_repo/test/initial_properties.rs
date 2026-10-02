@@ -4,9 +4,7 @@
 use super::*;
 use crate::domain::{
     models::{CreateInitiativeRequest, InitialPropertyValue, InitiativeError},
-    ports::{
-        InitiativeService, MockInitiativeDescriptionDocuments, MockInitiativeDescriptionSurfaces,
-    },
+    ports::{InitiativeService, MockInitiativeDescriptionSurfaces},
     resources::InitiativeResources,
     service::InitiativeServiceImpl,
 };
@@ -100,15 +98,9 @@ async fn status_of(harness: &Harness, id: InitiativeId) -> anyhow::Result<Option
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_persists_initial_values_in_the_same_request(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
-    let description = seed_description_document(&pool, OWNER).await?;
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents
-        .expect_create()
-        .return_once(move |_| Box::pin(async move { Ok(description) }));
     let harness = harness(&pool);
     let service = InitiativeServiceImpl::new(
         repo(pool.clone()),
-        documents,
         MockInitiativeDescriptionSurfaces::new(),
         harness.resources.clone(),
     );
@@ -139,7 +131,7 @@ async fn a_rejected_value_leaves_no_initial_values_behind(pool: PgPool) -> anyho
     insert_user(&pool, OWNER).await?;
     let project = repo(pool.clone())
         .create(
-            create_args(&pool, OWNER, "Launch", &[]).await?,
+            create_args(OWNER, "Launch", &[]),
             share_off(),
             TeamShareCreation::Unshared,
         )

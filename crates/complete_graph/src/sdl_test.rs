@@ -74,8 +74,6 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupProject implements GraphqlSoupEntity {",
         "type GraphqlSoupInitiative implements GraphqlSoupEntity {",
         "initiativeFilter: GraphqlInitiativeExpr",
-        "descriptionSurfaceId: ID",
-        "descriptionDocumentId: ID",
         "parent: GraphqlEntity",
         "type GraphqlCacheDeletion {",
         "graphqlTypeName: String!",

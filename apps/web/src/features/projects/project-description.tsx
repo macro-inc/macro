@@ -6,20 +6,16 @@ import { createProductionProjectDescriptionSession } from './queries/production-
 
 function DescriptionSession(props: {
   projectId: string;
-  surfaceId: string;
   canEdit: boolean;
   onRetry(): void;
 }) {
-  const session = createProductionProjectDescriptionSession({
-    projectId: props.projectId,
-    surfaceId: props.surfaceId,
-  });
+  const session = createProductionProjectDescriptionSession(props.projectId);
   onCleanup(session.dispose);
   return (
     <>
       <CollabMarkdownEditor
         resolveAppLink={useMacroMentionLinkResolver()}
-        sourceId={props.surfaceId}
+        sourceId={props.projectId}
         session={session}
         canEdit={() => props.canEdit}
         canComment={() => false}
@@ -40,26 +36,24 @@ function DescriptionSession(props: {
 /** Production adapter for the project's collaborative description surface. */
 export function ProjectDescription(props: {
   projectId: string;
-  surfaceId: string;
   canEdit: boolean;
 }) {
   const [attempt, setAttempt] = createSignal(0);
-  // Project refreshes re-read the same surface; only a new surface or retry reopens.
+  // Project refreshes keep the same session; only a new project or retry reopens.
   const identity = createMemo(
-    () => ({ surfaceId: props.surfaceId, attempt: attempt() }),
+    () => ({ projectId: props.projectId, attempt: attempt() }),
     undefined,
     {
       equals: (previous, next) =>
-        previous.surfaceId === next.surfaceId &&
+        previous.projectId === next.projectId &&
         previous.attempt === next.attempt,
     }
   );
   return (
-    <Show when={identity().surfaceId ? identity() : undefined} keyed>
+    <Show when={identity()} keyed>
       {(identity) => (
         <DescriptionSession
-          projectId={props.projectId}
-          surfaceId={identity.surfaceId}
+          projectId={identity.projectId}
           canEdit={props.canEdit}
           onRetry={() => setAttempt((attempt) => attempt + 1)}
         />

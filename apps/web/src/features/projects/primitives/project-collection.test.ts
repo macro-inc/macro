@@ -62,7 +62,6 @@ describe('project collection', () => {
           project: {
             id: 'project',
             name: 'Release',
-            descriptionSurfaceId: 'description',
             updatedAt: '',
           },
           properties: [],
@@ -154,7 +153,6 @@ function row(id: string): ProjectRow {
     project: {
       id,
       name: id,
-      descriptionSurfaceId: `description-${id}`,
       updatedAt: '',
     },
     properties: [],

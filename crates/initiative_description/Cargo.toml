@@ -1,15 +1,13 @@
 [package]
-name = "initiative_documents"
+name = "initiative_description"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
 [dependencies]
 collab_surface = { path = "../collab_surface", features = ["ports"] }
-documents_hex = { package = "documents", path = "../documents", default-features = false, features = ["document_create"] }
 initiative = { path = "../initiative", default-features = false, features = ["ports"] }
 model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

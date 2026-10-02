@@ -9,17 +9,22 @@ use super::*;
 /// Records the owned-surface calls the adapter makes.
 #[derive(Default)]
 struct FakeSurfaces {
-    adopted: Mutex<Vec<(Entity<'static>, Uuid)>>,
+    ensured: Mutex<Vec<(Entity<'static>, Uuid, String)>>,
     retired: Mutex<Vec<Uuid>>,
+    markdown: Option<String>,
 }
 
 impl OwnedSurfaceService for FakeSurfaces {
-    async fn adopt_document_session(
+    async fn ensure_owned_surface(
         &self,
         parent: Entity<'static>,
         id: Uuid,
+        initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        self.adopted.lock().unwrap().push((parent.clone(), id));
+        self.ensured
+            .lock()
+            .unwrap()
+            .push((parent.clone(), id, initial_markdown));
         Ok(CollabSurface {
             id,
             parent,
@@ -29,33 +34,53 @@ impl OwnedSurfaceService for FakeSurfaces {
         })
     }
 
+    async fn owned_surface_markdown(
+        &self,
+        _id: Uuid,
+    ) -> Result<Option<String>, CollabSurfaceError> {
+        Ok(self.markdown.clone())
+    }
+
     async fn retire_surface(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
         self.retired.lock().unwrap().push(id);
         Ok(())
     }
 }
 
-fn initiative() -> InitiativeId {
-    InitiativeId::from_uuid(Uuid::from_u128(1))
+#[tokio::test]
+async fn the_surface_has_the_initiative_id_and_parent() {
+    let fake = Arc::new(FakeSurfaces::default());
+    let adapter = InitiativeDescriptionSurfacesAdapter::new(fake.clone());
+    let initiative = InitiativeId::from_uuid(Uuid::now_v7());
+
+    adapter
+        .ensure(initiative, "# Plan".to_string())
+        .await
+        .unwrap();
+    adapter.delete(initiative).await.unwrap();
+
+    assert_eq!(
+        *fake.ensured.lock().unwrap(),
+        vec![(
+            EntityType::Initiative.with_entity_string(initiative.to_string()),
+            initiative.as_uuid(),
+            "# Plan".to_string(),
+        )]
+    );
+    assert_eq!(*fake.retired.lock().unwrap(), vec![initiative.as_uuid()]);
 }
 
 #[tokio::test]
-async fn adoption_binds_the_document_session_to_the_initiative_surface() {
-    let fake = Arc::new(FakeSurfaces::default());
-    let adapter = InitiativeDescriptionSurfacesAdapter::new(fake.clone());
-    let document = DescriptionDocumentId::from_uuid(Uuid::now_v7());
+async fn a_description_never_opened_reads_as_empty() {
+    let initiative = InitiativeId::from_uuid(Uuid::now_v7());
+    let written = InitiativeDescriptionSurfacesAdapter::new(Arc::new(FakeSurfaces {
+        markdown: Some("# Plan".to_string()),
+        ..Default::default()
+    }));
+    let unopened = InitiativeDescriptionSurfacesAdapter::new(Arc::new(FakeSurfaces::default()));
 
-    adapter.adopt(document, initiative()).await.unwrap();
-    adapter.delete(document.adopting_surface()).await.unwrap();
-
-    assert_eq!(
-        *fake.adopted.lock().unwrap(),
-        vec![(
-            EntityType::Initiative.with_entity_string(initiative().to_string()),
-            document.as_uuid(),
-        )]
-    );
-    assert_eq!(*fake.retired.lock().unwrap(), vec![document.as_uuid()]);
+    assert_eq!(written.read(initiative).await.unwrap(), "# Plan");
+    assert_eq!(unopened.read(initiative).await.unwrap(), "");
 }
 
 #[test]

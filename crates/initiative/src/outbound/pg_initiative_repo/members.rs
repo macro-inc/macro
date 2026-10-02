@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{AdapterError, GrantTargets, map_sqlx, parse_description_document_id};
+use super::{AdapterError, GrantTargets, map_sqlx};
 use crate::domain::models::{InitiativeError, InitiativeId};
 
 pub(super) async fn grant_assignees(
@@ -22,12 +22,7 @@ pub(super) async fn grant_assignees(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let row = sqlx::query!(
-        r#"
-        SELECT description_document_id AS "description_document_id?", owner_user_id
-        FROM initiative
-        WHERE id = $1
-        FOR UPDATE
-        "#,
+        "SELECT owner_user_id FROM initiative WHERE id = $1 FOR UPDATE",
         id.as_uuid(),
     )
     .fetch_optional(tx.as_mut())
@@ -35,8 +30,6 @@ pub(super) async fn grant_assignees(
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?
     .ok_or(InitiativeError::NotFound)?;
-    let description_id =
-        parse_description_document_id(id.as_uuid(), row.description_document_id.as_deref())?;
     let collaborators = user_ids
         .iter()
         .filter(|user_id| user_id.as_ref() != row.owner_user_id)
@@ -44,13 +37,7 @@ pub(super) async fn grant_assignees(
         .collect::<Vec<_>>();
     // Assignment grants remain after the property is cleared, just like task sharing.
     // Record those grants as collaborators so the owner can explicitly revoke them.
-    apply_member_diff(
-        &mut tx,
-        &GrantTargets::new(id, description_id),
-        &collaborators,
-        &[],
-    )
-    .await?;
+    apply_member_diff(&mut tx, &GrantTargets::new(id), &collaborators, &[]).await?;
     tx.commit()
         .await
         .map_err(AdapterError::Sqlx)

@@ -63,7 +63,7 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
     for name in ["Launch one", "Launch two"] {
         projects.push(
             repo.create(
-                create_args(&pool, OWNER, name, &[]).await?,
+                create_args(OWNER, name, &[]),
                 share_off(),
                 TeamShareCreation::Unshared,
             )

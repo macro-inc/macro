@@ -212,10 +212,10 @@ access. Edit/owner access allows typing; view/comment access is read-only. Two
 tabs on the same project see each other's edits live. The description is part
 of the native project view and does not open a separate document block.
 Discussion appears below the description, using the same discussion component
-as tasks. The surface adopts the project's backing description document on first
-open, so projects created before collab surfaces keep their description. Backing
-documents remain available through direct reads, but are omitted from ordinary
-document search, history, and Soup lists.
+as tasks. The surface has the project's id and is created on first open, or at
+creation when one is given (agents can pass a description). Projects no longer
+have description documents; older ones are ignored and stay hidden from document
+search, history, and Soup lists.
 An unavailable connection shows `Retry description` without clearing saved content.
 
 The project's Tasks tab starts with the task search, controls, and unified list;

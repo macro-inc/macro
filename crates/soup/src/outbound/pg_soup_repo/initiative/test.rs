@@ -97,19 +97,6 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             Uuid::from_u128(0xad000000000000000000000000000001)
         ]
     );
-    let SoupItem::Initiative(item) = &first[0] else {
-        panic!("expected initiative")
-    };
-    assert_eq!(
-        item.description_document_id,
-        Some(Uuid::from_u128(0xaf000000000000000000000000000004))
-    );
-    // The fixture inserts rows the way the previous release does, without a surface; the
-    // migration's trigger names the document's session.
-    assert_eq!(
-        item.description_surface_id,
-        Some(Uuid::from_u128(0xaf000000000000000000000000000004))
-    );
     let ids = (1..=6)
         .map(|id| {
             EntityType::Initiative.with_entity_string(

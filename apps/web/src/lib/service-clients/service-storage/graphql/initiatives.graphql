@@ -2,7 +2,6 @@ fragment InitiativeDetailFields on GraphqlSoupInitiative {
   __typename
   id
   displayName
-  descriptionSurfaceId
   metadata {
     ownerId
     createdAt

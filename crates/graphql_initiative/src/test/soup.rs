@@ -87,8 +87,6 @@ impl SoupService for RecordingSoupService {
                     id: detail.id.as_uuid(),
                     name: detail.name,
                     owner_id: Owner::from_principal_str(detail.owner_id.as_ref()).unwrap(),
-                    description_surface_id: Some(detail.description_surface_id.as_uuid()),
-                    description_document_id: detail.description_document_id.map(|id| id.as_uuid()),
                     created_at: detail.created_at,
                     updated_at: detail.updated_at,
                     viewed_at: Some(

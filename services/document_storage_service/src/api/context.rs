@@ -617,29 +617,13 @@ pub(crate) type RemindersServiceType =
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
-pub(crate) type InitiativeDescriptionDocumentsType =
-    initiative_documents::InitiativeDescriptionDocumentsAdapter<
-        Arc<DocumentService>,
-        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
-        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
-        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
-        documents_hex::domain::purge::DocumentPurger<
-            documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository,
-            documents_hex::outbound::document_purge::SqsDocumentPurgeQueue,
-            DssEventBroker,
-        >,
-    >;
-
 /// Initiative description surfaces, backed by the shared collab-surface service.
 pub(crate) type InitiativeDescriptionSurfacesType =
-    initiative_documents::InitiativeDescriptionSurfacesAdapter<CollabSurfaceServiceType>;
+    initiative_description::InitiativeDescriptionSurfacesAdapter<CollabSurfaceServiceType>;
 
 /// Type alias for the initiative service.
-pub(crate) type InitiativeServiceType = InitiativeServiceImpl<
-    PgInitiativeRepo,
-    InitiativeDescriptionDocumentsType,
-    InitiativeDescriptionSurfacesType,
->;
+pub(crate) type InitiativeServiceType =
+    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionSurfacesType>;
 
 /// Type alias for the initiative router state.
 pub(crate) type DssInitiativeState =

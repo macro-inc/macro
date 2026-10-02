@@ -12,12 +12,8 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{AccessError, EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
-};
-use models_permissions::share_permission::{
-    LinkShareState, SharePermissionV2, UpdateSharePermissionRequestV2,
-};
+use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -67,96 +63,6 @@ impl FromStr for InitiativeId {
     }
 }
 
-/// Id of the collab surface that holds an initiative's description: a Loro session in
-/// sync-service whose access derives from the initiative. The surface adopts the
-/// description document's session in place, so while a document is linked the ids match.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(transparent)]
-pub struct DescriptionSurfaceId(Uuid);
-
-impl DescriptionSurfaceId {
-    /// Wrap an already-persisted id.
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
-    /// The inner UUID.
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-}
-
-impl fmt::Display for DescriptionSurfaceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Id of the markdown document that backs an initiative's description. Its sync-service
-/// session is the description surface, and its grants mirror the initiative's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(transparent)]
-pub struct DescriptionDocumentId(Uuid);
-
-impl DescriptionDocumentId {
-    /// Wrap an already-persisted id.
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
-    /// The inner UUID.
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-
-    /// The surface that adopts this document's session: the same id.
-    pub fn adopting_surface(&self) -> DescriptionSurfaceId {
-        DescriptionSurfaceId(self.0)
-    }
-}
-
-impl fmt::Display for DescriptionDocumentId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for DescriptionDocumentId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Uuid::parse_str(s)?))
-    }
-}
-
-/// The description document the service asks the documents side to create. Every field is
-/// already validated by the initiative domain.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewDescriptionDocument {
-    /// Document owner; the initiative owner, so both entities agree on who may team-share.
-    pub owner: MacroUserIdStr<'static>,
-    /// The initiative's name at create time. Renames are not mirrored.
-    pub name: String,
-    /// Trimmed initial markdown; empty when the request had none.
-    pub prefill_markdown: String,
-    /// The initiative's resolved link share, applied verbatim so the markdown default
-    /// (PUBLIC/Edit) never exists for this document.
-    pub link_share: LinkShareState,
-}
-
-/// Where an initiative keeps its description, as persisted on the row. The database
-/// guarantees the surface is the document's session while a document is linked.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DescriptionLocation {
-    /// The collab surface holding the description.
-    pub surface_id: DescriptionSurfaceId,
-    /// The backing description document. Every initiative this release creates has one;
-    /// readers tolerate its absence so a later release can stop creating documents.
-    pub document_id: Option<DescriptionDocumentId>,
-}
-
 /// Minimal initiative identity used by access checks and internal lookups.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -179,11 +85,6 @@ pub struct InitiativeSummary {
     pub id: InitiativeId,
     /// Display name.
     pub name: String,
-    /// The collab surface holding the description; open it in the editor.
-    pub description_surface_id: DescriptionSurfaceId,
-    /// The markdown document backing the description; document tools can read and edit
-    /// it. Absent only for initiatives created by a later release.
-    pub description_document_id: Option<DescriptionDocumentId>,
     /// When the initiative was last updated.
     pub updated_at: DateTime<Utc>,
 }
@@ -197,11 +98,6 @@ pub struct InitiativeDetail {
     pub id: InitiativeId,
     /// Display name.
     pub name: String,
-    /// The collab surface holding the description; open it in the editor.
-    pub description_surface_id: DescriptionSurfaceId,
-    /// The markdown document backing the description; document tools can read and edit
-    /// it. Absent only for initiatives created by a later release.
-    pub description_document_id: Option<DescriptionDocumentId>,
     /// Owner of the initiative.
     pub owner_id: MacroUserIdStr<'static>,
     /// Member user ids. The owner is never stored here.
@@ -236,7 +132,7 @@ pub struct InitialPropertyValue {
 pub struct CreateInitiativeRequest {
     /// Display name.
     pub name: String,
-    /// Initial markdown for the description document. Not stored on the initiative; later
+    /// Initial markdown for the description surface. Not stored on the initiative; later
     /// edits happen in the collaborative description editor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -418,9 +314,6 @@ pub struct CreateInitiativeRepoArgs {
     pub owner_id: MacroUserIdStr<'static>,
     /// Validated name.
     pub name: String,
-    /// The description document, already committed by the documents side. Its session is
-    /// the description surface.
-    pub description_document_id: DescriptionDocumentId,
     /// Member ids with the owner removed and duplicates dropped.
     pub member_ids: Vec<MacroUserIdStr<'static>>,
 }
@@ -438,29 +331,8 @@ pub struct UpdateInitiativeRepoArgs {
     pub member_ids_removed: Vec<MacroUserIdStr<'static>>,
     /// Share permission patch when the owner sent one.
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
-    /// Authorized team-share writes for both entities, if any.
-    pub team_share: Option<LockstepTeamShare>,
-}
-
-/// Team-share commands for an initiative and its description document, authorized by the
-/// owner against one snapshot of facts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LockstepTeamShare {
-    /// Command whose expected facts name the initiative.
-    pub initiative: AuthorizedTeamShareCommand,
-    /// Command whose expected facts name the description document, when one exists.
-    pub description: Option<AuthorizedTeamShareCommand>,
-}
-
-/// Team-share facts for an initiative and its description document, read in one guarded
-/// transaction so the service authorizes both against the same snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LockstepTeamShareFacts {
-    /// Facts for the initiative entity.
-    pub initiative: TeamShareFacts,
-    /// Facts for the description document entity, when one exists. The description
-    /// surface derives access from the initiative and has no facts of its own.
-    pub description: Option<TeamShareFacts>,
+    /// Authorized team-share write, if any.
+    pub team_share: Option<AuthorizedTeamShareCommand>,
 }
 
 /// Errors returned by the initiative service.

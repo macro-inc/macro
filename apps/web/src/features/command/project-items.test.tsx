@@ -51,7 +51,6 @@ const page = (id: string, nextCursor: string | null = null) => ({
             __typename: 'GraphqlSoupInitiative',
             id,
             displayName: id,
-            descriptionSurfaceId: 'description',
             metadata: { updatedAt: '2026-09-22T12:00:00Z' },
             viewerPermission: {
               __typename: 'GraphqlAccessLevelPermission',

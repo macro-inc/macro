@@ -4,18 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId } from './soupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId';
-import type { SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId } from './soupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId';
 import type { SoupInitiativeSoupPropertiesFieldAllOfTwoViewedAt } from './soupInitiativeSoupPropertiesFieldAllOfTwoViewedAt';
 
 export type SoupInitiativeSoupPropertiesFieldAllOfTwo = {
   /** Creation timestamp. */
   createdAt: string;
-  /** Document backing the initiative description; its session is the description
-surface. */
-  descriptionDocumentId?: SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId;
-  /** Collab surface holding the initiative description. */
-  descriptionSurfaceId?: SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId;
   /** Initiative identifier. */
   id: string;
   /** Initiative display name. */

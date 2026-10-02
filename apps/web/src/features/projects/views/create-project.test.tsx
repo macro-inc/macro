@@ -67,7 +67,6 @@ const dueDate: Property = {
 const project: ProjectDetail = {
   id: 'project',
   name: 'Launch',
-  descriptionSurfaceId: 'description',
   ownerId: 'owner',
   memberIds: [],
   taskIds: [],

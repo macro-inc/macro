@@ -193,9 +193,6 @@ fn detail() -> InitiativeDetail {
     InitiativeDetail {
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
-        description_surface_id: DescriptionDocumentId::from_uuid(Uuid::from_u128(2))
-            .adopting_surface(),
-        description_document_id: Some(DescriptionDocumentId::from_uuid(Uuid::from_u128(2))),
         owner_id: user(),
         member_ids: vec![],
         task_ids: vec![],
@@ -212,8 +209,6 @@ fn row() -> InitiativePageRow {
         initiative: InitiativeSummary {
             id: detail.id,
             name: detail.name,
-            description_surface_id: detail.description_surface_id,
-            description_document_id: detail.description_document_id,
             updated_at: detail.updated_at,
         },
         user_access_level: AccessLevel::Edit,
@@ -277,10 +272,10 @@ impl InitiativeApi for RecordingApi {
         &self,
         user: MacroUserIdStr<'static>,
         _id: Uuid,
-    ) -> ApiFuture<'_, DescriptionSurfaceId> {
+    ) -> ApiFuture<'_, ()> {
         Box::pin(async move {
             self.record(&user, "ensure_description_surface")?;
-            Ok(detail().description_surface_id)
+            Ok(())
         })
     }
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
@@ -442,7 +437,7 @@ async fn anonymous_queries_and_mutations_never_call_domain() {
 }
 
 #[tokio::test]
-async fn ensure_description_surface_returns_the_surface_id() {
+async fn ensure_description_surface_returns_the_project_id_as_the_surface_id() {
     let api = Arc::new(RecordingApi::default());
     let response = schema(api.clone())
         .execute(
@@ -455,7 +450,7 @@ async fn ensure_description_surface_returns_the_surface_id() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["ensureInitiativeDescriptionSurface"],
-        Uuid::from_u128(2).to_string()
+        PROJECT_ID
     );
     assert_eq!(
         *api.calls.lock().unwrap(),

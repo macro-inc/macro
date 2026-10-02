@@ -4,7 +4,6 @@ import type {
   Client,
   DocumentInput,
   OperationResult,
-  OperationResultSource,
 } from '@urql/core';
 import {
   AssignInitiativeTasksDocument,
@@ -79,7 +78,6 @@ export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
-    descriptionSurfaceId: project.descriptionSurfaceId ?? '',
     updatedAt: project.metadata.updatedAt ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
@@ -163,42 +161,6 @@ function operationData<Data, Variables extends AnyVariables>(
   return result.data;
 }
 
-/**
- * The first final result of an operation, like `toPromise`, but rejecting at once
- * when `signal` aborts instead of waiting for the response. urql replaces
- * `fetchOptions.signal` with its own controller; unsubscribing tears down a query's
- * request, while a mutation's request finishes in the background unobserved.
- */
-function settle<Data, Variables extends AnyVariables>(
-  source: OperationResultSource<OperationResult<Data, Variables>>,
-  signal?: AbortSignal
-): Promise<OperationResult<Data, Variables>> {
-  if (!signal) return source.toPromise();
-  signal.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    let done = false;
-    let subscription: { unsubscribe(): void } | undefined;
-    const finish = () => {
-      done = true;
-      signal.removeEventListener('abort', onAbort);
-      subscription?.unsubscribe();
-    };
-    const onAbort = () => {
-      if (done) return;
-      finish();
-      reject(signal.reason);
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    subscription = source.subscribe((result) => {
-      if (done || result.stale || result.hasNext) return;
-      finish();
-      resolve(result);
-    });
-    // A synchronous result settled before the subscription was assigned.
-    if (done) subscription.unsubscribe();
-  });
-}
-
 /** All project operations use the authenticated, normalized GraphQL client. */
 export function createInitiativeClient(client: () => Client) {
   async function query<Data, Variables extends AnyVariables>(
@@ -207,23 +169,21 @@ export function createInitiativeClient(client: () => Client) {
     signal?: AbortSignal
   ) {
     signal?.throwIfAborted();
-    const result = await settle(
-      client().query(document, variables, {
+    const result = await client()
+      .query(document, variables, {
         requestPolicy: 'network-only',
         ...(signal ? { fetchOptions: { signal } } : {}),
-      }),
-      signal
-    );
+      })
+      .toPromise();
     signal?.throwIfAborted();
     return operationData(result);
   }
   async function mutation<Data, Variables extends AnyVariables>(
     document: DocumentInput<Data, Variables>,
-    variables: Variables,
-    signal?: AbortSignal
+    variables: Variables
   ) {
     return operationData(
-      await settle(client().mutation(document, variables), signal)
+      await client().mutation(document, variables).toPromise()
     );
   }
   return {
@@ -266,19 +226,14 @@ export function createInitiativeClient(client: () => Client) {
           ).updateInitiative
         )
       ),
-    /**
-     * Ensure the description surface exists before connecting; returns its id. The
-     * request is abandoned once `signal` aborts.
-     */
-    ensureDescriptionSurface: (id: string, signal?: AbortSignal) =>
+    /** Ensure the description surface, which has the project's id, before connecting. */
+    ensureDescriptionSurface: (id: string) =>
       catchToResult(
         async () =>
           (
-            await mutation(
-              EnsureInitiativeDescriptionSurfaceDocument,
-              { initiativeId: id },
-              signal
-            )
+            await mutation(EnsureInitiativeDescriptionSurfaceDocument, {
+              initiativeId: id,
+            })
           ).ensureInitiativeDescriptionSurface
       ),
     delete: (id: string) =>

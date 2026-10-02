@@ -201,7 +201,6 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                 description={
                   <ProjectDescription
                     projectId={project().id}
-                    surfaceId={project().descriptionSurfaceId}
                     canEdit={canEditProject(project())}
                   />
                 }

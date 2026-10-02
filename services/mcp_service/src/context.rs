@@ -391,7 +391,6 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
     );
 

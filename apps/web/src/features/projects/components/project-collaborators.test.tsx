@@ -37,7 +37,6 @@ afterEach(cleanup);
 const project: ProjectDetail = {
   id: 'p',
   name: 'Project',
-  descriptionSurfaceId: 'd',
   updatedAt: '',
   ownerId: 'owner',
   createdAt: '',

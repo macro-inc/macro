@@ -37,13 +37,6 @@ pub(super) async fn by_ids(
                 id: row.id,
                 name: row.name,
                 owner_id: Owner::from_principal_str(&row.owner_user_id).map_err(super::type_err)?,
-                description_surface_id: Some(row.description_surface_id),
-                description_document_id: row
-                    .description_document_id
-                    .as_deref()
-                    .map(str::parse)
-                    .transpose()
-                    .map_err(super::type_err)?,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
                 viewed_at: row.viewed_at,

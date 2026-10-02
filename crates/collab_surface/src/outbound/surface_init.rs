@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use lexical_client::LexicalClient;
+use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
 use sync_service_client::SyncServiceClient;
 use tokio_retry::{Retry, strategy::FixedInterval};
 
@@ -22,10 +22,6 @@ const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
 
 const MAX_ATTEMPTS: usize = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(1);
-
-/// Backoff while an adoption waits for a document session still being initialized:
-/// about 1.5 s in all, checking soon after the first miss.
-const SESSION_WAIT_BACKOFF_MS: [u64; 5] = [50, 100, 200, 400, 800];
 
 /// [`SurfaceInitializer`] over the real lexical-service and sync-service
 /// clients.
@@ -107,28 +103,14 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn await_session(&self, surface_id: &str) -> Result<bool, CollabSurfaceError> {
-        // A document's own initialization runs in the background after it is
-        // created, so give a just-created session a moment to land.
-        let mut backoff = SESSION_WAIT_BACKOFF_MS.into_iter();
-        loop {
-            let exists = self
-                .sync_service_client
-                .exists(surface_id)
-                .await
-                .map_err(|e| {
-                    CollabSurfaceError::Internal(
-                        rootcause::report!("failed to check sync-service session: {e:?}")
-                            .into_dynamic(),
-                    )
-                })?;
-            if exists {
-                return Ok(true);
-            }
-            let Some(delay) = backoff.next() else {
-                return Ok(false);
-            };
-            tokio::time::sleep(Duration::from_millis(delay)).await;
-        }
+    async fn markdown(&self, surface_id: &str) -> Result<String, CollabSurfaceError> {
+        self.lexical_client
+            .get_markdown(surface_id, MarkdownTarget::External)
+            .await
+            .map_err(|e| {
+                CollabSurfaceError::Internal(
+                    rootcause::report!("failed to render surface markdown: {e:?}").into_dynamic(),
+                )
+            })
     }
 }

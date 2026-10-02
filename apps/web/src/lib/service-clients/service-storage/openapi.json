@@ -21574,7 +21574,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the collaborative description editor."
+            "description": "Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor."
           },
           "memberIds": {
             "type": ["array", "null"],
@@ -22793,16 +22793,6 @@
             }
           }
         ]
-      },
-      "DescriptionDocumentId": {
-        "type": "string",
-        "format": "uuid",
-        "description": "Id of the markdown document that backs an initiative's description. Its sync-service\nsession is the description surface, and its grants mirror the initiative's."
-      },
-      "DescriptionSurfaceId": {
-        "type": "string",
-        "format": "uuid",
-        "description": "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. The surface adopts the\ndescription document's session in place, so while a document is linked the ids match."
       },
       "DocumentBasic": {
         "type": "object",
@@ -27278,7 +27268,6 @@
         "required": [
           "id",
           "name",
-          "descriptionSurfaceId",
           "ownerId",
           "memberIds",
           "taskIds",
@@ -27292,21 +27281,6 @@
             "type": "string",
             "format": "date-time",
             "description": "When the initiative was created."
-          },
-          "descriptionDocumentId": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DescriptionDocumentId",
-                "description": "The markdown document backing the description; document tools can read and edit\nit. Absent only for initiatives created by a later release."
-              }
-            ]
-          },
-          "descriptionSurfaceId": {
-            "$ref": "#/components/schemas/DescriptionSurfaceId",
-            "description": "The collab surface holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -27409,23 +27383,8 @@
       "InitiativeSummary": {
         "type": "object",
         "description": "List-row view of an initiative.",
-        "required": ["id", "name", "descriptionSurfaceId", "updatedAt"],
+        "required": ["id", "name", "updatedAt"],
         "properties": {
-          "descriptionDocumentId": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/DescriptionDocumentId",
-                "description": "The markdown document backing the description; document tools can read and edit\nit. Absent only for initiatives created by a later release."
-              }
-            ]
-          },
-          "descriptionSurfaceId": {
-            "$ref": "#/components/schemas/DescriptionSurfaceId",
-            "description": "The collab surface holding the description; open it in the editor."
-          },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
             "description": "Opaque identifier."
@@ -33678,16 +33637,6 @@
                 "type": "string",
                 "format": "date-time",
                 "description": "Creation timestamp."
-              },
-              "descriptionDocumentId": {
-                "type": ["string", "null"],
-                "format": "uuid",
-                "description": "Document backing the initiative description; its session is the description\nsurface."
-              },
-              "descriptionSurfaceId": {
-                "type": ["string", "null"],
-                "format": "uuid",
-                "description": "Collab surface holding the initiative description."
               },
               "id": {
                 "type": "string",

@@ -5,9 +5,7 @@
             UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $1
             UNION ALL SELECT $1
         )
-        SELECT i.id, i.name, i.owner_user_id, i.description_surface_id,
-            i.description_document_id AS "description_document_id?",
-            i.created_at, i.updated_at, uh."updatedAt"::timestamptz AS viewed_at
+        SELECT i.id, i.name, i.owner_user_id, i.created_at, i.updated_at, uh."updatedAt"::timestamptz AS viewed_at
         FROM initiative i
         LEFT JOIN "UserHistory" uh ON uh."itemId" = i.id::text
             AND uh."itemType" = 'initiative' AND uh."userId" = $1

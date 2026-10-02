@@ -22,16 +22,6 @@ use crate::domain::token::{access_level_for, encode_surface_token};
 /// Upper bound on initial markdown, mirroring the lexical-service request cap.
 const MAX_INITIAL_MARKDOWN_LEN: usize = 1_000_000;
 
-/// How a surface's sync-service session comes to exist when an ensure creates
-/// the surface.
-enum SurfaceSeed {
-    /// Initialize a new session from markdown; empty seeds the canonical blank
-    /// document.
-    Markdown(String),
-    /// Reuse the existing session of the document with the same id.
-    AdoptDocumentSession,
-}
-
 /// Whether the public API may create and delete surfaces under `parent`.
 fn caller_owned(parent: &Entity<'_>) -> bool {
     surface_ownership(parent.entity_type) == Some(SurfaceOwnership::Callers)
@@ -119,17 +109,11 @@ where
         id: Uuid,
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        if !is_random_id(id) {
-            return Err(CollabSurfaceError::BadRequest(
-                "surface ids must be random UUIDs".to_string(),
-            ));
-        }
         let parent = resolve_parent(user_id, &parent_receipt)?;
         if !caller_owned(&parent) {
             return Err(CollabSurfaceError::AccessDenied);
         }
-        self.ensure_bound(parent, id, SurfaceSeed::Markdown(initial_markdown))
-            .await
+        self.ensure_bound(parent, id, &initial_markdown).await
     }
 
     #[tracing::instrument(err, skip(self, user_id, parent_receipt))]
@@ -166,11 +150,8 @@ where
             return Err(CollabSurfaceError::NotReady);
         }
         // Checked on every mint, not only at creation, so a surface whose id
-        // names a document never connects to it, however it was bound. Only
-        // a parent's own domain binds its surfaces to a document on purpose.
-        if surface_ownership(surface.parent.entity_type) != Some(SurfaceOwnership::ParentDomain) {
-            self.refuse_document_id(surface.id).await?;
-        }
+        // names a document never connects to it, however it was bound.
+        self.refuse_document_id(surface.id).await?;
 
         let access_level = access_level_for(parent_receipt.entity_permission())?;
         encode_surface_token(
@@ -222,14 +203,24 @@ where
     I: SurfaceInitializer,
     D: DocumentIds,
 {
-    #[tracing::instrument(err, skip(self))]
-    async fn adopt_document_session(
+    #[tracing::instrument(err, skip(self, initial_markdown))]
+    async fn ensure_owned_surface(
         &self,
         parent: Entity<'static>,
         id: Uuid,
+        initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        self.ensure_bound(parent, id, SurfaceSeed::AdoptDocumentSession)
-            .await
+        self.ensure_bound(parent, id, &initial_markdown).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn owned_surface_markdown(&self, id: Uuid) -> Result<Option<String>, CollabSurfaceError> {
+        match self.get_optional(id).await? {
+            Some(surface) if surface.state == SurfaceState::Ready => {
+                Ok(Some(self.initializer.markdown(&id.to_string()).await?))
+            }
+            _ => Ok(None),
+        }
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -254,37 +245,34 @@ where
         &self,
         parent: Entity<'static>,
         id: Uuid,
-        seed: SurfaceSeed,
+        initial_markdown: &str,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        if let SurfaceSeed::Markdown(markdown) = &seed
-            && markdown.len() > MAX_INITIAL_MARKDOWN_LEN
-        {
+        if !is_random_id(id) {
+            return Err(CollabSurfaceError::BadRequest(
+                "surface ids must be random UUIDs".to_string(),
+            ));
+        }
+        if initial_markdown.len() > MAX_INITIAL_MARKDOWN_LEN {
             return Err(CollabSurfaceError::BadRequest(format!(
                 "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"
             )));
         }
 
-        // Only the owning domain adopts a document's session; any other seed
-        // never uses a document's id.
-        let own_session = matches!(seed, SurfaceSeed::Markdown(_));
-
         // Fast path: the surface already exists. A `pending` row still gets
-        // its initialization retried.
+        // its initialization retried in `finish_init`.
         if let Some(existing) = self.get_optional(id).await? {
             verify_receipt_matches_parent(&existing, &parent)?;
-            if own_session && existing.state == SurfaceState::Pending {
+            if existing.state == SurfaceState::Pending {
                 // A document may have taken the id since the row was written.
                 self.refuse_document_id(id).await?;
             }
-            return self.finish_init(existing, &seed).await;
+            return self.finish_init(existing, initial_markdown).await;
         }
 
         // A new surface creates its own session, so its id must be free in the
         // namespace surfaces share with documents: no document and no session
         // yet. Checked before inserting, so a refusal leaves no row behind.
-        if own_session {
-            self.refuse_taken_id(id).await?;
-        }
+        self.refuse_taken_id(id).await?;
 
         let now = chrono::Utc::now();
         let surface = CollabSurface {
@@ -309,10 +297,10 @@ where
                 return Err(CollabSurfaceError::Gone);
             };
             verify_receipt_matches_parent(&existing, &surface.parent)?;
-            return self.finish_init(existing, &seed).await;
+            return self.finish_init(existing, initial_markdown).await;
         }
 
-        self.finish_init(surface, &seed).await
+        self.finish_init(surface, initial_markdown).await
     }
 
     /// Fetch a live (non-deleted) surface or `NotFound`.
@@ -332,8 +320,7 @@ where
     }
 
     /// Refuse an id that names a document. Surfaces share the document
-    /// namespace in sync-service, so a surface never uses a document's id
-    /// unless its parent's domain adopts that document's session.
+    /// namespace in sync-service, so a surface never uses a document's id.
     async fn refuse_document_id(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
         if self.documents.is_document_id(id).await? {
             return Err(CollabSurfaceError::IdReserved);
@@ -366,33 +353,23 @@ where
         })
     }
 
-    /// Take a surface the caller may act on to `Ready`. A markdown seed
-    /// (re)initializes a `Pending` session; the initializer treats an
-    /// already-initialized session as success, so this is safe to run
-    /// concurrently and after partial failures (a pending row whose session
-    /// was initialized before `mark_ready` failed heals here). An adoption
-    /// never initializes: it waits for the document's own session, and stays
-    /// `Pending` until then.
+    /// Take a surface the caller may act on to `Ready`, (re)initializing its
+    /// sync-service session when it is still `Pending`. The initializer treats
+    /// an already-initialized session as success, so this is safe to run
+    /// concurrently and after partial failures: a pending row whose session
+    /// was initialized before `mark_ready` failed heals here.
     async fn finish_init(
         &self,
         surface: CollabSurface,
-        seed: &SurfaceSeed,
+        initial_markdown: &str,
     ) -> Result<CollabSurface, CollabSurfaceError> {
         if surface.state == SurfaceState::Ready {
             return Ok(surface);
         }
 
-        let session_id = surface.id.to_string();
-        match seed {
-            SurfaceSeed::Markdown(markdown) => {
-                self.initializer.initialize(&session_id, markdown).await?;
-            }
-            SurfaceSeed::AdoptDocumentSession => {
-                if !self.initializer.await_session(&session_id).await? {
-                    return Err(CollabSurfaceError::NotReady);
-                }
-            }
-        }
+        self.initializer
+            .initialize(&surface.id.to_string(), initial_markdown)
+            .await?;
 
         self.repo
             .mark_ready(surface.id)

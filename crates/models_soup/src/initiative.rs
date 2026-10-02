@@ -15,12 +15,6 @@ pub struct SoupInitiative<T = ()> {
     /// Initiative owner.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub owner_id: Owner,
-    /// Collab surface holding the initiative description.
-    #[serde(default)]
-    pub description_surface_id: Option<Uuid>,
-    /// Document backing the initiative description; its session is the description
-    /// surface.
-    pub description_document_id: Option<Uuid>,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Last modification timestamp.

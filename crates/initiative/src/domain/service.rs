@@ -25,56 +25,45 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
-    TeamShareCreation, TeamShareLevel, TeamSharePolicyError, TeamShareRequest, authorize_team_share,
+    AuthorizedTeamShareCommand, TeamShareCreation, TeamShareLevel, TeamSharePolicyError,
+    TeamShareRequest, authorize_team_share,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::domain::models::{
     AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs,
-    CreateInitiativeRequest, DescriptionSurfaceId, InitiativeBasic, InitiativeDetail,
-    InitiativeError, InitiativeId, InitiativeList, LockstepTeamShare,
-    MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN,
-    NewDescriptionDocument, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    CreateInitiativeRequest, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+    InitiativeList, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES,
+    MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
-use crate::domain::ports::{
-    InitiativeDescriptionDocuments, InitiativeDescriptionSurfaces, InitiativeRepo,
-    InitiativeService,
-};
+use crate::domain::ports::{InitiativeDescriptionSurfaces, InitiativeRepo, InitiativeService};
 use crate::domain::resources::InitiativeResources;
 
-/// Concrete initiative service backed by an [`InitiativeRepo`] and the description document
-/// and surface ports.
+/// Concrete initiative service backed by an [`InitiativeRepo`] and the description surface
+/// port.
 #[derive(Clone)]
-pub struct InitiativeServiceImpl<R, D, S> {
+pub struct InitiativeServiceImpl<R, S> {
     repo: R,
-    description_documents: D,
     description_surfaces: S,
     resources: Arc<dyn InitiativeResources>,
     events: Option<Arc<dyn InitiativeEventPublisher>>,
 }
 
-impl<R, D, S> std::fmt::Debug for InitiativeServiceImpl<R, D, S> {
+impl<R, S> std::fmt::Debug for InitiativeServiceImpl<R, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("InitiativeServiceImpl")
     }
 }
 
-impl<R, D, S> InitiativeServiceImpl<R, D, S>
+impl<R, S> InitiativeServiceImpl<R, S>
 where
     R: InitiativeRepo,
-    D: InitiativeDescriptionDocuments,
     S: InitiativeDescriptionSurfaces,
 {
-    /// Create an initiative service backed by the provided repository and description ports.
-    pub fn new(
-        repo: R,
-        description_documents: D,
-        description_surfaces: S,
-        resources: Arc<dyn InitiativeResources>,
-    ) -> Self {
+    /// Create an initiative service backed by the provided repository and description port.
+    pub fn new(repo: R, description_surfaces: S, resources: Arc<dyn InitiativeResources>) -> Self {
         Self {
             repo,
-            description_documents,
             description_surfaces,
             resources,
             events: None,
@@ -98,14 +87,19 @@ where
         }
     }
 
-    /// Authorize one team-share edit against the initiative and its description document
-    /// from a single snapshot of facts. A `NotOwner` on the document means the two owners
-    /// have drifted apart.
-    async fn authorize_lockstep_team_share(
+    /// Retire the description surface of an initiative that never came to exist.
+    async fn retire_description(&self, id: InitiativeId) {
+        if let Err(error) = self.description_surfaces.delete(id).await {
+            tracing::error!(?error, %id, "description surface orphaned after failed initiative create");
+        }
+    }
+
+    /// Authorize one team-share edit against the initiative's canonical facts.
+    async fn authorize_team_share(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         request: TeamShareRequest,
-    ) -> Result<Option<LockstepTeamShare>, InitiativeError> {
+    ) -> Result<Option<AuthorizedTeamShareCommand>, InitiativeError> {
         if request == TeamShareRequest::default() {
             return Ok(None);
         }
@@ -115,29 +109,15 @@ where
             .get_team_share_facts(id)
             .await
             .map_err(Into::into)?;
-        let actor = receipt.acting_user_id();
-        let initiative =
-            authorize_team_share(actor, &facts.initiative, request, TeamShareLevel::Edit)
-                .map_err(team_share_error)?
-                .ok_or_else(missing_team_share_command)?;
-        let description = facts
-            .description
-            .as_ref()
-            .map(|facts| {
-                authorize_team_share(actor, facts, request, TeamShareLevel::Edit)
-                    .map_err(|error| match error {
-                        TeamSharePolicyError::NotOwner => InitiativeError::Conflict(
-                            "description document is not owned by the initiative owner".to_string(),
-                        ),
-                        other => team_share_error(other),
-                    })?
-                    .ok_or_else(missing_team_share_command)
-            })
-            .transpose()?;
-        Ok(Some(LockstepTeamShare {
-            initiative,
-            description,
-        }))
+        authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::Edit,
+        )
+        .map_err(team_share_error)?
+        .ok_or_else(missing_team_share_command)
+        .map(Some)
     }
 }
 
@@ -147,11 +127,10 @@ fn missing_team_share_command() -> InitiativeError {
     ))
 }
 
-impl<R, D, S> InitiativeService for InitiativeServiceImpl<R, D, S>
+impl<R, S> InitiativeService for InitiativeServiceImpl<R, S>
 where
     R: InitiativeRepo,
     R::Err: Into<InitiativeError>,
-    D: InitiativeDescriptionDocuments,
     S: InitiativeDescriptionSurfaces,
 {
     async fn summary(
@@ -184,8 +163,8 @@ where
     ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
         self.read_task_references(user_id, request).await
     }
-    /// Two commits with compensation. The documents side commits first. A failed
-    /// initiative write purges the document so nothing orphaned survives an `Err`.
+    /// A seeded description surface commits before the initiative row. A failed create
+    /// retires it, and a failed property initialization deletes the new initiative.
     #[tracing::instrument(err, skip_all)]
     async fn create(
         &self,
@@ -237,17 +216,15 @@ where
             TeamShareCreation::Unshared
         };
 
-        let description_document_id = self
-            .description_documents
-            .create(NewDescriptionDocument {
-                owner: owner_id.clone(),
-                name: name.clone(),
-                prefill_markdown,
-                link_share: share_permission.link_share_state(),
-            })
-            .await?;
-
         let id = InitiativeId::generate();
+        // A description given at creation seeds the surface before the row exists, so the
+        // project never opens without it. Otherwise the surface is ensured on first open.
+        let seeded = !prefill_markdown.is_empty();
+        if seeded {
+            self.description_surfaces
+                .ensure(id, prefill_markdown)
+                .await?;
+        }
         let created = self
             .repo
             .create(
@@ -255,60 +232,55 @@ where
                     id,
                     owner_id,
                     name,
-                    description_document_id,
                     member_ids,
                 },
                 share_permission,
                 team_share,
             )
             .await;
-        match created {
-            Ok(mut detail) => {
-                if let Err(error) = initialize_properties(
-                    self.resources.as_ref(),
-                    user_id.clone().into_owned(),
-                    id,
-                    property_values,
-                )
-                .await
-                {
-                    if self.repo.delete(id).await.inspect_err(|cleanup| {
-                        tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
-                    }).is_ok() {
-                        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
-                            .await;
-                        let _ = self.description_documents.purge(description_document_id).await.inspect_err(|cleanup| tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization"));
-                    }
-                    return Err(error);
-                }
-                detail.user_access_level = AccessLevel::Owner;
-                self.publish(
-                    id,
-                    InitiativeTopicEvent::Created(InitiativeChange {
-                        initiative_id: id,
-                        attribution: Some(attribution.into()),
-                        occurred_at: Utc::now(),
-                    }),
-                )
-                .await;
-                Ok(detail)
-            }
+        let mut detail = match created {
+            Ok(detail) => detail,
             Err(error) => {
-                if let Err(purge_error) = self
-                    .description_documents
-                    .purge(description_document_id)
-                    .await
-                {
-                    tracing::error!(
-                        error = ?purge_error,
-                        %description_document_id,
-                        %id,
-                        "description document orphaned after failed initiative create"
-                    );
+                if seeded {
+                    self.retire_description(id).await;
                 }
-                Err(error.into())
+                return Err(error.into());
             }
+        };
+        if let Err(error) = initialize_properties(
+            self.resources.as_ref(),
+            user_id.clone().into_owned(),
+            id,
+            property_values,
+        )
+        .await
+        {
+            if self
+                .repo
+                .delete(id)
+                .await
+                .inspect_err(|cleanup| {
+                    tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
+                })
+                .is_ok()
+            {
+                self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
+                    .await;
+                self.retire_description(id).await;
+            }
+            return Err(error);
         }
+        detail.user_access_level = AccessLevel::Owner;
+        self.publish(
+            id,
+            InitiativeTopicEvent::Created(InitiativeChange {
+                initiative_id: id,
+                attribution: Some(attribution.into()),
+                occurred_at: Utc::now(),
+            }),
+        )
+        .await;
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -344,19 +316,19 @@ where
     async fn ensure_description_surface(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<DescriptionSurfaceId, InitiativeError> {
+    ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        let description = self
-            .repo
-            .description(id)
-            .await
-            .map_err(Into::into)?
-            .ok_or(InitiativeError::NotFound)?;
-        // A surface without a document was created ready by the release that wrote it.
-        if let Some(document) = description.document_id {
-            self.description_surfaces.adopt(document, id).await?;
-        }
-        Ok(description.surface_id)
+        // An existing surface keeps its content; a project's first open starts it empty.
+        self.description_surfaces.ensure(id, String::new()).await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn read_description(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, InitiativeError> {
+        let id = initiative_id_from_receipt(&receipt)?;
+        self.description_surfaces.read(id).await
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -397,7 +369,7 @@ where
         };
 
         let team_share = if let Some(share_permission) = request.share_permission.as_ref() {
-            self.authorize_lockstep_team_share(
+            self.authorize_team_share(
                 &receipt,
                 TeamShareRequest {
                     access_level: share_permission.team_share_access_level,
@@ -561,7 +533,7 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        let description = self.repo.delete(id).await.map_err(Into::into)?;
+        self.repo.delete(id).await.map_err(Into::into)?;
         self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
             .await;
         // Cleanup follows an authorized deletion and is not a fresh user edit.
@@ -575,19 +547,10 @@ where
         )
         .map_err(|_| InitiativeError::Unauthorized)?;
         let properties_cleanup = self.resources.purge(cleanup_receipt).await;
-        let document_cleanup = match description.document_id {
-            Some(document) => self.description_documents.purge(document).await.inspect_err(|error| {
-                tracing::error!(?error, %document, %id, "description document orphaned after initiative delete");
-            }),
-            None => Ok(()),
-        };
-        let surface = description.surface_id;
-        let surface_cleanup = self.description_surfaces.delete(surface).await.inspect_err(|error| {
-            tracing::error!(?error, %surface, %id, "description surface orphaned after initiative delete");
+        let surface_cleanup = self.description_surfaces.delete(id).await.inspect_err(|error| {
+            tracing::error!(?error, %id, "description surface orphaned after initiative delete");
         });
-        properties_cleanup
-            .and(document_cleanup)
-            .and(surface_cleanup)
+        properties_cleanup.and(surface_cleanup)
     }
 }
 

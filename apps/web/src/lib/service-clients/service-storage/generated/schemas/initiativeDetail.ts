@@ -6,8 +6,6 @@
  */
 
 import type { AccessLevel } from './accessLevel';
-import type { DescriptionSurfaceId } from './descriptionSurfaceId';
-import type { InitiativeDetailDescriptionDocumentId } from './initiativeDetailDescriptionDocumentId';
 import type { InitiativeId } from './initiativeId';
 import type { MacroUserIdStr } from './macroUserIdStr';
 import type { SharePermissionV2 } from './sharePermissionV2';
@@ -18,9 +16,6 @@ import type { SharePermissionV2 } from './sharePermissionV2';
 export interface InitiativeDetail {
   /** When the initiative was created. */
   createdAt: string;
-  descriptionDocumentId?: InitiativeDetailDescriptionDocumentId;
-  /** The collab surface holding the description; open it in the editor. */
-  descriptionSurfaceId: DescriptionSurfaceId;
   /** Opaque identifier. */
   id: InitiativeId;
   /** Member user ids. The owner is never stored here. */

@@ -63,9 +63,8 @@ pub struct CollabSurface {
 pub enum SurfaceOwnership {
     /// Any caller with access to the parent, through the public API.
     Callers,
-    /// The parent's own domain, through [`OwnedSurfaceService`], which may
-    /// bind them to its own document's session. The public API mints tokens
-    /// for these surfaces but never ensures or deletes them.
+    /// The parent's own domain, through [`OwnedSurfaceService`]. The public
+    /// API mints tokens for these surfaces but never ensures or deletes them.
     ///
     /// [`OwnedSurfaceService`]: crate::domain::ports::OwnedSurfaceService
     ParentDomain,

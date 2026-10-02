@@ -1024,18 +1024,6 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         }
     }
 
-    /// Collaborative surface holding the project's description. Ensure it with
-    /// `ensureInitiativeDescriptionSurface` before connecting.
-    async fn description_surface_id(&self) -> Option<ID> {
-        self.0.description_surface_id.map(|id| ID(id.to_string()))
-    }
-
-    /// Document backing the project's description; document tools read and edit it. Absent
-    /// only for projects created by a later release.
-    async fn description_document_id(&self) -> Option<ID> {
-        self.0.description_document_id.map(|id| ID(id.to_string()))
-    }
-
     /// Common entity edges, including properties and viewer permissions.
     #[graphql(flatten)]
     async fn edges(&self) -> E {

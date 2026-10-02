@@ -657,7 +657,6 @@ async fn main() -> anyhow::Result<()> {
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker.clone(),
     );
 

@@ -70,12 +70,19 @@ impl InitiativeService for ReceiptService {
     async fn ensure_description_surface(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<DescriptionSurfaceId, InitiativeError> {
+    ) -> Result<(), InitiativeError> {
         self.receipts.lock().unwrap().push((
             receipt.entity().entity_id.clone(),
             receipt.get_authenticated_user().unwrap().to_string(),
         ));
-        Ok(DescriptionSurfaceId::from_uuid(Uuid::from_u128(2)))
+        Ok(())
+    }
+
+    async fn read_description(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, InitiativeError> {
+        Ok(String::new())
     }
     async fn list(&self, user_id: &MacroUserIdStr<'_>) -> Result<InitiativeList, InitiativeError> {
         unreachable!("unexpected domain call")

@@ -83,7 +83,6 @@ import { createProjectSources } from './queries/project-sources';
 const project = {
   id: 'launch',
   name: 'Launch',
-  descriptionSurfaceId: 'description',
   ownerId: 'viewer',
   memberIds: [],
   taskIds: ['task'],
@@ -124,7 +123,6 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
               __typename: 'GraphqlSoupInitiative',
               id: project.id,
               displayName: project.name,
-              descriptionSurfaceId: project.descriptionSurfaceId,
               metadata: { updatedAt: project.updatedAt },
               viewerPermission: {
                 __typename: 'GraphqlAccessLevelPermission',

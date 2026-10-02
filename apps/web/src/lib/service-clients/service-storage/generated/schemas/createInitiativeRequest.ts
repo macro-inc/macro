@@ -13,7 +13,7 @@ import type { InitialPropertyValue } from './initialPropertyValue';
  * Create-initiative HTTP body.
  */
 export interface CreateInitiativeRequest {
-  /** Initial markdown for the description document. Not stored on the initiative; later
+  /** Initial markdown for the description surface. Not stored on the initiative; later
 edits happen in the collaborative description editor. */
   description?: CreateInitiativeRequestDescription;
   /** Optional member user ids. Invalid ids fail at the service boundary. */

@@ -12,10 +12,7 @@ use serde::{Deserialize, Serialize};
 use super::{InitiativeServiceImpl, receipt_access_level};
 use crate::domain::{
     models::{InitiativeError, InitiativeId, MAX_TASKS_PER_ASSIGN},
-    ports::{
-        InitiativeDescriptionDocuments, InitiativeDescriptionSurfaces, InitiativeRepo,
-        InitiativeService,
-    },
+    ports::{InitiativeDescriptionSurfaces, InitiativeRepo, InitiativeService},
     reads::{
         InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeReference,
         InitiativeSort, InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH,
@@ -140,9 +137,7 @@ fn order(left: &Position, right: &Position, sort: InitiativeSort, descending: bo
     if descending { order.reverse() } else { order }
 }
 
-impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments, S: InitiativeDescriptionSurfaces>
-    InitiativeServiceImpl<R, D, S>
-{
+impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<R, S> {
     pub(super) async fn read_summary(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -179,8 +174,6 @@ impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments, S: InitiativeDescript
             initiative: crate::domain::models::InitiativeSummary {
                 id: detail.id,
                 name: detail.name,
-                description_surface_id: detail.description_surface_id,
-                description_document_id: detail.description_document_id,
                 updated_at: detail.updated_at,
             },
             user_access_level: detail.user_access_level,

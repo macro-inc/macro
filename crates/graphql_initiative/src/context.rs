@@ -12,8 +12,8 @@ use entity_access::domain::{
 use futures::{StreamExt, TryStreamExt, stream};
 use initiative::domain::{
     models::{
-        AssignTasksResponse, CreateInitiativeRequest, DescriptionSurfaceId, InitiativeDetail,
-        InitiativeError, TaskAssignment, TaskAssignmentBatch, UpdateInitiativeRequest,
+        AssignTasksResponse, CreateInitiativeRequest, InitiativeDetail, InitiativeError,
+        TaskAssignment, TaskAssignmentBatch, UpdateInitiativeRequest,
     },
     ports::InitiativeService,
     reads::{
@@ -38,7 +38,7 @@ pub(crate) trait InitiativeApi: Send + Sync {
         &self,
         user: MacroUserIdStr<'static>,
         id: Uuid,
-    ) -> ApiFuture<'_, DescriptionSurfaceId>;
+    ) -> ApiFuture<'_, ()>;
     fn tasks(
         &self,
         user: MacroUserIdStr<'static>,
@@ -147,7 +147,7 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
         &self,
         user: MacroUserIdStr<'static>,
         id: Uuid,
-    ) -> ApiFuture<'_, DescriptionSurfaceId> {
+    ) -> ApiFuture<'_, ()> {
         Box::pin(async move {
             let receipt = self
                 .access

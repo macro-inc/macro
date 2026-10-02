@@ -3767,7 +3767,7 @@ export type CreateImport = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Initial markdown for the description document. Not stored on the initiative; later
+     * Initial markdown for the description surface. Not stored on the initiative; later
      * edits happen in the collaborative description editor.
      */
     description?: string | null;
@@ -4661,19 +4661,6 @@ export type DeleteUnthreadedPdfAnchorRequest = {
     anchorType: 'highlight';
     uuid: string;
 };
-
-/**
- * Id of the markdown document that backs an initiative's description. Its sync-service
- * session is the description surface, and its grants mirror the initiative's.
- */
-export type DescriptionDocumentId = string;
-
-/**
- * Id of the collab surface that holds an initiative's description: a Loro session in
- * sync-service whose access derives from the initiative. The surface adopts the
- * description document's session in place, so while a document is linked the ids match.
- */
-export type DescriptionSurfaceId = string;
 
 /**
  * Returns basic information of a document used for some db queries
@@ -7229,11 +7216,6 @@ export type InitiativeDetail = {
      * When the initiative was created.
      */
     createdAt: string;
-    descriptionDocumentId?: null | DescriptionDocumentId;
-    /**
-     * The collab surface holding the description; open it in the editor.
-     */
-    descriptionSurfaceId: DescriptionSurfaceId;
     /**
      * Opaque identifier.
      */
@@ -7321,11 +7303,6 @@ export type InitiativeList = {
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
-    descriptionDocumentId?: null | DescriptionDocumentId;
-    /**
-     * The collab surface holding the description; open it in the editor.
-     */
-    descriptionSurfaceId: DescriptionSurfaceId;
     /**
      * Opaque identifier.
      */
@@ -11196,15 +11173,6 @@ export type SoupInitiativeSoupPropertiesField = {
      * Creation timestamp.
      */
     createdAt: string;
-    /**
-     * Document backing the initiative description; its session is the description
-     * surface.
-     */
-    descriptionDocumentId?: string | null;
-    /**
-     * Collab surface holding the initiative description.
-     */
-    descriptionSurfaceId?: string | null;
     /**
      * Initiative identifier.
      */

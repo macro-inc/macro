@@ -4,18 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { DescriptionSurfaceId } from './descriptionSurfaceId';
 import type { InitiativeId } from './initiativeId';
-import type { InitiativeSummaryDescriptionDocumentId } from './initiativeSummaryDescriptionDocumentId';
 
 /**
  * List-row view of an initiative.
  */
 export interface InitiativeSummary {
-  descriptionDocumentId?: InitiativeSummaryDescriptionDocumentId;
-  /** The collab surface holding the description; open it in the editor. */
-  descriptionSurfaceId: DescriptionSurfaceId;
   /** Opaque identifier. */
   id: InitiativeId;
   /** Display name. */

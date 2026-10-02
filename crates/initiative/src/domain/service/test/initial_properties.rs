@@ -81,8 +81,8 @@ fn request(property_values: Vec<InitialPropertyValue>) -> CreateInitiativeReques
     }
 }
 
-/// Repo and description ports for a create that reaches the property steps.
-fn created_ports() -> (MockInitiativeRepo, MockInitiativeDescriptionDocuments) {
+/// A repo for a create that reaches the property steps.
+fn created_repo() -> MockInitiativeRepo {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_team_default_link_share()
         .return_once(|_| Box::pin(async { Ok(None) }));
@@ -95,20 +95,15 @@ fn created_ports() -> (MockInitiativeRepo, MockInitiativeDescriptionDocuments) {
             })
         })
     });
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents
-        .expect_create()
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
-    (repo, documents)
+    repo
 }
 
 #[tokio::test]
 async fn create_sets_initial_values_as_the_owner_once_properties_are_attached() {
-    let (repo, documents) = created_ports();
+    let repo = created_repo();
     let resources = Arc::new(RecordingResources::default());
     let created = InitiativeServiceImpl::new(
         repo,
-        documents,
         MockInitiativeDescriptionSurfaces::new(),
         resources.clone(),
     )
@@ -128,21 +123,14 @@ async fn create_sets_initial_values_as_the_owner_once_properties_are_attached() 
 
 #[tokio::test]
 async fn rejected_initial_values_delete_the_new_project_and_its_description() {
-    let (mut repo, mut documents) = created_ports();
+    let mut repo = created_repo();
     repo.expect_delete()
-        .times(1)
-        .return_once(|_| Box::pin(async { Ok(description()) }));
-    documents
-        .expect_purge()
-        .withf(|id| *id == description_document_id())
         .times(1)
         .return_once(|_| Box::pin(async { Ok(()) }));
     let events = Arc::new(super::events::Events::default());
     let svc = InitiativeServiceImpl::new(
         repo,
-        documents,
-        // The surface is adopted on first open, so a failed create has none to remove.
-        MockInitiativeDescriptionSurfaces::new(),
+        deleting_surfaces(),
         Arc::new(RecordingResources {
             reject_values: true,
             ..Default::default()
@@ -162,10 +150,9 @@ async fn rejected_initial_values_delete_the_new_project_and_its_description() {
 
 #[tokio::test]
 async fn invalid_initial_values_are_rejected_before_anything_is_created() {
-    // No expectations: any repo, document, or property call fails the test.
+    // No expectations: any repo, surface, or property call fails the test.
     let svc = InitiativeServiceImpl::new(
         MockInitiativeRepo::new(),
-        MockInitiativeDescriptionDocuments::new(),
         MockInitiativeDescriptionSurfaces::new(),
         Arc::new(RecordingResources::default()),
     );

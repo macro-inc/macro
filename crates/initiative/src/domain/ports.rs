@@ -8,56 +8,41 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::team_share::TeamShareCreation;
+use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use std::collections::HashMap;
 
 use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    AssignTasksResponse, CreateInitiativeRepoArgs, CreateInitiativeRequest, DescriptionDocumentId,
-    DescriptionLocation, DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError,
-    InitiativeId, InitiativeList, LockstepTeamShareFacts, NewDescriptionDocument, TaskAssignment,
+    AssignTasksResponse, CreateInitiativeRepoArgs, CreateInitiativeRequest, InitiativeBasic,
+    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, TaskAssignment,
     UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 
-/// Outbound port for the description document's lifecycle.
-#[cfg_attr(test, mockall::automock)]
-pub trait InitiativeDescriptionDocuments: Send + Sync + 'static {
-    /// Create the `initiative_description` markdown document, editor-ready, owned by
-    /// `document.owner` with link share exactly `document.link_share`. Commits before returning.
-    fn create(
-        &self,
-        document: NewDescriptionDocument,
-    ) -> impl Future<Output = Result<DescriptionDocumentId, InitiativeError>> + Send;
-
-    /// Remove the document and everything that hangs off it: rows, grants, sync-service state,
-    /// mentions, and the events downstream consumers need to forget it. Purging an id that is
-    /// already gone succeeds, so a failed purge can be retried.
-    fn purge(
-        &self,
-        id: DescriptionDocumentId,
-    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
-}
-
-/// Outbound port for the collab surface holding an initiative's description. The surface is
-/// parented by the initiative, so its access derives from initiative access; the initiative
-/// domain has already authorized every call.
+/// Outbound port for the collab surface holding an initiative's description. The surface
+/// has the initiative's id and is parented by it, so its access derives from initiative
+/// access; the initiative domain has already authorized every call.
 #[cfg_attr(test, mockall::automock)]
 pub trait InitiativeDescriptionSurfaces: Send + Sync + 'static {
-    /// Idempotently bind the description document's existing sync-service session to the
-    /// initiative's surface, which has the document's id. Never writes content: while the
-    /// document's session is still initializing this fails with a retryable
-    /// [`InitiativeError::Conflict`].
-    fn adopt(
+    /// Idempotently ensure the initiative's surface exists and is ready. A new surface starts
+    /// from `markdown`; an existing one keeps its content.
+    fn ensure(
         &self,
-        document: DescriptionDocumentId,
         initiative: InitiativeId,
+        markdown: String,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
-    /// Soft-delete the surface so no new connection token is minted for it. Idempotent.
+    /// The description as GitHub-flavored markdown; empty while the surface was never ensured.
+    fn read(
+        &self,
+        initiative: InitiativeId,
+    ) -> impl Future<Output = Result<String, InitiativeError>> + Send;
+
+    /// Soft-delete the surface so no new connection token is minted for it. Idempotent, and a
+    /// surface that was never ensured is already gone.
     fn delete(
         &self,
-        id: DescriptionSurfaceId,
+        initiative: InitiativeId,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 }
 
@@ -73,9 +58,7 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         task_ids: Vec<String>,
     ) -> impl Future<Output = Result<HashMap<String, InitiativeId>, Self::Err>> + Send;
 
-    /// Persist a new initiative, its members, and initial share state, mirroring the member
-    /// and team grants onto `args.description_document_id` in the same transaction. The
-    /// description surface is recorded as the document's session.
+    /// Persist a new initiative, its members, and initial share state in one transaction.
     fn create(
         &self,
         args: CreateInitiativeRepoArgs,
@@ -88,12 +71,6 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         &self,
         id: InitiativeId,
     ) -> impl Future<Output = Result<Option<InitiativeBasic>, Self::Err>> + Send;
-
-    /// Load where the initiative keeps its description, without the rest of the row.
-    fn description(
-        &self,
-        id: InitiativeId,
-    ) -> impl Future<Output = Result<Option<DescriptionLocation>, Self::Err>> + Send;
 
     /// Load the full initiative, including members, tasks, and share state.
     fn get_detail(
@@ -108,18 +85,17 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<InitiativeList, Self::Err>> + Send;
 
     /// Apply an update, including member add/remove sets, share patch, and optional team
-    /// share, to the initiative and its description document in one transaction.
+    /// share, in one transaction.
     fn update(
         &self,
         args: UpdateInitiativeRepoArgs,
     ) -> impl Future<Output = Result<InitiativeDetail, Self::Err>> + Send;
 
-    /// Load canonical team-share facts for an initiative and its description document from
-    /// one guarded read.
+    /// Load canonical team-share facts for an initiative.
     fn get_team_share_facts(
         &self,
         id: InitiativeId,
-    ) -> impl Future<Output = Result<LockstepTeamShareFacts, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TeamShareFacts, Self::Err>> + Send;
 
     /// Load the owner's team default link-share preference, if any.
     fn get_team_default_link_share(
@@ -147,7 +123,7 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         task_id: &str,
     ) -> impl Future<Output = Result<Option<TaskMembershipChange>, Self::Err>> + Send;
 
-    /// Grant assignees edit access to the initiative and description in one transaction,
+    /// Grant assignees edit access to the initiative in one transaction,
     /// recording non-owner recipients as collaborators without removing anyone or
     /// downgrading existing grants. Clearing the property does not undo this share.
     fn grant_assignees(
@@ -156,12 +132,8 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         user_ids: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete the initiative and clean up its own rows in one transaction, returning where
-    /// the description lived for the caller to clean up afterwards.
-    fn delete(
-        &self,
-        id: InitiativeId,
-    ) -> impl Future<Output = Result<DescriptionLocation, Self::Err>> + Send;
+    /// Delete the initiative and clean up its own rows in one transaction.
+    fn delete(&self, id: InitiativeId) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Inbound service port: the initiative API used by drivers (HTTP).
@@ -221,12 +193,18 @@ pub trait InitiativeService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<InitiativeDetail, InitiativeError>> + Send;
 
     /// Idempotently ensure the description surface of an initiative the receipt authorized
-    /// for view, before a client connects to it: the surface adopts the description
-    /// document's session, so its content carries over.
+    /// for view, before a client connects to it. The surface has the initiative's id.
     fn ensure_description_surface(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<DescriptionSurfaceId, InitiativeError>> + Send;
+    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
+
+    /// The description of an initiative the receipt authorized for view, as GitHub-flavored
+    /// markdown; empty while no one has opened or written it.
+    fn read_description(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<String, InitiativeError>> + Send;
 
     /// List initiatives the user can view.
     fn list(

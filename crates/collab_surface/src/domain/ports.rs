@@ -56,8 +56,8 @@ pub trait DocumentIds: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
 }
 
-/// Outbound port for a surface's sync-service session: boots it from
-/// markdown and checks whether it exists.
+/// Outbound port for a surface's sync-service session: boots it from markdown
+/// and checks whether it exists.
 ///
 /// Implementations convert the markdown to a Loro snapshot (an empty string
 /// maps to the canonical blank-document snapshot) and store it as the
@@ -81,12 +81,11 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         surface_id: &str,
     ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
 
-    /// Whether the session for `surface_id` exists, waiting briefly for a
-    /// session another service is still initializing.
-    fn await_session(
+    /// The session for `surface_id` rendered as GitHub-flavored markdown.
+    fn markdown(
         &self,
         surface_id: &str,
-    ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
+    ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
 }
 
 /// The collab-surface use-cases, generic over the outbound ports.
@@ -138,8 +137,7 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     /// Mint a sync-service connection token for a `ready` surface, at the
     /// access level implied by the caller's permission on the parent entity.
     /// A surface whose id names a document is refused
-    /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound, unless
-    /// its parent's domain adopted that document's session on purpose.
+    /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound.
     fn mint_token(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -150,9 +148,9 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     /// Soft-delete a surface. Requires an edit-capable permission on the
     /// parent, and a parent whose domain does not own its surfaces
     /// ([`SurfaceOwnership::ParentDomain`]): a deleted id never comes back, so
-    /// only the owning domain may retire one. The sync-service session is not reclaimed
-    /// (documented gap shared with documents); deletion makes the surface
-    /// unmintable, which cuts off all access.
+    /// only the owning domain may retire one. The sync-service session is not
+    /// reclaimed (documented gap shared with documents); deletion makes the
+    /// surface unmintable, which cuts off all access.
     fn delete_surface(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -165,17 +163,23 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
 /// domain has already authorized its caller, so these take no receipt; keep
 /// them out of reach of caller-chosen ids.
 pub trait OwnedSurfaceService: Send + Sync + 'static {
-    /// Idempotently bind surface `id`, parented by `parent`, to the existing
-    /// sync-service session of the document with the same id, which the
-    /// owning domain has verified belongs to `parent`. The CRDT is reused
-    /// as-is and never initialized here: while the document's own session is
-    /// still missing the surface stays `pending` and this returns
-    /// [`CollabSurfaceError::NotReady`].
-    fn adopt_document_session(
+    /// Idempotently ensure surface `id`, parented by `parent`, exists and is
+    /// `ready`, under the same rules as [`CollabSurfaceService::ensure_surface`].
+    /// A new surface starts from `initial_markdown`; an existing one keeps its
+    /// content.
+    fn ensure_owned_surface(
         &self,
         parent: Entity<'static>,
         id: Uuid,
+        initial_markdown: String,
     ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
+
+    /// A ready surface's content as GitHub-flavored markdown; `None` while the
+    /// surface does not exist or is not ready.
+    fn owned_surface_markdown(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, CollabSurfaceError>> + Send;
 
     /// Soft-delete a surface for the domain that owns it. Idempotent.
     fn retire_surface(

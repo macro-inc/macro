@@ -99,7 +99,6 @@ export function projectSoupRows(
         project: {
           id: item.id,
           name: item.displayName ?? 'Untitled project',
-          descriptionSurfaceId: item.descriptionSurfaceId ?? '',
           updatedAt: item.metadata.updatedAt ?? '',
           access:
             permission?.__typename === 'GraphqlAccessLevelPermission'

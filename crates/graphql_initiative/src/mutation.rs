@@ -77,9 +77,7 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
     }
 
     /// Idempotently ensure the collaborative description surface of an initiative the viewer
-    /// can see, returning its id. Call before connecting: the surface adopts the description
-    /// document's session here, so its content carries over. `CONFLICT` means the document
-    /// is still initializing; retry shortly.
+    /// can see, returning its id, which is the initiative's id. Call before connecting.
     async fn ensure_initiative_description_surface(
         &self,
         ctx: &Context<'_>,
@@ -87,13 +85,12 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
     ) -> async_graphql::Result<ID> {
         let user = require_authenticated_user(ctx)?;
         let id = parse_id(initiative_id, "initiativeId")?;
-        let surface = ctx
-            .data::<InitiativeGraphqlContext>()?
+        ctx.data::<InitiativeGraphqlContext>()?
             .0
             .ensure_description_surface(user, id)
             .await
             .map_err(graphql_error)?;
-        Ok(ID(surface.to_string()))
+        Ok(ID(id.to_string()))
     }
 
     /// Delete an initiative after its owner capability has been verified.

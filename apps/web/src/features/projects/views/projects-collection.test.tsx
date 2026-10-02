@@ -174,7 +174,6 @@ function project(
     project: {
       id,
       name,
-      descriptionSurfaceId: `${id}-description`,
       updatedAt: '',
       access,
     },

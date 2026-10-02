@@ -3874,10 +3874,6 @@ export interface ProjectDetails {
    */
   name: string;
   /**
-   * Description document; read or edit its Markdown using document tools.
-   */
-  descriptionDocumentId?: string | null;
-  /**
    * Project owner.
    */
   ownerId: string;
@@ -5594,10 +5590,6 @@ export interface ProjectListRow {
    */
   name: string;
   /**
-   * Description document id.
-   */
-  descriptionDocumentId?: string | null;
-  /**
    * Effective caller access.
    */
   access: string;
@@ -7020,7 +7012,7 @@ export interface DocumentComment {
   editedAt?: string | null;
 }
 /**
- * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history.
+ * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The description field is the project's description as Markdown. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history.
  */
 export interface ReadInitiative {
   /**
@@ -7042,6 +7034,10 @@ export interface ReadInitiative {
 export interface ProjectReadResult {
   project: ProjectDetails;
   properties: ProjectPropertyValues;
+  /**
+   * The project's description as Markdown; empty when it has none.
+   */
+  description: string;
   /**
    * Opaque cursor for the next task page, absent after the final page.
    */
@@ -8390,7 +8386,7 @@ export interface UpdateCalendarEvent {
   outOfOffice?: OutOfOfficeInput | null;
 }
 /**
- * Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'. ReadInitiative returns the description document id for document editing tools.
+ * Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'.
  */
 export interface UpdateInitiative {
   /**
