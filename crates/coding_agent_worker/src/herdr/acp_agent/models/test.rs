@@ -81,8 +81,10 @@ fn catalog(root: &Path) {
     std::fs::write(
         root.join(".codex/models_cache.json"),
         json!({"models":[
-            {"slug":"gpt-6-astra","display_name":"GPT-6 Astra","visibility":"list"},
-            {"slug":"gpt-6-sol","display_name":"GPT-6 Sol","visibility":"list"},
+            {"slug":"gpt-6-astra","display_name":"GPT-6 Astra","visibility":"list",
+                "supported_reasoning_levels":[{"effort":"low"}]},
+            {"slug":"gpt-6-sol","display_name":"GPT-6 Sol","visibility":"list",
+                "supported_reasoning_levels":[{"effort":"medium"},{"effort":"high"}]},
             {"slug":"hidden-model","visibility":"hide"}
         ]})
         .to_string(),
@@ -189,7 +191,19 @@ esac
         assert!(result.is_err());
         assert_ne!(saved.model, wanted);
     } else {
-        assert_eq!(result.unwrap()["configOptions"][0]["currentValue"], wanted);
+        let config = result.unwrap()["configOptions"].clone();
+        assert_eq!(config[0]["currentValue"], wanted);
+        if kind == TuiAgent::Codex {
+            assert_eq!(config[1]["currentValue"], "medium");
+            assert_eq!(
+                config[1]["options"],
+                json!([
+                    {"value":"medium","name":"Medium"}, {"value":"high","name":"High"}
+                ])
+            );
+        } else {
+            assert_eq!(config.as_array().unwrap().len(), 1);
+        }
         assert_eq!(saved.model, wanted);
         let mut models = Vec::new();
         while let Ok(update) = output.try_recv() {

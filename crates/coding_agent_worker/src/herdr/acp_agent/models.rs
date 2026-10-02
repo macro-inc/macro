@@ -53,12 +53,26 @@ impl Adapter {
         if *lock(&session.model) == model {
             return Ok(());
         }
+        self.report_settings(session, live, model, None)
+    }
+
+    pub(super) fn report_settings(
+        &self,
+        session: &Session,
+        live: &Live,
+        model: &str,
+        effort: Option<&str>,
+    ) -> Result<(), RpcError> {
+        if *lock(&session.model) == model && lock(&session.effort).as_deref() == effort {
+            return Ok(());
+        }
         model.clone_into(&mut lock(&session.model));
+        *lock(&session.effort) = effort.map(str::to_owned);
         self.save(session, Some(live))?;
         self.notify_update(
             &session.id,
             json!({
-                "sessionUpdate":"config_option_update", "configOptions":self.model_options(model),
+                "sessionUpdate":"config_option_update", "configOptions":self.session_options(session),
             }),
         );
         Ok(())
@@ -80,8 +94,8 @@ impl Adapter {
         })
         .await;
         let Ok(Some(screen)) = snapshot else { return };
-        if let Some(model) = codex_footer_model(&screen)
-            && let Err(error) = self.report_model(session, live, model)
+        if let Some((model, effort)) = codex_footer(&screen)
+            && let Err(error) = self.report_settings(session, live, model, Some(effort))
         {
             tracing::warn!(error = %error.message, "could not save native model");
         }
@@ -123,8 +137,9 @@ impl Adapter {
         }
         let Some(live) = guard.as_mut() else {
             model.clone_into(&mut lock(&session.model));
+            *lock(&session.effort) = None;
             self.save(session, None)?;
-            return Ok(json!({"configOptions":self.model_options(model)}));
+            return Ok(json!({"configOptions":self.session_options(session)}));
         };
         if model == DEFAULT_MODEL {
             return Err(RpcError::invalid(
@@ -151,11 +166,11 @@ impl Adapter {
         }
         self.sync_model(session, live).await;
         if *lock(&session.model) == model {
-            return Ok(json!({"configOptions":self.model_options(model)}));
+            return Ok(json!({"configOptions":self.session_options(session)}));
         }
-        self.native_selection(session, live, model, None).await?;
-        self.report_model(session, live, model)?;
-        Ok(json!({"configOptions":self.model_options(model)}))
+        let effort = self.native_selection(session, live, model, None).await?;
+        self.report_settings(session, live, model, effort.as_deref())?;
+        Ok(json!({"configOptions":self.session_options(session)}))
     }
     /// Drive only the recognized native picker, verifying the resulting setting.
     pub(super) async fn native_selection(
@@ -164,7 +179,7 @@ impl Adapter {
         live: &Live,
         model: &str,
         effort: Option<&str>,
-    ) -> Result<(), RpcError> {
+    ) -> Result<Option<String>, RpcError> {
         let herdr = self
             .herdr
             .as_ref()
@@ -213,7 +228,7 @@ impl Adapter {
                         codex_footer(&screen).is_some_and(|(_, actual)| wanted == actual)
                     })
                 {
-                    return Ok(());
+                    return Ok(codex_footer(&screen).map(|(_, effort)| effort.to_owned()));
                 }
                 if self.options.kind == TuiAgent::Codex
                     && let Some((key, next)) = effort.map_or_else(

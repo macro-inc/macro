@@ -88,6 +88,20 @@ fn advanced_effort_requires_the_explicit_requested_level() {
 }
 
 async fn run_command(text: &str, fail: bool) -> (Result<Value, RpcError>, Vec<Value>, String) {
+    run_request(Request::Prompt(text), fail).await
+}
+
+enum Request<'a> {
+    Prompt(&'a str),
+    Select(&'a str),
+    BusySelect(&'a str),
+    Observe,
+}
+
+async fn run_request(
+    request: Request<'_>,
+    fail: bool,
+) -> (Result<Value, RpcError>, Vec<Value>, String) {
     let root = tempfile::tempdir().unwrap();
     let id = uuid::Uuid::new_v4().to_string();
     save_transcript(root.path(), &id);
@@ -134,25 +148,66 @@ async fn run_command(text: &str, fail: bool) -> (Result<Value, RpcError>, Vec<Va
     inner.herdr = Some(HerdrCli::new(script, None));
     inner.home = Some(root.path().to_owned());
     adapter.shutdown.cancel();
-    adapter
+    let loaded = adapter
         .load_session(&json!({"sessionId":id,"cwd":root.path()}))
         .await
         .unwrap();
+    assert_eq!(loaded["configOptions"][1]["id"], CONFIG_ID);
+    assert_eq!(loaded["configOptions"][1]["category"], "thought_level");
+    assert_eq!(loaded["configOptions"][1]["currentValue"], "medium");
+    assert_eq!(
+        loaded["configOptions"][1]["options"],
+        json!([
+            {"value":"medium","name":"Medium"}, {"value":"high","name":"High"}
+        ])
+    );
     // Production holds this flag during every session/prompt, including commands.
     let session = adapter.session(&json!({"sessionId":id})).unwrap();
-    session.prompt_pending.store(true, Ordering::SeqCst);
-    let response = adapter
-        .request(
+    session
+        .prompt_pending
+        .store(!matches!(request, Request::Select(_)), Ordering::SeqCst);
+    if matches!(request, Request::Observe) {
+        std::fs::write(root.path().join("stage"), "3").unwrap();
+        let guard = session.live.lock().await;
+        adapter.sync_model(&session, guard.as_ref().unwrap()).await;
+    }
+    let (method, params) = match request {
+        Request::Prompt(text) => (
             "session/prompt",
             json!({"sessionId":id,"prompt":[{"type":"text","text":text}]}),
-        )
-        .await;
+        ),
+        Request::Select(value) | Request::BusySelect(value) => (
+            "session/set_config_option",
+            json!({"sessionId":id,"configId":CONFIG_ID,"value":value}),
+        ),
+        Request::Observe => ("session/load", json!({"sessionId":id,"cwd":root.path()})),
+    };
+    if matches!(request, Request::Observe) {
+        session.prompt_pending.store(false, Ordering::SeqCst);
+    }
+    let response = adapter.request(method, params).await;
     let mut updates = Vec::new();
     while let Ok(update) = output.try_recv() {
         updates.push(update);
     }
     let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
     (response, updates, calls)
+}
+
+#[tokio::test]
+async fn local_effort_changes_are_observed_and_preserved_on_reload() {
+    let (response, updates, calls) = run_request(Request::Observe, false).await;
+    assert_eq!(
+        response.unwrap()["configOptions"][1]["currentValue"],
+        "high"
+    );
+    assert!(
+        updates
+            .iter()
+            .any(|event| event["params"]["update"]["configOptions"][1]["currentValue"] == "high")
+    );
+    assert!(!calls.contains("agent prompt"));
+    assert!(!calls.contains("send-keys"));
 }
 
 #[tokio::test]
@@ -166,6 +221,9 @@ async fn effort_rpc_selects_current_model_and_requested_effort_and_confirms_in_m
                 .is_some_and(|text| text.contains("**high** effort with **gpt-6-sol**"))
         }));
         assert!(!calls.contains("/effort"));
+        assert!(updates.iter().any(|event| {
+            event["params"]["update"]["configOptions"][1]["currentValue"] == "high"
+        }));
         let keys: Vec<_> = calls
             .lines()
             .filter(|line| line.starts_with("agent send-keys"))
@@ -173,6 +231,59 @@ async fn effort_rpc_selects_current_model_and_requested_effort_and_confirms_in_m
             .collect();
         assert_eq!(keys, ["2", "3"]);
     }
+}
+
+#[tokio::test]
+async fn graphical_effort_selection_returns_full_confirmed_configuration_without_chat() {
+    let (response, updates, calls) = run_request(Request::Select("high"), false).await;
+    let config = response.unwrap()["configOptions"].clone();
+    assert_eq!(config[0]["currentValue"], "gpt-6-sol");
+    assert_eq!(config[1]["currentValue"], "high");
+    assert!(
+        updates
+            .iter()
+            .any(|event| event["params"]["update"]["configOptions"] == config)
+    );
+    assert!(
+        !updates
+            .iter()
+            .any(|event| event["params"]["update"]["sessionUpdate"] == "agent_message_chunk")
+    );
+    assert!(calls.contains("agent prompt"));
+    assert!(!calls.contains("/effort"));
+}
+
+#[tokio::test]
+async fn graphical_selection_rejects_busy_unsupported_and_unconfirmed_changes() {
+    for (request, fail) in [
+        (Request::BusySelect("high"), false),
+        (Request::Select("ultra"), false),
+        (Request::Select("bogus"), false),
+        (Request::Select("high"), true),
+    ] {
+        let (response, updates, calls) = run_request(request, fail).await;
+        assert!(response.is_err());
+        assert!(
+            !updates.iter().any(
+                |event| event["params"]["update"]["configOptions"][1]["currentValue"] == "high"
+            )
+        );
+        if !fail {
+            assert!(!calls.contains("agent prompt"));
+            assert!(!calls.contains("send-keys"));
+        }
+    }
+}
+
+#[tokio::test]
+async fn graphical_selection_of_current_effort_does_not_send_native_input() {
+    let (response, _, calls) = run_request(Request::Select("medium"), false).await;
+    assert_eq!(
+        response.unwrap()["configOptions"][1]["currentValue"],
+        "medium"
+    );
+    assert!(!calls.contains("agent prompt"));
+    assert!(!calls.contains("send-keys"));
 }
 
 #[tokio::test]
