@@ -14,7 +14,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'line',
   use: {
-    baseURL: 'http://127.0.0.1:3018',
+    baseURL: 'http://localhost:3018',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -22,7 +22,7 @@ export default defineConfig({
     command:
       'bunx vite --config src/features/block-write/browser-test/vite.config.ts',
     cwd: webDirectory,
-    url: 'http://127.0.0.1:3018',
+    url: 'http://localhost:3018',
     reuseExistingServer: true,
     timeout: 120_000,
   },

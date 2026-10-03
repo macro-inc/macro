@@ -267,7 +267,16 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
     opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
       if (event.type === 'reconnect')
-        void accept(event).then(() => wal.flush());
+        accept(event)
+          .then(() => wal.flush())
+          .catch((cause: unknown) => {
+            console.error('DOCX session failed to resync', cause);
+            if (!disposed)
+              setState({
+                t: 'error',
+                message: 'Unable to open this document.',
+              });
+          });
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();

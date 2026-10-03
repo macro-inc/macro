@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type CommentMark,
   deleteCommentMark,
+  MAX_MARK_TEXT,
   readCommentMarks,
   resolveMark,
   writeCommentMark,
@@ -59,6 +60,22 @@ describe('comment mark storage', () => {
     expect(readCommentMarks(other).get('m1')).toEqual(mark);
     deleteCommentMark(doc, 'm1');
     expect(readCommentMarks(doc).size).toBe(0);
+  });
+
+  it('stores long selections so they resolve in place, not as a move', () => {
+    const doc = new LoroDoc();
+    const text = 'x'.repeat(MAX_MARK_TEXT + 200);
+    writeCommentMark(doc, 'm1', {
+      block: 'b',
+      start: 0,
+      length: text.length,
+      text,
+    });
+    const stored = readCommentMarks(doc).get('m1');
+    expect(stored).toMatchObject({ length: MAX_MARK_TEXT });
+    expect(resolveMark(stored!, [{ id: 'b', text }])).toMatchObject({
+      relocated: false,
+    });
   });
 
   it('ignores malformed marks', () => {

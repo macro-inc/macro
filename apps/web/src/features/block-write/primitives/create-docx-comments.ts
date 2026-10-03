@@ -12,6 +12,7 @@ import { v7 as uuidv7 } from 'uuid';
 import {
   type CommentMark,
   deleteCommentMark,
+  MAX_MARK_TEXT,
   readCommentMarks,
   resolveMark,
   writeCommentMark,
@@ -149,13 +150,26 @@ export function createDocxComments(options: {
   const located = () => placement().threads;
 
   // Keep stored offsets close to the text so later edits relocate cheaply.
-  // Writing a relocated mark re-resolves it in place, so this settles.
+  // Writing a relocated mark re-resolves it in place, so this settles; marks
+  // already stored at the new place (another editor got there first) are
+  // left alone so peers do not commit the same move twice.
   createEffect(() => {
     const { relocations } = placement();
     const doc = options.doc;
     if (!relocations.length || !doc || !untrack(options.canEdit)) return;
-    for (const [markId, mark] of relocations)
+    const stored = untrack(marks);
+    for (const [markId, mark] of relocations) {
+      const current = stored.get(markId);
+      if (
+        current &&
+        current.block === mark.block &&
+        current.start === mark.start &&
+        current.length === mark.length &&
+        current.text === mark.text
+      )
+        continue;
       writeCommentMark(doc, markId, mark);
+    }
   });
 
   /** Threads that cannot be shown beside the text: legacy anchors or removed text. */
@@ -180,16 +194,11 @@ export function createDocxComments(options: {
     const span = blockSpanOfRange(selection.getRangeAt(0), root);
     if (!span) return false;
     const id = span.block.getAttribute('data-anchor');
-    const text = contentText(span.block).slice(
-      span.start,
-      span.start + span.length
-    );
+    const length = Math.min(span.length, MAX_MARK_TEXT);
+    const text = contentText(span.block).slice(span.start, span.start + length);
     if (!id || !text.trim()) return false;
     const markId = uuidv7();
-    setDraft({
-      markId,
-      mark: { block: id, start: span.start, length: span.length, text },
-    });
+    setDraft({ markId, mark: { block: id, start: span.start, length, text } });
     setActive(markId);
     return true;
   }

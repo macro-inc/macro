@@ -1,24 +1,24 @@
-import { platformFetch } from '@core/util/platformFetch';
-import { storageServiceClient } from '@service-storage/client';
+import { queryClient } from '@queries/client';
+import { downloadExportedDocument } from '@service-storage/util/downloadExportedDocument';
 import { syncServiceClient } from '@service-sync/client';
 import { createSyncServiceSource } from '@service-sync/source';
 import { buildSeedSnapshot } from '../core/docx-seed';
 import type { DocxConnection } from './docx-session';
 import { loadDocxodus } from './docxodus-runtime';
 
-/** The DOCX as uploaded, rebuilt by document storage from its stored parts. */
-export async function fetchOriginalDocx(
-  documentId: string
-): Promise<Uint8Array> {
-  const exported = await storageServiceClient.exportDocument({ documentId });
-  if (exported.isErr())
-    throw new Error('Unable to load the uploaded document.');
-  const response = await platformFetch(exported.value.presigned_url);
-  if (!response.ok)
-    throw new Error(
-      `Unable to download the uploaded document (${response.status}).`
-    );
-  return new Uint8Array(await response.arrayBuffer());
+const docxKeys = {
+  original: (documentId: string) => ['docx', 'original', documentId] as const,
+};
+
+/**
+ * The DOCX as uploaded, rebuilt by document storage from its stored parts.
+ * Cached so views opening the same file share one download.
+ */
+export function fetchOriginalDocx(documentId: string): Promise<Uint8Array> {
+  return queryClient.fetchQuery({
+    queryKey: docxKeys.original(documentId),
+    queryFn: () => downloadExportedDocument({ documentId }),
+  });
 }
 
 export async function docxSyncExists(documentId: string): Promise<boolean> {

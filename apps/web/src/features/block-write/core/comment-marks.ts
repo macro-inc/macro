@@ -51,10 +51,18 @@ export function readCommentMarks(doc: LoroDoc): Map<string, CommentMark> {
   return marks;
 }
 
+/** Longest quoted text a mark keeps; longer selections anchor on their start. */
+export const MAX_MARK_TEXT = 1000;
+
 export function writeCommentMark(doc: LoroDoc, id: string, mark: CommentMark) {
-  doc
-    .getMap(DOCX_LORO_CONTAINERS.marks)
-    .set(id, JSON.stringify({ ...mark, text: mark.text.slice(0, 1000) }));
+  doc.getMap(DOCX_LORO_CONTAINERS.marks).set(
+    id,
+    JSON.stringify({
+      ...mark,
+      length: Math.min(mark.length, MAX_MARK_TEXT),
+      text: mark.text.slice(0, MAX_MARK_TEXT),
+    })
+  );
   doc.commit({ origin: 'docx-comment' });
 }
 
@@ -95,17 +103,17 @@ export function resolveMark(
     if (start >= 0)
       return { ...mark, start, length: mark.text.length, relocated: true };
   }
-  let best: { index: number; start: number } | null = null;
+  type Match = { index: number; start: number; distance: number };
+  let best: Match | null = null;
   blocks.forEach((block, index) => {
     if (index === home) return;
     const start = block.text.indexOf(mark.text);
     if (start < 0) return;
     const distance = home >= 0 ? Math.abs(index - home) : index;
-    if (!best || distance < Math.abs(best.index - Math.max(home, 0)))
-      best = { index, start };
+    if (!best || distance < best.distance) best = { index, start, distance };
   });
   if (!best) return null;
-  const found: { index: number; start: number } = best;
+  const found: Match = best;
   return {
     block: blocks[found.index].id,
     start: found.start,
