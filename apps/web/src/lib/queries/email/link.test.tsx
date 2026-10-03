@@ -98,6 +98,36 @@ beforeEach(() => {
 });
 
 describe('useDisableCalendarMutation', () => {
+  it('does not offer re-enable while the server is still deleting calendar data', async () => {
+    let finish!: (value: Ok<Record<string, never>, never>) => void;
+    disableLinkCalendarMock.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    const disable = mountEmailMutation(
+      useDisableCalendarMutation,
+      testQueryClient
+    );
+    const pending = disable.mutateAsync('inbox-a');
+    await vi.waitFor(() =>
+      expect(disableLinkCalendarMock).toHaveBeenCalledOnce()
+    );
+    expect(disable.isPending).toBe(true);
+    expect(cachedLink('inbox-a')).toMatchObject({
+      calendar_disabled: false,
+      needs_calendar_permission: false,
+      has_calendar_data: true,
+    });
+    finish(ok({}));
+    await pending;
+    expect(cachedLink('inbox-a')).toMatchObject({
+      calendar_disabled: true,
+      needs_calendar_permission: true,
+      has_calendar_data: false,
+    });
+  });
+
   it('marks only the target inbox as deliberately calendar-less', async () => {
     disableLinkCalendarMock.mockResolvedValue(ok({}));
     const disable = mountEmailMutation(
@@ -123,7 +153,7 @@ describe('useDisableCalendarMutation', () => {
     expect(invalidateCalendarViewsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('restores the previous links when the request fails', async () => {
+  it('keeps the previous links when the request fails', async () => {
     disableLinkCalendarMock.mockResolvedValue(
       err([{ code: 'HTTP_ERROR' as const, message: 'nope' }])
     );
