@@ -11,7 +11,9 @@ use crate::domain::model::{
     is_macro_staff, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
     sanitize_response_headers,
 };
+use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
+use crate::domain::reopen_throttle::ReopenThrottle;
 
 #[cfg(test)]
 mod test;
@@ -36,6 +38,9 @@ pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward> {
     tokens: Tokens,
     forward: Forward,
     preview_mcp: Option<(url::Url, bool)>,
+    /// Recent event-stream opens per session and upstream, so a client
+    /// reconnecting in a loop is paced rather than relayed at full speed.
+    reopens: ReopenThrottle,
 }
 
 impl<Sessions, Credentials, Tokens, Forward>
@@ -75,6 +80,7 @@ where
             tokens,
             forward,
             preview_mcp: None,
+            reopens: ReopenThrottle::default(),
         }
     }
 }
@@ -217,6 +223,27 @@ where
             request.headers_mut().insert(name.clone(), value.clone());
         }
 
+        // A GET on an MCP target opens the server's event stream. Those are
+        // the requests a client reopens in a loop when the upstream keeps
+        // closing them, so each is paced against the session's recent ones
+        // and its body is watched to its end - the one place the upstream's
+        // side of the loop can be seen.
+        let event_stream =
+            matches!(target, EgressTarget::McpServer(_)) && *request.method() == Method::GET;
+        if event_stream {
+            let admission = self.reopens.admit(&grant.session, &target.name());
+            if admission.is_held() {
+                tracing::warn!(
+                    session = %grant.session,
+                    upstream = %target.name(),
+                    recent_opens = admission.recent,
+                    hold_ms = admission.hold.as_millis() as u64,
+                    "MCP event stream reopened repeatedly; holding this open back"
+                );
+                tokio::time::sleep(admission.hold).await;
+            }
+        }
+
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
 
@@ -231,6 +258,27 @@ where
                 %status,
                 "upstream answered with a failure status"
             );
+        }
+
+        if event_stream {
+            let identity = StreamIdentity {
+                session: grant.session,
+                upstream: target.name(),
+                status: response.status().as_u16(),
+                content_type: response
+                    .headers()
+                    .get(http::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned),
+            };
+            tracing::info!(
+                session = %identity.session,
+                upstream = %identity.upstream,
+                status = identity.status,
+                content_type = identity.content_type.as_deref(),
+                "MCP event stream opened"
+            );
+            return Ok(response.map(|body| ObservedBody::new(body, identity).boxed_unsync()));
         }
 
         Ok(response)
