@@ -3,7 +3,7 @@ import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Envelope from '@phosphor/envelope.svg';
 import Hash from '@phosphor/hash.svg';
 import ListChecks from '@phosphor/list-checks.svg';
-import { Tabs } from '@ui';
+import Plus from '@phosphor/plus.svg';
 import {
   type Component,
   createEffect,
@@ -234,7 +234,7 @@ const inboxRows: InboxRow[] = [
   },
 ];
 
-/** features/home: Signal/Noise tabs, date groups, ViewSidebar rows, E = Mark done. */
+/** features/home on desktop: Home header, New chat, date groups, E = Mark done. */
 export function ChatInboxDemo() {
   let root!: HTMLDivElement;
   const w = createDummyWorkspace('messages');
@@ -318,70 +318,73 @@ export function ChatInboxDemo() {
             }
           }}
         >
-          <aside class="chat-inbox-list">
-            <div class="chat-inbox-header">
-              <Tabs
-                aria-label="Home views"
-                list={[
-                  { value: 'signal', label: 'Signal' },
-                  { value: 'noise', label: 'Noise' },
-                ]}
-                value="signal"
-              />
-            </div>
-            <For each={['Today', 'Yesterday'] as const}>
-              {(group) => (
-                <Show when={rows().some((r) => r.group === group)}>
-                  <p class="chat-inbox-group">{group}</p>
-                  <ViewSidebar.Nav>
-                    <For each={rows().filter((r) => r.group === group)}>
-                      {(row) => (
-                        <ViewSidebar.Item
-                          class="group/home-item chat-inbox-row"
-                          active={selected() === row.id}
-                          data-home-item={row.id}
-                          onClick={() => {
-                            pause();
-                            select(row.id);
-                          }}
-                        >
-                          <Show
-                            when={row.person}
-                            fallback={
-                              <ViewSidebar.Icon>
-                                <Dynamic component={row.icon} />
-                              </ViewSidebar.Icon>
-                            }
+          <ViewSidebar.Root aria-label="Home" class="chat-inbox-list">
+            <ViewSidebar.Header>
+              <ViewSidebar.Title>Home</ViewSidebar.Title>
+            </ViewSidebar.Header>
+            <ViewSidebar.Primary>
+              <ViewSidebar.Action onClick={() => pause()}>
+                <ViewSidebar.Icon>
+                  <Plus />
+                </ViewSidebar.Icon>
+                New chat
+              </ViewSidebar.Action>
+            </ViewSidebar.Primary>
+            <ViewSidebar.Content>
+              <For each={['Today', 'Yesterday'] as const}>
+                {(group) => (
+                  <Show when={rows().some((r) => r.group === group)}>
+                    <p class="chat-inbox-group">{group}</p>
+                    <ViewSidebar.Nav>
+                      <For each={rows().filter((r) => r.group === group)}>
+                        {(row) => (
+                          <ViewSidebar.Item
+                            class="group/home-item chat-inbox-row"
+                            active={selected() === row.id}
+                            data-home-item={row.id}
+                            onClick={() => {
+                              pause();
+                              select(row.id);
+                            }}
                           >
-                            {(person) => (
-                              <img
-                                class="size-5 shrink-0 rounded-full"
-                                src={homepagePeople[person()].photo}
-                                alt=""
-                              />
-                            )}
-                          </Show>
-                          <span
-                            class="flex min-w-0 flex-1 items-center truncate"
-                            classList={{ 'text-ink': row.unread }}
-                          >
-                            {row.title}
-                          </span>
-                          <span class="chat-inbox-time">{row.time}</span>
-                          <Show when={row.unread}>
+                            <Show
+                              when={row.person}
+                              fallback={
+                                <ViewSidebar.Icon>
+                                  <Dynamic component={row.icon} />
+                                </ViewSidebar.Icon>
+                              }
+                            >
+                              {(person) => (
+                                <img
+                                  class="size-5 shrink-0 rounded-full"
+                                  src={homepagePeople[person()].photo}
+                                  alt=""
+                                />
+                              )}
+                            </Show>
                             <span
-                              aria-label="Unread"
-                              class="size-1.5 shrink-0 rounded-full bg-accent"
-                            />
-                          </Show>
-                        </ViewSidebar.Item>
-                      )}
-                    </For>
-                  </ViewSidebar.Nav>
-                </Show>
-              )}
-            </For>
-          </aside>
+                              class="flex min-w-0 flex-1 items-center truncate"
+                              classList={{ 'text-ink': row.unread }}
+                            >
+                              {row.title}
+                            </span>
+                            <span class="chat-inbox-time">{row.time}</span>
+                            <Show when={row.unread}>
+                              <span
+                                aria-label="Unread"
+                                class="size-1.5 shrink-0 rounded-full bg-accent"
+                              />
+                            </Show>
+                          </ViewSidebar.Item>
+                        )}
+                      </For>
+                    </ViewSidebar.Nav>
+                  </Show>
+                )}
+              </For>
+            </ViewSidebar.Content>
+          </ViewSidebar.Root>
           <div class="dummy-main chat-inbox-preview">
             <Show
               when={selected()}

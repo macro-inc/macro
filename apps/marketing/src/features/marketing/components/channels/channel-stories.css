@@ -1,12 +1,11 @@
 .channel-demo-frame { position: relative; }
 .channel-demo-cursor { z-index: 9; transition: transform 600ms cubic-bezier(.2,.8,.2,1); }
 
-/* features/home: the list is a ViewSidebar with Signal/Noise tabs and date groups. */
+/* features/home on desktop: a ViewSidebar with a Home header, New chat, and date groups. */
 .chat-inbox-scene { outline: none; }
-.chat-inbox-list { display: flex; flex-direction: column; flex: 0 0 300px; width: 300px; min-width: 0; padding: 12px var(--sidebar-gutter); border-right: 1px solid var(--color-edge-muted); background: var(--color-panel); overflow: hidden; }
-.chat-inbox-header { display: flex; align-items: center; height: 32px; margin-bottom: 8px; padding: 0 4px; }
-.chat-inbox-group { padding: 6px 16px 6px 8px; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; color: color-mix(in srgb, var(--color-ink-extra-muted) 80%, transparent); }
-.chat-inbox-group:not(:first-of-type) { padding-top: 20px; }
+.chat-inbox-list { flex: 0 0 300px; width: 300px; min-width: 0; border-right: 1px solid var(--color-edge-muted); background: var(--color-panel); overflow: hidden; }
+.chat-inbox-group { padding: 2px 16px 2px 8px; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; color: color-mix(in srgb, var(--color-ink-extra-muted) 80%, transparent); }
+.chat-inbox-list [data-view-sidebar-content] { gap: 4px; }
 .chat-inbox-row { animation: chat-inbox-in 240ms ease both; }
 .chat-inbox-time { display: none; flex-shrink: 0; font-size: 12px; color: var(--color-ink-extra-muted); }
 .chat-inbox-row:hover .chat-inbox-time { display: block; }
@@ -31,3 +30,4 @@
   .chat-inbox-row { animation: none; }
   .channel-demo-cursor, .chat-shortcut-dock > button, .chat-shortcut-dock kbd { transition: none; }
 }
+.chat-inbox-group:not(:first-child) { margin-top: 16px; }
