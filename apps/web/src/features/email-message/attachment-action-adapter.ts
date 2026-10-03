@@ -45,10 +45,13 @@ export function createEmailAttachmentOpener() {
     const blockName = fileType
       ? fileTypeToBlockName(fileType as FileType)
       : 'unknown';
-    openWithSplit(
-      { type: blockName, id: document_id },
-      { preferNewSplit: true }
-    );
+    const result = openWithSplit({ type: blockName, id: document_id });
+    if (result.status === 'unavailable') {
+      toast.failure('Unable to open attachment');
+      Telemetry.error(
+        new Error('openWithSplit returned unavailable for email attachment')
+      );
+    }
   };
 
   return openAttachment;
