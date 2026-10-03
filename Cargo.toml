@@ -89,6 +89,7 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/pptx_engine",
   "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
@@ -209,6 +210,7 @@ chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 constant_time_eq = "0.3.1"
+console_error_panic_hook = "0.1.7"
 crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
@@ -223,6 +225,7 @@ eventsource-stream = "0.2.3"
 fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
+gif = { version = "0.14", default-features = false, features = ["std"] }
 glob = "0.3.3"
 # Pinned engine for the generated dependency artifacts (used by the xtask
 # graph/deps commands). This version lives in Cargo.lock, so dev machines and
@@ -258,6 +261,7 @@ log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 lru = "0.16"
+miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nom = "8"
 opus-pure = "0.2.1"
@@ -279,6 +283,7 @@ pdfium-render = { version = "0.8.37", default-features = false, features = [
   "thread_safe",
 ] }
 pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
+png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 quote = "1"
@@ -341,6 +346,7 @@ symphonia = { version = "0.6.1", default-features = false, features = [
 tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
+tiny-skia = { version = "0.11.4", default-features = false, features = ["simd", "std"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-retry = { version = "0.3.2", default-features = false }
 tokio-stream = { version = "0.1.17" }
@@ -361,6 +367,7 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+ttf-parser = { version = "0.25", default-features = false, features = ["opentype-layout", "std"] }
 tui-input = { version = "0.14.0", default-features = false }
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
@@ -378,6 +385,8 @@ utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 wiremock = "0.6.5"
 zeroize = "1.8.2"
+zune-core = "0.5"
+zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
 wasm-bindgen = "0.2.123"

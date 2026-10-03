@@ -1,0 +1,454 @@
+//! Editing: atomic batches of [`EditOp`]s, undo/redo, and lossless save.
+//!
+//! Edits mutate the parsed XML of the parts they touch (copy-on-write), so
+//! untouched parts keep their original bytes and untouched markup inside an
+//! edited part is re-serialized unchanged. A batch is atomic: if any operation
+//! fails, the presentation is restored to its state before the batch.
+//!
+//! [`Editor`] adds an undo history on top. Snapshots are whole
+//! [`Presentation`] clones, which are cheap because parsed parts and package
+//! bytes are reference-counted and only copied when an edit touches them.
+
+mod autofit;
+mod notes;
+mod ops;
+mod parts;
+mod shapes;
+mod slides;
+mod table;
+mod text;
+mod xmlutil;
+
+pub use notes::notes_text;
+pub use slides::{LayoutInfo, layouts};
+pub use ops::{
+    BodyPatch, BulletSpec, CellRef, Created, EditOp, EditResult, FillSpec, LinePatch, NewShape, ParaPatch, RunPatch,
+    TextPos, ZOrder,
+};
+
+use crate::error::{Error, Result};
+use crate::font::FontDb;
+use crate::model::presentation::Presentation;
+use crate::opc::{TargetMode, rel_type, rels_part_name};
+use crate::xml::{NodeId, XmlDoc};
+
+/// Maximum number of undo steps an [`Editor`] keeps.
+const HISTORY_LIMIT: usize = 200;
+
+impl EditOp {
+    /// The slide this operation addresses, if any.
+    pub fn slide(&self) -> Option<u32> {
+        use EditOp as O;
+        match self {
+            O::SetText { slide, .. }
+            | O::InsertText { slide, .. }
+            | O::DeleteText { slide, .. }
+            | O::FormatText { slide, .. }
+            | O::FormatParagraphs { slide, .. }
+            | O::FormatBody { slide, .. }
+            | O::SetTransform { slide, .. }
+            | O::SetFill { slide, .. }
+            | O::SetLine { slide, .. }
+            | O::SetGeometry { slide, .. }
+            | O::AddShape { slide, .. }
+            | O::DeleteShape { slide, .. }
+            | O::DuplicateShape { slide, .. }
+            | O::ReorderShape { slide, .. }
+            | O::ReplaceImage { slide, .. }
+            | O::SetCellText { slide, .. }
+            | O::InsertTableRow { slide, .. }
+            | O::DeleteTableRow { slide, .. }
+            | O::InsertTableColumn { slide, .. }
+            | O::DeleteTableColumn { slide, .. }
+            | O::DuplicateSlide { slide }
+            | O::DeleteSlide { slide }
+            | O::MoveSlide { slide, .. }
+            | O::SetSlideHidden { slide, .. }
+            | O::SetNotes { slide, .. }
+            | O::SetBackground { slide, .. } => Some(*slide),
+            O::AddSlide { .. } => None,
+        }
+    }
+
+    /// Whether the operation can leave parts without any relationship pointing at them.
+    fn may_orphan(&self) -> bool {
+        matches!(
+            self,
+            EditOp::DeleteShape { .. }
+                | EditOp::DeleteSlide { .. }
+                | EditOp::ReplaceImage { .. }
+                | EditOp::SetText { .. }
+                | EditOp::DeleteText { .. }
+                | EditOp::FormatText { .. }
+                | EditOp::DeleteTableRow { .. }
+                | EditOp::DeleteTableColumn { .. }
+                | EditOp::SetCellText { .. }
+                | EditOp::SetBackground { .. }
+                | EditOp::SetFill { .. }
+        )
+    }
+}
+
+impl Presentation {
+    /// Applies a batch of operations atomically.
+    ///
+    /// `fonts` is used to re-fit text after text edits (shrink-on-overflow and
+    /// resize-shape-to-fit), as PowerPoint does while editing.
+    pub fn apply(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<EditResult> {
+        self.apply_batch(ops, fonts).map(|(result, _)| result)
+    }
+
+    /// Applies a batch, returning the result and the state before the batch.
+    fn apply_batch(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<(EditResult, Presentation)> {
+        let before = self.clone();
+        match self.run_batch(ops, fonts) {
+            Ok(created) => {
+                self.flush();
+                let mut result = diff(&before, self);
+                result.created = created;
+                Ok((result, before))
+            }
+            Err(e) => {
+                *self = before;
+                Err(e)
+            }
+        }
+    }
+
+    fn run_batch(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<Vec<Created>> {
+        let gc = if ops.iter().any(EditOp::may_orphan) { Some(parts::baseline(self)?) } else { None };
+        let mut created = Vec::new();
+        let mut refit = Vec::new();
+        for op in ops {
+            if let Some(c) = self.apply_op(op, &mut refit)? {
+                created.push(c);
+            }
+        }
+        autofit::refit(self, &refit, fonts)?;
+        parts::prune_rels(self)?;
+        if let Some(gc) = gc {
+            parts::collect_garbage(self, &gc)?;
+        }
+        Ok(created)
+    }
+
+    /// The part name of the slide with stable id `id`.
+    pub(crate) fn slide_part(&self, id: u32) -> Result<String> {
+        self.slides
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.part.clone())
+            .ok_or_else(|| Error::NotFound(format!("slide {id}")))
+    }
+
+    /// Runs `f` on the text body of a shape (or of one of its table cells).
+    fn edit_text<T>(
+        &mut self,
+        part: &str,
+        shape: u32,
+        cell: Option<CellRef>,
+        f: impl FnOnce(&mut XmlDoc, NodeId) -> Result<T>,
+    ) -> Result<T> {
+        let doc = self.xml_mut(part)?;
+        let node = shapes::find(doc, shape)?;
+        let body = match cell {
+            Some(c) => table::cell_body(doc, node, c)?,
+            None => shapes::ensure_tx_body(doc, node)?,
+        };
+        f(doc, body)
+    }
+
+    fn apply_op(&mut self, op: &EditOp, refit: &mut Vec<(String, u32)>) -> Result<Option<Created>> {
+        use EditOp as O;
+        let mut created = None;
+        match op {
+            O::SetText { slide, shape, cell, text } => {
+                let part = self.slide_part(*slide)?;
+                self.edit_text(&part, *shape, *cell, |doc, body| text::set_text(doc, body, text))?;
+                refit.push((part, *shape));
+            }
+            O::InsertText { slide, shape, cell, at, text } => {
+                let part = self.slide_part(*slide)?;
+                self.edit_text(&part, *shape, *cell, |doc, body| text::insert_text(doc, body, *at, text))?;
+                refit.push((part, *shape));
+            }
+            O::DeleteText { slide, shape, cell, start, end } => {
+                let part = self.slide_part(*slide)?;
+                self.edit_text(&part, *shape, *cell, |doc, body| text::delete_text(doc, body, *start, *end))?;
+                refit.push((part, *shape));
+            }
+            O::FormatText { slide, shape, cell, start, end, props } => {
+                let part = self.slide_part(*slide)?;
+                let rid = match props.link.as_deref().map(str::trim) {
+                    Some(link) if !link.is_empty() => {
+                        Some(self.rels_mut(&part)?.add(rel_type::HYPERLINK, link, TargetMode::External))
+                    }
+                    _ => None,
+                };
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    text::format_text(doc, body, *start, *end, props, rid.as_deref())
+                })?;
+                refit.push((part, *shape));
+            }
+            O::FormatParagraphs { slide, shape, cell, from, to, props } => {
+                let part = self.slide_part(*slide)?;
+                self.edit_text(&part, *shape, *cell, |doc, body| text::format_paragraphs(doc, body, *from, *to, props))?;
+                refit.push((part, *shape));
+            }
+            O::FormatBody { slide, shape, cell, props } => {
+                let part = self.slide_part(*slide)?;
+                self.edit_text(&part, *shape, *cell, |doc, body| text::format_body(doc, body, props))?;
+                refit.push((part, *shape));
+            }
+            O::SetTransform { slide, shape, x, y, w, h, rotation, flip_h, flip_v } => {
+                let part = self.slide_part(*slide)?;
+                let patch = shapes::TransformPatch {
+                    x: *x,
+                    y: *y,
+                    w: *w,
+                    h: *h,
+                    rotation: *rotation,
+                    flip_h: *flip_h,
+                    flip_v: *flip_v,
+                };
+                shapes::set_transform(self, &part, *shape, &patch)?;
+                if w.is_some() || h.is_some() {
+                    refit.push((part, *shape));
+                }
+            }
+            O::SetFill { slide, shape, fill } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                shapes::set_fill(doc, node, fill)?;
+            }
+            O::SetLine { slide, shape, line } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                shapes::set_line(doc, node, line)?;
+            }
+            O::SetGeometry { slide, shape, preset } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                shapes::set_geometry(doc, node, preset)?;
+            }
+            O::AddShape { slide, shape, x, y, w, h } => {
+                let part = self.slide_part(*slide)?;
+                let id = shapes::add_shape(self, &part, shape, [*x, *y, *w, *h])?;
+                created = Some(Created { slide: *slide, shape: Some(id) });
+                refit.push((part, id));
+            }
+            O::DeleteShape { slide, shape } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                shapes::delete_shape(doc, node);
+            }
+            O::DuplicateShape { slide, shape, dx, dy } => {
+                let part = self.slide_part(*slide)?;
+                let id = shapes::duplicate_shape(self, &part, *shape, *dx, *dy)?;
+                created = Some(Created { slide: *slide, shape: Some(id) });
+            }
+            O::ReorderShape { slide, shape, to } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                shapes::reorder(doc, node, *to);
+            }
+            O::ReplaceImage { slide, shape, data } => {
+                let part = self.slide_part(*slide)?;
+                shapes::replace_image(self, &part, *shape, data)?;
+            }
+            O::SetCellText { slide, shape, row, col, text } => {
+                let part = self.slide_part(*slide)?;
+                let cell = CellRef { row: *row, col: *col };
+                self.edit_text(&part, *shape, Some(cell), |doc, body| text::set_text(doc, body, text))?;
+            }
+            O::InsertTableRow { slide, shape, at } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                table::insert_row(doc, node, *at)?;
+            }
+            O::DeleteTableRow { slide, shape, row } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                table::delete_row(doc, node, *row)?;
+            }
+            O::InsertTableColumn { slide, shape, at } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                table::insert_column(doc, node, *at)?;
+            }
+            O::DeleteTableColumn { slide, shape, col } => {
+                let part = self.slide_part(*slide)?;
+                let doc = self.xml_mut(&part)?;
+                let node = shapes::find(doc, *shape)?;
+                table::delete_column(doc, node, *col)?;
+            }
+            O::AddSlide { layout, after, title, body } => {
+                let id = slides::add_slide(self, layout.as_deref(), *after, title.as_deref(), body.as_deref())?;
+                created = Some(Created { slide: id, shape: None });
+            }
+            O::DuplicateSlide { slide } => {
+                let id = slides::duplicate_slide(self, *slide)?;
+                created = Some(Created { slide: id, shape: None });
+            }
+            O::DeleteSlide { slide } => slides::delete_slide(self, *slide)?,
+            O::MoveSlide { slide, to } => slides::move_slide(self, *slide, *to)?,
+            O::SetSlideHidden { slide, hidden } => slides::set_hidden(self, *slide, *hidden)?,
+            O::SetNotes { slide, text } => notes::set_notes(self, *slide, text)?,
+            O::SetBackground { slide, fill } => slides::set_background(self, *slide, fill.as_ref())?,
+        }
+        Ok(created)
+    }
+}
+
+/// Which slides differ between two states of the same presentation.
+fn diff(before: &Presentation, after: &Presentation) -> EditResult {
+    let ids = |p: &Presentation| p.slides.iter().map(|s| s.id).collect::<Vec<_>>();
+    let structure_changed = ids(before) != ids(after) || before.size != after.size;
+    let same = |name: &str| before.pkg.part_identity(name) == after.pkg.part_identity(name);
+    let notes_part = |p: &Presentation, slide: &str| {
+        p.rels.get(slide).and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
+    };
+    let changed_slides = after
+        .slides
+        .iter()
+        .filter(|s| {
+            let unchanged = before.slides.iter().any(|o| o.id == s.id && o.part == s.part)
+                && same(&s.part)
+                && same(&rels_part_name(&s.part))
+                && notes_part(after, &s.part).is_none_or(|n| same(&n));
+            !unchanged
+        })
+        .map(|s| s.id)
+        .collect();
+    EditResult { created: Vec::new(), changed_slides, structure_changed }
+}
+
+/// Moves parsed-part and decoded-image caches from `from` into `to` for every
+/// part whose bytes are identical in both states.
+fn carry_caches(from: &Presentation, to: &mut Presentation) {
+    let same = |name: &str| from.pkg.part_identity(name) == to.pkg.part_identity(name);
+    for (name, doc) in &from.xml {
+        if !to.xml.contains_key(name) && same(name) {
+            to.xml.insert(name.clone(), doc.clone());
+        }
+    }
+    for (name, rels) in &from.rels {
+        if !to.rels.contains_key(name) && same(&rels_part_name(name)) {
+            to.rels.insert(name.clone(), rels.clone());
+        }
+    }
+    for (name, img) in &from.images {
+        if !to.images.contains_key(name) && same(name) {
+            to.images.insert(name.clone(), img.clone());
+        }
+    }
+    for (name, mf) in &from.metafiles {
+        if !to.metafiles.contains_key(name) && same(name) {
+            to.metafiles.insert(name.clone(), mf.clone());
+        }
+    }
+}
+
+/// A presentation with an undo history, for interactive editing.
+pub struct Editor {
+    pres: Presentation,
+    undo: Vec<Presentation>,
+    redo: Vec<Presentation>,
+    /// Coalescing key of the last batch (typing bursts share one undo step).
+    group: Option<String>,
+}
+
+impl Editor {
+    /// Wraps an opened presentation.
+    pub fn new(pres: Presentation) -> Self {
+        Self { pres, undo: Vec::new(), redo: Vec::new(), group: None }
+    }
+
+    /// The current state.
+    pub fn presentation(&self) -> &Presentation {
+        &self.pres
+    }
+
+    /// The current state, mutably (rendering fills caches).
+    pub fn presentation_mut(&mut self) -> &mut Presentation {
+        &mut self.pres
+    }
+
+    /// Applies a batch as one undo step.
+    ///
+    /// Consecutive batches with the same `group` key merge into a single undo
+    /// step (used for typing); `None` always starts a new step.
+    pub fn apply(&mut self, ops: &[EditOp], group: Option<&str>, fonts: &FontDb) -> Result<EditResult> {
+        let (result, before) = self.pres.apply_batch(ops, fonts)?;
+        let nothing_changed = result.changed_slides.is_empty() && !result.structure_changed;
+        if nothing_changed && result.created.is_empty() {
+            return Ok(result);
+        }
+        let coalesce = group.is_some() && group == self.group.as_deref() && !self.undo.is_empty();
+        if !coalesce {
+            self.undo.push(before);
+            if self.undo.len() > HISTORY_LIMIT {
+                self.undo.remove(0);
+            }
+        }
+        self.redo.clear();
+        self.group = group.map(str::to_owned);
+        Ok(result)
+    }
+
+    /// Ends the current coalescing group, so the next batch starts a new undo step.
+    pub fn break_group(&mut self) {
+        self.group = None;
+    }
+
+    /// Whether there is something to undo.
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    /// Whether there is something to redo.
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    /// Reverts the last undo step.
+    pub fn undo(&mut self) -> Option<EditResult> {
+        let previous = self.undo.pop()?;
+        Some(self.restore(previous, true))
+    }
+
+    /// Re-applies the last undone step.
+    pub fn redo(&mut self) -> Option<EditResult> {
+        let next = self.redo.pop()?;
+        Some(self.restore(next, false))
+    }
+
+    fn restore(&mut self, state: Presentation, undoing: bool) -> EditResult {
+        let current = std::mem::replace(&mut self.pres, state);
+        carry_caches(&current, &mut self.pres);
+        let result = diff(&current, &self.pres);
+        if undoing {
+            self.redo.push(current);
+        } else {
+            self.undo.push(current);
+        }
+        self.group = None;
+        result
+    }
+
+    /// Serializes the current state.
+    pub fn save(&mut self) -> Result<Vec<u8>> {
+        self.pres.save()
+    }
+}
+
+#[cfg(test)]
+mod test;
