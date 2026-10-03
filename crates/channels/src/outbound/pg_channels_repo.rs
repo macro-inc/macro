@@ -1855,10 +1855,55 @@ impl ChannelRepo for PgChannelsRepo {
             .context("failed to get generic entity references")
         };
 
-        let (attachment_references, mention_references, generic_rows) = tokio::try_join!(
+        // A session created from a channel stores that message on the session,
+        // not as a mention: the invoking message names the bot, and the session
+        // does not exist yet. Surface it with the same participant and
+        // deleted-message filters as a channel mention so References can open
+        // the channel the session came from. At most one row; the session id
+        // is the primary key.
+        let session_id = entity_types
+            .iter()
+            .any(|kind| kind == "agent_session")
+            .then(|| Uuid::parse_str(entity_id).ok())
+            .flatten();
+        let origin_references_fut = async {
+            let Some(session_id) = session_id else {
+                return Ok(Vec::new());
+            };
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
+                SELECT
+                    m.parent_entity_id::uuid         AS "channel_id!: uuid::Uuid",
+                    c.name                           AS "channel_name?",
+                    m.id                             AS "message_id: uuid::Uuid",
+                    m.thread_id                      AS "thread_id?: uuid::Uuid",
+                    m.sender_id                      AS "sender_id!",
+                    m.content                        AS "message_content!",
+                    m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
+                    s.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
+                FROM agent_session s
+                JOIN comms_messages m ON m.id = s.originating_message_id
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
+                JOIN comms_channel_participants cp ON cp.channel_id = c.id
+                WHERE s.id = $1
+                  AND cp.user_id = $2
+                  AND cp.left_at IS NULL
+                  AND m.deleted_at IS NULL
+                "#,
+                session_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get the agent session's originating channel")
+        };
+
+        let (attachment_references, mention_references, generic_rows, origin_references) = tokio::try_join!(
             attachment_references_fut,
             mention_references_fut,
             generic_references_fut,
+            origin_references_fut,
         )?;
 
         let generic_references = generic_rows
@@ -1880,6 +1925,21 @@ impl ChannelRepo for PgChannelsRepo {
         references.extend(
             mention_references
                 .into_iter()
+                .map(AttachmentEntityReference::Channel),
+        );
+        // The invoking message can also mention the session later. Keep the
+        // mention row; it is the same channel message.
+        let seen_messages: HashSet<Uuid> = references
+            .iter()
+            .filter_map(|reference| match reference {
+                AttachmentEntityReference::Channel(channel) => Some(channel.message_id),
+                AttachmentEntityReference::Generic(_) => None,
+            })
+            .collect();
+        references.extend(
+            origin_references
+                .into_iter()
+                .filter(|origin| !seen_messages.contains(&origin.message_id))
                 .map(AttachmentEntityReference::Channel),
         );
         references.extend(
