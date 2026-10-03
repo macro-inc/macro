@@ -8,6 +8,7 @@ use super::ports::{
     ImageGenerationService, ImageGenerator, ImageMarkdownComposer, ImageReferenceReader,
     ImageStore, UnconfiguredImageReferenceReader,
 };
+use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ pub struct ImageGenerationServiceImpl<Store, References = UnconfiguredImageRefer
     store: Store,
     composer: Arc<dyn ImageMarkdownComposer>,
     references: References,
+    recorder: Arc<dyn UsageRecorder>,
 }
 
 impl<Store> ImageGenerationServiceImpl<Store> {
@@ -28,12 +30,14 @@ impl<Store> ImageGenerationServiceImpl<Store> {
         generator: Arc<dyn ImageGenerator>,
         store: Store,
         composer: Arc<dyn ImageMarkdownComposer>,
+        recorder: Arc<dyn UsageRecorder>,
     ) -> Self {
         Self {
             generator,
             store,
             composer,
             references: UnconfiguredImageReferenceReader,
+            recorder,
         }
     }
 }
@@ -46,6 +50,7 @@ impl<Store, References> ImageGenerationServiceImpl<Store, References> {
             store: self.store,
             composer: self.composer,
             references,
+            recorder: self.recorder,
         }
     }
 }
@@ -105,13 +110,21 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             references.push(image);
         }
 
+        let usage = match principal.user() {
+            Some(user) => UsageContext::new(AiFeature::ImageGeneration, user.clone()),
+            None => UsageContext::system(AiFeature::ImageGeneration),
+        };
         let generated = self
             .generator
-            .generate_image(&ImageGenerationRequest {
-                prompt: prompt.to_string(),
-                aspect_ratio,
-                reference_images: references,
-            })
+            .generate_image(
+                &ImageGenerationRequest {
+                    prompt: prompt.to_string(),
+                    aspect_ratio,
+                    reference_images: references,
+                },
+                &usage,
+                self.recorder.as_ref(),
+            )
             .await?;
         generated.file_type().ok_or_else(|| {
             ImageGenerationError::Provider(anyhow::anyhow!(

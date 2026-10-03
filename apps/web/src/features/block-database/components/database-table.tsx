@@ -63,6 +63,7 @@ export type DatabaseCellFocus = {
 
 /** Another viewer of the same table; no row or column means no cell. */
 export type DatabaseCellPresence = {
+  peerId?: string;
   userId: string;
   rowId?: string;
   columnId?: string;
@@ -918,7 +919,7 @@ function presenceOutline(
   edges: PresenceEdges = { top: true, right: true, bottom: true, left: true }
 ): JSX.CSSProperties | undefined {
   if (!user) return undefined;
-  const color = presenceColor(user.userId);
+  const color = presenceColor(user.peerId ?? user.userId);
   const border = `2px ${user.editing ? 'dashed' : 'solid'} ${color}`;
   return {
     'background-color': `color-mix(in srgb, ${color} 8%, transparent)`,
@@ -951,7 +952,11 @@ function PresenceTag(props: { user: DatabaseCellPresence; below?: boolean }) {
       title={label()}
       class="max-w-40 truncate px-1.5 py-0.5 text-[11px] font-medium leading-4 text-surface shadow-sm"
       classList={{ 'rounded-t-sm': !props.below, 'rounded-b-sm': props.below }}
-      style={{ 'background-color': presenceColor(props.user.userId) }}
+      style={{
+        'background-color': presenceColor(
+          props.user.peerId ?? props.user.userId
+        ),
+      }}
     >
       {presenceName(props.user.userId)}
     </span>

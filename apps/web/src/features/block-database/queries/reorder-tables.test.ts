@@ -9,9 +9,18 @@ import { reorderDatabaseTables } from './reorder-tables';
 
 const storage = vi.hoisted(() => ({
   applyDatabaseOps: vi.fn(),
-  invalidateDatabase: vi.fn(),
 }));
-vi.mock('@queries/storage/databases', () => storage);
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {
+    databases: {
+      applyOps: (input: { id: string; request: { ops: unknown[] } }) =>
+        storage
+          .applyDatabaseOps(input.id, input.request.ops)
+          .map((results: OpResult[]) => ({ results, changes: [] }))
+          .mapErr((error: DatabaseOpsError) => [error]),
+    },
+  },
+}));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return {
@@ -106,7 +115,7 @@ describe('reordering tables', () => {
         .getQueryData<DatabaseDetail>(key)
         ?.tables.map((entry) => entry.table.name)
     ).toEqual(['Guests', 'Venues']);
-    expect(storage.invalidateDatabase).toHaveBeenCalledExactlyOnceWith('db');
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
   it('takes each table’s committed version from the answer', async () => {
@@ -142,6 +151,6 @@ describe('reordering tables', () => {
       ['venues', 2],
       ['invites', 4],
     ]);
-    expect(storage.invalidateDatabase).not.toHaveBeenCalled();
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 });

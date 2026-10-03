@@ -135,14 +135,10 @@ vi.mock('@queries/agents/models', () => ({
                 { id: 'chat-default', name: 'Chat default' },
                 { id: 'claude-sonnet-4', name: 'Sonnet 4' },
                 {
-                  id: 'anthropic/claude-fable-5-1',
-                  name: 'Fable 5.1',
+                  id: 'anthropic/claude-sonnet-5-5',
+                  name: 'anthropic/claude-sonnet-5-5',
                 },
-                {
-                  id: 'anthropic/claude-sonnet-5',
-                  name: 'anthropic/claude-sonnet-5',
-                },
-                { id: 'anthropic/claude-opus-5', name: 'Claude Opus 5' },
+                { id: 'anthropic/claude-opus-5-5', name: 'Claude Opus 5.5' },
                 { id: 'openai/gpt-5.6', name: 'GPT-5.6' },
                 { id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
                 { id: 'fireworks/kimi-k3', name: 'Kimi K3' },
@@ -322,16 +318,16 @@ describe('agent-led new conversation', () => {
     fireEvent.input(
       await screen.findByRole('textbox', { name: 'Search agents and models' }),
       {
-        target: { value: 'Sonnet 5' },
+        target: { value: 'Sonnet 5.5' },
       }
     );
     expect(screen.queryByRole('button', { name: 'Chat default' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelOverride: 'anthropic/claude-sonnet-5',
+        modelOverride: 'anthropic/claude-sonnet-5-5',
       })
     );
   });
@@ -595,12 +591,12 @@ describe('agent-led new conversation', () => {
   it('clears a temporary model choice when selecting another agent', async () => {
     page();
     openAgents();
-    const model = screen.getByTitle('Sonnet 5');
+    const model = screen.getByTitle('Sonnet 5.5');
     model.focus();
     fireEvent.keyDown(model, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
-      'Sonnet 5'
+      'Sonnet 5.5'
     );
     await selectAgent(/Cursor/);
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
@@ -642,23 +638,22 @@ describe('agent-led new conversation', () => {
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })
     ).toBeNull();
-    expect(models.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
-    const sonnet = models.getByTitle('Sonnet 5');
+    const sonnet = models.getByTitle('Sonnet 5.5');
     expect(
       sonnet.querySelector('[data-ai-provider="anthropic"] svg')
     ).toBeTruthy();
-    expect(screen.queryByText('anthropic/claude-sonnet-5')).toBeNull();
+    expect(screen.queryByText('anthropic/claude-sonnet-5-5')).toBeNull();
     sonnet.focus();
     fireEvent.keyDown(sonnet, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(mocks.rememberInmemModel).toHaveBeenCalledWith(
-      'anthropic/claude-sonnet-5'
+      'anthropic/claude-sonnet-5-5'
     );
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
-      'Sonnet 5'
+      'Sonnet 5.5'
     );
     const trigger = screen.getByRole('button', { name: 'Agent' });
-    expect(trigger.title).toBe('Sonnet 5');
+    expect(trigger.title).toBe('Sonnet 5.5');
     expect(
       trigger.querySelector('[data-ai-provider="anthropic"] svg')
     ).toBeTruthy();
@@ -668,15 +663,15 @@ describe('agent-led new conversation', () => {
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
-      modelOverride: 'anthropic/claude-sonnet-5',
+      modelOverride: 'anthropic/claude-sonnet-5-5',
     });
     // Macro Models picks stick: a second send still uses the preferred model.
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
-      'Sonnet 5'
+      'Sonnet 5.5'
     );
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send.mock.calls[1][0]).toMatchObject({
-      modelOverride: 'anthropic/claude-sonnet-5',
+      modelOverride: 'anthropic/claude-sonnet-5-5',
     });
   });
   it('keeps unavailable Macro models disabled throughout the catalog', async () => {
@@ -703,7 +698,7 @@ describe('agent-led new conversation', () => {
       />
     ));
     openAgents();
-    const sonnet = screen.getByTitle('Sonnet 5');
+    const sonnet = screen.getByTitle('Sonnet 5.5');
     expect(sonnet.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(sonnet);
     fireEvent.keyDown(sonnet, { key: 'Enter' });
@@ -724,10 +719,10 @@ describe('agent-led new conversation', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
   it('restores a preferred Macro model on a fresh composer', () => {
-    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5';
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5-5';
     page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
-      'Sonnet 5'
+      'Sonnet 5.5'
     );
   });
   it('restores the most recently used supported agent', async () => {

@@ -82,6 +82,9 @@ pub(crate) struct World {
     pub(crate) op_answers: VecDeque<Result<Vec<OpResult>, DatabaseError>>,
     /// Every question the databases service stored.
     pub(crate) saved: Vec<(Option<DatabaseId>, QueryDefinition)>,
+    pub(crate) created: Vec<CreateDatabase>,
+    pub(crate) guarded:
+        Vec<std::collections::HashMap<TableId, databases::domain::models::TableVersion>>,
     /// The filter of every Soup read, in order.
     pub(crate) soup_reads: Vec<EntityFilterAst>,
 }
@@ -197,6 +200,7 @@ impl DatabasesService for FakeDatabases {
         };
         let database = receipt.entity().entity_id.parse().expect("a database id");
         let mut world = self.0.lock().unwrap();
+        world.guarded.push(batch.base_versions);
         world.applied.push(AppliedOps {
             database,
             level: *access_level,
@@ -229,8 +233,16 @@ impl DatabasesService for FakeDatabases {
         })
     }
 
-    async fn create_database(&self, _: CreateDatabase) -> Result<Database, DatabaseError> {
-        unimplemented!("SQL never creates a database")
+    async fn create_database(&self, input: CreateDatabase) -> Result<Database, DatabaseError> {
+        let database = Database {
+            id: DatabaseId::new(),
+            name: input.name.clone(),
+            owner_id: input.owner_id.to_string(),
+            created_at: Utc::now(),
+            trashed_at: None,
+        };
+        self.0.lock().unwrap().created.push(input);
+        Ok(database)
     }
     async fn list_databases(&self, _: Viewer) -> Result<Vec<ListedDatabase>, DatabaseError> {
         unimplemented!("SQL reads databases in detail")
@@ -243,10 +255,17 @@ impl DatabasesService for FakeDatabases {
     }
     async fn rename_database(
         &self,
-        _: EntityAccessReceipt<EditAccessLevel>,
-        _: String,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        name: String,
     ) -> Result<Database, DatabaseError> {
-        unimplemented!("SQL never renames a database")
+        let mut world = self.0.lock().unwrap();
+        let database = world
+            .databases
+            .iter_mut()
+            .find(|database| database.database.id.to_string() == receipt.entity().entity_id)
+            .unwrap();
+        database.database.name = name;
+        Ok(database.database.clone())
     }
     async fn trash_database(
         &self,

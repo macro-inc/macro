@@ -1,0 +1,1 @@
+-- Preserve pricing and recorded costs on rollback; older services ignore this model.

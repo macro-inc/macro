@@ -10,6 +10,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { createSignal, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -262,7 +263,7 @@ describe('deleting a table', () => {
         results: [
           { kind: 'table', table: 'budget', change: { kind: 'deleted' } },
         ],
-        changes: [],
+        changes: [{ table: 'budget', version: 2, change: 1 }],
       })
     );
     renderTabs();
@@ -301,4 +302,107 @@ describe('deleting a table', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
+});
+
+it('shows a rename before commit and cancels an older schema read', async () => {
+  let releaseRead!: (value: DatabaseDetail) => void;
+  const staleRead = queryClient.fetchQuery({
+    queryKey: key,
+    queryFn: () =>
+      new Promise<DatabaseDetail>((resolve) => {
+        releaseRead = resolve;
+      }),
+    staleTime: 0,
+  });
+  const settled = Promise.allSettled([staleRead]);
+  let releaseWrite!: () => void;
+  fetch.mockImplementationOnce(async () => {
+    await new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    return ok({
+      results: [
+        {
+          kind: 'table',
+          table: 'guests',
+          tableVersion: 4,
+          change: { kind: 'renamed' },
+        },
+      ],
+      changes: [],
+    });
+  });
+  renderTabs();
+  fireEvent.dblClick(screen.getByRole('tab', { name: 'Guests' }));
+  const input = screen.getByRole('textbox', { name: 'Table name' });
+  fireEvent.input(input, { target: { value: 'Attendees' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(
+    queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table.name
+  ).toBe('Attendees');
+  releaseWrite();
+  await screen.findByRole('tab', { name: 'Attendees' });
+  releaseRead(detail);
+  await settled;
+  expect(
+    queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table.name
+  ).toBe('Attendees');
+});
+
+it('refreshes a refused optimistic rename back to server state', async () => {
+  const observer = new QueryObserver(queryClient, {
+    queryKey: key,
+    queryFn: async () => detail,
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    fetch.mockResolvedValue(
+      err([{ code: 'CONFLICT', message: 'The table changed.' }])
+    );
+    renderTabs();
+    fireEvent.dblClick(screen.getByRole('tab', { name: 'Guests' }));
+    const input = screen.getByRole('textbox', { name: 'Table name' });
+    fireEvent.input(input, { target: { value: 'Attendees' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table.name
+      ).toBe('Guests')
+    );
+  } finally {
+    unsubscribe();
+  }
+});
+
+it('restores a refused deletion even when its recovery read fails', async () => {
+  const observer = new QueryObserver(queryClient, {
+    queryKey: key,
+    queryFn: async (): Promise<DatabaseDetail> => {
+      throw new Error('Offline');
+    },
+    staleTime: Infinity,
+    retry: false,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    fetch.mockResolvedValue(
+      err([{ code: 'UNKNOWN_ERROR', message: 'Offline' }])
+    );
+    renderTabs();
+    await chooseMenuItem('Budget', 'Delete table');
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete table' }));
+    await waitFor(() => expect(toast.failure).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(tabNames()).toEqual(['Guests', 'Budget', 'Venues'])
+    );
+    await waitFor(() =>
+      expect(queryClient.getQueryState(key)?.status).toBe('error')
+    );
+  } finally {
+    unsubscribe();
+  }
 });

@@ -22,11 +22,6 @@ fn subagent_toolset_passes_schema_validation() {
         "ListDatabases",
         "DescribeDatabase",
         "QueryDatabase",
-        "CreateDatabase",
-        "CreateTable",
-        "RenameTable",
-        "AddColumn",
-        "AddColumnOptions",
         "SaveDatabaseView",
     ] {
         assert!(
@@ -48,18 +43,6 @@ fn database_only_toolset_exposes_exactly_its_database_capabilities() {
         "ListDatabases",
         "DescribeDatabase",
         "QueryDatabase",
-        "CreateDatabase",
-        "CreateTable",
-        "RenameDatabase",
-        "RenameTable",
-        "ReorderTables",
-        "DeleteTable",
-        "AddColumn",
-        "AddColumnOptions",
-        "RenameColumn",
-        "ChangeColumnType",
-        "DeleteColumn",
-        "ReorderColumns",
         "SaveDatabaseView",
         "DeleteDatabaseView",
         "SaveDatabaseQuery",
@@ -222,7 +205,33 @@ fn search_toolset_passes_schema_validation() {
 
 #[test]
 fn frontend_schemas_build() {
-    let _ = all_tool_frontend_schemas();
+    let json = all_tool_frontend_schemas().to_json_pretty().unwrap();
+    let schemas: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let mut names = std::collections::HashSet::new();
+    for tool in schemas["tools"].as_array().unwrap() {
+        let name = tool["name"].as_str().unwrap();
+        assert!(names.insert(name), "duplicate frontend tool: {name}");
+    }
+    assert!(names.contains("QueryDatabase"));
+    for name in [
+        "CreateDatabase",
+        "CreateTable",
+        "RenameDatabase",
+        "RenameTable",
+        "ReorderTables",
+        "DeleteTable",
+        "AddColumn",
+        "AddColumnOptions",
+        "RenameColumn",
+        "ChangeColumnType",
+        "DeleteColumn",
+        "ReorderColumns",
+    ] {
+        assert!(
+            !names.contains(name),
+            "removed tool {name} must not be generated"
+        );
+    }
 }
 
 #[test]

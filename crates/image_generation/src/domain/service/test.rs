@@ -69,8 +69,15 @@ impl ImageGenerator for FakeGenerator {
     async fn generate_image(
         &self,
         request: &ImageGenerationRequest,
+        usage: &UsageContext,
+        recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError> {
         self.requests.lock().unwrap().push(request.clone());
+        recorder.record(
+            usage
+                .clone()
+                .into_event("gemini-2.5-flash-image".to_string(), 8, 1290),
+        );
         self.result
             .clone()
             .map_err(|reason| ImageGenerationError::Refused(reason.to_string()))
@@ -108,7 +115,12 @@ fn test_service(
     generator: Arc<dyn ImageGenerator>,
     store: Arc<RecordingStore>,
 ) -> ImageGenerationServiceImpl<Arc<RecordingStore>> {
-    ImageGenerationServiceImpl::new(generator, store, Arc::new(RecordingComposer::default()))
+    ImageGenerationServiceImpl::new(
+        generator,
+        store,
+        Arc::new(RecordingComposer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
 }
 
 fn png() -> GeneratedImage {
@@ -458,6 +470,7 @@ async fn delegates_saved_image_dimensions_to_the_composer() {
         Arc::new(FakeGenerator::returning(png())),
         store,
         composer.clone(),
+        Arc::new(ai_usage::NoOpUsageRecorder),
     );
     let created = service
         .create_generated_image(&principal(), request("image"))
@@ -480,6 +493,7 @@ async fn reports_composition_failure_after_saving_the_image() {
             fail: true,
             ..Default::default()
         }),
+        Arc::new(ai_usage::NoOpUsageRecorder),
     );
     assert!(matches!(
         service
@@ -488,4 +502,93 @@ async fn reports_composition_failure_after_saving_the_image() {
         Err(GenerateImageError::Markup(_))
     ));
     assert_eq!(store.saves.lock().unwrap().len(), 1);
+}
+
+#[derive(Default)]
+struct RecordingUsage(Mutex<Vec<ai_usage::UsageEvent>>);
+
+impl UsageRecorder for RecordingUsage {
+    fn record(&self, event: ai_usage::UsageEvent) {
+        self.0.lock().unwrap().push(event);
+    }
+}
+
+#[tokio::test]
+async fn attributes_usage_to_the_user_even_when_upload_fails() {
+    for fail in [false, true] {
+        let recorder = Arc::new(RecordingUsage::default());
+        let service = ImageGenerationServiceImpl::new(
+            Arc::new(FakeGenerator::returning(png())),
+            Arc::new(RecordingStore {
+                fail,
+                ..Default::default()
+            }),
+            Arc::new(RecordingComposer::default()),
+            recorder.clone(),
+        )
+        .with_reference_reader(Arc::new(RecordingReader::returning(Vec::new())));
+        let result = service
+            .create_generated_image(&principal(), request("draw a cat"))
+            .await;
+        assert_eq!(result.is_err(), fail);
+        let events = recorder.0.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].feature, AiFeature::ImageGeneration);
+        assert_eq!(&events[0].user, principal().user().unwrap());
+        assert_eq!(events[0].entity, None);
+        assert_eq!(
+            events[0].amount,
+            ai_usage::UsageAmount::Tokens {
+                input: 8,
+                output: 1290
+            }
+        );
+    }
+}
+
+#[tokio::test]
+async fn invalid_requests_do_not_record_usage() {
+    let recorder = Arc::new(RecordingUsage::default());
+    let service = ImageGenerationServiceImpl::new(
+        Arc::new(FakeGenerator::returning(png())),
+        Arc::new(RecordingStore::default()),
+        Arc::new(RecordingComposer::default()),
+        recorder.clone(),
+    );
+    assert!(
+        service
+            .create_generated_image(&principal(), request(" "))
+            .await
+            .is_err()
+    );
+    assert!(recorder.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn direct_users_and_team_bots_have_distinct_usage_attribution() {
+    let user = principal().user().unwrap().clone();
+    let team_bot = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id::BotId::new_from_uuid(Uuid::from_u128(42)))
+            .unwrap(),
+        team: Uuid::from_u128(43),
+    };
+    for (principal, expected_user) in [
+        (CreationPrincipal::User(user.clone()), user),
+        (team_bot, ai_usage::SYSTEM_USER_ID.clone()),
+    ] {
+        let recorder = Arc::new(RecordingUsage::default());
+        let service = ImageGenerationServiceImpl::new(
+            Arc::new(FakeGenerator::returning(png())),
+            Arc::new(RecordingStore::default()),
+            Arc::new(RecordingComposer::default()),
+            recorder.clone(),
+        );
+        service
+            .create_generated_image(&principal, request("draw a cat"))
+            .await
+            .unwrap();
+        let events = recorder.0.lock().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].user, expected_user);
+    }
 }

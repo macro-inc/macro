@@ -1,6 +1,7 @@
 //! Running a statement as a viewer: build their catalog, compile against it,
 //! refuse what they may not write, and drive the engine.
 
+mod schema;
 #[cfg(test)]
 mod test;
 
@@ -34,6 +35,7 @@ pub struct DatabasesSql<Databases, Access, Soup, Contacts> {
     entity_access: Arc<Access>,
     soup: Arc<Soup>,
     contacts: Arc<Contacts>,
+    read_only: bool,
 }
 
 impl<Databases, Access, Soup, Contacts> Clone for DatabasesSql<Databases, Access, Soup, Contacts> {
@@ -43,6 +45,7 @@ impl<Databases, Access, Soup, Contacts> Clone for DatabasesSql<Databases, Access
             entity_access: self.entity_access.clone(),
             soup: self.soup.clone(),
             contacts: self.contacts.clone(),
+            read_only: self.read_only,
         }
     }
 }
@@ -120,6 +123,12 @@ pub enum SqlError {
         /// The table.
         table_id: TableId,
     },
+    /// One of the tables in a schema batch moved past the caller's version.
+    #[error("database {database_id} changed since its schema was read")]
+    SchemaVersionConflict {
+        /// The database whose schema should be refreshed.
+        database_id: DatabaseId,
+    },
     /// The statement is longer than any statement is allowed to be.
     #[error("the statement is too long")]
     TooLong,
@@ -187,6 +196,7 @@ where
             entity_access,
             soup,
             contacts,
+            read_only: false,
         }
     }
 
@@ -196,6 +206,7 @@ where
         DatabasesSql {
             databases: self.databases.clone(),
             entity_access: Arc::new(ViewOnlyAccess((*self.entity_access).clone())),
+            read_only: true,
             soup: self.soup.clone(),
             contacts: self.contacts.clone(),
         }
@@ -247,6 +258,11 @@ where
     ) -> Result<SqlOutcome, SqlError> {
         if request.sql.len() > MAX_STATEMENT_LENGTH {
             return Err(SqlError::TooLong);
+        }
+        if let Some(command) =
+            database_sql::parse::parse_schema(&request.sql).map_err(CompileError::Parse)?
+        {
+            return self.execute_schema(viewer, request, command).await;
         }
         let catalog = self.catalog(&viewer, request.scope).await?;
         let query = database_sql::compile(catalog.catalog(), &request.sql)?;

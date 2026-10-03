@@ -13,6 +13,7 @@ import {
 } from '@queries/storage/databases-sync';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
+import { ResultAsync } from 'neverthrow';
 import {
   createMemo,
   createSignal,
@@ -42,15 +43,15 @@ import {
 } from '../database-mentions';
 import type { BoardPositionsState } from '../primitives/board-layout';
 import { createColumnCasts } from '../queries/column-casts';
-import { updateDatabaseColumns } from '../queries/column-schema';
+import { opColumnKind } from '../queries/column-schema';
 import {
   addDatabaseColumnOptions,
   convertDatabaseColumn,
 } from '../queries/columns';
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
+import { patchTable } from '../queries/detail-cache';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
-import { renameDatabaseColumn } from '../queries/rename-column';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
 import {
@@ -285,16 +286,6 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     tableId: props.tableId,
     version: () => table().table.version,
   });
-  const changeColumns = (
-    mutation: Parameters<typeof updateDatabaseColumns>[0]['mutation'],
-    baseVersion = table().table.version
-  ) =>
-    updateDatabaseColumns({
-      databaseId,
-      tableId: props.tableId,
-      baseVersion,
-      mutation,
-    });
   return (
     <>
       <For each={relatedDatabases()}>
@@ -340,10 +331,21 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
             onChangeColumnType={(columnId, change) =>
               // Checked against the version the menu's dry run read, so a
               // change made since is not converted blind.
-              changeColumns(
-                { kind: 'type', columnId, change },
-                change.baseVersion
-              )
+              applyDatabaseOps(
+                databaseId,
+                [
+                  {
+                    kind: 'column',
+                    table: props.tableId,
+                    column: columnId,
+                    change: {
+                      kind: 'change_type',
+                      to: opColumnKind(databaseId, change.to),
+                    },
+                  },
+                ],
+                { [props.tableId]: change.baseVersion ?? table().table.version }
+              ).map(() => undefined)
             }
             onConvertColumn={(columnId, conversion) =>
               convertDatabaseColumn({
@@ -358,27 +360,102 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 ),
               })
             }
-            onDeleteColumn={(columnId) =>
-              changeColumns({ kind: 'delete', columnId })
-            }
-            onReorderColumns={(columnIds) =>
-              changeColumns({
-                kind: 'order',
-                columnIds: mergeDatabaseColumnOrder(
-                  table().columns.map(({ column }) => column.id),
-                  columnIds
-                ),
-              })
-            }
-            onRenameColumn={(columnId, name, previousName) =>
-              renameDatabaseColumn({
-                databaseId,
-                tableId: props.tableId,
-                columnId,
-                name,
-                previousName,
-              })
-            }
+            onDeleteColumn={(columnId) => {
+              const tableId = props.tableId;
+              const version = table().table.version;
+              return ResultAsync.fromSafePromise(
+                patchTable(databaseId, tableId, (entry) => ({
+                  ...entry,
+                  columns: entry.columns.filter(
+                    ({ column }) => column.id !== columnId
+                  ),
+                }))
+              )
+                .andThen((rollback) =>
+                  applyDatabaseOps(
+                    databaseId,
+                    [
+                      {
+                        kind: 'column',
+                        table: tableId,
+                        column: columnId,
+                        change: { kind: 'delete' },
+                      },
+                    ],
+                    { [tableId]: version }
+                  ).mapErr((error) => {
+                    rollback();
+                    return error;
+                  })
+                )
+                .map(() => undefined);
+            }}
+            onReorderColumns={(columnIds) => {
+              const tableId = props.tableId;
+              const version = table().table.version;
+              const order = mergeDatabaseColumnOrder(
+                table().columns.map(({ column }) => column.id),
+                columnIds
+              );
+              const rank = new Map(order.map((id, i) => [id, i]));
+              return ResultAsync.fromSafePromise(
+                patchTable(databaseId, tableId, (entry) => ({
+                  ...entry,
+                  columns: entry.columns.toSorted(
+                    (a, b) =>
+                      (rank.get(a.column.id) ?? Infinity) -
+                      (rank.get(b.column.id) ?? Infinity)
+                  ),
+                }))
+              )
+                .andThen((rollback) =>
+                  applyDatabaseOps(
+                    databaseId,
+                    [
+                      {
+                        kind: 'table',
+                        table: tableId,
+                        change: { kind: 'reorder_columns', order },
+                      },
+                    ],
+                    { [tableId]: version }
+                  ).mapErr((error) => {
+                    rollback();
+                    return error;
+                  })
+                )
+                .map(() => undefined);
+            }}
+            onRenameColumn={(columnId, name, previousName) => {
+              const tableId = props.tableId;
+              return ResultAsync.fromSafePromise(
+                patchTable(databaseId, tableId, (entry) => ({
+                  ...entry,
+                  columns: entry.columns.map((column) =>
+                    column.column.id === columnId
+                      ? {
+                          ...column,
+                          column: { ...column.column, display_name: name },
+                        }
+                      : column
+                  ),
+                }))
+              )
+                .andThen((rollback) =>
+                  applyDatabaseOps(databaseId, [
+                    {
+                      kind: 'column',
+                      table: tableId,
+                      column: columnId,
+                      change: { kind: 'rename', name, previousName },
+                    },
+                  ]).mapErr((error) => {
+                    rollback();
+                    return error;
+                  })
+                )
+                .map(() => undefined);
+            }}
             actionsRef={props.actionsRef}
             renderToolbar={props.renderToolbar}
             createColumn={() =>

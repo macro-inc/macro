@@ -19,6 +19,10 @@ import type {
   Outcome,
   Schema,
 } from '@core/database-sql/generated/types';
+import type {
+  DatabaseSqlReadContext,
+  DatabaseSqlReadReason,
+} from '@core/database-sql/trace';
 import { buildDatabaseSqlCatalog } from '@core/database-sql/wasm-module';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -99,15 +103,18 @@ function runStatement(
   catalog: Catalog,
   statement: DatabaseSqlStatement,
   source: RowSource,
-  capabilities: Pick<DatabaseSqlQueryCapabilities, 'open' | 'openView'>
+  capabilities: Pick<DatabaseSqlQueryCapabilities, 'open' | 'openView'>,
+  context: DatabaseSqlReadContext
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
   if (statement.view)
     return runDatabaseView(catalog, statement.view, {
       source,
+      context,
       ...(capabilities.openView ? { open: capabilities.openView } : {}),
     });
   return runDatabaseSql(catalog, statement.sql, {
     source,
+    context,
     ...(capabilities.open ? { open: capabilities.open } : {}),
   });
 }
@@ -124,7 +131,9 @@ export interface DatabaseSqlQuery {
   error: Accessor<DatabaseSqlFailure | undefined>;
   loading: Accessor<boolean>;
   /** Read the statement's tables from the server again. */
-  refresh: () => ResultAsync<DatabaseSqlRun, DatabaseSqlFailure>;
+  refresh: (
+    reason?: DatabaseSqlReadReason
+  ) => ResultAsync<DatabaseSqlRun, DatabaseSqlFailure>;
   /** Whether a local cache backs the reads, so rows read into it can answer the statement. */
   cached: () => boolean;
   /** Answer the statement again from the local cache, as a cache change would, without waiting on one. */
@@ -167,6 +176,7 @@ export function createDatabaseSqlQuery(
     current: DatabaseSqlStatement,
     requestPolicy: RequestPolicy,
     reconcile: boolean,
+    reason: DatabaseSqlReadReason,
     options: { reportFailure?: boolean; keepLoading?: boolean } = {}
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> => {
     const generation = ++latest;
@@ -184,7 +194,13 @@ export function createDatabaseSqlQuery(
             people: capabilities.people,
             membership: host ? { host, baselines, reconcile } : undefined,
           }),
-          capabilities
+          capabilities,
+          {
+            reason,
+            scope: current.scope,
+            requestPolicy,
+            reportFailure: options.reportFailure,
+          }
         ).map((answer): DatabaseSqlRun => {
           if (generation !== latest) return { landed: false };
           // A cache change that left the answer alone keeps the same outcome.
@@ -223,13 +239,16 @@ export function createDatabaseSqlQuery(
     return new ResultAsync(settle());
   }
 
-  function openStatement(current: DatabaseSqlStatement): void {
+  function openStatement(
+    current: DatabaseSqlStatement,
+    reason: DatabaseSqlReadReason
+  ): void {
     if (!capabilities.cacheHost()) {
-      void trackNetwork(run(current, 'cache-and-network', false));
+      void trackNetwork(run(current, 'cache-and-network', false, reason));
       return;
     }
     // Only a complete cached answer is shown. A miss still reads the network.
-    const cached = run(current, 'cache-only', false, {
+    const cached = run(current, 'cache-only', false, reason, {
       reportFailure: false,
       keepLoading: true,
     });
@@ -237,13 +256,13 @@ export function createDatabaseSqlQuery(
     const reconcile = async () => {
       await cached;
       if (generation !== latest) return ok({ landed: false });
-      return await run(current, 'network-only', false);
+      return await run(current, 'network-only', false, reason);
     };
     void trackNetwork(new ResultAsync(reconcile()));
   }
 
   createEffect(
-    on(statement, (current) => {
+    on(statement, (current, previous) => {
       baselines = new Map();
       latest += 1;
       setError(undefined);
@@ -255,7 +274,12 @@ export function createDatabaseSqlQuery(
         });
         return;
       }
-      openStatement(current);
+      const reason = !previous
+        ? 'initial'
+        : JSON.stringify(previous.schema) !== JSON.stringify(current.schema)
+          ? 'schema-change'
+          : 'statement-change';
+      openStatement(current, reason);
     })
   );
 
@@ -271,7 +295,7 @@ export function createDatabaseSqlQuery(
           return;
         }
         const current = untrack(statement);
-        if (current) await run(current, 'cache-first', true);
+        if (current) await run(current, 'cache-first', true, 'cache-change');
       })
     );
   });
@@ -285,16 +309,16 @@ export function createDatabaseSqlQuery(
     catalog,
     error,
     loading,
-    refresh: () => {
+    refresh: (reason = 'refresh') => {
       const current = untrack(statement);
       if (!current) return okAsync({ landed: false });
-      return trackNetwork(run(current, 'network-only', false));
+      return trackNetwork(run(current, 'network-only', false, reason));
     },
     cached: () => capabilities.cacheHost() !== undefined,
     answerFromCache: () => {
       const current = untrack(statement);
       if (!current) return okAsync({ landed: false });
-      return run(current, 'cache-first', true);
+      return run(current, 'cache-first', true, 'cache-reconcile');
     },
   };
 }
@@ -309,7 +333,8 @@ export function refreshInBackground(reader: {
 /** One read of a statement from the network, for an answer nothing keeps live. */
 export function readDatabaseSql(
   statement: DatabaseSqlStatement,
-  capabilities: DatabaseSqlQueryCapabilities = productionDatabaseSqlCapabilities()
+  capabilities: DatabaseSqlQueryCapabilities = productionDatabaseSqlCapabilities(),
+  reason: DatabaseSqlReadReason = 'read'
 ): ResultAsync<{ catalog: Catalog; outcome: Outcome }, DatabaseSqlFailure> {
   return statementCatalog(statement, capabilities).andThen((catalog) =>
     runStatement(
@@ -321,7 +346,8 @@ export function readDatabaseSql(
         requestPolicy: 'network-only',
         people: capabilities.people,
       }),
-      capabilities
+      capabilities,
+      { reason, scope: statement.scope, requestPolicy: 'network-only' }
     ).map((outcome) => ({ catalog, outcome }))
   );
 }

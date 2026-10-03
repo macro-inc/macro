@@ -116,3 +116,32 @@ fn a_version_conflict_tells_the_model_to_describe_and_retry() {
          schema and version, then retry."
     );
 }
+
+#[tokio::test]
+async fn describe_is_compact_by_default_and_editing_metadata_is_opt_in() {
+    let (context, _) = context(FakeAccess::granting(AccessLevel::Owner));
+    let concise: DescribeDatabase =
+        serde_json::from_value(serde_json::json!({"databaseId": DATABASE_ID})).unwrap();
+    assert!(!concise.include_editing_metadata);
+    let compact = concise
+        .call(ServiceContext(context.clone()), request_context())
+        .await
+        .unwrap();
+    let detailed = DescribeDatabase {
+        database_id: DATABASE_ID,
+        include_editing_metadata: true,
+    }
+    .call(ServiceContext(context), request_context())
+    .await
+    .unwrap();
+    let json = serde_json::to_value(&compact).unwrap();
+    let column = &json["tables"][0]["columns"][0];
+    assert!(column.get("safeTypes").is_none());
+    assert!(column.get("checkedTypes").is_none());
+    assert!(column.get("options").is_some());
+    assert!(column.get("id").is_some());
+    assert!(
+        serde_json::to_string(&compact).unwrap().len()
+            < serde_json::to_string(&detailed).unwrap().len()
+    );
+}

@@ -26,10 +26,10 @@ describe('chat input storage: model defaults', () => {
 
   it('keeps each chat on its own remembered model', () => {
     storeChatStateImmediate('chat-a', { model: Model.gpt56 });
-    storeChatStateImmediate('chat-b', { model: Model.sonnet5 });
+    storeChatStateImmediate('chat-b', { model: Model.sonnet55 });
 
     expect(getChatInputStoredState('chat-a').model).toBe(Model.gpt56);
-    expect(getChatInputStoredState('chat-b').model).toBe(Model.sonnet5);
+    expect(getChatInputStoredState('chat-b').model).toBe(Model.sonnet55);
   });
 
   it('returns no stored model for a chat that has never been used', () => {
