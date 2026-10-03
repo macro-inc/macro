@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET deleted_at = NULL, content = 'edited' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dd70275d1f21a505bddab63286b1e7a031aaa7d0be090d1c9e74430de679f478"
+}
