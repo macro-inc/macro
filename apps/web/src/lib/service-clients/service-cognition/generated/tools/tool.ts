@@ -8,11 +8,6 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
-  AddColumn: { call: types.AddColumn; response: types.AddColumnResponse };
-  AddColumnOptions: {
-    call: types.AddColumnOptions;
-    response: types.AddColumnOptionsResponse;
-  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -24,10 +19,6 @@ type ToolParserMap = {
   CalculateSpreadsheet: {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
-  };
-  ChangeColumnType: {
-    call: types.ChangeColumnType;
-    response: types.ChangeColumnTypeResponse;
   };
   CommentOnDocument: {
     call: types.CommentOnDocument;
@@ -54,10 +45,6 @@ type ToolParserMap = {
     call: types.CreateChannel;
     response: types.CreateChannelResponse;
   };
-  CreateDatabase: {
-    call: types.CreateDatabase;
-    response: types.CreateDatabaseResponse;
-  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -75,16 +62,11 @@ type ToolParserMap = {
     response: types.CreateProjectResponse;
   };
   CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
-  CreateTable: { call: types.CreateTable; response: types.CreateTableResponse };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
   DeleteCalendarEvent: {
     call: types.DeleteCalendarEvent;
     response: types.DeleteCalendarEventResponse;
-  };
-  DeleteColumn: {
-    call: types.DeleteColumn;
-    response: types.DeleteColumnResponse;
   };
   DeleteDatabaseView: {
     call: types.DeleteDatabaseView;
@@ -102,7 +84,6 @@ type ToolParserMap = {
     call: types.DeleteReminder;
     response: types.DeleteReminderResponse;
   };
-  DeleteTable: { call: types.DeleteTable; response: types.DeleteTableResponse };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DescribeDatabase: {
     call: types.DescribeDatabase;
@@ -260,26 +241,9 @@ type ToolParserMap = {
     call: types.RenameChannel;
     response: types.RenameChannelResponse;
   };
-  RenameColumn: {
-    call: types.RenameColumn;
-    response: types.RenameColumnResponse;
-  };
-  RenameDatabase: {
-    call: types.RenameDatabase;
-    response: types.RenameDatabaseResponse;
-  };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
-  };
-  RenameTable: { call: types.RenameTable; response: types.RenameTableResponse };
-  ReorderColumns: {
-    call: types.ReorderColumns;
-    response: types.ReorderColumnsResponse;
-  };
-  ReorderTables: {
-    call: types.ReorderTables;
-    response: types.ReorderTablesResponse;
   };
   ResolveDocumentComment: {
     call: types.ResolveDocumentComment;
@@ -350,11 +314,6 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
-  AddColumn: { call: schemas.AddColumn, response: schemas.AddColumnResponse },
-  AddColumnOptions: {
-    call: schemas.AddColumnOptions,
-    response: schemas.AddColumnOptionsResponse,
-  },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
@@ -366,10 +325,6 @@ const toolParserMap = {
   CalculateSpreadsheet: {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
-  },
-  ChangeColumnType: {
-    call: schemas.ChangeColumnType,
-    response: schemas.ChangeColumnTypeResponse,
   },
   CommentOnDocument: {
     call: schemas.CommentOnDocument,
@@ -396,10 +351,6 @@ const toolParserMap = {
     call: schemas.CreateChannel,
     response: schemas.CreateChannelResponse,
   },
-  CreateDatabase: {
-    call: schemas.CreateDatabase,
-    response: schemas.CreateDatabaseResponse,
-  },
   CreateDocument: {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
@@ -420,19 +371,11 @@ const toolParserMap = {
     call: schemas.CreateReminder,
     response: schemas.ToolReminder,
   },
-  CreateTable: {
-    call: schemas.CreateTable,
-    response: schemas.CreateTableResponse,
-  },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
   DeleteBot: { call: schemas.DeleteBot, response: schemas.DeleteBotResponse },
   DeleteCalendarEvent: {
     call: schemas.DeleteCalendarEvent,
     response: schemas.DeleteCalendarEventResponse,
-  },
-  DeleteColumn: {
-    call: schemas.DeleteColumn,
-    response: schemas.DeleteColumnResponse,
   },
   DeleteDatabaseView: {
     call: schemas.DeleteDatabaseView,
@@ -449,10 +392,6 @@ const toolParserMap = {
   DeleteReminder: {
     call: schemas.DeleteReminder,
     response: schemas.DeleteReminderResponse,
-  },
-  DeleteTable: {
-    call: schemas.DeleteTable,
-    response: schemas.DeleteTableResponse,
   },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
   DescribeDatabase: {
@@ -635,29 +574,9 @@ const toolParserMap = {
     call: schemas.RenameChannel,
     response: schemas.RenameChannelResponse,
   },
-  RenameColumn: {
-    call: schemas.RenameColumn,
-    response: schemas.RenameColumnResponse,
-  },
-  RenameDatabase: {
-    call: schemas.RenameDatabase,
-    response: schemas.RenameDatabaseResponse,
-  },
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
-  },
-  RenameTable: {
-    call: schemas.RenameTable,
-    response: schemas.RenameTableResponse,
-  },
-  ReorderColumns: {
-    call: schemas.ReorderColumns,
-    response: schemas.ReorderColumnsResponse,
-  },
-  ReorderTables: {
-    call: schemas.ReorderTables,
-    response: schemas.ReorderTablesResponse,
   },
   ResolveDocumentComment: {
     call: schemas.ResolveDocumentComment,
@@ -745,11 +664,6 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
-  AddColumn: { call: types.AddColumn; response: types.AddColumnResponse };
-  AddColumnOptions: {
-    call: types.AddColumnOptions;
-    response: types.AddColumnOptionsResponse;
-  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -761,10 +675,6 @@ type ToolDataMap = {
   CalculateSpreadsheet: {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
-  };
-  ChangeColumnType: {
-    call: types.ChangeColumnType;
-    response: types.ChangeColumnTypeResponse;
   };
   CommentOnDocument: {
     call: types.CommentOnDocument;
@@ -791,10 +701,6 @@ type ToolDataMap = {
     call: types.CreateChannel;
     response: types.CreateChannelResponse;
   };
-  CreateDatabase: {
-    call: types.CreateDatabase;
-    response: types.CreateDatabaseResponse;
-  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -812,16 +718,11 @@ type ToolDataMap = {
     response: types.CreateProjectResponse;
   };
   CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
-  CreateTable: { call: types.CreateTable; response: types.CreateTableResponse };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
   DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
   DeleteCalendarEvent: {
     call: types.DeleteCalendarEvent;
     response: types.DeleteCalendarEventResponse;
-  };
-  DeleteColumn: {
-    call: types.DeleteColumn;
-    response: types.DeleteColumnResponse;
   };
   DeleteDatabaseView: {
     call: types.DeleteDatabaseView;
@@ -839,7 +740,6 @@ type ToolDataMap = {
     call: types.DeleteReminder;
     response: types.DeleteReminderResponse;
   };
-  DeleteTable: { call: types.DeleteTable; response: types.DeleteTableResponse };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
   DescribeDatabase: {
     call: types.DescribeDatabase;
@@ -997,26 +897,9 @@ type ToolDataMap = {
     call: types.RenameChannel;
     response: types.RenameChannelResponse;
   };
-  RenameColumn: {
-    call: types.RenameColumn;
-    response: types.RenameColumnResponse;
-  };
-  RenameDatabase: {
-    call: types.RenameDatabase;
-    response: types.RenameDatabaseResponse;
-  };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
-  };
-  RenameTable: { call: types.RenameTable; response: types.RenameTableResponse };
-  ReorderColumns: {
-    call: types.ReorderColumns;
-    response: types.ReorderColumnsResponse;
-  };
-  ReorderTables: {
-    call: types.ReorderTables;
-    response: types.ReorderTablesResponse;
   };
   ResolveDocumentComment: {
     call: types.ResolveDocumentComment;

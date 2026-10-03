@@ -27,6 +27,7 @@ fn an_awareness_relay_serializes_its_relay_time_as_epoch_milliseconds() {
         database_id: DatabaseId::from_uuid(Uuid::from_u128(1)),
         user_id: "macro|sam@example.com".to_string(),
         state: Awareness {
+            peer_id: Some(uuid::Uuid::from_u128(7)),
             table_id: TableId::from_uuid(Uuid::from_u128(2)),
             row_id: Some(RowId::from_uuid(Uuid::from_u128(3))),
             column_id: Some(ColumnId::from_uuid(Uuid::from_u128(4))),
@@ -43,6 +44,7 @@ fn an_awareness_relay_serializes_its_relay_time_as_epoch_milliseconds() {
             "databaseId": "00000000-0000-0000-0000-000000000001",
             "userId": "macro|sam@example.com",
             "state": {
+                "peerId": "00000000-0000-0000-0000-000000000007",
                 "tableId": "00000000-0000-0000-0000-000000000002",
                 "rowId": "00000000-0000-0000-0000-000000000003",
                 "columnId": "00000000-0000-0000-0000-000000000004",

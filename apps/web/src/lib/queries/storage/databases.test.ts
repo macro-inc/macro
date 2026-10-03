@@ -1,3 +1,4 @@
+import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { errAsync, okAsync } from 'neverthrow';
@@ -7,6 +8,7 @@ import {
   applyDatabaseTableVersions,
   createDatabase,
   fetchViewerDatabases,
+  onDatabaseBatchCommitted,
 } from './databases';
 import { databasesKeys } from './keys';
 
@@ -311,4 +313,309 @@ describe('reading every viewer database once', () => {
       { code: 'FORBIDDEN', message: 'no access' },
     ]);
   });
+});
+
+describe('shared ops cache effects', () => {
+  it('publishes versions and refreshes schema without replaying ops into the cache', async () => {
+    queryClient.setQueryData(key, detail);
+    mock.applyOps.mockReturnValue(
+      okAsync({
+        results: [
+          {
+            kind: 'table',
+            table: 'tasks',
+            tableVersion: 6,
+            change: { kind: 'renamed' },
+          },
+          {
+            kind: 'table',
+            table: 'tasks',
+            tableVersion: 6,
+            change: { kind: 'renamed' },
+          },
+        ],
+        changes: [],
+      })
+    );
+    await applyDatabaseOps('db', [
+      {
+        kind: 'table',
+        table: 'tasks',
+        change: { kind: 'rename', name: 'First', previousName: 'Tasks' },
+      },
+      {
+        kind: 'table',
+        table: 'tasks',
+        change: { kind: 'rename', name: 'Final', previousName: 'First' },
+      },
+    ]);
+    expect(
+      queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table
+    ).toMatchObject({ name: 'Tasks', version: 6 });
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+  it('invalidates dependent catalogs for table deletion without replaying it', async () => {
+    queryClient.setQueryData(key, detail);
+    const other = databasesKeys.detail('other').queryKey;
+    queryClient.setQueryData(other, detail);
+    mock.applyOps.mockReturnValue(
+      okAsync({
+        results: [
+          {
+            kind: 'table',
+            table: 'tasks',
+            change: { kind: 'deleted' },
+          },
+        ],
+        changes: [{ table: 'tasks', version: 6, change: 1 }],
+      })
+    );
+    await applyDatabaseOps('db', [
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    expect(
+      queryClient
+        .getQueryData<DatabaseDetail>(key)
+        ?.tables.map(({ table }) => table.id)
+    ).toEqual(['tasks', 'people']);
+    expect(queryClient.getQueryState(other)?.isInvalidated).toBe(true);
+  });
+  it('advances ordinary row writes without refetching the schema for each cell', async () => {
+    queryClient.setQueryData(key, detail);
+    mock.applyOps.mockReturnValue(
+      okAsync({
+        results: [],
+        changes: [{ table: 'tasks', version: 6, change: 1 }],
+      })
+    );
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'delete', rows: ['row'] },
+      },
+    ]);
+    expect(
+      queryClient.getQueryData<DatabaseDetail>(key)?.tables[0].table.version
+    ).toBe(6);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+  it('invalidates optimistic state after a refused batch', async () => {
+    queryClient.setQueryData(key, detail);
+    mock.applyOps.mockReturnValue(
+      errAsync([{ code: 'CONFLICT', message: 'Changed', refusal: null }])
+    );
+    const result = await applyDatabaseOps('db', [
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    expect(result.isErr()).toBe(true);
+    expect(queryClient.getQueryData(key)).toEqual(detail);
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+});
+
+it('returns and announces schema commits without waiting for a slow refresh', async () => {
+  const events: number[] = [];
+  const unsubscribe = onDatabaseBatchCommitted((batch) =>
+    events.push(batch.changes[0].change)
+  );
+  let release!: () => void;
+  const refresh = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const invalidation = vi
+    .spyOn(queryClient, 'invalidateQueries')
+    .mockImplementationOnce(() => refresh);
+  mock.applyOps
+    .mockReturnValueOnce(
+      okAsync({
+        results: [],
+        changes: [{ table: 'tasks', version: 6, change: 10 }],
+      })
+    )
+    .mockReturnValueOnce(
+      okAsync({
+        results: [],
+        changes: [{ table: 'tasks', version: 7, change: 11 }],
+      })
+    );
+  try {
+    const schema = applyDatabaseOps('db', [
+      {
+        kind: 'table',
+        table: 'tasks',
+        change: { kind: 'rename', name: 'Renamed', previousName: 'Tasks' },
+      },
+    ]);
+    await vi.waitFor(() => expect(invalidation).toHaveBeenCalled());
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'delete', rows: ['row'] },
+      },
+    ]);
+    expect(events).toEqual([10, 11]);
+    expect((await schema).isOk()).toBe(true);
+    release();
+  } finally {
+    release();
+    unsubscribe();
+    invalidation.mockRestore();
+  }
+});
+
+it.each<DatabaseOp>([
+  {
+    kind: 'column',
+    table: 'tasks',
+    column: 'status',
+    change: {
+      kind: 'create',
+      definition: {
+        source: 'new',
+        name: 'Status',
+        type: { type: 'select', multi: false },
+      },
+    },
+  },
+  {
+    kind: 'column',
+    table: 'tasks',
+    column: 'status',
+    change: { kind: 'add_options', options: [{ id: 'done', label: 'Done' }] },
+  },
+])(
+  'loads created column data before a caller can cancel its refresh: %j',
+  async (op) => {
+    let release!: (value: DatabaseDetail) => void;
+    const refreshed = {
+      ...detail,
+      tables: [{ ...detail.tables[0], sql_name: 'refreshed schema' }],
+    };
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(detail)
+      .mockImplementationOnce(
+        () =>
+          new Promise<DatabaseDetail>((resolve) => {
+            release = resolve;
+          })
+      );
+    // An inactive but previously loaded catalog must also be reconciled.
+    await queryClient.fetchQuery({ queryKey: key, queryFn: read });
+    mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+    let continued = false;
+    const write = applyDatabaseOps('db', [op]).map(async () => {
+      // View patches cancel pending reads. This used to discard the only read
+      // containing the newly created Status column.
+      continued = true;
+      await queryClient.cancelQueries({ queryKey: key, exact: true });
+      expect(queryClient.getQueryData(key)).toEqual(refreshed);
+    });
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(continued).toBe(false);
+    release(refreshed);
+    expect((await write).isOk()).toBe(true);
+    expect(continued).toBe(true);
+  }
+);
+
+it('keeps a column creation successful when its catalog refresh fails', async () => {
+  const read = vi
+    .fn()
+    .mockResolvedValueOnce(detail)
+    .mockRejectedValueOnce(new Error('Offline'));
+  await queryClient.fetchQuery({ queryKey: key, queryFn: read });
+  mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+  const result = await applyDatabaseOps('db', [
+    {
+      kind: 'column',
+      table: 'tasks',
+      column: 'status',
+      change: {
+        kind: 'create',
+        definition: { source: 'new', name: 'Status', type: { type: 'text' } },
+      },
+    },
+  ]);
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(result.isOk()).toBe(true);
+  expect(mock.applyOps).toHaveBeenCalledOnce();
+  expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+});
+
+it('does not refresh the catalog for board card or view order changes', async () => {
+  const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+  mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+  const result = await applyDatabaseOps('db', [
+    {
+      kind: 'view',
+      table: 'tasks',
+      view: 'board',
+      change: {
+        kind: 'move_card',
+        row: 'row',
+        lane: { kind: 'none' },
+        before: null,
+        after: null,
+      },
+    },
+  ]);
+  await applyDatabaseOps('db', [
+    {
+      kind: 'table',
+      table: 'tasks',
+      change: { kind: 'reorder_views', order: ['board'] },
+    },
+  ]);
+  expect(result.isOk()).toBe(true);
+  expect(invalidate).not.toHaveBeenCalled();
+  invalidate.mockRestore();
+});
+
+it('does not hold a cell write while refreshing a newly minted option', async () => {
+  let release!: () => void;
+  const refresh = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const invalidate = vi
+    .spyOn(queryClient, 'invalidateQueries')
+    .mockReturnValue(refresh);
+  mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+  try {
+    const result = await applyDatabaseOps('db', [
+      {
+        kind: 'column',
+        table: 'tasks',
+        column: 'status',
+        change: {
+          kind: 'add_options',
+          options: [{ id: 'done', label: 'Done' }],
+        },
+      },
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: {
+          kind: 'update',
+          changes: {
+            kind: 'uniform',
+            rows: ['row'],
+            cells: [
+              {
+                column: 'status',
+                value: { type: 'options', value: [{ label: 'Done' }] },
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    expect(result.isOk()).toBe(true);
+    expect(invalidate).toHaveBeenCalledOnce();
+  } finally {
+    release();
+    invalidate.mockRestore();
+  }
 });

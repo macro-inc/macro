@@ -2239,7 +2239,8 @@
           "import",
           "agent_session",
           "agent_repository_choice",
-          "dictation"
+          "dictation",
+          "image_generation"
         ]
       },
       "AssistantMessagePart": {

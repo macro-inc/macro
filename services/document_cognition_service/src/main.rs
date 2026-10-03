@@ -689,6 +689,7 @@ async fn main() -> anyhow::Result<()> {
         image_generation_tool_context: ai_tools::build_image_generation_tool_context(
             &document_tool_context,
             ai_tools::build_image_generator_from_env(),
+            recorder.clone(),
         )?,
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),

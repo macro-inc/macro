@@ -191,10 +191,11 @@ export function QueryEditor(props: {
     <div
       class="flex min-h-0 flex-col gap-3 p-4"
       data-database-query-editor
-      onKeyDown={(event) => {
+      on:keydown={(event) => {
         if (!isPlainEnter(event) || !canAccept() || ownsEnter(event.target))
           return;
         event.preventDefault();
+        event.stopPropagation();
         accept();
       }}
     >
@@ -217,7 +218,7 @@ export function QueryEditor(props: {
               placeholder="Ask anything about your data…"
               value={composer.prompt()}
               onInput={(event) => composer.setPrompt(event.currentTarget.value)}
-              onKeyDown={(event) => {
+              on:keydown={(event) => {
                 if (event.isComposing || event.keyCode === 229) return;
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();

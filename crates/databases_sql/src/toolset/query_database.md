@@ -1,4 +1,4 @@
-Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data. One statement per call.
+Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data, CREATE/ALTER/DROP to edit schema. One statement per call.
 
 **Every table the user can see is already in scope, across all of their databases.** The statement runs as the user against exactly what they are allowed to read: a table they cannot see simply does not exist, and a table they only have view access to is read-only. Always pass `databaseId` for the database the statement is about, so its tables win name ties.
 

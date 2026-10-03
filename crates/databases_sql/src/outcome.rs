@@ -44,6 +44,13 @@ pub struct SqlOutcome {
     rename_all_fields = "camelCase"
 )]
 pub enum SqlStatement {
+    /// A committed schema command. IDs remain available even without a follow-up read.
+    Schema {
+        /// Owning database.
+        database_id: models_databases::DatabaseId,
+        /// What changed and how to read the resulting schema.
+        summary: String,
+    },
     /// A `SELECT`.
     Select,
     /// An `INSERT`.

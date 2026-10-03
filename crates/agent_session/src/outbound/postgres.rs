@@ -27,6 +27,7 @@ use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
     SessionOwnership,
 };
+use crate::domain::sharing::{SessionBotOwnership, originating_channel_access};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -37,8 +38,7 @@ use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{
-    AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
-    insert_entity_access_row,
+    EntityAccessSourceType, EntityType, delete_entity_access_rows, insert_entity_access_row,
 };
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{
@@ -412,11 +412,11 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 _ => registry_unknown(error, "failed to register the agent session"),
             })?;
 
-        // The channel the bot was invoked in can steer the session: the
-        // invocation was public there, so that audience is. Read from the
-        // message rather than taken from the caller, so the channel is always
-        // the one the message actually sits in. A session created without a
-        // message - directly, rather than from a channel - is its owner's alone.
+        // The channel the bot was invoked in gets the session, at the level
+        // `originating_channel_access` grants. Read from the message rather
+        // than taken from the caller, so the channel is always the one the
+        // message actually sits in. A session created without a message -
+        // directly, rather than from a channel - is its owner's alone.
         let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
                 r#"SELECT parent_entity_id::uuid AS "channel_id!" FROM comms_messages WHERE parent_entity_type = 'channel' AND id = $1"#,
@@ -429,13 +429,28 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         };
 
         if let Some(channel_id) = origin_channel_id {
+            // Read in the transaction, so the grant matches the bot's owner
+            // at creation. System bots have no row.
+            let owned_by_user = sqlx::query_scalar!(
+                r#"SELECT owner_user_id IS NOT NULL AS "owned_by_user!" FROM bots WHERE id = $1"#,
+                bot_id.as_uuid(),
+            )
+            .fetch_optional(&mut *transaction)
+            .await
+            .context("failed to read the session bot's owner")?
+            .unwrap_or(false);
+            let bot = if owned_by_user {
+                SessionBotOwnership::User
+            } else {
+                SessionBotOwnership::Shared
+            };
             insert_entity_access_row(
                 &mut transaction,
                 &id.as_uuid(),
                 EntityType::AgentSession,
                 &channel_id.to_string(),
                 EntityAccessSourceType::Channel,
-                AccessLevel::Edit,
+                originating_channel_access(bot),
             )
             .await
             .context("failed to grant the originating channel access to the agent session")?;

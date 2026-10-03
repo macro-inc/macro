@@ -22,9 +22,17 @@ export function DriveCreateMenu() {
   const options = () =>
     CREATABLE_BLOCKS.filter(
       (block) =>
-        ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'].includes(
-          block.blockName
-        ) && isEnabled(block.blockName)
+        [
+          'md',
+          'snippet',
+          'spreadsheet',
+          'canvas',
+          'code',
+          'project',
+          'database',
+        ].includes(block.blockName) &&
+        isEnabled(block.blockName) &&
+        (block.blockName !== 'database' || !state.projectId())
     );
 
   return (

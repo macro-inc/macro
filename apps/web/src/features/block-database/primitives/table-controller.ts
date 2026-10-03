@@ -159,7 +159,7 @@ export function createTableController(
           if (written.isErr()) {
             const failure = written.error;
             const outcomeUnknown = failure.kind === 'outcome-unknown';
-            if (outcomeUnknown && (await source.refresh()).isErr())
+            if (outcomeUnknown && (await source.refresh('after-write')).isErr())
               setRefreshWarning(true);
             const failed: FailedWrite = {
               mutation,
@@ -216,7 +216,9 @@ export function createTableController(
           });
           // A failed refresh cannot turn a committed write into a failed edit.
           span.event('committed_state_applied');
-          await span.span('database.rows.refresh', async () => refresh());
+          await span.span('database.rows.refresh', async () =>
+            refresh('after-write')
+          );
           span.event('refresh_completed');
           return ok(saved);
         })
@@ -261,8 +263,8 @@ export function createTableController(
     );
   }
 
-  async function refresh() {
-    const refreshed = await source.refresh();
+  async function refresh(reason: 'after-write' | 'refresh' = 'refresh') {
+    const refreshed = await source.refresh(reason);
     setRefreshWarning(refreshed.isErr());
     if (refreshed.isOk()) pruneCommitted();
   }
@@ -277,7 +279,7 @@ export function createTableController(
       return await writes.run(TABLE_WRITES, async () => {
         const added = await source.addOption(columnId, label);
         // The option is saved even if its subsequent rows refresh fails.
-        if (added.isOk()) await refresh();
+        if (added.isOk()) await refresh('after-write');
         return added;
       });
     } finally {
@@ -359,7 +361,7 @@ export function createTableController(
       drain: (writes: AcceptedDraftWrites) => Promise<boolean>
     ) => (disposed ? Promise.resolve(false) : drain({ save })),
     retry,
-    refresh,
+    refresh: () => refresh(),
     addGroup: (
       ...request: Parameters<typeof addGroup>
     ): ReturnType<typeof addGroup> =>

@@ -115,7 +115,7 @@ fn google_provider_without_a_client_is_unroutable() {
 fn selected_effort_is_mapped_to_each_provider_request_shape() {
     let router = test_router();
 
-    let RoutedModel::Anthropic(anthropic) = router.route("anthropic/claude-sonnet-5").unwrap()
+    let RoutedModel::Anthropic(anthropic) = router.route("anthropic/claude-sonnet-5-5").unwrap()
     else {
         panic!("sonnet should use the native Anthropic client");
     };
@@ -165,10 +165,13 @@ fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
     );
     assert!(ReasoningEffort::supported("compatible/gpt-5-mini").is_empty());
     assert!(ReasoningEffort::supported("anthropic/claude-haiku-4-5").is_empty());
+    // Retired Anthropic ids are no longer offered, so they advertise no effort.
+    assert!(ReasoningEffort::supported("anthropic/claude-sonnet-5").is_empty());
+    assert!(ReasoningEffort::supported("anthropic/claude-opus-5").is_empty());
     assert!(ReasoningEffort::supported("openai/unknown").is_empty());
     for model in [
-        "anthropic/claude-sonnet-5",
-        "anthropic/claude-opus-5",
+        "anthropic/claude-sonnet-5-5",
+        "anthropic/claude-opus-5-5",
         "openai/gpt-5.5",
         "openai/gpt-5-mini",
     ] {

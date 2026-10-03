@@ -599,6 +599,11 @@ async fn the_dry_run_answers_every_menu_target_for_a_viewer() {
         examples: examples.iter().map(|example| example.to_string()).collect(),
         ..target(data_type, is_multi_select)
     };
+    let no_values_fit = |data_type, summary: &str, examples: &[&str]| ColumnCast {
+        cast: CastVerdict::Never,
+        reason: Some(summary.to_owned()),
+        ..checked(data_type, false, 3, Some(summary), examples)
+    };
 
     let casts = seeded
         .service
@@ -623,18 +628,14 @@ async fn the_dry_run_answers_every_menu_target_for_a_viewer() {
             ),
             checked(DataType::SelectString, false, 0, None, &[]),
             checked(DataType::SelectString, true, 0, None, &[]),
-            checked(
+            no_values_fit(
                 DataType::Date,
-                false,
-                3,
-                Some("3 values aren't dates"),
+                "3 values aren't dates",
                 &["Sam", "12", "https://macro.com"]
             ),
-            checked(
+            no_values_fit(
                 DataType::Boolean,
-                false,
-                3,
-                Some("3 values aren't true or false"),
+                "3 values aren't true or false",
                 &["Sam", "12", "https://macro.com"]
             ),
             checked(
@@ -1030,4 +1031,91 @@ async fn a_text_column_converts_into_a_new_select_column_with_its_labels_as_opti
         cell(&seeded.world, rows[1], diet_definition),
         Some(PropertyValue::Str("Nut-free".into()))
     );
+}
+
+#[tokio::test]
+async fn numeric_selects_offer_dates_only_while_the_column_is_empty() {
+    for multi in [false, true] {
+        let seeded = seeded().await;
+        let column = ColumnId::new();
+        seeded
+            .service
+            .apply_ops(
+                edit(seeded.database_id),
+                viewer(OWNER),
+                OpBatch::from(vec![DatabaseOp::Column {
+                    table: seeded.table_id,
+                    column,
+                    change: ColumnChange::Create {
+                        definition: NewColumn::New {
+                            name: "Rating".into(),
+                            kind: ColumnKind::SelectNumber { multi },
+                            options: (1..=4)
+                                .map(|n| NewOption {
+                                    id: OptionId::new(),
+                                    label: n.to_string(),
+                                })
+                                .collect(),
+                            infer_type: false,
+                        },
+                        after: None,
+                    },
+                }]),
+            )
+            .await
+            .unwrap();
+        let empty = seeded
+            .service
+            .column_casts(
+                receipt(seeded.database_id, VIEWER, AccessLevel::View),
+                seeded.table_id,
+                column,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            empty
+                .iter()
+                .find(|cast| cast.data_type == DataType::Date)
+                .unwrap()
+                .cast,
+            CastVerdict::Safe
+        );
+        seeded
+            .service
+            .apply_ops(
+                edit(seeded.database_id),
+                viewer(OWNER),
+                OpBatch::from(vec![DatabaseOp::Rows {
+                    table: seeded.table_id,
+                    change: RowsChange::Update {
+                        changes: RowChanges::Uniform {
+                            rows: vec![seeded.row_id],
+                            cells: vec![CellWrite {
+                                column,
+                                value: CellValue::Options(vec![OptionRef::Label("1".into())]),
+                            }],
+                        },
+                    },
+                }]),
+            )
+            .await
+            .unwrap();
+        let filled = seeded
+            .service
+            .column_casts(
+                receipt(seeded.database_id, VIEWER, AccessLevel::View),
+                seeded.table_id,
+                column,
+            )
+            .await
+            .unwrap();
+        let date = filled
+            .iter()
+            .find(|cast| cast.data_type == DataType::Date)
+            .unwrap();
+        assert_eq!(date.cast, CastVerdict::Never);
+        assert_eq!(date.failures, 1);
+        assert_eq!(date.reason.as_deref(), Some("1 value isn't a date"));
+    }
 }

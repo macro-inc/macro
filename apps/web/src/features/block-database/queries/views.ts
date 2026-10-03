@@ -5,7 +5,6 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import {
   applyDatabaseOps,
-  applyDatabaseTableVersions,
   invalidateDatabase,
 } from '@queries/storage/databases';
 import { storageServiceClient } from '@service-storage/client';
@@ -56,7 +55,6 @@ export function createDatabaseView(
   return inOrder(viewListKey(tableId), () =>
     applyOp(
       databaseId,
-      tableId,
       {
         kind: 'view',
         table: tableId,
@@ -102,9 +100,6 @@ function applyColumnAndView(
           return errAsync<DatabaseView, DatabaseOpFailure>({
             kind: 'unexpected-result',
           });
-        applyDatabaseTableVersions(databaseId, {
-          [tableId]: result.tableVersion,
-        });
         return okAsync(result.change.view);
       })
       .orElse((failure) => {
@@ -117,7 +112,6 @@ function applyColumnAndView(
         ? views.map((existing) => (existing.id === view.id ? view : existing))
         : [...views, view]
     );
-    await invalidateDatabase(databaseId);
     return view;
   });
 }
@@ -190,7 +184,6 @@ export function updateDatabaseView(
     optimistic.andThen(() =>
       applyOp(
         view.databaseId,
-        view.tableId,
         {
           kind: 'view',
           table: view.tableId,
@@ -229,7 +222,6 @@ export function deleteDatabaseView(
       inOrder(view.id, () =>
         applyOp(
           view.databaseId,
-          view.tableId,
           {
             kind: 'view',
             table: view.tableId,
@@ -256,7 +248,6 @@ export function reorderDatabaseViews(
       inOrder(viewListKey(tableId), () =>
         applyOp(
           databaseId,
-          tableId,
           {
             kind: 'table',
             table: tableId,
@@ -332,7 +323,6 @@ export function moveDatabaseCard(
   return inOrder(view.id, () =>
     applyOp(
       view.databaseId,
-      view.tableId,
       {
         kind: 'view',
         table: view.tableId,

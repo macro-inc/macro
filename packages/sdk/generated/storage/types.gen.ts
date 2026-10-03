@@ -973,6 +973,11 @@ export type Awareness = {
      */
     left?: boolean;
     /**
+     * This mounted client's random peer id, distinct from its authenticated user.
+     * Older clients omit it and remain visible as one peer per user.
+     */
+    peerId?: string;
+    /**
      * The row of the focused cell, if any.
      */
     rowId?: string;

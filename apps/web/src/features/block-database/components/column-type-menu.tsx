@@ -57,17 +57,36 @@ export function ColumnTypeMenu(props: {
   const castOf = (to: DatabaseColumnKind) =>
     casts ? castFor(casts(), to) : undefined;
   const selected = (to: DatabaseColumnKind) => {
+    if (to.type === 'relation')
+      return props.column.relation?.tableId === to.table;
     const target = castTargetOf(to);
+    // Numeric options and tags use the same single/multiple choice controls.
+    const dataType =
+      props.column.dataType === 'SELECT_NUMBER' ||
+      props.column.dataType === 'TAG'
+        ? 'SELECT_STRING'
+        : props.column.dataType;
     return (
       !props.column.relation &&
-      props.column.dataType === target.dataType &&
+      dataType === target.dataType &&
       props.column.isMultiSelect === target.isMultiSelect &&
       (props.column.specificEntityType ?? undefined) ===
         target.specificEntityType
     );
   };
-  /** A type no value converts to is left out; until the dry run answers, nothing is listed. */
+  // Keep a multi-valued reference column represented by its current menu item.
+  const menuTypes = () =>
+    types.map((item) =>
+      item.to.type === 'entity' &&
+      props.column.dataType === 'ENTITY' &&
+      !props.column.relation &&
+      props.column.specificEntityType === item.to.target
+        ? { ...item, to: { ...item.to, multi: props.column.isMultiSelect } }
+        : item
+    );
+  /** Keep the current type visible; leave out types no value converts to. */
   const offered = (to: DatabaseColumnKind) => {
+    if (selected(to)) return true;
     const cast = castOf(to);
     if (cast?.verdict === 'never') return false;
     return !misfits(cast) || !!props.onConvertToNewColumn;
@@ -78,6 +97,7 @@ export function ColumnTypeMenu(props: {
       offered({ type: 'relation', table: table.id })
     );
   const choose = (label: string, to: DatabaseColumnKind) => {
+    if (selected(to)) return;
     const cast = castOf(to);
     if (misfits(cast)) {
       props.onConvertToNewColumn?.({ to, label, cast });
@@ -108,7 +128,7 @@ export function ColumnTypeMenu(props: {
         </Show>
         <Show when={!checking()}>
           <Dropdown.Group>
-            <For each={types.filter((type) => offered(type.to))}>
+            <For each={menuTypes().filter((type) => offered(type.to))}>
               {(type) => (
                 <TypeItem
                   label={type.label}
@@ -139,7 +159,7 @@ export function ColumnTypeMenu(props: {
                       label={table.name}
                       cast={castOf(to)}
                       icon={<PropertyIcon type="ENTITY" relation />}
-                      selected={props.column.relation?.tableId === table.id}
+                      selected={selected(to)}
                       onSelect={() => choose(table.name, to)}
                     />
                   );
@@ -176,7 +196,10 @@ function TypeItem(props: {
       .join(' · ');
   };
   return (
-    <Dropdown.Item onSelect={props.onSelect}>
+    <Dropdown.Item
+      aria-current={props.selected ? 'true' : undefined}
+      onSelect={props.onSelect}
+    >
       {props.icon}
       <span class="flex min-w-0 flex-1 flex-col">
         <Dropdown.ItemLabel class="truncate">{props.label}</Dropdown.ItemLabel>

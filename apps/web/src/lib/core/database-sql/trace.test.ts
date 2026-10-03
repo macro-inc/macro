@@ -1,4 +1,4 @@
-import { ok, okAsync } from 'neverthrow';
+import { errAsync, ok, okAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Catalog, Outcome } from './generated/types';
 import { traceDatabaseSqlRun } from './trace';
@@ -10,7 +10,10 @@ type RecordedSpan = {
   ended: boolean;
 };
 
-const recorded = vi.hoisted(() => ({ roots: [] as RecordedSpan[] }));
+const recorded = vi.hoisted(() => ({
+  roots: [] as RecordedSpan[],
+  warnings: vi.fn(),
+}));
 
 vi.mock('@macro-inc/observability', () => {
   const fake = (node: RecordedSpan) => ({
@@ -35,6 +38,7 @@ vi.mock('@macro-inc/observability', () => {
   });
   return {
     Telemetry: {
+      warn: recorded.warnings,
       span: (name: string) => {
         const root = { name, attributes: {}, children: [], ended: false };
         recorded.roots.push(root);
@@ -46,6 +50,7 @@ vi.mock('@macro-inc/observability', () => {
 
 afterEach(() => {
   recorded.roots.length = 0;
+  recorded.warnings.mockClear();
   vi.restoreAllMocks();
 });
 
@@ -187,5 +192,65 @@ describe('database SQL run traces', () => {
         ),
       ],
     ]);
+  });
+  it('logs failed reads with their cause and IDs without SQL or error content', async () => {
+    const result = await traceDatabaseSqlRun(
+      { kind: 'sql', sql: "SELECT 'private cell value' FROM Guests" },
+      catalog,
+      () => errAsync({ kind: 'fetch', message: 'private cell value' }),
+      { reason: 'after-write', scope: 'party', requestPolicy: 'network-only' }
+    );
+    expect(result.isErr()).toBe(true);
+    expect(recorded.roots[0].attributes).toMatchObject({
+      'database_sql.read_reason': 'after-write',
+      'database_sql.request_policy': 'network-only',
+      'database_sql.scope_id': 'party',
+    });
+    expect(recorded.warnings).toHaveBeenCalledWith('database SQL read failed', {
+      'database_sql.error_kind': 'fetch',
+      'database_sql.read_reason': 'after-write',
+      'database_sql.request_policy': 'network-only',
+      'database_sql.scope_id': 'party',
+      'database_sql.database_ids': 'party',
+      'database_sql.table_ids': 'guests',
+    });
+    expect(JSON.stringify(recorded.warnings.mock.calls)).not.toContain(
+      'private cell value'
+    );
+    expect(recorded.roots[0].ended).toBe(true);
+  });
+
+  it('keeps an expected cache warmup miss out of failure logs', async () => {
+    await traceDatabaseSqlRun(
+      { kind: 'sql', sql: 'SELECT Name FROM Guests' },
+      catalog,
+      () => errAsync({ kind: 'fetch' }),
+      { reason: 'initial', requestPolicy: 'cache-only', reportFailure: false }
+    );
+    expect(recorded.warnings).not.toHaveBeenCalled();
+    expect(recorded.roots[0].ended).toBe(true);
+  });
+  it('records structural engine error codes without the unknown column value', async () => {
+    await traceDatabaseSqlRun(
+      { kind: 'sql', sql: 'SELECT confidential FROM Guests' },
+      catalog,
+      () =>
+        errAsync({
+          kind: 'engine',
+          error: {
+            stage: 'view' as const,
+            kind: 'unknownColumn' as const,
+            column: 'confidential',
+          },
+        }),
+      { reason: 'schema-change', requestPolicy: 'network-only' }
+    );
+    expect(recorded.roots[0].attributes).toMatchObject({
+      'database_sql.error_stage': 'view',
+      'database_sql.error_code': 'unknownColumn',
+    });
+    expect(JSON.stringify(recorded.warnings.mock.calls)).not.toContain(
+      'confidential'
+    );
   });
 });

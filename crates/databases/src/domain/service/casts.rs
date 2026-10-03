@@ -110,6 +110,10 @@ where
             casts[index].failures = converter.failures();
             casts[index].summary = converter.summary();
             casts[index].examples = converter.examples();
+            if converter.cells.is_empty() && converter.failures() > 0 {
+                casts[index].cast = CastVerdict::Never;
+                casts[index].reason = converter.summary();
+            }
         }
         Ok(casts)
     }

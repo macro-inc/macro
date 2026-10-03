@@ -72,7 +72,6 @@ describe('adding columns and options', () => {
     ];
     expect(new Set(ids).size).toBe(3);
     expect(created._unsafeUnwrap()).toBe(op.column);
-    expect(storage.invalidateDatabase).toHaveBeenCalledExactlyOnceWith('db');
   });
 
   it('adds options to a column under minted ids and reads the schema again', async () => {
@@ -107,7 +106,6 @@ describe('adding columns and options', () => {
         },
       },
     ]);
-    expect(storage.invalidateDatabase).toHaveBeenCalledExactlyOnceWith('db');
   });
 
   it('converts into a new column after the original in one batch, against the version the conversion read', async () => {
@@ -219,7 +217,6 @@ describe('adding columns and options', () => {
     );
     expect(new Set([created.column, high.id, low.id]).size).toBe(3);
     expect(converted._unsafeUnwrap()).toBe(created.column);
-    expect(storage.invalidateDatabase).toHaveBeenCalledExactlyOnceWith('db');
   });
 
   it('creates only the new column when no value converts', async () => {
