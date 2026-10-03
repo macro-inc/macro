@@ -1,0 +1,35 @@
+name: Sync MacroDB Datadog alerts
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'infra/stacks/datadog-macrodb-alerts/monitors.ts'
+      - 'infra/stacks/datadog-macrodb-alerts/sync.ts'
+      - '.github/workflows/sync-macrodb-datadog-alerts.yml'
+
+concurrency:
+  group: sync-macrodb-datadog-alerts
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.0
+
+      - name: Upsert MacroDB Datadog monitors
+        working-directory: infra/stacks/datadog-macrodb-alerts
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_SITE: us5.datadoghq.com
+        run: bun run sync.ts
