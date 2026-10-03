@@ -69,6 +69,7 @@ export default function DummyWorkspace(props: {
   initialTask?: string;
   initialCompany?: string;
   initialDocument?: string;
+  initialAgent?: string;
   embedded?: boolean;
 }) {
   let workspaceElement!: HTMLDivElement;
@@ -82,6 +83,7 @@ export default function DummyWorkspace(props: {
       w.open('crm', companyId);
   }
   if (props.initialDocument) w.open('documents', props.initialDocument);
+  if (props.initialAgent) w.open('agents', props.initialAgent);
   if (props.initialTask) w.open('tasks', props.initialTask);
   if (props.initialCompany) w.open('crm', props.initialCompany);
   const [filter, setFilter] = createSignal<TaskFilter>('all');
