@@ -119,7 +119,8 @@ pub fn surface_ownership(parent: EntityType) -> Option<SurfaceOwnership> {
         | EntityType::Project
         | EntityType::Chat
         | EntityType::EmailThread
-        | EntityType::Call => Some(SurfaceOwnership::Callers),
+        | EntityType::Call
+        | EntityType::Database => Some(SurfaceOwnership::Callers),
         EntityType::Initiative | EntityType::Form => Some(SurfaceOwnership::ParentDomain),
         _ => None,
     }

@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: fileURLToPath(new URL('.', import.meta.url)),
   testMatch: '*.browser.e2e.ts',
   workers: 1,
-  timeout: 60_000,
+  timeout: 120_000,
   outputDir: fileURLToPath(
     new URL('../../../../../../work/email-marketing-browser', import.meta.url)
   ),

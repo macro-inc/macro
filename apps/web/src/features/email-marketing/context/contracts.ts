@@ -1,3 +1,5 @@
+import type { CollabMarkdownSession } from '@core/collab-surface/types';
+import type { SequenceContentOptions } from '../core/content-identity';
 import type {
   Campaign,
   Enrollment,
@@ -5,6 +7,13 @@ import type {
   MarketingSnapshot,
   Sender,
 } from '../core/model';
+
+export type { SequenceContentOptions } from '../core/content-identity';
+
+export type SequenceContentSession = CollabMarkdownSession & {
+  sourceId: string;
+  dispose(): void;
+};
 
 export interface MarketingRepository {
   load(): Promise<MarketingSnapshot>;
@@ -34,4 +43,7 @@ export type MarketingCapabilities = {
   loadSenders(): Promise<Sender[]>;
   openContact(contact: MarketingContact): void;
   openDatabase(id: string): void;
+  composition?: {
+    createSession(options: SequenceContentOptions): SequenceContentSession;
+  };
 };

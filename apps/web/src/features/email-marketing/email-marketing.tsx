@@ -7,6 +7,7 @@ import type {
   MarketingRepository,
 } from './context/contracts';
 import { createContactQueries } from './queries/contacts';
+import { createSequenceContentSession } from './queries/content-session';
 import { createDatabaseMarketingRepository } from './queries/database-repository';
 import { createGmailSequenceDelivery } from './queries/gmail-delivery';
 import { MarketingWorkspaceView } from './views/marketing-workspace';
@@ -44,6 +45,7 @@ export function EmailMarketing() {
   const capabilities: MarketingCapabilities = {
     repository: createQueryRepository(userId),
     delivery: createGmailSequenceDelivery(),
+    composition: { createSession: createSequenceContentSession },
     ...createContactQueries(userId),
     openContact(contact) {
       if (contact.crmContactId)

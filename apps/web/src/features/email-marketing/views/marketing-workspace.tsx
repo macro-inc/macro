@@ -12,6 +12,7 @@ import {
   primaryButton,
   secondaryButton,
 } from '../components/enrollment-dialog';
+import type { CompositionState } from '../components/sequence-content-editor';
 import { SequenceEditor } from '../components/sequence-editor';
 import { StatusBadge } from '../components/status-badge';
 import type { MarketingCapabilities } from '../context/contracts';
@@ -44,6 +45,26 @@ export function MarketingWorkspaceView(props: {
   const [preview, setPreview] = createSignal<SequenceStep>();
   const [previewEmail, setPreviewEmail] = createSignal('');
   const [contactDetail, setContactDetail] = createSignal<MarketingContact>();
+  const [compositionStates, setCompositionStates] = createSignal<
+    Record<string, CompositionState>
+  >({});
+  const compositionKey = (
+    campaignId: string,
+    stepId: string,
+    field: 'subject' | 'body'
+  ) => `${campaignId}:${stepId}:${field}`;
+  const compositionReady = () =>
+    !props.capabilities.composition ||
+    draft()?.status === 'active' ||
+    (detailTab() === 'sequence' &&
+      draft()?.steps.every((step) =>
+        ['subject', 'body'].every(
+          (field) =>
+            compositionStates()[
+              compositionKey(draft()!.id, step.id, field as 'subject' | 'body')
+            ] === 'ready'
+        )
+      ));
   onMount(() => {
     void workspace.initialize();
   });
@@ -87,12 +108,14 @@ export function MarketingWorkspaceView(props: {
           .campaigns.find((campaign) => campaign.id === draft()?.id)
       );
   const openCampaign = (campaign: Campaign) => {
+    setCompositionStates({});
     setDraft(structuredClone(campaign));
     setDetailTab('sequence');
   };
   const save = async (activate: boolean) => {
     const campaign = draft();
     if (!campaign) return;
+    if (!compositionReady()) return;
     if (
       await workspace.run(
         () => workspace.save(campaign, activate),
@@ -107,6 +130,14 @@ export function MarketingWorkspaceView(props: {
   };
   const go = async (next: 'campaigns' | 'contacts' | 'delivery') => {
     if (changed() && canEdit()) {
+      if (!compositionReady()) {
+        await workspace.run(async () => {
+          throw new Error(
+            'Open the sequence and wait for its shared drafts to load before saving.'
+          );
+        }, '');
+        return;
+      }
       const campaign = draft()!;
       if (
         !(await workspace.run(
@@ -291,7 +322,7 @@ export function MarketingWorkspaceView(props: {
                                 <button
                                   type="button"
                                   class={secondaryButton}
-                                  disabled={!canEdit()}
+                                  disabled={!canEdit() || !compositionReady()}
                                   onClick={() => void save(false)}
                                 >
                                   {workspace.busy() ? 'Saving…' : 'Save draft'}
@@ -299,7 +330,7 @@ export function MarketingWorkspaceView(props: {
                                 <button
                                   type="button"
                                   class={primaryButton}
-                                  disabled={!canEdit()}
+                                  disabled={!canEdit() || !compositionReady()}
                                   onClick={() => void save(true)}
                                 >
                                   Activate campaign
@@ -346,6 +377,20 @@ export function MarketingWorkspaceView(props: {
                           </Show>
                         </div>
                       </div>
+                      <Show
+                        when={
+                          props.capabilities.composition &&
+                          campaign().status !== 'active'
+                        }
+                      >
+                        <p class="mt-3 text-xs text-ink-muted">
+                          {compositionReady()
+                            ? 'Subject and message edits are shared live. Save to update the sending snapshot.'
+                            : detailTab() === 'sequence'
+                              ? 'Loading shared draft content…'
+                              : 'Open Sequence to load the shared draft before saving or activating.'}
+                        </p>
+                      </Show>
                       <div class="mt-5 flex gap-6">
                         <For each={['sequence', 'enrollments'] as const}>
                           {(tab) => (
@@ -529,6 +574,15 @@ export function MarketingWorkspaceView(props: {
                           campaign={campaign()}
                           senders={workspace.senders()}
                           disabled={!canEdit()}
+                          databaseId={workspace.snapshot().databaseId}
+                          composition={props.capabilities.composition}
+                          onCompositionState={(stepId, field, state) =>
+                            setCompositionStates((states) => ({
+                              ...states,
+                              [compositionKey(campaign().id, stepId, field)]:
+                                state,
+                            }))
+                          }
                           onChange={setDraft}
                           onPreview={(step) => {
                             setPreviewEmail(

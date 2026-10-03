@@ -6,7 +6,7 @@ test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, re
 }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(path);
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
   await expect(
     page.getByRole('heading', { name: 'Campaigns', exact: true })
   ).toBeVisible();
@@ -142,9 +142,9 @@ test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, re
       )
     )
     .toBe(0);
-  await page.reload();
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /A warm welcome/ }).click();
-  await expect(page.getByLabel('Email 1 subject')).toHaveValue(
+  await expect(page.getByLabel('Email 1 subject')).toHaveText(
     'Welcome to Macro, {{firstName}}'
   );
   await page.getByRole('button', { name: 'Enrollments (2)' }).click();
@@ -157,7 +157,7 @@ test('v1 creates a campaign, previews, enrolls, cross-references CRM, pauses, re
 test('active sequences reject duplicate enrollment and readonly controls, and fit a mobile viewport', async ({
   page,
 }) => {
-  await page.goto(path);
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /Customer onboarding/ }).click();
   await page.getByRole('button', { name: 'Activate campaign' }).click();
   await page.getByRole('button', { name: '＋ Enroll contacts' }).click();
@@ -187,8 +187,118 @@ test('active sequences reject duplicate enrollment and readonly controls, and fi
     data.writable = false;
     localStorage.setItem('marketing-test', JSON.stringify(data));
   });
-  await page.reload();
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(
     page.getByRole('button', { name: '＋ New campaign' })
   ).toBeDisabled();
+});
+
+test('two clients share subjects and messages, merge concurrent typing, retain focus, and restore unsaved content', async ({
+  page,
+  context,
+}) => {
+  const peer = await context.newPage();
+  const errors: string[] = [];
+  for (const client of [page, peer])
+    client.on('pageerror', (error) => errors.push(error.message));
+  await Promise.all([
+    page.goto(`${path}?theme=dark`, { waitUntil: 'domcontentloaded' }),
+    peer.goto(`${path}?theme=dark&peer=jamie`, {
+      waitUntil: 'domcontentloaded',
+    }),
+  ]);
+  for (const client of [page, peer]) {
+    await client.getByRole('button', { name: /Customer onboarding/ }).click();
+    await expect(
+      client.getByRole('button', { name: 'Activate campaign' })
+    ).toBeEnabled();
+  }
+  const subject = page.getByLabel('Email 1 subject');
+  const body = page.getByLabel('Email 1 message');
+  const peerBody = peer.getByLabel('Email 1 message');
+  await subject.fill('A shared welcome, {{firstName}}');
+  await expect(peer.getByLabel('Email 1 subject')).toHaveText(
+    'A shared welcome, {{firstName}}'
+  );
+  await subject.press('End');
+  await subject.press('Enter');
+  await expect(subject).toHaveText('A shared welcome, {{firstName}}');
+  await body.fill('Working together');
+  await expect(peerBody).toHaveText('Working together');
+  const original = await body.elementHandle();
+  await body.press('Control+End');
+  await peerBody.press('Control+End');
+  await Promise.all([
+    body.pressSequentially(' Alex'),
+    peerBody.pressSequentially(' Jamie'),
+  ]);
+  await expect
+    .poll(async () => (await body.innerText()) === (await peerBody.innerText()))
+    .toBe(true);
+  const typed = (await body.innerText()).slice('Working together'.length);
+  // Concurrent single-character inserts can interleave; every character must survive.
+  expect([...typed].sort().join('')).toBe([...' Alex Jamie'].sort().join(''));
+  expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(body).toBeFocused();
+  const merged = await body.innerText();
+  await page.getByLabel('Move email 2 up').click();
+  await expect(page.getByLabel('Email 2 message')).toHaveText(merged);
+  expect(await original!.evaluate((node) => node.isConnected)).toBe(true);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: /Customer onboarding/ }).click();
+  await expect(page.getByLabel('Email 1 subject')).toHaveText(
+    'A shared welcome, {{firstName}}'
+  );
+  await expect(page.getByLabel('Email 1 message')).toHaveText(merged);
+  await expect(
+    page.getByRole('button', { name: 'Activate campaign' })
+  ).toBeEnabled();
+  const chrome = await page
+    .getByRole('article', { name: 'Email 1', exact: true })
+    .locator(':scope > div')
+    .evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        classes: node.className,
+        shadow: style.boxShadow,
+        radius: style.borderRadius,
+        rim: getComputedStyle(node, '::after').boxShadow,
+      };
+    });
+  expect(chrome.classes).toContain('dark-mode:glass-input');
+  expect(chrome.shadow).not.toBe('none');
+  expect(chrome.radius).toBe('26.25px');
+  await page.getByRole('button', { name: 'Activate campaign' }).click();
+  await expect(page.getByLabel('Email 1 message')).toHaveValue(merged);
+  await peerBody.fill('Later edits from another draft tab');
+  await expect(page.getByLabel('Email 1 message')).toHaveValue(merged);
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('marketing-test')!).campaigns.find(
+      (campaign: { id: string }) => campaign.id === 'example-welcome'
+    )
+  );
+  expect(stored.steps[0].body).toBe(merged);
+  expect(errors).toEqual([]);
+});
+
+test('failed collaborative initialization blocks activation and can be retried', async ({
+  page,
+}) => {
+  await page.goto(`${path}?failContent=once`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.getByRole('button', { name: /Customer onboarding/ }).click();
+  await expect(
+    page.getByRole('button', { name: 'Activate campaign' })
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Save draft', exact: true })
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Retry shared content' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Activate campaign' })
+  ).toBeEnabled();
+  await expect(page.getByLabel('Email 1 subject')).toHaveText(
+    'Welcome to Macro, {{firstName}}'
+  );
 });

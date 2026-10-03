@@ -14,7 +14,26 @@ those names. The database remains private until the user shares it through the
 existing database permission controls. Both table versions guard enrollment
 reservations and writes, including a campaign pause racing with an enrollment.
 Human-readable name, status, and contact email columns accompany a validated
-JSON sequence snapshot. Enrollment content is frozen at enrollment time.
+JSON sequence snapshot. Activation saves a sending snapshot; enrollment content
+is frozen at enrollment time.
+
+Subject and body fields use the same Lexical/Loro editor and collaboration
+provider as markdown documents. Each field has a stable collaborative surface
+ID derived from its database, campaign, step, and field. The database is the
+permission parent: its viewers/editors receive matching sync token access.
+This PR adds database parents to the existing backend surface allowlist, so the
+backend change must deploy with the frontend. No new persistence schema is needed.
+Draft content syncs live independently of the explicit metadata/sending-snapshot
+save. Both fields must initialize successfully before saving or activating;
+connection failures expose retry controls. Active cards display the frozen
+snapshot, so later edits from a stale draft tab cannot change queued messages.
+
+Each email card reuses `ComposerSurface`, the actual email composer's chrome,
+including its light-mode shadow and dark-mode glass rim and raised shadow.
+The editor supports markdown formatting, but v1 delivery serializes plain text;
+formatting does not imply HTML email sending. Campaign names, step order,
+delays, and enrollment controls retain database version checks rather than
+character-level collaboration.
 
 The existing Gmail draft/scheduled-message API provides server-side delivery;
 no browser timer or new sending service is needed. Draft handles are persisted
@@ -78,11 +97,15 @@ NODE_OPTIONS=--max-old-space-size=10000 bun run type-check
 
 The browser fixture mounts the production view, production sequence engine, and
 the actual outer-sidebar navigation definitions with isolated local storage and
-a simulated Gmail scheduler. Its CRM panel exercises the same enrollment-card
+a simulated Gmail scheduler. Shared-content tests use real Loro managers,
+Lexical editors, history, and collaboration providers; browser locks and
+BroadcastChannel replace only the authenticated server transport. Its CRM panel exercises the same enrollment-card
 component mounted in the production CRM overview. The fixture is labeled and
 never sends real emails. Browser coverage includes creation, editing, adding
 steps, personalization, activation, enrollment, scheduled payloads and delays,
 CRM cross-reference, pause/resume/stop, reload persistence, duplicate blocking,
-readonly controls, and a mobile viewport. Unit coverage includes reservation
+readonly controls, a mobile viewport, two-client concurrent editing,
+unsaved-content reload persistence, focus retention during typing/reordering,
+frozen activation snapshots, dark composer shadows, and initialization retry. Unit coverage includes reservation
 conflicts, malformed records, sender routing, actual GraphQL aliases/pagination,
 partial scheduling rollback, cancellation recovery, and stale-tab actions.

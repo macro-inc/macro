@@ -1,11 +1,25 @@
 import '@app/index.css';
 import '@fontsource-variable/inter';
+import { macroDarkTheme } from '@app/features/theme/themes/macro-dark';
 import { macroLightTheme } from '@app/features/theme/themes/macro-light';
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { ChannelsContextProvider } from '@core/context/channels';
+import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
+import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
+import { UserContextProvider } from '@core/context/user';
+import { authKeys } from '@queries/auth/keys';
+import { channelKeys } from '@queries/channel/keys';
+import { queryClient } from '@queries/client';
+import { QueryClientProvider } from '@tanstack/solid-query';
+import { createTestContentSession } from './collaboration';
 
-for (const [token, value] of Object.entries(macroLightTheme.colorTokens))
+const dark = new URLSearchParams(location.search).get('theme') === 'dark';
+for (const [token, value] of Object.entries(
+  (dark ? macroDarkTheme : macroLightTheme).colorTokens
+))
   document.documentElement.style.setProperty(`--color-${token}`, value);
-document.documentElement.dataset.themeLight = 'true';
-document.documentElement.style.colorScheme = 'light';
+document.documentElement.dataset.themeLight = dark ? 'false' : 'true';
+document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 
 import { visibleNavItems } from '@components/app/sidebar-next/nav-items';
 import { createSignal, For, Show } from 'solid-js';
@@ -100,6 +114,7 @@ function writeOutbox(value: Draft[]) {
 const [panel, setPanel] = createSignal('email-marketing');
 const [crmEmail, setCrmEmail] = createSignal('alex@example.com');
 const capabilities: MarketingCapabilities = {
+  composition: { createSession: createTestContentSession },
   repository: {
     async load() {
       return read();
@@ -360,4 +375,49 @@ function Fixture() {
     </div>
   );
 }
-render(() => <Fixture />, document.getElementById('root')!);
+const fixturePeer =
+  new URLSearchParams(location.search).get('peer') === 'jamie'
+    ? 'jamie'
+    : 'alex';
+queryClient.setQueryData(authKeys.userInfo.queryKey, {
+  id: `macro|${fixturePeer}@example.com`,
+  email: `${fixturePeer}@example.com`,
+  name: fixturePeer === 'jamie' ? 'Jamie Chen' : 'Alex Morgan',
+  authenticated: true,
+  permissions: [],
+  tutorialComplete: true,
+});
+queryClient.setQueryDefaults(channelKeys._def, { enabled: false });
+queryClient.setQueryData(channelKeys.listChannels.queryKey, []);
+queryClient.setQueryData(channelKeys.activity.queryKey, []);
+const emptyQuickAccess: QuickAccessContextValue = {
+  useList: () => ({
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  }),
+  usesRecordSelection: () => false,
+  usesSearchProjection: () => false,
+  isLoading: () => false,
+  refresh() {},
+  getById: () => undefined,
+};
+render(
+  () => (
+    <QueryClientProvider client={queryClient}>
+      <UserContextProvider>
+        <AnalyticsContextProvider>
+          <ChannelsContextProvider>
+            <QuickAccessContextProvider value={emptyQuickAccess}>
+              <Fixture />
+            </QuickAccessContextProvider>
+          </ChannelsContextProvider>
+        </AnalyticsContextProvider>
+      </UserContextProvider>
+    </QueryClientProvider>
+  ),
+  document.getElementById('root')!
+);
