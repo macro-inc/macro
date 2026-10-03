@@ -1,4 +1,4 @@
-export { DraftBadge } from './components/Badges';
+export { DraftBadge, ScheduledBadge } from './components/Badges';
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
 export { ProjectBreadCrumb } from './components/ProjectBreadCrumb';
 export { UnreadIndicator } from './components/UnreadIndicator';

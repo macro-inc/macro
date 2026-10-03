@@ -1,4 +1,5 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { ScheduledBadge } from '@entity';
 import CaretRight from '@phosphor/caret-right.svg';
 import { Button, cn, Tooltip } from '@ui';
 import {
@@ -198,15 +199,22 @@ function HeaderTopRow(props: {
           hiddenActions={props.hiddenActions}
         />
       </div>
-      <Show when={props.message.internal_date_ts}>
-        <Tooltip
-          as="span"
-          label={formatFullDate(props.message.internal_date_ts!)}
-        >
-          <span class="text-ink-extra-muted/60 tabular-nums shrink-0">
-            {formatShortDate(props.message.internal_date_ts!)}
-          </span>
-        </Tooltip>
+      <Show
+        when={props.message.scheduled_send_time}
+        fallback={
+          <Show when={props.message.internal_date_ts}>
+            <Tooltip
+              as="span"
+              label={formatFullDate(props.message.internal_date_ts!)}
+            >
+              <span class="text-ink-extra-muted/60 tabular-nums shrink-0">
+                {formatShortDate(props.message.internal_date_ts!)}
+              </span>
+            </Tooltip>
+          </Show>
+        }
+      >
+        <ScheduledBadge sendTime={props.message.scheduled_send_time!} />
       </Show>
     </div>
   );

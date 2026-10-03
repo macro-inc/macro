@@ -49,4 +49,20 @@ describe('thread message selection', () => {
     expect(input.messages[0]).toBe(newer);
     expect(output.messages).toContain(standalone);
   });
+
+  it('treats scheduled drafts as messages instead of composers', () => {
+    const sent = message('sent', { internal_date_ts: '2026-09-01T10:00:00Z' });
+    const scheduledReply = message('scheduled-reply', {
+      is_draft: true,
+      replying_to_id: 'sent',
+      scheduled_send_time: '2026-12-01T12:00:00Z',
+      internal_date_ts: '2026-09-02T10:00:00Z',
+    });
+    const output = selectThreadMessages(thread([sent, scheduledReply]));
+    expect(output.filtered.map((m) => m.db_id)).toEqual([
+      'sent',
+      'scheduled-reply',
+    ]);
+    expect(output.draftMap).toEqual({});
+  });
 });

@@ -37,6 +37,12 @@ export function selectThreadMessages(thread: EmailThread) {
       continue;
     }
 
+    // A scheduled draft is no longer editable; show it as a message, not a composer.
+    if (message.scheduled_send_time) {
+      filtered.push(message);
+      continue;
+    }
+
     if (message.body_html_sanitized?.trim().length === 0) {
       continue;
     }
