@@ -1,6 +1,7 @@
 use super::{context::ApiContext, middleware};
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     routing::{delete, get, post, put},
 };
 use tower::ServiceBuilder;
@@ -108,7 +109,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/{document_id}/simple_save",
-            put(simple_save::handler).layer(ensure_document_exists_middleware.clone()),
+            put(simple_save::handler).layer(
+                ServiceBuilder::new()
+                    .layer(DefaultBodyLimit::max(simple_save::MAX_FILE_BYTES))
+                    .layer(ensure_document_exists_middleware.clone()),
+            ),
         )
         // NOTE: DELETE /{document_id} is now served by the documents hex crate router
         .route(

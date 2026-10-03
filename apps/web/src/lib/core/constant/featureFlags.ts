@@ -733,6 +733,17 @@ export const enableNotificationSettings = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The in-browser PowerPoint editor (`block-pptx`). Off shows uploaded
+ * `.pptx` files as before: download only. On in dev; deployed environments
+ * follow PostHog.
+ */
+export const enablePptxEditor = defineFlag({
+  key: 'enable-pptx-editor',
+  env: 'ENABLE_PPTX_EDITOR',
+  default: onInDev,
+});
+
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
