@@ -50,10 +50,4 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         &self,
         task_ids: &[String],
     ) -> impl Future<Output = Result<Vec<(String, String)>, SystemPropertyError>> + Send;
-
-    /// Remove every task's Project value that names `project_id`.
-    fn clear_project(
-        &self,
-        project_id: Uuid,
-    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }

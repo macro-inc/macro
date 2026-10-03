@@ -487,9 +487,7 @@ async fn set_task_reference(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn project_membership_reads_and_clears_the_project_property(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgSystemPropertiesRepository::new(pool.clone());
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();
@@ -544,14 +542,5 @@ async fn project_membership_reads_and_clears_the_project_property(
         ]
     );
 
-    repo.clear_project(first).await?;
-    assert!(repo.project_task_ids(first).await?.is_empty());
-    assert_eq!(repo.project_task_ids(second).await?, ["elsewhere", "moved"]);
-    let companies = get_task_property_values(&pool, "companies").await;
-    assert_eq!(
-        companies.len(),
-        1,
-        "other properties naming the project stay"
-    );
     Ok(())
 }

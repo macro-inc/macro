@@ -1,4 +1,5 @@
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
+import { toast } from '@core/component/Toast/Toast';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
@@ -20,7 +21,11 @@ import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
 import { projectDefinitionProperties } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
-import { TASK_PROJECT_PROPERTY, taskProjectValue } from './task-project';
+import {
+  TASK_PROJECT_PROPERTY,
+  taskIsInProject,
+  taskProjectValue,
+} from './task-project';
 
 type ProjectCommands = ReturnType<ProjectsContext['createCommands']>;
 
@@ -103,14 +108,16 @@ export function createProjectSources(
     },
     createCommands() {
       // A task joins a project through its Project property, set at creation.
-      const createTask: ProjectCommands['createTask'] = (
+      // Creation keeps the task when a property is rejected, so confirm the
+      // join and say when it didn't happen.
+      const createTask: ProjectCommands['createTask'] = async (
         projectId,
         title,
         content,
         properties,
         ...rest
-      ) =>
-        createTaskWithProperties(
+      ) => {
+        const created = await createTaskWithProperties(
           title,
           content,
           [
@@ -119,6 +126,15 @@ export function createProjectSources(
           ],
           ...rest
         );
+        if (
+          created &&
+          (await taskIsInProject(created.documentId, projectId)) === false
+        )
+          toast.failure(
+            'Task created, but could not be added to the project. Use Add to project from the task menu to try again.'
+          );
+        return created;
+      };
       const create = createProjectMutation(client, cache, userId);
       const update = useMutation(
         () => ({

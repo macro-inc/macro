@@ -1,9 +1,11 @@
+import { entityPropertyFromApi } from '@property/api/converters';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type {
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '@property/types';
+import { propertiesServiceClient } from '@service-properties/client';
 
 /** A task's project is its Project system property: one project reference. */
 export const TASK_PROJECT_PROPERTY: PropertyDefinitionDomain = {
@@ -38,4 +40,28 @@ export function taskProjectId(
   return property.value?.find(
     (reference) => reference.entity_type === 'INITIATIVE'
   )?.entity_id;
+}
+
+/**
+ * Whether the server has `taskId` in `projectId`, from its Project property;
+ * undefined when the properties can't be read.
+ */
+export async function taskIsInProject(
+  taskId: string,
+  projectId: string
+): Promise<boolean | undefined> {
+  const result = await propertiesServiceClient.getEntityProperties({
+    entity_type: 'DOCUMENT',
+    entity_id: taskId,
+    query: {},
+  });
+  if (result.isErr()) return undefined;
+  const properties = result.value.properties.flatMap((property) => {
+    try {
+      return [entityPropertyFromApi(property)];
+    } catch {
+      return [];
+    }
+  });
+  return taskProjectId(properties) === projectId;
 }

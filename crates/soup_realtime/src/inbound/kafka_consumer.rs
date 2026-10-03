@@ -490,8 +490,15 @@ fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePa
     match event {
         PropertyTopicEvent::EntityPropertyUpdated(metadata) => {
             let mut patches = property_update(metadata.entity_type, &metadata.entity_id);
+            // Deleting a project clears its tasks with internal, unattributed writes
+            // after publishing Purged; refreshing that project here could replace the
+            // deletion with a stale replica row.
+            let attributed = metadata.actor_user_id.is_some()
+                || metadata.actor.is_some()
+                || metadata.on_behalf_of.is_some();
             if metadata.entity_type == PropertyEntityType::Task
                 && metadata.property_definition_id == SystemPropertyKey::PROJECT_UUID
+                && attributed
             {
                 // The projects the task left and joined change their task lists.
                 for value in [&metadata.previous_value, &metadata.value]

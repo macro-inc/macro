@@ -1051,4 +1051,14 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
             update(EntityType::Initiative, "project-to"),
         ]
     );
+    // A deleted project's internal cleanup refreshes only the task.
+    let PropertyTopicEvent::EntityPropertyUpdated(mut cleanup) = event else {
+        unreachable!()
+    };
+    cleanup.actor_user_id = None;
+    cleanup.value = None;
+    assert_eq!(
+        patches_from_property_event(&PropertyTopicEvent::EntityPropertyUpdated(cleanup)),
+        vec![update(EntityType::Document, DOCUMENT_ID)]
+    );
 }

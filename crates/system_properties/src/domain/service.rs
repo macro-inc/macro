@@ -89,13 +89,6 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         &self,
         task_ids: Vec<String>,
     ) -> impl Future<Output = Result<HashMap<String, Uuid>, SystemPropertyError>> + Send;
-
-    /// Take every task out of a deleted project by removing the Project
-    /// values that name it.
-    fn clear_project(
-        &self,
-        project_id: Uuid,
-    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }
 
 /// Implementation of SystemPropertiesService using a repository.
@@ -208,11 +201,6 @@ where
             // Writes store canonical ids; anything else names no project.
             .filter_map(|(task_id, project_id)| Some((task_id, project_id.parse().ok()?)))
             .collect())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn clear_project(&self, project_id: Uuid) -> Result<(), SystemPropertyError> {
-        self.repository.clear_project(project_id).await
     }
 }
 
