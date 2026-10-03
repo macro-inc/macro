@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 # `AgentSessionId` only. `default-features = false` drops the crate's CLI
 # binaries (clap, tokio), which the vocabulary does not need.
-agent_fold = { path = "../agent_fold", default-features = false }
+agent_fold = { path = "../folds/agent_fold", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 axum = { workspace = true }

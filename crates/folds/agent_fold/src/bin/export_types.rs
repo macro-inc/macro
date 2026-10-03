@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<FoldedStreamEvent>()
         .register::<SessionMetadata>();
     let output = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts");
+        .join("../../../apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts");
 
     let generated = Typescript::default().export(&types, specta_serde::Format)?;
     let generated = generated

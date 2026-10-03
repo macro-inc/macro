@@ -4,7 +4,7 @@
       "source_paths": [
         "services/agent_harness_service/**",
         "crates/agent_harness/**",
-        "crates/agent_fold/**",
+        "crates/folds/agent_fold/**",
         "crates/agent_session/**",
         "crates/agent_trigger/**",
         "crates/agent_runtime_protocol/**",

@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-agent-fold-wasm
- * which runs wasm-pack over crates/agent_fold into
+ * which runs wasm-pack over crates/folds/agent_fold into
  * src/lib/core/agent-fold/wasm/ (gitignored).
  */
 
