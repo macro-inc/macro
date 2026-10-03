@@ -15,7 +15,12 @@ vi.mock(
     buildConfig: () => {
       const builder = {
         namespace: () => builder,
+        withAppLinkResolver: () => builder,
+        withMentions: () => builder,
+        withEmojis: () => builder,
+        withLinks: () => builder,
         withHistory: () => builder,
+        withCode: () => builder,
         onChange: (callback: (markdown: string) => void) => {
           editor.change = callback;
           return builder;
@@ -43,6 +48,24 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
     </div>
   ),
 }));
+// The real static surface has its own markdown rendering suite; here the
+// preview only needs to show which markdown it was handed.
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: (props: { markdown: string; singleLine?: boolean }) => (
+      <span data-testid="static-markdown" data-single-line={props.singleLine}>
+        {props.markdown}
+      </span>
+    ),
+  })
+);
+vi.mock('@core/component/LexicalMarkdown/theme', () => ({
+  singleLineMarkdownTheme: {},
+}));
+vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
+  useMacroMentionLinkResolver: () => undefined,
+}));
 vi.mock('@ui', () => ({
   Surface: (props: { children?: JSX.Element }) => props.children,
   Button: (props: {
@@ -66,6 +89,50 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+describe('queued prompt preview', () => {
+  it('renders prompt markdown through the single-line static surface', () => {
+    const link =
+      '<m-link>{"url":"https://example.com","text":"example"}</m-link>';
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'linked', kind: 'prompt', prompt: `Read ${link}` },
+          { actionId: 'files', kind: 'prompt', prompt: '' },
+          { actionId: 'compact', kind: 'compact' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    ));
+    const previews = screen.getAllByTestId('static-markdown');
+    expect(previews).toHaveLength(1);
+    expect(previews[0]?.textContent).toBe(`Read ${link}`);
+    expect(previews[0]?.getAttribute('data-single-line')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Attached files' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Compact the conversation' })
+    ).toBeTruthy();
+  });
+
+  it('keeps the preview on the edited text while the editor is open', () => {
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Updated request';
+    editor.change?.(editor.markdown);
+    expect(screen.getByTestId('static-markdown').textContent).toBe(
+      'Updated request'
+    );
+  });
 });
 
 describe('queued prompt access', () => {

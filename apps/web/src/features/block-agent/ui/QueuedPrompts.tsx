@@ -6,15 +6,20 @@
  * the bottom, immediately above the composer, so Up from the input lands on
  * "the one about to be sent" and further Up presses walk toward the newest.
  *
- * Rows start as one-line previews. Opening a prompt reveals its scrollable
+ * Rows start as one-line previews rendered through the static Lexical
+ * surface, so mentions and links read as they do in the transcript rather
+ * than as their serialized markup. Opening a prompt reveals its scrollable
  * Lexical editor; only one row is expanded at a time.
  * Edits debounce and autosave through `onEdit`, with a flush on blur; there
  * are no save/cancel affordances. Non-prompt entries (compact) are
  * read-only text but keep their remove affordance, which is always visible.
  */
 
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button, Surface } from '@ui';
@@ -155,9 +160,15 @@ function QueuedRow(props: QueuedRowProps) {
   const [draft, setDraft] = createSignal<string>();
   let toggle: HTMLButtonElement | undefined;
   let focusBody: (() => void) | undefined;
-  const preview = () =>
+  // The collapsed line shows the prompt's markdown; an empty prompt (files
+  // only) and a compact fall back to a plain label.
+  const previewMarkdown = () =>
     props.item.kind === 'prompt'
-      ? (draft() ?? props.item.prompt ?? '').trim() || 'Attached files'
+      ? (draft() ?? props.item.prompt ?? '').trim()
+      : '';
+  const previewLabel = () =>
+    props.item.kind === 'prompt'
+      ? 'Attached files'
       : 'Compact the conversation';
   const open = () => {
     props.onExpandedChange(true);
@@ -203,7 +214,22 @@ function QueuedRow(props: QueuedRowProps) {
               class="size-3 shrink-0 text-ink-muted transition-transform"
               classList={{ 'rotate-180': props.expanded }}
             />
-            <span class="truncate">{preview()}</span>
+            <Show
+              when={previewMarkdown()}
+              fallback={<span class="truncate">{previewLabel()}</span>}
+            >
+              {(markdown) => (
+                // Interactive content in the rendered preview (mentions,
+                // links) must not swallow the click that opens the row.
+                <div class="pointer-events-none min-w-0 flex-1 truncate">
+                  <StaticMarkdown
+                    markdown={markdown()}
+                    theme={singleLineMarkdownTheme}
+                    singleLine
+                  />
+                </div>
+              )}
+            </Show>
           </button>
           <span class="shrink-0 text-xs text-ink-extra-muted">
             Queued
@@ -288,9 +314,16 @@ function PromptBody(
     saveTimer = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
   };
 
+  // Mirrors `AgentInput`'s editor features so a queued prompt edits the way
+  // it was written: `@` mentions, links, emojis, and code blocks.
   const editor = buildConfig('chat')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-queued-prompt')
+    .withMentions({ showOpenTabs: true, block: 'agent' })
+    .withEmojis()
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
+    .withCode()
     .onChange(scheduleSave)
     .onEscape(() => {
       flush();
