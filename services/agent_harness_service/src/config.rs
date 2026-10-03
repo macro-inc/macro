@@ -187,6 +187,10 @@ pub struct Config {
     /// harness that cannot store a patch cannot show a session's changes,
     /// and that is worth failing at boot rather than on the first capture.
     pub agent_session_changes_bucket: String,
+    /// S3 bucket of pull request patches, owned by document-storage-service and
+    /// shared with it, so a session capture reuses the patch a pull request
+    /// viewer stored for the same base and head.
+    pub github_pull_request_patch_bucket: String,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.

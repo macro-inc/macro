@@ -17,9 +17,37 @@ pub(crate) fn choose_tools_prompt<'a>(
 ) -> &'a (dyn std::fmt::Display + Sync) {
     match selection {
         ToolSet::All => all_tools_prompt,
-        ToolSet::None | ToolSet::DatabasesReadOnly => &prompt::BASE_PROMPT,
+        ToolSet::None => &prompt::BASE_PROMPT,
+        ToolSet::DatabasesReadOnly => &prompt::DATABASE_READ_ONLY_TOOL_USE_PROMPT,
         ToolSet::Databases => &prompt::DATABASE_TOOL_USE_PROMPT,
     }
+}
+
+/// Keep the database dialect and parameter reference in both discovery and
+/// formatting. Tool descriptions come from the registered schemas, so frontend
+/// callers cannot drift onto a second, obsolete copy of the SQL grammar.
+pub(crate) fn structured_completion_prompt(
+    selection: &ToolSet,
+    all_tools_prompt: &(dyn std::fmt::Display + Sync),
+    additional_instructions: Option<&str>,
+    schemas: &[ai_toolset::RequestSchema],
+) -> String {
+    let mut prompt = choose_tools_prompt(selection, all_tools_prompt).to_string();
+    if matches!(selection, ToolSet::Databases | ToolSet::DatabasesReadOnly) {
+        prompt.push_str("\n## Registered database tools\nThese are the available tools and their authoritative reference. Read-only host restrictions override any write examples in a shared tool description.\n");
+        for tool in schemas {
+            prompt.push_str(&format!(
+                "\n### {}\n{:#}\n",
+                tool.name,
+                tool.schema.as_value()
+            ));
+        }
+    }
+    if let Some(instructions) = additional_instructions {
+        prompt.push('\n');
+        prompt.push_str(instructions);
+    }
+    prompt
 }
 
 /// The service's tools for `selection`: a database toolset, or every static

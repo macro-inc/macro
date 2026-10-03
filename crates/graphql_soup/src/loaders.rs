@@ -419,6 +419,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             foreign_entities,
             ForeignEntityLiteral::Id(nil),
         )),
+        github_pull_request_filter: None,
         reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
         agent_session_filter: Some(literal_tree(agent_sessions, AgentSessionLiteral::Id(nil))),
         initiative_filter: Some(literal_tree(initiatives, InitiativeLiteral::Id(nil))),

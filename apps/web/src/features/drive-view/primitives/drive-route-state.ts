@@ -7,7 +7,7 @@ import {
   type SplitNavigateOptions,
   useNavigate,
   useParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -25,10 +25,7 @@ import { driveDestination } from '../drive-route-navigation';
 import { type DriveRouteParams, driveLocationFromParams } from './drive-route';
 import { type DriveSearchParams, driveSearch } from './drive-search';
 
-type NavigationOptions = Pick<
-  SplitNavigateOptions<unknown>,
-  'replace' | 'target'
->;
+type NavigationOptions = Pick<SplitNavigateOptions, 'replace'>;
 
 /** URL-owned Drive selection and the one-time legacy launch-facet handoff. */
 export function createDriveRouteState(

@@ -7,7 +7,7 @@ import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { projectRouteId } from '@app/features/projects/core/route';
-import { useSplitRouter } from '@app/lib/split-router';
+import { type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {
@@ -48,7 +48,7 @@ import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import type { SplitContent, SplitId } from '../layoutManager';
+import type { SplitContent } from '../layoutManager';
 import {
   closeSplitOrReturnToList,
   shouldShowSplitCloseButton,
@@ -370,7 +370,7 @@ export function ListNavigationButtons(props: {
 function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
-  const router = useSplitRouter<SplitId>();
+  const router = useSplitRouter();
   if (!panel || !layout) return props.children;
 
   const splitIndex = createMemo(() =>
@@ -415,7 +415,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: router.href(panel.handle.id),
+            currentSplitUrl: router.href(panel.handle.id as string as PaneId),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,

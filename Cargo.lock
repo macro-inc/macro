@@ -233,12 +233,12 @@ dependencies = [
  "chrono",
  "dashmap",
  "entity_access",
- "github",
+ "git_patch",
+ "github_pull_requests",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
- "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -247,7 +247,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "url",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -429,6 +428,7 @@ dependencies = [
  "entity_registry_db_utils",
  "futures",
  "github",
+ "github_pull_requests",
  "harness_id",
  "harnesses",
  "initiative",
@@ -889,6 +889,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "github_pull_requests",
  "image_generation",
  "import",
  "initiative",
@@ -1866,6 +1867,7 @@ dependencies = [
  "fusionauth",
  "futures",
  "github",
+ "github_pull_requests",
  "gtm_invite",
  "http-body-util",
  "initiative",
@@ -3455,6 +3457,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar_scheduling"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "calendar_events",
+ "chrono",
+ "chrono-tz",
+ "email_validator",
+ "macro_authorization",
+ "macro_user_id",
+ "model_user",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "calendar_service"
 version = "0.1.0"
 dependencies = [
@@ -3464,6 +3491,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "calendar_events",
+ "calendar_scheduling",
  "chrono",
  "connection_gateway_client",
  "email_db_client",
@@ -3491,6 +3519,7 @@ dependencies = [
  "sqlx",
  "sqs_worker",
  "subtle",
+ "teams",
  "tokio",
  "tokio-util",
  "tower 0.5.3",
@@ -5930,6 +5959,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "github_pull_requests",
  "http 1.4.0",
  "http-body-util",
  "import",
@@ -6068,6 +6098,7 @@ dependencies = [
  "frecency",
  "futures",
  "github",
+ "github_pull_requests",
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
@@ -6288,6 +6319,7 @@ dependencies = [
  "entity_registry_db_utils",
  "foreign_entity",
  "futures",
+ "github_pull_requests",
  "hex",
  "http-body-util",
  "jsonwebtoken 10.3.0",
@@ -8050,6 +8082,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "git_patch"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "strum 0.27.2",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "github"
 version = "0.1.0"
 dependencies = [
@@ -8066,6 +8110,7 @@ dependencies = [
  "entity_access",
  "foreign_entity",
  "fusionauth",
+ "github_pull_requests",
  "hex",
  "hmac 0.12.1",
  "http-body-util",
@@ -8102,6 +8147,36 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "github_pull_requests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-s3",
+ "axum",
+ "chrono",
+ "entity_access",
+ "filter_ast",
+ "foreign_entity",
+ "git_patch",
+ "item_filters",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "models_pagination",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -11592,6 +11667,7 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "github_pull_requests",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",
@@ -11716,6 +11792,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "github_pull_requests",
  "lexical_client",
  "macro_authorization",
  "macro_aws_config",
@@ -17419,6 +17496,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "github_pull_requests",
  "http-body-util",
  "indexmap 2.14.0",
  "item_filters",

@@ -1,5 +1,6 @@
 use super::*;
 mod queue;
+mod recovery;
 mod search;
 mod user_cleanup;
 mod working_branch;
@@ -2282,6 +2283,69 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
             .record_pull_request(session.id, session.owner_user().unwrap(), url, None)
             .await
             .unwrap()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pull_request_links_keep_the_pull_request_the_agent_opened(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    use crate::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLinkRepo};
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let owner = session.owner_user().unwrap();
+
+    repo.link_pull_request(session.id, "org/repo/pull/7", owner)
+        .await
+        .unwrap();
+    repo.record_pull_request(
+        session.id,
+        owner,
+        "https://github.com/org/repo/pull/7",
+        None,
+    )
+    .await
+    .unwrap();
+    repo.link_pull_request(session.id, "org/repo/pull/8", owner)
+        .await
+        .unwrap();
+
+    let links = repo.session_pull_requests(session.id).await.unwrap();
+    assert_eq!(
+        links
+            .iter()
+            .map(|link| (link.github_key.as_str(), link.source))
+            .collect::<Vec<_>>(),
+        vec![
+            ("org/repo/pull/7", PullRequestLinkSource::Agent),
+            ("org/repo/pull/8", PullRequestLinkSource::User),
+        ]
+    );
+    assert_eq!(links[0].linked_by, None);
+    assert_eq!(links[1].linked_by.as_deref(), Some(owner.as_ref()));
+
+    assert!(
+        !repo
+            .unlink_pull_request(session.id, "org/repo/pull/7")
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.unlink_pull_request(session.id, "ORG/repo/pull/8")
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        repo.sessions_for_pull_request("org/REPO/pull/7")
+            .await
+            .unwrap(),
+        vec![session.id]
+    );
+    assert!(
+        repo.sessions_for_pull_request("org/repo/pull/8")
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 

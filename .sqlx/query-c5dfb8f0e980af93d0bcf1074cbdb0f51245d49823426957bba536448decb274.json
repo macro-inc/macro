@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET manager_replica_id = $2, manager_fence = manager_fence + 1 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c5dfb8f0e980af93d0bcf1074cbdb0f51245d49823426957bba536448decb274"
+}

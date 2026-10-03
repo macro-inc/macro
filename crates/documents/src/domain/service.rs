@@ -34,6 +34,7 @@ use entity_access::domain::models::{
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
+use github_pull_requests::domain::models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponseMetadata, LocationResponseData};
@@ -209,8 +210,6 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
         }
     }
 }
-
-const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
 
 const MAX_DOCUMENT_NAME_GRAPHEMES: usize = 200;
 

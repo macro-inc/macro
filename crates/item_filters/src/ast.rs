@@ -15,6 +15,7 @@ use crate::{
         database_row::DatabaseRowLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        github_pull_request::GithubPullRequestLiteral,
         initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::PropertiesLiteral,
@@ -50,6 +51,8 @@ pub mod document;
 pub mod email;
 /// contains the ast literal value for foreign entities
 pub mod foreign_entity;
+/// contains the ast literal value for GitHub pull requests
+pub mod github_pull_request;
 /// Initiative filter literals.
 pub mod initiative;
 /// contains the ast literal value for projects
@@ -237,6 +240,11 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "fef")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
+    /// the filters that should be applied to GitHub pull request records, on top of the foreign
+    /// entity filter
+    #[serde(default, rename = "ghprf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     /// the filters that should be applied to reminders
     #[serde(default, rename = "remf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -303,6 +311,7 @@ impl EntityFilterAst {
                 entity_filter.foreign_entity_filters,
             )?
             .map(Arc::new),
+            github_pull_request_filter: None,
             reminder_filter: ReminderFilters::expand_ast(entity_filter.reminder_filters)?
                 .map(Arc::new),
             agent_session_filter: AgentSessionFilters::expand_ast(
@@ -352,6 +361,7 @@ impl EntityFilterAst {
             call_filter: None,
             crm_company_filter: None,
             foreign_entity_filter: None,
+            github_pull_request_filter: None,
             reminder_filter: None,
             agent_session_filter: None,
             initiative_filter: None,
@@ -390,6 +400,7 @@ impl IsEmpty for EntityFilterAst {
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
+            github_pull_request_filter,
             reminder_filter,
             agent_session_filter,
             initiative_filter,
@@ -407,6 +418,7 @@ impl IsEmpty for EntityFilterAst {
             && call_filter.is_none()
             && crm_company_filter.is_none()
             && foreign_entity_filter.is_none()
+            && github_pull_request_filter.is_none()
             && reminder_filter.is_none()
             && agent_session_filter.is_none()
             && initiative_filter.is_none()

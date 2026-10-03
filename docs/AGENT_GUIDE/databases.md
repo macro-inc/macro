@@ -386,7 +386,12 @@ choose a database; the entire chosen database is in scope, without a table
 prerequisite. **Automatic** finds a relevant accessible database from the question
 with the discovery tools and inspects all its tables. The answer's `QueryDatabase`
 runs with view access only, so asking a question never changes data, even for an
-editor. If matching sources are
+editor. Both discovery and final answer formatting receive the registered database
+tool reference, including the current SQL dialect. Verify an Automatic question
+that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
+results; repeat with an explicit source and an aggregate using an AS alias. The
+formatting step must preserve tool-call/result names and ids without another tool
+execution. If matching sources are
 ambiguous, the assistant asks for clarification. Type to search the
 source menu, use the arrow keys and Enter to choose, or Escape to return without
 changing it. The displayed source is checked against the query's actual table

@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "git_patch"
+publish = false
+version = "0.1.0"
+
+[features]
+# OpenAPI schemas for the wire types.
+schema = ["dep:utoipa"]
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
