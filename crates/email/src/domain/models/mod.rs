@@ -16,7 +16,10 @@ pub mod thread;
 #[cfg(test)]
 mod tests;
 
-pub use attachment::{Attachment, AttachmentDraft, AttachmentForwarded, MessageAttachment};
+pub use attachment::{
+    Attachment, AttachmentDraft, AttachmentForwarded, MAX_DRAFT_ATTACHMENTS_BYTES,
+    MessageAttachment, SourcedAttachment,
+};
 pub use contact::{Contact, ContactInfo, RecipientType};
 pub use draft::{
     CreateDraftInput, CreatedDraft, DeletedUserDraft, DraftDeletion, MessageTimestamps,

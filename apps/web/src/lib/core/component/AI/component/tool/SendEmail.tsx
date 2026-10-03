@@ -33,6 +33,12 @@ function getRecipientsLabel(data: SendEmail) {
   return `${labels[0]}, ${labels[1]}, +${labels.length - 2} more`;
 }
 
+function getAttachmentsLabel(data: SendEmail) {
+  const count = data.attachments?.length ?? 0;
+  if (count === 0) return undefined;
+  return `${count} ${count === 1 ? 'attachment' : 'attachments'}`;
+}
+
 function getUserAction(response: SendEmailResponse | undefined) {
   if (
     typeof response === 'object' &&
@@ -138,6 +144,9 @@ export function SentEmailResponse(props: {
                 Email sent to{' '}
                 <span class="text-ink">{getRecipientsLabel(props.args)}</span>
               </span>
+              <Show when={getAttachmentsLabel(props.args)}>
+                {(label) => <span>with {label()}</span>}
+              </Show>
               <Suspense>
                 <ItemPreview class="ring-0" id={props.threadId} type="email" />
               </Suspense>
@@ -176,6 +185,9 @@ export function DraftEmailResponse(props: {
             Email saved as draft for{' '}
             <span class="text-ink">{getRecipientsLabel(props.args)}</span>
           </span>
+          <Show when={getAttachmentsLabel(props.args)}>
+            {(label) => <span>with {label()}</span>}
+          </Show>
           <DraftPreviewButton
             draftId={props.draftId}
             subject={props.args.subject}

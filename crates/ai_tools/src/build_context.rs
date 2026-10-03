@@ -126,6 +126,9 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 ///
+/// `ATTACHMENT_BUCKET` (the email service's draft attachment bucket) is
+/// optional; without it `SendEmail` refuses attachments but still sends.
+///
 /// `enforcement` is validated by the host at startup and shared with all other
 /// AI entry points. It configures both quota admission and prospective counting.
 ///
@@ -372,6 +375,14 @@ pub async fn build_tool_service_context_from_env(
             pool.clone(),
         ))),
         Arc::new(lexical_client),
+    )
+    .with_attachment_sender(
+        crate::email_attachments::build_email_attachment_sender(
+            user_email_service.clone(),
+            EmailPgRepo::new(pool.clone()),
+            document_tool_context.service.clone(),
+        )
+        .await,
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(

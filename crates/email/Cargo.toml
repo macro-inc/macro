@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 # Calendar invitation extraction and resolution against the viewer's calendar.
-calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:sha2", "dep:url"]
+calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:url"]
 all = [
   "ai_tools",
   "gmail_token",
@@ -14,6 +14,7 @@ all = [
   "inbound",
   "outbound",
   "ports",
+  "s3",
 ]
 attachment = [
   "dep:attachment",
@@ -40,18 +41,21 @@ http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
+# The S3 adapter for staged draft attachments.
+s3 = ["dep:aws-sdk-s3", "ports"]
 
 [dependencies]
 calendar_events = { path = "../calendar_events", optional = true }
 ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
 chrono-tz = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
+sha2 = { workspace = true }
 url = { workspace = true, optional = true }
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 attachment = { path = "../attachment", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
+aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 entity_access = { path = "../entity_access" }

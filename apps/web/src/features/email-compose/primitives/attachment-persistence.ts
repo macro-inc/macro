@@ -126,7 +126,11 @@ export function createAttachmentPersistence(options: {
       if (attachment.type === 'local') state.removeByFile(attachment.file);
       else if (attachment.type === 'forwarded')
         state.removeForwarded(attachment.attachmentId);
-      else state.removeById(attachment.attachmentId);
+      else if (attachment.type === 'remote')
+        state.removeById(attachment.attachmentId);
+      // Document attachments exist only in the AI draft composer, which owns
+      // their removal; no draft row holds them.
+      else return;
 
       const draftId = options.draftId();
       if (!draftId || !attachment.attachmentId) return;

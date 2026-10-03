@@ -5,14 +5,17 @@ use crate::domain::models::{
     GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
     MessageTimestamps, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
     RecipientType, ResolvedDraftInput, SavedUserDraft, SenderPolicy, SettledDraftIds,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
+    SimpleMessage, SimpleMessageInfo, SourcedAttachment, Thread, ThreadRow,
+    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
+    UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use std::collections::HashMap;
+use std::pin::Pin;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Keyed map of message recipients grouped by message ID.
@@ -803,6 +806,174 @@ impl GmailTokenProvider for NoOpGmailTokenProvider {
         Err(EmailErr::ProviderErr(anyhow::anyhow!(
             "Gmail token provider not configured"
         )))
+    }
+}
+
+/// Port for turning a Macro document the caller may view into the file an
+/// outgoing email attaches. The email domain never reads document storage
+/// itself; a composition root implements this over the documents domain.
+pub trait DraftAttachmentSource: Send + Sync + 'static {
+    /// Resolve the document the receipt names into its bytes, name, and
+    /// MIME type. Errors with [`EmailErr::AttachmentUnavailable`] when the
+    /// document has no file to attach.
+    fn fetch_attachment(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<SourcedAttachment, EmailErr>> + Send;
+}
+
+/// Port for the object store the scheduled sender reads draft attachments
+/// from. Keys are the domain's; the adapter only owns the bucket.
+pub trait DraftAttachmentStorage: Send + Sync + 'static {
+    /// Store one attachment's bytes under `key`.
+    fn put_attachment(
+        &self,
+        key: &str,
+        content_type: &str,
+        bytes: &[u8],
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
+/// Port for recording a staged draft attachment against its draft row.
+pub trait DraftAttachmentRepo: Send + Sync + 'static {
+    /// Error type for repository operations.
+    type Err: Send;
+
+    /// Record `attachment` on its draft. A draft outside `link_id` must be
+    /// left untouched: the row the record points at is the sending inbox's.
+    fn insert_draft_attachment(
+        &self,
+        link_id: Uuid,
+        attachment: &AttachmentDraft,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+impl<T: DraftAttachmentSource> DraftAttachmentSource for Arc<T> {
+    fn fetch_attachment(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<SourcedAttachment, EmailErr>> + Send {
+        T::fetch_attachment(self, receipt)
+    }
+}
+
+impl<T: DraftAttachmentStorage> DraftAttachmentStorage for Arc<T> {
+    fn put_attachment(
+        &self,
+        key: &str,
+        content_type: &str,
+        bytes: &[u8],
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        T::put_attachment(self, key, content_type, bytes)
+    }
+}
+
+impl<T: DraftAttachmentRepo> DraftAttachmentRepo for Arc<T> {
+    type Err = T::Err;
+
+    fn insert_draft_attachment(
+        &self,
+        link_id: Uuid,
+        attachment: &AttachmentDraft,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+        T::insert_draft_attachment(self, link_id, attachment)
+    }
+}
+
+/// The slice of [`EmailService`] a staged send needs: save the draft, send
+/// it, discard it. Every `EmailService` is one; the narrower bound lets the
+/// use case be tested against a fake of three methods.
+pub trait DraftSendService: Send + Sync + 'static {
+    /// See [`EmailService::create_draft`].
+    fn create_draft(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+
+    /// See [`EmailService::send_message`].
+    fn send_message(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+
+    /// See [`EmailService::delete_draft_for_user`].
+    fn delete_draft_for_user(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        draft_id: Uuid,
+    ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send;
+}
+
+impl<T: EmailService> DraftSendService for T {
+    fn create_draft(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send {
+        EmailService::create_draft(self, link, accessible_inboxes, input)
+    }
+
+    fn send_message(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send {
+        EmailService::send_message(self, link, accessible_inboxes, input)
+    }
+
+    fn delete_draft_for_user(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        draft_id: Uuid,
+    ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send {
+        EmailService::delete_draft_for_user(self, macro_id, draft_id)
+    }
+}
+
+/// Use case: send a message carrying Macro documents as attachments.
+///
+/// Object-safe (boxed future) so a tool context can hold any implementation
+/// behind one `Arc<dyn _>`, and hosts without attachment infrastructure can
+/// hold [`NoOpEmailAttachmentSender`] under the same type.
+pub trait EmailAttachmentSendService: Send + Sync + 'static {
+    /// Like [`EmailService::send_message`], with every document in
+    /// `attachments` staged on the message before delivery is queued. With
+    /// no attachments it is exactly a send.
+    fn send_message_with_attachments<'a>(
+        &'a self,
+        link: &'a Link,
+        accessible_inboxes: &'a [Link],
+        input: CreateDraftInput,
+        attachments: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Pin<Box<dyn Future<Output = Result<CreatedDraft, EmailErr>> + Send + 'a>>;
+}
+
+/// [`EmailAttachmentSendService`] for hosts with no attachment source or
+/// storage. Sends without attachments pass through to `service`; a send
+/// naming attachments fails with [`EmailErr::AttachmentsUnavailable`]
+/// rather than silently dropping them.
+pub struct NoOpEmailAttachmentSender<T>(pub Arc<T>);
+
+impl<T: DraftSendService> EmailAttachmentSendService for NoOpEmailAttachmentSender<T> {
+    fn send_message_with_attachments<'a>(
+        &'a self,
+        link: &'a Link,
+        accessible_inboxes: &'a [Link],
+        input: CreateDraftInput,
+        attachments: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Pin<Box<dyn Future<Output = Result<CreatedDraft, EmailErr>> + Send + 'a>> {
+        Box::pin(async move {
+            if !attachments.is_empty() {
+                return Err(EmailErr::AttachmentsUnavailable);
+            }
+            self.0.send_message(link, accessible_inboxes, input).await
+        })
     }
 }
 

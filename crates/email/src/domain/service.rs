@@ -1,3 +1,4 @@
+pub mod attachments;
 mod draft;
 mod followup;
 mod previews;
