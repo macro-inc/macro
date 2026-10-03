@@ -85,7 +85,9 @@ test('types into a placeholder, undoes, and autosaves', async ({ page }) => {
   await page.keyboard.press('End');
   await page.keyboard.type(' (draft)');
   await expect
-    .poll(async () => (await shapeOn(page, 0, TITLE.shape))?.paragraphs[0].text)
+    .poll(
+      async () => (await shapeOn(page, 0, TITLE.shape))?.paragraphs?.[0]?.text
+    )
     .toBe('Q3 FY2024 Earnings Review (draft)');
   await expect(page.getByTestId('pptx-save-state')).toHaveText('Saved');
   const saves = await page.evaluate(() => window.pptxFixture.saves());
@@ -98,7 +100,9 @@ test('types into a placeholder, undoes, and autosaves', async ({ page }) => {
   await page.keyboard.press('Escape');
   await page.keyboard.press('ControlOrMeta+z');
   await expect
-    .poll(async () => (await shapeOn(page, 0, TITLE.shape))?.paragraphs[0].text)
+    .poll(
+      async () => (await shapeOn(page, 0, TITLE.shape))?.paragraphs?.[0]?.text
+    )
     .toBe('Q3 FY2024 Earnings Review');
 });
 
@@ -142,16 +146,16 @@ test('moves a shape by dragging and resizes it with a handle', async ({
 
 test('inserts a text box and types into it', async ({ page }) => {
   await open(page);
-  const before = (await outline(page)).slides[0].shapes.length;
+  const before = (await outline(page)).slides[0]?.shapes.length ?? 0;
   await page.getByTestId('pptx-insert-textbox').click();
   // The caret is a zero-width line, which Playwright never calls visible.
   await expect(page.getByTestId('pptx-caret')).toBeAttached();
   await page.keyboard.type('Inserted note');
   await expect
     .poll(async () => {
-      const shapes = (await outline(page)).slides[0].shapes;
+      const shapes = (await outline(page)).slides[0]?.shapes ?? [];
       return shapes.length === before + 1
-        ? shapes.at(-1)?.paragraphs[0]?.text
+        ? shapes.at(-1)?.paragraphs?.[0]?.text
         : undefined;
     })
     .toBe('Inserted note');
@@ -236,7 +240,7 @@ test('keeps unsaved edits when the stored file changes elsewhere', async ({
     'changed elsewhere'
   );
   const title = await shapeOn(page, 0, TITLE.shape);
-  expect(title?.paragraphs[0].text).toBe('Q3 FY2024 Earnings Review!');
+  expect(title?.paragraphs?.[0]?.text).toBe('Q3 FY2024 Earnings Review!');
 });
 
 test('opens real-world decks', async ({ page }) => {
@@ -257,6 +261,6 @@ test('read-only viewers cannot edit', async ({ page }) => {
   await page.keyboard.type('nope');
   await expect(page.getByTestId('pptx-caret')).toHaveCount(0);
   const title = await shapeOn(page, 0, TITLE.shape);
-  expect(title?.paragraphs[0].text).toBe('Q3 FY2024 Earnings Review');
+  expect(title?.paragraphs?.[0]?.text).toBe('Q3 FY2024 Earnings Review');
   expect(await page.evaluate(() => window.pptxFixture.saves())).toBe(0);
 });

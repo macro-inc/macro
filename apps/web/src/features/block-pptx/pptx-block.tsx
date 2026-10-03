@@ -58,6 +58,10 @@ import {
 } from './queries/presentation-file';
 import { PptxEditor } from './views/pptx-editor';
 
+/** Every save stores the whole file as a new version, so big decks save less often. */
+const LARGE_DECK_BYTES = 5 * 1024 * 1024;
+const LARGE_DECK_AUTOSAVE_MS = 5000;
+
 function download(bytes: Uint8Array | Blob, name: string) {
   const blob =
     bytes instanceof Blob
@@ -109,6 +113,10 @@ function PresentationHost(props: {
     watchStoredFile: (onChange) =>
       watchPresentationChanges(props.documentId, onChange),
     fetchLatest: () => fetchPresentationFile(props.documentId),
+    autosaveDelay:
+      props.bytes.byteLength > LARGE_DECK_BYTES
+        ? LARGE_DECK_AUTOSAVE_MS
+        : undefined,
   });
 
   return (
