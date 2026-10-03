@@ -39,6 +39,20 @@ pub(crate) enum HerdrError {
     },
 }
 
+impl HerdrError {
+    /// Only an explicit missing-agent response permits a native session restart.
+    pub(crate) fn missing_agent(&self) -> bool {
+        let Self::Refused { stderr, .. } = self else {
+            return false;
+        };
+        serde_json::from_str::<Value>(stderr)
+            .ok()
+            .is_some_and(|value| {
+                value.pointer("/error/code").and_then(Value::as_str) == Some("agent_not_found")
+            })
+    }
+}
+
 /// The tab and root pane a new herdr window opened with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
@@ -55,6 +69,10 @@ pub(crate) struct AgentInfo {
     pub status: String,
     /// The agent's own session id, when its integration reports one.
     pub session_id: Option<String>,
+    /// Native pane working directory, for reconnect validation.
+    pub cwd: Option<PathBuf>,
+    /// Monotonic native state generation, used to reject stale permissions.
+    pub state_change_seq: u64,
 }
 
 /// Drives the herdr session through its CLI.
@@ -246,6 +264,14 @@ impl HerdrCli {
                 source,
             })?;
         Ok(AgentInfo {
+            cwd: answer
+                .pointer("/result/agent/cwd")
+                .and_then(Value::as_str)
+                .map(PathBuf::from),
+            state_change_seq: answer
+                .pointer("/result/agent/state_change_seq")
+                .and_then(Value::as_u64)
+                .unwrap_or_default(),
             status: answer
                 .pointer("/result/agent/agent_status")
                 .and_then(Value::as_str)

@@ -19,6 +19,8 @@ pub(crate) mod acp_agent;
 pub(crate) mod cli;
 mod hub;
 pub(crate) mod repositories;
+mod store;
+mod tail;
 mod tap;
 pub(crate) mod wire;
 
