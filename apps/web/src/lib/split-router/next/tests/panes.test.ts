@@ -6,8 +6,8 @@ import {
   findStep,
   removeEntries,
 } from '../panes/history';
-import { createPanes, insertionIndex } from '../panes/panes';
 import { createMemoryPaneStore } from '../panes/memory-store';
+import { createPanes, insertionIndex } from '../panes/panes';
 import type {
   PaneId,
   PanePolicy,

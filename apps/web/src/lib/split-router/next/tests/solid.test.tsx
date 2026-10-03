@@ -11,14 +11,14 @@ import { SplitRouterProvider } from '../solid/context';
 import { createSearchParams } from '../solid/create-search-params';
 import {
   useCanGo,
-  usePane,
   useMatches,
   useNavigate,
+  usePane,
   usePendingNavigation,
   useRouteParams,
 } from '../solid/hooks';
-import { PaneScope } from '../solid/pane-scope';
 import { Outlet } from '../solid/outlet';
+import { PaneScope } from '../solid/pane-scope';
 import { useBeforeLeave } from '../solid/use-before-leave';
 import { createTestPolicy } from './fixtures';
 

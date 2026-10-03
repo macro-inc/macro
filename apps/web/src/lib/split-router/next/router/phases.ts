@@ -16,14 +16,14 @@ import { withValidState } from './entries';
 import {
   type Check,
   checksFor,
-  PANE_LEVEL,
   type LeaveGuards,
+  PANE_LEVEL,
   runChecks,
 } from './leave-guards';
 import { runMiddleware, type SplitRouterMiddleware } from './middleware';
 import { preloadLocation, withinBudget } from './preload';
 import type { Event as RunEvent, Running, State as RunState } from './run';
-import type { PaneTarget, Navigation } from './types';
+import type { Navigation, PaneTarget } from './types';
 
 type Report = (event: RunEvent) => void;
 

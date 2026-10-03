@@ -12,16 +12,16 @@ import { type MaybePromise, UNCANCELLABLE } from '../utils';
 import { sameVisit } from './entries';
 import {
   checksFor,
-  PANE_LEVEL,
   type LeaveGuards,
+  PANE_LEVEL,
   runChecks,
 } from './leave-guards';
 import type { Runner } from './runner';
 import type {
-  PaneTarget,
   Navigation,
   NavigationCause,
   NavigationResult,
+  PaneTarget,
   RouterPanes,
 } from './types';
 import type { Url } from './url';

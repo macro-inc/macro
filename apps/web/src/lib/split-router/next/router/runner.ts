@@ -19,10 +19,10 @@ import {
 } from './run';
 import {
   CANCELLED_RESULT,
-  type PaneTarget,
   type Navigation,
   type NavigationCause,
   type NavigationResult,
+  type PaneTarget,
 } from './types';
 import {
   type Command as GateCommand,

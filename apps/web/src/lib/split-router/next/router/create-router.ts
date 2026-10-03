@@ -9,9 +9,9 @@ import type {
 } from '../routes/types';
 import { UNCANCELLABLE } from '../utils';
 import { createClaims } from './claims';
+import { createLeaveGuards } from './leave-guards';
 import { createPaneList } from './pane-list';
 import { createPaneNavigation } from './pane-navigation';
-import { createLeaveGuards } from './leave-guards';
 import { createPhaseScopes } from './phases';
 import { preloadLocation } from './preload';
 import { createRunner } from './runner';

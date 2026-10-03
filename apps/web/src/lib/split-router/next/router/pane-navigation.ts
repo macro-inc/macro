@@ -40,10 +40,10 @@ import {
 import type { Runner } from './runner';
 import {
   CANCELLED_RESULT,
-  type PaneTarget,
   type Navigation,
   type NavigationCause,
   type NavigationResult,
+  type PaneTarget,
   type RouterPanes,
   type SplitNavigateOptions,
   type VisitHistory,

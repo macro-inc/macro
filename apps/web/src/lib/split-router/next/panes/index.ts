@@ -1,8 +1,10 @@
-export { createPanes, type Panes, type PanesOptions } from './panes';
 export { createMemoryPaneStore } from './memory-store';
+export { createPanes, type Panes, type PanesOptions } from './panes';
 export type {
   CloseAction,
   HistoryTarget,
+  OpenIntent,
+  OpenTarget,
   PaneArrival,
   PaneChange,
   PaneEntry,
@@ -10,7 +12,5 @@ export type {
   PanePolicy,
   PaneSnapshot,
   PaneStore,
-  OpenIntent,
-  OpenTarget,
   Placement,
 } from './types';

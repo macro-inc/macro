@@ -8,19 +8,19 @@ import {
   type DiffOptions,
   diffPanes,
   type IncomingPane,
-  type PanesDiff,
   type LivePanes,
+  type PanesDiff,
 } from './diff';
 import { currentEntry } from './history';
 import type {
   CloseAction,
+  OpenIntent,
   PaneArrival,
   PaneChange,
   PaneEntry,
   PaneId,
   PanePolicy,
   PaneStore,
-  OpenIntent,
   Placement,
 } from './types';
 

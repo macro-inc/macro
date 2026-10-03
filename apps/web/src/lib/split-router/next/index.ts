@@ -15,9 +15,9 @@ export type {
 } from './history/types';
 export { createMemoryPaneStore } from './panes/memory-store';
 export type {
-  PaneStore,
   OpenIntent,
   OpenTarget,
+  PaneStore,
   Placement,
 } from './panes/types';
 export type { ClaimHolder } from './router/claims';
@@ -37,8 +37,8 @@ export type {
   NavigationResult,
   RouteMatchInfo,
   SplitCloseAction,
-  SplitPanePolicy,
   SplitNavigateOptions,
+  SplitPanePolicy,
   SplitRouterOptions,
 } from './router/types';
 export { defineRoute, defineRoutes } from './routes/define';
@@ -88,15 +88,15 @@ export {
   useArrival,
   useCanGo,
   useEntryProps,
-  usePane,
   useMatches,
   useNavigate,
+  usePane,
   useParams,
   usePendingNavigation,
   useRouteParams,
   useRouteState,
 } from './solid/hooks';
-export { PaneScope } from './solid/pane-scope';
 export { Outlet, type OutletProps } from './solid/outlet';
+export { PaneScope } from './solid/pane-scope';
 export { useBeforeLeave } from './solid/use-before-leave';
 export { useClaim } from './solid/use-claim';
