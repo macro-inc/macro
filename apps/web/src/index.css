@@ -903,7 +903,7 @@ html[data-theme-light='false'] {
 
 /* Shared flat menu appearance, on the existing menu elements. */
 @utility menu-surface {
-  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none;
+  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none light-mode:shadow-menu;
   --color-surface: var(--color-menu);
 }
 
