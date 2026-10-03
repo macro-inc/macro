@@ -313,6 +313,32 @@ export const useBlockEntityCommands = (
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
+    // Trash emails - '#' (Superhuman-style shortcut)
+    registerHotkey({
+      hotkey: ['#'],
+      hotkeyToken: TOKENS.entity.action.trash,
+      scopeId,
+      description: 'Move to Trash',
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity) return false;
+        if (entity.type !== 'email') return false;
+        if (!deleteAction.canExecute(entity)) return false;
+        deleteAction.execute([entity]);
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return (
+          entity !== undefined &&
+          entity.type === 'email' &&
+          deleteAction.canExecute(entity)
+        );
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
     registerHotkey({
       hotkey: ['r'],
       hotkeyToken: TOKENS.entity.action.rename,

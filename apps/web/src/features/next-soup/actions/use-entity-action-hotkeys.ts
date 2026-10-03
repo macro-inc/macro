@@ -334,6 +334,32 @@ export const useEntityActionHotkeys = (
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
+
+    // Trash emails - '#' (Superhuman-style shortcut)
+    registerHotkey({
+      hotkey: ['#'],
+      hotkeyToken: TOKENS.entity.action.trash,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Move to Trash' : 'Move to Trash';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every((e) => e.type === 'email')) return false;
+
+        deleteAction.executeWithSoup(entities, list);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length > 0 && entities.every((e) => e.type === 'email');
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
   }
 
   /**
