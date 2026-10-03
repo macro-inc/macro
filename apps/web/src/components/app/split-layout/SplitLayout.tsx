@@ -126,17 +126,14 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     >
       <SplitLayoutContext.Provider value={{ manager: splitManager }}>
         <ContentNavigationBinding manager={splitManager} routes={routes} />
-        <div
-          class="size-full"
-          classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
-        >
+        <div class="size-full" classList={{ 'p-2 gap-2': useBentoLayout() }}>
           <Show
             when={isNativeMobilePlatform() && mobileSwipeLayout}
             fallback={
               // Desktop: side-by-side resizable splits.
               <Resize.Zone
                 direction="horizontal"
-                gutter={useBentoLayout() ? 6 : 1}
+                gutter={useBentoLayout() ? 8 : 1}
                 showDividers={!useBentoLayout()}
                 captureResizeCtx={splitManager.setResizeContext}
               >

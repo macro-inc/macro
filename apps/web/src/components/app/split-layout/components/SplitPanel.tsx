@@ -282,16 +282,18 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               class={cn(
-                'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
+                'touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
                 props.handle.isSpotLight()
                   ? 'rounded-xl'
                   : multipleSplits()
-                    ? 'rounded-md'
+                    ? 'rounded-xl'
                     : 'rounded-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
+                multipleSplits() && 'transition-shadow duration-150',
                 {
-                  'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
-                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
+                  'shadow-md shadow-drop-shadow/30': splitUnfocusedStyling(),
+                  'shadow-lg shadow-drop-shadow/50 ring-1 ring-edge/50':
+                    splitFocusStyling(),
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}

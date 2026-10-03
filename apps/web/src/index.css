@@ -359,8 +359,9 @@ body.tauri-ios {
    Lower lightness directly: mixing with ink reverses the effect in dark themes. */
 .split-panel-inactive {
   --color-panel: oklch(
-    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) c h
+    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.02) c h
   );
+  opacity: 0.92;
 }
 
 @theme {
