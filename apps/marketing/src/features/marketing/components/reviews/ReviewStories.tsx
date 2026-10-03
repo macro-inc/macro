@@ -92,7 +92,7 @@ const pointAt = (target: DOMRect, frame: DOMRect): Point => ({
 
 /** Hero: Home with a review request open, every row clickable. */
 export function GithubHomeHero() {
-  const inbox = createHomeInbox({ groups: heroGroups, initial: 'pr-482' });
+  const inbox = createHomeInbox({ groups: heroGroups, initial: 'pr-491' });
   return (
     <ProductDemo label="Explore pull requests in Home">
       <div
@@ -122,7 +122,7 @@ export function ReviewInboxDemo() {
   const inbox = createHomeInbox({
     groups: arrivalGroups,
     initial: 'channel-engineers',
-    pending: ['pr-482'],
+    pending: ['pr-491'],
   });
   const [phase, setPhase] = createSignal(0);
   const [automatic, setAutomatic] = createSignal(true);
@@ -160,8 +160,8 @@ export function ReviewInboxDemo() {
         ? [
             undefined,
             '[data-home-row="channel-engineers"]',
-            '[data-home-row="pr-482"]',
-            '[data-home-row="pr-482"]',
+            '[data-home-row="pr-491"]',
+            '[data-home-row="pr-491"]',
           ][phase()]
         : undefined,
     measure: pointAt,

@@ -273,7 +273,7 @@ export function TaskFromChecklistDemo() {
 const PR = {
   title: 'Keep the invited team through sign-up',
   repo: 'launch-team/web',
-  number: 482,
+  number: 491,
 };
 
 /** InlineTaskGithubPullRequests plus the GitHub sync's status changes. */

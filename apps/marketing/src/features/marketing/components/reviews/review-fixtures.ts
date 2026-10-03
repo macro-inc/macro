@@ -33,10 +33,10 @@ export type DemoPullRequest = {
 
 /** The same pull request the Tasks page links to its task. */
 export const invitePr: DemoPullRequest = {
-  id: 'pr-482',
+  id: 'pr-491',
   title: 'Keep the invited team through sign-up',
   repo: 'launch-team/web',
-  number: 482,
+  number: 491,
   status: 'open',
   author: 'teo',
   login: 'teo',

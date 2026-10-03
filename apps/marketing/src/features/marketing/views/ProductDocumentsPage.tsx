@@ -60,7 +60,7 @@ const documentsFaq = [
 
 export function RouteDocuments() {
   setPageSeo({
-    title: 'Macro Docs — Fast Docs Your Agents Can Edit Live',
+    title: 'Macro Docs — Markdown Documents, Wired Into Everything',
     description:
       'Markdown docs with live agent edits, offline editing that merges cleanly, and @mentions that link to everything in your company.',
     path: '/documents',

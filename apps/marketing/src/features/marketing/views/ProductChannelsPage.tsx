@@ -22,7 +22,7 @@ import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 
 export function RouteChannels() {
   setPageSeo({
-    title: 'Macro Chat — Team Chat Wired into Your Docs, Tasks, and Email',
+    title: 'Macro Chat — Team Chat Wired into Everything',
     description:
       'Team chat where @mentioning a doc shares it with the channel, messages wait in a real inbox until you’re done, threads stay readable, and agents can answer in the conversation.',
     path: '/channels',

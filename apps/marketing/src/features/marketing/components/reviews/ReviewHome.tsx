@@ -60,7 +60,7 @@ export type HomeRow = {
 export type HomeGroup = { label: string; rows: HomeRow[] };
 
 export const reviewRequestRow: HomeRow = {
-  id: 'pr-482',
+  id: 'pr-491',
   kind: 'pr',
   label: `${invitePr.title} #${invitePr.number}`,
   time: '11:36 AM',

@@ -158,5 +158,5 @@ it('moves the task to In Review, then Completed, as its pull request changes', (
   expect(
     view.getAllByRole('button', { name: 'Change status' })[0].textContent
   ).toContain('Completed');
-  expect(view.getByText('launch-team/web#482')).toBeTruthy();
+  expect(view.getByText('launch-team/web#491')).toBeTruthy();
 });

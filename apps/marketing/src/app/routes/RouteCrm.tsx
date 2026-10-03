@@ -65,7 +65,7 @@ const faqItems = [
 
 export function RouteCrm() {
   setPageSeo({
-    title: 'Macro CRM — The CRM That Updates Itself',
+    title: 'Macro CRM — The Self-Building CRM',
     description:
       'Companies and contacts built from your email, enriched automatically, and kept current by agents. Right in your workspace, so there’s no separate tool to check.',
     path: '/crm',

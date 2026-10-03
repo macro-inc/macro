@@ -58,7 +58,7 @@ function visible(value: boolean) {
     );
 }
 
-const REQUEST = 'Keep the invited team through sign-up #482';
+const REQUEST = 'Keep the invited team through sign-up #491';
 const home = (view: ReturnType<typeof render>) =>
   within(view.getByRole('complementary', { name: 'Home' }));
 
@@ -74,7 +74,7 @@ it('delivers a review request to Home, opens the pull request, then marks it don
   expect(
     view.getByRole('heading', { name: 'Keep the invited team through sign-up' })
   ).toBeTruthy();
-  expect(view.getByText('launch-team/web#482')).toBeTruthy();
+  expect(view.getByText('launch-team/web#491')).toBeTruthy();
   expect(view.getByText('src/invite/accept-invite.ts:42')).toBeTruthy();
   expect(view.getByRole('button', { name: 'Open on GitHub' })).toBeTruthy();
   expect(within(request).queryByRole('img', { name: 'Unread' })).toBeNull();
@@ -162,7 +162,7 @@ it('previews a pull request link on hover and follows it to merged', () => {
   visible(true);
   vi.advanceTimersByTime(2250);
   const card = view.getByRole('dialog', {
-    name: 'Preview of launch-team/web#482',
+    name: 'Preview of launch-team/web#491',
   });
   expect(card.textContent).toContain('open');
   expect(card.textContent).toContain('+38');
@@ -186,7 +186,7 @@ it('opens the preview for a visitor who hovers the link', () => {
   fireEvent.mouseEnter(link);
   vi.advanceTimersByTime(50);
   expect(
-    view.getByRole('dialog', { name: 'Preview of launch-team/web#482' })
+    view.getByRole('dialog', { name: 'Preview of launch-team/web#491' })
   ).toBeTruthy();
   fireEvent.mouseLeave(link);
   expect(view.queryByRole('dialog', { hidden: true })).toBeNull();

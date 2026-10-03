@@ -62,7 +62,7 @@ const callsFaq = [
 
 export function RouteCalls() {
   setPageSeo({
-    title: 'Macro Calls — Every Call Recorded, Transcribed, and Summarized',
+    title: 'Macro Calls — Recordings, Transcripts, and Agent Tools',
     description:
       'Start a call from any channel. Macro records, transcribes, and summarizes it by default, so your team and your agents know what was decided.',
     path: '/calls',

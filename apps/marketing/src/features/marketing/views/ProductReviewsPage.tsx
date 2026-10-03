@@ -70,7 +70,7 @@ const githubFaq = [
 
 export function RouteGithub() {
   setPageSeo({
-    title: 'Macro + GitHub — PR Reviews in Your Inbox, Linked to Tasks',
+    title: 'Macro Reviews — Review PRs in Your Inbox',
     description:
       'Review requests and PR comments land in your Macro inbox, GitHub links show live status, and tasks update themselves when pull requests open and merge.',
     path: '/github',
