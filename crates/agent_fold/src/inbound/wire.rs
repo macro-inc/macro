@@ -38,6 +38,10 @@ pub struct FoldedMessage {
     parts: Vec<MessagePart>,
     /// How the turn ended, absent while it remains in flight.
     stop: Option<StopReason>,
+    /// Derived from an action this client issued that the log has not yet
+    /// confirmed. A reader shows it as sending; it flips off in place when
+    /// the confirmed frame arrives.
+    pending: bool,
 }
 
 impl FoldedMessage {
@@ -51,6 +55,7 @@ impl FoldedMessage {
             request_id: message.request_id.map(|id| id.to_string()),
             parts: message.parts.into_inner(),
             stop: message.stop,
+            pending: message.pending,
         }
     }
 }

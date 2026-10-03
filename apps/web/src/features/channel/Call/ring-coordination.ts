@@ -1,5 +1,11 @@
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
 import { evictOldest } from '@core/util/evictOldest';
+import {
+  type Cleanup,
+  createMachine,
+  type Machine,
+  type MachineDef,
+} from '@macro-inc/machine';
 import { match, P } from 'ts-pattern';
 
 /**
@@ -148,30 +154,50 @@ export type RingParticipationOptions = {
    * takeover cannot outlive the original ring window.
    */
   maxDurationMs: number;
-  /**
-   * Start making noise: this tab won the election, either up front or by
-   * taking over from a tab that went away mid-ring.
-   */
-  onAcquire: () => void;
-  /**
-   * Stop making noise: a better-placed tab holds the ring, or the ring was
-   * silenced. Only ever called after a matching `onAcquire`.
-   */
-  onRelease: () => void;
+  /** Own the audible sound until release; call end when it stops itself. */
+  ring: (end: () => void) => Cleanup;
   /** Called exactly once when the participation ends, whatever the cause. */
   onEnd?: () => void;
+};
+
+type RingState =
+  | { t: 'suppressed' }
+  | { t: 'audible'; claim: { claimedAt: number; audible: boolean } }
+  | { t: 'ended' };
+type RingEvent =
+  | { t: 'acquire'; claim: { claimedAt: number; audible: boolean } }
+  | { t: 'suppress' | 'end' };
+
+const ringDefinition: MachineDef<RingState, RingEvent> = {
+  suppressed: {
+    on: (_state, event) =>
+      match(event)
+        .with({ t: 'acquire' }, ({ claim }) => ({
+          state: { t: 'audible', claim } as const,
+        }))
+        .with({ t: 'end' }, () => ({ state: { t: 'ended' } as const }))
+        .with({ t: 'suppress' }, () => undefined)
+        .exhaustive(),
+  },
+  audible: {
+    on: (_state, event) =>
+      match(event)
+        .with({ t: 'suppress' }, () => ({
+          state: { t: 'suppressed' } as const,
+        }))
+        .with({ t: 'end' }, () => ({ state: { t: 'ended' } as const }))
+        .with({ t: 'acquire' }, () => undefined)
+        .exhaustive(),
+  },
+  ended: { on: () => undefined },
 };
 
 type Participation = {
   callId: string;
   options: RingParticipationOptions;
-  state: 'audible' | 'suppressed';
-  /** This tab's own claim while audible. */
-  claim: { claimedAt: number; audible: boolean } | null;
+  machine: Machine<RingState, RingEvent>;
   deadline: number;
   lastDefendedAt: number;
-  ended: boolean;
-  tickIntervalId: number | undefined;
 };
 
 const trackedClaims = new Map<string, TrackedClaim>();
@@ -220,8 +246,9 @@ function invokeCallback(callback: (() => void) | undefined, label: string) {
 }
 
 function publishClaim(participation: Participation, now: number) {
-  const { claim } = participation;
-  if (!claim) return;
+  const state = participation.machine.getState();
+  if (state.t !== 'audible') return;
+  const { claim } = state;
   trackedClaims.set(participation.callId, {
     tabId,
     claimedAt: claim.claimedAt,
@@ -240,33 +267,25 @@ function publishClaim(participation: Participation, now: number) {
 }
 
 function acquire(participation: Participation, now: number) {
-  participation.state = 'audible';
-  participation.claim = { claimedAt: now, audible: !isAudioLikelyBlocked() };
-  publishClaim(participation, now);
-  invokeCallback(participation.options.onAcquire, 'onAcquire');
+  participation.machine.dispatch({
+    t: 'acquire',
+    claim: { claimedAt: now, audible: !isAudioLikelyBlocked() },
+  });
 }
 
 function demote(participation: Participation) {
-  if (participation.state !== 'audible') return;
-  participation.state = 'suppressed';
-  participation.claim = null;
-  invokeCallback(participation.options.onRelease, 'onRelease');
+  participation.machine.dispatch({ t: 'suppress' });
 }
 
 function endParticipation(participation: Participation) {
-  if (participation.ended) return;
-  participation.ended = true;
+  participation.machine.dispatch({ t: 'end' });
+}
 
-  if (participation.tickIntervalId !== undefined) {
-    window.clearInterval(participation.tickIntervalId);
-  }
-  if (participations.get(participation.callId) === participation) {
+function finishParticipation(participation: Participation) {
+  if (participations.get(participation.callId) === participation)
     participations.delete(participation.callId);
-  }
-  if (trackedClaims.get(participation.callId)?.tabId === tabId) {
+  if (trackedClaims.get(participation.callId)?.tabId === tabId)
     trackedClaims.delete(participation.callId);
-  }
-  demote(participation);
   invokeCallback(participation.options.onEnd, 'onEnd');
 }
 
@@ -300,7 +319,7 @@ function tick(participation: Participation) {
     return;
   }
 
-  if (participation.state === 'audible') {
+  if (participation.machine.getState().t === 'audible') {
     publishClaim(participation, now);
   } else {
     maybeClaim(participation, now);
@@ -332,9 +351,9 @@ function handleClaimMessage(message: RingClaimMessage) {
   }
 
   const participation = participations.get(message.callId);
-  if (!participation || participation.state !== 'audible') return;
-  const ownClaim = participation.claim;
-  if (!ownClaim) return;
+  const state = participation?.machine.getState();
+  if (!participation || state?.t !== 'audible') return;
+  const ownClaim = state.claim;
 
   if (compareClaims(incoming, { tabId, ...ownClaim }) < 0) {
     demote(participation);
@@ -362,7 +381,7 @@ function handleReleaseMessage(message: RingReleaseMessage) {
     trackedClaims.delete(message.callId);
   }
   const participation = participations.get(message.callId);
-  if (participation && participation.state === 'suppressed') {
+  if (participation && participation.machine.getState().t === 'suppressed') {
     maybeClaim(participation, Date.now());
   }
 }
@@ -380,7 +399,7 @@ function handlePageHide() {
   // of making it wait out the claim TTL. Participations are also ended so a
   // page restored from the back/forward cache does not resume a stale ring.
   for (const participation of [...participations.values()]) {
-    if (participation.state === 'audible') {
+    if (participation.machine.getState().t === 'audible') {
       ringBus.publish({
         type: 'release',
         callId: participation.callId,
@@ -408,8 +427,8 @@ export function attachRingCoordination() {
 }
 
 /**
- * Joins the cross-tab election for ringing `callId`. `onAcquire` fires when
- * this tab should make noise and `onRelease` when it should stop; a
+ * Joins the cross-tab election for ringing `callId`. The ring scope owns
+ * sound while this tab is audible and cleans it up on release; a
  * suppressed participant stays ready to take the ring over until the call
  * resolves, the ring is silenced, or `maxDurationMs` elapses.
  */
@@ -421,32 +440,65 @@ export function participateInRing(
   const existing = participations.get(options.callId);
   if (existing) endParticipation(existing);
 
-  const now = Date.now();
-  const participation: Participation = {
-    callId: options.callId,
-    options,
-    state: 'suppressed',
-    claim: null,
-    deadline: now + options.maxDurationMs,
-    lastDefendedAt: 0,
-    ended: false,
-    tickIntervalId: undefined,
-  };
-
-  // Silenced or already-stopped calls never ring; end before registering so
-  // no timers or claims are created.
+  // Silenced or already-stopped calls never acquire resources.
   if (silencedCallIds.has(options.callId) || options.shouldStop()) {
-    participation.ended = true;
     invokeCallback(options.onEnd, 'onEnd');
     return { stop: () => {} };
   }
 
+  const now = Date.now();
+  const deadline = now + options.maxDurationMs;
+  const watch = () => {
+    const interval = window.setInterval(
+      () => tick(participation),
+      CLAIM_HEARTBEAT_INTERVAL_MS
+    );
+    // Keep the original deadline across promotion/demotion, including between ticks.
+    const timeout = window.setTimeout(
+      () => endParticipation(participation),
+      Math.max(0, deadline - Date.now())
+    );
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  };
+  const participation: Participation = {
+    callId: options.callId,
+    options,
+    deadline,
+    lastDefendedAt: 0,
+    machine: createMachine<RingState, RingEvent>({
+      initial: { t: 'suppressed' },
+      def: ringDefinition,
+      scopes: {
+        suppressed: watch,
+        audible: () => {
+          const unwatch = watch();
+          publishClaim(participation, Date.now());
+          let active = true;
+          let stop: Cleanup | undefined;
+          try {
+            stop = options.ring(() => {
+              if (active) endParticipation(participation);
+            });
+          } catch (error) {
+            console.error('Ring participation ring callback failed', error);
+          }
+          return () => {
+            // A released sound may report that it stopped. That is not an end
+            // request: suppressed tabs must remain eligible for takeover.
+            active = false;
+            unwatch();
+            invokeCallback(stop, 'ring cleanup');
+          };
+        },
+        ended: () => finishParticipation(participation),
+      },
+    }),
+  };
   participations.set(options.callId, participation);
   maybeClaim(participation, now);
-  participation.tickIntervalId = window.setInterval(
-    () => tick(participation),
-    CLAIM_HEARTBEAT_INTERVAL_MS
-  );
 
   return { stop: () => endParticipation(participation) };
 }

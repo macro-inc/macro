@@ -59,7 +59,15 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('CHAT', () => 'chat')
     .with('CALL_RECORD', () => 'call')
     .with('THREAD', () => 'email')
-    .with('COMPANY', 'USER', 'CALENDAR_EVENT', () => undefined)
+    .with('COMPANY', () => 'crm_company')
+    .with('CONTACT', () => 'crm_contact')
+    .with(
+      'USER',
+      'CALENDAR_EVENT',
+      'INITIATIVE',
+      'DATABASE_ROW',
+      () => undefined
+    )
     .exhaustive();
 }
 
@@ -70,6 +78,7 @@ export function macroEntityToPropertyEntityType(
     .when(isTaskEntity, () => EntityType.DOCUMENT)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'initiative' }, () => EntityType.INITIATIVE)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
@@ -78,7 +87,7 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'call' }, () => EntityType.CALL_RECORD)
     .with({ type: 'crm_company' }, () => EntityType.COMPANY)
     .with({ type: 'crm_contact' }, () => {
-      // No CONTACT in the properties-service EntityType yet.
+      // Contacts are entity-reference values (CONTACT), never property owners.
       throw new Error('crm contacts do not support properties');
     })
     .with({ type: 'agent_session' }, () => {
@@ -98,6 +107,9 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'calendar_event' }, () => {
       // CALENDAR_EVENT is not a property-editing target on the frontend yet.
       throw new Error('calendar events do not support properties');
+    })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases do not support properties');
     })
     .exhaustive();
 }

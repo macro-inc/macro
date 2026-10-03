@@ -102,6 +102,7 @@ function BookingRow(
       ...options,
     }).format(new Date(props.booking.startsAt));
   const answerLabel = (id: string) =>
+    props.booking.questionLabels?.[id] ??
     props.event?.questions.find((question) => question.id === id)?.label ??
     'Additional response';
   return (
@@ -451,7 +452,7 @@ export function BookingsPanel(props: BookingsPanelProps) {
                   variant="outline"
                   onClick={() => {
                     setSearch('');
-                    setEventId('');
+                    setEventId('all');
                   }}
                 >
                   Clear filters

@@ -37,6 +37,7 @@ import {
   type UserMentionNode,
 } from '../nodes/UserMentionNode';
 import { wrapXml } from '../transformers/transformers';
+import { messageReference } from './message-references';
 
 function dropKey<T extends object, K extends keyof T>(
   obj: T,
@@ -110,6 +111,9 @@ function documentMentionEntityType(blockName: string): string {
       return 'crm_company';
     case 'contact':
       return 'crm_contact';
+    // A task project. Not a message reference type, so it is dropped below.
+    case 'initiative':
+      return 'initiative';
     default:
       return 'document';
   }
@@ -119,14 +123,17 @@ function documentMentionEntityType(blockName: string): string {
  * Extracts the mentions in the current editor state as `ChannelMention`s,
  * the way the web editor tracks them while composing a channel message.
  * Document mentions map by block name; user mentions are re-tagged `bot`
- * when they target a bot principal. Contact, date, group, and PR mentions
- * carry no referencable entity and are skipped. Duplicates are dropped.
+ * when they target a bot principal. Contact, date, and PR mentions
+ * carry no referencable entity and are skipped. Project (initiative) mentions
+ * are skipped too: channel references auto-share their target with members.
+ * Authored group mentions are preserved. Duplicates are dropped.
  */
 export function $extractChannelMentions(): ChannelMention[] {
   const out: ChannelMention[] = [];
   const seen = new Set<string>();
-  const push = (mention: ChannelMention) => {
-    if (!mention.entityId) return;
+  const push = (raw: ChannelMention) => {
+    const mention = messageReference(raw.entityType, raw.entityId);
+    if (!mention?.entityId) return;
     const key = `${mention.entityType}:${mention.entityId}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -141,6 +148,8 @@ export function $extractChannelMentions(): ChannelMention[] {
       });
     } else if ($isAgentSessionMentionNode(node)) {
       push({ entityType: 'agent_session', entityId: node.getId() });
+    } else if ($isGroupMentionNode(node)) {
+      push({ entityType: 'group', entityId: node.getGroupAlias() });
     } else if ($isUserMentionNode(node)) {
       const userId = node.getUserId();
       push({

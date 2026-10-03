@@ -1,0 +1,16 @@
+---
+title: AssignTasksToInitiative
+description: >-
+  Move tasks into an initiative.
+---
+
+# AssignTasksToInitiative
+
+Move tasks into an initiative. A task already in another initiative is moved; duplicates are ignored; at most 100 unique task ids per call. Requires edit access to the initiative and to each task. Returns one status per task id: assigned, moved, not_a_task, not_found, or skipped_no_permission.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | The id of the initiative to assign tasks to. Requires edit access. |
+| `taskIds` | string[] | Yes | Task document ids to assign, at least one and at most 100 unique ids per call. Duplicates are ignored. Requires edit access to each task. |

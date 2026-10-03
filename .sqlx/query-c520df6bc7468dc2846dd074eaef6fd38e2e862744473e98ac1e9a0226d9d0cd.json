@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.team_share_access_level::text AS \"level?\",\n            sp.team_share_team_id AS \"team_id?\",\n            sp.team_share_revision AS revision\n        FROM \"ProjectPermission\" pp\n        JOIN \"SharePermission\" sp ON pp.\"sharePermissionId\" = sp.id\n        WHERE pp.\"projectId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "level?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      false
+    ]
+  },
+  "hash": "c520df6bc7468dc2846dd074eaef6fd38e2e862744473e98ac1e9a0226d9d0cd"
+}

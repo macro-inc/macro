@@ -1,3 +1,4 @@
+import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import {
@@ -11,11 +12,29 @@ import {
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster, type PersistedAgentLike } from '../core/roster';
+import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
+  touch: false,
   openSettings: vi.fn(),
+  capabilitiesPending: false,
+  attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
+  recentUrls: [] as string[],
+  preferredInmemModel: undefined as string | undefined,
+  rememberInmemModel: vi.fn((id: string) => {
+    mocks.preferredInmemModel = id;
+  }),
+  repositories: [] as { url: string; defaultBranch?: string }[],
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
+vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
+vi.mock('@channel/Input', async () => ({
+  ...(await import('../../channel/Input/attachment-tracker')),
+  uploadInputAttachments: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/constant/SettingsState', () => ({
@@ -28,40 +47,113 @@ vi.mock('@app/features/block-agent/context/recent-agent-selections', () => ({
   }),
 }));
 vi.mock('../primitives/recent-repositories', () => ({
-  createRecentRepositories: () => ({ urls: () => [], remember: vi.fn() }),
+  createRecentRepositories: () => ({
+    urls: () => mocks.recentUrls,
+    remember: vi.fn(),
+  }),
+}));
+vi.mock('../primitives/preferred-inmem-model', () => ({
+  createPreferredInmemModel: () => ({
+    model: () => mocks.preferredInmemModel,
+    remember: mocks.rememberInmemModel,
+  }),
+}));
+vi.mock('../queries/reachable-repositories', () => ({
+  createReachableRepositories: () => ({
+    repositories: () => mocks.repositories,
+    loading: () => false,
+    error: () => false,
+    retry: vi.fn(),
+  }),
+}));
+vi.mock('../queries/repository-branches', () => ({
+  createRepositoryBranches: () => ({
+    branches: () => ['main', 'develop', 'feature/home'],
+    loading: () => false,
+    error: () => false,
+    retry: vi.fn(),
+  }),
 }));
 vi.mock('../components/AgentGlyph', () => ({ AgentIcon: () => <span /> }));
 
-vi.mock('@queries/agents/models', () => ({
-  useAgentModelsQueries: (targets: () => { harness: string }[]) => [
-    {
-      get isSuccess() {
-        return targets().length > 0;
-      },
-      get data() {
-        const harness = targets()[0]?.harness;
-        return {
-          status: 'available',
-          currentModel:
-            harness === 'cursor' ? 'cursor-default' : 'chat-default',
-          models:
-            harness === 'cursor'
-              ? [
-                  { id: 'cursor-default', name: 'Cursor default' },
-                  { id: 'gpt-5', name: 'GPT-5' },
-                ]
-              : [
-                  { id: 'chat-default', name: 'Chat default' },
-                  { id: 'claude-sonnet-4', name: 'Sonnet 4' },
-                  {
-                    id: 'anthropic/claude-sonnet-5',
-                    name: 'anthropic/claude-sonnet-5',
-                  },
-                ],
-        };
-      },
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: (
+    target: () => { model?: string } | undefined
+  ) => ({
+    get isSuccess() {
+      return !mocks.capabilitiesPending;
     },
-  ],
+    isFetching: false,
+    get data() {
+      if (target()?.model !== 'gpt-5') return { configOptions: [] };
+      return {
+        configOptions: [
+          {
+            id: 'cursor_effort',
+            name: 'Effort',
+            category: 'thought_level',
+            type: 'select',
+            currentValue: 'low',
+            options: [
+              { value: 'low', name: 'Low' },
+              { value: 'ultra', name: 'Ultra' },
+            ],
+          },
+        ],
+      };
+    },
+  }),
+}));
+
+vi.mock('@queries/agents/models', () => ({
+  useAgentModelsQuery: (
+    target: () => { harness: string },
+    enabled: () => boolean
+  ) => ({
+    get isSuccess() {
+      return enabled();
+    },
+    get isPending() {
+      return false;
+    },
+    get isError() {
+      return false;
+    },
+    get data() {
+      if (!enabled()) throw new Error('Pending resource must not be read');
+      const harness = target().harness;
+      return {
+        status: 'available',
+        currentModel: harness === 'cursor' ? 'cursor-default' : 'chat-default',
+        models:
+          harness === 'cursor'
+            ? [
+                { id: 'cursor-default', name: 'Cursor default' },
+                { id: 'gpt-5', name: 'GPT-5' },
+              ]
+            : [
+                { id: 'chat-default', name: 'Chat default' },
+                { id: 'claude-sonnet-4', name: 'Sonnet 4' },
+                {
+                  id: 'anthropic/claude-sonnet-5-5',
+                  name: 'anthropic/claude-sonnet-5-5',
+                },
+                { id: 'anthropic/claude-opus-5-5', name: 'Claude Opus 5.5' },
+                { id: 'openai/gpt-5.6', name: 'GPT-5.6' },
+                { id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+                { id: 'fireworks/kimi-k3', name: 'Kimi K3' },
+                { id: 'fireworks/glm-5p3', name: 'GLM 5.3' },
+                {
+                  id: 'fireworks/glm-5p3-flash',
+                  name: 'GLM 5.3 Flash',
+                },
+                { id: 'fireworks/qwen3p8-max', name: 'Qwen 3.8 Max' },
+                { id: 'fireworks/minimax-m3', name: 'MiniMax M3' },
+                { id: 'cerebras/gpt-oss-120b', name: 'GPT OSS 120B' },
+              ],
+      };
+    },
+  }),
 }));
 
 // Keep the real picker and send wiring; substitute only the Lexical editor.
@@ -71,7 +163,7 @@ type ComposerProps = {
   drawerOpen: boolean;
   draft: string;
   onDraftChange: (draft: string) => void;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
@@ -85,17 +177,33 @@ vi.mock('../components/ChatComposer', () => ({
         value={props.draft}
         onInput={(event) => props.onDraftChange(event.currentTarget.value)}
       />
-      <button onClick={() => props.onSend(props.draft || 'Prompt')}>
+      <button
+        onClick={() =>
+          props.onSend(
+            props.draft || (mocks.attachments.length ? '' : 'Prompt'),
+            mocks.attachments
+          )
+        }
+      >
         Send
       </button>
     </>
   ),
 }));
 
-function page(connected = true, agents: PersistedAgentLike[] = []) {
+beforeEach(() => {
+  localStorage.clear();
+});
+
+function page(
+  connected = true,
+  agents: PersistedAgentLike[] = [],
+  availabilityLoading = false
+) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
+      compact={mocks.touch}
       roster={buildAgentRoster({
         agents,
         runtimes: [],
@@ -105,6 +213,7 @@ function page(connected = true, agents: PersistedAgentLike[] = []) {
         cursorDefaultModel: 'cursor-default',
       })}
       rosterLoading={false}
+      availabilityLoading={availabilityLoading}
       onStart={onStart}
       onOpenRoster={vi.fn()}
     />
@@ -132,25 +241,95 @@ async function hoverAgent(name: string) {
   screen
     .getByRole('menuitem', { name: new RegExp(`^${name}`) })
     .dispatchEvent(event);
-  const search = await screen.findByRole('textbox', { name: 'Search models' });
+  await waitFor(() =>
+    expect(
+      screen.getAllByRole('textbox', { name: 'Search models' })
+    ).toHaveLength(2)
+  );
+  const search = screen
+    .getAllByRole('textbox', { name: 'Search models' })
+    .at(-1);
+  if (!search) throw new Error('Agent model search did not open');
   return within(search.closest('[role="menu"]') as HTMLElement);
 }
 
 describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
+    mocks.capabilitiesPending = false;
+    mocks.touch = false;
+    mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
+    mocks.recentUrls = [];
+    mocks.preferredInmemModel = undefined;
+    mocks.repositories = [
+      { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
+    ];
     vi.clearAllMocks();
+    mocks.rememberInmemModel.mockImplementation((id: string) => {
+      mocks.preferredInmemModel = id;
+    });
     motionStyles = document.createElement('style');
     motionStyles.textContent =
-      '[role="menu"] { animation-name: none; transition-duration: 0s; }';
+      '[role="menu"], [data-corvu-drawer-content], [data-corvu-drawer-overlay] { animation-name: none; transition-duration: 0s; }';
     document.head.append(motionStyles);
     vi.stubGlobal('scrollTo', vi.fn());
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    Element.prototype.scrollTo = vi.fn();
   });
   afterEach(() => {
     cleanup();
+    mocks.touch = false;
     motionStyles.remove();
     vi.unstubAllGlobals();
+  });
+  it('selects a coding model from the phone sheet without hover and preserves the draft', async () => {
+    mocks.touch = true;
+    const send = page();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Phone draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Models for Cursor' })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'GPT-5' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'Phone draft',
+        botId: CURSOR_BOT_ID,
+        modelOverride: 'gpt-5',
+      })
+    );
+  });
+  it('filters models in the phone sheet and selects an in-memory model', async () => {
+    mocks.touch = true;
+    const send = page();
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    fireEvent.input(
+      await screen.findByRole('textbox', { name: 'Search agents and models' }),
+      {
+        target: { value: 'Sonnet 5.5' },
+      }
+    );
+    expect(screen.queryByRole('button', { name: 'Chat default' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'anthropic/claude-sonnet-5-5',
+      })
+    );
   });
   it('offers both kinds without a mode or model control and starts with the agent default', async () => {
     const send = page();
@@ -185,15 +364,13 @@ describe('agent-led new conversation', () => {
     ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
-      target: { value: 'macro-inc/macro' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
+    // The listed repository's own default branch, until one is chosen.
+    expect(
+      screen.getByRole('button', { name: 'Branch' }).textContent
+    ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/home' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
+    fireEvent.click(screen.getByRole('option', { name: 'feature/home' }));
     await selectAgent(/^Chat default$/);
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     expect(
@@ -214,6 +391,69 @@ describe('agent-led new conversation', () => {
       prompt: 'Shared draft',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
+    });
+  });
+  it('restores an unsent draft after the page remounts', () => {
+    page();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Keep this prompt' },
+    });
+    cleanup();
+    page();
+    expect(
+      (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Keep this prompt');
+  });
+  it('starts a new conversation on Choose repository, not the last used one', async () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    mocks.recentUrls = ['https://github.com/macro-inc/macro'];
+    const send = page();
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('Choose repository');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).not.toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+  });
+  it('refuses an unlisted repository and starts a listed one on its default branch', async () => {
+    const send = page();
+    await selectAgent(/Cursor/);
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.input(
+      screen.getByRole('combobox', { name: 'Search repositories' }),
+      {
+        target: { value: 'macro-inc/other' },
+      }
+    );
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText(/No repositories match/).textContent).toContain(
+      'macro-inc/other'
+    );
+    fireEvent.input(
+      screen.getByRole('combobox', { name: 'Search repositories' }),
+      { target: { value: '' } }
+    );
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
+    expect(
+      screen.getByRole('button', { name: 'Branch' }).textContent
+    ).toContain('develop');
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    fireEvent.input(screen.getByRole('combobox', { name: 'Search branches' }), {
+      target: { value: 'feature/other' },
+    });
+    fireEvent.click(screen.getByRole('option', { name: 'Use feature/other' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'feature/other',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {
@@ -249,10 +489,7 @@ describe('agent-led new conversation', () => {
       ]);
       await selectAgent(/Cursor/);
       fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
-      fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
-        target: { value: 'macro-inc/macro' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+      fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
       await selectAgent(/Cloud reviewer/);
       expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
       expect(screen.getByRole('button', { name: 'Repository' })).toBeTruthy();
@@ -281,6 +518,20 @@ describe('agent-led new conversation', () => {
     expect(row.textContent).toContain('Its runtime is disconnected');
   });
 
+  it('focuses model search when hovering an agent submenu', async () => {
+    page();
+    const submenu = await hoverAgent('Cursor');
+    const search = submenu.getByRole('textbox', { name: 'Search models' });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+
+    fireEvent.input(search, { target: { value: 'GPT' } });
+    expect((search as HTMLInputElement).value).toBe('GPT');
+    expect(submenu.getByRole('menuitem', { name: /GPT-5/ })).toBeTruthy();
+    expect(
+      submenu.queryByRole('menuitem', { name: /Cursor default/ })
+    ).toBeNull();
+  });
+
   it('shows the model beside the agent and sends a hovered model choice only once', async () => {
     const send = page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
@@ -306,7 +557,11 @@ describe('agent-led new conversation', () => {
     fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Cursor/ }), {
       key: 'ArrowRight',
     });
-    await screen.findByRole('textbox', { name: 'Search models' });
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('textbox', { name: 'Search models' })
+      ).toHaveLength(2)
+    );
     expect(
       screen
         .getByRole('menuitem', { name: /GPT-5/ })
@@ -336,43 +591,69 @@ describe('agent-led new conversation', () => {
   it('clears a temporary model choice when selecting another agent', async () => {
     page();
     openAgents();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: /Sonnet 4/ }), {
-      key: 'Enter',
-    });
+    const model = screen.getByTitle('Sonnet 5.5');
+    model.focus();
+    fireEvent.keyDown(model, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
-      'Sonnet 4'
+      'Sonnet 5.5'
     );
     await selectAgent(/Cursor/);
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Cursor default'
     );
   });
-  it('groups by kind and selects direct models through Macro with readable names and icons', async () => {
-    const send = page();
+  it('groups the Macro catalog and selects direct models with readable names and icons', async () => {
+    const send = page(true, [
+      {
+        bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
+        harness: 'in-memory',
+        default_model: 'saved-default',
+      },
+    ]);
     await selectAgent(/Cursor/);
     openAgents();
-    const coding = within(screen.getByRole('group', { name: 'Coding agents' }));
-    expect(screen.queryByRole('group', { name: 'Agents' })).toBeNull();
-    const models = within(screen.getByRole('group', { name: 'Models' }));
+    const modelsGroup = screen.getByRole('group', { name: 'Recommended' });
+    const agentsGroup = screen.getByRole('group', { name: 'Agents' });
+    const codingGroup = screen.getByRole('group', { name: 'Coding agents' });
+    expect(
+      modelsGroup.compareDocumentPosition(agentsGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      agentsGroup.compareDocumentPosition(codingGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const coding = within(codingGroup);
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    expect(screen.getByRole('menuitem', { name: /More models/ })).toBeTruthy();
+    fireEvent.input(search, { target: { value: 'GLM' } });
+    expect(screen.getByTitle('GLM 5.3')).toBeTruthy();
+    expect(screen.getByTitle('GLM 5.3 Flash')).toBeTruthy();
+    fireEvent.input(search, { target: { value: '' } });
     expect(coding.getByRole('menuitem', { name: /Cursor/ })).toBeTruthy();
     expect(coding.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
+    const models = within(screen.getByRole('group', { name: 'Recommended' }));
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })
     ).toBeNull();
-    const sonnet = models.getByRole('menuitem', { name: 'Sonnet 5' });
+    const sonnet = models.getByTitle('Sonnet 5.5');
     expect(
       sonnet.querySelector('[data-ai-provider="anthropic"] svg')
     ).toBeTruthy();
-    expect(screen.queryByText('anthropic/claude-sonnet-5')).toBeNull();
+    expect(screen.queryByText('anthropic/claude-sonnet-5-5')).toBeNull();
+    sonnet.focus();
     fireEvent.keyDown(sonnet, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(mocks.rememberInmemModel).toHaveBeenCalledWith(
+      'anthropic/claude-sonnet-5-5'
+    );
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
-      'Sonnet 5'
+      'Sonnet 5.5'
     );
     const trigger = screen.getByRole('button', { name: 'Agent' });
-    expect(trigger.title).toBe('Sonnet 5');
+    expect(trigger.title).toBe('Sonnet 5.5');
     expect(
       trigger.querySelector('[data-ai-provider="anthropic"] svg')
     ).toBeTruthy();
@@ -382,8 +663,67 @@ describe('agent-led new conversation', () => {
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
-      modelOverride: 'anthropic/claude-sonnet-5',
+      modelOverride: 'anthropic/claude-sonnet-5-5',
     });
+    // Macro Models picks stick: a second send still uses the preferred model.
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5.5'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.calls[1][0]).toMatchObject({
+      modelOverride: 'anthropic/claude-sonnet-5-5',
+    });
+  });
+  it('keeps unavailable Macro models disabled throughout the catalog', async () => {
+    const roster = buildAgentRoster({
+      agents: [],
+      runtimes: [],
+      cursorConnected: true,
+      cursorNeedsConnection: false,
+    });
+    const macro = {
+      ...roster[0],
+      unavailableReason: 'Temporarily unavailable',
+    };
+    const onSelect = vi.fn();
+    render(() => (
+      <AgentPicker
+        agents={[macro]}
+        selected={macro}
+        loading={false}
+        onSelect={onSelect}
+        onSelectEffort={onSelect}
+        onConnect={vi.fn()}
+        onCreate={vi.fn()}
+      />
+    ));
+    openAgents();
+    const sonnet = screen.getByTitle('Sonnet 5.5');
+    expect(sonnet.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(sonnet);
+    fireEvent.keyDown(sonnet, { key: 'Enter' });
+
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    fireEvent.input(search, { target: { value: 'GLM' } });
+    const flash = screen.getByTitle('GLM 5.3 Flash');
+    expect(flash.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(flash);
+    fireEvent.input(search, { target: { value: '' } });
+
+    const more = screen.getByRole('menuitem', { name: /More models/ });
+    more.focus();
+    fireEvent.keyDown(more, { key: 'ArrowRight' });
+    const extra = await screen.findByTitle('GLM 5.3 Flash');
+    expect(extra.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(extra);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+  it('restores a preferred Macro model on a fresh composer', () => {
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5-5';
+    page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5.5'
+    );
   });
   it('restores the most recently used supported agent', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
@@ -391,6 +731,14 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Cursor'
     );
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+  });
+  it('keeps the most recent agent while its connection status loads', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    page(false, [], true);
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
   });
   it('offers Cursor setup when disconnected without switching to an unavailable agent', async () => {
@@ -402,4 +750,61 @@ describe('agent-led new conversation', () => {
     );
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
   });
+  it('passes opaque effort and clears it with the model override after sending', async () => {
+    const send = page();
+    const models = await hoverAgent('Cursor');
+    fireEvent.keyDown(models.getByRole('menuitem', { name: /^GPT-5/ }), {
+      key: 'ArrowRight',
+    });
+    await screen.findByRole('menuitem', { name: 'Ultra' });
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Ultra' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    mocks.capabilitiesPending = true;
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
+      'GPT-5 · Ultra'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        modelOverride: 'gpt-5',
+        effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+      })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Reasoning effort' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ effortOverride: undefined })
+    );
+  });
+});
+
+it('starts a conversation with an uploaded image and no text', () => {
+  mocks.attachments = [
+    {
+      id: 'sfs-image',
+      name: 'pasted.png',
+      kind: 'image',
+      mimeType: 'image/png',
+      size: 123,
+    },
+  ];
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prompt: '',
+      attachments: [
+        {
+          uri: expect.stringContaining('sfs-image'),
+          name: 'pasted.png',
+          mimeType: 'image/png',
+          size: 123,
+        },
+      ],
+    })
+  );
 });

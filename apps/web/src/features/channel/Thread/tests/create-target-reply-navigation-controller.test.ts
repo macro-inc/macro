@@ -15,6 +15,76 @@ function createHandle() {
 }
 
 describe('createTargetReplyNavigationController', () => {
+  it('revisits a settled reply only for a new navigation request', () => {
+    const controller = createTargetReplyNavigationController();
+    const { handle, settle } = createHandle();
+    const options = {
+      targetReplyId: 'reply',
+      handle,
+      canScroll: true,
+      replies: [{ id: 'reply' }],
+      getCurrentTargetReplyId: () => 'reply',
+    };
+
+    controller.update({ ...options, requestKey: 'first' });
+    settle();
+    controller.update({ ...options, requestKey: 'first' });
+    expect(handle.scrollToIndex).toHaveBeenCalledTimes(1);
+    controller.update({ ...options, requestKey: 'again' });
+    expect(handle.scrollToIndex).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a cancelled request settling after the same reply is requested again', () => {
+    const controller = createTargetReplyNavigationController();
+    const { handle, settle } = createHandle();
+    const onScrolled = vi.fn();
+    const options = {
+      targetReplyId: 'reply',
+      handle,
+      canScroll: true,
+      replies: [{ id: 'reply' }],
+      getCurrentTargetReplyId: () => 'reply',
+      onScrolled,
+    };
+    controller.update({ ...options, requestKey: 1 });
+    const staleSettlement = vi.mocked(handle.scrollToIndex).mock.calls[0][1];
+    controller.update({ ...options, requestKey: 2 });
+    expect(handle.cancelScroll).toHaveBeenCalledOnce();
+
+    staleSettlement();
+    expect(onScrolled).not.toHaveBeenCalled();
+    settle();
+    expect(onScrolled).toHaveBeenCalledExactlyOnceWith('reply');
+  });
+
+  it('invalidates an earlier request even when its key is reused after clearing', () => {
+    const controller = createTargetReplyNavigationController();
+    const { handle, settle } = createHandle();
+    const onScrolled = vi.fn();
+    const options = {
+      targetReplyId: 'reply',
+      requestKey: 1,
+      handle,
+      canScroll: true,
+      replies: [{ id: 'reply' }],
+      getCurrentTargetReplyId: () => 'reply',
+      onScrolled,
+    };
+    controller.update(options);
+    const staleSettlement = vi.mocked(handle.scrollToIndex).mock.calls[0][1];
+    controller.update({
+      ...options,
+      targetReplyId: undefined,
+      requestKey: undefined,
+    });
+    controller.update(options);
+
+    staleSettlement();
+    expect(onScrolled).not.toHaveBeenCalled();
+    settle();
+    expect(onScrolled).toHaveBeenCalledExactlyOnceWith('reply');
+  });
+
   it('cancels target A before returning while target B is unavailable', () => {
     const controller = createTargetReplyNavigationController();
     const first = createHandle();

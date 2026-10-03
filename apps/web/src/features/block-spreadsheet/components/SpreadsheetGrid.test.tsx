@@ -36,6 +36,7 @@ function renderGrid(
     | 'showGridlines'
     | 'showFormulas'
     | 'columnWidths'
+    | 'hiddenColumns'
     | 'rowCount'
     | 'sheetId'
     | 'onFill'
@@ -104,6 +105,7 @@ function renderGrid(
           showGridlines={options.showGridlines}
           showFormulas={options.showFormulas}
           columnWidths={options.columnWidths}
+          hiddenColumns={options.hiddenColumns}
           onFill={options.onFill}
           onResizeColumn={options.onResizeColumn}
           values={options.values ?? {}}
@@ -784,6 +786,31 @@ describe('spreadsheet presentation', () => {
     );
   });
 
+  it('waits for new formula results without flashing expressions or hiding literal text', () => {
+    const [values, setValues] = createSignal<
+      ComponentProps<typeof SpreadsheetGrid>['values']
+    >({});
+    const view = renderGrid(
+      {
+        A1: { value: '=SUM(B1:B3)' },
+        A2: { value: '=literal', format: 'text' },
+      },
+      {
+        get values() {
+          return values();
+        },
+      }
+    );
+    const cell = view.container.querySelector('[data-address="A1"]')!;
+    expect(cell.textContent).toBe('');
+    expect(
+      view.container.querySelector('[data-address="A2"]')?.textContent
+    ).toBe('=literal');
+    setValues({ A1: { display: '6', number: 6 } });
+    expect(cell.textContent).toBe('6');
+    expect(view.cells().A1.value).toBe('=SUM(B1:B3)');
+  });
+
   it('shows formulas without changing their values or numeric alignment in the normal view', () => {
     const [showFormulas, setShowFormulas] = createSignal(false);
     const view = renderGrid(
@@ -972,6 +999,27 @@ describe('cell context menu', () => {
     });
     await waitFor(() => expect(comments.add).toHaveBeenCalledWith(cell));
     expect(onCellAction).not.toHaveBeenCalled();
+  });
+
+  it('anchors a range comment to a rendered cell when its selection anchor is hidden', async () => {
+    const comments = {
+      canComment: () => true,
+      add: vi.fn(),
+      hasComment: () => false,
+      enter: vi.fn(),
+      leave: vi.fn(),
+      show: vi.fn(),
+    };
+    const view = renderGrid({}, { comments, hiddenColumns: [0] });
+    view.controller.selectRange({ row: 1, column: 0 }, { row: 1, column: 25 });
+    fireEvent.keyDown(view.element, { key: 'ContextMenu' });
+    const comment = await screen.findByRole('menuitem', { name: 'Comment' });
+    fireEvent.keyDown(comment, { key: 'Enter' });
+    await waitFor(() =>
+      expect(comments.add).toHaveBeenCalledWith(
+        view.getByRole('gridcell', { name: 'B2' })
+      )
+    );
   });
 
   it('keeps the native text editing menu and does not open the cell menu over headers', async () => {

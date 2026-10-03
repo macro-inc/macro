@@ -86,6 +86,17 @@ pub trait PropertiesService: Send + Sync + 'static {
         value: Option<SetPropertyValue>,
     ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
 
+    /// Append the project's agent assignees to a newly added task, preserving
+    /// existing assignees and concurrent edits. Both capabilities must belong
+    /// to the same actor. Publishes assignment changes with the task's attribution.
+    /// The caller verifies the task's current project membership.
+    /// Documents that are no longer tasks are ignored.
+    fn inherit_project_agent_assignees(
+        &self,
+        project: &ViewReceipt,
+        task: &EditReceipt,
+    ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
     /// Add one option to a multi-select entity property value atomically.
     /// Attaches the property if needed and dedupes. Validates the option belongs
     /// to the (multi-select) property. Prefer this over `set_entity_property`
@@ -204,6 +215,15 @@ pub trait PropertiesService: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         team: Option<&TeamReceipt>,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
+
+    /// Batch options for requested definitions readable by the caller.
+    /// Missing or inaccessible definitions are omitted, including their options.
+    fn get_property_options_batch(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, PropertiesErr>> + Send;
 
     /// Add a new option to a select property owned by the caller.
     /// Validates the request against the property's data type, including the

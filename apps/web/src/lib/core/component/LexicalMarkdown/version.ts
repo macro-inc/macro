@@ -21,5 +21,11 @@
  * Version 4.0 - Sep 2026. Added AgentSessionMentionNode.
  * Version 3.1 - Sep 2026. Added ConnectAppNode (agent "connect this app" chip).
  * Version 4.1 - Sep 2026. Expandable session mentions reuse Magic Chip with a null message lock for the latest turn.
+ * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
+ * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
+ * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
+ * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
+ * Version 6.0 - Oct 2026. Added source-only DatabaseQueryNode: a live database answer pointing at a saved query (`queryId`), with its table, title, and table or chart display (bar, line, area, scatter, pie; optional `color` and `stack`).
+ * Version 6.1 - Oct 2026. ReplyTargetNode accepts call, initiative, and CRM message parents.
  */
-export const MARKDOWN_VERSION_COUNTER = 4.1;
+export const MARKDOWN_VERSION_COUNTER = 6.1;

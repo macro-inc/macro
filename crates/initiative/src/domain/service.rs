@@ -3,50 +3,97 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::events::{
+    AssignedTasks, InitiativeChange, InitiativeEventPublisher, InitiativeMacroEvent,
+    InitiativeTasksChanged, InitiativeTopicEvent, receipt_attribution,
+};
+use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::Arc;
+
+mod reads;
+mod tasks;
+
+pub use tasks::{ClearTaskOutcome, ClearTaskStatus, clear_task_batch};
 
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, EntityType,
-    OwnerAccessLevel, ViewAccessLevel,
+    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareCreation, TeamShareLevel, TeamSharePolicyError,
-    TeamShareRequest, authorize_team_share,
+    TeamShareCreation, TeamShareLevel, TeamSharePolicyError, TeamShareRequest, authorize_team_share,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::domain::models::{
     AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs,
     CreateInitiativeRequest, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-    InitiativeList, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES,
-    MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    InitiativeList, LockstepTeamShare, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
+    MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN, NewDescriptionDocument, TaskAssignment,
+    UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
-use crate::domain::ports::{InitiativeRepo, InitiativeService};
+use crate::domain::ports::{InitiativeDescriptionDocuments, InitiativeRepo, InitiativeService};
+use crate::domain::resources::InitiativeResources;
 
-/// Concrete initiative service backed by an [`InitiativeRepo`].
-#[derive(Debug, Clone)]
-pub struct InitiativeServiceImpl<R> {
+/// Concrete initiative service backed by an [`InitiativeRepo`] and the description document
+/// port.
+#[derive(Clone)]
+pub struct InitiativeServiceImpl<R, D> {
     repo: R,
+    description_documents: D,
+    resources: Arc<dyn InitiativeResources>,
+    events: Option<Arc<dyn InitiativeEventPublisher>>,
 }
 
-impl<R> InitiativeServiceImpl<R>
+impl<R, D> std::fmt::Debug for InitiativeServiceImpl<R, D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("InitiativeServiceImpl")
+    }
+}
+
+impl<R, D> InitiativeServiceImpl<R, D>
 where
     R: InitiativeRepo,
+    D: InitiativeDescriptionDocuments,
 {
-    /// Create an initiative service backed by the provided repository.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+    /// Create an initiative service backed by the provided repository and document port.
+    pub fn new(repo: R, description_documents: D, resources: Arc<dyn InitiativeResources>) -> Self {
+        Self {
+            repo,
+            description_documents,
+            resources,
+            events: None,
+        }
     }
 
-    async fn authorize_initiative_team_share(
+    /// Attach the host's shared initiative event publisher.
+    pub fn with_event_publisher(mut self, publisher: Arc<dyn InitiativeEventPublisher>) -> Self {
+        self.events = Some(publisher);
+        self
+    }
+
+    async fn publish(&self, id: InitiativeId, event: InitiativeTopicEvent) {
+        if let Some(publisher) = &self.events
+            && let Err(error) = publisher
+                .publish(InitiativeMacroEvent::new(id, event))
+                .await
+        {
+            // The write has committed. Returning an error would invite a duplicate mutation.
+            tracing::error!(?error, %id, "failed to publish committed initiative event");
+        }
+    }
+
+    /// Authorize one team-share edit against both entities from a single snapshot of facts.
+    /// A `NotOwner` on the description document means the two owners have drifted apart.
+    async fn authorize_lockstep_team_share(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         request: TeamShareRequest,
-    ) -> Result<Option<AuthorizedTeamShareCommand>, InitiativeError> {
+    ) -> Result<Option<LockstepTeamShare>, InitiativeError> {
         if request == TeamShareRequest::default() {
             return Ok(None);
         }
@@ -56,62 +103,191 @@ where
             .get_team_share_facts(id)
             .await
             .map_err(Into::into)?;
-        authorize_team_share(
-            receipt.acting_user_id(),
-            &facts,
-            request,
-            TeamShareLevel::Edit,
-        )
-        .map_err(|error| match error {
-            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
-                InitiativeError::Unauthorized
-            }
-            TeamSharePolicyError::InvalidRevision => InitiativeError::Conflict(error.to_string()),
-            _ => InitiativeError::BadRequest(error.to_string()),
-        })
+        let actor = receipt.acting_user_id();
+        let initiative =
+            authorize_team_share(actor, &facts.initiative, request, TeamShareLevel::Edit)
+                .map_err(team_share_error)?;
+        let description =
+            authorize_team_share(actor, &facts.description, request, TeamShareLevel::Edit)
+                .map_err(|error| match error {
+                    TeamSharePolicyError::NotOwner => InitiativeError::Conflict(
+                        "description document is not owned by the initiative owner".to_string(),
+                    ),
+                    other => team_share_error(other),
+                })?;
+        let (Some(initiative), Some(description)) = (initiative, description) else {
+            return Err(InitiativeError::Internal(rootcause::report!(
+                "team-share authorization produced no command for a supplied request"
+            )));
+        };
+        Ok(Some(LockstepTeamShare {
+            initiative,
+            description,
+        }))
     }
 }
 
-impl<R> InitiativeService for InitiativeServiceImpl<R>
+impl<R, D> InitiativeService for InitiativeServiceImpl<R, D>
 where
     R: InitiativeRepo,
     R::Err: Into<InitiativeError>,
+    D: InitiativeDescriptionDocuments,
 {
+    async fn summary(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        self.read_summary(receipt).await
+    }
+
+    async fn page(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: crate::domain::reads::InitiativePageRequest,
+    ) -> Result<crate::domain::reads::InitiativePage, InitiativeError> {
+        self.read_page(user_id, request).await
+    }
+
+    async fn tasks_page(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        request: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeTasksPage, InitiativeError> {
+        self.read_tasks_page(receipt, request).await
+    }
+
+    async fn task_references(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: crate::domain::reads::TaskInitiativeReferencesRequest,
+    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
+        self.read_task_references(user_id, request).await
+    }
+    /// Two commits with compensation. The documents side commits first. A failed
+    /// initiative write purges the document so nothing orphaned survives an `Err`.
     #[tracing::instrument(err, skip_all)]
     async fn create(
         &self,
         user_id: &MacroUserIdStr<'_>,
         request: CreateInitiativeRequest,
     ) -> Result<InitiativeDetail, InitiativeError> {
+        self.create_attributed(
+            user_id,
+            request,
+            activity::Attribution::direct(activity::Actor::new_from_user(
+                user_id.clone().into_owned(),
+            )),
+        )
+        .await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn create_attributed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        attribution: activity::Attribution,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        let authorized = match &attribution {
+            activity::Attribution::Direct { actor } => {
+                actor.as_user().is_some_and(|actor| actor == user_id)
+            }
+            activity::Attribution::Delegated { actor, subject } => {
+                actor.as_bot().is_some() && subject == user_id
+            }
+        };
+        if !authorized {
+            return Err(InitiativeError::Unauthorized);
+        }
         let name = normalize_name(&request.name)?;
-        let description = normalize_description(request.description)?;
+        let prefill_markdown = normalize_description(request.description)?;
         let owner_id = user_id.clone().into_owned();
         let member_ids = parse_member_ids(request.member_ids.unwrap_or_default(), &owner_id)?;
+        let property_values = validate_initial_properties(request.property_values)?;
         let team_default = self
             .repo
             .get_team_default_link_share(&owner_id)
             .await
             .map_err(Into::into)?;
         let share_permission = SharePermissionV2::new_initiative_share_permission(team_default);
-        let team_share = if request.share_with_team == Some(true) {
+        let team_share = if request.share_with_team.unwrap_or(true) {
             TeamShareCreation::Initiative
         } else {
             TeamShareCreation::Unshared
         };
-        self.repo
+
+        let description_document_id = self
+            .description_documents
+            .create(NewDescriptionDocument {
+                owner: owner_id.clone(),
+                name: name.clone(),
+                prefill_markdown,
+                link_share: share_permission.link_share_state(),
+            })
+            .await?;
+
+        let id = InitiativeId::generate();
+        let created = self
+            .repo
             .create(
                 CreateInitiativeRepoArgs {
-                    id: InitiativeId::generate(),
+                    id,
                     owner_id,
                     name,
-                    description,
+                    description_document_id,
                     member_ids,
                 },
                 share_permission,
                 team_share,
             )
-            .await
-            .map_err(Into::into)
+            .await;
+        match created {
+            Ok(mut detail) => {
+                if let Err(error) = initialize_properties(
+                    self.resources.as_ref(),
+                    user_id.clone().into_owned(),
+                    id,
+                    property_values,
+                )
+                .await
+                {
+                    if self.repo.delete(id).await.inspect_err(|cleanup| {
+                        tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
+                    }).is_ok() {
+                        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
+                            .await;
+                        let _ = self.description_documents.purge(description_document_id).await.inspect_err(|cleanup| tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization"));
+                    }
+                    return Err(error);
+                }
+                detail.user_access_level = AccessLevel::Owner;
+                self.publish(
+                    id,
+                    InitiativeTopicEvent::Created(InitiativeChange {
+                        initiative_id: id,
+                        attribution: Some(attribution.into()),
+                        occurred_at: Utc::now(),
+                    }),
+                )
+                .await;
+                Ok(detail)
+            }
+            Err(error) => {
+                if let Err(purge_error) = self
+                    .description_documents
+                    .purge(description_document_id)
+                    .await
+                {
+                    tracing::error!(
+                        error = ?purge_error,
+                        %description_document_id,
+                        %id,
+                        "description document orphaned after failed initiative create"
+                    );
+                }
+                Err(error.into())
+            }
+        }
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -132,11 +308,15 @@ where
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo
+        let mut detail = self
+            .repo
             .get_detail(id)
             .await
             .map_err(Into::into)?
-            .ok_or(InitiativeError::NotFound)
+            .ok_or(InitiativeError::NotFound)?;
+        detail.user_access_level = receipt_access_level(&receipt)?;
+        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -154,15 +334,13 @@ where
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: UpdateInitiativeRequest,
     ) -> Result<InitiativeDetail, InitiativeError> {
-        if request.share_permission.is_some() && !receipt_is_owner(&receipt) {
+        if (request.share_permission.is_some() || request.member_ids.is_some())
+            && !receipt_is_owner(&receipt)
+        {
             return Err(InitiativeError::Unauthorized);
         }
 
         let name = request.name.as_deref().map(normalize_name).transpose()?;
-        let description = match request.description {
-            None => None,
-            Some(value) => Some(normalize_description(Some(value))?),
-        };
 
         let id = initiative_id_from_receipt(&receipt)?;
         let (member_ids_added, member_ids_removed) = if let Some(member_ids) = request.member_ids {
@@ -179,7 +357,7 @@ where
         };
 
         let team_share = if let Some(share_permission) = request.share_permission.as_ref() {
-            self.authorize_initiative_team_share(
+            self.authorize_lockstep_team_share(
                 &receipt,
                 TeamShareRequest {
                     access_level: share_permission.team_share_access_level,
@@ -191,18 +369,30 @@ where
             None
         };
 
-        self.repo
+        let mut detail = self
+            .repo
             .update(UpdateInitiativeRepoArgs {
                 id,
                 name,
-                description,
                 member_ids_added,
                 member_ids_removed,
                 share_permission: request.share_permission,
                 team_share,
             })
             .await
-            .map_err(Into::into)
+            .map_err(Into::into)?;
+        self.publish(
+            id,
+            InitiativeTopicEvent::Updated(InitiativeChange {
+                initiative_id: id,
+                attribution: receipt_attribution(&receipt),
+                occurred_at: Utc::now(),
+            }),
+        )
+        .await;
+        detail.user_access_level = receipt_access_level(&receipt)?;
+        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -211,11 +401,7 @@ where
         receipt: EntityAccessReceipt<EditAccessLevel>,
         assignments: Vec<TaskAssignment>,
     ) -> Result<AssignTasksResponse, InitiativeError> {
-        if receipt.entity().entity_type != EntityType::Initiative {
-            return Err(InitiativeError::BadRequest(
-                "assign_tasks requires an initiative access receipt".to_string(),
-            ));
-        }
+        let id = initiative_id_from_receipt(&receipt)?;
 
         let assignments = dedupe_assignments(assignments);
         if assignments.len() > MAX_TASKS_PER_ASSIGN {
@@ -224,19 +410,20 @@ where
             )));
         }
 
-        let id = initiative_id_from_receipt(&receipt)?;
-        let candidate_ids: Vec<String> = assignments
-            .iter()
-            .filter_map(|assignment| match assignment {
-                TaskAssignment::Candidate { task_id } => Some(task_id.clone()),
-                TaskAssignment::NotFound { .. } | TaskAssignment::SkippedNoPermission { .. } => {
-                    None
-                }
-            })
-            .collect();
+        let mut candidate_ids = Vec::new();
+        for assignment in &assignments {
+            if let TaskAssignment::Authorized {
+                receipt: task_receipt,
+            } = assignment
+            {
+                validate_task_receipt(task_receipt)?;
+                require_same_actor(&receipt, task_receipt)?;
+                candidate_ids.push(task_receipt.entity().entity_id.clone());
+            }
+        }
 
-        let repo_results = if candidate_ids.is_empty() {
-            Vec::new()
+        let committed = if candidate_ids.is_empty() {
+            AssignedTasks::default()
         } else {
             self.repo
                 .assign_tasks(id, candidate_ids)
@@ -244,8 +431,19 @@ where
                 .map_err(Into::into)?
         };
 
+        if !committed.changes.is_empty() {
+            self.publish(
+                id,
+                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+                    attribution: receipt_attribution(&receipt),
+                    changes: committed.changes,
+                    occurred_at: Utc::now(),
+                }),
+            )
+            .await;
+        }
         Ok(AssignTasksResponse {
-            results: merge_assign_results(&assignments, repo_results),
+            results: merge_assign_results(&assignments, committed.results),
         })
     }
 
@@ -253,22 +451,106 @@ where
     async fn unassign_task(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_id: &str,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo
-            .unassign_task(id, task_id)
+        validate_task_receipt(&task_receipt)?;
+        require_same_actor(&receipt, &task_receipt)?;
+        let change = self
+            .repo
+            .unassign_task(id, &task_receipt.entity().entity_id)
             .await
-            .map_err(Into::into)
+            .map_err(Into::into)?;
+        if let Some(change) = change {
+            self.publish(
+                id,
+                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+                    attribution: receipt_attribution(&receipt),
+                    changes: vec![change],
+                    occurred_at: Utc::now(),
+                }),
+            )
+            .await;
+        }
+        Ok(())
     }
 
+    #[tracing::instrument(err, skip_all)]
+    async fn clear_task(
+        &self,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<(), InitiativeError> {
+        validate_task_receipt(&task_receipt)?;
+        let change = self
+            .repo
+            .clear_task(&task_receipt.entity().entity_id)
+            .await
+            .map_err(Into::into)?;
+        if let Some(change) = change
+            && let Some(id) = change.from
+        {
+            self.publish(
+                id,
+                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+                    attribution: receipt_attribution(&task_receipt),
+                    changes: vec![change],
+                    occurred_at: Utc::now(),
+                }),
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn grant_assignees(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), InitiativeError> {
+        super::assignees::grant(&self.repo, &receipt, user_ids).await
+    }
+
+    /// Initiative rows first, then the document. The FK's `ON DELETE RESTRICT`
+    /// would reject a document-first purge while the initiative still names it.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo.delete(id).await.map_err(Into::into)
+        let description_document_id = self.repo.delete(id).await.map_err(Into::into)?;
+        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
+            .await;
+        // Cleanup follows an authorized deletion and is not a fresh user edit.
+        // Unattributed property cleanup cannot recreate history after the purge event.
+        let cleanup_receipt = EntityAccessReceipt::try_new(
+            EntityAccessAuth::Internal,
+            receipt.entity().clone(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
+        .map_err(|_| InitiativeError::Unauthorized)?;
+        let properties_cleanup = self.resources.purge(cleanup_receipt).await;
+        let document_cleanup = self.description_documents.purge(description_document_id).await.inspect_err(|error| {
+            tracing::error!(?error, %description_document_id, %id, "description document orphaned after initiative delete");
+        });
+        properties_cleanup.and(document_cleanup)
+    }
+}
+
+fn team_share_error(error: TeamSharePolicyError) -> InitiativeError {
+    match error {
+        TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+            InitiativeError::Unauthorized
+        }
+        TeamSharePolicyError::InvalidRevision => InitiativeError::Conflict(error.to_string()),
+        TeamSharePolicyError::MissingTeam
+        | TeamSharePolicyError::InvalidLevel
+        | TeamSharePolicyError::ContradictoryInputs => {
+            InitiativeError::BadRequest(error.to_string())
+        }
     }
 }
 
@@ -283,11 +565,54 @@ fn receipt_is_owner<T: entity_access::domain::models::RequiredPermission>(
     )
 }
 
-fn initiative_id_from_receipt<T: entity_access::domain::models::RequiredPermission>(
+pub(super) fn initiative_id_from_receipt<T: entity_access::domain::models::RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
 ) -> Result<InitiativeId, InitiativeError> {
+    if receipt.entity().entity_type != EntityType::Initiative {
+        return Err(InitiativeError::BadRequest(
+            "requires an initiative access receipt".to_string(),
+        ));
+    }
     InitiativeId::from_str(&receipt.entity().entity_id)
         .map_err(|_| InitiativeError::BadRequest("invalid initiative id".to_string()))
+}
+
+fn receipt_access_level<T: entity_access::domain::models::RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<AccessLevel, InitiativeError> {
+    match receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => Ok(*access_level),
+        _ => Err(InitiativeError::Unauthorized),
+    }
+}
+
+fn validate_task_receipt(
+    receipt: &EntityAccessReceipt<EditAccessLevel>,
+) -> Result<(), InitiativeError> {
+    if receipt.entity().entity_type != EntityType::Document {
+        return Err(InitiativeError::BadRequest(
+            "requires a task document access receipt".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn require_same_actor(
+    initiative: &EntityAccessReceipt<EditAccessLevel>,
+    task: &EntityAccessReceipt<EditAccessLevel>,
+) -> Result<(), InitiativeError> {
+    let same_actor = match (initiative.auth(), task.auth()) {
+        (EntityAccessAuth::Authenticated(left), EntityAccessAuth::Authenticated(right)) => {
+            left == right
+        }
+        (EntityAccessAuth::Bot(left), EntityAccessAuth::Bot(right)) => left == right,
+        (EntityAccessAuth::Internal, EntityAccessAuth::Internal) => true,
+        _ => false,
+    };
+    if !same_actor {
+        return Err(InitiativeError::Unauthorized);
+    }
+    Ok(())
 }
 
 fn normalize_name(name: &str) -> Result<String, InitiativeError> {
@@ -305,20 +630,14 @@ fn normalize_name(name: &str) -> Result<String, InitiativeError> {
     Ok(name.to_string())
 }
 
-fn normalize_description(description: Option<String>) -> Result<Option<String>, InitiativeError> {
-    let Some(description) = description else {
-        return Ok(None);
-    };
-    let description = description.trim();
-    if description.is_empty() {
-        return Ok(None);
-    }
+fn normalize_description(description: Option<String>) -> Result<String, InitiativeError> {
+    let description = description.as_deref().unwrap_or_default().trim();
     if description.graphemes(true).count() > MAX_INITIATIVE_DESCRIPTION_GRAPHEMES {
         return Err(InitiativeError::BadRequest(format!(
             "description must be at most {MAX_INITIATIVE_DESCRIPTION_GRAPHEMES} graphemes"
         )));
     }
-    Ok(Some(description.to_string()))
+    Ok(description.to_string())
 }
 
 fn parse_member_ids(
@@ -339,6 +658,43 @@ fn parse_member_ids(
         }
     }
     Ok(parsed)
+}
+
+/// More than any project form sends; bounds the writes one create can fan out to.
+const MAX_INITIAL_PROPERTY_VALUES: usize = 32;
+
+/// Rejected before anything is created, so a bad request never needs compensation.
+fn validate_initial_properties(
+    values: Vec<crate::domain::models::InitialPropertyValue>,
+) -> Result<Vec<crate::domain::models::InitialPropertyValue>, InitiativeError> {
+    if values.len() > MAX_INITIAL_PROPERTY_VALUES {
+        return Err(InitiativeError::BadRequest(format!(
+            "at most {MAX_INITIAL_PROPERTY_VALUES} initial property values are allowed"
+        )));
+    }
+    let mut seen = HashSet::new();
+    if let Some(duplicate) = values
+        .iter()
+        .find(|value| !seen.insert(value.property_definition_id))
+    {
+        return Err(InitiativeError::BadRequest(format!(
+            "property {} is set more than once",
+            duplicate.property_definition_id
+        )));
+    }
+    Ok(values)
+}
+
+/// Attach the canonical properties, then set the owner's first values. Either
+/// failing fails the create, which then deletes the initiative.
+async fn initialize_properties(
+    resources: &dyn InitiativeResources,
+    owner: MacroUserIdStr<'static>,
+    id: InitiativeId,
+    values: Vec<crate::domain::models::InitialPropertyValue>,
+) -> Result<(), InitiativeError> {
+    resources.initialize(id).await?;
+    resources.set_initial_properties(owner, id, values).await
 }
 
 fn member_diff(
@@ -379,10 +735,10 @@ fn merge_assign_results(
     assignments
         .iter()
         .map(|assignment| match assignment {
-            TaskAssignment::Candidate { task_id } => AssignTasksResult {
-                task_id: task_id.clone(),
+            TaskAssignment::Authorized { receipt } => AssignTasksResult {
+                task_id: receipt.entity().entity_id.clone(),
                 status: repo_by_id
-                    .get(task_id)
+                    .get(&receipt.entity().entity_id)
                     .copied()
                     .unwrap_or(AssignTaskStatus::NotFound),
             },

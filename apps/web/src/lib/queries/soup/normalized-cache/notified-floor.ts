@@ -10,7 +10,12 @@
 
 import { createStampFloors } from './stamp-floors';
 
-const notifiedFloors = createStampFloors();
+// Entity mappers read both network and optimistic snapshots. Reading our own
+// stamp must not retire the guard before a replica-stale refetch completes.
+const NOTIFIED_FLOOR_RETENTION_MS = 5 * 60 * 1000;
+const notifiedFloors = createStampFloors({
+  retainForMs: NOTIFIED_FLOOR_RETENTION_MS,
+});
 
 /** Record a delivered notification's time as the entity's floor. */
 export function raiseNotifiedFloor(entityId: string, notifiedAt: string): void {
@@ -18,8 +23,9 @@ export function raiseNotifiedFloor(entityId: string, notifiedAt: string): void {
 }
 
 /**
- * Resolve the effective notified_at for an entity: the server value unless a
- * newer floor exists. Clears the floor once the server catches up.
+ * Resolve the effective notified_at for an entity: the snapshot value unless
+ * a newer delivered stamp exists. Retained briefly across optimistic reads
+ * and overlapping refetches; bounded by age and entity count.
  */
 export function resolveNotifiedAt(
   entityId: string,

@@ -95,6 +95,7 @@ export function FilterSubmenu<TId extends string>(props: {
   onSelect: (id: TId) => void;
   closeOnSelect?: boolean;
   contentClass?: string;
+  selectionMode?: 'single' | 'multiple';
 }) {
   return (
     <Dropdown.Sub>
@@ -109,18 +110,53 @@ export function FilterSubmenu<TId extends string>(props: {
       </Dropdown.SubTrigger>
       <Dropdown.SubContent class={props.contentClass}>
         <Dropdown.Group>
-          <For each={props.options}>
-            {(option) => (
-              <FilterOptionItem
-                label={option.label}
-                icon={option.icon}
-                disabled={option.disabled}
-                active={props.isSelected(option.id)}
-                onSelect={() => props.onSelect(option.id)}
-                closeOnSelect={props.closeOnSelect}
-              />
-            )}
-          </For>
+          <Show
+            when={props.selectionMode === 'single'}
+            fallback={
+              <For each={props.options}>
+                {(option) => (
+                  <FilterOptionItem
+                    label={option.label}
+                    icon={option.icon}
+                    disabled={option.disabled}
+                    active={props.isSelected(option.id)}
+                    onSelect={() => props.onSelect(option.id)}
+                    closeOnSelect={props.closeOnSelect}
+                  />
+                )}
+              </For>
+            }
+          >
+            <Dropdown.RadioGroup
+              value={
+                props.options.find((option) => props.isSelected(option.id))?.id
+              }
+              onChange={(id) => {
+                const option = props.options.find((option) => option.id === id);
+                if (option) props.onSelect(option.id);
+              }}
+            >
+              <For each={props.options}>
+                {(option) => (
+                  <Dropdown.RadioItem
+                    value={option.id}
+                    disabled={option.disabled}
+                    closeOnSelect={props.closeOnSelect}
+                  >
+                    <Show when={option.icon}>
+                      <span class="size-4 flex items-center justify-center shrink-0">
+                        {option.icon?.()}
+                      </span>
+                    </Show>
+                    <span class="flex-1">{option.label}</span>
+                    <Dropdown.ItemIndicator>
+                      <CheckIcon class="size-3.5 text-accent" />
+                    </Dropdown.ItemIndicator>
+                  </Dropdown.RadioItem>
+                )}
+              </For>
+            </Dropdown.RadioGroup>
+          </Show>
         </Dropdown.Group>
       </Dropdown.SubContent>
     </Dropdown.Sub>

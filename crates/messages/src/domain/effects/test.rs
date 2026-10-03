@@ -69,3 +69,30 @@ async fn typing_only_reaches_the_parent_transport() {
         .unwrap();
     assert_eq!(*log.lock().unwrap(), vec![2]);
 }
+
+#[tokio::test]
+async fn call_chat_reaches_both_agent_targets_and_the_parent_transport() {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let target = |id| Target {
+        id,
+        fail: false,
+        log: log.clone(),
+    };
+    let mut event = event(MessageChange::ThreadUpdated {
+        state: crate::domain::models::ThreadState {
+            root_id: uuid::Uuid::from_u128(1),
+            user_id: "macro|author@example.com".into(),
+            resolved: false,
+            anchor: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            deleted_at: None,
+        },
+    });
+    event.parent = MessageParent::Call(uuid::Uuid::from_u128(1));
+    MessageEffects::new(target(0), target(1), target(2))
+        .publish(event)
+        .await
+        .unwrap();
+    assert_eq!(*log.lock().unwrap(), vec![0, 1, 2]);
+}

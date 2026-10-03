@@ -1,0 +1,87 @@
+/* Frozen MentionsMenu Surface, ItemBin, and MentionsMenuItem dimensions. */
+.workspace-demo .demo-mention-menu {
+  position: fixed;
+  z-index: 250;
+  width: min(384px, calc(100vw - 24px));
+  max-height: min(460px, 70vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 0 6px;
+  background: var(--color-menu-glass, #202020);
+  color: var(--color-ink, #fff);
+  border: 1px solid var(--color-edge-muted, #333);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px #0006;
+  font: 500 14px/20px var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+  text-align: left;
+  letter-spacing: normal;
+  color-scheme: dark;
+}
+.workspace-demo .demo-mention-menu,
+.workspace-demo .demo-mention-menu * { box-sizing: border-box; }
+.workspace-demo .demo-mention-groups { min-height: 0; overflow: auto; scrollbar-width: none; }
+.workspace-demo .demo-mention-menu section + section {
+  border-top: 1px solid var(--color-edge-muted, #333);
+  margin-top: 16px;
+  padding-top: 8px;
+}
+.workspace-demo .demo-mention-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 8px;
+  color: var(--color-ink-extra-muted, #888);
+  font-size: 12px;
+  line-height: 16px;
+}
+.workspace-demo .demo-mention-heading button { border: 0; background: none; color: inherit; font: inherit; padding: 0; }
+.workspace-demo .demo-mention-heading button:hover { color: var(--color-ink); text-decoration: underline; }
+.workspace-demo .demo-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  min-height: 32px;
+  margin-inline: 6px;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.workspace-demo .demo-mention-option[aria-selected=true] { background: color-mix(in srgb, var(--color-ink, #fff) 5%, transparent); }
+.workspace-demo .demo-mention-option img { width: 16px; height: 16px; flex: none; border-radius: 50%; object-fit: cover; }
+.workspace-demo .demo-mention-option > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-demo .demo-mention-detail { margin-left: .5em; opacity: .5; }
+.workspace-demo .demo-mention-icon { display: inline-flex; width: 16px; height: 16px; flex: none; color: var(--color-ink-muted, #bbb); }
+.workspace-demo .demo-mention-icon svg { width: 100%; height: 100%; }
+.workspace-demo .demo-mention-icon.mention-document { color: var(--color-note, #b68aff); }
+.workspace-demo .demo-mention-icon.mention-task { color: var(--color-task, #37bb72); }
+.workspace-demo .demo-mention-icon.mention-agent { color: var(--color-chat, #69cbe0); }
+.workspace-demo .demo-mention-icon.mention-spreadsheet { color: var(--color-success, #37bb72); }
+.workspace-demo .demo-mention-empty { padding: 8px; color: var(--color-ink-extra-muted, #888); font-weight: 400; }
+
+/* UserMention and DocumentMention/MentionContainer use the editor's font size. */
+.workspace-demo .demo-inline-mention { display: inline; white-space: normal; color: inherit; }
+.workspace-demo .demo-inline-mention.mention-person {
+  padding: 2px;
+  border-radius: 6px;
+  color: var(--color-link, #59a8ed);
+  background: color-mix(in srgb, var(--color-link, #59a8ed) 8%, transparent);
+  white-space: nowrap;
+}
+.workspace-demo .demo-inline-mention > .demo-mention-icon { position: relative; top: .125em; width: 1em; height: 1em; margin-inline: 4px; }
+.workspace-demo .demo-inline-mention:not(.mention-person) > .demo-mention-name {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 20%, transparent);
+  text-decoration-thickness: max(1px, .1em);
+  text-underline-offset: 2px;
+}
+.workspace-demo .demo-mention-status { display: inline-block; width: .75em; height: .75em; border: 2px solid var(--color-task, #37bb72); border-radius: 50%; margin-left: 4px; }
+.workspace-demo .demo-mention-status[data-status='In Review'] { border-color: var(--color-violet); background: conic-gradient(transparent 0 75%, var(--color-violet) 75% 100%); }
+.workspace-demo .demo-mention-status[data-status='In Progress'] { border-color: var(--color-orange); background: linear-gradient(90deg, var(--color-orange) 50%, transparent 50%); }
+.workspace-demo .demo-mention-editor { white-space: pre-wrap; overflow-wrap: anywhere; }
+.workspace-demo .demo-mention-editor:empty::before { content: attr(data-placeholder); color: var(--color-composer-placeholder); pointer-events: none; }

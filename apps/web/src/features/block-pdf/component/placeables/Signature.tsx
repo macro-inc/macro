@@ -13,8 +13,9 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { themeReactive } from '../../../theme/signals/themeReactive';
+import { resolvedThemeColors } from '../../../theme/signals/themeSignals';
 import { usePdfDocument } from '../../context/pdf-document-context';
+import { usePdfViewer } from '../../context/pdf-viewer-context';
 import { useDeletePlaceable, useModifyPayload } from '../../store/placeables';
 import { type AllowableEdits, PayloadMode } from '../../type/placeables';
 
@@ -32,6 +33,7 @@ interface SignatureEditorProps {
 
 function SignatureEditor(props: SignatureEditorProps) {
   const pdf = usePdfDocument();
+  const rootElement = usePdfViewer().rootElement;
   let canvasRef!: HTMLCanvasElement;
   let signaturePad: SignaturePad | undefined;
 
@@ -39,19 +41,15 @@ function SignatureEditor(props: SignatureEditorProps) {
     signaturePad = new SignaturePad(canvasRef);
   });
 
-  const [, setActivePlaceable] = pdf.state.signals.activePlaceableId;
   const modifyPayload = useModifyPayload();
   const deletePlaceable = useDeletePlaceable();
 
-  const [, setNewPlaceable] = pdf.state.signals.newPlaceable;
   const updatePlaceable = createCallback((e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    setNewPlaceable((prev) =>
-      prev?.internalId === props.id ? undefined : prev
-    );
-    setActivePlaceable(undefined);
+    pdf.markup.commands.clearDraftIf(props.id);
+    pdf.markup.commands.clearActive();
 
     if (!signaturePad?.isEmpty()) {
       modifyPayload(props.id, PayloadMode.Signature, {
@@ -74,7 +72,7 @@ function SignatureEditor(props: SignatureEditorProps) {
   );
 
   onMount(() => {
-    const el = pdf.rootElement();
+    const el = rootElement();
     if (!el) {
       setBlockRect(undefined);
       return;
@@ -143,7 +141,10 @@ function SignatureEditor(props: SignatureEditorProps) {
             ref={canvasRef}
             // SCUFFED THEMING TODO: this filter is janky af, checks if it's a "darkish" or "lightish" theme, we should handle this better
             style={{
-              filter: themeReactive.b0.l[0]() < 0.5 ? 'invert(1)' : 'none',
+              filter:
+                resolvedThemeColors()['surface-0'].l < 0.5
+                  ? 'invert(1)'
+                  : 'none',
             }}
           />
           <div class="flex flex-row w-full justify-center items-center border-t border-edge">

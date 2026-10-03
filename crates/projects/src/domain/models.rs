@@ -3,13 +3,15 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model::folder::FileSystemNode;
 use model::project::Project;
+use model_owner::Owner;
+use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 /// Arguments for atomically creating a project and its access metadata.
 #[derive(Debug, Clone)]
 pub struct CreateProjectArgs {
-    /// Project owner.
-    pub user_id: String,
+    /// Recorded project owner.
+    pub owner: Owner,
     /// Project name.
     pub name: String,
     /// Optional parent project.
@@ -31,6 +33,10 @@ pub struct EditProjectArgs {
     pub parent_id: Option<String>,
     /// Optional sharing changes.
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
+    /// Owner-authorized command for an explicit `teamShareAccessLevel`; the
+    /// repository applies it atomically with the rest of the edit and rejects
+    /// a team level that arrives without one.
+    pub team_share: Option<AuthorizedTeamShareCommand>,
 }
 
 /// Identifiers affected by a recursive soft deletion.
@@ -129,6 +135,10 @@ pub enum ProjectError {
     /// A soft-deleted project cannot be modified.
     #[error("cannot modify deleted project")]
     CannotModifyDeleted,
+    /// The requested change conflicts with the persisted state (for example a
+    /// stale team-share revision); the caller should reload and retry.
+    #[error("conflict: {0}")]
+    Conflict(String),
     /// The requested parent would recursively nest the project.
     #[error("project is recursively nested")]
     RecursiveNesting,

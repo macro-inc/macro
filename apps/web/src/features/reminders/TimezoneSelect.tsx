@@ -116,12 +116,12 @@ export function TimezoneSelect(props: {
       placement="bottom-start"
       gutter={4}
     >
-      <Combobox.Control>
+      <Combobox.Control class="min-w-0 flex-1">
         <Combobox.Trigger
           type="button"
           aria-label="Timezone"
           class={cn(
-            'flex flex-1 items-center justify-between gap-2 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent',
+            'flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-edge-muted bg-input px-2 py-1.5 text-sm text-ink outline-none focus:border-accent',
             props.class
           )}
         >

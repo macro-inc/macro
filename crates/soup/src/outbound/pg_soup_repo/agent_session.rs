@@ -11,8 +11,8 @@ use item_filters::ast::{
     agent_session::AgentSessionLiteral,
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
@@ -27,8 +27,15 @@ mod test;
 struct AgentSessionRow {
     id: Uuid,
     name: String,
+    is_archived: bool,
     owner_id: String,
     bot_id: Uuid,
+    harness: String,
+    repo_url: Option<String>,
+    repo_branch: Option<String>,
+    working_branch: Option<String>,
+    pull_request_url: Option<String>,
+    turn_state: Option<String>,
     thread_id: Option<Uuid>,
     status: String,
     status_event_name: Option<String>,
@@ -101,6 +108,12 @@ pub(super) async fn cursor_soup(
     query.push(" AND (");
     push_filter(&mut query, filter);
     query.push(")");
+    // Inline @macro sessions (`list_hidden`) are absent from broad lists. A
+    // query that names the session still returns it, so favorites and direct
+    // id lookups keep working.
+    query.push(" AND (s.list_hidden = FALSE OR s.id = ANY(");
+    query.push_bind(explicitly_named_ids(filter));
+    query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
         query.push(format!(" AND ({sort}, s.id) < ("));
         query.push_bind(timestamp);
@@ -208,8 +221,15 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     SELECT
         s.id,
         s.name,
+        s.is_archived,
         s.owner_id,
         s.bot_id,
+        s.harness,
+        s.repo_url,
+        s.repo_branch,
+        s.working_branch,
+        s.pull_request_url,
+        s.turn_state,
         s.thread_id,
         s.status,
         s.status_event_name,
@@ -239,6 +259,25 @@ fn sort_sql(sort: SimpleSortMethod) -> &'static str {
             r#"COALESCE(uh."updatedAt", s.modified_at)::timestamptz"#
         }
     }
+}
+
+/// Session ids the query asked for by name, ignoring ids under `NOT`.
+/// Those stay visible even when the session is hidden from broad lists.
+fn explicitly_named_ids(expression: &Expr<AgentSessionLiteral>) -> Vec<Uuid> {
+    fn walk(expression: &Expr<AgentSessionLiteral>, negated: bool, ids: &mut Vec<Uuid>) {
+        match expression {
+            Expr::Literal(AgentSessionLiteral::Id(id)) if !negated => ids.push(*id),
+            Expr::Not(inner) => walk(inner, true, ids),
+            Expr::And(left, right) | Expr::Or(left, right) => {
+                walk(left, negated, ids);
+                walk(right, negated, ids);
+            }
+            Expr::Literal(_) => {}
+        }
+    }
+    let mut ids = Vec::new();
+    walk(expression, false, &mut ids);
+    ids
 }
 
 fn push_filter(builder: &mut QueryBuilder<'_, Postgres>, expression: &Expr<AgentSessionLiteral>) {
@@ -272,15 +311,13 @@ fn push_filter(builder: &mut QueryBuilder<'_, Postgres>, expression: &Expr<Agent
         }
         Expr::Literal(AgentSessionLiteral::Owner(owner)) => {
             builder.push("s.owner_id = ");
-            builder.push_bind(owner.as_ref().to_string());
+            builder.push_bind(owner.principal_id());
         }
     }
 }
 
 fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
-    let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
-        .map_err(super::type_err)?
-        .into_owned();
+    let owner_id = Owner::from_principal_str(&row.owner_id).map_err(super::type_err)?;
     // Mirror `agent_session::domain::model::SessionStatus`'s wire shape: the
     // event name is the status once one has arrived.
     let status = match row.status.as_str() {
@@ -290,8 +327,17 @@ fn row_to_item(row: AgentSessionRow) -> Result<SoupItem<()>, sqlx::Error> {
     Ok(SoupItem::AgentSession(SoupAgentSession {
         id: row.id,
         name: row.name,
+        is_archived: row.is_archived,
         owner_id,
         bot_id: row.bot_id,
+        harness: row.harness,
+        repo_url: row.repo_url,
+        repo_branch: row.repo_branch,
+        pull_request_url: row.pull_request_url,
+        working_branch: row.working_branch,
+        pull_request_state: None,
+        pull_request_id: None,
+        turn_state: row.turn_state,
         thread_id: row.thread_id,
         status,
         created_at: row.created_at,

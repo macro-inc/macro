@@ -10,8 +10,7 @@ use super::{
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
-        CreateChannelResponse, PatchChannelRequest, PostMessageRequest, PostMessageResponse,
-        RemoveParticipantsRequest, Sender,
+        CreateChannelResponse, PatchChannelRequest, RemoveParticipantsRequest, Sender,
     },
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -22,7 +21,8 @@ use bot_id::BotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        EntityPermission, EntityType, MemberParticipantRole, RequiredPermission, TeamRole,
+        UserTeamInfo,
     },
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
@@ -47,6 +47,15 @@ struct RecordingMessages {
 
 #[async_trait::async_trait]
 impl messages::domain::api::MessageCommands for RecordingMessages {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("channel tools do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
@@ -136,6 +145,57 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
     }
 }
 
+#[async_trait::async_trait]
+impl messages::domain::api::MessageReader for RecordingMessages {
+    async fn get(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn get_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::MessageThread, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn timeline(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: messages::domain::ports::MessageTimelineQuery,
+    ) -> Result<messages::domain::ports::MessagePage, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn preceding(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: u16,
+    ) -> Result<Vec<messages::domain::models::Message>, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn resolve_legacy(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: i64,
+        _: bool,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by mutation tools")
+    }
+    async fn parent_of(
+        &self,
+        _: Uuid,
+    ) -> Result<
+        Option<messages::domain::models::MessageParent>,
+        messages::domain::ports::MessageError,
+    > {
+        unimplemented!("read path unused by mutation tools")
+    }
+}
+
 fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid macro user id")
 }
@@ -148,7 +208,6 @@ type CreatedChannelCall = (
 type PatchChannelCall = (Sender, Uuid, PatchChannelRequest);
 type AddParticipantsCall = (Sender, Uuid, AddParticipantsRequest);
 type RemoveParticipantsCall = (Sender, Uuid, RemoveParticipantsRequest);
-type PostMessageCall = (Sender, Uuid, PostMessageRequest);
 
 #[derive(Clone, Default)]
 struct ToolTestChannelService {
@@ -159,7 +218,6 @@ struct ToolTestChannelService {
     patch_error: Option<String>,
     adds: Arc<Mutex<Vec<AddParticipantsCall>>>,
     removes: Arc<Mutex<Vec<RemoveParticipantsCall>>>,
-    posts: Arc<Mutex<Vec<PostMessageCall>>>,
     metadata_name: Option<String>,
 }
 
@@ -189,21 +247,6 @@ impl ChannelService for ToolTestChannelService {
         _picture_id: Option<uuid::Uuid>,
     ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
         unimplemented!("picture mutation is not used by this fixture")
-    }
-
-    async fn get_channel_messages(
-        &self,
-        _channel_id: Uuid,
-        _query: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
-        _direction: crate::domain::models::MessagePageDirection,
-        _limit: u16,
-        _filters: &crate::domain::models::ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Result<
-        crate::domain::ports::ChannelMessagesQueryResult,
-        crate::domain::ports::ChannelMessagesErr,
-    > {
-        unimplemented!("read path unused by mutation tools")
     }
 
     async fn get_channel_attachments(
@@ -255,27 +298,6 @@ impl ChannelService for ToolTestChannelService {
         unimplemented!("read path unused by mutation tools")
     }
 
-    async fn get_channel_messages_around(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _limit: u16,
-    ) -> Result<
-        crate::domain::ports::ChannelMessagesQueryResult,
-        crate::domain::ports::ChannelMessagesErr,
-    > {
-        unimplemented!("read path unused by mutation tools")
-    }
-
-    async fn get_thread_replies(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> Result<Vec<crate::domain::models::ThreadReply>, crate::domain::ports::ChannelMessagesErr>
-    {
-        unimplemented!("read path unused by mutation tools")
-    }
-
     async fn create_channel(
         &self,
         actor: Sender,
@@ -297,34 +319,24 @@ impl ChannelService for ToolTestChannelService {
 
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         if let Some(message) = &self.patch_error {
             return Err(ChannelMutationErr::BadRequest(message.clone()));
         }
+        let actor = Sender::new_from_user(
+            access
+                .get_authenticated_user()
+                .cloned()
+                .expect("authenticated user"),
+        );
+        let channel_id = Uuid::parse_str(&access.entity().entity_id).expect("channel id");
         self.patches
             .lock()
             .expect("patch lock")
             .push((actor, channel_id, req));
         Ok(())
-    }
-
-    async fn post_message(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> Result<PostMessageResponse, ChannelMutationErr> {
-        self.posts
-            .lock()
-            .expect("post lock")
-            .push((actor, channel_id, req));
-        Ok(PostMessageResponse {
-            id: Uuid::new_v4().to_string(),
-            nonce: None,
-        })
     }
 
     async fn add_participants(
@@ -557,7 +569,8 @@ fn rename_channel_schema_is_valid() {
     assert!(result.is_ok(), "{result:?}");
     let validated = result.unwrap();
     assert_eq!(validated.name, "RenameChannel");
-    assert!(validated.description.contains("Rename"));
+    assert!(validated.description.contains("participant"));
+    assert!(!validated.description.to_lowercase().contains("admin"));
 }
 
 #[test]
@@ -839,7 +852,7 @@ async fn create_channel_surfaces_domain_errors() {
 }
 
 #[tokio::test]
-async fn rename_channel_requires_admin_and_patches_only_the_name() {
+async fn rename_channel_requires_member_and_patches_only_the_name() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService {
         metadata_name: Some("Old Name".to_string()),
@@ -856,7 +869,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect("admin can rename");
+    .expect("member can rename");
 
     assert_eq!(response.name, "New Name");
     assert_eq!(response.previous_name.as_deref(), Some("Old Name"));
@@ -870,7 +883,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
 }
 
 #[tokio::test]
-async fn rename_channel_rejects_non_admins() {
+async fn rename_channel_rejects_non_members() {
     let context = ChannelToolContext::new(
         Arc::new(RecordingMessages::default()),
         ToolTestChannelService::default(),
@@ -886,11 +899,11 @@ async fn rename_channel_rejects_non_admins() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect_err("non-admin");
+    .expect_err("non-member");
 
     assert_eq!(
         error.description,
-        "you need channel admin access to rename this channel"
+        "you must be a member of the channel to rename it"
     );
 }
 

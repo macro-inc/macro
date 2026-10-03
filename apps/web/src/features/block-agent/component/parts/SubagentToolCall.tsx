@@ -4,22 +4,27 @@
  * same part components), and what it reported back.
  */
 
+import { modelLabel } from '@core/component/AI/constant/model-label';
+import AgentIcon from '@phosphor/sparkle.svg';
 import type {
   MessagePart,
   SubagentResult,
   ToolDetail,
 } from '@service-agent-fold/generated/types';
-import { For, type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
+import { Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { thoughtIsStreaming } from '../../state/thought-streaming';
 import { FoldedOutput, Thought, ToolCard } from '../../ui';
-import type { ToolCallCommon, ToolCallContext } from './shared';
+import {
+  type ToolCallCommon,
+  type ToolCallContext,
+  toolUsedAfter,
+} from './shared';
 import { TextPart } from './TextPart';
 import { ToolCallPart } from './ToolCallPart';
 
 type SubagentDetail = Extract<ToolDetail, { kind: 'subagent' }>;
 
-/** `1 tool · 3.5s · 26k tokens`, from whatever the harness reported. */
+/** `1 tool · 3.5s`, from whatever the harness reported. */
 function resultSummary(result: SubagentResult): string | undefined {
   const facts: string[] = [];
   if (result.toolUses != null) {
@@ -32,13 +37,6 @@ function resultSummary(result: SubagentResult): string | undefined {
         : `${result.durationMs}ms`
     );
   }
-  if (result.tokens != null) {
-    facts.push(
-      result.tokens >= 1000
-        ? `${Math.round(result.tokens / 1000)}k tokens`
-        : `${result.tokens} tokens`
-    );
-  }
   return facts.length > 0 ? facts.join(' · ') : undefined;
 }
 
@@ -46,52 +44,62 @@ function resultSummary(result: SubagentResult): string | undefined {
 function ChildPart(props: {
   part: MessagePart;
   index: number;
-  childCount: number;
-  context?: ToolCallContext;
+  /** The subagent's parts this one sits among. */
+  siblings: readonly MessagePart[];
+  context: ToolCallContext;
 }) {
-  const inFlight = () => props.context?.inFlight ?? false;
+  const inFlight = () => props.context.inFlight;
   return (
-    match(props.part)
-      .with({ kind: 'text' }, (part) => <TextPart text={part.text} />)
-      .with({ kind: 'thought' }, (part) => (
-        <Thought
-          text={part.text}
-          active={thoughtIsStreaming(inFlight(), props.index, props.childCount)}
-        />
-      ))
-      .with({ kind: 'tool_use' }, (part) => (
-        <ToolCallPart
-          part={part}
-          context={
-            props.context && {
+    <Switch>
+      <Match when={props.part.kind === 'text' && props.part}>
+        {(part) => <TextPart text={part().text} />}
+      </Match>
+      <Match when={props.part.kind === 'thought' && props.part}>
+        {(part) => (
+          <Thought
+            text={part().text}
+            active={thoughtIsStreaming(
+              inFlight(),
+              props.index,
+              props.siblings.length
+            )}
+          />
+        )}
+      </Match>
+      <Match when={props.part.kind === 'tool_use' && props.part}>
+        {(part) => (
+          <ToolCallPart
+            part={part()}
+            context={{
               ...props.context,
               // A child's slot is its own; the parent's index is not it.
               partIndex: props.index,
-            }
-          }
-        />
-      ))
-      // A subagent's permission, plan, or control has nowhere to nest today;
-      // the harnesses that attribute children only attribute tool calls.
-      .otherwise(() => null)
+              followedBy: toolUsedAfter(props.siblings, props.index),
+            }}
+          />
+        )}
+      </Match>
+    </Switch>
   );
 }
 
 export function SubagentToolCall(props: {
   detail: SubagentDetail;
   common: ToolCallCommon;
-  context?: ToolCallContext;
+  context: ToolCallContext;
 }): JSX.Element {
   const working = () =>
     props.common.status === 'pending' || props.common.status === 'running';
   // Children only shimmer while both the subagent and the turn are live.
-  const childContext = () =>
-    props.context && {
-      ...props.context,
-      inFlight: working() && props.context.inFlight,
-    };
+  const childContext = () => ({
+    ...props.context,
+    inFlight: working() && props.context.inFlight,
+  });
   const subtitle = () =>
-    [props.detail.agentType, props.detail.background ? 'background' : undefined]
+    [
+      props.detail.agentType ?? 'subagent',
+      props.detail.background ? 'background' : undefined,
+    ]
       .filter(Boolean)
       .join(' · ') || undefined;
   const trailing = () =>
@@ -99,9 +107,7 @@ export function SubagentToolCall(props: {
     (props.detail.result?.error != null ? (
       <span class="text-ink">Failed</span>
     ) : props.detail.result ? (
-      <Show when={resultSummary(props.detail.result)}>
-        {(summary) => <span>{summary()}</span>}
-      </Show>
+      resultSummary(props.detail.result)
     ) : undefined);
   const hasBody = () =>
     props.detail.prompt != null ||
@@ -110,12 +116,12 @@ export function SubagentToolCall(props: {
 
   return (
     <ToolCard
+      icon={<AgentIcon class="size-4" />}
       title={props.detail.title}
       subtitle={subtitle()}
       status={props.common.status}
       muted={props.common.muted || props.detail.result?.error != null}
       trailing={trailing()}
-      defaultOpen={props.detail.children.length > 0}
       hasContent={hasBody()}
     >
       <Show when={hasBody()}>
@@ -128,17 +134,24 @@ export function SubagentToolCall(props: {
             )}
           </Show>
           <Show when={props.detail.children.length > 0}>
-            <div class="flex flex-col gap-1 border-l-2 border-edge-muted pl-2">
-              <For each={props.detail.children}>
+            <div
+              role="region"
+              aria-label="Agent activity"
+              tabIndex={0}
+              class="flex max-h-40 flex-col overflow-y-auto overscroll-contain border-l-2 border-edge-muted pl-2"
+            >
+              <Index each={props.detail.children}>
                 {(child, index) => (
-                  <ChildPart
-                    part={child}
-                    index={index()}
-                    childCount={props.detail.children.length}
-                    context={childContext()}
-                  />
+                  <div class="min-h-8 shrink-0">
+                    <ChildPart
+                      part={child()}
+                      index={index}
+                      siblings={props.detail.children}
+                      context={childContext()}
+                    />
+                  </div>
                 )}
-              </For>
+              </Index>
             </div>
           </Show>
           <Show when={props.detail.result}>
@@ -152,8 +165,15 @@ export function SubagentToolCall(props: {
                 </Show>
                 <Show when={result().model}>
                   {(model) => (
-                    <span class="text-xs text-ink-extra-muted">{model()}</span>
+                    <span class="text-xs text-ink-extra-muted">
+                      {modelLabel(model())}
+                    </span>
                   )}
+                </Show>
+                <Show when={result().tokens != null}>
+                  <span class="text-xs text-ink-extra-muted">
+                    {result().tokens?.toLocaleString()} tokens
+                  </span>
                 </Show>
               </div>
             )}

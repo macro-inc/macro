@@ -41,13 +41,9 @@ pub trait MessageReader: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> Result<Message, MessageError>;
-    /// Discover accessible source threads mentioning the authorized document.
-    async fn referenced_threads(
-        &self,
-        access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ReferencedThreadPage, MessageError>;
+    /// The parent a live message belongs to, for adapters addressed only by
+    /// message id. Grants nothing: callers mint the parent's receipt before any read.
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
 }
 
 /// Conversation mutations under a verified actor and parent capability.
@@ -60,6 +56,15 @@ pub trait MessageCommands: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
+    /// Idempotently post a trusted server event, using its UUIDv7 as the message
+    /// id without a client clock-skew limit. Replays return the original message,
+    /// including tombstones, after checking its parent, author, and thread.
+    async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        input: PostMessage,
+    ) -> Result<Message, MessageError>;
     /// Apply partial body, mention, and attachment changes under the common policy.
     async fn patch(
         &self,
@@ -67,7 +72,7 @@ pub trait MessageCommands: Send + Sync + 'static {
         id: Uuid,
         input: MessagePatch,
     ) -> Result<Message, MessageError>;
-    /// Tombstone a message under the common authorship and moderation policy.
+    /// Tombstone a message, or delete the whole discussion when it is a root.
     async fn delete(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -91,7 +96,7 @@ pub trait MessageCommands: Send + Sync + 'static {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError>;
-    /// Update document discussion state or detach removed Markdown text.
+    /// Update entity discussion state or detach removed document Markdown text.
     async fn patch_thread(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -152,13 +157,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     ) -> Result<Message, MessageError> {
         MessageService::resolve_legacy(self, access, id, is_thread).await
     }
-    async fn referenced_threads(
-        &self,
-        access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ReferencedThreadPage, MessageError> {
-        MessageService::referenced_threads(self, access, cursor, limit).await
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        MessageService::parent_of(self, id).await
     }
 }
 
@@ -170,6 +170,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         input: PostMessage,
     ) -> Result<Message, MessageError> {
         MessageService::post(self, access, input).await
+    }
+    async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        MessageService::post_from_event(self, access, event_id, input).await
     }
     async fn patch(
         &self,
@@ -258,8 +266,8 @@ mockall::mock! {
     ) -> Result<Vec<Message>, MessageError>;
     /// Read an old link under current parent access.
     async fn resolve_legacy(&self, access: EntityAccessReceipt<MessageView>, id: i64, is_thread: bool) -> Result<Message, MessageError>;
-    /// Discover accessible source threads mentioning the authorized document.
-    async fn referenced_threads(&self, access: EntityAccessReceipt<MessageView>, cursor: Option<MessageCursor>, limit: u16) -> Result<ReferencedThreadPage, MessageError>;
+    /// The parent a message belongs to, for id-addressed adapters.
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
     }
     #[async_trait::async_trait]
     impl MessageCommands for MessageServiceApi {
@@ -269,9 +277,16 @@ mockall::mock! {
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
+    /// Post or recover the message belonging to a trusted server event.
+    async fn post_from_event(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        event_id: Uuid,
+        input: PostMessage,
+    ) -> Result<Message, MessageError>;
     /// Apply partial body, mention, and attachment changes under the common policy.
     async fn patch(&self, access: EntityAccessReceipt<MessageWrite>, id: Uuid, input: MessagePatch) -> Result<Message, MessageError>;
-    /// Tombstone a message under the common authorship and moderation policy.
+    /// Tombstone a message, or delete the whole discussion when it is a root.
     async fn delete(
         &self,
         access: EntityAccessReceipt<MessageWrite>,

@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreatePairingRequestAllowPermissionBypass } from './createPairingRequestAllowPermissionBypass';
 import type { CreatePairingRequestHost } from './createPairingRequestHost';
 import type { CreatePairingRequestScope } from './createPairingRequestScope';
 
@@ -13,6 +14,8 @@ import type { CreatePairingRequestScope } from './createPairingRequestScope';
 The daemon serializes this, so both derives are used.
  */
 export interface CreatePairingRequest {
+  /** Daemon operator consent ceiling. Omitted by older clients; web approval decides. */
+  allow_permission_bypass?: CreatePairingRequestAllowPermissionBypass;
   /** Display-only description of the machine, e.g. `eric@macbook / darwin`. */
   host?: CreatePairingRequestHost;
   /** Requested harness display name (typically the machine's hostname). */

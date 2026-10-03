@@ -2,6 +2,7 @@ import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { cn } from '../utils/classname';
+import { ActionDialogShell } from './ActionDialogShell';
 import { Button } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
 import {
@@ -10,7 +11,6 @@ import {
   openDialog,
   type PropsSource,
 } from './ImperativeDialog';
-import { Surface } from './Surface';
 
 /** Presentation options for the shared confirmation dialog. */
 export type ConfirmDialogDisplayProps = {
@@ -27,12 +27,6 @@ export type ConfirmDialogDisplayProps = {
   class?: string;
 };
 
-const TONE_VARIANT = {
-  default: 'accent',
-  danger: 'danger',
-  success: 'success',
-} as const;
-
 export type ConfirmDialogProps = ManagedDialogProps &
   ConfirmDialogDisplayProps & {
     onConfirm: () => void;
@@ -48,28 +42,24 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
         <Dialog
           open={props.open}
           onOpenChange={(open) => !props.pending && props.onOpenChange(open)}
-          position={props.position}
-          class={cn('w-[90%] max-w-120', props.class)}
+          position={props.position ?? 'center'}
+          class={cn('w-110', props.class)}
           visibleScrim
         >
-          <Surface depth={2} class="rounded-xl text-ink">
-            <div class="flex flex-col gap-1 px-5 py-4">
-              <Dialog.Title class="text-base font-semibold">
-                {props.title}
-              </Dialog.Title>
-              <Dialog.Description
-                as="div"
-                class="text-sm leading-5 text-ink-muted"
-              >
-                {props.body ?? props.children}
-              </Dialog.Description>
-            </div>
-            <div class="flex items-center justify-end gap-2 px-5 py-3">
+          <ActionDialogShell>
+            <ActionDialogShell.Body>
+              <ActionDialogShell.Header>
+                <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
+                <ActionDialogShell.Description as="div">
+                  {props.body ?? props.children}
+                </ActionDialogShell.Description>
+              </ActionDialogShell.Header>
+            </ActionDialogShell.Body>
+            <ActionDialogShell.Footer>
               <Button
                 type="button"
                 variant="ghost"
                 depth={2}
-                class="rounded-lg"
                 disabled={props.pending}
                 onClick={() => props.onOpenChange(false)}
               >
@@ -77,16 +67,15 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
               </Button>
               <Button
                 type="button"
-                variant={TONE_VARIANT[props.tone ?? 'default']}
+                variant="strong"
                 depth={2}
-                class="rounded-lg"
                 disabled={props.pending}
                 onClick={props.onConfirm}
               >
                 {props.confirmLabel ?? 'Confirm'}
               </Button>
-            </div>
-          </Surface>
+            </ActionDialogShell.Footer>
+          </ActionDialogShell>
         </Dialog>
       }
     >

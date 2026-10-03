@@ -45,6 +45,7 @@ import {
 } from '../../plugins/media';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
+import { MediaLoadingPlaceholder } from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
 
 type ImageState = 'loading' | 'ok' | 'error';
@@ -268,12 +269,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         class={cn(
           'relative max-w-full my-4 grid place-items-center',
           isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' &&
-            'pattern-edge-muted pattern-diagonal-8 min-h-44',
+          state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
+          state() === 'error' && !effectiveDims()[0] && 'min-h-44',
           // If there are no constrained dimensions, center the image
           !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
         )}
         style={{
+          width: effectiveDims()[0] ? '100%' : undefined,
           'max-width': `${effectiveDims()[0] ? effectiveDims()[0] * scale() : 640}px`,
           'aspect-ratio':
             effectiveDims()[0] && effectiveDims()[1]
@@ -316,30 +318,39 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           crossorigin="anonymous"
           class={cn(
             'h-full object-contain',
-            (state() === 'loading' || state() === 'error') && 'invisible'
+            effectiveDims()[0] > 0 && 'absolute inset-0 size-full',
+            (state() === 'loading' || state() === 'error') && 'invisible',
+            state() === 'loading' &&
+              !effectiveDims()[0] &&
+              'absolute inset-0 size-0'
           )}
           draggable={true}
           use:internalDrag={true}
           ref={imageRef}
           src={imageUrl()}
           style={{
-            width: effectiveDims()[0]
-              ? `${effectiveDims()[0] * scale()}px`
-              : 'auto',
+            width: effectiveDims()[0] ? '100%' : 'auto',
           }}
         />
 
         <Show when={state() === 'error'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted min-h-44">
+          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted">
             <ImageIcon class="size-5" />
             <div>{ImageErrors[imageError() ?? 'FALLBACK']}</div>
           </div>
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
-            <Spinner />
-          </div>
+          <Show
+            when={effectiveDims()[0] > 0}
+            fallback={
+              <MediaLoadingPlaceholder kind="image" label={props.alt} />
+            }
+          >
+            <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+              <Spinner />
+            </div>
+          </Show>
         </Show>
 
         <Show when={uploading() && state() !== 'error'}>

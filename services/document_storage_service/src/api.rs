@@ -58,7 +58,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     },
                     validate_api_version,
                 ))
-                .layer(macro_cors::cors_layer())
+                .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
@@ -99,7 +99,10 @@ fn api_router(state: ApiContext) -> Router {
     let webhook_router = Router::new()
         .nest(
             "/call",
-            call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
+            call::inbound::axum_router::webhook_router(
+                state.call_webhook_state.clone(),
+                state.call_public_rate_limiter.clone(),
+            ),
         )
         .nest(
             "/cal",
@@ -113,6 +116,10 @@ fn api_router(state: ApiContext) -> Router {
     );
 
     let internal_router = Router::new()
+        .nest(
+            "/dictation",
+            dictation::inbound::axum_router::dictation_router(state.dictation_state.clone()),
+        )
         .nest(
             "/github",
             github::inbound::github_sync_router::github_sync_router(
@@ -233,10 +240,20 @@ fn api_router(state: ApiContext) -> Router {
             favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
         )
         .nest(
+            "/channel-labels",
+            channel_labels::inbound::axum_router::channel_labels_router(
+                state.channel_labels_state.clone(),
+            ),
+        )
+        .nest(
             "/user-api-keys",
             user_api_key::inbound::axum_router::user_api_key_router(
                 state.user_api_key_state.clone(),
             ),
+        )
+        .nest(
+            "/slack",
+            slack_integration::inbound::axum_router::slack_router(state.slack_state.clone()),
         )
         .nest(
             "/reminders",
@@ -245,6 +262,14 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/initiatives",
             initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+        )
+        .nest(
+            "/databases",
+            databases::inbound::axum_router::databases_router(state.databases_state.clone()).merge(
+                databases::inbound::starter_router::starter_router(
+                    state.database_starter_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/collab_surfaces",

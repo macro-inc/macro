@@ -23,6 +23,7 @@ const operationMocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(async () => {}),
   invalidateSoupEntity: vi.fn(async () => {}),
   setQueryData: vi.fn(),
+  refreshGraphqlSoup: vi.fn(async () => {}),
   updateThreadLabel: vi.fn(
     async (_args: {
       thread_id: string;
@@ -61,6 +62,14 @@ vi.mock('@queries/client', () => ({
     invalidateQueries: operationMocks.invalidateQueries,
     setQueryData: operationMocks.setQueryData,
   },
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: () => true,
+}));
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: operationMocks.refreshGraphqlSoup,
 }));
 vi.mock('@queries/email/thread', () => ({
   fetchAndCacheThread: operationMocks.fetchAndCacheThread,
@@ -120,6 +129,38 @@ afterEach(() => {
 });
 
 describe('trashEmails', () => {
+  it('revalidates mounted GraphQL Soup membership after trash succeeds', async () => {
+    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
+    const handle = trashEmails([{ id: 'thread-a', linkId: 'link-a' }]);
+    await handle.done;
+    expect(operationMocks.updateThreadLabel).toHaveBeenCalledWith({
+      thread_id: 'thread-a',
+      label_id: 'trash-a',
+      value: true,
+    });
+    expect(
+      operationMocks.refreshGraphqlSoup,
+      'TanStack invalidation cannot remove a row from a mounted GraphQL Soup list'
+    ).toHaveBeenCalled();
+  });
+
+  it('revalidates mounted GraphQL Soup membership after trash undo succeeds', async () => {
+    operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
+    const handle = trashEmails([{ id: 'thread-b', linkId: 'link-b' }]);
+    await handle.done;
+    operationMocks.refreshGraphqlSoup.mockClear();
+    await handle.undo();
+    expect(operationMocks.updateThreadLabel).toHaveBeenLastCalledWith({
+      thread_id: 'thread-b',
+      label_id: 'trash-b',
+      value: false,
+    });
+    expect(
+      operationMocks.refreshGraphqlSoup,
+      'Restoring a legacy snapshot cannot restore GraphQL Soup membership'
+    ).toHaveBeenCalled();
+  });
+
   it('uses and undoes the TRASH label for each inbox independently', async () => {
     operationMocks.fetchQuery.mockResolvedValue({ labels: trashLabels });
 

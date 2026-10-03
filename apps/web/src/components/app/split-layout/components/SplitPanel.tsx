@@ -2,13 +2,15 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
-import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
+import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
@@ -19,8 +21,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  onCleanup,
-  onMount,
   Show,
   Suspense,
 } from 'solid-js';
@@ -51,12 +51,6 @@ type SplitPanelProps = {
   index: number;
 };
 
-/**
- * A Preview Pair Viewer displays content passively. Only record it as opened
- * after the user lingers, so keyboard scanning does not mark every row viewed.
- */
-const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
-
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
@@ -72,6 +66,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
+  let pointerTarget: Element | undefined;
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
@@ -94,12 +89,11 @@ export function SplitPanel(props: SplitPanelProps) {
       );
       if (wentBack) return;
       props.handle.replace({
-        next: { type: 'component', id: LIST_VIEW_ID.inbox },
+        next: { type: 'component', id: LIST_VIEW_ID.home },
         referredFrom: 'hotkey',
       });
     },
     isNotUnifiedList,
-    isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -127,25 +121,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const headerSize = createElementSize(headerRef);
 
   const [hasToolbarContent, setHasToolbarContent] = createSignal(false);
-  onMount(() => {
-    const checkContent = () => {
-      setHasToolbarContent(
-        Boolean(
-          layoutRefs.toolbarLeft?.hasChildNodes() ||
-            layoutRefs.toolbarRight?.hasChildNodes()
-        )
-      );
-    };
-    checkContent();
-    const observer = new MutationObserver(checkContent);
-    if (layoutRefs.toolbarLeft) {
-      observer.observe(layoutRefs.toolbarLeft, { childList: true });
-    }
-    if (layoutRefs.toolbarRight) {
-      observer.observe(layoutRefs.toolbarRight, { childList: true });
-    }
-    onCleanup(() => observer.disconnect());
-  });
 
   createEffect(() => {
     const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
@@ -172,22 +147,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitUnfocusedStyling = () =>
     !isTouchDevice() && !props.active && multipleSplits();
 
-  const gutterSize = () =>
-    globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
-
-  /**
-   * This split is a Viewer sitting immediately right of its Controller: the
-   * pane slides left across the gutter so it sits flush against the
-   * Controller, reading as tucked behind it.
-   */
-  const tuckedBehindController = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isViewerSplit()
-    );
-  });
-
   const usesComposableLayout = () =>
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';
@@ -204,25 +163,33 @@ export function SplitPanel(props: SplitPanelProps) {
         goForward: props.handle.goForward,
         canClose: () => {
           const manager = globalSplitManager();
-          return manager
-            ? shouldShowSplitCloseButton(manager, props.handle)
-            : false;
+          return manager ? shouldShowSplitCloseButton(manager) : false;
         },
         close: props.handle.close,
       }}
     >
-      <Suspense>
-        <SoupViewContextProvider soup={nextSoup}>
-          <BlockOpenTrackingDelayContext.Provider
-            value={
-              props.handle.isViewerSplit()
-                ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
-                : 0
-            }
-          >
-            <Dynamic component={props.split.mount.element} />
-          </BlockOpenTrackingDelayContext.Provider>
-        </SoupViewContextProvider>
+      <Suspense fallback={<ContentLoading />}>
+        <Show
+          when={
+            props.split.mount.kind === 'component' &&
+            props.split.mount.meta.ownsCollectionState
+          }
+          fallback={
+            <SoupViewContextProvider soup={nextSoup}>
+              <SplitRouter.Outlet
+                splitId={props.handle.id}
+                fallback={() => (
+                  <Dynamic component={props.split.mount.element} />
+                )}
+              />
+            </SoupViewContextProvider>
+          }
+        >
+          <SplitRouter.Outlet
+            splitId={props.handle.id}
+            fallback={() => <Dynamic component={props.split.mount.element} />}
+          />
+        </Show>
       </Suspense>
     </SplitPanelControllerProvider>
   );
@@ -257,6 +224,7 @@ export function SplitPanel(props: SplitPanelProps) {
           replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
+          pointerTarget: () => pointerTarget,
         }}
       >
         <SplitDrawerGroup panelSize={panelSize}>
@@ -284,19 +252,28 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
-              // Slide the preview pane left across the gutter so it sits
-              // flush against the controller, keeping its right edge in
-              // place. The gutter's drag hit-area still paints (and
-              // hit-tests) above this extension, so resizing works.
-              ...(tuckedBehindController() && {
-                'margin-left': `-${gutterSize()}px`,
-                width: `calc(100% + ${gutterSize()}px)`,
-              }),
             }}
             ref={(ref) => {
               setPanelRef(ref);
               props.setPanelRef(ref);
               attachHotKeys(ref);
+            }}
+            on:pointerdown={{
+              capture: true,
+              handleEvent: (e) => {
+                pointerTarget =
+                  e.target instanceof Element ? e.target : undefined;
+              },
+            }}
+            // A split opened from the keyboard has no pressed element to keep
+            // in view. Modifiers are held through Shift- and Cmd-clicks.
+            on:keydown={{
+              capture: true,
+              handleEvent: (e) => {
+                if (!EVENT_MODIFIER_KEYS.has(e.key.toLowerCase())) {
+                  pointerTarget = undefined;
+                }
+              },
             }}
             data-split-id={props.split.id}
             {...splitContainerAttribute}
@@ -306,7 +283,11 @@ export function SplitPanel(props: SplitPanelProps) {
             <Panel
               class={cn(
                 'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
-                props.handle.isSpotLight() ? 'rounded-xl' : 'rounded-none',
+                props.handle.isSpotLight()
+                  ? 'rounded-xl'
+                  : multipleSplits()
+                    ? 'rounded-md'
+                    : 'rounded-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
@@ -314,7 +295,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}
-              hideBorder={!props.handle.isSpotLight()}
+              hideBorder={!props.handle.isSpotLight() && !multipleSplits()}
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header
@@ -344,6 +325,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   <SplitToolbar
                     ref={setToolbarRef}
                     collapseController={toolbarCollapseController}
+                    onContentChange={setHasToolbarContent}
                   />
                 </Panel.Toolbar>
               </Show>
@@ -362,8 +344,8 @@ export function SplitPanel(props: SplitPanelProps) {
                   </div>
                   <Show when={!usesComposableLayout() && bottomPanel()}>
                     {(panel) => (
-                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
-                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
+                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-frame bg-surface flex flex-col">
+                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-frame px-2">
                           <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
                             {panel().title}
                           </h3>

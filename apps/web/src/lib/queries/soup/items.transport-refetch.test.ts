@@ -2,7 +2,10 @@ import { useInfiniteQuery } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const testState = vi.hoisted(() => ({ graphqlEnabled: false }));
+const testState = vi.hoisted(() => ({
+  graphqlEnabled: false,
+  restPending: false,
+}));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
 const flatQuery = vi.hoisted(() => makeGraphqlQuery(false));
@@ -69,6 +72,9 @@ vi.mock('@tanstack/solid-query', () => ({
   useInfiniteQuery: vi.fn(() => ({
     data: undefined,
     error: null,
+    get isPending() {
+      return testState.restPending;
+    },
     isLoading: false,
     isFetching: false,
     isPlaceholderData: false,
@@ -90,6 +96,9 @@ vi.mock('./graphql/grouped-items', () => ({
 }));
 
 import { refreshActiveGraphqlSoupQueries } from './graphql/active-queries';
+import { makeGraphqlGroupedSoupInput } from './graphql/ast';
+import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
+import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 import {
   type SoupAstItemsData,
   type SoupAstItemsPage,
@@ -99,19 +108,22 @@ import {
 
 let disposeRoot: (() => void) | undefined;
 
-function mountAutoTransportQuery(): SoupAstItemsQuery {
+function mountAutoTransportQuery(networkPaused = false): SoupAstItemsQuery {
   let query: SoupAstItemsQuery | undefined;
   createRoot((dispose) => {
     disposeRoot = dispose;
-    query = useSoupAstItemsQuery(() => ({
-      params: {},
-      body: {},
-      groupBy: {
-        type: 'property',
-        propertyDefinitionId: 'priority',
-        entityType: 'TASK',
-      },
-    }));
+    query = useSoupAstItemsQuery(
+      () => ({
+        params: {},
+        body: {},
+        groupBy: {
+          type: 'property',
+          propertyDefinitionId: 'priority',
+          entityType: 'TASK',
+        },
+      }),
+      () => ({ networkPaused })
+    );
   });
   return query!;
 }
@@ -119,12 +131,51 @@ function mountAutoTransportQuery(): SoupAstItemsQuery {
 describe('Soup refetch transport selection', () => {
   beforeEach(() => {
     testState.graphqlEnabled = false;
+    testState.restPending = false;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     disposeRoot?.();
     disposeRoot = undefined;
+  });
+
+  it('exposes paused REST requests as pending even when they are not loading', () => {
+    testState.restPending = true;
+    const query = mountAutoTransportQuery();
+    expect(query.isLoading).toBe(false);
+    expect(query.isPending).toBe(true);
+  });
+
+  it('keeps paused GraphQL requests pending until data or an error arrives, unless disabled', () => {
+    testState.graphqlEnabled = true;
+    const query = mountAutoTransportQuery(true);
+    expect(query.transport).toBe('graphql');
+    expect(query.isLoading).toBe(false);
+    expect(query.isPending).toBe(true);
+
+    groupedQuery.data.mockReturnValueOnce({ entities: [] });
+    expect(query.isPending).toBe(false);
+
+    groupedQuery.error.mockReturnValueOnce(new Error('Request failed'));
+    expect(query.isPending).toBe(false);
+
+    groupedQuery.isEnabled.mockReturnValueOnce(false);
+    expect(query.isPending).toBe(false);
+  });
+
+  it('forwards the channel list projection only to the flat GraphQL query', () => {
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      useSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, graphqlProjection: 'channel-list' })
+      );
+    });
+    const options = vi
+      .mocked(createGraphqlSoupAstItemsQuery)
+      .mock.calls[0][1]();
+    expect(options.projection).toBe('channel-list');
   });
 
   it('preserves fetched page coverage when optimistic inserts change cached membership', async () => {
@@ -192,6 +243,50 @@ describe('Soup refetch transport selection', () => {
     expect(restRefetch).toHaveBeenCalledOnce();
     expect(groupedQuery.refresh).not.toHaveBeenCalled();
   });
+
+  it.each(['inbox', 'drafts', 'sent', 'all'] as const)(
+    'keeps grouped %s mail on REST even when GraphQL is explicitly requested and cached mail exists',
+    async (emailView) => {
+      testState.graphqlEnabled = true;
+      vi.mocked(createGraphqlGroupedSoupAstItemsQuery).mockImplementationOnce(
+        (args) => ({
+          ...groupedQuery,
+          // Use the real AST eligibility boundary, not the default supported mock.
+          isSupported: () => {
+            const request = args();
+            if (!request.groupBy) return false;
+            try {
+              makeGraphqlGroupedSoupInput({
+                ...request,
+                groupBy: request.groupBy,
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          data: () => ({ cachedMail: true, entities: [], groups: [] }),
+        })
+      );
+      const query = createRoot((dispose) => {
+        disposeRoot = dispose;
+        return useSoupAstItemsQuery(() => ({
+          params: { sort_method: 'updated_at' },
+          body: { emailView },
+          groupBy: { type: 'date' },
+          transport: 'graphql',
+        }));
+      });
+      expect(query.transport).toBe('rest');
+      expect(query.data).toBeUndefined(); // Never exposes the private cached-Mail projection.
+      const restOptions = vi.mocked(useInfiniteQuery).mock.calls.at(-1)?.[0];
+      expect(restOptions?.().enabled).toBe(true);
+      await query.refetch();
+      await refreshActiveGraphqlSoupQueries();
+      expect(restRefetch).toHaveBeenCalledOnce();
+      expect(groupedQuery.refresh).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses GraphQL refetch and mutation-driven refresh when the flag is on', async () => {
     testState.graphqlEnabled = true;

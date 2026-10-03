@@ -92,6 +92,29 @@ impl RustService {
 /// The full service inventory of the local service binaries.
 pub const RUST_SERVICES: &[RustService] = &[
     RustService {
+        compose_name: "slack_import_worker",
+        cargo_bin: "slack_import_worker",
+        package: "slack_import_worker",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        // Explicit local Compose profile only; never consume shared-dev queues.
+        modes: &[],
+        opt_in: true,
+        no_default_features: false,
+    },
+    RustService {
+        compose_name: "preview_gateway",
+        cargo_bin: "preview_gateway",
+        package: "preview_gateway",
+        host_port: Some(Port::PreviewControl),
+        path_prefix: Some("/preview"),
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "authentication-service",
         cargo_bin: "authentication_service",
         package: "authentication_service",
@@ -196,6 +219,21 @@ pub const RUST_SERVICES: &[RustService] = &[
         path_prefix: None,
         is_websocket: false,
         modes: &[],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
+        compose_name: "calendar_service",
+        cargo_bin: "calendar_service",
+        package: "calendar_service",
+        host_port: Some(Port::Calendar),
+        path_prefix: Some("/calendar"),
+        is_websocket: false,
+        // Local-only: the backfill SQS workers spawn unconditionally (not gated
+        // on CALENDAR_SYNC_ENABLED), so running the binary under `run-dev`
+        // against shared-dev resources would race the deployed calendar-service
+        // for its backfill queue — the same reason scheduled_action is local-only.
+        modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,
     },

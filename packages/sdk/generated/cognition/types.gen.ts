@@ -24,10 +24,25 @@ export type AddServerRequest = {
 };
 
 /**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
+/**
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'dictation' | 'image_generation';
 
 /**
  * A structured part within an assistant message.
@@ -293,6 +308,10 @@ export type ChatMessageContent = string | Array<AssistantMessagePart>;
  * Error response for chat message endpoints
  */
 export type ChatMessageError = {
+    /**
+     * Stable machine-readable code for admission errors (402 or 503).
+     */
+    code?: string | null;
     error: string;
     stream_id?: string | null;
 };
@@ -400,24 +419,23 @@ export type CompleteOnboardingRequest = {
 };
 
 /**
- * A recorded completion: who, what feature, optional entity, and the cost.
+ * User and feature attribution for one invocation.
  */
 export type CompletionUsage = {
     /**
-     * Token usage and cost.
+     * Measured usage and resolved cost.
      */
     cost: Usage;
     /**
-     * The entity the completion related to, if any.
+     * Related entity, if any.
      */
     entity?: string | null;
     /**
-     * The feature that performed the completion.
+     * Feature that performed the invocation.
      */
     feature: AiFeature;
     /**
-     * The user the completion was performed for (the [system user](SYSTEM_USER_ID)
-     * for background work).
+     * User the invocation was performed for.
      */
     user: MacroUserIdStr;
 };
@@ -458,6 +476,18 @@ export type CreateChatRequest = {
      * Optional project to associate the chat with.
      */
     projectId?: string | null;
+};
+
+/**
+ * What a successful tool call committed to the user's databases.
+ */
+export type DatabaseChange = {
+    kind: 'none';
+} | {
+    kind: 'schema';
+} | {
+    count: number;
+    kind: 'rows';
 };
 
 export type DocumentCognitionServiceApiVersion = 'v1' | 'v2';
@@ -508,7 +538,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
 
 /**
  * Error response body.
@@ -537,19 +567,19 @@ export type ErrorResponse = {
 export type Expiry = 'day' | 'week' | 'month';
 
 /**
- * Usage for a single feature, with its rolled-up dollar total.
+ * Recorded invocations and total for one feature.
  */
 export type FeatureUsage = {
     /**
-     * The individual completions recorded for this feature.
+     * Recorded invocations.
      */
     entries: Array<CompletionUsage>;
     /**
-     * The feature.
+     * Feature attribution.
      */
     feature: AiFeature;
     /**
-     * Total cost across `entries` (USD).
+     * Total cost (USD).
      */
     total: number;
 };
@@ -769,7 +799,7 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * Where an import entity was first staged from. Provenance only — never a
  * visibility filter.
  */
-export type Initiator = 'onboarding' | 'chat';
+export type Initiator = 'onboarding' | 'chat' | 'archive';
 
 export type JwtPayload = {
     token: string;
@@ -1073,19 +1103,23 @@ export type PipedreamUpdateRequest = {
 };
 
 /**
- * Resolved price for one completion.
+ * Rates applied to an invocation and its resolved dollar cost.
  */
 export type Price = {
     /**
-     * Price per million input tokens (USD).
+     * Price per audio minute (USD), absent for token billing.
+     */
+    price_per_audio_minute?: number | null;
+    /**
+     * Price per million input tokens (USD); zero for audio billing.
      */
     price_per_million_in: number;
     /**
-     * Price per million output tokens (USD).
+     * Price per million output tokens (USD); zero for audio billing.
      */
     price_per_million_out: number;
     /**
-     * Total cost of the completion (USD).
+     * Total cost (USD).
      */
     total: number;
 };
@@ -1263,13 +1297,17 @@ export type SetPricingRequest = {
      */
     model: string;
     /**
-     * New price per million input tokens (USD).
+     * Price per minute of audio (USD), or null for token-only pricing.
      */
-    price_per_mil_in: number;
+    price_per_audio_minute?: number | null;
     /**
-     * New price per million output tokens (USD).
+     * New price per million input tokens (USD). Required for token pricing.
      */
-    price_per_mil_out: number;
+    price_per_mil_in?: number | null;
+    /**
+     * New price per million output tokens (USD). Required for token pricing.
+     */
+    price_per_mil_out?: number | null;
 };
 
 export type SharePermissionV2 = {
@@ -1403,7 +1441,19 @@ export type StringIdResponse = {
 };
 
 export type StructuredCompletionError = {
+    /**
+     * Stable machine-readable code for admission errors (402 or 503).
+     */
+    code?: string | null;
     error: string;
+};
+
+export type StructuredCompletionOutcome = {
+    result: unknown;
+    status: 'completed';
+} | {
+    reason: string;
+    status: 'interrupted';
 };
 
 export type StructuredCompletionRequest = {
@@ -1415,7 +1465,19 @@ export type StructuredCompletionRequest = {
 };
 
 export type StructuredCompletionResponse = {
-    result: unknown;
+    outcome: StructuredCompletionOutcome;
+    /**
+     * Actual completed tools, independent of the model's claims.
+     */
+    toolActivity: Array<StructuredToolActivity>;
+};
+
+/**
+ * One tool call the agent finished, and what it did.
+ */
+export type StructuredToolActivity = {
+    name: string;
+    outcome: ToolOutcome;
 };
 
 /**
@@ -1423,10 +1485,21 @@ export type StructuredCompletionResponse = {
  */
 export type TargetType = 'user' | 'team';
 
+export type ToolOutcome = {
+    changes: DatabaseChange;
+    status: 'succeeded';
+} | {
+    status: 'failed';
+};
+
 export type ToolSet = {
     type: 'all';
 } | {
     type: 'none';
+} | {
+    type: 'databases';
+} | {
+    type: 'databases_read_only';
 };
 
 export type UpdateChannelSharePermission = {
@@ -1560,23 +1633,27 @@ export type UpsertProjectionRequest = {
 };
 
 /**
- * The token usage and resolved cost of a single completion.
+ * Measured usage for one invocation.
  */
 export type Usage = {
     /**
-     * When the completion was recorded.
+     * Audio duration in seconds, absent for token billing.
+     */
+    audio_seconds?: number | null;
+    /**
+     * Recording timestamp.
      */
     created_at: string;
     /**
-     * Tokens consumed by the input.
+     * Input tokens; zero for audio billing.
      */
     input_tokens: number;
     /**
-     * The model api id (e.g. `claude-opus-4-8`).
+     * Provider model identifier.
      */
     model: string;
     /**
-     * Tokens generated in the output.
+     * Output tokens; zero for audio billing.
      */
     output_tokens: number;
     price?: null | Price;
@@ -1605,7 +1682,7 @@ export type UsageRequest = {
 };
 
 /**
- * The result of a usage query: per-feature breakdown plus a grand total.
+ * Per-feature breakdown and grand total.
  */
 export type UsageSummary = {
     /**
@@ -1613,7 +1690,7 @@ export type UsageSummary = {
      */
     entries: Array<FeatureUsage>;
     /**
-     * Grand total cost across all features (USD).
+     * Grand total (USD).
      */
     total: number;
 };
@@ -1677,6 +1754,10 @@ export type SetPricingHandlerData = {
 };
 
 export type SetPricingHandlerErrors = {
+    /**
+     * Invalid pricing
+     */
+    400: ErrorBody;
     /**
      * Admin access required
      */
@@ -1854,6 +1935,7 @@ export type CreateChatData = {
 
 export type CreateChatErrors = {
     401: string;
+    403: string;
     500: string;
 };
 
@@ -2266,10 +2348,20 @@ export type RetryGatherHandlerErrors = {
      */
     400: unknown;
     /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
      * Internal server error
      */
     500: unknown;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
+
+export type RetryGatherHandlerError = RetryGatherHandlerErrors[keyof RetryGatherHandlerErrors];
 
 export type RetryGatherHandlerResponses = {
     /**
@@ -2719,13 +2811,17 @@ export type SendChatMessageErrors = {
      */
     401: unknown;
     /**
-     * Payment required — user lacks access to the requested model
+     * Payment required — the user's AI allowance is used up
      */
-    402: unknown;
+    402: ChatMessageError;
     /**
-     * Forbidden
+     * Forbidden — user lacks access to the requested model
      */
-    403: unknown;
+    403: ChatMessageError;
+    /**
+     * AI usage validation unavailable — retry later
+     */
+    503: ChatMessageError;
 };
 
 export type SendChatMessageError = SendChatMessageErrors[keyof SendChatMessageErrors];
@@ -2783,11 +2879,19 @@ export type StructuredCompletionErrors = {
     /**
      * Payment required
      */
-    402: unknown;
+    402: StructuredCompletionError;
+    /**
+     * No access to the requested model
+     */
+    403: StructuredCompletionError;
     /**
      * Internal error
      */
     500: StructuredCompletionError;
+    /**
+     * AI usage validation unavailable — retry later
+     */
+    503: StructuredCompletionError;
 };
 
 export type StructuredCompletionError2 = StructuredCompletionErrors[keyof StructuredCompletionErrors];

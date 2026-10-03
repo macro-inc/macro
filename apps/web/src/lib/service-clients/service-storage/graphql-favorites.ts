@@ -44,6 +44,8 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   agent_session: 'AGENT_SESSION',
   scheduled_action: 'SCHEDULED_ACTION',
   initiative: 'INITIATIVE',
+  database: 'DATABASE',
+  database_row: 'DATABASE_ROW',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -55,6 +57,8 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   CHAT: 'chat',
   CRM_COMPANY: 'crm_company',
   CRM_CONTACT: 'crm_contact',
+  DATABASE: 'database',
+  DATABASE_ROW: 'database_row',
   DOCUMENT: 'document',
   EMAIL_THREAD: 'email_thread',
   FOREIGN_ENTITY: 'foreign_entity',
@@ -76,8 +80,13 @@ export function toGraphqlFavoriteEntityType(
 }
 
 /** Convert one GraphQL favorite into the shared favorites-list shape. */
-export function mapGraphqlFavorite(favorite: FavoriteFieldsFragment): Favorite {
+export function mapGraphqlFavorite(
+  favorite: FavoriteFieldsFragment
+): Favorite & { id: string } {
   return {
+    // urql-solid reconciles lists by id. Preserve it so a mounted row's
+    // preview/avatar subscriptions keep pointing at the same entity.
+    id: favorite.id,
     channelId: favorite.channelId,
     channelType: favorite.channelType,
     createdAt: favorite.createdAt,
@@ -95,10 +104,63 @@ export type SetFavoriteArgs = {
   entityId: string;
 };
 
+/** Explicit null keeps unfiltered reads, link patches, and revalidations on the
+ * same cache field; the cache cannot resolve an omitted optional variable. */
+export const UNFILTERED_FAVORITES_VARIABLES = {
+  filter: null,
+} satisfies FavoritesQueryVariables;
+
 export type FavoritesCacheTarget = {
   variables: FavoritesQueryVariables;
   updateCachedList: boolean;
 };
+
+type FavoriteEffects = Extract<
+  SetFavoriteMutation['setFavorite']['result'],
+  { __typename: 'GraphqlMutationSuccess' }
+>['effects'];
+
+function favoriteSoupEffects(
+  args: SetFavoriteArgs,
+  favorite: boolean
+): FavoriteEffects {
+  const typenames = {
+    document: 'GraphqlSoupDocument',
+    project: 'GraphqlSoupProject',
+    chat: 'GraphqlSoupChat',
+    channel: 'GraphqlSoupChannel',
+    channel_message: 'GraphqlSoupChannelMessage',
+    email_thread: 'GraphqlSoupEmailThread',
+    calendar_event: 'GraphqlSoupCalendarEvent',
+    call: 'GraphqlSoupCall',
+    crm_company: 'GraphqlSoupCrmCompany',
+    foreign_entity: 'GraphqlSoupForeignEntity',
+    reminder: 'GraphqlSoupReminder',
+    agent_session: 'GraphqlSoupAgentSession',
+    user: undefined,
+    team: undefined,
+    static_file: undefined,
+    crm_contact: undefined,
+    skill: undefined,
+    scheduled_action: undefined,
+    initiative: 'GraphqlSoupInitiative',
+    database: undefined,
+    database_row: undefined,
+  } as const satisfies Record<FavoriteEntityType, string | undefined>;
+  const typename = typenames[args.entityType];
+  return typename
+    ? [
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: typename,
+            id: args.entityId,
+            isFavorited: favorite,
+          },
+        },
+      ]
+    : [];
+}
 
 /** Submit a durable optimistic GraphQL add/remove favorite mutation. */
 export function executeGraphqlSetFavoriteMutation(
@@ -107,7 +169,7 @@ export function executeGraphqlSetFavoriteMutation(
   favorite: boolean,
   optimisticSortOrder: number,
   cacheTargets: readonly FavoritesCacheTarget[] = [
-    { variables: {}, updateCachedList: true },
+    { variables: UNFILTERED_FAVORITES_VARIABLES, updateCachedList: true },
   ]
 ): Promise<OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>> {
   const entityType = toGraphqlFavoriteEntityType(args.entityType);
@@ -130,7 +192,10 @@ export function executeGraphqlSetFavoriteMutation(
   const optimisticData: SetFavoriteMutation = {
     setFavorite: {
       __typename: 'SetFavoritePayload',
-      result: { __typename: 'GraphqlMutationSuccess' },
+      result: {
+        __typename: 'GraphqlMutationSuccess',
+        effects: favoriteSoupEffects(args, favorite),
+      },
       favorite: favorite ? optimisticFavorite : null,
     },
   };
@@ -206,7 +271,9 @@ export type ReorderFavoritesResult =
 export function executeGraphqlReorderFavoritesMutation(
   client: Client,
   args: ReorderFavoritesRequest,
-  revalidationVariables: readonly FavoritesQueryVariables[] = [{}]
+  revalidationVariables: readonly FavoritesQueryVariables[] = [
+    UNFILTERED_FAVORITES_VARIABLES,
+  ]
 ): Promise<
   OperationResult<ReorderFavoritesMutation, ReorderFavoritesMutationVariables>
 > {

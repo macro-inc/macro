@@ -4,17 +4,17 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
+import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown, pressHandlers } from '@ui';
-import { createSignal } from 'solid-js';
+import { tourTarget } from '@ui/components/Tour';
+import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TOUR } from '../tour';
 import { EmailControls } from './EmailControls';
-import { EmailInboxMenu } from './EmailInboxSelector';
-import { EmailNavigation } from './EmailSidebar';
+import { EmailInboxFilter, EmailInboxMenu } from './EmailInboxSelector';
 
 export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */
@@ -34,6 +34,7 @@ export function EmailViewBreadcrumbItem() {
     >
       {(item) => (
         <ViewBreadcrumbs.Button
+          class="shrink-0 rounded-md hover:bg-hover"
           isActive={item.isActive()}
           onClick={item.onSelect}
         >
@@ -50,17 +51,21 @@ export function EmailViewBreadcrumbItem() {
 export function EmailTopBar() {
   return (
     <ViewShell.TopBar>
-      <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
+      <div class="flex min-w-0 flex-1 items-baseline gap-2">
+        <ViewBreadcrumbs.Outlet aria-label="Email location" />
+        <EmailInboxFilter class="@max-[720px]/view-shell:hidden" />
+      </div>
     </ViewShell.TopBar>
   );
 }
 
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
+  const { openWithSplit } = useSplitLayout();
   const { state, setState } = useEmailView();
-  const [navigationOpen, setNavigationOpen] = createSignal(false);
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
+  const searchTarget = tourTarget(EMAIL_TOUR.search);
   const selectedTabLabel = () =>
     EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
@@ -70,6 +75,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search email',
+      condition: () => state.tab !== 'scheduled' && state.tab !== 'reminders',
       run: () => {
         searchInput?.focus();
         searchInput?.select();
@@ -78,6 +84,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     },
     filter: {
       description: 'Filter email',
+      condition: () => state.tab !== 'scheduled',
       run: () => {
         setFilterOpen(true);
         return true;
@@ -87,62 +94,45 @@ export function EmailHeader(props: EmailHeaderProps) {
 
   return (
     <div class="flex min-w-0 flex-col">
-      {/* Sidebar stand-in while the aside is collapsed: the tab menu, the
-          inbox selector, and compose. */}
-      <div class="mb-4 hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-        <Dropdown
-          open={navigationOpen()}
-          onOpenChange={setNavigationOpen}
-          placement="bottom-start"
-        >
-          <h1 class="min-w-0">
-            <Dropdown.Trigger
-              variant="ghost"
-              size="sm"
-              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
-              aria-label={`Select email view: ${selectedTabLabel()}`}
-            >
-              <span class="truncate">{selectedTabLabel()}</span>
-              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-            </Dropdown.Trigger>
-          </h1>
-          <Dropdown.Content class="w-72 rounded-2xl p-2">
-            <div class="rounded-xl bg-menu">
-              <EmailNavigation onNavigate={() => setNavigationOpen(false)} />
-            </div>
-          </Dropdown.Content>
-        </Dropdown>
-        <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="mb-4 hidden min-h-8 min-w-0 flex-wrap items-baseline gap-2 @max-[720px]/view-shell:flex">
+        <h1 class="min-w-0 shrink-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
+          {selectedTabLabel()}
+        </h1>
+        <EmailInboxFilter class="@max-[480px]/view-shell:order-3 @max-[480px]/view-shell:w-full" />
+        <div class="ml-auto flex shrink-0 items-center self-center gap-2">
           <EmailInboxMenu />
-          <Button
-            type="button"
-            variant="cta"
-            size="md"
-            class="rounded-lg px-3 transition-none"
-            {...pressHandlers(() => composeEmail())}
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            New
-          </Button>
+          <div class="shrink-0">
+            <SidebarCreateButton
+              label="New"
+              onCreate={() => composeEmail(openWithSplit, state.inboxIds)}
+            />
+          </div>
         </div>
       </div>
 
-      <div class="flex min-w-0 items-center justify-between gap-3">
-        <SearchBar
-          ref={(element) => (searchInput = element)}
-          label="Search email"
-          value={state.search}
-          hotkey="cmd+f"
-          onValueChange={(search) => setState('search', search)}
-          onEscape={props.onSearchEscape}
-          placeholder="Search email"
-          class="max-w-md flex-1"
-        />
-        <EmailControls
-          filterOpen={filterOpen()}
-          onFilterOpenChange={setFilterOpen}
-        />
-      </div>
+      <Show when={state.tab !== 'scheduled'}>
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <Show when={state.tab !== 'reminders'}>
+            <SearchBar
+              ref={(element) => {
+                searchInput = element;
+                searchTarget(element);
+              }}
+              label="Search email"
+              value={state.search}
+              hotkey="cmd+f"
+              onValueChange={(search) => setState('search', search)}
+              onEscape={props.onSearchEscape}
+              placeholder="Search email"
+              class="max-w-md flex-1"
+            />
+          </Show>
+          <EmailControls
+            filterOpen={filterOpen()}
+            onFilterOpenChange={setFilterOpen}
+          />
+        </div>
+      </Show>
     </div>
   );
 }

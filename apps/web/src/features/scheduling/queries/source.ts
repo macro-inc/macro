@@ -7,21 +7,30 @@ import type { SchedulingSource } from '../context/scheduling-context';
 import type { SchedulingProfile, SchedulingScope } from '../core/types';
 import { schedulingKeys } from './keys';
 
-export function createSchedulingSource(
-  scope: Accessor<SchedulingScope>
-): SchedulingSource {
-  const profile = useQuery(() => ({
+export function useSchedulingProfileQuery(scope: Accessor<SchedulingScope>) {
+  return useQuery(() => ({
     queryKey: schedulingKeys.settings(scope().id).queryKey,
     queryFn: async () =>
       (await throwOnErr(() => schedulingClient.settings(scope().teamId)))
         .profile,
     retry: false,
   }));
+}
+
+export function createSchedulingSource(
+  scope: Accessor<SchedulingScope>,
+  range: Accessor<{ from: string; to: string }>
+): SchedulingSource {
+  const profile = useSchedulingProfileQuery(scope);
   const bookings = useQuery(() => ({
-    queryKey: schedulingKeys.bookings(scope().id).queryKey,
+    queryKey: schedulingKeys.bookings(scope().id, range().from, range().to)
+      .queryKey,
     queryFn: async () =>
-      (await throwOnErr(() => schedulingClient.bookings(scope().teamId)))
-        .bookings,
+      (
+        await throwOnErr(() =>
+          schedulingClient.bookings(scope().teamId, range())
+        )
+      ).bookings,
     retry: false,
   }));
   const save = useMutation(() => ({
@@ -51,7 +60,9 @@ export function createSchedulingSource(
     loading: () => profile.isPending || bookings.isPending,
     error: () =>
       profile.isError || bookings.isError
-        ? 'Calendar scheduling could not be loaded. Check your connection and try again.'
+        ? profile.isError
+          ? 'Calendar scheduling could not be loaded. Check your connection and try again.'
+          : 'Bookings could not be loaded. Try a shorter date range or check your connection.'
         : undefined,
     saving: () => save.isPending,
     save: async (next) => {

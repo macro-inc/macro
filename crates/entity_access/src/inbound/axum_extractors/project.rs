@@ -96,7 +96,7 @@ where
         };
 
         if let Some(ref user_id) = macro_user_id
-            && project_context.user_id == *user_id
+            && project_context.user_id.is_user(user_id)
         {
             return Ok(Self {
                 entity_access_receipt: project_access_receipt(

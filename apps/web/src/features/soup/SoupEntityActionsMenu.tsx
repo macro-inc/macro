@@ -5,7 +5,7 @@ import type {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
-import { For, Show } from 'solid-js';
+import { children, For, type JSX, Show } from 'solid-js';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
@@ -17,11 +17,19 @@ interface SoupEntityActionsMenuProps {
   viewContext: EntityActionViewContext;
   onActionComplete?: () => void;
   onEditTags?: () => void;
+  onSetProject?: () => void;
+  /** Host-specific items shown after the entity actions. */
+  extraItems?: JSX.Element;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const panel = useSplitPanelOrThrow();
   const { buildActionGroups } = createSoupEntityActions();
+  // Resolved rather than tested as JSX: a host whose items render nothing
+  // (label rows behind a flag, say) still passes a truthy element, and
+  // separating on that alone leaves a divider under the last action.
+  const extraItems = children(() => props.extraItems);
+  const hasExtraItems = () => extraItems.toArray().length > 0;
 
   const groups = () => {
     const content = panel.handle.content();
@@ -29,6 +37,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       viewContext: props.viewContext,
       viewedProjectId: viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
+      openProjectPicker: props.onSetProject,
       splitHandle: panel.handle,
     });
   };
@@ -39,27 +48,35 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   };
 
   return (
-    <For each={groups()}>
-      {(group, groupIndex) => (
-        <>
-          <Show when={groupIndex() > 0}>
-            <MenuSeparator />
-          </Show>
-          <For each={group.items}>
-            {(action) => (
-              <MenuItem
-                text={action.label}
-                icon={action.icon}
-                hotkeyToken={action.hotkeyToken}
-                shortcut={action.shortcut}
-                disabled={action.disabled}
-                onClick={() => handleAction(action.onClick)}
-                class={action.destructive ? 'text-failure-ink' : undefined}
-              />
-            )}
-          </For>
-        </>
-      )}
-    </For>
+    <>
+      <For each={groups()}>
+        {(group, groupIndex) => (
+          <>
+            <Show when={groupIndex() > 0}>
+              <MenuSeparator />
+            </Show>
+            <For each={group.items}>
+              {(action) => (
+                <MenuItem
+                  text={action.label}
+                  icon={action.icon}
+                  hotkeyToken={action.hotkeyToken}
+                  shortcut={action.shortcut}
+                  disabled={action.disabled}
+                  onClick={() => handleAction(action.onClick)}
+                  class={action.destructive ? 'text-failure-ink' : undefined}
+                />
+              )}
+            </For>
+          </>
+        )}
+      </For>
+      <Show when={hasExtraItems()}>
+        <Show when={groups().length > 0}>
+          <MenuSeparator />
+        </Show>
+        {extraItems()}
+      </Show>
+    </>
   );
 };

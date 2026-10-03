@@ -29,15 +29,21 @@ pub mod channel_users;
 pub mod chat_access;
 pub mod crm_company_access;
 pub mod crm_contact_access;
+pub mod crm_entity_users;
+pub mod database_access;
+pub mod database_row_access;
 pub mod document_access;
 pub mod foreign_entity_access;
 pub mod initiative_access;
 pub mod project_access;
+pub mod scheduled_action_access;
 pub mod team_access;
 pub mod thread_access;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod typed_owner_test;
 
 /// Type safety for source ids for entity_access table
 #[derive(Debug, Clone)]

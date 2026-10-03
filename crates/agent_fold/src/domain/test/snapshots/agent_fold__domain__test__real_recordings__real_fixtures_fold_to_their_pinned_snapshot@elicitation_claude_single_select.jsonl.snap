@@ -26,6 +26,7 @@ input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jso
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -137,5 +138,6 @@ input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jso
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
 ]

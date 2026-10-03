@@ -80,25 +80,21 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             return Err(Error::Forbidden);
         }
         validate_profile(&profile, team.is_some())?;
-        if profile
-            .event_types
-            .iter()
-            .any(|event| event.requires_confirmation)
-        {
-            return Err(Error::Invalid(
-                "Manual approval is not available yet. Use automatic confirmation.".into(),
-            ));
-        }
         let owner = OwnedProfile {
             user_id: team.is_none().then(|| user.to_owned()),
             team_id: team,
             profile,
         };
         self.authorize(user, &owner, true).await?;
-        self.validate_hosts(&owner).await?;
+        let previous = self.repository.profile(owner.profile.id).await?;
+        self.validate_hosts(&owner, previous.as_ref()).await?;
         self.repository.save_profile(owner).await
     }
-    async fn validate_hosts(&self, owner: &OwnedProfile) -> Result<(), Error> {
+    async fn validate_hosts(
+        &self,
+        owner: &OwnedProfile,
+        previous: Option<&OwnedProfile>,
+    ) -> Result<(), Error> {
         let members = if let Some(team) = owner.team_id {
             self.directory
                 .members(team)
@@ -109,15 +105,22 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         } else {
             vec![owner.user_id.clone().ok_or(Error::Forbidden)?]
         };
-        if owner
-            .profile
-            .event_types
-            .iter()
-            .any(|e| e.hosts.iter().any(|h| !members.contains(h)))
-        {
-            return Err(Error::Invalid(
-                "Every host must be a current member of this calendar's owner".into(),
-            ));
+        for event in &owner.profile.event_types {
+            let old =
+                previous.and_then(|p| p.profile.event_types.iter().find(|e| e.id == event.id));
+            // Permit repairing one legacy event at a time; booking still validates current hosts.
+            if event.requires_confirmation && !old.is_some_and(|e| e.requires_confirmation) {
+                return Err(Error::Invalid(
+                    "Manual approval is not available yet. Use automatic confirmation.".into(),
+                ));
+            }
+            if event.hosts.iter().any(|host| !members.contains(host))
+                && !old.is_some_and(|e| e.hosts == event.hosts && (!event.enabled || e.enabled))
+            {
+                return Err(Error::Invalid(
+                    "Every host must be a current member of this calendar's owner".into(),
+                ));
+            }
         }
         Ok(())
     }
@@ -180,13 +183,22 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .profile(profile_id)
             .await?
             .ok_or(Error::NotFound)?;
+        self.slots_for_owner(&owner, event_id, date).await
+    }
+    async fn slots_for_owner(
+        &self,
+        owner: &OwnedProfile,
+        event_id: Uuid,
+        date: NaiveDate,
+    ) -> Result<Vec<Slot>, Error> {
+        let profile_id = owner.profile.id;
         let event = owner
             .profile
             .event_types
             .iter()
             .find(|e| e.id == event_id && e.enabled)
             .ok_or(Error::NotFound)?;
-        self.validate_booking_hosts(&owner, &event.hosts).await?;
+        self.validate_booking_hosts(owner, &event.hosts).await?;
         if event.requires_confirmation {
             return Err(Error::Invalid(
                 "This booking link is paused until its host enables automatic confirmation.".into(),
@@ -225,7 +237,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 .await?,
         );
         self.respect_host_hours(
-            &owner,
+            owner,
             event,
             slots_for_date(event, schedule, date, now, &busy)?,
         )
@@ -323,7 +335,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         let mut slots = vec![];
         while host_date <= last {
             slots.extend(
-                self.slots(profile_id, event_id, host_date)
+                self.slots_for_owner(&owner, event_id, host_date)
                     .await?
                     .into_iter()
                     .filter(|s| s.starts_at >= start && s.starts_at < end),
@@ -370,8 +382,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         if request.name.trim().is_empty()
             || request.name.len() > 200
             || request.email.len() > 254
-            || request.email.contains(['\r', '\n', ' '])
-            || !request.email.contains('@')
+            || !email_validator::is_valid_email(&request.email)
             || request.answers.len() > 20
             || request.answers.values().any(|a| a.len() > 4000)
         {
@@ -408,7 +419,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .with_timezone(&schedule.time_zone)
             .date_naive();
         let mut slot = self
-            .slots(profile_id, event_id, date)
+            .slots_for_owner(&owner, event_id, date)
             .await?
             .into_iter()
             .find(|s| s.starts_at == request.starts_at)
@@ -416,24 +427,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         if event.mode == SchedulingMode::RoundRobin {
             let counts = self
                 .repository
-                .bookings(
+                .host_booking_counts(
                     profile_id,
+                    &slot.hosts,
                     Utc::now() - Duration::days(30),
                     Utc::now() + Duration::days(366),
                 )
                 .await?;
-            slot.hosts.sort_by_key(|host| {
-                (
-                    counts
-                        .iter()
-                        .filter(|r| {
-                            r.booking.status != BookingStatus::Cancelled
-                                && r.booking.hosts.contains(host)
-                        })
-                        .count(),
-                    host.clone(),
-                )
-            });
+            slot.hosts
+                .sort_by_key(|host| (counts.get(host).copied().unwrap_or(0), host.clone()));
             slot.hosts.truncate(1);
         }
         let (day_start, day_end) = day_bounds(schedule, date)?;
@@ -469,6 +471,11 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 rescheduled_at: None,
                 location: event.location.clone(),
                 answers: request.answers,
+                question_labels: event
+                    .questions
+                    .iter()
+                    .map(|q| (q.id, q.label.clone()))
+                    .collect(),
             },
         };
         let reservation_id = record.booking.id;
@@ -487,8 +494,8 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         self.bookings_in_range(
             user,
             team,
-            now - Duration::days(365),
-            now + Duration::days(366),
+            now - Duration::days(30),
+            now + Duration::days(31),
         )
         .await
     }
@@ -517,7 +524,15 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .bookings(id, start, end)
             .await?
             .into_iter()
-            .map(|r| r.booking)
+            .map(|mut r| {
+                r.booking.question_labels = r
+                    .event
+                    .questions
+                    .into_iter()
+                    .map(|q| (q.id, q.label))
+                    .collect();
+                r.booking
+            })
             .collect())
     }
     /// Record attendance after a confirmed meeting, as its current host or an administrator.
@@ -648,11 +663,6 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         };
         // Current membership is authoritative even when the original link was removed.
         self.validate_booking_hosts(&owner, &event.hosts).await?;
-        if event.requires_confirmation {
-            return Err(Error::Invalid(
-                "This booking link is paused until its host enables automatic confirmation.".into(),
-            ));
-        }
         let (start, end) = day_bounds(&record.schedule, date)?;
         if start > Utc::now() + Duration::days(i64::from(event.horizon_days) + 1)
             || end < Utc::now()

@@ -240,7 +240,7 @@ pub async fn create_document_txn(
     Ok(DocumentMetadata::new_document(
         &document_id,
         document_version.id,
-        user_id,
+        model_owner::Owner::User(user_id),
         document_name,
         file_type,
         document_version.sha.as_str(),
@@ -330,10 +330,14 @@ async fn insert_document_with_id(
 }
 
 #[cfg(test)]
+mod test;
+
+#[cfg(test)]
 mod tests {
     #[allow(unused_imports)]
     use super::*;
     use chrono::TimeZone;
+    use model_owner::Owner;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
@@ -373,7 +377,10 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
         assert_eq!(document_metadata.created_at, Some(ts));
@@ -403,7 +410,10 @@ mod tests {
 
         assert!(!document_metadata.document_id.is_empty());
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
 
         Ok(())
     }
@@ -448,7 +458,10 @@ mod tests {
             "20f603c2-99db-aaaa-0000-1d8b9f95a52f"
         );
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
         assert_eq!(document_metadata.created_at, Some(ts));
@@ -481,41 +494,12 @@ mod tests {
             "20f603c2-99db-4f02-aaaa-1d8b9f95a52f"
         );
         assert_eq!(document_metadata.document_name, "document-name".to_string());
-        assert_eq!(document_metadata.owner.as_ref(), "macro|user@user.com");
+        assert_eq!(
+            document_metadata.owner,
+            Owner::from_principal_str("macro|user@user.com").unwrap()
+        );
 
         Ok(())
-    }
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
-    async fn test_create_document_no_user(pool: Pool<Postgres>) {
-        // document exists
-        let document_metadata = create_document(
-            &pool,
-            CreateDocumentArgs {
-                id: None,
-                sha: "sha",
-                document_name: "document-name",
-                user_id: MacroUserIdStr::parse_from_str("macro|non-existent-user@fake.com")
-                    .unwrap(),
-                file_type: Some(FileType::Pdf),
-                project_id: None,
-                project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(
-                    Some(FileType::Pdf),
-                    None,
-                ),
-                skip_history: false,
-                email_attachment_id: None,
-                created_at: None,
-                is_task: false,
-            },
-        )
-        .await;
-
-        assert!(document_metadata.is_err());
-        assert_eq!(
-            document_metadata.err().unwrap().to_string(),
-            "unable to create document: error returned from database: insert or update on table \"Document\" violates foreign key constraint \"Document_owner_fkey\"".to_string()
-        );
     }
 
     // should return appropriate error if we try to insert a document with a duplicate ID

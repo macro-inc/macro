@@ -68,7 +68,6 @@ async fn connected_probe_is_bounded() {
     assert!(matches!(error, ProbeError::Timeout(_)));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn subprocess_probe_uses_configured_command_arguments_and_cwd() {
     let cwd = tempfile::tempdir().expect("temporary cwd");
@@ -94,6 +93,7 @@ sys.stdin.read()
         command: "python3".into(),
         args: vec!["-c".to_owned(), script.to_owned(), "argument".to_owned()],
         cwd: cwd.path().to_owned(),
+        env: Default::default(),
     };
 
     let options = probe_subprocess(&process, Duration::from_secs(2))
@@ -120,6 +120,7 @@ async fn subprocess_exit_after_stdio_closes_is_a_process_failure() {
             "exec 1>&-; sleep 0.05; exit 127".to_owned(),
         ],
         cwd: "/".into(),
+        env: Default::default(),
     };
 
     let error = probe_subprocess(&process, Duration::from_secs(2))

@@ -32,7 +32,7 @@ impl McpCloud {
     }
 }
 impl Cloud for McpCloud {
-    async fn recent_sessions(&self) -> Result<Vec<SessionId>> {
+    async fn models(&self) -> Result<Vec<crate::domain::models::ModelOption>> {
         Ok(vec![])
     }
     async fn history(&self, _: &SessionId) -> Result<Vec<Event>> {

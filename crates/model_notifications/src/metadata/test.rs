@@ -14,6 +14,67 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
+fn channel_reaction() -> ChannelMessageReactionMetadata {
+    ChannelMessageReactionMetadata {
+        message_id: "message-1".to_string(),
+        thread_id: None,
+        message_content: "This is a useful message".to_string(),
+        emoji: "👍".to_string(),
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Public,
+            channel_name: "general".to_string(),
+        },
+        sender_profile_picture_url: None,
+    }
+}
+
+#[test]
+fn channel_reaction_formats_push_copy() {
+    let reaction = channel_reaction();
+    assert_eq!(
+        reaction
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “This is a useful message”"
+    );
+    assert_eq!(reaction.format_body(None).unwrap(), "#general");
+    let apns = reaction
+        .as_apns(
+            Some(uid("macro|teo@macro.com")),
+            &EntityType::Channel.with_entity_str("channel-1"),
+            Uuid::nil(),
+        )
+        .unwrap();
+    assert!(matches!(
+        apns.aps.alert,
+        Some(Alert::Dictionary(AlertDictionary {
+            title: Some(ref title),
+            body: Some(ref body),
+            ..
+        })) if title == "teo reacted with 👍 to “This is a useful message”"
+            && body == "#general"
+    ));
+
+    let mut multiline = channel_reaction();
+    multiline.message_content = "First line\nsecond line".to_string();
+    assert_eq!(
+        multiline
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “First line second line”"
+    );
+}
+
+#[test]
+fn channel_reaction_round_trips_as_notif_event() {
+    let value = serde_json::json!({
+        "tag": "channel_message_reaction",
+        "content": serde_json::to_value(channel_reaction()).unwrap(),
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
+}
+
 fn github_pr_common() -> GithubPrNotificationCommon {
     GithubPrNotificationCommon {
         foreign_entity_id: Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),
@@ -574,10 +635,31 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
     assert_eq!(title, "Helper Bot mentioned you in #general");
 }
 
+#[test]
+fn channel_message_body_renders_mentioned_agent_by_its_own_name() {
+    let notification = ChannelMessageSendMetadata {
+        sender: Some(uid("macro|teo@macro.com")),
+        sender_display_name: None,
+        message_content: r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention> push notifications resolve mentions wrong"#.to_string(),
+        message_id: Uuid::nil().to_string(),
+        has_attachments: false,
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "AI Team".to_string(),
+        },
+        sender_profile_picture_url: None,
+    };
+
+    assert_eq!(
+        notification.format_body(None).unwrap(),
+        "Cursor push notifications resolve mentions wrong"
+    );
+}
+
 fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMentionMetadata {
     DocumentMentionMetadata {
         document_name: "Q3 plan".to_string(),
-        owner: uid("macro|owner@macro.com"),
+        owner: Owner::from_principal_str("macro|owner@macro.com").unwrap(),
         file_type: Some("md".to_string()),
         sub_type,
         channel: ChannelMentionMetadata {

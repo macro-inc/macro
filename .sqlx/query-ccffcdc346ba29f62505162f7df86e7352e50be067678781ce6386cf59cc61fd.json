@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, created_at)\n        SELECT id, 'document_comment', entity_id, 'document', 'test',\n               timestamp '2024-06-02' + position * interval '1 second'\n        FROM unnest($1::uuid[], $2::text[]) WITH ORDINALITY seeded(id, entity_id, position)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ccffcdc346ba29f62505162f7df86e7352e50be067678781ce6386cf59cc61fd"
+}

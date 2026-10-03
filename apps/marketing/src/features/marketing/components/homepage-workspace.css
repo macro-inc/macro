@@ -1,0 +1,20 @@
+.workspace-demo-panel { --message-padding-x: 20px; --user-icon-width: 32px; --color-surface: var(--color-panel); --color-composer: var(--color-surface-2); display: flex; flex-direction: column; height: 100%; min-width: 0; background: var(--color-panel); color: var(--color-ink); font: 400 14px/1.5 var(--font-sans), sans-serif; }
+.workspace-demo-scroll { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--color-edge) transparent; }
+.workspace-demo-composer { flex-shrink: 0; padding: 12px 16px 16px; }
+.workspace-demo-email { --homepage-email-height: 520px; }
+.workspace-demo-email .homepage-email-demo { padding: 0; }
+.workspace-demo-sheet > div { padding-bottom: 0; }
+.workspace-demo-sheet > div > .pointer-events-none { display: none; }
+.workspace-demo-sheet .homepage-spreadsheet { height: 510px; border: 0; border-radius: 0; }
+.workspace-demo-page { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
+.workspace-demo-page[hidden] { display: none; }
+
+.workspace-demo-document { padding: 52px 24px 40px; }
+.workspace-demo-task-owner [data-slot=avatar] { width: 20px; height: 20px; }
+.workspace-demo-panel [data-view-shell-top-bar] { background: var(--color-panel); }
+.workspace-demo-panel .agents-view-portal .settings .wrap { padding: 40px 28px 48px; }
+.workspace-demo-panel button:disabled { cursor: default; }
+
+.workspace-demo-panel [data-message-slot=icon] [data-slot=avatar] { width: 32px; height: 32px; }
+
+.workspace-demo-sheet .homepage-compose-status { display: none; }

@@ -1,12 +1,17 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  parseMacroAppLink,
+  sanitizeCalendarDescription,
+} from '@app/features/calendar/utils/calendar-description';
 import {
   type CalendarMentionTarget,
   copyCalendarEventMentionTarget,
-} from '@block-calendar/copy-event-mention';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+} from '@app/features/calendar-view/copy-event-mention';
+import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
@@ -18,7 +23,10 @@ import {
 } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
-import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import {
+  isBlockNameWithLocation,
+  openDocument as openBlockDocument,
+} from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
@@ -26,6 +34,7 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
+import { openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
@@ -34,12 +43,14 @@ import ThreadIcon from '@phosphor/chats-circle.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
+import EyeIcon from '@phosphor/eye.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import HighlightIcon from '@phosphor/highlighter-circle.svg';
 import Link from '@phosphor/link.svg';
 import MapPinIcon from '@phosphor/map-pin-simple.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
+import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import UsersIcon from '@phosphor/users.svg';
 import {
@@ -370,8 +381,34 @@ function CalendarEventPreviewDetails(props: {
 }) {
   const organizer = () =>
     props.event.organizerName ?? props.event.organizerEmail;
+  const descriptionHtml = () =>
+    sanitizeCalendarDescription(props.event.description ?? '');
+  // Opening a Macro link reads the split layout from context, so the handler
+  // keeps this component's owner.
+  const openDescriptionLink = createCallback((event: MouseEvent) => {
+    const anchor = (event.target as Element | null)?.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = parseMacroAppLink(anchor.href);
+    if (target) {
+      openBlockDocument(
+        target.blockName,
+        target.documentId,
+        Object.fromEntries(new URL(anchor.href).searchParams),
+        event.shiftKey
+      );
+      return;
+    }
+    openExternalUrl(anchor.href);
+  });
   return (
     <div class="px-2 pb-2 flex flex-col gap-1 text-sm text-ink-muted">
+      <Show when={!props.event.viewerEventId}>
+        <MetadataInfo icon={EyeIcon}>
+          Shared with you · not on your calendar
+        </MetadataInfo>
+      </Show>
       <Show when={calendarPreviewSchedule(props.event)}>
         {(schedule) => (
           <MetadataInfo icon={ClockIcon}>
@@ -385,6 +422,18 @@ function CalendarEventPreviewDetails(props: {
           <MetadataInfo icon={MapPinIcon}>
             <span class="truncate">{location()}</span>
           </MetadataInfo>
+        )}
+      </Show>
+      <Show when={descriptionHtml()}>
+        {(html) => (
+          <div class="mt-2 flex items-start text-[0.8em] text-ink-muted">
+            <TextAlignLeftIcon class="relative mx-1 mt-0.5 size-3 shrink-0" />
+            <div
+              class="line-clamp-4 min-w-0 wrap-anywhere [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              innerHTML={html()}
+              onClick={openDescriptionLink}
+            />
+          </div>
         )}
       </Show>
       <Show when={organizer() || props.event.attendeeCount > 0}>
@@ -503,29 +552,27 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     props.collapseInfo?.handleCollapse();
   };
 
-  // The calendar is a singleton block: a mentioned event opens it aimed at
-  // the viewer's own copy of the meeting rather than a per-id split.
-  const calendarOpenTarget = () => {
-    const i = item();
-    if (isCalendarEventPreviewItem(i)) {
-      return {
-        eventId: i.event.viewerEventId,
-        occurrenceKey: i.event.occurrenceKey ?? undefined,
-        time: i.event.time,
-      };
-    }
-    // Preview not (yet) accessible — e.g. the recent-mention fallback for a
-    // just-created event. Still route through the singleton opener with the
-    // mentioned id; a generic `{type:'calendar', id:<event-id>}` split would
-    // be rejected by the calendar block's load.
-    if (targetBlockType() === 'calendar') {
-      return {
-        eventId: props.documentInfo.id,
-        occurrenceKey: props.documentInfo.params?.occurrenceKey,
-      };
-    }
-    return undefined;
+  // Calendar is a singleton application view: a mentioned event opens it aimed
+  // at the viewer's own copy of the meeting rather than a per-id split. A
+  // preview that is not (yet) accessible still routes the mentioned id through
+  // the singleton opener so it resolves through the event preview API.
+  const calendarOpen = () => {
+    if (targetBlockType() !== 'calendar') return undefined;
+    return calendarMentionOpen(
+      item(),
+      props.documentInfo.id,
+      props.documentInfo.params?.occurrenceKey
+    );
   };
+  const calendarOpenTarget = () => {
+    const open = calendarOpen();
+    return open?.kind === 'calendar' ? open.target : undefined;
+  };
+  // A meeting shared through a channel but absent from the viewer's own
+  // calendars previews read-only: there is no event of theirs to open.
+  const isReadOnlyCalendarShare = () => calendarOpen()?.kind === 'read_only';
+  const isOpenable = () =>
+    !!props.documentInfo.isOpenable && !isReadOnlyCalendarShare();
 
   const openDocument = createCallback(async (event: MouseEvent) => {
     const calendarTarget = calendarOpenTarget();
@@ -583,8 +630,16 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   // writes, so pasting into an editor rebuilds the mention instead of
   // dropping in a bare deep link.
   const calendarMentionTarget = (): CalendarMentionTarget | undefined => {
-    const target = calendarOpenTarget();
-    if (!target) return undefined;
+    const open = calendarOpen();
+    if (!open) return undefined;
+    // A read-only share re-mentions the id that was shared with the channel.
+    const target =
+      open.kind === 'calendar'
+        ? open.target
+        : {
+            eventId: props.documentInfo.id,
+            occurrenceKey: props.documentInfo.params?.occurrenceKey,
+          };
     const i = item();
     const previewed = isCalendarEventPreviewItem(i) ? i.event : undefined;
     return {
@@ -636,7 +691,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     const splitManager = globalSplitManager();
     if (!splitManager) return false;
     if (calendarOpenTarget()) {
-      return !!splitManager.getSplitByContent('calendar', CALENDAR_BLOCK_ID);
+      return !!splitManager.getSplitByContent('component', CALENDAR_VIEW_ID);
     }
     return !!splitManager.getSplitByContent(
       targetBlockType(),
@@ -685,7 +740,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   const PreviewTitle = (local: { name: string }) => (
     <Item.Title>
       <Show
-        when={props.documentInfo.isOpenable}
+        when={isOpenable()}
         fallback={<span class="wrap-anywhere">{local.name}</span>}
       >
         <button
@@ -756,7 +811,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 Copy Branch Name
               </Dropdown.Item>
             </Show>
-            <Show when={props.documentInfo.isOpenable && !isSplitAlreadyOpen()}>
+            <Show when={isOpenable() && !isSplitAlreadyOpen()}>
               <Dropdown.Item onSelect={() => void openInNewSplit()}>
                 <ColumnsPlusRight class="size-4" />
                 Open in New Split
@@ -831,12 +886,15 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                       <PreviewTitle
                         name={props.documentInfo.name || accessibleItem().name}
                       />
+                      {/* A calendar card shows the event's own schedule; its
+                          last-updated time would read as the meeting time. */}
                       <Show
                         when={
-                          messageContext()?.sender_id ||
-                          accessibleItem().owner ||
-                          messageContext()?.created_at ||
-                          accessibleItem().updatedAt
+                          !isCalendarEventPreviewItem(accessibleItem()) &&
+                          (messageContext()?.sender_id ||
+                            accessibleItem().owner ||
+                            messageContext()?.created_at ||
+                            accessibleItem().updatedAt)
                         }
                       >
                         <Item.Description class="text-left wrap-anywhere">

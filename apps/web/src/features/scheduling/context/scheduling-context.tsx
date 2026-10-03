@@ -29,7 +29,10 @@ export type SchedulingCapabilities = {
   scopes: Accessor<SchedulingScope[]>;
   members: Accessor<SchedulingMember[]>;
   userId: Accessor<string>;
-  createSource: (scope: Accessor<SchedulingScope>) => SchedulingSource;
+  createSource: (
+    scope: Accessor<SchedulingScope>,
+    range: Accessor<{ from: string; to: string }>
+  ) => SchedulingSource;
   copyLink: (profile: SchedulingProfile, slug?: string) => Promise<void>;
   link: (profile: SchedulingProfile, slug?: string) => string;
   openConnections: () => void;

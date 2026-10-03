@@ -3,10 +3,13 @@ use std::borrow::Cow;
 use anyhow::Context;
 use lambda_runtime::tracing;
 use model::document::SaveBomPart;
+use model_owner::Owner;
+use s3_key::build_docx_staging_bucket_document_key;
 
+/// The parts of a DOCX staging bucket key: `{owner}/{document_id}/{document_bom_id}.docx`.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct DocumentKeyParts {
-    pub user_id: String,
+    pub owner: Owner,
     pub document_id: String,
     pub document_bom_id: i64,
 }
@@ -14,29 +17,28 @@ pub struct DocumentKeyParts {
 impl DocumentKeyParts {
     #[tracing::instrument]
     pub fn from_s3_key(key: &str) -> Result<Self, anyhow::Error> {
-        // user_id/document_id/document_bom_id.docx
+        // owner/document_id/document_bom_id.docx
         let split = key.split("/").collect::<Vec<&str>>();
         if split.len() != 3 {
             anyhow::bail!("invalid key format");
         }
 
-        let encoded_user_id = split[0].to_string();
-        let user_id = urlencoding::decode(&encoded_user_id).context("UTF-8")?;
+        // S3 event notifications deliver keys form-encoded.
+        let owner_segment = urlencoding::decode(split[0]).context("UTF-8")?;
+        let owner = Owner::from_principal_str(&owner_segment)
+            .context("owner segment is not an owner principal")?;
         let document_bom_id = split[2].split(".").collect::<Vec<&str>>()[0]
             .parse::<i64>()
             .context("expect a number for verison id")?;
         Ok(Self {
-            user_id: user_id.to_string(),
+            owner,
             document_id: split[1].to_string(),
             document_bom_id,
         })
     }
 
     pub fn to_key(&self) -> String {
-        format!(
-            "{}/{}/{}.docx",
-            self.user_id, self.document_id, self.document_bom_id
-        )
+        build_docx_staging_bucket_document_key(&self.owner, &self.document_id, self.document_bom_id)
     }
 }
 

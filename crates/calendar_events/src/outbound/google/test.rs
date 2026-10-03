@@ -336,6 +336,23 @@ fn quota_forbidden_response_is_retryable() {
 }
 
 #[test]
+fn push_unsupported_watch_is_classified_apart_from_other_rejections() {
+    let error = provider_response_error(
+        GoogleRequestKind::Mutation,
+        StatusCode::BAD_REQUEST,
+        r#"{"error":{"code":400,"message":"Push notifications are not supported by this resource.","errors":[{"domain":"global","reason":"pushNotSupportedForRequestedResource","message":"Push notifications are not supported by this resource."}]}}"#,
+    );
+    assert_eq!(error.kind(), GoogleProviderErrorKind::PushUnsupported);
+
+    let other = provider_response_error(
+        GoogleRequestKind::Mutation,
+        StatusCode::BAD_REQUEST,
+        r#"{"error":{"code":400,"message":"Invalid channel","errors":[{"reason":"invalid"}]}}"#,
+    );
+    assert_eq!(other.kind(), GoogleProviderErrorKind::Permanent);
+}
+
+#[test]
 fn insufficient_permissions_require_reauthorization() {
     let error = provider_response_error(
         GoogleRequestKind::Read,

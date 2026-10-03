@@ -5,31 +5,29 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-import { createEffect, createMemo, type JSX, onCleanup, Show } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { styled } from 'solid-styled-components';
 import { usePdfDocument } from '../../context/pdf-document-context';
-import type Section from '../../model/Section';
+import { usePdfViewer } from '../../context/pdf-viewer-context';
 import type Term from '../../model/Term';
-import { keyedTermDataStore } from '../../PdfViewer/TermDataStore';
+import { usePopupStore } from '../../signal/definitionPopup';
 import { useIsPopup } from '../../signal/pdfViewer';
 import { useGoToLocation } from '../../signal/tab';
-import { usePopupStore } from '../../store/definitionPopup';
-import { useGetIdToSectionMap } from '../../store/tableOfContents';
 import { CoParseClassName } from '../../type/coParse';
 import TocUtils from '../../util/TocUtils';
 import { DefinitionsAccordion } from './DefinitionsAccordion';
 import { ReferencesAccordion } from './ReferencesAccordion';
 import { parseDefinitionMetadata } from './shared';
-
-// import { useOpenLocation } from '@app/atoms/tab';
-// import { useDoEdit } from '@app/atoms/unsaved';
-// import {
-//   usePinnedTerms,
-//   useWidgetDispatchContext,
-// } from '../../context/WidgetContext';
-// import { ILocation } from '../../models/Location';
-// import SectionPreview from '../SectionPreview';
 
 const DefinitionLabelWrapper = styled.div`
   margin-right: auto;
@@ -57,7 +55,6 @@ const Card = styled.div<{ isPinsWindow: boolean }>`
   height: 100%;
   box-sizing: border-box;
   border-radius: 2px;
-  // No box shadow, take full width, have padding if in pins window
   ${({ isPinsWindow }) =>
     isPinsWindow
       ? `
@@ -99,27 +96,13 @@ type IProps = {
     }
 );
 
-export interface IState {
-  left?: number;
-  width?: number;
-  activeTab: 'DEFINITION_TAB' | 'REFERENCE_TAB';
-
-  // For section preview
-  section: Section | null;
-  hoveredDOMRect: DOMRect | null;
-}
-
 export function DefinitionLookup(props: IProps) {
-  const popupOpen = usePdfDocument().state.derived.popupOpen;
+  const pdf = usePdfDocument();
+  const popupOpen = usePdfViewer().isPopupOpen;
   const isPopup = useIsPopup();
-  const getIdToSectionMap = useGetIdToSectionMap();
-  // popupAtoms => popupStore
   const popupStore = usePopupStore(isPopup);
   const termIDToSizingMap = popupStore.termIDToSizingMap;
   const terms = popupStore.terms;
-  const termDataStore = keyedTermDataStore();
-  // const widgetDispatch = useWidgetDispatchContext();
-  // const pinnedTerms = usePinnedTerms();
 
   let termRef: HTMLDivElement | undefined;
   const pageWidth = popupStore.pageWidth;
@@ -155,11 +138,9 @@ export function DefinitionLookup(props: IProps) {
     return newPageWidth;
   });
 
-  const [state, updateState] = createStore<IState>({
-    hoveredDOMRect: null,
-    section: null,
-    activeTab: 'DEFINITION_TAB',
-  });
+  const [activeTab, setActiveTab] = createSignal<
+    'DEFINITION_TAB' | 'REFERENCE_TAB'
+  >('DEFINITION_TAB');
 
   const sizing = () =>
     props.term?.id ? termIDToSizingMap()[props.term.id] : undefined;
@@ -172,9 +153,7 @@ export function DefinitionLookup(props: IProps) {
 
     if (className === CoParseClassName.SectionReference) {
       e.stopPropagation();
-      // when current TOC is using PDF bookmarks, use the AI TOC's ID-to-section
-      // mapping since the section references are built from the AI TOC
-      const idToSectionMap = getIdToSectionMap();
+      const idToSectionMap = pdf.outline.sectionReferenceMap();
       const section = TocUtils.getSection({ id, idToSectionMap });
       openLocation({
         newTab: true,
@@ -184,17 +163,14 @@ export function DefinitionLookup(props: IProps) {
       });
     } else if (className === CoParseClassName.TermReference) {
       e.stopPropagation();
-      const term = termDataStore?.get('' + id);
+      const term = pdf.definitions.getTerm(`${id}`);
       if (!term) {
         console.error('Term not found');
         return;
       }
 
-      if (props.isPinsWindow) {
-        // widgetDispatch({ type: 'ADD_PINNED_TERM', term, index: props.index });
-      } else {
-        props.addNextTerm?.(term);
-      }
+      if (props.isPinsWindow) return;
+      props.addNextTerm?.(term);
     } else {
       e.stopPropagation();
       // NOTE this only applies in the non-pins case
@@ -252,58 +228,35 @@ export function DefinitionLookup(props: IProps) {
             <div style={{ display: 'flex' }}>
               <TabButton
                 class="definition-popup-tab-button"
-                isActive={state.activeTab === 'DEFINITION_TAB'}
-                on:click={() =>
-                  updateState(
-                    produce((draft) => {
-                      draft.activeTab = 'DEFINITION_TAB';
-                    })
-                  )
-                }
+                isActive={activeTab() === 'DEFINITION_TAB'}
+                on:click={() => setActiveTab('DEFINITION_TAB')}
               >
                 Terms
               </TabButton>
               <TabButton
                 class="definition-popup-tab-button"
-                isActive={state.activeTab === 'REFERENCE_TAB'}
-                on:click={() =>
-                  updateState(
-                    produce((draft) => {
-                      draft.activeTab = 'REFERENCE_TAB';
-                    })
-                  )
-                }
+                isActive={activeTab() === 'REFERENCE_TAB'}
+                on:click={() => setActiveTab('REFERENCE_TAB')}
               >
                 Uses
               </TabButton>
             </div>
           </div>
-          {state.activeTab === 'DEFINITION_TAB' ? (
-            <DefinitionsAccordion
-              term={props.term}
-              truncated={sizing()?.truncated ?? false}
-              onClick={onClick}
-              setHoveredDOMRect={(hoveredDOMRect) =>
-                updateState(
-                  produce((draft) => {
-                    draft.hoveredDOMRect = hoveredDOMRect;
-                  })
-                )
-              }
-              setSection={(section) =>
-                updateState(
-                  produce((draft) => {
-                    draft.section = section;
-                  })
-                )
-              }
-            />
-          ) : state.activeTab === 'REFERENCE_TAB' ? (
-            <ReferencesAccordion term={props.term} />
-          ) : null}
+          <Switch>
+            <Match when={activeTab() === 'DEFINITION_TAB'}>
+              <DefinitionsAccordion
+                term={props.term}
+                truncated={sizing()?.truncated ?? false}
+                getTerm={pdf.definitions.getTerm}
+                onClick={onClick}
+              />
+            </Match>
+            <Match when={activeTab() === 'REFERENCE_TAB'}>
+              <ReferencesAccordion term={props.term} />
+            </Match>
+          </Switch>
         </Card>
       </div>
-      {/* <SectionPreview section={section} hoveredDOMRect={state.hoveredDOMRect} /> */}
       <Show when={!props.isPinsWindow && nextTerm()}>
         {(nextTerm) => (
           <DefinitionLookup

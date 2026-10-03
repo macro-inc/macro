@@ -1,26 +1,23 @@
-import {
-  EntityDetailNavigationStack,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SplitRouter } from '@app/lib/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createSignal,
-  Match,
   onMount,
   type ParentProps,
   Show,
   Suspense,
-  Switch,
 } from 'solid-js';
-import { EmailDetailView } from './components/EmailDetailView';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import {
   EmailHeader,
@@ -31,6 +28,7 @@ import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
+import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 
 export type EmailViewProps = {
@@ -39,18 +37,17 @@ export type EmailViewProps = {
 };
 
 function EmailViewBreadcrumbs(props: ParentProps) {
-  const { closeThread } = useEmailView();
-  const navigationStack = useEntityDetailNavigationStack();
+  const { closeThread, selectedThread } = useEmailView();
+  const value = () => {
+    const thread = selectedThread();
+    return thread ? `email-thread:${thread.id}` : 'email-view';
+  };
 
   return (
     <ViewBreadcrumbs.Root
-      value={navigationStack.active()?.value ?? 'email-view'}
-      onChange={(value) => {
-        if (value === 'email-view') {
-          closeThread();
-          return;
-        }
-        navigationStack.popTo(value);
+      value={value()}
+      onChange={(next) => {
+        if (next === 'email-view') closeThread();
       }}
     >
       <EmailViewBreadcrumbItem />
@@ -70,7 +67,16 @@ function EmailListFallback() {
 function EmailDesktopLayout(
   props: ParentProps<{ onSearchEscape: () => void }>
 ) {
-  const { selectedThread } = useEmailView();
+  const list = () => (
+    <>
+      <EmailTopBar />
+      <ViewShell.Header>
+        <EmailHeader onSearchEscape={props.onSearchEscape} />
+      </ViewShell.Header>
+      <ViewTour tour={emailTour} />
+      <ViewShell.Content>{props.children}</ViewShell.Content>
+    </>
+  );
 
   return (
     <ViewShell.Root
@@ -83,18 +89,7 @@ function EmailDesktopLayout(
         <EmailSidebar />
       </ViewShell.Aside>
       <ViewShell.Main>
-        <Switch>
-          <Match when={selectedThread()}>
-            {(thread) => <EmailDetailView thread={thread()} />}
-          </Match>
-          <Match when={true}>
-            <EmailTopBar />
-            <ViewShell.Header>
-              <EmailHeader onSearchEscape={props.onSearchEscape} />
-            </ViewShell.Header>
-            <ViewShell.Content>{props.children}</ViewShell.Content>
-          </Match>
-        </Switch>
+        <SplitRouter.Outlet fallback={list} />
       </ViewShell.Main>
     </ViewShell.Root>
   );
@@ -106,6 +101,7 @@ const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = EMAIL_TABS.map((tab) => ({
 }));
 
 function EmailMobileLayout(props: ParentProps) {
+  const reminders = useFeatureFlag(enableReminders);
   const { state, setTab } = useEmailView();
 
   return (
@@ -117,7 +113,12 @@ function EmailMobileLayout(props: ParentProps) {
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
             leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS}
+            items={MOBILE_EMAIL_TABS.filter(
+              (tab) =>
+                tab.value !== 'reminders' ||
+                reminders().enabled ||
+                (reminders().loading && state.tab === 'reminders')
+            )}
             value={state.tab}
             onChange={setTab}
           />
@@ -138,7 +139,6 @@ function EmailMobileLayout(props: ParentProps) {
 
 function EmailViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { selectedThread } = useEmailView();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Email'));
@@ -161,14 +161,7 @@ function EmailViewRoot() {
               </EmailDesktopLayout>
             }
           >
-            <Switch>
-              <Match when={selectedThread()}>
-                {(thread) => <EmailDetailView thread={thread()} />}
-              </Match>
-              <Match when={true}>
-                <EmailMobileLayout>{list()}</EmailMobileLayout>
-              </Match>
-            </Switch>
+            <EmailMobileLayout>{list()}</EmailMobileLayout>
           </Show>
         </SplitPanel.Body>
       </SplitPanel.Root>
@@ -179,16 +172,12 @@ function EmailViewRoot() {
 /** Email shares one list across desktop sidebar and mobile pill layouts. */
 export function EmailView(props: EmailViewProps) {
   return (
-    <EntityDetailNavigationStack.Root
-      shouldNavigate={(_, options) => options?.event?.shiftKey !== true}
-    >
-      <ListEntityMetadataQueryProvider>
-        <EmailViewProvider initialState={props.initialState}>
-          <EmailViewBreadcrumbs>
-            <EmailViewRoot />
-          </EmailViewBreadcrumbs>
-        </EmailViewProvider>
-      </ListEntityMetadataQueryProvider>
-    </EntityDetailNavigationStack.Root>
+    <ListEntityMetadataQueryProvider>
+      <EmailViewProvider initialState={props.initialState}>
+        <EmailViewBreadcrumbs>
+          <EmailViewRoot />
+        </EmailViewBreadcrumbs>
+      </EmailViewProvider>
+    </ListEntityMetadataQueryProvider>
   );
 }

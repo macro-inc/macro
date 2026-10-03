@@ -79,9 +79,9 @@ describe('shared model selector', () => {
     const select = vi.fn();
     const [changingTo, setChangingTo] = createSignal<string>();
     const ids = [
-      'anthropic/claude-sonnet-5',
-      'anthropic/claude-opus-5',
-      'anthropic/claude-haiku-4-5',
+      'anthropic/claude-sonnet-5-5',
+      'anthropic/claude-opus-5-5',
+      'openai/gpt-5.6-mini',
     ];
     render(() => (
       <SessionModelSelector
@@ -97,18 +97,20 @@ describe('shared model selector', () => {
       />
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
-    expect(trigger.textContent).toBe('Sonnet 5');
-    expect(trigger.title).toBe('Sonnet 5');
+    expect(trigger.textContent).toBe('Sonnet 5.5');
+    expect(trigger.title).toBe('Sonnet 5.5');
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    expect(screen.getByRole('menuitem', { name: /^Haiku 4.5/ })).toBeTruthy();
+    expect(
+      screen.getByRole('menuitem', { name: /^GPT-5.6 mini/ })
+    ).toBeTruthy();
     expect(screen.queryByText(ids[0])).toBeNull();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5/ }), {
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5.5/ }), {
       key: 'Enter',
     });
     expect(select).toHaveBeenCalledWith(ids[1]);
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     setChangingTo(ids[1]);
-    expect(trigger.textContent).toBe('Opus 5');
+    expect(trigger.textContent).toBe('Opus 5.5');
   });
   it('keeps the new-session default selectable before models are available', async () => {
     const selectDefault = vi.fn();
@@ -180,7 +182,9 @@ describe('shared model selector', () => {
       />
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
-    expect(trigger.textContent).toContain('gpt-5');
+    // The id is all the selector has until the catalog lands; it still reads
+    // as a name rather than a slug.
+    expect(trigger.textContent).toContain('GPT-5');
     fireEvent.keyDown(trigger, { key: 'Enter' });
     expect(screen.getByRole('status').textContent).toContain(
       'Waiting for the agent'

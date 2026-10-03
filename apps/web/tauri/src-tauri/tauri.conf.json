@@ -52,7 +52,7 @@
       "icons/icon.ico"
     ],
     "iOS": {
-      "minimumSystemVersion": "14.0"
+      "minimumSystemVersion": "15.0"
     }
   },
   "plugins": {
@@ -66,20 +66,29 @@
         },
         {
           "host": "macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         },
         {
           "host": "dev.macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         },
         {
           "host": "staging.macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         }
       ],

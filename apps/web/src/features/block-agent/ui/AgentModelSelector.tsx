@@ -1,10 +1,12 @@
 /**
  * The session's model, as a pill that opens the harness's own model list.
  *
- * Everything here is harness-reported: the options come from the runtime's
- * ACP `configOptions` and the current model is the fold's rejection-safe
- * projection of them, so this component never needs a model registry of its
- * own. Renders nothing until the harness has advertised its models.
+ * The catalog is harness-reported: the options come from the runtime's ACP
+ * `configOptions` and the current model is the fold's rejection-safe
+ * projection of them. Names and logos still go through the house
+ * `modelLabel` / `ModelIcon`, because a runtime that keeps no display name
+ * for a model — the in-memory Macro Agent among them — reports the slug as
+ * its name. Renders nothing until the harness has advertised its models.
  *
  * Touch devices get a bottom sheet (`MobileDrawer`, the same chrome as the
  * split title menu) listing every model with a check on the current one, and
@@ -20,12 +22,17 @@
  */
 
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import {
+  ModelCatalogPicker,
+  type ModelRowProps,
+} from '@core/component/AI/component/input/ModelCatalogPicker';
 import {
   type CatalogModelOption,
   isLargeModelCatalog,
   matchesModelQuery,
 } from '@core/component/AI/component/input/modelCatalog';
+import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Check from '@phosphor/check.svg';
@@ -33,9 +40,8 @@ import SearchIcon from '@phosphor/magnifying-glass.svg';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import { groupOptions, withoutRedundantGroups } from './model-groups';
-import { TextShimmer } from './TextShimmer';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
 const PILL_TRIGGER_CLASS =
@@ -63,14 +69,16 @@ export interface AgentModelSelectorProps {
   /** Current model id, when the fold has learned it. */
   model: string | null;
   /**
-   * A change to this model is on the wire. The pill shows it, shimmering,
-   * so the switch is visibly in progress rather than appearing not to have
-   * registered — the request can block for a whole container resume.
+   * A change to this model the fold has shown but `metadata.model` has not
+   * caught up to. The pill reads it as the current model at once and stays
+   * interactive; a runtime rejection later reverts it through the fold.
    */
   changingTo?: string;
   /** The models the harness offers, in the order it listed them. */
   options: ModelOption[];
   disabled?: boolean;
+  effortLabel?: string;
+  modelRow?: Component<ModelRowProps>;
   /** Receives the id of the model to switch to. */
   onSelect: (model: string) => void;
 }
@@ -80,14 +88,17 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
   const [sheetOpen, setSheetOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
   const shown = () => props.changingTo ?? props.model;
+  const baseLabel = () =>
+    modelLabel(
+      shown() ?? undefined,
+      props.options.find((option) => option.id === shown())?.name
+    );
   const label = () =>
-    props.options.find((option) => option.id === shown())?.name ??
-    shown() ??
-    'Model';
+    [baseLabel(), props.effortLabel].filter(Boolean).join(' · ');
   const options = createMemo(() => withoutRedundantGroups(props.options));
   const toCatalogOption = (option: ModelOption): CatalogModelOption => ({
     id: option.id,
-    label: option.name,
+    label: modelLabel(option.id, option.name),
     description: option.description ?? undefined,
     group: option.group ?? undefined,
   });
@@ -103,8 +114,6 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
       : options();
     return groupOptions(matching);
   });
-  const disabled = () => props.disabled || props.changingTo !== undefined;
-
   const openSheet = (open: boolean) => {
     setSheetOpen(open);
     if (!open) setQuery('');
@@ -123,20 +132,17 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
       preventScroll={false}
       preventScrollbarShift={false}
     >
-      {/* Plain text + caret, like the reference composer — no pill. */}
+      {/* Provider logo + text + caret, like the reference composer — no pill. */}
       <MobileDrawer.Trigger
         as={Button}
         variant="ghost"
         size="sm"
         aria-label="Agent model"
-        disabled={disabled()}
-        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
+        disabled={props.disabled}
+        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1.5 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
       >
-        <TextShimmer
-          text={label()}
-          active={props.changingTo !== undefined}
-          class="min-w-0 truncate"
-        />
+        <ModelIcon model={shown()} />
+        <span class="min-w-0 truncate">{label()}</span>
         <CaretDown class="size-3.5 shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
@@ -184,8 +190,9 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                           title={option.description ?? undefined}
                           onClick={() => pick(option.id)}
                         >
+                          <ModelIcon model={option.id} />
                           <span class="min-w-0 flex-1 truncate">
-                            {option.name}
+                            {modelLabel(option.id, option.name)}
                           </span>
                           <Show when={option.id === shown()}>
                             <Check class="size-3.5 shrink-0 text-accent" />
@@ -209,10 +216,11 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         variant="ghost"
         size="sm"
         class={PILL_TRIGGER_CLASS}
-        disabled={disabled()}
+        disabled={props.disabled}
       >
-        <TextShimmer text={label()} active={props.changingTo !== undefined} />
-        <CaretDown />
+        <ModelIcon model={shown()} class="size-3.5" />
+        <span class="min-w-0 truncate">{label()}</span>
+        <CaretDown class="shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
         {/* The gradients anchor here, outside the scrolling box, and read
@@ -234,7 +242,10 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                     title={option.description ?? undefined}
                     onSelect={() => pick(option.id)}
                   >
-                    <span class="flex-1 truncate">{option.name}</span>
+                    <ModelIcon model={option.id} class="size-3.5" />
+                    <span class="flex-1 truncate">
+                      {modelLabel(option.id, option.name)}
+                    </span>
                   </Dropdown.Item>
                 )}
               </For>
@@ -248,13 +259,15 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
 
   return (
     <Show when={props.options.length > 0}>
-      <Show when={!isTouchDevice()} fallback={sheet}>
-        <Show when={useCatalog()} fallback={shortList}>
+      <Show when={!isTouchDevice() || props.modelRow} fallback={sheet}>
+        <Show when={useCatalog() || props.modelRow} fallback={shortList}>
           <ModelCatalogPicker
             value={shown()}
             options={catalogOptions()}
             onSelect={pick}
-            disabled={disabled()}
+            modelRow={props.modelRow}
+            triggerLabel={label()}
+            disabled={props.disabled}
             ariaLabel="Agent model"
             searchPlaceholder="Search models"
             triggerClass={PILL_TRIGGER_CLASS}

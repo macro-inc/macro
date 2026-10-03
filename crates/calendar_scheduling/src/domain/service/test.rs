@@ -69,6 +69,30 @@ impl Repository for Arc<Memory> {
             .cloned()
             .collect())
     }
+    async fn host_booking_counts(
+        &self,
+        profile: Uuid,
+        hosts: &[String],
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<std::collections::BTreeMap<String, i64>, Error> {
+        let bookings = self.bookings(profile, start, end).await?;
+        Ok(hosts
+            .iter()
+            .map(|host| {
+                (
+                    host.clone(),
+                    bookings
+                        .iter()
+                        .filter(|r| {
+                            r.booking.status != BookingStatus::Cancelled
+                                && r.booking.hosts.contains(host)
+                        })
+                        .count() as i64,
+                )
+            })
+            .collect())
+    }
     async fn busy(
         &self,
         hosts: &[String],
@@ -168,8 +192,6 @@ impl Repository for Arc<Memory> {
 #[derive(Default)]
 struct Calendar {
     creates: AtomicUsize,
-    fail: bool,
-    fail_reschedule: bool,
     lose_create_response: AtomicBool,
     lose_move_response: AtomicBool,
     lose_cancel_response: AtomicBool,
@@ -189,9 +211,6 @@ impl Calendars for Arc<Calendar> {
         Ok(vec![])
     }
     async fn create(&self, record: &BookingRecord, _: &EventType) -> Result<(Uuid, String), Error> {
-        if self.fail {
-            return Err(Error::CalendarUnavailable);
-        }
         let id = *self
             .events
             .lock()
@@ -213,7 +232,7 @@ impl Calendars for Arc<Calendar> {
         Ok(())
     }
     async fn reschedule(&self, _: &BookingRecord) -> Result<(), Error> {
-        if self.fail_reschedule || self.lose_move_response.swap(false, Ordering::SeqCst) {
+        if self.lose_move_response.swap(false, Ordering::SeqCst) {
             return Err(Error::CalendarUnavailable);
         }
         Ok(())
@@ -411,6 +430,7 @@ async fn pending_booking_can_be_approved_after_link_is_removed() {
         .unwrap();
     let mut legacy = booking.clone();
     legacy.booking.status = BookingStatus::Pending;
+    legacy.event.requires_confirmation = true;
     legacy.calendar_event_id = None;
     service
         .repository
@@ -428,35 +448,17 @@ async fn pending_booking_can_be_approved_after_link_is_removed() {
             .status,
         BookingStatus::Confirmed
     );
+    let moved = service
+        .reschedule(
+            booking.booking.id,
+            booking.token,
+            booking.booking.starts_at + Duration::hours(1),
+        )
+        .await
+        .unwrap();
+    assert_eq!(moved.booking.status, BookingStatus::Confirmed);
+    assert_eq!(moved.booking.reschedule_count, 1);
 }
-#[tokio::test]
-async fn provider_failure_retains_reservation_instead_of_risking_a_duplicate() {
-    let service = TestService::new(
-        Arc::new(Memory::default()),
-        Arc::new(Calendar {
-            creates: AtomicUsize::new(0),
-            fail: true,
-            fail_reschedule: false,
-            ..Default::default()
-        }),
-        Members,
-    );
-    let p = service.save("admin", None, profile(None)).await.unwrap();
-    assert_eq!(
-        service
-            .book(p.id, p.event_types[0].id, request())
-            .await
-            .unwrap()
-            .booking
-            .status,
-        BookingStatus::Failed
-    );
-    assert!(matches!(
-        service.book(p.id, p.event_types[0].id, request()).await,
-        Err(Error::Conflict)
-    ));
-}
-
 #[tokio::test]
 async fn reschedule_keeps_identity_and_releases_the_old_slot() {
     let cal = Arc::new(Calendar::default());
@@ -666,41 +668,6 @@ async fn unrelated_team_member_cannot_record_attendance() {
 }
 
 #[tokio::test]
-async fn failed_reschedule_does_not_count_as_successful_move() {
-    let store = Arc::new(Memory::default());
-    let service = TestService::new(
-        store.clone(),
-        Arc::new(Calendar {
-            fail_reschedule: true,
-            ..Default::default()
-        }),
-        Members,
-    );
-    let p = service.save("admin", None, profile(None)).await.unwrap();
-    let r = service
-        .book(p.id, p.event_types[0].id, request())
-        .await
-        .unwrap();
-    assert_eq!(
-        service
-            .reschedule(
-                r.booking.id,
-                r.token,
-                r.booking.starts_at + Duration::hours(1)
-            )
-            .await
-            .unwrap()
-            .booking
-            .status,
-        BookingStatus::Failed
-    );
-    let stored = store.booking(r.booking.id).await.unwrap().unwrap();
-    assert_eq!(stored.booking.status, BookingStatus::Failed);
-    assert_eq!(stored.booking.reschedule_count, 0);
-    assert_eq!(stored.booking.rescheduled_at, None);
-}
-
-#[tokio::test]
 async fn booking_ranges_are_half_open_bounded_and_authorized() {
     let service = TestService::new(
         Arc::new(Memory::default()),
@@ -902,6 +869,10 @@ async fn recovery_after_lost_create_response_creates_only_one_invitation() {
             .status,
         BookingStatus::Failed
     );
+    assert!(matches!(
+        service.book(p.id, p.event_types[0].id, request()).await,
+        Err(Error::Conflict)
+    ));
     let record = store
         .bookings
         .lock()
@@ -948,6 +919,10 @@ async fn recovery_finishes_move_once_and_cancel_releases_the_slot() {
             .status,
         BookingStatus::Failed
     );
+    let stored = store.booking(r.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.status, BookingStatus::Failed);
+    assert_eq!(stored.booking.reschedule_count, 0);
+    assert_eq!(stored.booking.rescheduled_at, None);
     make_due(&store, r.booking.id);
     assert!(service.recover_once().await.unwrap());
     let moved = service.receipt(r.booking.id, r.token).await.unwrap();
@@ -1070,4 +1045,62 @@ async fn completion_database_failure_still_returns_private_receipt_and_recovers(
         BookingStatus::Confirmed
     );
     assert_eq!(calendars.creates.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn invalid_email_never_reserves_a_slot_or_calls_the_provider() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar::default());
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let profile = service.save("admin", None, profile(None)).await.unwrap();
+    for email in ["@", "a@@b", "guest@example.com\n", "guest example.com"] {
+        let mut request = request();
+        request.email = email.into();
+        assert!(matches!(
+            service
+                .book(profile.id, profile.event_types[0].id, request)
+                .await,
+            Err(Error::Invalid(_))
+        ));
+    }
+    assert!(store.bookings.lock().unwrap().is_empty());
+    assert_eq!(calendars.creates.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn stale_team_events_can_be_repaired_one_at_a_time() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let team = Uuid::now_v7();
+    let mut profile = service
+        .save("admin", Some(team), profile(Some(team)))
+        .await
+        .unwrap();
+    let mut second = profile.event_types[0].clone();
+    second.id = Uuid::now_v7();
+    second.slug = "second".into();
+    profile.event_types.push(second);
+    for event in &mut profile.event_types {
+        event.hosts.push("departed".into());
+        event.requires_confirmation = true;
+    }
+    store
+        .profiles
+        .lock()
+        .unwrap()
+        .get_mut(&profile.id)
+        .unwrap()
+        .profile = profile.clone();
+    for index in 0..2 {
+        profile.event_types[index]
+            .hosts
+            .retain(|host| host != "departed");
+        profile.event_types[index].requires_confirmation = false;
+        profile = service.save("admin", Some(team), profile).await.unwrap();
+    }
+    profile.event_types[0].hosts.push("new-outsider".into());
+    assert!(matches!(
+        service.save("admin", Some(team), profile).await,
+        Err(Error::Invalid(_))
+    ));
 }

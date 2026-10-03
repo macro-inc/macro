@@ -3,6 +3,7 @@ use crate::domain::{
     credentials::AccountCredentials,
     environment::gateway_network_patch,
     model::{Error, Event, Result, SessionId},
+    models::{Model, ModelOption},
     ports::{Cloud, CloudLifecycle, CloudProvider, Events},
 };
 use futures::StreamExt;
@@ -11,6 +12,8 @@ use std::collections::VecDeque;
 
 const API: &str = "https://api.anthropic.com";
 const BETA: &str = "ccr-byoc-2025-07-29";
+const MODEL_PAGE_SIZE: usize = 1000;
+const MODEL_PAGE_LIMIT: u8 = 10;
 
 /// HTTP client pinned to one Macro account and the official Anthropic origin.
 #[derive(Clone)]
@@ -98,9 +101,12 @@ impl Client {
     }
 
     /// Create only in the explicitly selected, active Anthropic cloud environment.
-    pub async fn create(&self, instructions: &str) -> Result<SessionId> {
+    pub async fn create(&self, instructions: &str, model: &Model) -> Result<SessionId> {
         let environment = self.selected_environment().await?;
         let mut config = json!({"sources": [], "outcomes": []});
+        if let Some(model) = model.provider_value() {
+            config["model"] = json!(model);
+        }
         if !instructions.is_empty() {
             config["append_system_prompt"] = json!(instructions);
         }
@@ -170,8 +176,8 @@ impl CloudLifecycle for Client {
         Ok(())
     }
 
-    async fn create(&self, instructions: &str) -> Result<SessionId> {
-        Client::create(self, instructions).await
+    async fn create(&self, instructions: &str, model: &Model) -> Result<SessionId> {
+        Client::create(self, instructions, model).await
     }
 
     async fn archive(&self, session: &SessionId) -> Result<()> {
@@ -180,20 +186,40 @@ impl CloudLifecycle for Client {
 }
 
 impl Cloud for Client {
-    async fn recent_sessions(&self) -> Result<Vec<SessionId>> {
-        let response: Value = self
-            .request("/v1/code/sessions?limit=5", None)
-            .await?
-            .json()
+    async fn models(&self) -> Result<Vec<ModelOption>> {
+        let credentials = self.credentials.resolve(&self.owner).await?;
+        let mut models = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut after = None;
+        for _ in 0..MODEL_PAGE_LIMIT {
+            let response = models_request(
+                &self.http,
+                credentials.access_token.expose(),
+                &credentials.organization_id,
+                after.as_ref(),
+            )
+            .send()
             .await
-            .map_err(|_| Error::Protocol)?;
-        response["data"]
-            .as_array()
-            .ok_or(Error::Protocol)?
-            .iter()
-            .take(5)
-            .map(|row| SessionId::parse(row["id"].as_str().ok_or(Error::Protocol)?))
-            .collect()
+            .map_err(|_| Error::Network)?;
+            let page = checked(response)?
+                .json()
+                .await
+                .map_err(|_| Error::Protocol)?;
+            let (options, next) = model_page(page)?;
+            for option in options {
+                if !seen.insert(option.model.id().to_owned()) {
+                    return Err(Error::Protocol);
+                }
+                models.push(option);
+            }
+            match next {
+                None => return Ok(models),
+                Some(next) if after.as_ref() != Some(&next) => after = Some(next),
+                Some(_) => return Err(Error::Protocol),
+            }
+        }
+        // Never advertise a silently truncated catalog.
+        Err(Error::Protocol)
     }
     async fn send_batch(&self, session: &SessionId, payloads: Vec<Value>) -> Result<()> {
         self.request(
@@ -333,6 +359,60 @@ impl Cloud for Client {
             .boxed(),
         )
     }
+}
+
+// The code-session beta is not accepted by the standard models endpoint.
+fn models_request(
+    http: &reqwest::Client,
+    token: &str,
+    organization: &str,
+    after: Option<&Model>,
+) -> reqwest::RequestBuilder {
+    let request = http
+        .get(format!("{API}/v1/models"))
+        .bearer_auth(token)
+        .header("anthropic-version", "2023-06-01")
+        .header("x-organization-uuid", organization)
+        .query(&[("limit", MODEL_PAGE_SIZE)])
+        .timeout(std::time::Duration::from_secs(30));
+    match after {
+        Some(model) => request.query(&[("after_id", model.id())]),
+        None => request,
+    }
+}
+
+fn model_page(response: Value) -> Result<(Vec<ModelOption>, Option<Model>)> {
+    let rows = response["data"].as_array().ok_or(Error::Protocol)?;
+    if rows.len() > MODEL_PAGE_SIZE {
+        return Err(Error::Protocol);
+    }
+    let options = rows
+        .iter()
+        .map(|row| {
+            let model = Model::parse(row["id"].as_str().ok_or(Error::Protocol)?)
+                .map_err(|_| Error::Protocol)?;
+            let name = row["display_name"].as_str().ok_or(Error::Protocol)?;
+            if name.trim().is_empty() || name.len() > 512 {
+                return Err(Error::Protocol);
+            }
+            Ok(ModelOption {
+                model,
+                name: name.into(),
+                description: None,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let next = match response["has_more"].as_bool().ok_or(Error::Protocol)? {
+        false => None,
+        true => {
+            let last = options.last().ok_or(Error::Protocol)?;
+            if response["last_id"].as_str() != Some(last.model.id()) {
+                return Err(Error::Protocol);
+            }
+            Some(last.model.clone())
+        }
+    };
+    Ok((options, next))
 }
 
 fn checked(response: reqwest::Response) -> Result<reqwest::Response> {

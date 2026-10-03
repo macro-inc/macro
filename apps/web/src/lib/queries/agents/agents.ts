@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/result';
-import { botKeys } from '@queries/bots/keys';
+import { botKeys, botProfileKeys } from '@queries/bots/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -7,6 +7,7 @@ import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { agentKeys } from './keys';
 
 /**
@@ -30,6 +31,18 @@ export type CreateAgentParams = {
   /** Which Pipedream MCP servers the agent's sessions are handed. */
   mcp: AgentMcpServers;
   teamId?: string;
+  /**
+   * Whether the agent's sessions approve permission requests without asking.
+   * Omit to defer to the runtime's default: built-in runtimes auto-accept,
+   * macrod prompts.
+   */
+  autoAcceptPermissions?: boolean;
+  /**
+   * Whether the agent is a coding agent, which decides how it answers a
+   * channel mention: a magic chip into its live session, or a reply in the
+   * thread.
+   */
+  isCoding: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -41,9 +54,10 @@ export type DeleteAgentParams = {
   channelIds: string[];
 };
 
-export function useAgentsQuery() {
+export function useAgentsQuery(enabled: Accessor<boolean> = () => true) {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
+    enabled: enabled(),
     queryFn: async (): Promise<AgentWithHarnessId[]> =>
       await throwOnErr(() => storageServiceClient.getAgents()),
   }));
@@ -81,6 +95,8 @@ export function useCreateAgentMutation() {
           instructions: vars.instructions,
           mcp: vars.mcp,
           team_id: vars.teamId,
+          auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (agent) => {
@@ -88,7 +104,14 @@ export function useCreateAgentMutation() {
         agentKeys.list.queryKey,
         (current = []) => [...current, agent]
       );
-      await invalidateAgentChannelBots(agent.channel_ids);
+      queryClient.setQueryData(
+        botKeys.detail(agent.bot.id).queryKey,
+        agent.bot
+      );
+      await Promise.all([
+        invalidateAgentChannelBots(agent.channel_ids),
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+      ]);
     },
     onError: (error) => console.error('failed to create agent', error),
   }));
@@ -113,13 +136,11 @@ export function useUpdateAgentMutation() {
           instructions: vars.instructions,
           mcp: vars.mcp,
           team_id: vars.teamId,
+          auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (updated) => {
-      const previousChannelIds =
-        queryClient
-          .getQueryData<Agent[]>(agentKeys.list.queryKey)
-          ?.find((agent) => agent.bot.id === updated.bot.id)?.channel_ids ?? [];
       queryClient.setQueryData<Agent[]>(
         agentKeys.list.queryKey,
         (current = []) =>
@@ -127,9 +148,20 @@ export function useUpdateAgentMutation() {
             agent.bot.id === updated.bot.id ? updated : agent
           )
       );
-      await invalidateAgentChannelBots([
-        ...previousChannelIds,
-        ...updated.channel_ids,
+      queryClient.setQueryData(
+        botKeys.detail(updated.bot.id).queryKey,
+        updated.bot
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(updated.bot.id).queryKey,
+        }),
+        // Global agents have no selected channel IDs but can still appear in
+        // a channel's bot list, which takes precedence in the mention menu.
+        queryClient.invalidateQueries({
+          queryKey: channelKeys.channelBots._def,
+        }),
       ]);
     },
     onError: (error) => console.error('failed to update agent', error),
@@ -161,6 +193,9 @@ export function useDeleteAgentMutation() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: botKeys.list.queryKey }),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(vars.agentId).queryKey,
+        }),
         ...[...new Set(vars.channelIds)].flatMap((channelId) => [
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,

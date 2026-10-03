@@ -1,7 +1,11 @@
 //! Task-specific property handlers.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::HashSet;
 
+use bot_id::BotIdStr;
 use entity_access::domain::models::EntityAccessAuth;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
@@ -25,6 +29,45 @@ where
     B: MacroEventBroker,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
+    /// Share the initiative through its owner domain before persisting assignees.
+    /// Clearing responsibility leaves previously granted edit access intact,
+    /// just as task assignment does.
+    pub(crate) async fn handle_initiative_assignees_property(
+        &self,
+        access: &EditReceipt,
+        value: &Option<PropertyValue>,
+    ) -> Result<(), PropertiesErr> {
+        let Some(PropertyValue::EntityRef(references)) = value else {
+            return Ok(());
+        };
+        let mut assignee_ids = Vec::new();
+        for reference in references {
+            if reference.entity_type != EntityType::User {
+                return Err(PropertiesErr::Validation(
+                    "Assignees must reference users or agents".to_string(),
+                ));
+            }
+            // Agents act with the delegating user's access; only human
+            // assignees receive direct project collaboration grants.
+            if BotIdStr::parse_from_str(&reference.entity_id).is_ok() {
+                continue;
+            }
+            assignee_ids.push(
+                MacroUserIdStr::parse_from_str(&reference.entity_id)
+                    .map(|user_id| user_id.into_owned())
+                    .map_err(|error| PropertiesErr::Validation(error.to_string()))?,
+            );
+        }
+        if assignee_ids.is_empty() {
+            return Ok(());
+        }
+        self.initiative_assignees
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionServiceNotConfigured)?
+            .grant_assignees(access, assignee_ids)
+            .await
+    }
+
     /// Require edit access to every referenced task before linking: linking
     /// mutates the referenced task's Parent Task / Subtasks property, so edit
     /// access to the primary task alone is not enough. Internal (machine)
@@ -159,11 +202,25 @@ where
             return Ok(());
         };
 
-        let assignee_ids = references
-            .iter()
-            .map(|r| MacroUserIdStr::parse_from_str(&r.entity_id))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
+        let mut assignee_ids = Vec::new();
+        for reference in references {
+            if reference.entity_type != EntityType::User {
+                return Err(PropertiesErr::Validation(
+                    "Assignees must reference users or agents".to_string(),
+                ));
+            }
+
+            // Agent identities share the User reference namespace. Their
+            // sessions run with the assigning user's access, so only humans
+            // receive direct task permissions and assignment notifications.
+            if BotIdStr::parse_from_str(&reference.entity_id).is_ok() {
+                continue;
+            }
+            assignee_ids.push(
+                MacroUserIdStr::parse_from_str(&reference.entity_id)
+                    .map_err(|error| PropertiesErr::Validation(error.to_string()))?,
+            );
+        }
         if assignee_ids.is_empty() {
             return Ok(());
         }

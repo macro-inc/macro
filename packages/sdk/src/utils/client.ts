@@ -1,6 +1,7 @@
 import { match, P } from 'ts-pattern';
 import { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
+import { Sdk as CalendarSdk } from '../../generated/calendar/sdk.gen';
 import { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
 import { Sdk as EmailSdk } from '../../generated/email/sdk.gen';
@@ -95,6 +96,7 @@ export async function requestAuthHeaders(
 export class MacroClient {
   readonly agentHarness: AgentHarnessSdk;
   readonly auth: AuthSdk;
+  readonly calendar: CalendarSdk;
   readonly cognition: CognitionSdk;
   readonly contacts: ContactsSdk;
   readonly email: EmailSdk;
@@ -142,6 +144,9 @@ export class MacroClient {
       client: this.makeClient(hosts['agent-harness']),
     });
     this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
+    this.calendar = new CalendarSdk({
+      client: this.makeClient(hosts.calendar),
+    });
     this.cognition = new CognitionSdk({
       client: this.makeClient(hosts.cognition),
     });

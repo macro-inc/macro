@@ -54,20 +54,22 @@ export type DocumentMentionMetadata = z.infer<typeof documentMentionMetadata>;
 export type DocumentMentionLocation = NonNullable<
   DocumentMentionMetadata['location']
 >;
+const commentRef = z.union([z.number(), z.string()]);
+
 export const documentMentionMetadata = z.object({
   mention_id: z.string(),
   location: z
     .discriminatedUnion('type', [
       z.object({
         type: z.literal('create-comment'),
-        commentId: z.number(),
-        threadId: z.number(),
+        commentId: commentRef,
+        threadId: commentRef,
         text: z.string(),
       }),
       z.object({
         type: z.literal('edit-comment'),
-        commentId: z.number(),
-        threadId: z.number(),
+        commentId: commentRef,
+        threadId: commentRef,
         text: z.string(),
       }),
     ])
@@ -234,9 +236,12 @@ export const notificationServiceClient = {
       })
     ).map((result) => ({ data: result }));
   },
-  async unsubscribeItem(args: WithItem) {
+  async unsubscribeItem(args: WithItem & { snoozed_until?: string | null }) {
+    const query = args.snoozed_until
+      ? `?snoozed_until=${encodeURIComponent(args.snoozed_until)}`
+      : '';
     return notificationFetch<{}>(
-      `/unsubscribe/item/${args.item_type}/${args.item_id}`,
+      `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}${query}`,
       {
         method: 'POST',
       }
@@ -244,7 +249,7 @@ export const notificationServiceClient = {
   },
   async removeUnsubscribeItem(args: WithItem) {
     return notificationFetch<{}>(
-      `/unsubscribe/item/${args.item_type}/${args.item_id}`,
+      `/unsubscribe/item/${encodeURIComponent(args.item_type)}/${encodeURIComponent(args.item_id)}`,
       {
         method: 'DELETE',
       }

@@ -34,11 +34,19 @@ export function buildGraphqlEntitiesSoupInput(
   const input = buildGraphqlEntitySoupInput('DOCUMENT', NIL_ENTITY_ID);
   if (!input || !('initial' in input) || !input.initial) return undefined;
   const base = input.initial.filters!;
+  const initiativeFilter = or(
+    ids('INITIATIVE').map((id) => ({ literal: { id } }))
+  );
+  const databaseRowFilter = or(
+    ids('DATABASE_ROW').map((id) => ({ literal: { id } }))
+  );
   const filters: GraphqlEntityFilterAst = {
     ...base,
+    ...(databaseRowFilter ? { databaseRowFilter } : {}),
     documentFilter:
       or(ids('DOCUMENT', 'TASK').map((id) => ({ literal: { id } }))) ??
       base.documentFilter,
+    ...(initiativeFilter ? { initiativeFilter } : {}),
     projectFilter:
       or(
         ids('PROJECT').map((projectIdSelf) => ({ literal: { projectIdSelf } }))
@@ -66,7 +74,8 @@ export function buildGraphqlEntitiesSoupInput(
   };
   const count = new Set(
     entities
-      .filter((e) => e.entityType !== 'USER')
+      // Users and CRM contacts are not Soup items.
+      .filter((e) => e.entityType !== 'USER' && e.entityType !== 'CONTACT')
       .map(
         (e) =>
           `${e.entityType === 'TASK' ? 'DOCUMENT' : e.entityType}:${e.entityId}`
@@ -108,7 +117,14 @@ export function buildGraphqlEntitySoupInput(
     .with('CALENDAR_EVENT', () => ({
       calendarEventFilter: { literal: { id: entityId } },
     }))
-    .with('USER', () => undefined)
+    .with('INITIATIVE', () => ({
+      initiativeFilter: { literal: { id: entityId } },
+    }))
+    .with('DATABASE_ROW', () => ({
+      databaseRowFilter: { literal: { id: entityId } },
+    }))
+    // Users and CRM contacts are not Soup items.
+    .with('USER', 'CONTACT', () => undefined)
     .exhaustive();
   if (!targetFilter) return undefined;
 

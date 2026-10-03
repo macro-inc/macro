@@ -9,9 +9,12 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   on,
   Show,
 } from 'solid-js';
+import { routineTargetSchema } from '../core/routine-target';
+import { RoutineExecutionPicker } from '../routine-execution-picker';
 import {
   clearAutomationComposerDraft,
   loadAutomationComposerDraft,
@@ -43,44 +46,44 @@ export const [automationComposerOpen, setAutomationComposerOpen] =
  * Create-only automation composer modal. Mount once (see Layout.tsx) — the
  * dialog is driven by the `automationComposerOpen` signal.
  */
-export function AutomationComposer() {
+export function AutomationComposer(): JSX.Element {
   const { openWithSplit } = useSplitLayout();
 
   const [draft, setRawDraft] = createSignal<ScheduleDraft>(createEmptyDraft());
   const [submitAttempted, setSubmitAttempted] = createSignal(false);
+  const [submitError, setSubmitError] = createSignal<string | null>(null);
   // Snapshots the prompt value at dialog-open time so the editor gets a
   // stable initialValue per open (the editor only reads it on mount).
   const [initialPrompt, setInitialPrompt] = createSignal('');
 
-  const setDraft = (
-    update: ScheduleDraft | ((prev: ScheduleDraft) => ScheduleDraft)
-  ) => {
-    setRawDraft(update as typeof update & ScheduleDraft);
-  };
-
-  let skipNextSave = false;
+  let draftChanged = false;
   const debouncedSave = debounce(saveAutomationComposerDraft, 300);
+
+  function setDraft(update: (prev: ScheduleDraft) => ScheduleDraft): void {
+    if (createMutation.isPending) return;
+    const next = setRawDraft(update);
+    draftChanged = true;
+    setSubmitError(null);
+    debouncedSave(next);
+  }
 
   createEffect(
     on(automationComposerOpen, (open) => {
-      if (!open) return;
-      const loaded = loadAutomationComposerDraft();
-      const next = loaded ?? createEmptyDraft();
-      skipNextSave = true;
+      debouncedSave.clear();
+      if (!open) {
+        // Closing before the debounce fires must still preserve the latest edit.
+        if (draftChanged) saveAutomationComposerDraft(draft());
+        draftChanged = false;
+        return;
+      }
+      const next = loadAutomationComposerDraft() ?? createEmptyDraft();
+      draftChanged = false;
       setRawDraft(next);
       setInitialPrompt(next.prompt);
       setSubmitAttempted(false);
+      setSubmitError(null);
     })
   );
-
-  createEffect(() => {
-    const current = draft();
-    if (skipNextSave) {
-      skipNextSave = false;
-      return;
-    }
-    debouncedSave(current);
-  });
 
   const currentSummary = createMemo(() =>
     describeSchedule(draft(), getDefaultTimezone())
@@ -98,11 +101,16 @@ export function AutomationComposer() {
         return 'Pick a day between 1 and 31.';
       }
     }
+    if (!routineTargetSchema.safeParse(draft().target).success) {
+      return 'Choose a valid model or agent.';
+    }
     return null;
   });
 
   const createMutation = useCreateScheduleMutation({
     onSuccess: async (schedule) => {
+      debouncedSave.clear();
+      draftChanged = false;
       clearAutomationComposerDraft();
       setAutomationComposerOpen(false, false);
       if (schedule.id) {
@@ -116,20 +124,23 @@ export function AutomationComposer() {
       });
     },
     onError: (error) => {
+      setSubmitError(getErrorMessage(error));
       toast.alert('Failed to create automation', {
         subtext: getErrorMessage(error),
       });
     },
   });
 
-  const handleCreate = () => {
+  function handleCreate(): void {
+    if (createMutation.isPending) return;
+    setSubmitError(null);
     const error = formError();
     if (error) {
       setSubmitAttempted(true);
       return;
     }
     createMutation.mutate(draftToCreateBody(draft()));
-  };
+  }
 
   const toggleClass = (active: boolean) =>
     cn(
@@ -156,7 +167,11 @@ export function AutomationComposer() {
               </Dialog.CloseButton>
             </div>
 
-            <div class="grid max-h-[70vh] gap-3 overflow-y-auto p-3">
+            <fieldset
+              disabled={createMutation.isPending}
+              inert={createMutation.isPending}
+              class="grid min-w-0 max-h-[70vh] gap-3 overflow-y-auto p-3"
+            >
               <div class="grid gap-1.5">
                 <label class="text-xs font-medium text-ink-muted cursor-default">
                   Name
@@ -188,6 +203,13 @@ export function AutomationComposer() {
                   }
                 />
               </div>
+
+              <RoutineExecutionPicker
+                target={draft().target}
+                onChange={(target) =>
+                  setDraft((current) => ({ ...current, target }))
+                }
+              />
 
               <div class="grid gap-3 border border-edge-muted rounded-sm p-3">
                 <div>
@@ -299,11 +321,18 @@ export function AutomationComposer() {
                   </div>
                 )}
               </Show>
-            </div>
+              <Show when={submitError()}>
+                {(message) => (
+                  <div role="alert" class="text-xs text-failure">
+                    {message()}
+                  </div>
+                )}
+              </Show>
+            </fieldset>
 
             <div class="flex items-center justify-end gap-2 border-t border-edge-muted px-3 py-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 class="cursor-default"
                 onClick={() => setAutomationComposerOpen(false, false)}
@@ -311,7 +340,7 @@ export function AutomationComposer() {
                 Cancel
               </Button>
               <Button
-                variant="accent"
+                variant="strong"
                 size="sm"
                 class="cursor-default"
                 disabled={createMutation.isPending}

@@ -1,10 +1,14 @@
 use anyhow::Context;
+pub use dictation::outbound::OpenaiApiKey;
+use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
+/// Allow long recordings to play and seek without the signed URL expiring mid-session.
+pub const CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 6 * 60 * 60;
 pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
 
 env_vars! {
@@ -32,15 +36,11 @@ env_vars! {
     pub struct LivekitServerUrl;
     pub struct LivekitApiKey;
     pub struct LivekitApiSecret;
-    /// OpenAI API key used to generate task-dedup embeddings. Required —
-    /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
-    /// infra stack, the same way `document_cognition_service` consumes it.
-    pub struct OpenaiApiKey;
     /// Cohere API key used by the task-dedup reranker. Required — injected
     /// as `COHERE_API_KEY`, following the same pattern as `OPENAI_API_KEY`.
     pub struct CohereApiKey;
     pub struct DocumentLimit;
-    /// Shared signed URL lifetime for document content and call recordings.
+    /// Signed URL lifetime for document content.
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
     /// Shared CloudFront signer private key for document content and call recordings.
@@ -58,6 +58,8 @@ env_vars! {
 }
 
 maybe_env_vars! {
+    /// Rollout gate for entities owned by bots or teams.
+    pub struct EnableNonUserOwners;
     /// Optional name of the LiveKit agent to dispatch for call transcription.
     pub struct LivekitTranscriptionAgentName;
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
@@ -83,6 +85,9 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
     pub database_url: DatabaseUrl,
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
@@ -106,6 +111,7 @@ pub struct Config {
     pub livekit_server_url: LivekitServerUrl,
     pub livekit_api_key: LivekitApiKey,
     pub livekit_api_secret: LivekitApiSecret,
+    /// Shared server credential for task embeddings and Whisper, supplied by Doppler.
     pub openai_api_key: OpenaiApiKey,
     pub cohere_api_key: CohereApiKey,
     pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,
@@ -133,6 +139,11 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_search_enabled: bool,
 
+    /// Enable Slack import creation and uploads. Existing receipts remain
+    /// readable, finalizable and cancellable when this switch is off.
+    #[macro_config_default(false)]
+    pub slack_import_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,
@@ -157,13 +168,8 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_reminder_dispatch_enabled: bool,
 
-    /// Master switch for the legacy document comment writers: comment create,
-    /// edit and delete, and anchor delete, which also deletes the thread.
-    /// Set to `false` for the final pass of the legacy comment importer, before
-    /// the new document discussion UI is enabled; those handlers then answer
-    /// 503 and the importer works from a frozen source.
-    #[macro_config_default(true)]
-    pub legacy_comment_writes_enabled: bool,
+    /// Lets a team-scoped bot with no acting user own the documents it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
 
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
@@ -190,6 +196,16 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config =
+            macro_config::ConfigLoader::load::<Config>().context("failed to load config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        Ok(config)
+    }
+
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 }

@@ -218,7 +218,7 @@ function Fixture() {
     },
     openConnections: () => setNotice('Calendar connection shortcut selected'),
     openTeamSettings: () => setNotice('Macro team settings shortcut selected'),
-    createSource: (scope) => {
+    createSource: (scope, range) => {
       selectedScope = () => (scope().id === 'readonly' ? 'team' : scope().id);
       return {
         profile: () =>
@@ -227,7 +227,10 @@ function Fixture() {
           bookings().filter(
             (b) =>
               b.profileId ===
-              profiles()[scope().id === 'readonly' ? 'team' : scope().id].id
+                profiles()[scope().id === 'readonly' ? 'team' : scope().id]
+                  .id &&
+              b.startsAt >= range().from &&
+              b.startsAt < range().to
           ),
         loadInsights: async (from, to) =>
           bookings().filter(

@@ -16,7 +16,8 @@ expression: messages
         "text": "wh atis this repo how is ti going man"
       }
     ],
-    "stop": null
+    "stop": null,
+    "pending": false
   },
   {
     "turn": 0,
@@ -66,7 +67,8 @@ expression: messages
     ],
     "stop": {
       "kind": "end_turn"
-    }
+    },
+    "pending": false
   },
   {
     "turn": 1,
@@ -81,7 +83,8 @@ expression: messages
         "text": "what is your name"
       }
     ],
-    "stop": null
+    "stop": null,
+    "pending": false
   },
   {
     "turn": 1,
@@ -97,6 +100,7 @@ expression: messages
     ],
     "stop": {
       "kind": "end_turn"
-    }
+    },
+    "pending": false
   }
 ]

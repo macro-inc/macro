@@ -17,10 +17,9 @@ export const DRAFT_FIELD = 'draft';
 
 export function createElicitationReviewSink<T>(options: {
   canAnswer: Accessor<boolean>;
-  answering: Accessor<boolean>;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 }): UserToolReviewSink<T> {
-  const canAct = () => options.canAnswer() && !options.answering();
+  const canAct = () => options.canAnswer();
   return {
     canAct,
     lockedNotice: () =>

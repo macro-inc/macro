@@ -54,8 +54,7 @@ export function NotificationStackRow(props: {
     entityId: props.entity.id,
   });
 
-  // The containing split (when any) is the navigation source, so opens from
-  // an engaged preview controller route into its viewer split.
+  // Keep navigation associated with the originating split.
   const panel = useSplitPanel();
 
   const handleClick = async (e: PointerEvent | MouseEvent | KeyboardEvent) => {
@@ -152,7 +151,7 @@ export function NotificationStackRow(props: {
               <Button
                 onClick={handleMarkAsDone}
                 tooltip={'Mark done'}
-                class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
+                class="text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
               >
                 <CheckIcon class="size-3" />
               </Button>

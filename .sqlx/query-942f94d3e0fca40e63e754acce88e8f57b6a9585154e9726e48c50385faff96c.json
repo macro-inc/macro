@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \"pinnedItemId\" as \"pinned_item_id\" FROM \"Pin\"\n            WHERE \"userId\" = $1\n            ORDER BY \"pinIndex\" ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pinned_item_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "942f94d3e0fca40e63e754acce88e8f57b6a9585154e9726e48c50385faff96c"
+}

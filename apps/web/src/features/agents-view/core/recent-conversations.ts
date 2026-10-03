@@ -1,8 +1,15 @@
-import type { AgentSessionEntity, ChatEntity, EntityData } from '@entity';
-import { type AgentKind, modeForKind } from './agent-kind';
+import type {
+  AgentSessionEntity,
+  ChatEntity,
+  EntityData,
+  WithNotification,
+} from '@entity';
+import { type AgentKind, kindForHarness, modeForKind } from './agent-kind';
 import type { AgentsMode } from './mode';
 
-export type AgentConversationEntity = AgentSessionEntity | ChatEntity;
+export type AgentConversationEntity = WithNotification<
+  AgentSessionEntity | ChatEntity
+>;
 
 /** The persona a conversation runs, when the entity says. Chats have none. */
 export function conversationBotId(
@@ -49,7 +56,14 @@ export function selectRecentAgentConversations(
     .filter(
       (entity) =>
         !query ||
-        (entity.name || 'Untitled chat').toLocaleLowerCase().includes(query)
+        (
+          entity.name ||
+          (entity.type === 'agent_session'
+            ? 'Untitled conversation'
+            : 'Untitled chat')
+        )
+          .toLocaleLowerCase()
+          .includes(query)
     )
     .toSorted(
       (left, right) =>
@@ -67,25 +81,31 @@ export function conversationMode(
 ): AgentsMode {
   return conversation.type === 'chat'
     ? 'chat'
-    : modeForKind(kindOf(conversationBotId(conversation)));
+    : modeForKind(
+        conversation.harness
+          ? kindForHarness(conversation.harness)
+          : kindOf(conversationBotId(conversation))
+      );
 }
 
-type ConversationGroupId = 'recent';
-
-export type ConversationGroup = {
-  id: ConversationGroupId;
-  /** Absent for a lone group that needs no heading. */
-  label: string | undefined;
+export type PartitionedConversations = {
   conversations: AgentConversationEntity[];
+  archived: AgentConversationEntity[];
 };
 
-/** One mixed list, retaining the query's newest-first order. */
-export function groupConversations(
+const isArchived = (conversation: AgentConversationEntity) =>
+  conversation.type === 'agent_session' && conversation.isArchived;
+
+/** Splits archived agent sessions out, keeping the query's newest-first order. */
+export function partitionArchived(
   conversations: readonly AgentConversationEntity[]
-): ConversationGroup[] {
-  return conversations.length
-    ? [{ id: 'recent', label: undefined, conversations: [...conversations] }]
-    : [];
+): PartitionedConversations {
+  return {
+    conversations: conversations.filter(
+      (conversation) => !isArchived(conversation)
+    ),
+    archived: conversations.filter(isArchived),
+  };
 }
 
 export type BotUsage = {

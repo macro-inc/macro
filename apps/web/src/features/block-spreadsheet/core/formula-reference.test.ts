@@ -68,3 +68,25 @@ describe('formula reference slots', () => {
     ).toBe('B4');
   });
 });
+
+it('quotes cross-sheet ranges and replaces a complete sheet-qualified operand', () => {
+  const range = { anchor: { row: 0, column: 0 }, focus: { row: 3, column: 1 } };
+  expect(formulaRangeReference(range, "Owner's budget")).toBe(
+    "'Owner''s budget'!A1:B4"
+  );
+  for (const reference of ["'Owner''s budget'!A1:B4", 'Sheet2!$C$3:$D8']) {
+    const text = `=SUM(${reference},2)`;
+    expect(
+      formulaReferenceSlot(text, {
+        start: 5 + reference.length,
+        end: 5 + reference.length,
+      })
+    ).toEqual({ start: 5, end: 5 + reference.length });
+  }
+  expect(formulaReferenceSlot("='Cash flow'!A1", { start: 6, end: 6 })).toEqual(
+    { start: 1, end: 15 }
+  );
+  expect(
+    formulaReferenceSlot('="Sheet2!A1"', { start: 8, end: 8 })
+  ).toBeUndefined();
+});

@@ -6,14 +6,15 @@ import {
   type EntityActivityQuery,
   type EntityActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
 import {
   type EntityActivityResult,
   selectEntityActivity,
 } from './select-entity-activity';
 
-/** Rows requested for a side-panel activity preview. */
+/** Rows shown in an entity activity preview. */
 export const ENTITY_ACTIVITY_PREVIEW_LIMIT = 20;
 
 type EntityActivityQueryOptions = {
@@ -39,6 +40,7 @@ export function createEntityActivityQuery(
     return buildEntityPropertiesInput(options.entityType(), entityId);
   });
 
+  const client = createMemo(context.graphql);
   const result = createUrqlQuery<
     EntityActivityQuery,
     EntityActivityQueryVariables,
@@ -49,7 +51,7 @@ export function createEntityActivityQuery(
 
     return {
       query: EntityActivityDocument,
-      client: context.graphql(),
+      client: client(),
       variables: {
         input: currentInput!,
         limit: options.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,
@@ -60,6 +62,20 @@ export function createEntityActivityQuery(
       select: (data) => selectEntityActivity(data, entityId),
     };
   });
+
+  onCleanup(
+    registerActivityRevalidator({
+      client,
+      refresh: (entities) => {
+        if (
+          input() === undefined ||
+          (entities !== null && !entities.has(options.entityId()))
+        )
+          return;
+        return result.refetch({ requestPolicy: 'network-only' });
+      },
+    })
+  );
 
   return {
     result,

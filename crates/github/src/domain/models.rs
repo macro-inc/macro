@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "sync")]
 mod app_jwt;
 mod installation_state;
 mod link;
@@ -10,7 +11,9 @@ mod pull_request;
 mod repository;
 mod sync;
 
+#[cfg(feature = "sync")]
 pub use app_jwt::AppJwt;
+#[cfg(feature = "sync")]
 pub(crate) use app_jwt::app_jwt;
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,

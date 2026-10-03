@@ -1,22 +1,23 @@
+import { ChannelInput } from '@channel/Input';
+import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
-import { getAndClearCommentMentions } from '@core/comments';
-import type { CommentOperations, Root } from '@core/comments/commentType';
-import { NewReplyInput } from '@core/comments/Inputs';
 import {
-  CommentsContext,
-  ThreadBody,
-  ThreadContext,
-} from '@core/comments/Thread';
+  type CommentId,
+  isDraftThreadId,
+  type MessageCommentOperations,
+  type Root,
+} from '@core/comments/commentType';
+import { CommentsContext, ThreadBody } from '@core/comments/Thread';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button, cn } from '@ui';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
+import { Button } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -45,48 +46,54 @@ function getCommentComposerInput(): HTMLElement | null {
 
 /**
  * The drawer's always-visible reply composer, pinned below the scrolling
- * thread. Extracted so its state (text, mentions) resets when the pager
- * switches threads (the host keys it by thread). Provides its own
- * ThreadContext so @-mentions typed here are captured.
+ * thread. The host keys it by thread so its draft resets when the pager
+ * switches threads.
  */
 function PinnedReplyComposer(props: {
   root: Root;
-  createComment: CommentOperations['createComment'];
+  createComment: MessageCommentOperations['createComment'];
 }) {
-  const mentionsSignal = createSignal<UserMentionRecord[]>([]);
-  const [text, setText] = createSignal('');
-  const [editing, setEditing] = createSignal(false);
-
+  const context = useContext(CommentsContext);
+  const typing = usePostTypingUpdateMutation();
+  const parent = () => ({ type: 'document' as const, id: context.documentId });
   return (
-    <ThreadContext.Provider value={{ mentionsSignal }}>
-      <StaticMarkdownContext theme={drawerCommentTheme}>
-        <div
-          class={cn(
-            'shrink-0 px-3',
-            virtualKeyboardVisible()
-              ? 'pb-4'
-              : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]'
-          )}
-        >
-          <NewReplyInput
-            textValue={text()}
-            setTextValue={setText}
-            isEditing={editing()}
-            setEditing={setEditing}
-            deactivateThreadOnCancel={false}
-            createReply={(content) => {
-              if (content.trim() === '') return;
-              setEditing(false);
-              return props.createComment({
-                threadId: props.root.threadId,
-                text: content,
-                mentions: getAndClearCommentMentions(mentionsSignal),
-              });
-            }}
-          />
-        </div>
-      </StaticMarkdownContext>
-    </ThreadContext.Provider>
+    <StaticMarkdownContext theme={drawerCommentTheme}>
+      <div
+        class="shrink-0 px-3"
+        classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
+      >
+        <ChannelInput
+          parent={parent()}
+          input={{ mode: 'reply', placeholder: 'Reply...' }}
+          autofocus={false}
+          onStartTyping={() =>
+            typing.mutate({
+              parent: parent(),
+              threadId: String(props.root.threadId),
+              action: 'start',
+            })
+          }
+          onStopTyping={() =>
+            typing.mutate({
+              parent: parent(),
+              threadId: String(props.root.threadId),
+              action: 'stop',
+            })
+          }
+          onSend={async (snapshot) => {
+            const { thread_id: _threadId, ...message } =
+              buildPostMessageSendPayload({ snapshot }).message;
+            const created = await props.createComment({
+              ...message,
+              threadId: props.root.threadId,
+            });
+            // Throw on failure so the composer is not cleared and the draft
+            // survives for a retry (createComment resolves null, not rejects).
+            if (!created) throw new Error('Failed to post reply');
+          }}
+        />
+      </div>
+    </StaticMarkdownContext>
   );
 }
 
@@ -110,12 +117,12 @@ export function CommentThreadDrawer() {
   // Messages report their inline-edit state; while any edit input is open,
   // the pinned reply composer hides so two inputs never compete.
   const [editingMessageIds, setEditingMessageIds] = createSignal<
-    ReadonlySet<number>
+    ReadonlySet<CommentId>
   >(new Set());
   const messageEditing = () => editingMessageIds().size > 0;
   const drawerCommentsContext = {
     ...parentCommentsContext,
-    setMessageEditing: (commentId: number, editing: boolean) =>
+    setMessageEditing: (commentId: CommentId, editing: boolean) =>
       setEditingMessageIds((prev) => {
         if (prev.has(commentId) === editing) return prev;
         const next = new Set(prev);
@@ -138,7 +145,7 @@ export function CommentThreadDrawer() {
   // hidden, since marks live in the editor itself).
   const orderedThreadIds = createMemo(() => {
     return Object.values(commentState.threads)
-      .filter((root): root is Root => !!root && root.threadId !== -1)
+      .filter((root): root is Root => !!root && !isDraftThreadId(root.threadId))
       .map((root) => {
         const rect = firstMarkElement(root)?.getBoundingClientRect();
         return {
@@ -223,7 +230,6 @@ export function CommentThreadDrawer() {
             <div class="flex shrink-0 items-center justify-center gap-2 pb-1">
               <Button
                 size="icon-sm"
-                class="rounded-md"
                 depth={3}
                 variant="ghost"
                 aria-label="Previous comment thread"
@@ -237,7 +243,6 @@ export function CommentThreadDrawer() {
               </span>
               <Button
                 size="icon-sm"
-                class="rounded-md"
                 depth={3}
                 variant="ghost"
                 aria-label="Next comment thread"
@@ -287,7 +292,7 @@ export function CommentThreadDrawer() {
                 <PinnedReplyComposer
                   root={root}
                   createComment={
-                    parentCommentsContext.commentOperations.createComment
+                    parentCommentsContext.messageOperations.createComment
                   }
                 />
               </div>

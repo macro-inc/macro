@@ -52,7 +52,22 @@ fn handler(
     access: Arc<Access>,
     responder: Arc<Responder>,
 ) -> MacroAiHandler<Responder, FixedTimeZones> {
-    MacroAiHandler::new(Arc::new(api), access, responder, eastern_time_zones())
+    handler_with_marks(api, access, responder, Marks::none())
+}
+
+fn handler_with_marks(
+    api: MockMessageServiceApi,
+    access: Arc<Access>,
+    responder: Arc<Responder>,
+    marks: Arc<Marks>,
+) -> MacroAiHandler<Responder, FixedTimeZones> {
+    MacroAiHandler::new(
+        Arc::new(api),
+        access,
+        responder,
+        eastern_time_zones(),
+        marks,
+    )
 }
 
 fn invocation(trigger: &messages::domain::models::Message) -> BotEvent {
@@ -83,6 +98,41 @@ fn expect_placeholder(api: &mut MockMessageServiceApi) {
 }
 
 #[tokio::test]
+async fn rejected_responses_never_call_the_provider_and_explicit_requests_show_the_failure() {
+    for failure in admission_failures() {
+        for trigger_kind in [BotTrigger::Mention, BotTrigger::Inferred] {
+            let trigger = message(1, None, "help with this");
+            let mut event = invocation(&trigger);
+            event.trigger = trigger_kind;
+            let mut api = MockMessageServiceApi::new();
+            configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+            if trigger_kind == BotTrigger::Mention {
+                api.expect_post().once().returning(move |access, input| {
+                    assert_eq!(access.acting_user_id(), Some(&user()));
+                    assert!(input.content.contains(failure.code()));
+                    assert!(input.content.contains(&failure.to_string()));
+                    assert!(!input.content.contains(THINKING_MESSAGE));
+                    assert_eq!(
+                        input.notification_policy,
+                        PostMessageNotificationPolicy::Default
+                    );
+                    Ok(message(2, input.thread_id, &input.content))
+                });
+            }
+            let responder = responder("must not run");
+            let admission = Admission::new(Err(failure));
+            handler(api, Arc::new(Access::default()), responder.clone())
+                .with_admission(admission.clone())
+                .handle(&event)
+                .await
+                .expect("quota failures are handled, not redelivered");
+            assert!(responder.prompts.lock().unwrap().is_empty());
+            assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        }
+    }
+}
+
+#[tokio::test]
 async fn document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comment_policy() {
     let root = message(1, None, "Selected paragraph discussion");
     let trigger = message(2, Some(root.id), "@macro explain this");
@@ -104,10 +154,13 @@ async fn document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comm
         ))
     });
     let responder = responder("the answer");
+    let admission = Admission::new(Ok(()));
     handler(api, Arc::new(Access::default()), responder.clone())
+        .with_admission(admission.clone())
         .handle(&invocation(&trigger))
         .await
         .unwrap();
+    assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     let prompts = responder.prompts.lock().unwrap();
     assert!(prompts[0].contains("discussion-document"));
     assert!(prompts[0].contains("mentioned you (@macro) in a document discussion."));
@@ -131,34 +184,245 @@ async fn root_comment_is_valid_agent_context_before_any_replies_exist() {
 }
 
 #[tokio::test]
-async fn revoked_document_access_prevents_context_reads_and_agent_work() {
-    let trigger = message(1, None, "@macro help");
-    let access = Arc::new(Access::default());
-    access.revoke();
-    let responder = responder("reply");
-    let handler = handler(MockMessageServiceApi::new(), access, responder.clone());
-    assert!(handler.handle(&invocation(&trigger)).await.is_err());
-    assert!(responder.prompts.lock().unwrap().is_empty());
+async fn call_mentions_use_the_same_call_thread_for_context_and_replies() {
+    for is_first_message in [true, false] {
+        let parent = MessageParent::Call(Uuid::from_u128(1));
+        let mut root = message(1, None, "Call agenda");
+        root.parent = parent.clone();
+        let mut trigger = if is_first_message {
+            message(1, None, "@macro help with this call")
+        } else {
+            message(2, Some(root.id), "@macro help with this call")
+        };
+        trigger.parent = parent.clone();
+        let history = if is_first_message {
+            thread(trigger.clone(), vec![])
+        } else {
+            thread(root, vec![trigger.clone()])
+        };
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(&mut api, &trigger, history);
+        let reply_parent = parent.clone();
+        api.expect_post().once().returning(move |access, input| {
+            assert_eq!(
+                access.entity().entity_type,
+                reply_parent.access_entity_type()
+            );
+            assert_eq!(access.entity().entity_id, reply_parent.entity_id());
+            assert_eq!(access.acting_user_id(), Some(&user()));
+            assert_eq!(input.thread_id, Some(Uuid::from_u128(1)));
+            assert_eq!(input.content, THINKING_MESSAGE);
+            let mut reply = message(3, input.thread_id, &input.content);
+            reply.parent = reply_parent.clone();
+            Ok(reply)
+        });
+        api.expect_patch()
+            .once()
+            .returning(move |access, id, input| {
+                assert_eq!(access.entity().entity_id, parent.entity_id());
+                assert_eq!(id, Uuid::from_u128(3));
+                assert_eq!(input.content.as_deref(), Some("the call answer"));
+                let mut reply = message(3, Some(Uuid::from_u128(1)), "the call answer");
+                reply.parent = parent.clone();
+                Ok(reply)
+            });
+        let responder = responder("the call answer");
+        handler(api, Arc::new(Access::default()), responder.clone())
+            .handle(&invocation(&trigger))
+            .await
+            .unwrap();
+        let prompts = responder.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 1);
+        assert!(prompts[0].contains("mentioned you (@macro) in a call chat."));
+        assert!(prompts[0].contains("<thread>"));
+        assert!(!prompts[0].contains("<channel_context>"));
+        assert_eq!(prompts[0].matches("@macro help with this call").count(), 1);
+        if !is_first_message {
+            assert!(prompts[0].contains("Call agenda"));
+        }
+    }
+}
+
+#[tokio::test]
+async fn an_anchored_discussion_names_the_text_it_marks() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(
+            trigger.clone(),
+            Some("backfills the ledger from the archive"),
+        ),
+    );
+    let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("<anchor mark=\"00000000-0000-0000-0000-0000000000aa\">"));
+    assert!(prompt.contains("backfills the ledger from the archive"));
+    // The snapshot is dated, and the prompt says so rather than implying it is current.
+    assert!(prompt.contains("the document may have changed since"));
+}
+
+#[tokio::test]
+async fn a_discussion_with_no_marked_text_claims_no_anchor() {
+    let trigger = message(1, None, "@macro help with this document");
+    let mut api = MockMessageServiceApi::new();
+    // Anchored before snapshots existed, and the live lookup finds nothing.
+    configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
+    let prompt = handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(!prompt.contains("<anchor"));
+}
+
+#[tokio::test]
+async fn a_discussion_older_than_snapshots_reads_its_mark_from_the_document() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, marked_thread(trigger.clone(), None));
+    let marks = Arc::new(Marks(Ok(Some(MarkedPassage {
+        marked_text: "backfills the ledger".to_owned(),
+        surrounding_text: "The second stage backfills the ledger from the archive.".to_owned(),
+    }))));
+    let prompt = handler_with_marks(api, Arc::new(Access::default()), responder("reply"), marks)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("as the document reads now"));
+    assert!(prompt.contains("Marked text: backfills the ledger\n"));
+    assert!(prompt.contains("The second stage backfills the ledger from the archive."));
+    assert!(!prompt.contains("When the discussion was started"));
+}
+
+#[tokio::test]
+async fn an_edited_mark_shows_both_what_it_covers_now_and_what_it_covered() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(trigger.clone(), Some("backfills the ledger")),
+    );
+    let marks = Arc::new(Marks(Ok(Some(MarkedPassage {
+        marked_text: "rebuilds the ledger".to_owned(),
+        surrounding_text: "The second stage rebuilds the ledger.".to_owned(),
+    }))));
+    let prompt = handler_with_marks(api, Arc::new(Access::default()), responder("reply"), marks)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
+    assert!(prompt.contains("Marked text: rebuilds the ledger\n"));
+    assert!(prompt.contains("When the discussion was started it read: backfills the ledger"));
+}
+
+#[tokio::test]
+async fn a_failed_live_lookup_falls_back_to_the_snapshot() {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(
+        &mut api,
+        &trigger,
+        marked_thread(trigger.clone(), Some("backfills the ledger")),
+    );
+    let prompt = handler_with_marks(
+        api,
+        Arc::new(Access::default()),
+        responder("reply"),
+        Arc::new(Marks(Err("lexical unavailable"))),
+    )
+    .build_prompt(&invocation(&trigger))
+    .await
+    .unwrap();
+    assert!(prompt.contains("backfills the ledger"));
+    assert!(prompt.contains("the document may have changed since"));
+}
+
+async fn prompt_on(anchor: ThreadAnchor) -> String {
+    let trigger = message(1, None, "@macro what is this anchored to?");
+    let mut history = thread(trigger.clone(), vec![]);
+    history.state.anchor = Some(anchor);
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, history);
+    handler(api, Arc::new(Access::default()), responder("reply"))
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_pdf_highlight_discussion_names_the_words_it_covers() {
+    let prompt = prompt_on(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(0xbb),
+        marked_text: Some("indemnifies the lessor".to_owned()),
+    })
+    .await;
+    assert!(prompt.contains(&format!(
+        "<anchor highlight=\"{}\">\n{HIGHLIGHT_ANCHOR_INSTRUCTION}\n\nindemnifies the lessor\n</anchor>",
+        Uuid::from_u128(0xbb)
+    )));
+}
+
+#[tokio::test]
+async fn a_highlight_without_text_says_its_words_are_unknown() {
+    let prompt = prompt_on(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(0xbb),
+        marked_text: None,
+    })
+    .await;
+    assert!(prompt.contains(BLANK_HIGHLIGHT_INSTRUCTION));
+    assert!(!prompt.contains(HIGHLIGHT_ANCHOR_INSTRUCTION));
+}
+
+#[tokio::test]
+async fn a_pdf_pin_discussion_says_it_covers_no_words() {
+    let prompt = prompt_on(ThreadAnchor::PdfPlaceable {
+        anchor_id: Uuid::from_u128(0xcc),
+    })
+    .await;
+    assert!(prompt.contains(&format!(
+        "<anchor pin=\"{}\">\n{PIN_ANCHOR_INSTRUCTION}\n</anchor>",
+        Uuid::from_u128(0xcc)
+    )));
+}
+
+#[tokio::test]
+async fn revoked_parent_access_prevents_context_reads_and_agent_work() {
+    for parent in [parent(), MessageParent::Call(Uuid::from_u128(1))] {
+        let mut trigger = message(1, None, "@macro help");
+        trigger.parent = parent;
+        let access = Arc::new(Access::default());
+        access.revoke();
+        let responder = responder("reply");
+        let handler = handler(MockMessageServiceApi::new(), access, responder.clone());
+        assert!(handler.handle(&invocation(&trigger)).await.is_err());
+        assert!(responder.prompts.lock().unwrap().is_empty());
+    }
 }
 
 #[tokio::test]
 async fn revocation_while_model_runs_prevents_answer_delivery() {
-    let trigger = message(1, None, "@macro help");
-    let mut api = MockMessageServiceApi::new();
-    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
-    expect_placeholder(&mut api);
-    let access = Arc::new(Access::default());
-    let responder = Arc::new(Responder {
-        prompts: Mutex::new(vec![]),
-        revoke: Some(access.clone()),
-        result: "private answer",
-    });
-    assert!(
-        handler(api, access, responder)
-            .handle(&invocation(&trigger))
-            .await
-            .is_err()
-    );
+    for parent in [parent(), MessageParent::Call(Uuid::from_u128(1))] {
+        let mut trigger = message(1, None, "@macro help");
+        trigger.parent = parent;
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+        expect_placeholder(&mut api);
+        let access = Arc::new(Access::default());
+        let responder = Arc::new(Responder {
+            prompts: Mutex::new(vec![]),
+            revoke: Some(access.clone()),
+            result: "private answer",
+        });
+        assert!(
+            handler(api, access, responder)
+                .handle(&invocation(&trigger))
+                .await
+                .is_err()
+        );
+    }
 }
 
 #[tokio::test]
@@ -335,6 +599,7 @@ async fn prompt_says_the_time_zone_is_unknown_without_a_calendar() {
         Arc::new(Access::default()),
         responder("reply"),
         Arc::new(FixedTimeZones(None)),
+        Marks::none(),
     )
     .build_prompt(&invocation(&trigger))
     .await
@@ -369,4 +634,17 @@ fn current_time_block_falls_back_to_utc_for_missing_or_bad_zones() {
          time zone is unknown (their calendar's time zone could not be \
          interpreted)\n</current_time>\n"
     );
+}
+
+#[tokio::test]
+async fn spreadsheet_discussions_name_the_range_without_inventing_cell_contents() {
+    let prompt = prompt_on(ThreadAnchor::Spreadsheet {
+        sheet_id: "sheet-1".into(),
+        sheet_name: "Budget </anchor>".into(),
+        range: "B4:C9".into(),
+    })
+    .await;
+    assert!(prompt.contains("Use ReadSpreadsheet to read the live cells in this range."));
+    assert!(prompt.contains(r#""range":"B4:C9""#));
+    assert!(prompt.contains(r#"Budget \u003c/anchor\u003e"#));
 }

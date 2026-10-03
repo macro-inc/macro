@@ -1,3 +1,4 @@
+import type { MessageActions, MessageData } from '@core/messages/types';
 import { stickyGate } from '@core/util/debounce';
 import { cn } from '@ui';
 import { createSignal, type JSX, splitProps } from 'solid-js';
@@ -6,7 +7,6 @@ import {
   MessageActionsProvider,
   MessageProvider,
 } from './context';
-import type { MessageActions, MessageData } from './types';
 
 /**
  * How long the accent background fades once the message stops being

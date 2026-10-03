@@ -54,6 +54,7 @@ enum PartitionKind {
     Project,
     Chat,
     Channel,
+    DatabaseRow,
 }
 
 /// Validate strict Soup-specific completeness and canonical value semantics for
@@ -98,6 +99,10 @@ fn validate_soup_flat(
     } else if version == ProfileVersion::V4 && document.partition == vocabulary::channel_partition()
     {
         PartitionKind::Channel
+    } else if version == ProfileVersion::V4
+        && document.partition == vocabulary::database_row_partition()
+    {
+        PartitionKind::DatabaseRow
     } else {
         return Err(ProfileValidationError::UnsupportedPartition(
             document.partition.as_str().to_owned(),
@@ -127,6 +132,7 @@ fn validate_exact_facts(
     let mut channel_participant = 0;
     let mut channel_team = 0;
     let mut channel_organization = 0;
+    let mut table_id = 0;
     let mut notification_states = HashMap::new();
 
     for fact in facts {
@@ -142,7 +148,9 @@ fn validate_exact_facts(
             if value.is_empty() || std::str::from_utf8(value).is_err() {
                 return Err(ProfileValidationError::InvalidValue("owner"));
             }
-        } else if attribute == &vocabulary::project_id() && kind != PartitionKind::Channel {
+        } else if attribute == &vocabulary::project_id()
+            && !matches!(kind, PartitionKind::Channel | PartitionKind::DatabaseRow)
+        {
             project_id += 1;
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("project-id"));
@@ -154,7 +162,10 @@ fn validate_exact_facts(
                 .map_err(|_| ProfileValidationError::InvalidValue("file-type"))?;
         } else if attribute == &vocabulary::document_sub_type() && kind == PartitionKind::Document {
             sub_type += 1;
-            if !matches!(value, b"task" | b"snippet" | b"skill") {
+            if !matches!(
+                value,
+                b"task" | b"snippet" | b"skill" | b"initiative_description"
+            ) {
                 return Err(ProfileValidationError::InvalidValue("document-sub-type"));
             }
         } else if attribute == &vocabulary::email_attachment() && kind == PartitionKind::Document {
@@ -199,6 +210,11 @@ fn validate_exact_facts(
             channel_organization += 1;
             if value.len() != 8 {
                 return Err(ProfileValidationError::InvalidValue("channel-organization"));
+            }
+        } else if kind == PartitionKind::DatabaseRow && attribute == &vocabulary::table_id() {
+            table_id += 1;
+            if value.len() != 16 {
+                return Err(ProfileValidationError::InvalidValue("table-id"));
             }
         } else if version == ProfileVersion::V4
             && (attribute == &vocabulary::notification_unseen()
@@ -246,6 +262,7 @@ fn validate_exact_facts(
             allow_at_most_one("channel-team", channel_team)?;
             allow_at_most_one("channel-organization", channel_organization)?;
         }
+        PartitionKind::DatabaseRow => require_one("table-id", table_id)?,
     }
     Ok(())
 }

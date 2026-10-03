@@ -204,6 +204,9 @@ pub struct Booking {
     pub location: String,
     /// Answers keyed by question identity.
     pub answers: BTreeMap<Uuid, String>,
+    /// Original labels for answers, independent of later event-type edits.
+    #[serde(default)]
+    pub question_labels: BTreeMap<Uuid, String>,
 }
 /// Private persisted state, never returned from a public profile endpoint.
 #[derive(Clone, Debug, Serialize, Deserialize)]

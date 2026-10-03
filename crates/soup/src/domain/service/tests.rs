@@ -29,6 +29,7 @@ use item_filters::{
     ast::{EntityFilterAst, foreign_entity::ForeignEntityLiteral},
 };
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
@@ -45,6 +46,10 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use super::*;
+
+mod agent_metadata;
+mod exclusions;
+mod favorites;
 
 struct NoopEmailPreviewService;
 
@@ -177,6 +182,13 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     ) -> Result<Vec<call::domain::models::CallRecord>, call::domain::models::CallError> {
         Ok(Vec::new())
     }
+
+    async fn get_call_record_people(
+        &self,
+        _call_record_id: Uuid,
+    ) -> Result<call::domain::models::CallPeople, call::domain::models::CallError> {
+        Ok(Default::default())
+    }
 }
 
 #[derive(Clone)]
@@ -206,6 +218,13 @@ impl CallRecordQueryService for RecordingCallRecordQueryService {
         *self.calls.lock().unwrap() += 1;
         Ok(self.records.clone())
     }
+
+    async fn get_call_record_people(
+        &self,
+        _call_record_id: Uuid,
+    ) -> Result<call::domain::models::CallPeople, call::domain::models::CallError> {
+        Ok(Default::default())
+    }
 }
 
 fn call_record(
@@ -216,7 +235,7 @@ fn call_record(
 ) -> call::domain::models::CallRecord {
     call::domain::models::CallRecord {
         call_id,
-        channel_id,
+        channel_id: Some(channel_id),
         room_name: String::new(),
         created_by: created_by.to_string(),
         started_at,
@@ -237,6 +256,7 @@ fn call_record(
         status: None,
         user_access_level: None,
         participants: Vec::new(),
+        guests: Vec::new(),
         transcript: Vec::new(),
     }
 }
@@ -526,7 +546,7 @@ fn soup_document_with_is_completed(
     SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
         name: Default::default(),
         file_type: None,
         sha: None,
@@ -719,7 +739,7 @@ async fn simple_soup_includes_call_records() {
         &page.items[0],
         SoupItem::Call(call) => {
             assert_eq!(call.call_id, call_id);
-            assert_eq!(call.channel_id, channel_id);
+            assert_eq!(call.channel_id, Some(channel_id));
         }
     );
 }
@@ -2527,7 +2547,7 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
                 Ok(vec![SoupItem::Project(models_soup::project::SoupProject {
                     id: project,
                     name: 'p'.to_string(),
-                    owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+                    owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
                     parent_id: None,
                     created_at: Default::default(),
                     updated_at: Default::default(),
@@ -2754,7 +2774,7 @@ async fn unexpanded_touched_hydrates_projects_in_the_main_query() {
                     SoupItem::Project(models_soup::project::SoupProject {
                         id: project,
                         name: 'p'.to_string(),
-                        owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+                        owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
                         parent_id: None,
                         created_at: Default::default(),
                         updated_at: Default::default(),
@@ -2911,6 +2931,17 @@ struct RecordingRemindersService {
 }
 
 impl RemindersService for RecordingRemindersService {
+    async fn list_collection(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _query: reminders::domain::collection::CollectionQuery,
+    ) -> Result<reminders::domain::collection::ReminderCollectionPage, ReminderError> {
+        Ok(reminders::domain::collection::ReminderCollectionPage {
+            items: vec![],
+            next_cursor: None,
+        })
+    }
+
     async fn create_reminder(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -3174,7 +3205,7 @@ async fn notified_soup_refills_after_hydration_drops_and_ends_when_exhausted() {
                 Ok(vec![SoupItem::Project(models_soup::project::SoupProject {
                     id: project,
                     name: 'p'.to_string(),
-                    owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+                    owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
                     parent_id: None,
                     created_at: Default::default(),
                     updated_at: Default::default(),

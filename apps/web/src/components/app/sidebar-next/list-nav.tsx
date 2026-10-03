@@ -141,7 +141,6 @@ export const ListNav = (props: ListNavProps) => {
           viewId: props.item.id,
           params: props.item.params,
           shiftKey,
-          activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit: layout.openWithSplit,
           referredFrom: 'sidebar',
         });
@@ -175,13 +174,16 @@ export const ListNav = (props: ListNavProps) => {
     <SidebarOpenInSplitMenu
       content={content}
       onOpenChange={props.onContextMenuOpenChange}
-      // The trigger defaults to `w-full h-7`, which clips the square button.
-      triggerClass="size-9"
+      // The trigger defaults to `w-full h-7`, which clips the round button.
+      triggerClass="size-10"
     >
       <Button
         variant="ghost"
         size="icon-md"
-        class="cursor-default rounded-xl"
+        class={cn(
+          'size-10 cursor-default rounded-xl',
+          isActive() && 'bg-hover text-ink'
+        )}
         label={props.item.label}
         aria-description={
           [props.unread && 'Unread items', props.activeCall && 'Active call']
@@ -194,8 +196,7 @@ export const ListNav = (props: ListNavProps) => {
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         // An attribute rather than a class-only state, so the styling can be
-        // retargeted from CSS and the `data-active` selectors the old sidebar's
-        // tests use keep working.
+        // retargeted from CSS and tests can select the active item.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}
@@ -203,29 +204,22 @@ export const ListNav = (props: ListNavProps) => {
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
-        {/* Fixed geometry keeps the marker flush to the rail edge without
-            moving the glyph when selection changes. */}
-        <span
-          aria-hidden="true"
-          class={cn(
-            'absolute -left-2.5 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-ink-muted',
-            isActive() ? 'opacity-100' : 'opacity-0'
-          )}
-        />
-
         <NavGlyph
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class={cn('size-5.5', isActive() && 'text-ink-muted')}
+          class="size-5"
         />
         <Show
           when={props.activeCall}
           fallback={<SidebarUnreadDot active={props.unread} />}
         >
+          {/* Sits outside the button box: the glyph is inset from the
+              corner, so a badge flush to it lands on the icon. The rail's
+              horizontal padding absorbs the overhang. */}
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute top-0 right-0 flex size-3.5 items-center justify-center text-accent"
+            class="pointer-events-none absolute -top-0.5 -right-0.5 flex size-3 items-center justify-center text-accent"
           >
             <PhoneCallIcon class="size-full" />
           </span>

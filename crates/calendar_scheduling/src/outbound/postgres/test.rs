@@ -76,6 +76,7 @@ fn booking(profile: Uuid, start: DateTime<Utc>) -> BookingRecord {
             rescheduled_at: None,
             location: String::new(),
             answers: Default::default(),
+            question_labels: Default::default(),
         },
     }
 }
@@ -188,17 +189,31 @@ async fn reschedule_holds_both_times_without_blocking_the_days_between(pool: PgP
 }
 
 #[sqlx::test(migrations = false)]
-async fn booking_list_reports_overflow_instead_of_returning_partial_counts(pool: PgPool) {
+async fn booking_history_is_bounded_but_host_counts_are_not(pool: PgPool) {
     setup(&pool).await;
     let repo = PostgresRepository::new(pool.clone());
     let p = repo.save_profile(owned()).await.unwrap();
     let start = Utc::now() + Duration::days(2);
     let r = booking(p.id, start);
     let json = serde_json::to_value(&r).unwrap();
+    let ids: Vec<_> = (0..5001).map(|_| Uuid::now_v7()).collect();
     sqlx::query!(
-        "INSERT INTO scheduling_booking (id, profile_id, request_id, event_type_id, starts_at, ends_at, status, record) SELECT gen_random_uuid(), $1, gen_random_uuid(), $2, $3, $4, 'cancelled', $5 FROM generate_series(1, 5001)",
-        p.id, r.booking.event_type_id, start, r.booking.ends_at, json
+        "INSERT INTO scheduling_booking (id, profile_id, request_id, event_type_id, starts_at, ends_at, status, record) SELECT id, $1, id, $2, $3, $4, 'confirmed', $5 FROM unnest($6::uuid[]) AS id",
+        p.id, r.booking.event_type_id, start, r.booking.ends_at, json, &ids
     ).execute(&pool).await.unwrap();
+    let hosts = vec!["host".to_string(), "unused".to_string()];
+    let counts = repo
+        .host_booking_counts(p.id, &hosts, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    assert_eq!(counts.get("host"), Some(&5001));
+    assert!(!counts.contains_key("unused"));
+    assert!(
+        repo.host_booking_counts(p.id, &hosts, start - Duration::days(1), start)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(
         matches!(repo.bookings(p.id, start, start + Duration::days(1)).await, Err(Error::Invalid(message)) if message.contains("shorter date range"))
     );

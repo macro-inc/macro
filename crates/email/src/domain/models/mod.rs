@@ -1,4 +1,5 @@
 pub mod attachment;
+pub mod calendar_invitation;
 pub mod contact;
 pub mod draft;
 pub mod email_filter;
@@ -18,7 +19,8 @@ mod tests;
 pub use attachment::{Attachment, AttachmentDraft, AttachmentForwarded, MessageAttachment};
 pub use contact::{Contact, ContactInfo, RecipientType};
 pub use draft::{
-    CreateDraftInput, CreatedDraft, ParsedAddresses, ResolvedDraftInput, SimpleMessageInfo,
+    CreateDraftInput, CreatedDraft, DeletedUserDraft, DraftDeletion, MessageTimestamps,
+    ParsedAddresses, ResolvedDraftInput, SavedUserDraft, SettledDraftIds, SimpleMessageInfo,
     UpsertedContacts, UpsertedRecipient,
 };
 pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
@@ -32,7 +34,8 @@ pub use link::{
     UserEmailLinkSettings, UserProvider,
 };
 pub use mail_projection::{
-    EmailPreview, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
+    EmailDraftAggregate, EmailDraftEntry, EmailPreview, EmailThreadDraftState,
+    EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
 };
 pub use message::{Message, MessageRow, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};

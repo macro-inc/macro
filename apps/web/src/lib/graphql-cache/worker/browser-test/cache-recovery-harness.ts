@@ -538,9 +538,9 @@ async function runFaultKind(kind: MutatingRequestKind) {
   }
 }
 
-async function applyStorageMutation(
+async function runStorageControl(
   scope: string,
-  kind: RecoveryKind
+  kind: RecoveryKind | 'verify-artifacts'
 ): Promise<string> {
   const worker = new Worker(
     new URL('./production-cache.storage-control-worker.ts', import.meta.url),
@@ -578,6 +578,8 @@ async function applyStorageMutation(
 
 async function runRecoveryKind(kind: RecoveryKind) {
   const scope = `cache-recovery-${kind}-${crypto.randomUUID()}`;
+  // Fail before seeding or corrupting storage if either generated artifact is stale.
+  await runStorageControl(scope, 'verify-artifacts');
   const session = new ProductionSession(scope);
   try {
     await session.openTab('before-corruption');
@@ -590,7 +592,7 @@ async function runRecoveryKind(kind: RecoveryKind) {
       request: enqueueRequest('recovery-seed-owner', 10),
     });
     await session.gracefulClose('before-corruption');
-    const browserTestWasmUrl = await applyStorageMutation(scope, kind);
+    const browserTestWasmUrl = await runStorageControl(scope, kind);
     const telemetryBeforeReopen = session.cacheTelemetry.length;
     await session.openTab('after-corruption');
     await waitUntil('recovery outcome and authoritative wipe telemetry', () => {

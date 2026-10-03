@@ -338,22 +338,28 @@ impl CreateRunResponse {
     }
 }
 
-/// The envelope Cursor wraps an error status in: `{"error": {"code", …}}`.
+/// The envelope Cursor wraps an error status in: `{"error": {"code", "message"}}`.
 ///
-/// Only `code` is modelled. The human half of the body is Cursor's wording of
-/// the same fact, and this crate has its own wording for the one case it acts
-/// on; everything else keeps the raw body instead.
+/// `message` is read as well as `code` because Cursor files more than one
+/// distinct failure under `validation_error`, and the wording is the only
+/// thing that tells a branch it could not verify apart from a malformed
+/// model id. This crate still has its own wording for the cases it acts on;
+/// everything else keeps the raw body instead.
 #[derive(Debug, Deserialize)]
 pub struct ApiErrorEnvelope {
     /// The error itself.
     pub error: ApiErrorCode,
 }
 
-/// The machine-readable half of an error body.
+/// The two halves of an error body.
 #[derive(Debug, Deserialize)]
 pub struct ApiErrorCode {
     /// Cursor's error code, e.g. `repository_access`.
     pub code: String,
+    /// Cursor's human-readable wording. Defaulted so a body with only a code
+    /// still classifies by it.
+    #[serde(default)]
+    pub message: String,
 }
 
 /// `GET /v1/agents/{id}/artifacts` response.

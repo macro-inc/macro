@@ -1,4 +1,3 @@
-import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { createRoot } from 'solid-js';
@@ -6,11 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SoupState } from '../create-soup-state';
 
 const mocks = vi.hoisted(() => ({
-  controller: {
+  splitHandle: {
     content: vi.fn(() => ({ id: 'other' })),
-    isControllerSplit: vi.fn(() => true),
     referredFrom: vi.fn(() => undefined),
-    resetPreview: vi.fn(),
   },
   executeMarkEntitiesDone: vi.fn(async () => [] as string[]),
   executeMarkEntitiesUndone: vi.fn(async () => {}),
@@ -27,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanel: () => ({ handle: mocks.controller }),
+  useSplitPanel: () => ({ handle: mocks.splitHandle }),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -121,7 +118,14 @@ function createAction() {
 
 describe('canExecuteMarkDoneOnView', () => {
   it('allows mark done on every thread-listing mail tab', () => {
-    for (const tab of ['important', 'noise', 'calendar', 'shared', 'all']) {
+    for (const tab of [
+      'important',
+      'noise',
+      'favorites',
+      'calendar',
+      'shared',
+      'all',
+    ]) {
       expect(canExecuteMarkDoneOnView('mail', tab)).toBe(true);
     }
   });
@@ -134,10 +138,8 @@ describe('canExecuteMarkDoneOnView', () => {
 
 describe('makeMarkDoneAction', () => {
   beforeEach(() => {
-    mocks.controller.content.mockReturnValue({ id: 'other' });
-    mocks.controller.isControllerSplit.mockReturnValue(true);
-    mocks.controller.referredFrom.mockReturnValue(undefined);
-    mocks.controller.resetPreview.mockClear();
+    mocks.splitHandle.content.mockReturnValue({ id: 'other' });
+    mocks.splitHandle.referredFrom.mockReturnValue(undefined);
     mocks.executeMarkEntitiesDone.mockClear();
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
@@ -153,26 +155,169 @@ describe('makeMarkDoneAction', () => {
     mocks.toNotificationEntityRef.mockReset();
   });
 
-  it('opens the next focused entity in an engaged Preview Controller', async () => {
-    const { soup, focusSet } = createSoup();
+  it('allows mark done on agent-session rows', () => {
     const { action, dispose } = createAction();
 
-    await action.executeWithSoup([currentEntity], soup);
+    expect(
+      action.canExecute({
+        type: 'agent_session',
+        id: 'session-1',
+      } as EntityData)
+    ).toBe(true);
+    expect(
+      action.canExecute({ type: 'channel_message', id: 'msg-1' } as EntityData)
+    ).toBe(false);
+    dispose();
+  });
 
-    expect(focusSet).toHaveBeenCalledWith('next-row');
-    expect(mocks.openEntityInSplitFromUnifiedList).toHaveBeenCalledWith(
-      nextEntity,
-      {
-        splitHandle: mocks.controller as unknown as SplitHandle,
-        mergeHistory: true,
-        notificationSource,
+  it('keeps ordinary reminders undoable when selected with a workflow mirror', async () => {
+    const mirror = {
+      type: 'reminder',
+      id: 'mirror',
+      emailFollowup: { threadId: 'thread' },
+    } as EntityData;
+    const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
+    const { action, dispose } = createAction();
+    const onUndoHandle = vi.fn();
+    await action.execute([mirror, ordinary], undefined, { onUndoHandle });
+    expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
+    const mirrorVariables = mocks.mutateAsync.mock.calls[0][0];
+    const ordinaryVariables = mocks.mutateAsync.mock.calls[1][0];
+    expect(mirrorVariables).toMatchObject({ entities: [mirror] });
+    expect(ordinaryVariables).toMatchObject({
+      entities: [ordinary],
+      onUndoHandle,
+    });
+    const options = mocks.undoableOptionsFactory() as {
+      onPushed: (
+        handle: { dispose: () => void },
+        variables: unknown
+      ) => unknown;
+    };
+    const mirrorHandle = { dispose: vi.fn() };
+    const ordinaryHandle = { dispose: vi.fn() };
+    options.onPushed(mirrorHandle, mirrorVariables);
+    options.onPushed(ordinaryHandle, ordinaryVariables);
+    expect(mirrorHandle.dispose).toHaveBeenCalledOnce();
+    expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
+    expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
+    dispose();
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'waits for the mirror to %s before publishing ordinary Undo',
+    async (settlement) => {
+      const mirror = {
+        type: 'reminder',
+        id: 'mirror',
+        emailFollowup: { threadId: 'thread' },
+      } as EntityData;
+      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
+      let resolveMirror!: () => void;
+      let rejectMirror!: (reason: Error) => void;
+      const pendingMirror = new Promise<void>((resolve, reject) => {
+        resolveMirror = resolve;
+        rejectMirror = reject;
+      });
+      const failure = new Error('mirror failed');
+      const { action, dispose } = createAction();
+      const onUndoHandle = vi.fn();
+      const ordinaryHandle = { dispose: vi.fn() };
+      const options = mocks.undoableOptionsFactory() as {
+        onPushed: (
+          handle: { dispose: () => void },
+          variables: unknown
+        ) => unknown;
+      };
+      mocks.mutateAsync.mockImplementationOnce(() => pendingMirror);
+      mocks.mutateAsync.mockImplementationOnce(async (variables) => {
+        options.onPushed(ordinaryHandle, variables);
+      });
+      try {
+        const result = action
+          .execute([mirror, ordinary], undefined, { onUndoHandle })
+          .catch((error) => error);
+        await Promise.resolve();
+        expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
+        expect(onUndoHandle).not.toHaveBeenCalled();
+        if (settlement === 'reject') rejectMirror(failure);
+        else resolveMirror();
+        expect(await result).toBe(
+          settlement === 'reject' ? failure : undefined
+        );
+        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
+        expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
+        expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
+      } finally {
+        dispose();
       }
+    }
+  );
+
+  it.each(['mirror', 'ordinary'])(
+    'attempts both mixed groups when the %s group fails',
+    async (failedId) => {
+      const mirror = {
+        type: 'reminder',
+        id: 'mirror',
+        emailFollowup: { threadId: 'thread' },
+      } as EntityData;
+      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
+      const failure = new Error(`${failedId} failed`);
+      mocks.mutateAsync.mockImplementationOnce(async () => {
+        if (failedId === 'mirror') throw failure;
+      });
+      mocks.mutateAsync.mockImplementationOnce(async () => {
+        if (failedId === 'ordinary') throw failure;
+      });
+      const { action, dispose } = createAction();
+      const onUndoHandle = vi.fn();
+      try {
+        await expect(
+          action.execute([mirror, ordinary], undefined, { onUndoHandle })
+        ).rejects.toBe(failure);
+        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
+        expect(mocks.mutateAsync.mock.calls[1][0]).toMatchObject({
+          entities: [ordinary],
+          onUndoHandle,
+        });
+        expect(mocks.mutateAsync.mock.calls[0][0]).toMatchObject({
+          entities: [mirror],
+        });
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(true);
+    mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
+      emailIds: [],
+      notificationIds: ['agent-notification'],
+      reminderIds: [],
+    });
+    mocks.toNotificationEntityRef.mockReturnValue({
+      type: 'agent_session',
+      id: 'session-1',
+    });
+    const session = { type: 'agent_session', id: 'session-1' } as EntityData;
+    const { action, dispose } = createAction();
+
+    await action.execute([session]);
+
+    expect(mocks.toNotificationEntityRef).toHaveBeenCalledWith(session);
+    expect(mocks.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exactNotificationIds: { current: [] },
+        notificationEntities: [{ type: 'agent_session', id: 'session-1' }],
+        optimisticNotificationIds: ['agent-notification'],
+      })
     );
     dispose();
   });
 
-  it('does not open the next entity when the split is not a Controller', async () => {
-    mocks.controller.isControllerSplit.mockReturnValue(false);
+  it('moves list focus without opening the next entity', async () => {
     const { soup } = createSoup();
     const { action, dispose } = createAction();
 
@@ -182,7 +327,7 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('uses an explicit navigation handler instead of the split Controller', async () => {
+  it('uses an explicit navigation handler to open the next entity', async () => {
     const { soup } = createSoup();
     const onNavigate = vi.fn();
     const { action, dispose } = createAction();
@@ -261,7 +406,7 @@ describe('makeMarkDoneAction', () => {
 
   it('keeps whole-channel inbox writes ID-based to exclude thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.controller.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['channel-notification'],
@@ -287,7 +432,7 @@ describe('makeMarkDoneAction', () => {
 
   it('uses the canonical message entity for inbox channel-thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.controller.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['thread-notification'],
@@ -319,6 +464,66 @@ describe('makeMarkDoneAction', () => {
         ],
       })
     );
+    dispose();
+  });
+
+  it('applies Undo before its server reply and settles only afterwards', async () => {
+    const { dispose } = createAction();
+    const variables = {
+      emailIds: ['current'],
+      exactNotificationIds: { current: ['exact-id'] },
+      reminderIds: [],
+    };
+    const context = {
+      applyUndone: vi.fn(),
+      reapply: vi.fn(),
+      settle: vi.fn(),
+      releaseGraphql: vi.fn(),
+    };
+    const options = mocks.undoableOptionsFactory() as {
+      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    };
+    let finish!: () => void;
+    mocks.executeMarkEntitiesUndone.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const undo = options.undoFn(variables, context);
+    expect(context.applyUndone).toHaveBeenCalledOnce();
+    expect(context.settle).not.toHaveBeenCalled();
+    finish();
+    await undo;
+    expect(context.settle).toHaveBeenCalledWith(['exact-id']);
+    dispose();
+  });
+
+  it('does not pin guessed GraphQL state after a partially failed reversal', async () => {
+    const { dispose } = createAction();
+    const variables = {
+      emailIds: ['current'],
+      exactNotificationIds: { current: ['exact-id'] },
+      reminderIds: [],
+    };
+    const context = {
+      applyUndone: vi.fn(),
+      reapply: vi.fn(),
+      settle: vi.fn(),
+      releaseGraphql: vi.fn(),
+    };
+    const options = mocks.undoableOptionsFactory() as {
+      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    };
+    mocks.executeMarkEntitiesUndone.mockRejectedValueOnce(
+      new Error('partial failure')
+    );
+    await expect(options.undoFn(variables, context)).rejects.toThrow(
+      'partial failure'
+    );
+    expect(context.reapply).toHaveBeenCalledOnce();
+    expect(context.releaseGraphql).toHaveBeenCalledOnce();
+    expect(context.settle).not.toHaveBeenCalled();
     dispose();
   });
 
@@ -377,4 +582,9 @@ describe('makeMarkDoneAction', () => {
     });
     dispose();
   });
+});
+
+it('keeps original Email Reminders rows eligible for the email archive action', async () => {
+  const { canExecuteMarkDoneOnView } = await import('./make-mark-done-action');
+  expect(canExecuteMarkDoneOnView('mail', 'reminders')).toBe(true);
 });

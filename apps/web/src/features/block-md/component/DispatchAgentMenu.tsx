@@ -1,4 +1,5 @@
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import type { CustomFileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import type { SplitFileMenuAction } from '@components/app/split-layout/context';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
@@ -13,35 +14,131 @@ import CopyIcon from '@phosphor/copy.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, ButtonGroup, Dropdown } from '@ui';
+import { Button, ButtonGroup, CopyButton, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  sortComments,
-  useDiscussionThreads,
-} from '../comments/discussionResource';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
 
-async function generateTaskPrompt(
-  documentId: string,
-  documentName: string,
-  content: string,
-  threads: CommentThread[]
-): Promise<string> {
+type PromptComment = {
+  author: string;
+  createdAt?: string | null;
+  text: string;
+};
+type PromptThread = { threadId: string | number; comments: PromptComment[] };
+
+function messagePromptThreads(threads: MessageThread[]): PromptThread[] {
+  return threads.map((thread) => ({
+    threadId: thread.state.root_id,
+    comments: [thread.root, ...thread.replies]
+      .filter((message) => message.content && !message.deleted_at)
+      .map((message) => ({
+        author: message.imported_author?.name?.trim() || message.sender_id,
+        createdAt: message.created_at,
+        text: message.content,
+      })),
+  }));
+}
+
+/** Copy/export needs full discussions, not the timeline's bounded reply previews. */
+async function fetchMessagePromptThreads(
+  documentId: string
+): Promise<PromptThread[]> {
+  const threads = await fetchDocumentThreads({
+    type: 'document',
+    id: documentId,
+  });
+  threads.reverse();
+  return messagePromptThreads(threads);
+}
+
+function promptThreadLines(threads: PromptThread[]): string[] {
+  const lines: string[] = [];
+  for (const thread of threads) {
+    lines.push(`<comment-thread thread-id="${thread.threadId}">`);
+    for (const comment of thread.comments) {
+      const macroId = tryMacroId(comment.author);
+      const author = macroId ? macroIdToEmail(macroId) : comment.author;
+      const createdAt = comment.createdAt
+        ? ` created-at="${comment.createdAt}"`
+        : '';
+      lines.push(
+        `<comment author="${author}"${createdAt}>${comment.text}</comment>`
+      );
+    }
+    lines.push('</comment-thread>');
+  }
+  return lines;
+}
+
+async function fetchBranchName(documentId: string) {
   const result = await storageServiceClient.getDocumentBranchName({
     documentId,
   });
   if (!result.isOk()) {
     throw new Error('Failed to fetch branch name');
   }
-  const { shortId, branchName } = result.value;
+  return result.value;
+}
+
+/**
+ * Plain documents carry no branch (the branch endpoint rejects non-tasks), so
+ * the prompt frames them as context to read.
+ */
+async function generateDocumentPrompt(
+  documentId: string,
+  documentName: string,
+  content: string,
+  threads: PromptThread[]
+): Promise<string> {
+  const result = await storageServiceClient.getDocumentShortId({ documentId });
+  if (!result.isOk()) {
+    throw new Error('Failed to fetch short id');
+  }
+  const shortId = result.value;
+
+  const lines: string[] = [];
+
+  lines.push(`Read the Macro document ${documentName}:`);
+  lines.push('');
+  lines.push(`<document identifier="${shortId}">`);
+  lines.push(`<title>${documentName}</title>`);
+  lines.push('</document>');
+
+  if (content) {
+    lines.push('');
+    lines.push('<document-content>');
+    lines.push(content);
+    lines.push('</document-content>');
+  }
+
+  if (threads.length > 0) {
+    lines.push('');
+    lines.push(...promptThreadLines(threads));
+  }
+
+  lines.push('');
+  lines.push(
+    'If you have the Macro MCP server enabled, use it to gather additional context about this document.'
+  );
+
+  return lines.join('\n');
+}
+
+async function generateTaskPrompt(
+  documentId: string,
+  documentName: string,
+  content: string,
+  threads: PromptThread[]
+): Promise<string> {
+  const { shortId, branchName } = await fetchBranchName(documentId);
 
   const lines: string[] = [];
 
@@ -61,24 +158,7 @@ async function generateTaskPrompt(
 
   if (threads.length > 0) {
     lines.push('');
-    for (const thread of threads) {
-      const sorted = [...thread.comments].sort(sortComments);
-      lines.push(`<comment-thread thread-id="${thread.thread.threadId}">`);
-      for (const comment of sorted) {
-        if (comment.text && !comment.deletedAt) {
-          const userId = comment.sender ?? comment.owner;
-          const macroId = tryMacroId(userId);
-          const author = macroId ? macroIdToEmail(macroId) : userId;
-          const createdAt = comment.createdAt
-            ? ` created-at="${comment.createdAt}"`
-            : '';
-          lines.push(
-            `<comment author="${author}"${createdAt}>${comment.text}</comment>`
-          );
-        }
-      }
-      lines.push('</comment-thread>');
-    }
+    lines.push(...promptThreadLines(threads));
   }
 
   lines.push('');
@@ -104,7 +184,7 @@ type AgentAction = {
   name: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   buttonIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  execute: (prompt: string) => void;
+  execute: (prompt: string) => unknown;
 };
 
 const COPY_ACTION: AgentAction = {
@@ -112,9 +192,8 @@ const COPY_ACTION: AgentAction = {
   name: 'Copy as prompt',
   icon: CopyIcon,
   buttonIcon: TerminalWindowIcon,
-  execute: (prompt) => {
-    navigator.clipboard.writeText(prompt);
-    toast.success('Task prompt copied to clipboard');
+  execute: async (prompt) => {
+    await navigator.clipboard.writeText(prompt);
   },
 };
 
@@ -163,100 +242,121 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
 );
 
 export function useDispatchAgentAction() {
-  const { documentId, state } = useMarkdownDocument();
+  const { documentId, kind, state } = useMarkdownDocument();
   const blockId = documentId();
   const { displayName: name } = useMarkdownName();
-  const discussionThreads = useDiscussionThreads();
+  const isTask = () => kind() === 'task';
 
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
 
-  const buildPrompt = createCallback(() => {
+  const buildPrompt = createCallback(async () => {
     const docName = name() ?? '';
     const editor = state.editor.md.editor;
     const content = editor ? editorStateAsMarkdown(editor, 'external') : '';
-    const threads = discussionThreads() ?? [];
-    return generateTaskPrompt(blockId, docName, content, threads);
+    const threads = await fetchMessagePromptThreads(blockId);
+    const generate = isTask() ? generateTaskPrompt : generateDocumentPrompt;
+    return generate(blockId, docName, content, threads);
   });
 
-  const executeAction = async (action: AgentAction) => {
+  const executeAction = async (
+    action: AgentAction,
+    options: { silent?: boolean } = {}
+  ) => {
     try {
       const prompt = await buildPrompt();
-      action.execute(prompt);
+      await action.execute(prompt);
+      if (action.key === 'copy' && !options.silent) {
+        toast.success('Prompt copied to clipboard');
+      }
       setLastUsedKey(action.key);
+      return true;
     } catch (e) {
-      console.error('Failed to generate task prompt', e);
-      toast.failure('Failed to generate task prompt');
+      console.error('Failed to generate prompt', e);
+      toast.failure('Failed to generate prompt');
+      return false;
     }
   };
 
   return {
     blockId,
+    isTask,
     lastUsed,
     executeAction,
-    executeLastUsed: () => executeAction(lastUsed()),
+    executeLastUsed: () => executeAction(lastUsed(), { silent: true }),
   };
 }
 
-export function useDispatchAgentSplitFileActions(): SplitFileMenuAction[] {
+export function useDispatchAgentSplitFileActions(): {
+  copyAsPrompt: CustomFileOperation;
+  all: SplitFileMenuAction[];
+} {
   const { executeAction } = useDispatchAgentAction();
 
-  return [
-    {
-      label: COPY_ACTION.name,
-      icon: COPY_ACTION.icon,
-      action: () => {
-        void executeAction(COPY_ACTION);
-      },
+  const copyAsPrompt: CustomFileOperation = {
+    label: COPY_ACTION.name,
+    icon: COPY_ACTION.icon,
+    action: () => {
+      void executeAction(COPY_ACTION);
     },
-    ...PLATFORM_ACTIONS.map((action) => ({
-      label: action.name,
-      icon: action.icon,
-      action: () => {
-        void executeAction(action);
+  };
+
+  return {
+    copyAsPrompt,
+    all: [
+      copyAsPrompt,
+      ...PLATFORM_ACTIONS.map((action) => ({
+        label: action.name,
+        icon: action.icon,
+        action: () => {
+          void executeAction(action);
+        },
+      })),
+      {
+        label: 'MCP setup instructions',
+        icon: PlugIcon,
+        action: openMacroMcpSetupModal,
       },
-    })),
-    {
-      label: 'MCP setup instructions',
-      icon: PlugIcon,
-      action: openMacroMcpSetupModal,
-    },
-  ];
+    ],
+  };
 }
 
 export function DispatchAgentButton(
   props: { showPrimaryLabel?: boolean } = {}
 ) {
   const [open, setOpen] = createSignal(false);
-  const { blockId, lastUsed, executeAction, executeLastUsed } =
+  const { blockId, isTask, lastUsed, executeAction, executeLastUsed } =
     useDispatchAgentAction();
 
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
       <ButtonGroup
-        variant="ghost"
-        size={props.showPrimaryLabel ? 'sm' : 'icon-sm'}
+        variant="outline"
+        size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
         depth={2}
-        class="rounded-full border border-edge-muted"
+        class={props.showPrimaryLabel ? 'h-8' : undefined}
       >
-        <Button
+        <Dynamic
+          component={lastUsed().key === 'copy' ? CopyButton : Button}
           onClick={executeLastUsed}
           tooltip={lastUsed().name}
-          class="bg-transparent hover:bg-ink/[0.04]"
+          class="@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0"
         >
           <Dynamic
             component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3!"
+            class="size-3.5!"
           />
           <Show when={props.showPrimaryLabel}>
-            <span class="max-w-36 truncate text-xs font-medium">
+            <span class="max-w-36 truncate @max-[600px]/split-header:hidden">
               {lastUsed().name}
             </span>
           </Show>
-        </Button>
+        </Dynamic>
         <ButtonGroup.Divider />
         <Dropdown.Trigger
-          class="bg-transparent p-1 hover:bg-ink/[0.04]"
+          variant="outline"
+          size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
+          class="px-2"
           label="Agent options"
         >
           <CaretDown class="size-3.5!" />
@@ -273,15 +373,17 @@ export function DispatchAgentButton(
             <Dynamic component={COPY_ACTION.icon} class="size-4 shrink-0" />
             <span class="flex-1 truncate">{COPY_ACTION.name}</span>
           </Dropdown.Item>
-          <Dropdown.Item
-            onSelect={() => {
-              copyBranchNameToClipboard(blockId);
-              setOpen(false);
-            }}
-          >
-            <GitBranch class="size-4 shrink-0" />
-            <span class="flex-1 truncate">Copy branch name</span>
-          </Dropdown.Item>
+          <Show when={isTask()}>
+            <Dropdown.Item
+              onSelect={() => {
+                copyBranchNameToClipboard(blockId);
+                setOpen(false);
+              }}
+            >
+              <GitBranch class="size-4 shrink-0" />
+              <span class="flex-1 truncate">Copy branch name</span>
+            </Dropdown.Item>
+          </Show>
           <Dropdown.Item
             onSelect={() => {
               openMacroMcpSetupModal();

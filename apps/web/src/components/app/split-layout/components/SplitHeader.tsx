@@ -1,12 +1,14 @@
+import type { ListDetailNavigationTarget } from '@app/components/list';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { driveLocationLabel } from '@app/features/drive-view/core/location-label';
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { projectRouteId } from '@app/features/projects/core/route';
+import { useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {
   ContextMenuContent,
@@ -31,7 +33,6 @@ import CaretLeft from '@phosphor/caret-left.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import SplitIcon from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -47,8 +48,11 @@ import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import type { SplitContent } from '../layoutManager';
-import { shouldShowSplitCloseButton } from '../layoutUtils';
+import type { SplitContent, SplitId } from '../layoutManager';
+import {
+  closeSplitOrReturnToList,
+  shouldShowSplitCloseButton,
+} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -65,6 +69,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   return (
     match(data)
       .returnType<{ type: SplitContent['type']; id: string } | undefined>()
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => ({
         type: fileTypeToBlockName(entity.subType?.type ?? entity.fileType) as
           | BlockName
@@ -86,8 +94,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
       .with({ type: P.union('foreign', 'reminder') }, () => undefined)
       // The full calendar opening path supplies the event range to focus.
       .with({ type: 'calendar_event' }, () => ({
-        type: 'calendar',
-        id: CALENDAR_BLOCK_ID,
+        type: 'component',
+        id: CALENDAR_VIEW_ID,
       }))
       .with({ type: 'crm_company' }, (entity) => ({
         type: 'company',
@@ -105,12 +113,19 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
             'email',
             'project',
             'call',
-            'automation'
+            'automation',
+            'database'
           ),
         },
         (entity) => ({ type: entity.type, id: entity.id })
       )
       .exhaustive()
+  );
+}
+
+function hasAgentsBackFallback(content: SplitContent) {
+  return (
+    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
   );
 }
 
@@ -121,52 +136,28 @@ function SplitBackButton() {
     <Button
       square
       size="sm"
-      class="p-1 rounded-lg touch:active:bg-transparent"
+      class="p-1 touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
-      disabled={!context.handle.canGoBack()}
+      disabled={
+        !context.handle.canGoBack() &&
+        !hasAgentsBackFallback(context.handle.content())
+      }
       onClick={() => {
         if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
+        if (
+          !context.handle.canGoBack() &&
+          hasAgentsBackFallback(context.handle.content())
+        ) {
+          context.handle.replace({
+            next: { type: 'component', id: 'agents' },
+            mergeHistory: true,
+          });
+        } else context.handle.goBack();
       }}
     >
       <CaretLeft />
     </Button>
-  );
-}
-
-function SidebarExpandButton() {
-  const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  const sidebar = useSidebarCollapse();
-
-  const isLeftmostSplit = () =>
-    layout?.manager.splits()[0]?.id === panel?.handle.id;
-  const visible = () => sidebar.isCollapsed() && isLeftmostSplit();
-
-  return (
-    <div
-      class={cn(
-        'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible()
-          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
-          : 'w-0 opacity-0 mr-0'
-      )}
-      aria-hidden={!visible()}
-    >
-      <Button
-        class="rounded-lg"
-        square
-        size="sm"
-        label="Expand Sidebar"
-        hotkey={TOKENS.global.toggleSidebar}
-        disabled={!visible()}
-        tabindex={visible() ? undefined : -1}
-        onClick={() => sidebar.expand()}
-      >
-        <SidebarIcon class="size-4" />
-      </Button>
-    </div>
   );
 }
 
@@ -177,7 +168,7 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-lg hidden"
+        class="p-1 hidden"
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
@@ -200,20 +191,24 @@ function SplitCloseButton() {
   if (!context || !layout) return null;
 
   const label = createMemo(() => {
-    const isOnlySplit = layout.manager.splits().length === 1;
+    const isOnlySplit = !shouldShowSplitCloseButton(layout.manager);
     const isNotUnifiedList = !isListViewID(context.handle.content().id);
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
   return (
-    <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
+    <Show
+      when={
+        shouldShowSplitCloseButton(layout.manager) ||
+        !isListViewID(context.handle.content().id)
+      }
+    >
       <Button
         square
         size="icon-sm"
-        class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
-        onClick={context.handle.close}
+        onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}
       >
         <CloseIcon class="size-4" />
       </Button>
@@ -248,8 +243,10 @@ function SplitDriveReturnButton() {
   const sourceLabel = () => {
     const state = sourceList()?.state;
     const label = state?.['drive.returnLabel'];
+
     if (typeof label === 'string') return label;
-    const driveState = state?.['drive.view'] as DriveState | undefined;
+
+    const driveState = state?.['drive.view.v2'] as DriveState | undefined;
     return driveState ? driveLocationLabel(driveState.location) : 'My Files';
   };
   const returnToDrive = () => {
@@ -286,7 +283,7 @@ function SoupNavigationButtons() {
 
   const navigationReferredFrom = createMemo(() => {
     const referredFrom = context.handle.referredFrom();
-    if (referredFrom !== 'inbox' && referredFrom !== 'mail') {
+    if (referredFrom !== 'home' && referredFrom !== 'mail') {
       return;
     }
 
@@ -300,7 +297,7 @@ function SoupNavigationButtons() {
 
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
-      referredFrom === 'inbox' || referredFrom === 'mail';
+      referredFrom === 'home' || referredFrom === 'mail';
 
     return isNavigableListView && rows().length > 0;
   });
@@ -327,33 +324,53 @@ function SoupNavigationButtons() {
 
   return (
     <Show when={shouldShow()}>
-      <div class="flex items-center gap-0.5">
-        <Button
-          class="p-1 rounded-lg"
-          label="Previous item"
-          hotkey={TOKENS.entity.step.start}
-          disabled={!canNavigateUp()}
-          onClick={() => navigate(-1)}
-        >
-          <CaretUp class="size-4" />
-        </Button>
-        <Button
-          class="p-1 rounded-lg"
-          label="Next item"
-          hotkey={TOKENS.entity.step.end}
-          disabled={!canNavigateDown()}
-          onClick={() => navigate(1)}
-        >
-          <CaretDown class="size-4" />
-        </Button>
-      </div>
+      <ListNavigationButtons
+        navigation={{
+          canPrevious: canNavigateUp,
+          canNext: canNavigateDown,
+          previous: () => navigate(-1),
+          next: () => navigate(1),
+        }}
+      />
     </Show>
+  );
+}
+
+/** Shared header controls; each host supplies its current list navigation. */
+export function ListNavigationButtons(props: {
+  navigation: ListDetailNavigationTarget;
+  class?: string;
+}) {
+  return (
+    <div class={cn('flex items-center gap-0.5', props.class)}>
+      <Button
+        size="icon-md"
+        label="Previous item"
+        hotkey={TOKENS.entity.step.start}
+        disabled={!props.navigation.canPrevious()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.navigation.previous}
+      >
+        <CaretUp class="size-4" />
+      </Button>
+      <Button
+        size="icon-md"
+        label="Next item"
+        hotkey={TOKENS.entity.step.end}
+        disabled={!props.navigation.canNext()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.navigation.next}
+      >
+        <CaretDown class="size-4" />
+      </Button>
+    </div>
   );
 }
 
 function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
+  const router = useSplitRouter<SplitId>();
   if (!panel || !layout) return props.children;
 
   const splitIndex = createMemo(() =>
@@ -369,7 +386,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
 
   const newSplitContent = () => ({
     type: 'component' as const,
-    id: LIST_VIEW_ID.inbox,
+    id: LIST_VIEW_ID.home,
   });
 
   const duplicateContent = (): SplitContent => ({ ...panel.handle.content() });
@@ -398,7 +415,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: panel.handle.getUrl(),
+            currentSplitUrl: router.href(panel.handle.id),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,
@@ -474,18 +491,10 @@ function SplitHeaderContextMenu(props: ParentProps) {
             disabled={!hasOtherSplits()}
             onClick={() => {
               const currentSplitId = panel.handle.id;
-              // A Preview Pair is one unit: keep the current split's partner so
-              // closing "other" splits from a Viewer doesn't strand it by
-              // removing its Controller (or vice versa).
-              const partnerId =
-                layout.manager.controllerOf(currentSplitId) ??
-                layout.manager.viewerOf(currentSplitId);
-              const kept = new Set([currentSplitId, partnerId]);
-
               const otherSplitIds = layout.manager
                 .splits()
                 .map((split) => split.id)
-                .filter((id) => !kept.has(id));
+                .filter((id) => id !== currentSplitId);
 
               for (const splitId of otherSplitIds) {
                 layout.manager.removeSplit(splitId);
@@ -601,7 +610,6 @@ export function SplitHeader(props: {
             when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
-                <SidebarExpandButton />
                 <SplitCloseButton />
                 <SplitDriveReturnButton />
               </div>
@@ -613,7 +621,8 @@ export function SplitHeader(props: {
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                (!panel.handle.canGoBack() ||
+                ((!panel.handle.canGoBack() &&
+                  !hasAgentsBackFallback(panel.handle.content())) ||
                   isListViewID(panel.handle.content().id)) &&
                   'hidden'
               )}
@@ -638,7 +647,7 @@ export function SplitHeader(props: {
             }}
           />
 
-          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-1 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

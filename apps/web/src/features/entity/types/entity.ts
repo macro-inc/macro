@@ -11,12 +11,15 @@ import type {
   SoupThreadReply,
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
+import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 
 export type EntityBase = {
   id: string;
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /** Viewer-owned favorite state from Soup; absent on search-only results. */
+  isFavorited?: boolean;
   /**
    * The viewer's latest own mutation of this entity, present only on rows
    * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
@@ -93,6 +96,14 @@ export type ChannelEntityTarget = {
 };
 
 /**
+ * The comment a document row opens at when it is not derived from the row's
+ * notifications, e.g. a preview rebuilt from its route.
+ */
+export type DocumentCommentTarget = {
+  commentId: string;
+};
+
+/**
  * The resolved click intent for a channel-family row. Either a specific
  * message to jump to and highlight, or `latest` — open the channel at its
  * newest message with no highlight. A whole `channel` row with no unread
@@ -106,6 +117,13 @@ export type ChannelClickTarget =
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
+  /** Filtered, bounded edge for the unread dot. Undefined denotes a legacy/full
+   * row; an empty array denotes no unread messages. Never use for bulk reads. */
+  unreadNotifications?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+    createdAt: DateValue;
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
@@ -165,7 +183,17 @@ export type ChatEntity = EntityBase & {
 
 export type AgentSessionEntity = EntityBase & {
   type: 'agent_session';
+  isArchived?: boolean;
   botId: string;
+  harness?: string;
+  repoUrl?: string | null;
+  /** Starting branch selected at creation, not the current working branch. */
+  repoBranch?: string | null;
+  pullRequestUrl?: string | null;
+  workingBranch?: string | null;
+  pullRequestState?: 'open' | 'draft' | 'closed' | 'merged' | null;
+  pullRequestId?: string | null;
+  turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
   status: string;
@@ -180,6 +208,17 @@ export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
 } | null;
+
+/** Wire subtypes without a dedicated block, including initiative_description, become null. */
+export const toSubType = (
+  wire: { type: string; is_completed?: boolean } | null | undefined
+): SubType => {
+  if (wire == null) return null;
+  const { type } = wire;
+  return type === 'task' || type === 'snippet' || type === 'skill'
+    ? { type, is_completed: wire.is_completed }
+    : null;
+};
 
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';
@@ -239,6 +278,8 @@ export type EmailEntity = EntityBase & {
   isDraft: boolean;
   snippet?: string;
   isImportant: boolean;
+  /** Server-computed Signal membership; unavailable on some search results. */
+  isSignal?: boolean;
   done: boolean;
   projectId?: string;
   participants?: EmailThreadParticipants;
@@ -250,6 +291,8 @@ export type EmailEntity = EntityBase & {
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
+  /** ISO 8601 time of the thread draft's confirmed scheduled send. */
+  scheduledSendTime?: string;
 };
 
 export type ProjectEntity = EntityBase & {
@@ -260,34 +303,58 @@ export type ProjectEntity = EntityBase & {
 
 export type CallStatus = StorageCallStatus;
 
+/** Session-scoped guest identity on a call; not a Macro account. */
+export type CallGuest = {
+  id: string;
+  displayName: string;
+};
+
 export type CallEntity = EntityBase & {
   type: 'call';
-  channelId: string;
+  channelId?: string | null;
   channelName?: string;
   isActive: boolean;
   status: CallStatus;
   /** Compatibility flag derived from status. */
   attended: boolean;
   durationMs?: number;
+  /** Macro users only; guests are listed separately in `guests`. */
   participantIds: string[];
+  guests?: CallGuest[];
   summary?: string;
   properties?: SoupProperty[];
 };
+
+/**
+ * What a routine is doing now. A run in progress outranks activation, and a
+ * paused routine keeps its stale `next_run_at`, so pause outranks the schedule.
+ */
+export type RoutineStatus =
+  | { kind: 'running' }
+  | { kind: 'paused' }
+  | { kind: 'scheduled'; nextRunAt: string }
+  | { kind: 'unscheduled' };
+
+export function routineStatus(facts: {
+  enabled: boolean;
+  isRunning: boolean;
+  nextRunAt?: string | null;
+}): RoutineStatus {
+  if (facts.isRunning) return { kind: 'running' };
+  if (!facts.enabled) return { kind: 'paused' };
+  if (facts.nextRunAt) return { kind: 'scheduled', nextRunAt: facts.nextRunAt };
+  return { kind: 'unscheduled' };
+}
 
 export type AutomationEntity = EntityBase & {
   type: 'automation';
   /** Cron expression controlling when the automation runs. */
   cron: string;
-  /** Whether the automation is currently enabled. */
-  enabled: boolean;
-  /** ISO timestamp of the next scheduled run, or null when paused / unscheduled. */
-  nextRunAt?: string | null;
+  /** Running is derived from the server claim and the backend's stale-claim
+   *  window; claims update live via the connection-gateway websocket. */
+  status: RoutineStatus;
   /** ISO timestamp of the last completed run. */
   lastRunAt?: string | null;
-  /** True when a run is actively claimed on the server. Derived from the
-   *  scheduled action's `claimed` timestamp + the backend's stale-claim
-   *  window; updated live via the connection-gateway websocket. */
-  isRunning?: boolean;
 };
 
 export type CrmCompanyDomain = {
@@ -327,6 +394,13 @@ export type CrmContactEntity = EntityBase & {
   hidden: boolean;
 };
 
+/** A Macro Database. Not a Soup entity: it has no view history, so `createdAt` is its only timestamp. */
+export type DatabaseEntity = EntityBase & {
+  type: 'database';
+  /** What the viewer may do with the database. */
+  grant: AccessLevel;
+};
+
 export type ReminderEntity = EntityBase & {
   type: 'reminder';
   /** What to remind the user about. Doubles as {@link EntityBase.name}. */
@@ -348,7 +422,11 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    // Databases are not Soup entities, so nothing can point a reminder at one.
+    type: Exclude<
+      EntityType,
+      'reminder' | 'calendar_event' | 'initiative' | 'database'
+    >;
     fileType?: string;
     subType?: string;
   };
@@ -362,8 +440,10 @@ export type ReminderEntity = EntityBase & {
   nextRunAt: DateValue;
   /** When false, the dispatcher skips this reminder. */
   enabled: boolean;
-  /** Set once a one-shot reminder has fired. */
+  /** When the owner acknowledged the occurrence; recurring schedules can remain enabled. */
   completedAt?: DateValue | null;
+  /** Owning email workflow; these mirrors must be rescheduled through Remind me. */
+  emailFollowup?: import('@service-storage/generated/schemas/emailFollowup').EmailFollowup;
 };
 
 /** Normalized time shape of a calendar event soup row. */
@@ -399,6 +479,13 @@ export type CalendarEventEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/** A native project, distinct from folder entities. */
+export type InitiativeEntity = EntityBase & {
+  type: 'initiative';
+  descriptionDocumentId: string;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | AgentSessionEntity
   | ChannelEntity
@@ -410,9 +497,11 @@ export type EntityData =
   | SnippetEntity
   | EmailEntity
   | ProjectEntity
+  | InitiativeEntity
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
+  | DatabaseEntity
   | AutomationEntity
   | ReminderEntity
   | CalendarEventEntity
@@ -427,9 +516,11 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'document',
   'email',
   'project',
+  'initiative',
   'call',
   'crm_company',
   'crm_contact',
+  'database',
   'automation',
   'reminder',
   'calendar_event',

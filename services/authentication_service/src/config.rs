@@ -70,6 +70,10 @@ maybe_env_vars! {
     pub struct GtmInvitePromoCode;
     /// Hours a GTM invite link stays openable after creation. Defaults to 48.
     pub struct GtmInviteLinkTtlHours;
+    /// Stripe price id for the Max plan seat. Optional so the service can
+    /// deploy before the price exists in Stripe; until it is set, Max checkout
+    /// and plan changes answer 400 and every subscription maps to Premium.
+    pub struct StripeMaxPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -83,6 +87,14 @@ maybe_env_vars! {
 // #[macro_config::from_ref_all]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Default-off quota admission and prospective usage counting.
+    #[macro_config_default(ai_billing::AiUsageEnforcement::Disabled)]
+    pub enable_ai_usage_enforcement: ai_billing::AiUsageEnforcement,
+    /// Default-off settlement of usage past allowances: prepaid credit
+    /// consumption and Stripe overage collection. This service owns Stripe, so
+    /// its policy decides every settlement, however it was requested.
+    #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
+    pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
     #[allow(dead_code)]
     pub base_url: BaseUrl,
     /// The connection URL for the Postgres database this application should use.
@@ -156,13 +168,20 @@ pub struct Config {
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
     pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
+    /// Whether Develop allows every public signup without reading
+    /// `DEVELOPMENT_SIGNUP_ALLOWLIST_JSON`. Production and Local ignore it.
+    #[macro_config_default(false)]
+    pub development_bypass_signup_allowlist: bool,
     /// Stripe promotion code applied at checkout for accounts that signed up
     /// through a GTM invite link (optional, defaults to `1MF`).
     pub gtm_invite_promo_code: GtmInvitePromoCode,
     /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
     pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
-    /// The stripe price id
+    /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
+    /// The stripe price id for the Max plan seat (optional, see
+    /// [`StripeMaxPriceId`])
+    pub stripe_max_price_id: StripeMaxPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -184,8 +203,15 @@ pub(crate) struct MicrosoftCredentials {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load authentication service config")
+        let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let billing = ai_billing::config::load_ai_usage_billing()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut config = macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load authentication service config")?;
+        config.enable_ai_usage_enforcement = enforcement;
+        config.enable_ai_usage_billing = billing;
+        Ok(config)
     }
 
     /// The KMS key that encrypts Cursor API keys.
@@ -241,7 +267,11 @@ impl Config {
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {
-        resolve_signup_policy(environment, &self.development_signup_allowlist_json)
+        resolve_signup_policy(
+            environment,
+            self.development_bypass_signup_allowlist,
+            &self.development_signup_allowlist_json,
+        )
     }
 
     /// Resolves the offer GTM invite links carry.
@@ -282,10 +312,14 @@ fn resolve_microsoft_credentials(
 
 fn resolve_signup_policy(
     environment: Environment,
+    development_bypass_signup_allowlist: bool,
     development_signup_allowlist_json: &DevelopmentSignupAllowlistJson,
 ) -> anyhow::Result<SignupPolicy> {
     match environment {
         Environment::Production | Environment::Local => Ok(SignupPolicy::allow_all()),
+        Environment::Develop if development_bypass_signup_allowlist => {
+            Ok(SignupPolicy::allow_all())
+        }
         Environment::Develop => {
             let raw_allowlist = nonblank_value(development_signup_allowlist_json.value())
                 .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is required in Develop")?;

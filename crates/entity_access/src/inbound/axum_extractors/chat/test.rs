@@ -11,8 +11,8 @@ use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
+use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
 
@@ -146,7 +146,7 @@ fn chat_owned_by(owner_id: &str, deleted: bool) -> ChatBasic {
     ChatBasic {
         id: CHAT_ID.to_string(),
         name: "Test chat".to_string(),
-        user_id: MacroUserIdStr::try_from(owner_id.to_string()).expect("owner id should be valid"),
+        user_id: Owner::from_principal_str(owner_id).expect("owner id should be valid"),
         project_id: None,
         deleted_at: deleted.then(|| {
             "2026-01-01T00:00:00Z"
@@ -235,6 +235,66 @@ async fn authenticated_owner_bypasses_access_lookup() {
         EntityPermission::AccessLevel {
             access_level: AccessLevel::Owner
         }
+    ));
+    assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_owner_does_not_take_user_owner_fast_path() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let chat = chat_owned_by("bot|00000000-0000-0000-0000-00000000a1a1", false);
+
+    let extracted = extract::<EditAccessLevel>(request(Some("valid"), chat), &state)
+        .await
+        .expect("non-owner should fall through to entity_access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+    assert_eq!(state.entity_access.calls().len(), 1);
+    assert_eq!(
+        state.entity_access.calls()[0].user_id.as_deref(),
+        Some(USER_ID)
+    );
+}
+
+#[tokio::test]
+async fn team_owner_does_not_take_user_owner_fast_path() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let chat = chat_owned_by("01234567-89ab-cdef-0123-456789abcdef", false);
+
+    let extracted = extract::<ViewAccessLevel>(request(Some("valid"), chat), &state)
+        .await
+        .expect("non-owner should fall through to entity_access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+    assert_eq!(state.entity_access.calls().len(), 1);
+    assert_eq!(
+        state.entity_access.calls()[0].user_id.as_deref(),
+        Some(USER_ID)
+    );
+}
+
+#[tokio::test]
+async fn deleted_chat_with_non_user_owner_rejects_authenticated_user() {
+    let state = TestState::new(Some(AccessLevel::Owner));
+    let chat = chat_owned_by("bot|00000000-0000-0000-0000-00000000a1a1", true);
+
+    let result = extract::<ViewAccessLevel>(request(Some("valid"), chat), &state).await;
+
+    assert!(matches!(
+        result,
+        Err(ExtractorError::UnauthorizedWithMessage(
+            "only owner can access deleted resource"
+        ))
     ));
     assert!(state.entity_access.calls().is_empty());
 }

@@ -27,7 +27,7 @@ pub fn is_property_attribute(attribute: &Token) -> bool {
 
 /// A cached-Mail profile containing the same canonical message facts plus properties.
 pub fn mail_profile() -> Profile {
-    Profile::new(mail::token("soup-mail-v3"))
+    Profile::new(mail::token("soup-mail-v4"))
 }
 
 fn supported(ast: &EntityFilterAst) -> bool {
@@ -67,6 +67,17 @@ fn add_properties(
 ) -> Result<LocalCompileOutcome, CompileError> {
     let mut query = query.as_query().clone();
     query.profile = profile;
+    if ast.favorites_only == Some(true) {
+        for partition in &mut query.partitions {
+            partition.predicate = PredicateExpr::And(
+                Box::new(std::mem::replace(
+                    &mut partition.predicate,
+                    PredicateExpr::None,
+                )),
+                Box::new(mail::boolean("is-favorited", true)),
+            );
+        }
+    }
     if ast.properties_filter.is_some() {
         for partition in &mut query.partitions {
             partition.predicate = PredicateExpr::And(
@@ -95,9 +106,10 @@ pub fn compile_soup(
     }
     let mut base = ast.clone();
     base.properties_filter = None;
+    base.favorites_only = None;
     match compile_soup_flat_v4(&base, request)? {
         LocalCompileOutcome::Supported(query) => {
-            add_properties(ast, query, vocabulary::profile_v5())
+            add_properties(ast, query, vocabulary::profile_v6())
         }
         unsupported => Ok(unsupported),
     }
@@ -118,6 +130,7 @@ pub fn compile_mail(
     }
     let mut base = ast.clone();
     base.properties_filter = None;
+    base.favorites_only = None;
     match mail::compile(&base, request, view, links, viewer)? {
         LocalCompileOutcome::Supported(query) => add_properties(ast, query, mail_profile()),
         unsupported => Ok(unsupported),

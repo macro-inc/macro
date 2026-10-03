@@ -38,6 +38,12 @@ import {
   onCleanup,
 } from 'solid-js';
 
+import { registerGraphqlSoupRevalidations } from '../../graphql/active-queries';
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingSoupEntities,
+} from '../../graphql/optimistic-deletions';
+
 export type GroupQueryData = {
   entities: EntityData[];
 };
@@ -62,6 +68,7 @@ type GraphqlGroupQuery = {
 };
 
 type GraphqlGroupedInitialPage = {
+  cachedMail?: boolean;
   items: SoupAstItemsGroupedPage['items'];
   groups: GroupMeta[];
 };
@@ -107,6 +114,7 @@ export function createGraphqlGroupedSoupQueries(
   resetToInitialPage: () => void;
 } {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
 
   const mapItems = (
     items: SoupAstItemsGroupedPage['items'],
@@ -186,7 +194,7 @@ export function createGraphqlGroupedSoupQueries(
             GroupSoupQuery,
             GroupSoupQueryVariables,
             string,
-            GroupQueryData
+            GroupQueryData & { pageParams: readonly string[] }
           >(() => {
             const config = getConfig();
             return {
@@ -204,7 +212,8 @@ export function createGraphqlGroupedSoupQueries(
               },
               getNextPageParam: (lastPage) =>
                 groupPage(lastPage, config.group)?.group.nextCursor,
-              select: ({ pages }) => ({
+              select: ({ pages, pageParams }) => ({
+                pageParams,
                 entities: pages.flatMap((page) => {
                   const selected = groupPage(page, config.group);
                   return selected
@@ -221,6 +230,27 @@ export function createGraphqlGroupedSoupQueries(
               keepPreviousData: false,
             };
           });
+
+          onCleanup(
+            registerGraphqlSoupRevalidations(() => {
+              if (!query.isEnabled) return [];
+              const config = getConfig();
+              const cursors = new Set([
+                firstCursor,
+                ...(query.data?.pageParams ?? []),
+              ]);
+              return [...cursors].map((cursor) => ({
+                document: GroupSoupDocument,
+                variables: {
+                  input: makeGraphqlGroupedSoupContinuationInput({
+                    groupBy: config.field,
+                    groupKey: config.key,
+                    cursor,
+                  }),
+                },
+              }));
+            })
+          );
 
           createComputed(() => {
             if (!activated()) return;
@@ -261,6 +291,9 @@ export function createGraphqlGroupedSoupQueries(
         setContinuationRevision((value) => value + 1);
       };
 
+      const cachedMail = createMemo(
+        () => args.initialPage()?.cachedMail === true
+      );
       const initialData = createMemo<GroupQueryData | undefined>(() => {
         const config = getConfig();
         const initialPage = args.initialPage();
@@ -281,9 +314,17 @@ export function createGraphqlGroupedSoupQueries(
       const data = createMemo<GroupQueryData | undefined>(() => {
         const initial = initialData();
         if (!initial) return;
-        const continued = getContinuation()?.query.data;
-        if (!continued) return initial;
-        return { entities: [...initial.entities, ...continued.entities] };
+        const continued = cachedMail()
+          ? undefined
+          : getContinuation()?.query.data;
+        const combined = continued
+          ? { entities: [...initial.entities, ...continued.entities] }
+          : initial;
+        const entities = withoutPendingSoupEntities(
+          combined.entities,
+          pendingDeleteIds()
+        );
+        return entities === combined.entities ? combined : { entities };
       });
 
       const trackFirstPage = (action: Promise<unknown>): Promise<void> => {
@@ -307,7 +348,7 @@ export function createGraphqlGroupedSoupQueries(
 
       const fetchNextPage = async (): Promise<void> => {
         const config = getConfig();
-        if (!config.enabled) return;
+        if (!config.enabled || cachedMail()) return;
         if (firstPagePromise) return firstPagePromise;
 
         let current = getContinuation();
@@ -333,12 +374,14 @@ export function createGraphqlGroupedSoupQueries(
         await current.query.fetchNextPage();
       };
 
+      createComputed(on(cachedMail, () => disposeContinuation()));
       onCleanup(disposeContinuation);
 
       return {
         key,
         data,
         hasNextPage: () => {
+          if (cachedMail()) return false;
           const current = getContinuation();
           return current?.query.data === undefined
             ? getConfig().group.nextCursor !== null

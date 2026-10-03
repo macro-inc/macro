@@ -21,6 +21,7 @@ pub struct Session<C> {
     translator: Mutex<Translator>,
     model: Mutex<Model>,
     catalog: Mutex<Catalog>,
+    account_catalog: Mutex<Catalog>,
     mcp_servers: Mutex<Option<McpServers>>,
 }
 
@@ -43,6 +44,7 @@ impl<C: Cloud> Session<C> {
             translator: Mutex::new(Translator::default()),
             model: Mutex::new(model),
             catalog: Mutex::new(Catalog::Unknown),
+            account_catalog: Mutex::new(Catalog::Unknown),
             mcp_servers: Mutex::new(None),
         })
     }
@@ -51,19 +53,21 @@ impl<C: Cloud> Session<C> {
         self.model.lock().await.clone()
     }
 
-    /// Current provider catalog, or the explicit default-only bootstrap state.
+    /// Current session aliases supplemented by the direct account catalog.
     pub async fn catalog(&self) -> Catalog {
-        self.catalog.lock().await.clone()
+        self.catalog
+            .lock()
+            .await
+            .clone()
+            .supplemented_by(self.account_catalog.lock().await.clone())
     }
 
     /// Read-only discovery; never starts a cloud worker merely to populate a picker.
     pub async fn refresh_catalog(&self) -> Result<()> {
         let history = self.cloud.history(&self.id).await?;
-        let mut catalog = Catalog::from_history(&history);
-        if matches!(catalog, Catalog::Unknown) {
-            catalog = super::models::discover(&self.cloud).await?;
-        }
-        *self.catalog.lock().await = catalog;
+        let account = super::models::discover(&self.cloud).await?;
+        *self.catalog.lock().await = Catalog::from_history(&history);
+        *self.account_catalog.lock().await = account;
         Ok(())
     }
 
@@ -76,7 +80,9 @@ impl<C: Cloud> Session<C> {
             let mut catalog = self.catalog.lock().await;
             if *catalog != next {
                 emit(Update::Models {
-                    catalog: next.clone(),
+                    catalog: next
+                        .clone()
+                        .supplemented_by(self.account_catalog.lock().await.clone()),
                     current: self.model().await,
                 })?;
                 *catalog = next;
@@ -134,9 +140,7 @@ impl<C: Cloud> Session<C> {
         }
         *self.cursor.lock().await = cursor;
         *self.translator.lock().await = translator;
-        if matches!(self.catalog().await, Catalog::Unknown) {
-            *self.catalog.lock().await = super::models::discover(&self.cloud).await?;
-        }
+        *self.account_catalog.lock().await = super::models::discover(&self.cloud).await?;
         Ok(updates)
     }
 
@@ -232,7 +236,10 @@ impl<C: Cloud> Session<C> {
             return Err(Error::Busy);
         }
         if !self.catalog().await.contains(&self.model().await) {
-            return Err(Error::ModelUnavailable);
+            self.refresh_catalog().await?;
+            if !self.catalog().await.contains(&self.model().await) {
+                return Err(Error::ModelUnavailable);
+            }
         }
         let mut translator = self.translator.lock().await;
         // Catch completed foreign turns even if a prompt beats the next poll.

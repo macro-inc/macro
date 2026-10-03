@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT view.id, view.database_id, view.table_id, view.name, view.position, view.query,\n               view.layout, view.created_at, view.updated_at,\n               (SELECT first.id FROM database_columns first\n                WHERE first.table_id = view.table_id\n                ORDER BY first.position, first.id\n                LIMIT 1) AS \"first_column?\"\n        FROM database_views view\n        WHERE view.table_id = ANY($1)\n        ORDER BY view.table_id, view.position, view.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "query",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "layout",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "first_column?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "54d0475e690c10453ee7ed6ec1ed1f8b3c83cfaeb7eb0e6447b675ba7bb05cba"
+}

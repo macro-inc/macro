@@ -1,0 +1,98 @@
+/* Keep the original feature-page type sizes with the homepage's Slab weight. */
+.tasks-h1,
+.tasks-h2,
+.tasks-h3 {
+  color: var(--c1);
+  font-family: 'display';
+  font-weight: 315;
+  margin: 0;
+}
+.tasks-h1 {
+  font-size: 60px;
+  letter-spacing: -0.014em;
+  line-height: 1.08;
+}
+.tasks-h2 {
+  font-size: 48px;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+}
+.tasks-h3 {
+  font-size: 30px;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+@media (max-width: 699px) {
+  .tasks-h1 {
+    font-size: 40px;
+  }
+  .tasks-h2 {
+    font-size: 34px;
+  }
+  .tasks-h3 {
+    font-size: 23px;
+  }
+}
+
+.tasks-lead,
+.tasks-sub,
+.tasks-caption {
+  color: var(--c4);
+  font-family: 'body';
+  font-weight: 400;
+  margin: 0;
+}
+
+.tasks-lead,
+.tasks-sub {
+  font-family: 'Inter', 'body';
+  font-weight: 400;
+}
+
+.tasks-lead {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.tasks-sub {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.tasks-caption {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Section eyebrow — the small uppercase label above a section's heading.
+   Only this one is centralised. The other three uppercase labels on the page
+   stay as they are, because they are not the same thing:
+     - the hero's brand tag is HeroEyebrow, shared by 8 files across email,
+       agents, crm and github; restyling it here would change those pages
+     - the "Explore Macro Chat" anchors are navigational and deliberately
+       mirror FeatureEyebrowLink in SectionFeatureGrid.tsx
+     - the lifecycle stepper's "01/02/03" are tabular numerals, not labels */
+.tasks-eyebrow {
+  color: color-mix(in srgb, var(--c4) 62%, transparent);
+  font-family: 'Inter', 'body';
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 699px) {
+  .tasks-lead {
+    font-size: 14px;
+  }
+  .tasks-sub {
+    font-size: 14px;
+  }
+  .tasks-caption {
+    font-size: 14px;
+  }
+  .tasks-eyebrow {
+    font-size: 11.5px;
+  }
+}

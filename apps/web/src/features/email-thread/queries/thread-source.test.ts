@@ -2,6 +2,12 @@ import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiMessage, ApiThread } from '@service-email/generated/schemas';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import { invitationFixture } from '../../email-message/core/calendar-invitation-fixtures';
+
+const invalidateInvitations = vi.hoisted(() => vi.fn());
+vi.mock('@queries/calendar/invitations', () => ({
+  invalidateInvitationScheduling: invalidateInvitations,
+}));
 
 function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
   return {
@@ -38,9 +44,92 @@ function thread(messages: ApiMessage[]): ApiThread {
   };
 }
 
+import { createThreadSnapshot } from '../primitives/thread-snapshot';
 import { createEmailThreadSource, toEmailThread } from './thread-source';
 
+it('keeps a reopened local draft through server identity adoption and rejects another route', () =>
+  createRoot((dispose) => {
+    try {
+      const [route, setRoute] = createSignal('local-thread');
+      const [resolved, setResolved] = createSignal('local-thread');
+      const [loading, setLoading] = createSignal(false);
+      const local = {
+        ...thread([message('local-draft', { is_draft: true })]),
+        db_id: 'local-thread',
+      };
+      const [data, setData] = createSignal<ThreadQueryData | undefined>({
+        thread: local,
+        hasMore: false,
+      });
+      const source = createEmailThreadSource(route, {
+        get resolvedThreadId() {
+          return resolved();
+        },
+        get isSuccess() {
+          return !loading();
+        },
+        get isLoading() {
+          return loading();
+        },
+        isError: false,
+        get data() {
+          if (loading()) throw new Error('suspending resource read');
+          return data();
+        },
+      } as ThreadQueryResult<ThreadQueryData>);
+      const snapshot = createThreadSnapshot(source);
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+
+      // Cache subscriptions can publish the aliased record before the async
+      // identity lookup observes the same settlement.
+      setData({ thread: { ...local, db_id: 'server-thread' }, hasMore: false });
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+
+      // The route remains a durable local handle while its query changes keys.
+      batch(() => {
+        setResolved('server-thread');
+        setLoading(true);
+        setData(undefined);
+      });
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+      batch(() => {
+        setData({
+          thread: { ...local, db_id: 'server-thread' },
+          hasMore: false,
+        });
+        setLoading(false);
+      });
+      expect(source.id()).toBe('server-thread');
+      expect(snapshot()?.db_id).toBe('server-thread');
+
+      // Reopening the old route after settlement also accepts the canonical row.
+      const reopened = createEmailThreadSource(route, {
+        resolvedThreadId: 'server-thread',
+        isSuccess: true,
+        isError: false,
+        data: data(),
+      } as ThreadQueryResult<ThreadQueryData>);
+      expect(reopened.thread()?.db_id).toBe('server-thread');
+      batch(() => {
+        setRoute('another-thread');
+        setResolved('another-thread');
+        setLoading(true);
+      });
+      expect(snapshot()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  }));
+
 describe('thread query adaptation', () => {
+  it('preserves saved invitations through the explicit cached message projection', () => {
+    const invitations = [invitationFixture];
+    expect(
+      toEmailThread(
+        thread([message('invite', { calendar_invitations: invitations })])
+      ).messages[0].calendar_invitations
+    ).toEqual(invitations);
+  });
   it('guards resource reads, retains available data during refresh errors, and clears it when switching threads', () =>
     createRoot((dispose) => {
       try {
@@ -232,4 +321,134 @@ it('keeps rendering and attachment identities while excluding transport metadata
   expect(wire.messages[0].attachments_forwarded[0].filename).toBe(
     'forward.txt'
   );
+});
+
+it('revalidates capabilities when newer scheduling snapshots arrive in a fresh thread', async () => {
+  const { setData, dispose } = createRoot((dispose) => {
+    const [data, setData] = createSignal<ThreadQueryData>({
+      thread: thread([
+        message('old', {
+          calendar_invitations: [invitationFixture],
+        }),
+      ]),
+      hasMore: false,
+    });
+    createEmailThreadSource(() => 'thread', {
+      isSuccess: true,
+      isError: false,
+      get data() {
+        return data();
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    return { setData, dispose };
+  });
+  try {
+    invalidateInvitations.mockClear();
+    setData({
+      thread: thread([
+        message('old', {
+          calendar_invitations: [invitationFixture],
+        }),
+        message('cancel', {
+          calendar_invitations: [
+            { ...invitationFixture, method: 'cancel', sequence: 2 },
+          ],
+        }),
+      ]),
+      hasMore: false,
+    });
+    await vi.waitFor(() =>
+      expect(invalidateInvitations).toHaveBeenCalledExactlyOnceWith('thread')
+    );
+  } finally {
+    dispose();
+  }
+});
+
+it('does not revalidate when a thread first loads or the view switches threads', async () => {
+  const withInvite = (id: string): ThreadQueryData => ({
+    thread: {
+      ...thread([
+        message('invite', {
+          thread_db_id: id,
+          calendar_invitations: [invitationFixture],
+        }),
+      ]),
+      db_id: id,
+    },
+    hasMore: false,
+  });
+  const { setId, setData, dispose } = createRoot((dispose) => {
+    const [id, setId] = createSignal('thread');
+    const [data, setData] = createSignal<ThreadQueryData | undefined>();
+    createEmailThreadSource(id, {
+      get isSuccess() {
+        return data() !== undefined;
+      },
+      isError: false,
+      get data() {
+        return data();
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    return { setId, setData, dispose };
+  });
+  try {
+    invalidateInvitations.mockClear();
+    setData(withInvite('thread'));
+    await Promise.resolve();
+    batch(() => {
+      setId('other');
+      setData(withInvite('other'));
+    });
+    await Promise.resolve();
+    expect(invalidateInvitations).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
+});
+
+it('does not revalidate capabilities for unchanged snapshots or ordinary email changes', async () => {
+  const { setData, dispose } = createRoot((dispose) => {
+    const [data, setData] = createSignal<ThreadQueryData>({
+      thread: thread([message('plain')]),
+      hasMore: false,
+    });
+    createEmailThreadSource(() => 'thread', {
+      isSuccess: true,
+      isError: false,
+      get data() {
+        return data();
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    return { setData, dispose };
+  });
+  try {
+    invalidateInvitations.mockClear();
+    setData({
+      thread: thread([message('plain', { body_text: 'Changed body' })]),
+      hasMore: false,
+    });
+    await Promise.resolve();
+    expect(invalidateInvitations).not.toHaveBeenCalled();
+    const calendar_invitations = [invitationFixture];
+    setData({
+      thread: thread([message('invite', { calendar_invitations })]),
+      hasMore: false,
+    });
+    await vi.waitFor(() =>
+      expect(invalidateInvitations).toHaveBeenCalledOnce()
+    );
+    setData({
+      thread: thread([
+        message('invite', {
+          calendar_invitations: structuredClone(calendar_invitations),
+        }),
+      ]),
+      hasMore: false,
+    });
+    await Promise.resolve();
+    expect(invalidateInvitations).toHaveBeenCalledOnce();
+  } finally {
+    dispose();
+  }
 });

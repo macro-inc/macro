@@ -5,7 +5,7 @@ import {
   type AgentConversationEntity,
   botUsage,
   conversationMode,
-  groupConversations,
+  partitionArchived,
   selectRecentAgentConversations,
 } from './recent-conversations';
 
@@ -20,6 +20,7 @@ function session(
     id,
     name: `Session ${id}`,
     ownerId: OWNER,
+    isArchived: false,
     botId: 'bot-chat',
     status: 'acp_ready',
     updatedAt: '2026-09-15T10:00:00Z',
@@ -46,6 +47,19 @@ const kindOf = (botId: string | undefined) =>
   (botId && KINDS[botId]) || 'agent';
 
 describe('selectRecentAgentConversations', () => {
+  it('searches the visible fallback title for each conversation type', () => {
+    const unnamedSession = session('session', { name: '' });
+    const unnamedChat = chat('chat', { name: '' });
+    const rows = [unnamedSession, unnamedChat];
+
+    expect(selectRecentAgentConversations(rows, OWNER, 'conversation')).toEqual(
+      [unnamedSession]
+    );
+    expect(selectRecentAgentConversations(rows, OWNER, 'chat')).toEqual([
+      unnamedChat,
+    ]);
+  });
+
   it('keeps only the owner’s conversations, newest first, matching the search', () => {
     const mine = session('a', { updatedAt: '2026-09-15T08:00:00Z' });
     const newer = chat('b', { updatedAt: '2026-09-15T11:00:00Z' });
@@ -62,6 +76,17 @@ describe('selectRecentAgentConversations', () => {
 });
 
 describe('mixed conversation navigation', () => {
+  it('uses the saved session harness when the bot configuration has changed', () => {
+    expect(
+      conversationMode(session('code', { harness: 'cursor' }), kindOf)
+    ).toBe('code');
+    expect(
+      conversationMode(
+        session('chat', { harness: 'in-memory', botId: 'bot-coder' }),
+        kindOf
+      )
+    ).toBe('chat');
+  });
   it('resolves each conversation mode independently of the new composer', () => {
     expect(
       conversationMode(session('code', { botId: 'bot-coder' }), kindOf)
@@ -85,17 +110,25 @@ describe('mixed conversation navigation', () => {
     ).toBe('code');
   });
 
-  it('keeps chat and coding sessions together in their original date order', () => {
+  it('splits archived sessions out of the active list', () => {
     const rows: AgentConversationEntity[] = [
       session('code', { botId: 'bot-coder' }),
       chat('chat'),
-      session('ended', { botId: 'bot-coder', status: 'disconnected' }),
+      session('ended', {
+        botId: 'bot-coder',
+        status: 'disconnected',
+        isArchived: true,
+      }),
       session('agent'),
     ];
-    expect(groupConversations(rows)).toEqual([
-      { id: 'recent', label: undefined, conversations: rows },
-    ]);
-    expect(groupConversations([])).toEqual([]);
+    expect(partitionArchived(rows)).toEqual({
+      conversations: [rows[0], rows[1], rows[3]],
+      archived: [rows[2]],
+    });
+    expect(partitionArchived([])).toEqual({
+      conversations: [],
+      archived: [],
+    });
   });
 });
 

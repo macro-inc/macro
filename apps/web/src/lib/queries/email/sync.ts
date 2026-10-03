@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_INBOX_SYNC_STATUS } from '@core/constant/featureFlags';
+import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
   BackfillStatus,
@@ -13,6 +14,7 @@ import {
   invalidateBackfillJobs,
   setBackfillProgress,
 } from './backfill';
+import { emailKeys } from './keys';
 import { invalidateEmailLinks } from './link';
 
 const BACKFILL_SOUP_REFRESH_INTERVAL = 5_000;
@@ -51,6 +53,17 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 export function handleRefreshEmail(payload: unknown): void {
   const event = asRefreshEmailEvent(payload);
   if (!event) return;
+
+  if (
+    event.event === 'upsert_message' ||
+    event.event === 'update_labels' ||
+    event.event === 'delete_message'
+  ) {
+    void queryClient.invalidateQueries({
+      queryKey: emailKeys.composeDraftState._def,
+    });
+    return;
+  }
 
   // An inbox finished its async teardown — drop its now-deleted threads and
   // settle its links row. This is the only reliable signal that teardown is

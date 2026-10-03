@@ -4,9 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { DeleteUnthreadedAnchorResponseAllOfThreadId } from './deleteUnthreadedAnchorResponseAllOfThreadId';
+import type { DeleteUnthreadedAnchorResponseAllOfRootId } from './deleteUnthreadedAnchorResponseAllOfRootId';
 
 export type DeleteUnthreadedAnchorResponseAllOf = {
   documentId: string;
-  threadId?: DeleteUnthreadedAnchorResponseAllOfThreadId;
+  /** Root of the discussion that was deleted with the anchor, if it had one. */
+  rootId?: DeleteUnthreadedAnchorResponseAllOfRootId;
 };

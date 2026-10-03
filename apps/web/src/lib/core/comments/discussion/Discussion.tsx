@@ -2,7 +2,6 @@ import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta'
 import type { InputSnapshot } from '@channel/Input/types';
 import type { ChannelMessageListMeta } from '@channel/Message/list-meta';
 import { Message } from '@channel/Message/Message';
-import type { MessageActions } from '@channel/Message/types';
 import { buildThreadReplyListMeta } from '@channel/Thread/reply-list-meta';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
@@ -10,6 +9,7 @@ import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { MessageActions } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -26,7 +26,7 @@ import {
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
 import {
-  discussionCommentToApiChannelMessage,
+  discussionCommentToChannelMessage,
   discussionCommentToMessageData,
 } from './messageAdapter';
 import type {
@@ -109,7 +109,7 @@ export function Discussion(props: {
     const messages = source.threads().flatMap((thread) => {
       const root = thread.comments[0];
       if (!root) return [];
-      const message = discussionCommentToApiChannelMessage(root);
+      const message = discussionCommentToChannelMessage(root);
       message.thread.reply_count = thread.comments.length - 1;
       return [message];
     });
@@ -226,9 +226,7 @@ export function DiscussionThreadView(props: {
   const replies = () => comments().slice(1);
   const hasReplies = () => replies().length > 0;
   const replyMetaById = createMemo(() =>
-    buildThreadReplyListMeta(
-      replies().map(discussionCommentToApiChannelMessage)
-    )
+    buildThreadReplyListMeta(replies().map(discussionCommentToChannelMessage))
   );
   const threadId = () => props.thread.id;
 
@@ -273,7 +271,7 @@ export function DiscussionThreadView(props: {
             }
           : undefined,
       onDelete:
-        own && canEdit()
+        (own || source.canModerate?.()) && canEdit()
           ? async () => {
               try {
                 await source.deleteComment(comment);
@@ -312,7 +310,7 @@ export function DiscussionThreadView(props: {
     <Show when={root()}>
       {(rootComment) => {
         const rootMessageData = () =>
-          discussionCommentToApiChannelMessage(rootComment());
+          discussionCommentToChannelMessage(rootComment());
         return (
           <div class="flex flex-col w-full gap-0">
             <Thread.Row
@@ -499,7 +497,7 @@ function DiscussionMessageView(props: {
             <Show when={isEditing()} fallback={<Message.Content />}>
               <DiscussionInput
                 input={{
-                  mode: 'reply',
+                  mode: 'channel',
                   placeholder: 'Edit comment...',
                   value: props.comment.text,
                 }}

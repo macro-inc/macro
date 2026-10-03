@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentActionId } from './agentActionId';
+import type { PromptAttachment } from './promptAttachment';
 import type { QueuedActionDtoActorUserId } from './queuedActionDtoActorUserId';
 import type { QueuedActionDtoPrompt } from './queuedActionDtoPrompt';
 
@@ -18,6 +19,9 @@ export interface QueuedActionDto {
   actionId: AgentActionId;
   /** The user who queued it, absent when a bot acted on nobody's behalf. */
   actorUserId?: QueuedActionDtoActorUserId;
+  /** Files the prompt refers to, for prompts only. Kept through an edit,
+which replaces the text alone. */
+  attachments?: PromptAttachment[];
   /** When it was accepted. */
   createdAt: string;
   /** What kind of action waits - `prompt` or `compact`; only

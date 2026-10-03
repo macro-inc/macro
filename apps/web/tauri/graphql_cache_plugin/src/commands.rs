@@ -17,7 +17,8 @@ use crate::engine::{
     WriteResultWire,
 };
 use crate::{
-    CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
+    CacheState, InitializedCache, emit_cache_changed, emit_cache_changed_with_search_changes,
+    emit_mutation_settled, emit_ops_affected,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -26,6 +27,9 @@ use cache_core::search::{SearchPage, SearchRequest};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
+
+#[cfg(test)]
+mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
@@ -85,6 +89,14 @@ pub async fn graphql_cache_current_revision(
     state: State<'_, CacheState>,
 ) -> Result<String, String> {
     Ok(engine_handle(&state)?.current_revision().await.to_string())
+}
+
+/// Returns the durable cache generation, initializing it when absent.
+#[tauri::command]
+pub async fn graphql_cache_current_storage_generation(
+    state: State<'_, CacheState>,
+) -> Result<String, String> {
+    engine_handle(&state)?.current_storage_generation().await
 }
 
 /// Attempts a cache read; registers `op_id` as active when given.
@@ -180,7 +192,12 @@ pub async fn graphql_cache_write<R: Runtime>(
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
     if result.revision_advanced {
-        emit_cache_changed(&app, &result.revision);
+        emit_cache_changed_with_search_changes(
+            &app,
+            &result.revision,
+            result.reset,
+            result.search_changed_buckets.as_ref(),
+        );
     }
     Ok(result)
 }
@@ -191,15 +208,27 @@ pub async fn graphql_cache_write<R: Runtime>(
 pub enum HydrationResultWire {
     /// At least one non-cache-only field was projected.
     Data {
+        /// Quick Access buckets whose searchable or materialized fields changed.
+        #[serde(rename = "searchChangedBuckets")]
+        search_changed_buckets: std::collections::BTreeSet<String>,
         /// Projected GraphQL response data.
         data: serde_json::Value,
         /// Revision installed by the hydration write.
         revision: String,
+        /// Whether this hydration changed the effective cache view.
+        #[serde(rename = "revisionAdvanced")]
+        revision_advanced: bool,
     },
     /// Every response field was cache-only.
     Void {
+        /// Quick Access buckets whose searchable or materialized fields changed.
+        #[serde(rename = "searchChangedBuckets")]
+        search_changed_buckets: std::collections::BTreeSet<String>,
         /// Revision installed by the hydration write.
         revision: String,
+        /// Whether this hydration changed the effective cache view.
+        #[serde(rename = "revisionAdvanced")]
+        revision_advanced: bool,
     },
 }
 
@@ -232,16 +261,24 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             &result.write_result.changed,
         );
         if result.write_result.revision_advanced {
-            emit_cache_changed(&app, &result.write_result.revision);
+            emit_cache_changed(
+                &app,
+                &result.write_result.revision,
+                result.write_result.reset,
+            );
         }
     }
     Ok(match result.data {
         Some(data) => HydrationResultWire::Data {
+            search_changed_buckets: result.search_changed_buckets,
             data,
             revision: result.write_result.revision,
+            revision_advanced: result.write_result.revision_advanced,
         },
         None => HydrationResultWire::Void {
+            search_changed_buckets: result.search_changed_buckets,
             revision: result.write_result.revision,
+            revision_advanced: result.write_result.revision_advanced,
         },
     })
 }
@@ -261,6 +298,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     data: serde_json::Value,
     link_patches: Option<Vec<OptimisticLinkPatch>>,
     revalidations: Option<Vec<QueryRevalidation>>,
+    identity_bindings: Option<Vec<cache_core::identity::IdentityBinding>>,
     created_at_ms: i64,
     owner: String,
     now_ms: i64,
@@ -269,13 +307,14 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     let result = engine_handle(&state)?
         .enqueue_optimistic_mutation(
             origin_op_id,
-            uuid,
+            uuid.clone(),
             query,
             operation_name,
             variables.unwrap_or_default(),
             data,
             link_patches.unwrap_or_default(),
             revalidations.unwrap_or_default(),
+            identity_bindings.unwrap_or_default(),
             created_at_ms,
             owner,
             now_ms,
@@ -284,7 +323,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
     if result.result.revision_advanced {
-        emit_cache_changed(&app, &result.result.revision);
+        emit_cache_changed(&app, &result.result.revision, result.result.reset);
     }
     if let MutationUpsertKindWire::ReplacedPending {
         removed_transaction_id,
@@ -293,7 +332,9 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         emit_mutation_settled(
             &app,
             removed_transaction_id.clone(),
+            Some(uuid.clone()),
             "superseded",
+            None,
             None,
             Some(result.transaction_id.clone()),
         );
@@ -385,12 +426,14 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
     {
         emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
         if write_result.revision_advanced {
-            emit_cache_changed(&app, &write_result.revision);
+            emit_cache_changed(&app, &write_result.revision, write_result.reset);
         }
         emit_mutation_settled(
             &app,
             settlement_transaction_id,
+            write_result.mutation_uuid.clone(),
             "superseded",
+            None,
             None,
             Some(replacement_transaction_id.clone()),
         );
@@ -423,25 +466,38 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             data,
         )
         .await?;
-    let (write_result, replacement_transaction_id) = match &result {
-        CommitOptimisticWriteResultWire::Committed { result } => (result, None),
+    let (write_result, replacement_transaction_id, error) = match &result {
+        CommitOptimisticWriteResultWire::Failed {
+            result,
+            replacement_transaction_id,
+            error,
+        } => (
+            result,
+            replacement_transaction_id.clone(),
+            Some(error.clone()),
+        ),
+        CommitOptimisticWriteResultWire::Committed { result } => (result, None, None),
         CommitOptimisticWriteResultWire::CommittedSuperseded {
             replacement_transaction_id,
             result,
-        } => (result, Some(replacement_transaction_id.clone())),
+        } => (result, Some(replacement_transaction_id.clone()), None),
     };
     emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
     if write_result.revision_advanced {
-        emit_cache_changed(&app, &write_result.revision);
+        emit_cache_changed(&app, &write_result.revision, write_result.reset);
     }
     emit_mutation_settled(
         &app,
         settlement_transaction_id,
+        write_result.mutation_uuid.clone(),
         if replacement_transaction_id.is_some() {
             "superseded"
+        } else if error.is_some() {
+            "permanently-failed"
         } else {
             "committed"
         },
+        error,
         None,
         replacement_transaction_id,
     );
@@ -457,6 +513,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     lease_owner: String,
     lease_generation: String,
     error: String,
+    error_code: Option<String>,
 ) -> Result<RollbackOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
@@ -468,13 +525,15 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
         } => {
             emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
             if write_result.revision_advanced {
-                emit_cache_changed(&app, &write_result.revision);
+                emit_cache_changed(&app, &write_result.revision, write_result.reset);
             }
             emit_mutation_settled(
                 &app,
                 settlement_transaction_id,
+                write_result.mutation_uuid.clone(),
                 "permanently-failed",
                 Some(error),
+                error_code,
                 None,
             );
         }
@@ -484,12 +543,14 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
         } => {
             emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
             if write_result.revision_advanced {
-                emit_cache_changed(&app, &write_result.revision);
+                emit_cache_changed(&app, &write_result.revision, write_result.reset);
             }
             emit_mutation_settled(
                 &app,
                 settlement_transaction_id,
+                write_result.mutation_uuid.clone(),
                 "superseded",
+                None,
                 None,
                 Some(replacement_transaction_id.clone()),
             );
@@ -508,7 +569,7 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
 ) -> Result<AffectedOperationsResultWire, String> {
     let affected = engine_handle(&state)?.invalidate(keys.clone()).await?;
     emit_ops_affected(&app, &affected.affected_ops, &keys);
-    emit_cache_changed(&app, &affected.revision);
+    emit_cache_changed(&app, &affected.revision, false);
     Ok(affected)
 }
 
@@ -522,7 +583,7 @@ pub async fn graphql_cache_delete_records<R: Runtime>(
 ) -> Result<AffectedOperationsResultWire, String> {
     let affected = engine_handle(&state)?.delete_records(keys.clone()).await?;
     emit_ops_affected(&app, &affected.affected_ops, &keys);
-    emit_cache_changed(&app, &affected.revision);
+    emit_cache_changed(&app, &affected.revision, false);
     Ok(affected)
 }
 
@@ -542,6 +603,6 @@ pub async fn graphql_cache_clear<R: Runtime>(
     state: State<'_, CacheState>,
 ) -> Result<String, String> {
     let revision = engine_handle(&state)?.clear().await?.to_string();
-    emit_cache_changed(&app, &revision);
+    emit_cache_changed(&app, &revision, true);
     Ok(revision)
 }

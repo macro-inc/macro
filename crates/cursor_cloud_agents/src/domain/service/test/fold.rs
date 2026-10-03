@@ -38,7 +38,7 @@ pub(super) async fn replay_with_runs(
         journal,
         crate::domain::ports::NoArtifactStore,
     ));
-    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
     let (agent, mut client) = Channel::duplex();
     let task = tokio::spawn(serve_transport(service.clone(), notifier, agent));
     let mut log = Vec::new();
@@ -74,12 +74,19 @@ pub(super) async fn replay_with_runs(
             drop(events);
         }
         service.sync_foreign_runs().await;
-        // Recovery is host-local: one reload requirement for this session and
-        // no frame on the wire until the client's own standard load.
-        assert_eq!(reload_rx.try_recv().ok(), Some(id.clone()));
+        // The mirror streams the runs to the client as they happen, with no
+        // reload to wait for.
         assert!(reload_rx.try_recv().is_err());
-        assert_no_frame(&mut client).await;
+        drain_live_frames(&mut client, &mut log).await;
+        assert_incremental_matches_batch(&log);
+        let live = serde_json::to_value(agent_fold::domain::fold::fold(log.clone())).unwrap();
+        // A later load replaces that with the same conversation.
         load(&mut client, &mut log, &id, 93).await;
+        assert_eq!(
+            live,
+            serde_json::to_value(agent_fold::domain::fold::fold(log.clone())).unwrap(),
+            "the live mirror and a load show one conversation"
+        );
     }
     task.abort();
     assert_incremental_matches_batch(&log);
@@ -131,9 +138,47 @@ pub(super) async fn load(
             break;
         }
     }
+    // Commands are advertised after the load result, same as session/new.
+    // Drain that metadata notification so leftover catalog frames do not
+    // look like unsolicited history or poison the next load.
+    drain_available_commands_update(client).await;
 }
 
-/// The served transport stays silent: recovered history never streams live.
+/// Consume the `available_commands_update` that follows a successful load.
+async fn drain_available_commands_update(client: &mut agent_client_protocol::Channel) {
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
+        .await
+        .expect("available_commands_update after session/load")
+        .expect("the connection stayed open");
+    let TransportFrame::Single(frame) = frame else {
+        panic!("single frame")
+    };
+    let value = serde_json::to_value(&frame).unwrap();
+    assert_eq!(value["method"], "session/update", "{value}");
+    assert_eq!(
+        value["params"]["update"]["sessionUpdate"], "available_commands_update",
+        "session/load is followed by the slash-command catalog, got {value}"
+    );
+}
+
+/// Record every frame the agent sends unprompted until it goes quiet.
+async fn drain_live_frames(
+    client: &mut agent_client_protocol::Channel,
+    log: &mut Vec<AgentSessionLog>,
+) {
+    while let Ok(frame) =
+        tokio::time::timeout(std::time::Duration::from_millis(100), client.rx.next()).await
+    {
+        let TransportFrame::Single(frame) = frame.expect("the connection stayed open") else {
+            panic!("single frame")
+        };
+        log.push(entry(Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            frame,
+        )))));
+    }
+}
+
+/// The served transport stays silent: nothing leaves the agent unprompted.
 async fn assert_no_frame(client: &mut agent_client_protocol::Channel) {
     assert!(
         tokio::time::timeout(std::time::Duration::from_millis(100), client.rx.next())
@@ -400,7 +445,7 @@ async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without
             &session,
             None,
             JournalInput::Prompt(vec![ContentBlock::Text(TextContent::new("R2"))]),
-            false,
+            Emit::Silent,
         )
         .await
         .unwrap();
@@ -412,7 +457,7 @@ async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without
             &session,
             Some(&r2),
             JournalInput::PromptAccepted(2),
-            false,
+            Emit::Silent,
         )
         .await
         .unwrap();
@@ -436,7 +481,7 @@ async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without
                 &session,
                 Some(&r1),
                 JournalInput::Sse(crate::testing::raw_record(event.clone())),
-                false,
+                Emit::Silent,
             )
             .await
             .unwrap();
@@ -573,9 +618,12 @@ async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
         reload_rx.try_recv().is_err(),
         "no reload is required before the recovered run is reconciled"
     );
-    // The load arrives mid-backfill and waits behind the gate; the run's
-    // completion is captured before the load reads the journal.
+    // What the mirror has streamed so far is already on the client.
     let mut log = Vec::new();
+    drain_live_frames(&mut client, &mut log).await;
+    assert!(!log.is_empty(), "the mirror streams the run as it happens");
+    // The load arrives mid-backfill and waits behind the gate; the run's
+    // completion is captured, and streamed, before the load reads the journal.
     let loading = tokio::spawn(async move {
         load(&mut client, &mut log, &id, 91).await;
         (client, log, id)
@@ -583,9 +631,11 @@ async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
     older.send(finished("R1")).unwrap();
     older.send(CursorEvent::Done).unwrap();
     producer.await.unwrap();
-    let (mut client, log, id) = loading.await.unwrap();
-    assert_eq!(reload_rx.try_recv().ok(), Some(id.clone()));
-    assert!(reload_rx.try_recv().is_err());
+    let (mut client, log, _id) = loading.await.unwrap();
+    assert!(
+        reload_rx.try_recv().is_err(),
+        "a streamed run needs no reload"
+    );
     assert_no_frame(&mut client).await;
     task.abort();
     assert_incremental_matches_batch(&log);

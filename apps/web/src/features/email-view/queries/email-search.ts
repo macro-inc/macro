@@ -37,7 +37,15 @@ function tabFilters(tab: EmailTab): EmailFilters {
       shared: 'exclude' as const,
     }))
     .with('shared', () => ({ shared: 'only' as const }))
-    .with('drafts', 'sent', 'all', () => ({}))
+    .with(
+      'favorites',
+      'drafts',
+      'scheduled',
+      'reminders',
+      'sent',
+      'all',
+      () => ({})
+    )
     .exhaustive();
 }
 
@@ -72,11 +80,24 @@ function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
 /** Mirrors the Email view's tab, inbox, and facet scoping for service-backed search. */
 export function buildEmailSearchRequest(
   context: EmailQueryContext,
-  search: SoupSearchRequest
+  search: SoupSearchRequest,
+  admittedIds?: readonly string[]
 ): SearchSoupQueryArgs {
+  // Both discovery and retained unread results must stay within favorites.
+  const threadIds =
+    context.tab === 'favorites'
+      ? (context.favoriteThreadIds ?? []).filter(
+          (id) => admittedIds === undefined || admittedIds.includes(id)
+        )
+      : admittedIds;
   const emailFilters: EmailFilters = {
     ...tabFilters(context.tab),
-    ...facetFilters(context.facets),
+    ...facetFilters(
+      admittedIds ? { ...context.facets, read: [] } : context.facets
+    ),
+    ...(threadIds
+      ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
+      : {}),
   };
 
   if (context.inboxIds !== undefined) {

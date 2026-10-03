@@ -1,24 +1,42 @@
+import {
+  type ChannelPreviewSelection,
+  channelIdForPreviewNavigation,
+  getChannelEntityTarget,
+} from '@app/features/next-soup/utils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
+import {
+  createSearchParams,
+  useNavigate,
+  useRouteParams,
+} from '@app/lib/split-router';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
+import { channelsSearch, channelsSearchCodec } from './channels-route';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
   clampChannelsRailWidth,
 } from './constants';
 import { createChannelsViewPersistence } from './persistence';
+import { channelDetailRoute, channelsSplitRoute } from './route';
 import type {
   ChannelListSort,
-  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsRailSection,
+  ChannelsSortGroup,
   ChannelsTab,
   ChannelsViewState,
   ChannelsViewStateOptions,
 } from './types';
+import { activeChannelsTab } from './utils';
 
 type ChannelsViewProviderProps = ContextProviderProps & {
   initialState?: ChannelsViewStateOptions;
@@ -26,11 +44,27 @@ type ChannelsViewProviderProps = ContextProviderProps & {
 
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
+  /** The mobile list opens channels in the split; only desktop renders detail. */
+  mobileLayout: () => boolean;
+  selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
+  /** Whether the Threads tab is available to this user. */
+  threadsEnabled: Accessor<boolean>;
+  /**
+   * The tab to render. A stored or linked Threads tab shows All while the flag
+   * is off or still loading, and returns once it resolves on; `state.tab`
+   * keeps the choice so persistence and URLs are not rewritten.
+   */
+  tab: Accessor<ChannelsTab>;
+  /** Threads tab filter: the conversation whose threads are shown, or all. */
+  threadsChannelId: Accessor<string | undefined>;
+  setThreadsChannelId: (channelId: string | undefined) => void;
   setTab: (tab: ChannelsTab) => void;
   setMobileTab: (tab: ChannelsQueryScope) => void;
-  setSelectedChannelId: (channelId: string | undefined) => void;
+  setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
-  setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
+  /** Per-user collapse state of a team channel label. */
+  setLabelOpen: (labelId: string, open: boolean) => void;
+  setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
   setAsideWidth: (width: number) => void;
 };
 
@@ -41,17 +75,19 @@ function createInitialState(
     tab: initial.tab ?? 'browse',
     mobileTab:
       initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
-    selectedChannelId: initial.selectedChannelId,
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
+    collapsedLabels: initial.collapsedLabels ?? [],
+    threadsChannelId: initial.threadsChannelId,
     sortBy: {
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
         initial.sortBy?.direct_messages ??
         CHANNELS_DEFAULT_SORT_BY.direct_messages,
+      threads: initial.sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
     },
     asideWidth: clampChannelsRailWidth(
       initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
@@ -69,6 +105,12 @@ export const [ChannelsViewProvider, useChannelsView] =
     (props) => {
       const panel = useSplitPanelOrThrow();
       const userId = useUserId();
+      const navigate = useNavigate();
+      const params = useRouteParams(channelDetailRoute);
+      const [search, setSearch] = createSearchParams(channelsSearch);
+      const threadsFlag = useFeatureFlag(enableChannelThreadsPreview);
+      const threadsEnabled = () => threadsFlag().enabled;
+      const selectPreview = createPreviewSelectionGuard();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
         createStore(createInitialState(initial)),
@@ -81,13 +123,121 @@ export const [ChannelsViewProvider, useChannelsView] =
         })
       );
 
+      createEffect(
+        on(
+          () => [search.tab, search.mobileTab] as const,
+          ([tab, mobileTab]) => {
+            if (state.tab !== tab) setState('tab', tab);
+            if (state.mobileTab !== mobileTab) setState('mobileTab', mobileTab);
+          }
+        )
+      );
+
+      const mobileLayout = () => isTouchDevice();
+      const selectedChannel = createMemo<ChannelPreviewSelection | undefined>(
+        () => {
+          const channelId = params.channelId;
+          if (typeof channelId !== 'string') return undefined;
+          const target = search.messageId
+            ? {
+                messageId: search.messageId,
+                ...(search.threadId ? { threadId: search.threadId } : {}),
+              }
+            : undefined;
+          return {
+            type: 'channel',
+            id: channelId,
+            ...(target ? { target } : {}),
+          };
+        }
+      );
+      const routeSearch = (channel?: ChannelPreviewSelection) => {
+        const target = channel && getChannelEntityTarget(channel);
+        return channelsSearchCodec.serialize({
+          ...channelsSearch.defaults,
+          tab: state.tab,
+          mobileTab: state.mobileTab,
+          messageId: target?.kind === 'message' ? target.messageId : '',
+          threadId: target?.kind === 'message' ? (target.threadId ?? '') : '',
+        });
+      };
+      const navigateToChannel = (
+        channel: ChannelPreviewSelection,
+        replace = false
+      ) => {
+        navigate(
+          {
+            route: channelDetailRoute,
+            params: { channelId: channelIdForPreviewNavigation(channel) },
+          },
+          {
+            replace,
+            search: { [channelsSearch.namespace]: routeSearch(channel) },
+          }
+        );
+      };
+      const setSelectedChannel = (
+        channel: ChannelPreviewSelection | undefined
+      ) => {
+        if (!channel) {
+          navigate(
+            { route: channelsSplitRoute, params: {} },
+            { search: { [channelsSearch.namespace]: routeSearch() } }
+          );
+          return true;
+        }
+        if (mobileLayout() || !selectPreview.canSelect(channel)) return false;
+        navigateToChannel(channel);
+        return true;
+      };
+
+      createEffect(
+        on(selectedChannel, (channel, previous) => {
+          if (!selectPreview(channel)) {
+            if (previous) navigateToChannel(previous, true);
+            else
+              navigate(
+                { route: channelsSplitRoute, params: {} },
+                {
+                  replace: true,
+                  search: { [channelsSearch.namespace]: routeSearch() },
+                }
+              );
+          }
+        })
+      );
+
       return {
         state,
-        setTab: (tab) => setState('tab', tab),
-        setMobileTab: (tab) => setState('mobileTab', tab),
-        setSelectedChannelId: (channelId) =>
-          setState('selectedChannelId', channelId),
+        mobileLayout,
+        selectedChannel,
+        threadsEnabled,
+        tab: () => activeChannelsTab(state.tab, threadsEnabled()),
+        threadsChannelId: () => state.threadsChannelId,
+        setThreadsChannelId: (channelId) => {
+          if (state.threadsChannelId === channelId) return;
+          setState('threadsChannelId', channelId);
+        },
+        setTab: (tab) => {
+          if (state.tab === tab) return;
+          setState('tab', tab);
+          setSearch({ tab });
+        },
+        setMobileTab: (mobileTab) => {
+          if (state.mobileTab === mobileTab) return;
+          setState('mobileTab', mobileTab);
+          setSearch({ mobileTab });
+        },
+        setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
+        setLabelOpen: (labelId, open) =>
+          setState('collapsedLabels', (collapsed) =>
+            open
+              ? collapsed.filter((id) => id !== labelId)
+              : collapsed.includes(labelId)
+                ? collapsed
+                : [...collapsed, labelId]
+          ),
         setSortBy: (group, sort) => setState('sortBy', group, sort),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),

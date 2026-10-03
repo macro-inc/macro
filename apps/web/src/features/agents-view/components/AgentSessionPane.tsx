@@ -1,16 +1,28 @@
+import {
+  AgentChangesProvider,
+  AgentChangesSplit,
+  ChangesHandoff,
+  ChangesToggle,
+  ReviewNotesDock,
+} from '@app/features/agent-changes/agent-changes';
+import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
-import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
+import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
+import {
+  agentSessionFileOperations,
+  agentSessionTitle,
+} from '@app/features/block-agent/component/AgentSplitHeader';
+import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
-import {
-  AgentSessionProvider,
-  useAgentSession,
-} from '@app/features/block-agent/context/AgentSessionContext';
+import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
 import {
   forgetPendingSession,
   pendingSession,
 } from '@app/features/block-agent/context/pending-session';
+import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -26,18 +38,17 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { Permissions } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
+import type { NotificationSource } from '@notifications/notification-source';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import ShareIcon from '@phosphor/share.svg';
-import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
+import { EmptyStatePanel } from '@ui';
+import { onCleanup, Show } from 'solid-js';
+import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
@@ -56,11 +67,22 @@ function SessionCommands(props: {
   return null;
 }
 
-function SessionContent(props: { onDeleted: () => void }) {
-  const { loadFailed, loadRetryable, metadata, retryLoad, session, sessionId } =
-    useAgentSession();
+function SessionContent(props: {
+  onDeleted: () => void;
+  notificationSource: NotificationSource;
+}) {
+  const {
+    accessDenied,
+    loadFailed,
+    loadRetryable,
+    metadata,
+    retryLoad,
+    session,
+    sessionId,
+    startupError,
+  } = useAgentSession();
+  const searchTarget = createAgentRouteTarget();
   const panel = useSplitPanelOrThrow();
-  const [shareOpen, setShareOpen] = createSignal(false);
   const userId = useUserId();
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
@@ -78,6 +100,7 @@ function SessionContent(props: { onDeleted: () => void }) {
       type: 'agent_session',
       id,
       name: title(),
+      isArchived: current.isArchived,
       ownerId: current.ownerId,
       botId: current.botId,
       status:
@@ -86,15 +109,33 @@ function SessionContent(props: { onDeleted: () => void }) {
           : current.status.kind,
     };
   };
+  const openShare = useShareModal(() => {
+    const current = session();
+    const id = sessionId();
+    if (!current || !id) return;
+    return {
+      id,
+      name: title(),
+      owner: current.ownerId,
+      itemType: 'agent_session',
+      blockAlias: 'agent',
+      userPermissions: permissions(),
+    };
+  });
+  const setArchived = async () => {
+    const id = sessionId();
+    const current = session();
+    if (!id || !current) return;
+    await changeSessionArchiveState(id, !current.isArchived);
+  };
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-      }}
-    >
-      <SidePanel.Root defaultOpen={false} persistKey="agent">
+    <>
+      <AgentSessionReadMarker
+        sessionId={!loadFailed() && session() ? sessionId() : undefined}
+        active={panel.isPanelActive()}
+        notificationSource={props.notificationSource}
+      />
+      <SidePanel.Root floating defaultOpen={false} persistKey="agent">
         <Topbar
           title={title()}
           titleContent={
@@ -135,18 +176,11 @@ function SessionContent(props: { onDeleted: () => void }) {
                         entity={current()}
                         permissions={permissions()}
                         onDelete={props.onDeleted}
-                        ops={[
-                          { op: 'rename' },
-                          { op: 'delete' },
-                          {
-                            label: 'Open repository',
-                            icon: GitBranch,
-                            action: () => {
-                              const url = session()?.repoUrl;
-                              if (url) openExternalUrl(url);
-                            },
-                          },
-                        ]}
+                        ops={agentSessionFileOperations(
+                          session(),
+                          permissions(),
+                          setArchived
+                        )}
                         tools={[
                           {
                             label: () => {
@@ -167,7 +201,7 @@ function SessionContent(props: { onDeleted: () => void }) {
                           {
                             label: 'Share',
                             icon: ShareIcon,
-                            action: () => setShareOpen(true),
+                            action: openShare,
                           },
                         ]}
                       />
@@ -184,16 +218,18 @@ function SessionContent(props: { onDeleted: () => void }) {
           <Show when={sessionId()}>
             {(id) => (
               <ShareTrigger
+                onClick={openShare}
                 id={id()}
                 blockType="agent"
                 hotkeyScope={panel.splitHotkeyScope}
               />
             )}
           </Show>
+          <ChangesToggle />
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
-          <SidePanel.Layout headerToggle={false}>
+          <SidePanel.Layout headerToggle={false} floating>
             <AgentSidePanelSections />
             <section
               class="page pane size-full min-w-0"
@@ -203,22 +239,58 @@ function SessionContent(props: { onDeleted: () => void }) {
               <Show
                 when={!loadFailed()}
                 fallback={
-                  <LoadErrorPanel
-                    title="Unable to load this session"
-                    onRetry={loadRetryable() ? retryLoad : undefined}
-                  />
+                  <Show
+                    when={startupError()}
+                    fallback={
+                      <Show
+                        when={accessDenied()}
+                        fallback={
+                          <LoadErrorPanel
+                            title="Unable to load this session"
+                            onRetry={loadRetryable() ? retryLoad : undefined}
+                          />
+                        }
+                      >
+                        <EmptyStatePanel
+                          centered
+                          title="You don't have access to this session"
+                          description="Ask a participant to share it with you."
+                        />
+                      </Show>
+                    }
+                  >
+                    {(error) => (
+                      <EmptyStatePanel
+                        centered
+                        title="The agent could not be started"
+                        description={error()}
+                      />
+                    )}
+                  </Show>
                 }
               >
+                <AgentPreviewBanner />
                 <div class="transcript-host">
-                  <Transcript />
+                  <Transcript searchTarget={searchTarget()} />
                 </div>
                 <div class="dock">
-                  <div class="composer-anchor">
-                    <AgentComposer
-                      autofocus
-                      input={ChatSessionInput}
-                      modelSelector={SessionModelSelector}
-                    />
+                  <div class="composer-anchor flex flex-col gap-2">
+                    <Show
+                      when={!session()?.isArchived}
+                      fallback={
+                        <Show when={sessionId()}>
+                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        </Show>
+                      }
+                    >
+                      <ChangesHandoff />
+                      <ReviewNotesDock />
+                      <AgentComposer
+                        autofocus={!searchTarget()}
+                        input={ChatSessionInput}
+                        modelSelector={SessionModelSelector}
+                      />
+                    </Show>
                   </div>
                 </div>
               </Show>
@@ -226,30 +298,14 @@ function SessionContent(props: { onDeleted: () => void }) {
           </SidePanel.Layout>
         </div>
       </SidePanel.Root>
-
-      <Show when={sessionId() && session()}>
-        {(_) => (
-          <Suspense>
-            <ShareModal
-              id={sessionId() ?? ''}
-              name={title()}
-              owner={session()?.ownerId ?? ''}
-              itemType="agent_session"
-              blockAlias="agent"
-              userPermissions={permissions()}
-              isSharePermOpen={shareOpen()}
-              setIsSharePermOpen={setShareOpen}
-            />
-          </Suspense>
-        )}
-      </Show>
-    </ShareDialogContext.Provider>
+    </>
   );
 }
 
 /** A conversation opened in the workspace: its title row, transcript, and composer. */
 export function AgentSessionPane(props: {
   id: string;
+  notificationSource: NotificationSource;
   onSessionId: (sessionId: string) => void;
   onDeleted: () => void;
 }) {
@@ -262,7 +318,14 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <SessionContent onDeleted={props.onDeleted} />
+      <AgentChangesProvider>
+        <AgentChangesSplit>
+          <SessionContent
+            onDeleted={props.onDeleted}
+            notificationSource={props.notificationSource}
+          />
+        </AgentChangesSplit>
+      </AgentChangesProvider>
     </AgentSessionProvider>
   );
 }

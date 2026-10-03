@@ -1,19 +1,18 @@
 import { useLocation, useNavigate, useParams } from '@solidjs/router';
-import { useQuery } from '@tanstack/solid-query';
 import { Show, Suspense } from 'solid-js';
-import { schedulingKeys } from './queries/keys';
-import { publicSchedulingSource } from './queries/public';
+import {
+  createBookingReceiptSource,
+  createPublicBookingSource,
+  usePublicProfileQuery,
+} from './queries/public';
 import { BookingReceiptView } from './views/booking-receipt-view';
 import { PublicBookingView } from './views/public-booking-view';
 
 function BookingPageContent() {
   const params = useParams<{ profile: string; slug?: string }>();
   const navigate = useNavigate();
-  const profile = useQuery(() => ({
-    queryKey: schedulingKeys.publicProfile(params.profile).queryKey,
-    queryFn: () => publicSchedulingSource.profile(params.profile),
-    retry: false,
-  }));
+  const profile = usePublicProfileQuery(() => params.profile);
+  const source = createPublicBookingSource();
   return (
     <Show
       when={profile.isSuccess ? profile.data : undefined}
@@ -39,7 +38,7 @@ function BookingPageContent() {
           <PublicBookingView
             profile={p()}
             event={p().eventTypes.find((e) => e.slug === params.slug)}
-            source={publicSchedulingSource}
+            source={source}
             onEvent={(slug) => navigate(`/book/${params.profile}/${slug}`)}
             onReceipt={(r) => navigate(`/booking/${r.booking.id}#${r.token}`)}
           />
@@ -60,32 +59,14 @@ function ReceiptContent() {
   const params = useParams<{ id: string }>();
   const location = useLocation();
   const token = () => location.hash.slice(1);
-  const receipt = useQuery(() => ({
-    queryKey: schedulingKeys.receipt(params.id, token()).queryKey,
-    queryFn: () => publicSchedulingSource.receipt(params.id, token()),
-    retry: false,
-    gcTime: 0,
-    refetchInterval: (q) =>
-      q.state.data?.booking.status === 'processing' ||
-      q.state.data?.booking.status === 'failed'
-        ? 5000
-        : false,
-  }));
+  const source = createBookingReceiptSource(() => params.id, token);
   return (
     <BookingReceiptView
-      receipt={receipt.isPending ? undefined : receipt.data}
-      unavailable={receipt.isError}
-      cancel={async () => {
-        await publicSchedulingSource.cancel(params.id, token());
-        await receipt.refetch();
-      }}
-      loadSlots={(date) =>
-        publicSchedulingSource.replacementSlots(params.id, token(), date)
-      }
-      reschedule={async (start) => {
-        await publicSchedulingSource.reschedule(params.id, token(), start);
-        await receipt.refetch();
-      }}
+      receipt={source.receipt.isSuccess ? source.receipt.data : undefined}
+      unavailable={source.receipt.isError}
+      cancel={source.cancel}
+      loadSlots={source.replacementSlots}
+      reschedule={source.reschedule}
     />
   );
 }

@@ -9,7 +9,11 @@ import {
 } from '@app/lib/analytics/providers';
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getPlatform } from '@core/util/platform';
+import { getPlatform, isTauri } from '@core/util/platform';
+import {
+  redactCallLinkProperties,
+  redactCallLinkTokens,
+} from '@core/util/telemetryUrl';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { getPlanAnalyticsProperties } from './planProperties';
@@ -116,6 +120,11 @@ const IGNORABLE_ERRORS = [
 const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
 const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
+function isPrivateCallPage() {
+  const path = window.location.pathname + window.location.hash;
+  return redactCallLinkTokens(path) !== path;
+}
+
 const initializePosthog = (instance: PostHog) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
@@ -135,7 +144,14 @@ const initializePosthog = (instance: PostHog) => {
       return script;
     },
     before_send: (cr) => {
+      // Call URLs are bearer capabilities and meeting content must not replay.
+      if (isPrivateCallPage()) return null;
       if (cr) {
+        cr.properties = redactCallLinkProperties(cr.properties);
+        if (cr.$set) cr.$set = redactCallLinkProperties(cr.$set);
+        if (cr.$set_once) {
+          cr.$set_once = redactCallLinkProperties(cr.$set_once);
+        }
         cr.properties.env = DEV_MODE_ENV
           ? 'DEV'
           : PROD_MODE_ENV
@@ -170,12 +186,17 @@ const createAnalytics = () => {
   const posthog = new PostHog();
 
   const disabled = import.meta.env.DEV === true;
+  // Meta can submit events through hidden frames. Native navigation handlers
+  // can mistake those loads for external links and open the system browser.
+  const metaPixelEnabled = !isTauri();
 
   const initializeProviders = () => {
     if (disabled) return;
 
-    tryInitialize(initializeGoogleAnalytics);
-    tryInitialize(initializeMetaPixel);
+    if (!isPrivateCallPage()) {
+      tryInitialize(initializeGoogleAnalytics);
+      if (metaPixelEnabled) tryInitialize(initializeMetaPixel);
+    }
     tryInitialize(() => initializePosthog(posthog));
   };
 
@@ -187,7 +208,7 @@ const createAnalytics = () => {
     data?: Record<string, unknown>,
     options?: TrackOptions & { eventID?: string }
   ) => {
-    if (disabled) return;
+    if (disabled || isPrivateCallPage()) return;
 
     const enriched = {
       ...data,
@@ -201,6 +222,7 @@ const createAnalytics = () => {
           gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
+          if (!metaPixelEnabled) return;
           const fbqMethod = META_STANDARD_EVENTS.has(event)
             ? 'track'
             : 'trackCustom';
@@ -301,10 +323,12 @@ const createAnalytics = () => {
         ...(info.os && { os: info.os }),
       });
 
-      fbq('init', '639142540393286', {
-        external_id: userID,
-        em: info.email,
-      });
+      if (metaPixelEnabled) {
+        fbq('init', '639142540393286', {
+          external_id: userID,
+          em: info.email,
+        });
+      }
 
       posthog.identify(userID, { ...info });
     } catch (e) {
@@ -342,8 +366,13 @@ const createAnalytics = () => {
   const pageView = (pageTitle: string, opts?: PageViewOptions) => {
     if (disabled) return;
 
-    const pagePath = opts?.path ?? window.location.pathname;
-    const pageLocation = opts?.location ?? window.location.href;
+    if (isPrivateCallPage()) return;
+    const pagePath = redactCallLinkTokens(
+      opts?.path ?? window.location.pathname
+    );
+    const pageLocation = redactCallLinkTokens(
+      opts?.location ?? window.location.href
+    );
     const deviceType = getDeviceType();
     const environment = getEnvironment();
 
@@ -356,11 +385,13 @@ const createAnalytics = () => {
         page_path: pagePath,
       });
 
-      fbq('track', 'PageView', {
-        [DEVICE_PROPERTY]: deviceType,
-        [ENVIRONMENT_PROPERTY]: environment,
-        content_name: pageTitle,
-      });
+      if (metaPixelEnabled) {
+        fbq('track', 'PageView', {
+          [DEVICE_PROPERTY]: deviceType,
+          [ENVIRONMENT_PROPERTY]: environment,
+          content_name: pageTitle,
+        });
+      }
 
       posthog.capture('$pageview', {
         [DEVICE_PROPERTY]: deviceType,

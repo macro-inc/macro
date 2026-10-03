@@ -5,8 +5,10 @@ mod options;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use activity::Actor;
+use bot_id::BotIdStr;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     BotReceiptScope, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
@@ -29,10 +31,10 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
-use system_properties::SystemPropertyKey;
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use super::error::PropertiesErr;
+use super::error::{InvalidStoredPropertyValue, PropertiesErr};
 use super::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
     PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyMacroEvent,
@@ -46,7 +48,9 @@ use super::model::{
     ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope, TagSet,
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
-use super::ports::{NotificationService, PermissionService, PropertiesRepo};
+use super::ports::{
+    InitiativeAssigneeService, NotificationService, PermissionService, PropertiesRepo,
+};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
@@ -72,19 +76,31 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
-                PublishedEventActors {
-                    actor: None,
-                    on_behalf_of: None,
-                    actor_user_id: None,
-                }
-            }
+            BotReceiptScope::Team { .. } => PublishedEventActors {
+                actor: Some(Actor::new_from_bot(bot.bot_id())),
+                on_behalf_of: None,
+                actor_user_id: None,
+            },
+            BotReceiptScope::Channel { .. } => PublishedEventActors {
+                actor: None,
+                on_behalf_of: None,
+                actor_user_id: None,
+            },
         },
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => PublishedEventActors {
             actor: None,
             on_behalf_of: None,
             actor_user_id: None,
         },
+    }
+}
+
+fn inheritance_error(error: PropertiesErr) -> PropertiesErr {
+    match error {
+        PropertiesErr::Repo(error) if error.is::<InvalidStoredPropertyValue>() => {
+            PropertiesErr::Validation("Stored assignees are invalid".to_string())
+        }
+        error => error,
     }
 }
 
@@ -102,6 +118,7 @@ where
     permission_service: Option<P>,
     notification_service: Option<N>,
     event_broker: B,
+    initiative_assignees: Option<Arc<dyn InitiativeAssigneeService>>,
 }
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -121,6 +138,7 @@ where
             permission_service,
             notification_service,
             event_broker: NoopMacroEventBroker,
+            initiative_assignees: None,
         }
     }
 }
@@ -142,7 +160,17 @@ where
             permission_service: self.permission_service,
             notification_service: self.notification_service,
             event_broker,
+            initiative_assignees: self.initiative_assignees,
         }
+    }
+
+    /// Supply the initiative domain's assignee-sharing capability.
+    pub fn with_initiative_assignees(
+        mut self,
+        initiative_assignees: Arc<dyn InitiativeAssigneeService>,
+    ) -> Self {
+        self.initiative_assignees = Some(initiative_assignees);
+        self
     }
 
     /// Publish a property lifecycle event without coupling broker availability
@@ -299,9 +327,9 @@ where
                         .and_then(|document_id| document_sub_types.get(&document_id))
                         .map_or(EntityType::Document, |sub_type| match sub_type {
                             DocumentSubType::Task => EntityType::Task,
-                            DocumentSubType::Snippet | DocumentSubType::Skill => {
-                                EntityType::Document
-                            }
+                            DocumentSubType::Snippet
+                            | DocumentSubType::Skill
+                            | DocumentSubType::InitiativeDescription => EntityType::Document,
                         }),
                     other => super::model::storage_entity_type(other).ok_or_else(|| {
                         PropertiesErr::Validation(format!(
@@ -639,6 +667,23 @@ where
 
         // Validate property options at service layer (before upserting)
         let option_ids = extract_option_ids_from_property_value(&property_value);
+        if entity_type == EntityType::Initiative
+            && property_definition_id == SystemPropertyKey::STATUS_UUID
+            && option_ids.iter().any(|option_id| {
+                !matches!(
+                    StatusOption::from_uuid(*option_id),
+                    Some(
+                        StatusOption::NotStarted
+                            | StatusOption::InProgress
+                            | StatusOption::Completed
+                    )
+                )
+            })
+        {
+            return Err(PropertiesErr::Validation(
+                "Project status must be Not Started, In Progress, or Completed".to_string(),
+            ));
+        }
         if !option_ids.is_empty() {
             self.validate_property_options(property_definition_id, &option_ids)
                 .await?;
@@ -684,6 +729,13 @@ where
                 .await?;
         }
 
+        if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
+            && entity_type == EntityType::Initiative
+        {
+            self.handle_initiative_assignees_property(access, &property_value)
+                .await?;
+        }
+
         let snapshot = self
             .repository
             .upsert_entity_property(
@@ -708,6 +760,74 @@ where
             value: property_value,
             options: None,
         })
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn inherit_project_agent_assignees(
+        &self,
+        project: &ViewReceipt,
+        task: &EditReceipt,
+    ) -> Result<(), PropertiesErr> {
+        if project.entity_type() != AccessEntityType::Initiative
+            || task.entity_type() != AccessEntityType::Document
+        {
+            return Err(PropertiesErr::Validation(
+                "Agent inheritance requires a project and a task".to_string(),
+            ));
+        }
+        let same_actor = match (project.auth(), task.auth()) {
+            (EntityAccessAuth::Authenticated(project), EntityAccessAuth::Authenticated(task)) => {
+                project == task
+            }
+            (EntityAccessAuth::Bot(project), EntityAccessAuth::Bot(task)) => project == task,
+            (EntityAccessAuth::Internal, EntityAccessAuth::Internal) => true,
+            _ => false,
+        };
+        if !same_actor {
+            return Err(PropertiesErr::PermissionDenied);
+        }
+        if self.resolve_subject(task).await?.storage_entity_type != EntityType::Task {
+            // Membership events may outlive the document's task subtype.
+            return Ok(());
+        }
+
+        let Some(PropertyValue::EntityRef(references)) = self
+            .get_system_property_value(project, SystemPropertyKey::Assignees)
+            .await
+            .map_err(inheritance_error)?
+        else {
+            return Ok(());
+        };
+        let agents = references
+            .into_iter()
+            .filter(|reference| {
+                reference.entity_type == EntityType::User
+                    && BotIdStr::parse_from_str(&reference.entity_id).is_ok()
+            })
+            .collect::<Vec<_>>();
+        if agents.is_empty() {
+            return Ok(());
+        }
+
+        let mutation = self
+            .repository
+            .add_entity_property_references(
+                task.entity_id(),
+                EntityType::Task,
+                SystemPropertyKey::ASSIGNEES_UUID,
+                agents,
+            )
+            .await
+            .map_err(|error| inheritance_error(anyhow::Error::from(error).into()))?;
+        if mutation.value != mutation.previous_value {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &mutation.property,
+                &mutation.value,
+                &mutation.previous_value,
+                task,
+            ));
+        }
+        Ok(())
     }
 
     #[tracing::instrument(
@@ -1219,6 +1339,24 @@ where
         Ok(self
             .repository
             .get_property_options(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip(self, team), err)]
+    async fn get_property_options_batch(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, PropertiesErr> {
+        Ok(self
+            .repository
+            .get_visible_property_options_batch(
+                property_definition_ids,
+                user_id,
+                team_id_from_receipt(team),
+            )
             .await
             .map_err(anyhow::Error::from)?)
     }

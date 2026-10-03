@@ -10,6 +10,58 @@ const STRANGER: &str = "macro|agent-stranger@test.com";
 const BOT_ID: Uuid = Uuid::from_u128(0xa9e7);
 const CHANNEL_ID: Uuid = Uuid::from_u128(0xc05);
 
+#[test]
+fn persisted_row_metadata_survives_property_enrichment() {
+    let created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+    let item = row_to_item(AgentSessionRow {
+        id: Uuid::now_v7(),
+        name: "Fix agent rows".to_owned(),
+        owner_id: OWNER.to_owned(),
+        bot_id: BOT_ID,
+        harness: "cursor".to_owned(),
+        repo_url: Some("https://github.com/macro/macro".to_owned()),
+        repo_branch: Some("main".to_owned()),
+        working_branch: Some("cursor/fix-rows".to_owned()),
+        pull_request_url: Some("https://github.com/macro/macro/pull/6712".to_owned()),
+        turn_state: Some("running".to_owned()),
+        thread_id: None,
+        is_archived: false,
+        status: "event".to_owned(),
+        status_event_name: Some("acp_ready".to_owned()),
+        created_at,
+        modified_at: created_at,
+        viewed_at: None,
+    })
+    .expect("valid persisted session")
+    .map_extra(|()| "properties");
+
+    let SoupItem::AgentSession(session) = item else {
+        panic!("expected an agent session");
+    };
+    assert_eq!(session.harness, "cursor");
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro/macro")
+    );
+    assert_eq!(session.repo_branch.as_deref(), Some("main"));
+    assert_eq!(
+        session.pull_request_url.as_deref(),
+        Some("https://github.com/macro/macro/pull/6712")
+    );
+    assert_eq!(session.turn_state.as_deref(), Some("running"));
+    assert_eq!(session.status, "acp_ready");
+    assert_eq!(
+        session.working_branch.as_deref(),
+        Some("cursor/fix-rows"),
+        "runtime working branch survives list mapping"
+    );
+    assert_eq!(
+        session.pull_request_state, None,
+        "unknown PR state stays unknown"
+    );
+    assert_eq!(session.extra, "properties");
+}
+
 struct Fixture {
     /// Owned by `OWNER`, granted to `CHANNEL_ID` (where `MEMBER` participates).
     shared: Uuid,
@@ -137,6 +189,37 @@ fn ids(items: &[SoupItem<()>]) -> Vec<Uuid> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn runtime_branch_without_a_pr_is_listed_only_for_authorized_viewers(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE agent_session SET working_branch = 'cursor/no-pr', repo_url = 'https://github.com/example/example' WHERE id = $1",
+        fixture.shared,
+    ).execute(&pool).await?;
+    let items = cursor_soup(
+        &pool,
+        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    let SoupItem::AgentSession(session) = &items[0] else {
+        unreachable!()
+    };
+    assert_eq!(session.id, fixture.shared);
+    assert_eq!(session.working_branch.as_deref(), Some("cursor/no-pr"));
+    assert_eq!(session.pull_request_url, None);
+    assert!(
+        cursor_soup(
+            &pool,
+            request(STRANGER, Some(Expr::val(AgentSessionLiteral::Include)))
+        )
+        .await?
+        .is_empty()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sessions_are_opt_in(pool: PgPool) -> anyhow::Result<()> {
     seed(&pool).await?;
 
@@ -173,7 +256,7 @@ async fn include_lists_accessible_sessions_newest_first(pool: PgPool) -> anyhow:
     };
     assert_eq!(private.name, "Private session");
     assert_eq!(private.status, "session/end");
-    assert_eq!(private.owner_id.as_ref(), OWNER);
+    assert_eq!(private.owner_id.principal_id(), OWNER);
     assert_eq!(private.bot_id, BOT_ID);
 
     let member_items = cursor_soup(
@@ -215,7 +298,7 @@ async fn id_and_owner_literals_constrain_the_page(pool: PgPool) -> anyhow::Resul
         request(
             MEMBER,
             Some(Expr::val(AgentSessionLiteral::Owner(
-                MacroUserIdStr::parse_from_str(OWNER)?.into_owned(),
+                Owner::from_principal_str(OWNER)?,
             ))),
         ),
     )
@@ -227,7 +310,7 @@ async fn id_and_owner_literals_constrain_the_page(pool: PgPool) -> anyhow::Resul
         request(
             OWNER,
             Some(Expr::val(AgentSessionLiteral::Owner(
-                MacroUserIdStr::parse_from_str(MEMBER)?.into_owned(),
+                Owner::from_principal_str(MEMBER)?,
             ))),
         ),
     )
@@ -316,5 +399,61 @@ async fn by_ids_respects_access(pool: PgPool) -> anyhow::Result<()> {
     )
     .await?;
     assert_eq!(ids(&member_items), vec![fixture.shared]);
+    Ok(())
+}
+
+/// An inline `@macro` session (`list_hidden`) is missing from broad lists for
+/// everyone, but a named id still finds it and hydrating by id still works.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_sessions_stay_out_of_broad_lists(pool: PgPool) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE agent_session SET list_hidden = TRUE WHERE id = $1",
+        fixture.shared,
+    )
+    .execute(&pool)
+    .await?;
+
+    let owner_before = cursor_soup(
+        &pool,
+        request(OWNER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert_eq!(
+        ids(&owner_before),
+        vec![fixture.private],
+        "the owner's list omits the unopened inline session"
+    );
+    let member_before = cursor_soup(
+        &pool,
+        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert!(
+        member_before.is_empty(),
+        "a channel member does not inherit the owner's list"
+    );
+
+    let named = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::val(AgentSessionLiteral::Id(fixture.shared))),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&named), vec![fixture.shared]);
+
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.shared.to_string())];
+    let hydrated = by_ids(
+        &pool,
+        AdvancedSortParams {
+            entities: &entities,
+            user_id: MacroUserIdStr::parse_from_str(MEMBER)?,
+        },
+    )
+    .await?;
+    assert_eq!(ids(&hydrated), vec![fixture.shared]);
+
     Ok(())
 }

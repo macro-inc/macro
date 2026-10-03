@@ -1,5 +1,5 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { CommentsProvider } from '@block-md/comments/CommentsProvider';
+import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
@@ -75,6 +75,7 @@ import {
   blameTooltipPlugin,
   createBlameTooltipStore,
 } from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
+import { blockDecoratorNavigationPlugin } from '@core/component/LexicalMarkdown/plugins/block-decorator-navigation';
 import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
@@ -109,6 +110,7 @@ import {
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins/shared/utils';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -206,6 +208,7 @@ export function MarkdownEditor(props: {
   loroManager: LoroManager;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
+  resolveAppLink?: MentionLinkResolver;
 }) {
   const {
     documentId,
@@ -236,7 +239,6 @@ export function MarkdownEditor(props: {
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
   } = documentState.editor;
-  const { revisions, setRevisions } = documentState.rewrite;
   const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
@@ -404,10 +406,11 @@ export function MarkdownEditor(props: {
     const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
     if (!dragInsertPosition) return;
 
-    const mentionId =
-      res.item.type === 'agent_session'
-        ? undefined
-        : await trackMention(blockId, 'document', res.id);
+    const mentionId = await trackMention(
+      blockId,
+      res.item.type === 'agent_session' ? 'agent_session' : 'document',
+      res.id
+    );
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {
@@ -593,6 +596,7 @@ export function MarkdownEditor(props: {
       })
     )
     .use(mediaPlugin())
+    .use(blockDecoratorNavigationPlugin())
     .use(
       tablePlugin({
         hasCellMerge: true,
@@ -625,7 +629,7 @@ export function MarkdownEditor(props: {
         dragListenerRef: editorContainerRef,
       })
     )
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
@@ -681,12 +685,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_DIFF) {
-    plugins.use(
-      diffPlugin({
-        revisionsSignal: [revisions, setRevisions],
-        nodeIdMap: lexicalWrapper.mapping!,
-      })
-    );
+    plugins.use(diffPlugin());
   }
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
@@ -1002,6 +1001,10 @@ export function MarkdownEditor(props: {
             });
           }}
           contentEditable={isContentEditable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!isContentEditable()}
+          aria-label="Document content"
           class="ph-no-capture w-full max-w-full min-h-52"
           classList={{
             'select-auto': !canEdit(),
@@ -1149,10 +1152,12 @@ export function MarkdownEditor(props: {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider
-            activeComment={activeCommentIdParam}
-            loroManager={props.loroManager}
-          />
+          <Suspense>
+            <MessageCommentsProvider
+              activeComment={activeCommentIdParam}
+              loroManager={props.loroManager}
+            />
+          </Suspense>
         </Show>
 
         <Show when={canEdit()}>

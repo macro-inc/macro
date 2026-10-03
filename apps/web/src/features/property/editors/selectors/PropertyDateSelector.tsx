@@ -21,15 +21,17 @@ import {
 type DateSelectorMode = 'search' | 'calendar';
 
 type DateSelectorProps = {
-  property: DateProperty;
+  property: Pick<DateProperty, 'displayName'>;
   selectedDate?: Date | null;
+  /** Seeds the search, e.g. with the key that opened the selector. */
+  initialQuery?: string;
   onSelectDate: (date: Date | null) => void;
   onClose?: () => void;
 };
 
 export const PropertyDateSelector = (props: DateSelectorProps) => {
   const [mode, setMode] = createSignal<DateSelectorMode>('search');
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createSignal(props.initialQuery ?? '');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let searchInputRef!: HTMLInputElement;
   const keyboardMode = useKeyPressed(100);
@@ -262,17 +264,6 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   </div>
                 </Show>
               </div>
-            </div>
-          </div>
-
-          {/* Help text */}
-          <div class="shrink-0 px-2 py-1.5 border-t border-edge-muted">
-            <div class="text-xs text-ink-muted">
-              <span>Use queries like </span>
-              <code class="bg-active px-1">3d</code>,{' '}
-              <code class="bg-active px-1">1w</code>,{' '}
-              <code class="bg-active px-1">feb 17</code>, or{' '}
-              <code class="bg-active px-1">tomorrow</code>
             </div>
           </div>
         </Match>

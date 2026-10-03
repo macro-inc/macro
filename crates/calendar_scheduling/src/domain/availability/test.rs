@@ -182,3 +182,35 @@ fn personal_hours_respect_overrides_and_repeated_dst_hour() {
     });
     assert!(!schedule_contains(&s, start, start + Duration::minutes(10)).unwrap());
 }
+
+#[test]
+fn primary_schedule_rejects_slots_that_leave_hours_during_fall_back() {
+    let mut schedule = schedule();
+    schedule.weekly[0].windows = vec![TimeWindow {
+        start: "00:30".into(),
+        end: "01:30".into(),
+    }];
+    let mut event = event();
+    event.duration_minutes = 120;
+    let slots = slots_for_date(
+        &event,
+        &schedule,
+        NaiveDate::from_ymd_opt(2026, 11, 1).unwrap(),
+        Utc.with_ymd_and_hms(2026, 10, 31, 0, 0, 0).unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert!(slots.is_empty());
+    event.duration_minutes = 30;
+    assert!(
+        !slots_for_date(
+            &event,
+            &schedule,
+            NaiveDate::from_ymd_opt(2026, 11, 1).unwrap(),
+            Utc.with_ymd_and_hms(2026, 10, 31, 0, 0, 0).unwrap(),
+            &[],
+        )
+        .unwrap()
+        .is_empty()
+    );
+}

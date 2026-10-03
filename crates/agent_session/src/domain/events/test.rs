@@ -53,6 +53,17 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
             stop_reason: "end_turn".to_owned(),
             queued_remaining: 0,
         }),
+        AgentSessionLifecycleEvent::CommandRejected(CommandRejectedMetadata {
+            identity: identity(),
+            action_id: action_id(),
+            actor: Some(owner()),
+            announcement_message_id: Some(Uuid::from_u128(4)),
+            failure: CommandFailure {
+                code: "ai_billing_unavailable".into(),
+                message: "AI usage validation is temporarily unavailable. Please try again.".into(),
+                retryable: true,
+            },
+        }),
         AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
             identity: identity(),
             last_turn: Some(TurnSummary {
@@ -85,6 +96,7 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
                     .expect("valid user id")
                     .into_owned(),
             ],
+            origin_message_id: None,
         }),
         AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
             identity: identity(),
@@ -98,6 +110,31 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
             identity: identity(),
         }),
     ]
+}
+
+#[cfg(feature = "admission")]
+#[test]
+fn admission_failures_have_only_sanitized_public_fields() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+        AiAdmissionError::Unavailable,
+    ] {
+        let failure = CommandFailure::from(error);
+        assert_eq!(failure.code, error.code());
+        assert_eq!(failure.message, error.to_string());
+        assert_eq!(failure.retryable, error.is_retryable());
+        assert_eq!(
+            serde_json::to_value(failure)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .len(),
+            3
+        );
+    }
 }
 
 #[test]

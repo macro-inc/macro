@@ -10,6 +10,7 @@ use crate::tool_context::{
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
@@ -24,18 +25,22 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use image_generation::domain::ports::{ImageGenerator, UnconfiguredImageGenerator};
+use image_generation::outbound::gemini::GeminiImageGenerator;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -72,6 +77,28 @@ maybe_env_var! {
     }
 }
 
+maybe_env_var! {
+    struct GoogleGenerativeAiApiKey;
+}
+
+/// The text-to-image provider for the GenerateImage tool: Gemini's Nano
+/// Banana model when `GOOGLE_GENERATIVE_AI_API_KEY` is set, otherwise the
+/// unconfigured generator, whose calls fail with a clear message rather than
+/// keeping the host from booting.
+pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
+    match GoogleGenerativeAiApiKey::new()
+        .as_ref()
+        .and_then(|key| key.value())
+        .filter(|key| !key.trim().is_empty())
+    {
+        Some(key) => Arc::new(GeminiImageGenerator::new(key.to_string())),
+        None => {
+            tracing::warn!("GOOGLE_GENERATIVE_AI_API_KEY is not set; GenerateImage is disabled");
+            Arc::new(UnconfiguredImageGenerator)
+        }
+    }
+}
+
 /// Builds a [`ToolServiceContext`] by reading the required environment
 /// variables and wiring up all the shared services.
 ///
@@ -86,8 +113,8 @@ maybe_env_var! {
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
-/// `INTERNAL_API_KEY` (presented to the connection gateway for realtime
-/// channel side effects), `KAFKA_BROKERS`.
+/// `INTERNAL_API_KEY` (presented to the lexical service and to the
+/// connection gateway for realtime channel side effects), `KAFKA_BROKERS`.
 ///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
@@ -99,6 +126,9 @@ maybe_env_var! {
 /// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 ///
+/// `enforcement` is validated by the host at startup and shared with all other
+/// AI entry points. It configures both quota admission and prospective counting.
+///
 /// `event_task_tracker` tracks event publishes started by the context. Callers
 /// must retain the original tracker, pass a clone here, and close and drain the
 /// original after the host stops broker-backed work.
@@ -106,6 +136,7 @@ maybe_env_var! {
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
+    enforcement: ai_usage::AiUsageEnforcement,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -113,6 +144,7 @@ pub async fn build_tool_service_context_from_env(
     let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
     let email_service_url = EmailServiceUrl::new()?.to_string();
+    let calendar_service_url = CalendarServiceUrl::new()?;
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
     let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
     let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
@@ -187,10 +219,7 @@ pub async fn build_tool_service_context_from_env(
         sync_service_url,
     ));
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
-    let lexical_client = LexicalClient::new(
-        env.document_storage_service_auth_key.to_string(),
-        lexical_service_url,
-    );
+    let lexical_client = LexicalClient::new(env.internal_api_key.to_string(), lexical_service_url);
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
@@ -236,7 +265,9 @@ pub async fn build_tool_service_context_from_env(
         env.document_storage_bucket.to_string(),
         env.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(pool.clone());
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone())));
+    let document_repo = PgDocumentRepo::new(pool.clone(), owned_entity_registrar.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: env
             .document_storage_service_cloudfront_distribution_url
@@ -251,34 +282,39 @@ pub async fn build_tool_service_context_from_env(
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));
-    let properties_service =
-        crate::tool_context::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service = crate::tool_context::build_task_properties_adapter(
-        pool.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
         event_task_tracker,
+    );
+    let properties_service = crate::tool_context::build_properties_service_with_broker(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = crate::tool_context::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
     // Channel messages sent by AI tools dispatch the same side effects as the
     // document-storage channel API (realtime, notifications, contact sync, and
     // broker events that drive live search indexing), so agent-sent messages
     // notify mentioned users and stream to connected clients instead of landing
     // silently.
+    let side_effect_clients = ChannelSideEffectClients {
+        connection_gateway: Arc::new(ConnectionGatewayClient::new(
+            env.internal_api_key.to_string(),
+            connection_gateway_url,
+        )),
+        sqs: aws_sqs_client,
+        macro_event_broker: macro_event_broker.clone(),
+    };
+    let databases_gateway = side_effect_clients.connection_gateway.as_ref().clone();
     let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
         pool.clone(),
         Arc::new(lexical_client.clone()),
-        ChannelSideEffectClients {
-            connection_gateway: Arc::new(ConnectionGatewayClient::new(
-                env.internal_api_key.to_string(),
-                connection_gateway_url,
-            )),
-            sqs: aws_sqs_client,
-            macro_event_broker: macro_event_broker.clone(),
-        },
+        &side_effect_clients,
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
@@ -304,6 +340,11 @@ pub async fn build_tool_service_context_from_env(
         sync_client.as_ref().clone(),
         ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
         env.document_permission_jwt.to_string(),
+        crate::tool_context::build_message_service_with_side_effects(
+            pool.clone(),
+            Arc::new(lexical_client.clone()),
+            &side_effect_clients,
+        ),
     );
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
@@ -349,7 +390,7 @@ pub async fn build_tool_service_context_from_env(
 
     let calendar_tool_context = crate::tool_context::build_calendar_tool_context(
         pool.clone(),
-        email_service_url,
+        calendar_service_url,
         env.internal_api_key.to_string(),
     );
 
@@ -367,7 +408,7 @@ pub async fn build_tool_service_context_from_env(
     let notification_tool_context =
         notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
-    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone());
+    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
     let chat_service = chat::domain::service::ChatServiceImpl::new(
         chat_repo,
         Arc::new(ai_toolset::AsyncToolCollection::new()),
@@ -387,13 +428,43 @@ pub async fn build_tool_service_context_from_env(
         entity_access_service.clone(),
         document_tool_context.service.clone(),
         chat_tool_context.service.clone(),
-        user_email_service,
+        user_email_service.clone(),
     );
 
     let anthropic_tool_context = build_anthropic_tool_context();
 
-    let skill_tool_context =
-        crate::tool_context::build_skill_tool_context(search_client.clone(), soup_service.clone());
+    let skill_tool_context = crate::tool_context::build_skill_tool_context(
+        search_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
+
+    let initiative_tool_context = crate::tool_context::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        side_effect_clients.sqs,
+        side_effect_clients.macro_event_broker,
+    );
+
+    let databases_tool_context = crate::tool_context::build_databases_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        crate::tool_context::ToolTableEventPublisher::Gateway(
+            databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                databases_gateway,
+            ),
+        ),
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let databases_sql_tool_context = crate::tool_context::build_databases_sql_tool_context(
+        &databases_tool_context,
+        soup_service.clone(),
+        pool.clone(),
+    );
+
+    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
 
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),
@@ -405,6 +476,11 @@ pub async fn build_tool_service_context_from_env(
             properties_service,
             entity_access_service.clone(),
         ),
+        image_generation_tool_context: crate::build_image_generation_tool_context(
+            &document_tool_context,
+            build_image_generator_from_env(),
+            recorder.clone(),
+        )?,
         document_tool_context,
         properties_tool_context,
         email_tool_context,
@@ -413,24 +489,30 @@ pub async fn build_tool_service_context_from_env(
         notification_tool_context,
         reminders_tool_context: crate::tool_context::build_reminders_tool_context(
             pool.clone(),
+            user_email_service.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context,
+        databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         bot_tool_context: crate::tool_context::build_bot_tool_context(
             pool.clone(),
-            crate::tool_context::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             document_storage_service_url,
+            crate::mcp_app_catalog::pipedream_client_from_env()?,
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
         skill_tool_context,
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
-        recorder: ai_usage::pg_recorder(pool.clone()),
+        admission: ai_billing::composition::pg_admission_service(pool.clone(), enforcement),
+        recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }

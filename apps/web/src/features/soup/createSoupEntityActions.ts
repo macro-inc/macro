@@ -1,3 +1,4 @@
+import { createCrmEntityActionItems } from '@app/features/crm/crm-action-items';
 import {
   type EntityActionListState,
   type EntityActionNavigationHandler,
@@ -11,7 +12,6 @@ import {
   makeDeleteAction,
   makeEditReminderAction,
   makeFavoriteAction,
-  makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
@@ -23,7 +23,6 @@ import {
   makeMuteAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
-  makeSetCompanyPropertyAction,
   makeShareAction,
   markReminderTargetDone,
 } from '@app/features/next-soup/actions';
@@ -32,15 +31,17 @@ import {
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
-import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
+import { isEmailEntity, isTaskEntity } from '@entity';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -68,9 +69,10 @@ type BuildActionGroups = (
     // Provided only where the menu host can anchor a tag picker for the
     // right-clicked row.
     openTagPicker?: () => void;
+    openProjectPicker?: () => void;
     /**
      * The split hosting the list. Open actions route through it so they match
-     * their click/hotkey equivalents, including Preview Pair routing.
+     * their click/hotkey equivalents.
      */
     splitHandle?: SplitHandle;
     /** Creates a view-owned follow-up for action-driven navigation. */
@@ -91,11 +93,13 @@ export const viewedProjectIdFromContent = (content: {
 
 export function createSoupEntityActions(): {
   buildActionGroups: BuildActionGroups;
+  isFavorited: (entity: EntityData) => boolean;
 } {
   const analytics = useAnalytics();
+  const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const hiddenMutation = useSetCompanyHiddenMutation();
+  const crmActions = createCrmEntityActionItems();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -140,11 +144,6 @@ export function createSoupEntityActions(): {
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
-  const hideCompanyAction = makeHideCompanyAction({
-    setHidden: (companyId, hidden) =>
-      hiddenMutation.mutateAsync({ companyId, hidden }),
-  });
-  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const buildActionGroups: BuildActionGroups = (
     soup,
@@ -153,6 +152,7 @@ export function createSoupEntityActions(): {
       viewContext,
       viewedProjectId,
       openTagPicker,
+      openProjectPicker,
       splitHandle,
       createActionNavigationHandler,
     }
@@ -236,10 +236,7 @@ export function createSoupEntityActions(): {
      * The single entity these open actions apply to, if any.
      *
      * Content already mounted in another split is skipped — reopening it would
-     * duplicate it. The Preview Pair's own Viewer is the exception: its copy is
-     * the preview of this very row, which opening supersedes rather than
-     * duplicates, so the row keeps its open actions while it is being
-     * previewed.
+     * duplicate it.
      */
     const openableEntity = (): EntityData | undefined => {
       if (isMobile()) return undefined;
@@ -249,51 +246,38 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
-      // A reminder opens its own editor — a `reminder-view` component split —
-      // not what it references, so a standalone reminder is openable too and
-      // the dedup check is against that editor split, not the reference.
-      if (entity.type === 'reminder') {
-        const open = splitManager.getSplitByContent(
-          'component',
-          `reminder-view~${entity.id}`
-        );
-        if (open && open.id !== splitHandle?.viewerId()) return undefined;
-        return entity;
-      }
+      // Reminder route claims perform identity reuse when the action runs.
+      if (entity.type === 'reminder') return entity;
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
           : entity.id;
       const contentType = itemToBlockName(entity);
       const existing = splitManager.getSplitByContent(contentType, contentId);
-      if (existing && existing.id !== splitHandle?.viewerId()) return undefined;
+      if (existing) return undefined;
       return entity;
     };
 
-    const openEntity =
-      (options: { openInNewSplit?: boolean; replacePreview?: boolean }) =>
-      async () => {
-        const entity = openableEntity();
-        if (!entity) return;
+    const openEntity = (options: { openInNewSplit?: boolean }) => async () => {
+      const entity = openableEntity();
+      if (!entity) return;
 
-        if (options.openInNewSplit) {
-          analytics.track('split_created', {
-            from: 'soup_view_entity_actions_menu',
-          });
-        }
-
-        markReminderSeenOnOpen(entity, notificationSource);
-
-        // Same path as shift/opt+click, so the menu inherits Preview Pair
-        // routing (new split when it fits; replacing the pair outright) and
-        // per-entity targeting such as a thread row's driving message.
-        await openEntityInSplitFromUnifiedList(entity, {
-          ...options,
-          splitHandle,
-          referredFrom: 'entity-actions-menu',
-          notificationSource,
+      if (options.openInNewSplit) {
+        analytics.track('split_created', {
+          from: 'soup_view_entity_actions_menu',
         });
-      };
+      }
+
+      markReminderSeenOnOpen(entity, notificationSource);
+
+      // Match row navigation, including a thread row's driving message.
+      await openEntityInSplitFromUnifiedList(entity, {
+        ...options,
+        splitHandle,
+        referredFrom: 'entity-actions-menu',
+        notificationSource,
+      });
+    };
 
     if (openableEntity()) {
       topItems.push({
@@ -305,15 +289,6 @@ export function createSoupEntityActions(): {
         disabled: !globalSplitManager()?.canAppendSplit(),
         onClick: openEntity({ openInNewSplit: true }),
       });
-
-      if (splitHandle?.isControllerSplit()) {
-        topItems.push({
-          id: 'open-to-replace-preview',
-          label: 'Open to replace preview',
-          shortcut: 'opt+enter',
-          onClick: openEntity({ replacePreview: true }),
-        });
-      }
     }
 
     // Middle group: Rename, Move to folder, Duplicate, Copy Link, Copy Branch Name, Share
@@ -358,6 +333,11 @@ export function createSoupEntityActions(): {
     }
 
     if (canExecuteAll(muteAction.canExecute)) {
+      middleItems.push({
+        id: 'snooze',
+        label: 'Snooze notifications…',
+        onClick: () => muteAction.snooze(entities),
+      });
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
@@ -389,6 +369,20 @@ export function createSoupEntityActions(): {
         id: 'add-tag',
         label: 'Add tag',
         onClick: openTagPicker,
+      });
+    }
+
+    if (
+      projectsFlag().enabled &&
+      openProjectPicker &&
+      canExecuteAll(isTaskEntity)
+    ) {
+      middleItems.push({
+        id: 'set-initiative',
+        label: 'Add to project…',
+        onClick: () => {
+          if (isFeatureEnabled(enableProjects)) openProjectPicker();
+        },
       });
     }
 
@@ -485,41 +479,7 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // CRM group: Set stage/owner/revenue on the whole company
-    // selection, Hide / Unhide for a single company.
-    const crmItems: SoupEntityActionItem[] = [];
-
-    if (canExecuteAll(setCompanyPropertyAction.canExecute)) {
-      crmItems.push(
-        {
-          id: 'set-stage',
-          label: 'Set stage',
-          onClick: () => setCompanyPropertyAction.execute(entities, 'stage'),
-        },
-        {
-          id: 'set-owner',
-          label: 'Set owner',
-          onClick: () => setCompanyPropertyAction.execute(entities, 'owner'),
-        },
-        {
-          id: 'set-revenue',
-          label: 'Set revenue',
-          onClick: () => setCompanyPropertyAction.execute(entities, 'revenue'),
-        }
-      );
-    }
-
-    const singleEntity = entities.length === 1 ? entities[0] : undefined;
-    if (
-      singleEntity?.type === 'crm_company' &&
-      hideCompanyAction.canExecute(singleEntity)
-    ) {
-      crmItems.push({
-        id: 'hide-company',
-        label: singleEntity.hidden ? 'Unhide' : 'Hide',
-        onClick: handle(hideCompanyAction.executeWithSoup),
-      });
-    }
+    const crmItems = crmActions(entities, soup);
 
     // Delete group
     const deleteItems: SoupEntityActionItem[] = [];
@@ -528,7 +488,9 @@ export function createSoupEntityActions(): {
       deleteItems.push({
         id: 'delete',
         label: 'Delete',
-        hotkeyToken: TOKENS.entity.action.delete,
+        hotkeyToken: entities.every(isEmailEntity)
+          ? TOKENS.email.trash
+          : TOKENS.entity.action.delete,
         onClick: handle(deleteAction.executeWithSoup),
         destructive: true,
       });
@@ -539,5 +501,5 @@ export function createSoupEntityActions(): {
       .map((items) => ({ items }));
   };
 
-  return { buildActionGroups };
+  return { buildActionGroups, isFavorited: favoriteAction.isFavorited };
 }

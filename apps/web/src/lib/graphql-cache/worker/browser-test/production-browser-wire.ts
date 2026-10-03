@@ -22,7 +22,9 @@ export type ProductionHarnessCommand =
       commandId: string;
       request: ProductionCacheRequestWithoutId;
     }
-  | { kind: 'terminate-worker'; commandId: string };
+  | { kind: 'terminate-worker'; commandId: string }
+  /** Leaves the page the way `pagehide` does on navigation or reload. */
+  | { kind: 'navigate-away'; commandId: string };
 
 export type ProductionHarnessEnvelope =
   | {
@@ -49,5 +51,7 @@ export type ProductionHarnessEnvelope =
             ok: false;
             error: string;
           }
-        | { kind: 'protocol-error'; error: string };
+        | { kind: 'protocol-error'; error: string }
+        | { kind: 'cache-unavailable'; reason: string }
+        | { kind: 'cache-superseded'; reason: string };
     };

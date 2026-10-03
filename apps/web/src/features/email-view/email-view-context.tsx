@@ -1,7 +1,4 @@
-import {
-  createEntityDetailTarget,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
 import {
   createListController,
   type ListActivation,
@@ -9,20 +6,36 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
-import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
-import { usePreference } from '@app/lib/preferences/use-preference';
+import {
+  createSearchParams,
+  useNavigate,
+  useRouteParams,
+} from '@app/lib/split-router';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { enableReminders } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, onCleanup, type Setter } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  mergeProps,
+  on,
+  onCleanup,
+} from 'solid-js';
 import {
   createStore,
   produce,
@@ -31,12 +44,20 @@ import {
   type Store,
 } from 'solid-js/store';
 import { DEFAULT_EMAIL_TAB } from './constants';
+import {
+  emailDetailSearch,
+  emailTabSearch,
+  emailTabSearchCodec,
+} from './email-route';
+import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
+import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
 import {
   type EmailDataSource,
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
+import { emailSplitRoute, emailThreadRoute } from './route';
 import type {
   EmailTab,
   EmailThreadTarget,
@@ -80,17 +101,14 @@ export type EmailViewContext = {
     ) => void
   ) => void;
   selectedThread: Accessor<EmailThreadTarget | undefined>;
-  openThread: (thread: EmailThreadTarget) => void;
+  /** Returns false when inline detail is unavailable so the caller opens a split instead. */
+  openThread: (
+    thread: EmailThreadTarget,
+    options?: EntityDetailNavigationOptions
+  ) => boolean;
   closeThread: () => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
-  /**
-   * Whether the view may open its preview pane on its own. Written by the
-   * Preview toggle so an explicit close stays closed across visits; shares
-   * the legacy mail view's key so the choice carries over.
-   */
-  previewOpen: Accessor<boolean>;
-  setPreviewOpen: Setter<boolean>;
 };
 
 export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
@@ -98,24 +116,26 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   EmailViewProviderProps
 >('EmailView', (props) => {
   const panel = useSplitPanelOrThrow();
-  const navigationStack = useEntityDetailNavigationStack();
+  const navigate = useNavigate();
+  const routeParams = useRouteParams(emailThreadRoute);
+  const [tabSearch] = createSearchParams(emailTabSearch);
+  const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
-  const [previewOpen, setPreviewOpen] = usePreference<boolean>(
-    'macro:pref:soup:mail:preview-open',
-    { default: true }
-  );
+  const reminders = useFeatureFlag(enableReminders);
+  const availableTab = (tab: EmailTab) =>
+    tab === 'reminders' && !reminders().enabled && !reminders().loading
+      ? DEFAULT_EMAIL_TAB
+      : tab;
 
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
-      tab: initial.tab ?? DEFAULT_EMAIL_TAB,
+      tab: availableTab(initial.tab ?? DEFAULT_EMAIL_TAB),
       search: initial.search ?? '',
-      inboxIds:
-        initial.inboxIds === undefined ? undefined : [...initial.inboxIds],
+      inboxIds: normalizeInboxSelection(initial.inboxIds),
       facets: normalizeFacetSelection(initial.facets),
-      openThreadId: initial.openThreadId,
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
       ],
@@ -128,6 +148,42 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
   );
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
+
+  createEffect(
+    on(
+      () => availableTab(tabSearch.tab),
+      (tab) => {
+        if (state.tab === tab) return;
+        setState(
+          produce((draft) => {
+            if (draft.tab === 'reminders' || tab === 'reminders')
+              draft.search = '';
+            draft.tab = tab;
+            draft.facets = {};
+          })
+        );
+      }
+    )
+  );
+
+  createEffect(() => {
+    if (
+      state.tab === 'reminders' &&
+      !reminders().enabled &&
+      !reminders().loading
+    ) {
+      setState({ tab: DEFAULT_EMAIL_TAB, search: '', facets: {} });
+    }
+  });
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useEmailDataSource(state, { tagSets, tagSetsReady })
@@ -176,62 +232,130 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     });
   };
 
-  const selectedThread = (): EmailThreadTarget | undefined => {
-    const entry = navigationStack.entries.find(
-      (candidate) => candidate.data.type === 'email'
+  const selectedThread = createMemo<EmailThreadTarget | undefined>(() => {
+    const threadId = routeParams.threadId;
+    return typeof threadId === 'string' ? { id: threadId } : undefined;
+  });
+
+  const opensInline = (options?: EntityDetailNavigationOptions) => {
+    const event = options?.event;
+    return (
+      !isTouchDevice() &&
+      !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
-    if (!entry || entry.data.type !== 'email') return undefined;
-    return {
-      id: entry.data.id,
-      fallbackName: entry.data.fallbackName,
-    };
+  };
+  const closeThread = () =>
+    navigate(
+      { route: emailSplitRoute, params: {} },
+      {
+        search: {
+          [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
+  const openThread = (
+    thread: EmailThreadTarget,
+    options?: EntityDetailNavigationOptions
+  ) => {
+    if (!opensInline(options)) return false;
+    const selection = { type: 'email' as const, id: thread.id };
+    // The router may refuse a claimed destination. Check compatibility without
+    // claiming it until the accepted route changes.
+    if (!selectPreview.canSelect(selection)) return true;
+    navigate(
+      { route: emailThreadRoute, params: { threadId: thread.id } },
+      {
+        search: {
+          [emailDetailSearch.namespace]: {},
+          [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
+    );
+    return true;
   };
 
-  const openThread = (thread: EmailThreadTarget) => {
-    const row = source
-      .items()
-      .find((item) => item.kind === 'entity' && item.entity.id === thread.id);
-    if (row) {
+  createEffect(
+    on(selectedThread, (thread, previous) => {
+      const selection = thread
+        ? { type: 'email' as const, id: thread.id }
+        : undefined;
+      if (!selectPreview(selection)) {
+        if (previous) {
+          navigate(
+            {
+              route: emailThreadRoute,
+              params: { threadId: previous.id },
+            },
+            {
+              replace: true,
+              search: {
+                [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+                  tab: state.tab,
+                }),
+              },
+            }
+          );
+        } else {
+          navigate(
+            { route: emailSplitRoute, params: {} },
+            {
+              replace: true,
+              search: {
+                [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+                  tab: state.tab,
+                }),
+              },
+            }
+          );
+        }
+        return;
+      }
+      if (!thread) return;
+      const row = source
+        .items()
+        .find((item) => item.kind === 'entity' && item.entity.id === thread.id);
+      if (!row) return;
       list.focus.set(row.id, { reason: 'programmatic', force: true });
       list.selection.setAnchor(row.id);
-    }
-
-    setState('openThreadId', thread.id);
-    navigationStack.reset(
-      createEntityDetailTarget(
-        { type: 'email', id: thread.id },
-        thread.fallbackName
-      )
-    );
-  };
-
-  const closeThread = () => {
-    setState('openThreadId', undefined);
-    navigationStack.clear();
-  };
-
-  if (state.openThreadId) {
-    openThread({ id: state.openThreadId });
-  }
+    })
+  );
 
   // A tab is a fresh slice of the mailbox: filters chosen for one tab (Done
   // on Signal, say) would silently narrow the next, so they reset with it.
-  const setTab = (tab: EmailTab) => {
-    closeThread();
-    if (state.tab === tab) return;
-
+  const setTab = (requestedTab: EmailTab) => {
+    const tab = availableTab(requestedTab);
+    if (state.tab === tab) {
+      closeThread();
+      return;
+    }
     setState(
       produce((draft) => {
+        if (draft.tab === 'reminders' || tab === 'reminders') draft.search = '';
         draft.tab = tab;
         draft.facets = {};
       })
     );
+    closeThread();
   };
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
-    setState('inboxIds', ids === undefined ? undefined : [...ids]);
+    setState('inboxIds', normalizeInboxSelection(ids));
   };
+
+  // This belongs to the view lifecycle, even while every inbox picker is unmounted.
+  const linksQuery = useEmailLinksQuery();
+  createInboxSelectionReconciliation({
+    selectedIds: () => state.inboxIds,
+    loadedLinks: () =>
+      linksQuery.isSuccess ? linksQuery.data.links : undefined,
+    // Widening stale scope to all inboxes should preserve the current thread.
+    clearSelection: () => setState('inboxIds', undefined),
+  });
 
   const setFacets = (facets: EmailViewState['facets']) => {
     closeThread();
@@ -241,7 +365,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   // A tag reaches across every mailbox slice, so choosing one from a narrower
   // tab moves to All; as with `setTab`, that move drops the tab's other filters.
   const showTags = (tagIds: string[]) => {
-    closeThread();
     setState(
       produce((draft) => {
         const movesToAll = tagIds.length > 0 && draft.tab !== 'all';
@@ -252,6 +375,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         });
       })
     );
+    closeThread();
   };
 
   const isSidebarSectionOpen = (id: string) =>
@@ -262,17 +386,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       'collapsedSidebarSectionIds',
       setSidebarSectionCollapsed(id, open)
     );
-
-  // The classic sidebar's nested account rows scope the mail list by split id
-  // (see `SidebarMailLink`); registering keeps them driving this view too, and
-  // flushes a selection queued while navigating here.
-  onCleanup(
-    registerInboxFilterSplit(panel.handle.id, {
-      inboxFilter: () => state.inboxIds,
-      setInboxFilter: setInboxIds,
-    })
-  );
-
   return {
     state,
     setState,
@@ -288,7 +401,5 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
-    previewOpen,
-    setPreviewOpen,
   };
 });

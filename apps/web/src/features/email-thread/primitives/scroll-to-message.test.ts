@@ -65,6 +65,7 @@ function scrollList(height: number, viewport: number, top = 0) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -180,16 +181,18 @@ describe('nearestDelta', () => {
 
 describe('listScrollBehavior', () => {
   it('returns auto when reduced motion is preferred', () => {
-    vi.spyOn(window, 'matchMedia').mockReturnValue({
-      matches: true,
-    } as MediaQueryList);
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true }))
+    );
     expect(listScrollBehavior()).toBe('auto');
   });
 
   it('returns smooth otherwise', () => {
-    vi.spyOn(window, 'matchMedia').mockReturnValue({
-      matches: false,
-    } as MediaQueryList);
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: false }))
+    );
     expect(listScrollBehavior()).toBe('smooth');
   });
 });

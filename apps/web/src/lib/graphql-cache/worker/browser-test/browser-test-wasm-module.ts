@@ -1,17 +1,29 @@
-type BrowserTestCacheWasmModule = {
+import { loadCacheWasm } from '../wasm-module';
+import {
+  assertMatchingCacheWasmBuilds,
+  type CacheWasmBuildInfo,
+  type CacheWasmBuildInfoSource,
+} from './wasm-build-compatibility';
+
+type BrowserTestCacheWasmModule = CacheWasmBuildInfoSource & {
   default(input?: { module_or_path?: unknown }): Promise<unknown>;
   browserTestMakeNamespaceIncompatible(scope: string): Promise<void>;
   browserTestCorruptQueuePayload(scope: string): Promise<void>;
 };
 
 let modulePromise:
-  | Promise<{ module: BrowserTestCacheWasmModule; wasmUrl: string }>
+  | Promise<{
+      module: BrowserTestCacheWasmModule;
+      wasmUrl: string;
+      buildInfo: CacheWasmBuildInfo;
+    }>
   | undefined;
 
-/** Loads the separate feature-gated destructive-hook artifact for tests only. */
+/** Loads and verifies the test/production artifact pair without touching OPFS. */
 export function loadBrowserTestCacheWasm(): Promise<{
   module: BrowserTestCacheWasmModule;
   wasmUrl: string;
+  buildInfo: CacheWasmBuildInfo;
 }> {
   if (modulePromise) return modulePromise;
   const initialization = (async () => {
@@ -32,7 +44,9 @@ export function loadBrowserTestCacheWasm(): Promise<{
     }
     const compiled = await WebAssembly.compile(await response.arrayBuffer());
     await module.default({ module_or_path: compiled });
-    return { module, wasmUrl };
+    const production = await loadCacheWasm();
+    const buildInfo = assertMatchingCacheWasmBuilds(production, module);
+    return { module, wasmUrl, buildInfo };
   })();
   modulePromise = initialization;
   void initialization.catch(() => {

@@ -211,7 +211,7 @@ pub fn slots_for_date(
                 continue;
             };
             let end = start + Duration::minutes(i64::from(event.duration_minutes));
-            if end.with_timezone(&schedule.time_zone).naive_local() > local_end
+            if !schedule_contains(schedule, start, end)?
                 || start < now + Duration::minutes(i64::from(event.notice_minutes))
                 || start > now + Duration::days(i64::from(event.horizon_days))
             {

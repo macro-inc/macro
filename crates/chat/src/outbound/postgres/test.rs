@@ -1,11 +1,16 @@
+mod owner;
+
 use std::time::Duration;
 
 use agent::types::{ChatMessageContent, Role};
 use chrono::Utc;
+use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::NewChatMessage;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
@@ -17,10 +22,82 @@ use super::PgChatRepo;
 use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatRepoArgs};
 use crate::domain::ports::ChatRepo;
 
+/// Sponsors every bot with the fixture user, so a bot owner also grants that user.
+#[derive(Clone)]
+pub(super) struct SponsoredByOwner;
+
+impl BotFacts for SponsoredByOwner {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(Some(Owner::User(
+            MacroUserIdStr::parse_from_str("macro|test@example.com")
+                .unwrap()
+                .into_owned(),
+        )))
+    }
+}
+
+pub(super) type TestRepo = PgChatRepo<SponsoredByOwner>;
+
+pub(super) fn test_repo(pool: Pool<Postgres>) -> TestRepo {
+    PgChatRepo::new(
+        pool,
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(SponsoredByOwner)),
+    )
+}
+
 /// The no-team default permission for a chat — the repo persists whatever the
 /// domain layer resolved, so tests pass it explicitly.
 fn default_share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_chat_share_permission(None)
+}
+
+const BOT_OWNER: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+const TEAM_OWNER: &str = "00000000-0000-0000-0000-00000000a2a2";
+
+/// Registers a non-user principal in `"User"` so the `Chat."userId"` foreign
+/// key accepts it as an owner.
+async fn insert_owner_principal(pool: &Pool<Postgres>, principal: &str, macro_user_id: &str) {
+    let macro_user_id = uuid::Uuid::parse_str(macro_user_id).unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO "macro_user" ("id", "username", "email", "stripe_customer_id")
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(macro_user_id)
+    .bind(principal)
+    .bind(format!("{macro_user_id}@example.com"))
+    .bind(format!("stripe_{macro_user_id}"))
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $2, $3)"#)
+        .bind(principal)
+        .bind(format!("{macro_user_id}@example.com"))
+        .bind(macro_user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn set_chat_owner(pool: &Pool<Postgres>, chat_id: &str, owner: &str) {
+    sqlx::query(r#"UPDATE "Chat" SET "userId" = $1 WHERE id = $2"#)
+        .bind(owner)
+        .bind(chat_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn chat_history_count(pool: &Pool<Postgres>, chat_id: &str) -> i64 {
+    let count: (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = 'chat'"#,
+    )
+    .bind(chat_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    count.0
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -57,12 +134,12 @@ async fn get_stored_share_permission(
     }
 }
 
-async fn create_test_chat(repo: &PgChatRepo, name: &str) -> String {
+async fn create_test_chat(repo: &TestRepo, name: &str) -> String {
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
     repo.create(
-        user_id,
+        Owner::User(user_id),
         CreateChatArgs {
             name: name.to_string(),
             project_id: None,
@@ -74,7 +151,7 @@ async fn create_test_chat(repo: &PgChatRepo, name: &str) -> String {
 }
 
 async fn patch_share_permission(
-    repo: &PgChatRepo,
+    repo: &TestRepo,
     chat_id: &str,
     share_permission: UpdateSharePermissionRequestV2,
 ) {
@@ -95,13 +172,13 @@ async fn patch_share_permission(
     .unwrap();
 }
 
-async fn create_chat_with_message(repo: &PgChatRepo) -> (String, String) {
+async fn create_chat_with_message(repo: &TestRepo) -> (String, String) {
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Message update test".to_string(),
                 project_id: None,
@@ -135,14 +212,14 @@ async fn create_chat_with_message(repo: &PgChatRepo) -> (String, String) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_chat_returns_id(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Test Chat".to_string(),
                 project_id: None,
@@ -170,14 +247,14 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_message_updates_chat_timestamp_and_selected_model(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Active Chat".to_string(),
                 project_id: None,
@@ -253,7 +330,7 @@ async fn create_message_updates_chat_timestamp_and_selected_model(pool: Pool<Pos
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn delete_message_returns_parent_chat_id_and_removes_message(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
     let (chat_id, message_id) = create_chat_with_message(&repo).await;
 
     let deleted_from_chat_id = crate::domain::ports::MessageRepo::delete(&repo, &message_id)
@@ -272,7 +349,7 @@ async fn delete_message_returns_parent_chat_id_and_removes_message(pool: Pool<Po
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
     let (chat_id, message_id) = create_chat_with_message(&repo).await;
     let original_updated_at = repo
         .get_metadata(&chat_id)
@@ -304,7 +381,7 @@ async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn update_interim_message_content_does_not_bump_chat(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
     let (chat_id, message_id) = create_chat_with_message(&repo).await;
     let original_updated_at = repo
         .get_metadata(&chat_id)
@@ -336,7 +413,7 @@ async fn update_interim_message_content_does_not_bump_chat(pool: Pool<Postgres>)
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
     let (chat_id, _) = create_chat_with_message(&repo).await;
     let original_updated_at = repo
         .get_metadata(&chat_id)
@@ -368,7 +445,7 @@ async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_chat_creates_public_view_permission(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Perm Chat").await;
 
     let permission = get_stored_share_permission(&pool, &chat_id).await;
@@ -382,14 +459,14 @@ async fn create_chat_creates_public_view_permission(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Access Chat".to_string(),
                 project_id: None,
@@ -441,14 +518,14 @@ async fn fetch_entity_row(pool: &Pool<Postgres>, chat_id: &str) -> PgRow {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_chat_registers_entity_row(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Entity Chat".to_string(),
                 project_id: None,
@@ -473,7 +550,7 @@ async fn create_chat_registers_entity_row(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn delete_chat_marks_entity_deleted(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Entity Soft Delete").await;
 
     repo.delete(&chat_id).await.unwrap();
@@ -490,7 +567,7 @@ async fn delete_chat_marks_entity_deleted(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn revert_delete_clears_entity_deleted_at(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Entity Restore").await;
 
     repo.delete(&chat_id).await.unwrap();
@@ -508,7 +585,7 @@ async fn revert_delete_clears_entity_deleted_at(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn permanently_delete_chat_removes_entity_row(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Entity Perm Delete").await;
 
     repo.permanently_delete(&chat_id).await.unwrap();
@@ -527,14 +604,14 @@ async fn permanently_delete_chat_removes_entity_row(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn copy_chat_registers_entity_row_for_source_and_copy(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let source_id = repo
         .create(
-            user_id.clone(),
+            Owner::User(user_id.clone()),
             CreateChatArgs {
                 name: "Entity Source".to_string(),
                 project_id: None,
@@ -546,7 +623,7 @@ async fn copy_chat_registers_entity_row_for_source_and_copy(pool: Pool<Postgres>
 
     let copied_id = repo
         .copy_chat(
-            user_id,
+            Owner::User(user_id),
             &source_id,
             CopyChatArgs {
                 name: "Entity Copy".to_string(),
@@ -580,7 +657,7 @@ async fn copy_chat_registers_entity_row_for_source_and_copy(pool: Pool<Postgres>
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn delete_restore_and_purge_succeed_without_entity_row(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Legacy Chat").await;
     let chat_uuid = macro_uuid::string_to_uuid(&chat_id).unwrap();
 
@@ -614,14 +691,14 @@ async fn delete_restore_and_purge_succeed_without_entity_row(pool: Pool<Postgres
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "History Chat".to_string(),
                 project_id: None,
@@ -651,14 +728,14 @@ async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn create_chat_with_project_id(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Project Chat".to_string(),
                 project_id: Some("project-123".to_string()),
@@ -685,14 +762,14 @@ async fn create_chat_with_project_id(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn get_chat_returns_chat(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Get Me".to_string(),
                 project_id: None,
@@ -706,7 +783,10 @@ async fn get_chat_returns_chat(pool: Pool<Postgres>) {
 
     assert_eq!(chat.id, chat_id);
     assert_eq!(chat.name, "Get Me");
-    assert_eq!(chat.user_id, "macro|test@example.com");
+    assert_eq!(
+        chat.user_id,
+        Owner::from_principal_str("macro|test@example.com").unwrap()
+    );
     assert!(chat.created_at.is_some());
     assert!(chat.updated_at.is_some());
     assert!(chat.deleted_at.is_none());
@@ -716,8 +796,29 @@ async fn get_chat_returns_chat(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
+async fn get_chat_decodes_bot_and_team_owners(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let chat_id = create_test_chat(&repo, "Owned Elsewhere").await;
+    insert_owner_principal(&pool, BOT_OWNER, "b1111111-1111-1111-1111-111111111111").await;
+    insert_owner_principal(&pool, TEAM_OWNER, "b2222222-2222-2222-2222-222222222222").await;
+
+    set_chat_owner(&pool, &chat_id, BOT_OWNER).await;
+    let chat = repo.get_metadata(&chat_id).await.unwrap();
+    assert_eq!(chat.user_id, Owner::from_principal_str(BOT_OWNER).unwrap());
+    assert!(matches!(chat.user_id, Owner::Bot(_)));
+
+    set_chat_owner(&pool, &chat_id, TEAM_OWNER).await;
+    let chat = repo.get_metadata(&chat_id).await.unwrap();
+    assert_eq!(chat.user_id, Owner::from_principal_str(TEAM_OWNER).unwrap());
+    assert!(matches!(chat.user_id, Owner::Team(_)));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn get_chat_not_found(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
 
     let result = repo.get_metadata("nonexistent-id").await;
     assert!(matches!(result, Err(ChatErr::NotFound)));
@@ -728,14 +829,14 @@ async fn get_chat_not_found(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn soft_delete_chat_sets_deleted_at(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Delete Me".to_string(),
                 project_id: None,
@@ -762,14 +863,14 @@ async fn soft_delete_chat_sets_deleted_at(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn soft_delete_chat_removes_history(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "History Delete".to_string(),
                 project_id: None,
@@ -797,14 +898,14 @@ async fn soft_delete_chat_removes_history(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn permanently_delete_chat_removes_row(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Perm Delete".to_string(),
                 project_id: None,
@@ -830,14 +931,14 @@ async fn permanently_delete_chat_removes_row(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn permanently_delete_chat_removes_permissions(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Perm Delete Perms".to_string(),
                 project_id: None,
@@ -864,14 +965,14 @@ async fn permanently_delete_chat_removes_permissions(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Perm Delete Access".to_string(),
                 project_id: None,
@@ -900,14 +1001,14 @@ async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) 
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn patch_chat_updates_name(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Original".to_string(),
                 project_id: None,
@@ -942,14 +1043,14 @@ async fn patch_chat_updates_name(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn patch_chat_updates_project(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Project Chat".to_string(),
                 project_id: None,
@@ -992,14 +1093,14 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn patch_chat_clears_project(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Clear Project".to_string(),
                 project_id: Some("project-123".to_string()),
@@ -1039,14 +1140,14 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Full Chat".to_string(),
                 project_id: None,
@@ -1060,7 +1161,10 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
 
     assert_eq!(response.id, chat_id);
     assert_eq!(response.name, "Full Chat");
-    assert_eq!(response.user_id, "macro|test@example.com");
+    assert_eq!(
+        response.user_id,
+        Owner::from_principal_str("macro|test@example.com").unwrap()
+    );
     assert!(response.model.is_some());
     assert!(response.messages.is_empty());
 }
@@ -1070,7 +1174,7 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn get_chat_not_found_returns_error(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool);
+    let repo = test_repo(pool);
 
     let result = repo.get_chat("nonexistent-id").await;
     assert!(matches!(result, Err(ChatErr::NotFound)));
@@ -1081,14 +1185,14 @@ async fn get_chat_not_found_returns_error(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let source_id = repo
         .create(
-            user_id.clone(),
+            Owner::User(user_id.clone()),
             CreateChatArgs {
                 name: "Source Chat".to_string(),
                 project_id: None,
@@ -1112,7 +1216,7 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
 
     let copied_id = repo
         .copy_chat(
-            user_id,
+            Owner::User(user_id),
             &source_id,
             CopyChatArgs {
                 name: "Copied Chat".to_string(),
@@ -1145,14 +1249,14 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
 
     let chat_id = repo
         .create(
-            user_id,
+            Owner::User(user_id),
             CreateChatArgs {
                 name: "Revert Me".to_string(),
                 project_id: None,
@@ -1190,8 +1294,34 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
+async fn revert_delete_skips_user_history_for_non_user_owner(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let chat_id = create_test_chat(&repo, "Bot Chat").await;
+    insert_owner_principal(&pool, BOT_OWNER, "b1111111-1111-1111-1111-111111111111").await;
+    set_chat_owner(&pool, &chat_id, BOT_OWNER).await;
+    // `create` recorded history for the creating user; clear it so only
+    // `revert_delete` can put rows back.
+    sqlx::query(r#"DELETE FROM "UserHistory" WHERE "itemId" = $1"#)
+        .bind(&chat_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    repo.delete(&chat_id).await.unwrap();
+
+    repo.revert_delete(&chat_id, None).await.unwrap();
+
+    let chat = repo.get_metadata(&chat_id).await.unwrap();
+    assert!(chat.deleted_at.is_none());
+    assert_eq!(chat.user_id, Owner::from_principal_str(BOT_OWNER).unwrap());
+    assert_eq!(chat_history_count(&pool, &chat_id).await, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Team Chat").await;
 
     patch_share_permission(
@@ -1216,7 +1346,7 @@ async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(poo
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Default View Chat").await;
 
     patch_share_permission(
@@ -1252,7 +1382,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Private Chat").await;
 
     patch_share_permission(
@@ -1277,7 +1407,7 @@ async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Post
     fixtures(path = "fixtures", scripts("users"))
 )]
 async fn get_permissions_reads_link_share_columns(pool: Pool<Postgres>) {
-    let repo = PgChatRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let chat_id = create_test_chat(&repo, "Perms Chat").await;
 
     let permission = repo.get_permissions(&chat_id).await.unwrap();

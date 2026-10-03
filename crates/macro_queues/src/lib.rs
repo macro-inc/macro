@@ -450,6 +450,18 @@ queue! {
     /// bare queue names emitted by the xtask local environment, while `dev` and
     /// `prod` use the `{base}-queue-{stack}` names provisioned by Pulumi.
     pub struct Queues {
+        /// Queue for Slack archive conversation imports.
+        pub SlackImportQueue {
+            local: "slack-import-queue",
+            dev: "slack-import-queue-dev",
+            prod: "slack-import-queue-prod",
+        },
+        /// Dead-letter queue provisioned by the shared Pulumi Queue component.
+        pub SlackImportDlq {
+            local: "slack-import-dlq",
+            dev: "slack-import-dlq-dev",
+            prod: "slack-import-dlq-prod",
+        },
         /// Queue for document text extraction jobs.
         pub DocumentTextExtractorQueue {
             local: "document-text-extractor-lambda-queue",
@@ -626,6 +638,15 @@ queue! {
             local: "calendar-reminder-dispatch-queue",
             dev: "calendar-reminder-dispatch-queue-dev",
             prod: "calendar-reminder-dispatch-queue-prod",
+        },
+        /// Queue for the Google Calendar sync backfill process (calendar_service).
+        ///
+        /// Calendar keeps its own backfill queue rather than sharing the email
+        /// backfill queue, so its sync deploy lifecycle is independent of email.
+        pub CalendarServiceBackfillQueue {
+            local: "calendar-service-backfill-queue",
+            dev: "calendar-service-backfill-queue-dev",
+            prod: "calendar-service-backfill-queue-prod",
         },
         /// Queue for the organization retention handler
         /// (organization_retention_trigger `ORGANIZATION_RETENTION_QUEUE`).

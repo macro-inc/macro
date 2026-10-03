@@ -60,6 +60,21 @@ fn receive_participant_joined(
     client.receive_webhook(&body, &token)
 }
 
+#[test]
+fn room_composite_egress_uses_speaker_layout() {
+    let request = build_room_composite_egress_request(
+        "room-1",
+        &EgressS3Config {
+            bucket: "test-bucket".to_owned(),
+            region: "us-east-1".to_owned(),
+            access_key: "test-access-key".to_owned(),
+            secret: "test-secret".to_owned(),
+        },
+    );
+
+    assert_eq!(request.options.layout, "speaker");
+}
+
 #[tokio::test]
 async fn verify_access_token_round_trips_identity_and_room() {
     let client = client();
@@ -155,5 +170,31 @@ fn receive_webhook_skips_configured_transcription_agent_name() {
     )
     .expect("configured agent name must not fail webhook ingest");
 
+    assert_eq!(event.participant_identity, None);
+}
+
+#[tokio::test]
+async fn guest_tokens_preserve_names_and_only_grant_the_room() {
+    let client = client();
+    let guest_id = crate::domain::meetings::GuestId::generate();
+    let token = client
+        .generate_guest_token("meeting-room", guest_id, "Ada")
+        .await
+        .unwrap();
+    let verified = client.verify_access_token(&token).unwrap();
+    assert_eq!(verified.identity, guest_id.to_string());
+    assert_eq!(verified.room.as_deref(), Some("meeting-room"));
+    let payload = token.split('.').nth(1).unwrap();
+    let claims: serde_json::Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload)
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(claims["name"], "Ada");
+    assert_eq!(claims["video"]["roomJoin"], true);
+    assert_ne!(claims["video"]["roomAdmin"], true);
+    let event = receive_participant_joined(&client, &guest_id.to_string()).unwrap();
+    assert_eq!(event.guest_identity, Some(guest_id));
     assert_eq!(event.participant_identity, None);
 }

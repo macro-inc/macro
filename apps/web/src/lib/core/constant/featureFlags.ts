@@ -105,16 +105,20 @@ export function isFeatureEnabled(flag: Flag): boolean {
   return flag.enabled;
 }
 
+/** Databases rollout. Local HMR is on; deployed environments defer to PostHog. */
+export const enableDatabases = defineFlag({
+  key: 'enable-databases',
+  env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
 /**
- * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Enabled by default in local
- * development; production follows PostHog. Override locally with
- * VITE_ENABLE_NEW_APP_VIEWS=false.
+ * Shows the SQL behind database answers and tool results. Off everywhere;
+ * turn on locally with VITE_SHOW_DATABASE_SQL=true.
  */
-export const enableNewAppViews = defineFlag({
-  key: 'enable-new-app-views',
-  env: 'ENABLE_NEW_APP_VIEWS',
-  default: DEV_MODE_ENV || undefined,
+export const showDatabaseSql = defineFlag({
+  env: 'SHOW_DATABASE_SQL',
+  default: false,
 });
 
 /**
@@ -125,6 +129,20 @@ export const enableNewAppViews = defineFlag({
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+// Leave the production PostHog flag disabled until archive-import rollout.
+export const enableSlackArchiveImport = defineFlag({
+  key: 'enable-slack-archive-import',
+  env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
+  default: onInDev,
+});
+
+/** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
+export const enableTasksReviews = defineFlag({
+  key: 'enable-tasks-reviews',
+  env: 'ENABLE_TASKS_REVIEWS',
+  default: onInDev,
+});
 
 // Claude Cloud demo onboarding and harness/model discovery. Off until PostHog
 // enables it, including in dev; override locally with VITE_CLAUDE_CLOUD.
@@ -390,6 +408,12 @@ export const ENABLE_GRAPHQL_BACKFILL = defineFlag({
 
 export const ENABLE_CALLS = true;
 
+export const enableQuickCalls = defineFlag({
+  key: 'enable-quick-calls',
+  env: 'ENABLE_QUICK_CALLS',
+  default: true,
+});
+
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
 // previews, and the per-message include toggle. PostHog-gated with a dev-mode
 // default; override with VITE_ENABLE_EMAIL_SIGNATURES.
@@ -414,6 +438,15 @@ export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
   env: 'ENABLE_CRM_LISTS',
   default: false,
+});
+
+// Native Projects frontend: navigation, creation, task assignment and project
+// views. Enabled in development; PostHog controls production rollout. Override
+// with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
+export const enableProjects = defineFlag({
+  key: 'enable-projects',
+  env: 'ENABLE_PROJECTS',
+  default: onInDev,
 });
 
 // Reminders: the "Remind me" entry in the command menu, the soup
@@ -515,26 +548,6 @@ export function isAutoUpdateUiEnabled(): boolean {
   return !isFeatureEnabled(disableAutoUpdateUi);
 }
 
-export const enableHomeView = defineFlag({
-  key: 'enable-home-view',
-  default: onInDev,
-});
-
-// AI-generated recommendations on Home. Keep the whole data-owning component
-// behind this gate so disabled users do not fetch notifications or start AI
-// projections. Override locally with VITE_ENABLE_HOME_RECOMMENDATIONS.
-export const enableHomeRecommendations = defineFlag({
-  key: 'enable-home-recommendations',
-  env: 'ENABLE_HOME_RECOMMENDATIONS',
-  default: onInDev,
-});
-
-export const enableNewPricing = defineFlag({
-  key: 'enable-new-pricing',
-  env: 'ENABLE_NEW_PRICING',
-  default: onInDev,
-});
-
 // Bot management in Settings, channels, and the command menu. Override locally
 // with VITE_BOT_MANAGEMENT.
 export const botManagement = defineFlag({
@@ -628,6 +641,22 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Manual and smart channel labels, including their queries and drag/drop UI.
+// Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
+export const enableChannelTags = defineFlag({
+  key: 'enable-channel-tags',
+  env: 'ENABLE_CHANNEL_TAGS',
+});
+
+// The Chat view's Threads tab: channel threads filtered by conversation.
+// On in development; PostHog decides elsewhere. Override with
+// VITE_ENABLE_CHANNEL_THREADS_PREVIEW.
+export const enableChannelThreadsPreview = defineFlag({
+  key: 'enable-channel-threads-preview',
+  env: 'ENABLE_CHANNEL_THREADS_PREVIEW',
+  default: onInDev,
+});
+
 // The "Activity" section in the entity side panel: the entity's recent
 // activity timeline from the GraphQL activity log (who did what, when).
 // Purely additive — when off, the section never mounts and no activity
@@ -650,26 +679,27 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the Macro Coder mention entry and the folded agent-session view
-// in channels. Override with VITE_ENABLE_CHAT_V3_AGENTS.
+// AI agents: the Macro Coder mention entry, the folded agent-session view in
+// channels, and which bot the single `@macro` mention targets — the agent
+// session when on, the classic in-channel reply when off.
+// Override with VITE_ENABLE_CHAT_V3_AGENTS.
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
   env: 'ENABLE_CHAT_V3_AGENTS',
   default: onInDev,
 });
 
-// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
-// on Macro's Cursor account. PostHog-gated per user; the backend additionally
-// restricts these sessions to @macro.com senders. Override with
-// VITE_ENABLE_CURSOR_AGENTS.
+// The built-in @cursor mention, using the mentioning user's own Cursor account.
+// Account setup is checked after the mention; this flag controls discovery.
+// Override with VITE_ENABLE_CURSOR_AGENTS.
 export const enableCursorAgents = defineFlag({
   key: 'enable-cursor-agents',
   env: 'ENABLE_CURSOR_AGENTS',
   default: onInDev,
 });
 
-// Codex cloud agent mentions, composer choices, and harness settings also
-// require enableChatV3Agents. Override with VITE_ENABLE_CODEX_AGENTS.
+// Codex composer choices also require enableChatV3Agents.
+// Override with VITE_ENABLE_CODEX_AGENTS.
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
@@ -699,4 +729,27 @@ export const enableNotificationSettings = defineFlag({
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
   env: 'ENABLE_SPREADSHEETS',
+});
+
+/**
+ * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
+ * to OpenAI Whisper through DSS and are billed per audio minute, so this
+ * carries a remote kill switch rather than an env-only one. Off hides the
+ * microphone everywhere and never opens the recorder, so no audio is captured
+ * and no request is made. On in dev; production follows PostHog.
+ */
+export const enableDictation = defineFlag({
+  key: 'enable-dictation',
+  env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
+ * Automatic in-app feature tours on desktop views (`features/tours`). Follows
+ * PostHog everywhere, including the local dev server; set
+ * VITE_ENABLE_IN_APP_TOURS=true to turn tours on locally.
+ */
+export const enableInAppTours = defineFlag({
+  key: 'enable-in-app-tours',
+  env: 'ENABLE_IN_APP_TOURS',
 });

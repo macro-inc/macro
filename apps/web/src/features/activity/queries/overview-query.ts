@@ -4,7 +4,8 @@ import {
   type MyActivityOverviewQuery,
   type MyActivityOverviewQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityOverview } from '../core/event';
 import { decodeActivityOverview } from './decode';
@@ -17,13 +18,14 @@ export function createMyActivityOverviewQuery(
   context: Pick<ActivityContext, 'graphql'>,
   options: { enabled: Accessor<boolean> }
 ) {
-  return createUrqlQuery<
+  const client = createMemo(context.graphql);
+  const result = createUrqlQuery<
     MyActivityOverviewQuery,
     MyActivityOverviewQueryVariables,
     ActivityOverview
   >(() => ({
     query: MyActivityOverviewDocument,
-    client: context.graphql(),
+    client: client(),
     variables: {
       input: { timeZone: browserTimeZone() },
     },
@@ -32,4 +34,14 @@ export function createMyActivityOverviewQuery(
     keepPreviousData: true,
     select: (data) => decodeActivityOverview(data.user.activityOverview),
   }));
+  onCleanup(
+    registerActivityRevalidator({
+      client,
+      refresh: () => {
+        if (options.enabled())
+          return result.refetch({ requestPolicy: 'network-only' });
+      },
+    })
+  );
+  return result;
 }

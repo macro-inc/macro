@@ -2,7 +2,10 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use calendar_events::{
-    domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
+    domain::{
+        invitations::CalendarInvitationResolver, mutations::CalendarMutationServiceImpl,
+        service::CalendarService,
+    },
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -16,11 +19,11 @@ use email::{
 };
 use email_api_client::GmailApiClientRepository;
 use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use email_service::calendar_request_gate::RedisCalendarRequestGate;
 use email_service::calendar_tokens::CalendarTokenProviderAdapter;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
 };
-use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -41,7 +44,6 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::task::TaskTracker;
 
 mod api;
-mod scheduling_recovery;
 mod utils;
 
 #[tokio::main]
@@ -227,29 +229,12 @@ async fn main() -> anyhow::Result<()> {
         macro_event_broker.clone(),
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
-    let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
-        calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
-        calendar_scheduling::outbound::macro_services::MacroCalendars::new(
-            calendar_service.clone(),
-            calendar_mutation_service.clone(),
-            match config.environment {
-                Environment::Production => Some("https://macro.com".into()),
-                Environment::Develop => Some("https://dev.macro.com".into()),
-                Environment::Local => None,
-            },
-        ),
-        calendar_scheduling::outbound::macro_services::MacroDirectory(
-            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-        ),
-    ));
-    let scheduling_stop = tokio_util::sync::CancellationToken::new();
-    let scheduling_worker = config.calendar_sync_enabled.then(|| {
-        tokio::spawn(scheduling_recovery::run(
-            scheduling_service.clone(),
-            scheduling_stop.clone(),
-        ))
-    });
     let api_result = api::setup_and_serve(ApiContext {
+        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+        // calendar_service's sync kill switch rejects RSVP writes itself.
+        invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(
+            db.clone(),
+        ))),
         db,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
@@ -270,17 +255,10 @@ async fn main() -> anyhow::Result<()> {
         gmail_token_state,
         macro_event_broker: Arc::new(macro_event_broker),
         calendar_service,
-        scheduling_service,
         calendar_mutation_service,
     })
     .await;
 
-    scheduling_stop.cancel();
-    if let Some(worker) = scheduling_worker {
-        worker
-            .await
-            .context("scheduling recovery worker stopped unexpectedly")?;
-    }
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {

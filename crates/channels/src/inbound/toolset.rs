@@ -23,13 +23,16 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, AdminParticipantRole, BotAccessScope, EntityAccessReceipt,
-        EntityType, MemberParticipantRole, RequiredPermission,
+        AccessError, BotAccessScope, EntityAccessReceipt, EntityType, MemberParticipantRole,
+        RequiredPermission,
     },
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageCommands, service::MessageWrite};
+use messages::domain::{
+    api::MessageServiceApi,
+    service::{MessageView, MessageWrite},
+};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -45,9 +48,9 @@ where
     Svc: ChannelService,
     AccessSvc: EntityAccessService,
 {
-    /// Shared message writer used to send channel messages on the user's behalf.
-    pub messages: Arc<dyn MessageCommands>,
-    /// Channel message service used to read timelines, resolve messages, and fetch threads.
+    /// Shared message application: channel timelines, threads, and posts.
+    pub messages: Arc<dyn MessageServiceApi>,
+    /// Channel service used for channel metadata and membership mutations.
     pub service: Arc<Svc>,
     /// Entity access service used to ensure the caller is a channel member.
     pub entity_access_service: Arc<AccessSvc>,
@@ -78,7 +81,7 @@ where
 {
     /// Create a new channel tool context.
     pub fn new(
-        messages: Arc<dyn MessageCommands>,
+        messages: Arc<dyn MessageServiceApi>,
         service: Svc,
         entity_access_service: AccessSvc,
     ) -> Self {
@@ -113,31 +116,31 @@ where
         self
     }
 
-    /// Require that the request user is an active member of the channel before reading it.
+    /// Require that the request user is an active member of the channel before
+    /// reading it, minting the read capability the message reads take.
     pub async fn require_channel_member(
         &self,
         request_context: &RequestContext,
         channel_id: Uuid,
-    ) -> Result<(), ToolCallError> {
+    ) -> Result<EntityAccessReceipt<MessageView>, ToolCallError> {
         self.entity_access_service
-            .check_access(
-                Some(&*request_context.user_id),
+            .generate_entity_access_receipt::<MessageView>(
+                &request_context.user_id,
+                None,
                 &channel_id.to_string(),
                 EntityType::Channel,
-                AccessLevel::View,
             )
             .await
-            .map(|_| ())
             .map_err(channel_access_error)
     }
 
-    /// Mint the same admin receipt HTTP uses before renaming a channel.
-    pub async fn require_channel_admin(
+    /// Mint a member receipt before renaming a channel.
+    pub async fn require_channel_rename(
         &self,
         request_context: &RequestContext,
         channel_id: Uuid,
-    ) -> Result<EntityAccessReceipt<AdminParticipantRole>, ToolCallError> {
-        self.channel_receipt(request_context, channel_id, ChannelReceiptKind::Admin)
+    ) -> Result<EntityAccessReceipt<MemberParticipantRole>, ToolCallError> {
+        self.channel_receipt(request_context, channel_id, ChannelReceiptKind::Rename)
             .await
     }
 
@@ -171,7 +174,7 @@ where
 
 #[derive(Clone, Copy)]
 enum ChannelReceiptKind {
-    Admin,
+    Rename,
     Member,
 }
 
@@ -196,19 +199,16 @@ fn channel_access_error(err: AccessError) -> ToolCallError {
 fn channel_receipt_error(kind: ChannelReceiptKind, err: AccessError) -> ToolCallError {
     let description = match (kind, &err) {
         (
-            ChannelReceiptKind::Admin,
+            ChannelReceiptKind::Rename,
             AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
-        ) => "you need channel admin access to rename this channel",
+        ) => "you must be a member of the channel to rename it",
         (
             ChannelReceiptKind::Member,
             AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
         ) => "you must be a member of the channel to change its participants",
         (_, AccessError::NotFound(_)) => "channel not found",
         (_, AccessError::BadRequest(_)) => "invalid channel id",
-        (ChannelReceiptKind::Admin, AccessError::Unavailable(_) | AccessError::Internal(_)) => {
-            "failed to verify channel admin access"
-        }
-        (ChannelReceiptKind::Member, AccessError::Unavailable(_) | AccessError::Internal(_)) => {
+        (_, AccessError::Unavailable(_) | AccessError::Internal(_)) => {
             "failed to verify channel membership"
         }
     };

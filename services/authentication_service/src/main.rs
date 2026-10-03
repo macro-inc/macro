@@ -348,11 +348,21 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_macro_db,
     );
 
+    let stripe_prices = api::StripePrices {
+        premium: config.stripe_price_id.to_string(),
+        max: config
+            .stripe_max_price_id
+            .value()
+            .filter(|id| !id.trim().is_empty())
+            .map(str::to_owned),
+    };
+    if stripe_prices.max.is_none() {
+        tracing::warn!("STRIPE_MAX_PRICE_ID is not set; the Max plan cannot be sold");
+    }
+
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(
-        stripe_client.clone(),
-        config.stripe_price_id.to_string().clone(),
-    );
+    let customer_repo_impl =
+        CustomerRepositoryImpl::new(stripe_client.clone(), stripe_prices.seat_prices());
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
         favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
     );
@@ -381,7 +391,7 @@ async fn main() -> anyhow::Result<()> {
         PgAccessRepository::new(db.clone()),
     ));
     let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        internal_api_key.to_string(),
+        config.service_internal_auth_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     ));
     // Authentication creates channels and posts support welcome messages in-process, so its
@@ -405,7 +415,11 @@ async fn main() -> anyhow::Result<()> {
     // same persistence and delivery as every other channel message.
     let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
@@ -431,19 +445,6 @@ async fn main() -> anyhow::Result<()> {
             ),
         ),
     );
-
-    let teams_service_impl = TeamServiceImpl::new_with_analytics(
-        teams_repo_impl,
-        customer_repo_impl,
-        channel_service.clone(),
-        user_roles_and_permissions_service.clone(),
-        notification_ingress_service.clone(),
-        crm_enqueuer,
-        team_crm_settings_repo_impl,
-        team_analytics,
-    )
-    .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker);
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
@@ -497,6 +498,49 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
+    let stripe_client = Arc::new(stripe_client);
+    let ai_billing_service = Arc::new(
+        ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgUsageReader::new(db.clone()),
+            ai_billing::outbound::PgBillingRepo::new(db.clone()),
+            ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+        )
+        .with_enforcement(config.enable_ai_usage_enforcement)
+        .with_billing(config.enable_ai_usage_billing),
+    );
+    let teams_service_impl = TeamServiceImpl::new_with_analytics(
+        teams_repo_impl.clone(),
+        customer_repo_impl,
+        channel_service.clone(),
+        user_roles_and_permissions_service.clone(),
+        notification_ingress_service.clone(),
+        crm_enqueuer,
+        team_crm_settings_repo_impl,
+        team_analytics,
+    )
+    .with_contacts_enqueuer(contacts_enqueuer)
+    .with_event_broker(macro_event_broker)
+    .with_open_seat_release((*ai_billing_service).clone());
+    let teams_service = Arc::new(teams_service_impl);
+    let document_storage_service_client = Arc::new(document_storage_service_client);
+    // The harness and scheduled-action services validate the fleet-wide
+    // internal key, not this service's own inbound key.
+    let user_deletion = Arc::new(
+        authentication_service::outbound::user_deletion::UserDeletionAdapter::new(
+            db.clone(),
+            document_storage_service_client.clone(),
+            teams_service.clone(),
+            config.service_internal_auth_key.to_string(),
+            macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
+            macro_service_urls::ScheduledActionServiceUrl::new()?.to_string(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+    );
+
     let server_result = api::setup_and_serve(
         ApiContext {
             db,
@@ -506,8 +550,9 @@ async fn main() -> anyhow::Result<()> {
             cursor_api_key_cipher,
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
-            stripe_client: Arc::new(stripe_client),
-            document_storage_service_client: Arc::new(document_storage_service_client),
+            stripe_client,
+            document_storage_service_client,
+            user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service,
@@ -529,7 +574,7 @@ async fn main() -> anyhow::Result<()> {
             internal_api_key,
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
-            teams_service: Arc::new(teams_service_impl),
+            teams_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),
@@ -554,7 +599,8 @@ async fn main() -> anyhow::Result<()> {
             }),
             loops_client: Arc::new(loops_client),
             analytics_client,
-            stripe_price_id: config.stripe_price_id.to_string(),
+            stripe_prices,
+            ai_billing_service,
         },
         config.port,
     )

@@ -7,6 +7,7 @@
 
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentMcpServers } from './agentMcpServers';
+import type { CreateAgentRequestAutoAcceptPermissions } from './createAgentRequestAutoAcceptPermissions';
 import type { CreateAgentRequestAvatarUrl } from './createAgentRequestAvatarUrl';
 import type { CreateAgentRequestDescription } from './createAgentRequestDescription';
 import type { CreateAgentRequestHarnessId } from './createAgentRequestHarnessId';
@@ -16,6 +17,9 @@ import type { CreateAgentRequestTeamId } from './createAgentRequestTeamId';
  * Request to create a persisted AI agent.
  */
 export interface CreateAgentRequest {
+  /** Whether the agent's sessions approve ACP permission requests without
+asking. Omit to always prompt. */
+  auto_accept_permissions?: CreateAgentRequestAutoAcceptPermissions;
   /** Optional avatar URL or data URL. */
   avatar_url?: CreateAgentRequestAvatarUrl;
   /** Selected channels. Must be non-empty only for `selected` scope. */
@@ -33,6 +37,9 @@ export interface CreateAgentRequest {
   harness_id?: CreateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** Whether the agent is a coding agent: a mention is answered with a magic
+chip into its live session (`true`) or a reply in the thread (`false`). */
+  is_coding: boolean;
   /** Which MCP servers sessions of this agent are handed. */
   mcp?: AgentMcpServers;
   /** Display name. */

@@ -1,25 +1,36 @@
+import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import { toast } from '@core/component/Toast/Toast';
-import { type EntityData, InlineEntity } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
+import { Entity, type EntityData } from '@entity';
+
 import {
   reminderTarget,
   useCreateReminderMutation,
 } from '@queries/reminders/reminders';
 import { refetchSoupEntity } from '@queries/soup/cache';
+import type { CreateReminderRequest } from '@service-storage/generated/schemas/createReminderRequest';
+import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
-import { Dialog, Panel } from '@ui';
-import { Show } from 'solid-js';
+import { ActionDialogShell, Button, Dialog } from '@ui';
+import { createSignal, Show } from 'solid-js';
 import { ReminderForm } from './ReminderForm';
 import {
+  chooseReminderTarget,
   closeReminderComposer,
   reminderComposerOpen,
   reminderComposerState,
+  showReminderEntityPicker,
   takeReminderCreatedHandler,
 } from './reminder-composer';
 import {
+  describeReminderConfirmation,
   resolveReminderDescription,
   resolveStandaloneDescription,
 } from './reminder-schedule';
+import { EmailReminderComposer } from './views/email-reminder-composer';
+import { ReminderEntityPicker } from './views/reminder-entity-picker';
+
+const CREATE_FAILURE_MESSAGE =
+  'We couldn’t save this reminder. Your draft is still here—try again. If the request timed out, it may already exist; check Reminders before retrying.';
 
 /**
  * Creates a reminder — one about an entity, or one about nothing at all — in a
@@ -38,6 +49,54 @@ export function ReminderComposerModal() {
 
   const entity = () => reminderComposerState.entity;
   const standalone = () => reminderComposerState.standalone === true;
+  const [submitting, setSubmitting] = createSignal(false);
+  const [saveError, setSaveError] = createSignal<string>();
+  let focusBeforeSave: HTMLElement | undefined;
+
+  const save = async (args: CreateReminderRequest) => {
+    if (submitting()) return;
+    focusBeforeSave =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setSubmitting(true);
+    setSaveError(undefined);
+
+    let reminder: Reminder;
+    try {
+      reminder = await createReminder.mutateAsync(args);
+    } catch {
+      setSaveError(CREATE_FAILURE_MESSAGE);
+      setSubmitting(false);
+      queueMicrotask(() => {
+        if (focusBeforeSave?.isConnected) focusBeforeSave.focus();
+      });
+      return;
+    }
+
+    const onCreated = takeReminderCreatedHandler();
+    setSubmitting(false);
+    closeReminderComposer();
+    toast.success(
+      `Reminder set · ${describeReminderConfirmation(reminder.schedule, reminder.nextRunAt)}`,
+      {
+        actions: [
+          {
+            label: 'View',
+            onClick: () => void openReminderDetail(reminder.id),
+          },
+        ],
+      }
+    );
+    // This host-owned follow-up runs only after persistence. It is intentionally
+    // outside the request catch: a downstream row action failing does not mean
+    // the reminder failed to save and must never invite a duplicate retry.
+    try {
+      await onCreated?.();
+    } catch {
+      toast.failure('Reminder saved, but the source could not be updated');
+    }
+  };
 
   const submitCreate = async (
     schedule: ReminderSchedule,
@@ -46,27 +105,12 @@ export function ReminderComposerModal() {
   ) => {
     const resolved = resolveReminderDescription(input, target);
     const attachTo = reminderTarget(target);
-    // Taken before the close, which clears it.
-    const onCreated = takeReminderCreatedHandler();
-    closeReminderComposer();
-
-    try {
-      await createReminder.mutateAsync({
-        description: resolved,
-        schedule,
-        // Both or neither: the API rejects one without the other.
-        ...(attachTo ?? undefined),
-      });
-      toast.success('Reminder set');
-    } catch {
-      toast.failure('Failed to create reminder');
-      return;
-    }
-
-    // Whatever the invoking surface does with its row now that the reminder
-    // will bring it back — marking it done, in every soup list. Runs only once
-    // the reminder exists, so a failed create leaves the row alone.
-    await onCreated?.();
+    await save({
+      description: resolved,
+      schedule,
+      // Both or neither: the API rejects one without the other.
+      ...(attachTo ?? undefined),
+    });
   };
 
   /**
@@ -85,20 +129,7 @@ export function ReminderComposerModal() {
     // on it rather than a `!` on the value above.
     if (!resolved) return;
 
-    // Taken before the close, which clears it. Nothing passes one today, but
-    // taking it is what keeps a handler from leaking into the next open.
-    const onCreated = takeReminderCreatedHandler();
-    closeReminderComposer();
-
-    try {
-      await createReminder.mutateAsync({ description: resolved, schedule });
-      toast.success('Reminder set');
-    } catch {
-      toast.failure('Failed to create reminder');
-      return;
-    }
-
-    await onCreated?.();
+    await save({ description: resolved, schedule });
   };
 
   const handleSubmit = (values: {
@@ -107,10 +138,11 @@ export function ReminderComposerModal() {
   }) => {
     const target = entity();
     if (target) {
-      submitCreate(values.schedule, target, values.description);
+      void submitCreate(values.schedule, target, values.description);
       return;
     }
-    if (standalone()) submitStandalone(values.schedule, values.description);
+    if (standalone())
+      void submitStandalone(values.schedule, values.description);
   };
 
   // Both targets are cleared on close, so this unmounts the form while the
@@ -122,51 +154,95 @@ export function ReminderComposerModal() {
     <Dialog
       open={reminderComposerOpen()}
       onOpenChange={(open) => {
-        if (!open) closeReminderComposer();
+        if (!open && !submitting()) {
+          setSaveError(undefined);
+          closeReminderComposer();
+        }
       }}
-      // The form autofocuses its title; keep Kobalte from stealing focus onto
-      // the referenced-entity chip, which is the first tabbable otherwise.
-      onOpenAutoFocus={(event) => event.preventDefault()}
       position="center"
-      class="w-[28rem]"
+      class="w-[calc(100vw-2rem)] max-w-110"
     >
-      <Panel depth={2} class="rounded-xl">
-        <Panel.Header class="px-4">
-          <Dialog.Title class="flex items-center gap-2 text-sm font-semibold text-ink">
-            <BellIcon class="size-3.5 text-ink-muted" />
-            New reminder
-          </Dialog.Title>
-        </Panel.Header>
-        <Show when={hasTarget()}>
-          <Panel.Body class="p-4 font-sans">
-            <ReminderForm
-              autofocus
-              placeholder={
-                // Not optional for a standalone reminder: there is no entity to
-                // name it after, so this is all it will ever say.
-                standalone()
-                  ? "What's the reminder?"
-                  : "What's the reminder? (optional)"
-              }
-              descriptionRequired={standalone()}
-              submitLabel="Set reminder"
-              reference={
-                <Show when={entity()}>
-                  {(target) => (
-                    <div class="flex">
-                      <div class="max-w-full truncate rounded border border-edge-muted bg-active px-2 py-1 text-xs">
-                        <InlineEntity entity={target()} />
-                      </div>
-                    </div>
-                  )}
+      <ActionDialogShell>
+        <Show
+          when={reminderComposerState.choosing}
+          fallback={
+            <Show
+              when={entity()?.type === 'email'}
+              fallback={
+                <Show when={hasTarget()}>
+                  <ReminderForm
+                    layout="dialog"
+                    header={
+                      <ActionDialogShell.Header>
+                        <ActionDialogShell.Title>
+                          {standalone() ? 'New reminder' : 'Remind me'}
+                        </ActionDialogShell.Title>
+                        <ActionDialogShell.Description>
+                          Choose when you’d like to be reminded.
+                        </ActionDialogShell.Description>
+                      </ActionDialogShell.Header>
+                    }
+                    placeholder={
+                      standalone()
+                        ? 'What would you like to remember?'
+                        : "What's the reminder? (optional)"
+                    }
+                    descriptionRequired={standalone()}
+                    optionalNote={!standalone()}
+                    submitLabel="Set reminder"
+                    autofocus
+                    pending={submitting()}
+                    error={saveError()}
+                    reference={
+                      <Show when={entity()}>
+                        {(target) => (
+                          <div class="flex min-w-0 items-center gap-3 rounded-lg border border-edge-muted p-3">
+                            <span class="size-6 shrink-0">
+                              <Entity.Icon entity={target()} />
+                            </span>
+                            <span class="min-w-0 flex-1 font-medium">
+                              <Entity.Title entity={target()} />
+                            </span>
+                            <Show when={!submitting()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={showReminderEntityPicker}
+                              >
+                                Change
+                              </Button>
+                            </Show>
+                          </div>
+                        )}
+                      </Show>
+                    }
+                    onCancel={() => {
+                      if (submitting()) return;
+                      setSaveError(undefined);
+                      closeReminderComposer();
+                    }}
+                    onSubmit={(values) => void handleSubmit(values)}
+                  />
                 </Show>
               }
-              onCancel={closeReminderComposer}
-              onSubmit={handleSubmit}
-            />
-          </Panel.Body>
+            >
+              <Show when={entity()}>
+                {(target) => (
+                  <EmailReminderComposer
+                    entity={target()}
+                    onPending={setSubmitting}
+                  />
+                )}
+              </Show>
+            </Show>
+          }
+        >
+          <ReminderEntityPicker
+            onSelect={chooseReminderTarget}
+            onWrite={() => chooseReminderTarget()}
+          />
         </Show>
-      </Panel>
+      </ActionDialogShell>
     </Dialog>
   );
 }

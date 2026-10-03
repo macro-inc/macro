@@ -4,12 +4,16 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SeatPlan } from './seatPlan';
 import type { TeamRole } from './teamRole';
 
 /**
  * The team member struct
  */
 export interface TeamMember {
+  /** The paid plan the member's seat is billed at. Meaningful on paying
+and enterprise teams; free-team members carry the default. */
+  plan: SeatPlan;
   /** The role of the team member */
   role: TeamRole;
   /** The id of the team */

@@ -10,7 +10,10 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
+import { devHttps } from './scripts/dev-https';
+import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
+import { localDevServer } from './scripts/local-dev-server';
 
 function readShortSha(): string {
   try {
@@ -22,6 +25,8 @@ function readShortSha(): string {
 
 const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
+/** Orders builds: a newer build takes the local cache over from older tabs. */
+const appBuildTime = Date.now();
 
 function readGitBranch(): string {
   try {
@@ -83,6 +88,8 @@ export const createAppViteConfig = (): UserConfigFn => {
         },
       },
       plugins: [
+        devHttps(),
+        hostedDevProxy(),
         // solidDevtools({ autoname: true }),
         solid(),
         wasm(),
@@ -199,10 +206,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
         strictPort: true,
-        hmr: {
-          protocol: 'ws',
-          host: process.env.TAURI_DEV_HOST || 'localhost',
-        },
+        ...localDevServer(process.env),
         cors: true,
         watch: {
           usePolling: true,
@@ -250,6 +254,7 @@ function defineEnv(mode: string, command: string) {
   });
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
+    'import.meta.env.__APP_BUILD_TIME__': JSON.stringify(appBuildTime),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),

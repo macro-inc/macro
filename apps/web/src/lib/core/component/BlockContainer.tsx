@@ -1,8 +1,7 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { type BlockName, useBlockId, useBlockName } from '@core/block';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isTabFocused } from '@core/signal/tabFocus';
-import { connectionGatewayClient } from '@service-connection/client';
+import { useEntitySubscription } from '@service-connection/client';
 import {
   children,
   createEffect,
@@ -10,6 +9,7 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { blockLiveTrackingEnabledSignal } from '../internal/BlockLoader';
 import {
   blockContainerMountedSignal,
@@ -20,20 +20,10 @@ import {
 // TODO: handle nested state
 const getBlockElementId = (blockId: string) => `block-${blockId}`;
 
-/** 20 seconds ping interval */
-const PING_INTERVAL = 20_000;
-
 function resolveEntityType(blockName: BlockName) {
-  switch (blockName) {
-    case 'chat':
-      return 'chat';
-    case 'channel':
-      return 'channel';
-    case 'project':
-      return 'project';
-    default:
-      return 'document';
-  }
+  return match(blockName)
+    .with('chat', 'channel', 'project', 'database', (entityType) => entityType)
+    .otherwise(() => 'document' as const);
 }
 
 interface BlockContainerProps extends FlowProps {
@@ -51,32 +41,18 @@ export function BlockContainer(props: BlockContainerProps) {
   const setHotkeyScope = blockHotkeyScopeSignal.set;
   const blockId = useBlockId();
   const blockName = useBlockName();
-  let pingInterval: ReturnType<typeof setInterval>;
-
-  function trackEntity(operation: 'open' | 'close' | 'ping') {
-    if (!liveTrackingEnabled()) return;
-    if (!blockId || !blockName) return;
-    connectionGatewayClient.trackEntity({
-      entity_type: resolveEntityType(blockName),
-      entity_id: blockId,
-      action: operation,
-    });
-  }
+  useEntitySubscription(() =>
+    liveTrackingEnabled() && blockId && blockName
+      ? { entity_type: resolveEntityType(blockName), entity_id: blockId }
+      : undefined
+  );
 
   onMount(() => {
     setMounted(true);
-    trackEntity('open');
-    pingInterval = setInterval(() => {
-      if (isTabFocused()) {
-        trackEntity('ping');
-      }
-    }, PING_INTERVAL);
   });
 
   onCleanup(() => {
     setMounted(false);
-    trackEntity('close');
-    if (pingInterval) clearInterval(pingInterval);
   });
 
   // Block commands register on the split scope: it covers the whole panel

@@ -1,5 +1,5 @@
 import { render } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import { createRoot, type ParentProps } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { createBlockOrchestrator } from './orchestrator';
 
@@ -8,7 +8,10 @@ vi.mock('./block', () => ({
   ValidNestingCombinations: {},
 }));
 vi.mock('./constant/allBlocks', () => ({
-  blocks: { channel: { component: () => <div>Channel content</div> } },
+  resolveBlockAlias: (type: string) => type,
+  blocks: {
+    channel: { component: () => <div>Channel content</div> },
+  },
 }));
 vi.mock('./internal/BlockLoader', () => ({ BlockLoader: () => null }));
 vi.mock('./internal/BlockEffectRunner', () => ({
@@ -40,4 +43,30 @@ it('keeps one live mount and preserves its handle when a duplicate unmounts', as
   const reopenedView = render(reopened.element);
   expect(reopenedView.container.textContent).toBe('Channel content');
   reopenedView.unmount();
+});
+
+it('exposes a handle for content mounted outside a block container until its owner disposes', async () => {
+  const orchestrator = createBlockOrchestrator();
+  const navigate = vi.fn();
+  const dispose = createRoot((dispose) => {
+    const handle = orchestrator.registerBlockHandle('channel', 'channel-1');
+    handle?.registerMethod('goToLocationFromParams', navigate);
+    expect(
+      orchestrator.registerBlockHandle('channel', 'channel-1')
+    ).toBeUndefined();
+    return dispose;
+  });
+
+  const handle = await orchestrator.getBlockHandle('channel-1', 'channel');
+  await handle?.goToLocationFromParams({ message: 'message-1' });
+  expect(navigate).toHaveBeenCalledWith({ message: 'message-1' });
+
+  dispose();
+  const mounted = orchestrator.createBlockInstance('channel', 'channel-1');
+  const view = render(mounted.element);
+  expect(view.container.textContent).toBe('Channel content');
+  expect(
+    orchestrator.registerBlockHandle('channel', 'channel-1')
+  ).toBeUndefined();
+  view.unmount();
 });

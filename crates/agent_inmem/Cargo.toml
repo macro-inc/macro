@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.
@@ -14,22 +15,27 @@ agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
+attachment = { path = "../attachment" }
 ai_toolset = { path = "../ai_toolset" }
 ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
+bot_id = { path = "../bot_id" }
 chat = { path = "../chat", default-features = false }
 dashmap = { workspace = true }
 futures = { workspace = true }
 genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
+model_owner = { path = "../model_owner" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 mcp_select = { path = "../mcp_select" }
 mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
+model-entity = { path = "../model-entity" }
+non_empty = { path = "../non_empty" }
 prompt = { path = "../prompt" }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 schemars = { workspace = true }
@@ -41,6 +47,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

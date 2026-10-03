@@ -2,13 +2,14 @@
  * @vitest-environment jsdom
  */
 
+import type { MessageData } from '@core/messages/types';
 import { render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { formatReactorNames } from '../ReactionChip';
 import { Reactions } from '../Reactions';
 import { Root } from '../Root';
-import type { MessageData } from '../types';
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'user-1',
@@ -46,6 +47,48 @@ describe('Reactions', () => {
 
     expect(container.querySelector('[data-message-reactions-row]')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add reaction' })).toBeNull();
+  });
+
+  it('marks only the current user’s reactions as pressed and updates with membership', () => {
+    const [reactions, setReactions] = createSignal([
+      { emoji: '❤️', users: ['user-1', 'user-2'] },
+      { emoji: '👍', users: ['user-3'] },
+    ]);
+    render(() => (
+      <Root
+        message={{
+          ...baseMessage,
+          reactions: reactions(),
+        }}
+        actions={{
+          onReact: () => undefined,
+        }}
+      >
+        <Reactions />
+      </Root>
+    ));
+
+    const heart = screen.getByRole('button', { name: /❤️/u, pressed: true });
+    const thumb = screen.getByRole('button', { name: /👍/u, pressed: false });
+
+    expect(heart.hasAttribute('data-user-reacted')).toBe(true);
+    expect(thumb.hasAttribute('data-user-reacted')).toBe(false);
+
+    setReactions([
+      { emoji: '❤️', users: ['user-2'] },
+      { emoji: '👍', users: ['user-3', 'user-1'] },
+    ]);
+
+    expect(
+      screen
+        .getByRole('button', { name: /❤️/u, pressed: false })
+        .hasAttribute('data-user-reacted')
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole('button', { name: /👍/u, pressed: true })
+        .hasAttribute('data-user-reacted')
+    ).toBe(true);
   });
 
   it('calls onReact with chip emoji when a reaction chip is clicked', async () => {

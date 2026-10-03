@@ -2,142 +2,95 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
-import { useBlockId } from '@core/block';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { References } from '@core/component/References';
-import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import ClockIcon from '@phosphor/clock.svg';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import { cn, InlineCheckbox } from '@ui';
-import { type Accessor, Show, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
-  record: Accessor<CallRecord>;
+  record: CallRecord;
+  callId: string;
 }
 
 export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
-  const blockId = useBlockId();
-
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
+      <SidePanel.Footer>
         <DetailsSectionContent record={props.record} />
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <SidePanel.Section
         id="properties"
         title="Properties"
         defaultOpen
         order={15}
       >
-        <PropertiesSectionContent record={props.record} />
+        <Suspense fallback={<SidePanel.Loading />}>
+          <PropertiesSectionContent record={props.record} />
+        </Suspense>
       </SidePanel.Section>
-      <SidePanel.Section id="sharing" title="Sharing" order={20}>
-        <SharingSectionContent record={props.record} />
-      </SidePanel.Section>
+      <Show when={props.record.channelId != null}>
+        <SidePanel.Section id="sharing" title="Sharing" order={20}>
+          <SharingSectionContent record={props.record} />
+        </SidePanel.Section>
+      </Show>
       <EntityActivitySectionConditional
-        entityId={props.record().callId}
+        entityId={props.record.callId}
         entityType="CALL_RECORD"
         order={40}
       />
-      <ReferencesSectionConditional callId={blockId} />
+      <ReferencesSectionConditional callId={props.callId} />
     </>
   );
 }
 
-function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
-  const record = props.record;
+function DetailsSectionContent(props: { record: CallRecord }) {
+  const record = () => props.record;
 
   const startedAt = (): DateValue | undefined => record().startedAt;
   const endedAt = (): DateValue | undefined => record().endedAt ?? undefined;
   const durationMs = () => record().durationMs ?? undefined;
 
   return (
-    <SidePanel.Grid>
-      <SidePanel.Row label="Owner">
-        <OwnerValue ownerId={record().createdBy} />
-      </SidePanel.Row>
+    <EntityMetadata ownerId={record().createdBy}>
       <Show when={startedAt()}>
         {(value) => (
-          <SidePanel.Row label="Started">
-            <DateValueDisplay value={value()} />
-          </SidePanel.Row>
+          <div>Started {formatDate(value(), { showTime: true })}</div>
         )}
       </Show>
       <Show when={endedAt()}>
-        {(value) => (
-          <SidePanel.Row label="Ended">
-            <DateValueDisplay value={value()} />
-          </SidePanel.Row>
-        )}
+        {(value) => <div>Ended {formatDate(value(), { showTime: true })}</div>}
       </Show>
       <Show when={durationMs()}>
-        {(ms) => (
-          <SidePanel.Row label="Duration">
-            <SidePanel.Pill>
-              <ClockIcon class="size-3 shrink-0" />
-              <span class="truncate">{formatCallDuration(ms())}</span>
-            </SidePanel.Pill>
-          </SidePanel.Row>
-        )}
+        {(ms) => <div>{formatCallDuration(ms())}</div>}
       </Show>
-      <SidePanel.Row label="Status">
-        <SidePanel.Pill>
-          <Show
-            when={record().isActive}
-            fallback={<span class="truncate text-ink-muted">Ended</span>}
-          >
-            <span class="size-2 rounded-full bg-success shrink-0" />
-            <span class="truncate text-success font-medium">In progress</span>
-          </Show>
-        </SidePanel.Pill>
-      </SidePanel.Row>
-    </SidePanel.Grid>
+      <div>{record().isActive ? 'In progress' : 'Ended'}</div>
+    </EntityMetadata>
   );
 }
 
-function PropertiesSectionContent(props: { record: Accessor<CallRecord> }) {
+function PropertiesSectionContent(props: { record: CallRecord }) {
   // Tag/property writes are authorized server-side via the call's owning
   // channel (edit access), mirroring the sharing control above, so the editor
   // is always mounted and the backend rejects unauthorized mutations.
   return (
     <EntityPropertiesSection
-      entityId={props.record().callId}
+      entityId={props.record.callId}
       entityType="CALL_RECORD"
       canEdit
       documentName={
-        props.record().customName ?? props.record().channelName ?? undefined
+        props.record.customName ?? props.record.channelName ?? undefined
       }
     />
-  );
-}
-
-function OwnerValue(props: { ownerId: string }) {
-  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
-  return (
-    <SidePanel.Pill>
-      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      <span class="truncate">{displayName()}</span>
-    </SidePanel.Pill>
-  );
-}
-
-function DateValueDisplay(props: { value: DateValue }) {
-  return (
-    <SidePanel.Pill>
-      <ClockIcon class="size-3 shrink-0" />
-      <span class="truncate">
-        {formatDate(props.value, { showTime: true })}
-      </span>
-    </SidePanel.Pill>
   );
 }
 
@@ -145,8 +98,8 @@ function DateValueDisplay(props: { value: DateValue }) {
 // Sharing Section
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
-  const record = props.record;
+function SharingSectionContent(props: { record: CallRecord }) {
+  const record = () => props.record;
   const callCtx = useCallContextOptional();
   const userId = useUserId();
   const toggleLiveShare = useToggleShareWithTeamMutation();
@@ -163,6 +116,7 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
 
   const handleChange = async (checked: boolean) => {
     const current = record();
+    if (!current.channelId) return;
     try {
       const newValue = current.isActive
         ? await toggleLiveShare.mutateAsync(current.callId)
@@ -183,13 +137,13 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
 
   const description = () => {
     if (record().isActive) {
-      return "Lets everyone on the creator's team view and search this call's transcript and AI summary once it ends.";
+      return "Lets everyone on the creator's team view this call's chat, transcript, and AI summary once it ends.";
     }
     if (canEdit()) {
-      return "Lets everyone on your team view and search this call's transcript and AI summary.";
+      return "Lets everyone on your team view this call's chat, transcript, and AI summary.";
     }
     return isShared()
-      ? "Everyone on the creator's team can view and search this call's transcript and AI summary."
+      ? "Everyone on the creator's team can view this call's chat, transcript, and AI summary."
       : "Only the call's creator can share it with their team.";
   };
 
@@ -229,7 +183,7 @@ function ReferencesSectionConditional(props: { callId: string }) {
     () => 'call'
   );
 
-  const count = () => references.data?.length ?? 0;
+  const count = () => (references.isSuccess ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

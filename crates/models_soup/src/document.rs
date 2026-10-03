@@ -1,6 +1,6 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_properties::EntityType;
 use uuid::Uuid;
 
@@ -21,6 +21,8 @@ pub enum SoupDocumentSubType {
     Snippet {},
     /// A skill document — markdown instructions for AI
     Skill {},
+    /// The description document of an initiative
+    InitiativeDescription {},
 }
 
 impl SoupDocumentSubType {
@@ -33,6 +35,7 @@ impl SoupDocumentSubType {
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
             DocumentSubType::Skill => Some(Self::Skill {}),
+            DocumentSubType::InitiativeDescription => Some(Self::InitiativeDescription {}),
         }
     }
 
@@ -40,7 +43,7 @@ impl SoupDocumentSubType {
     pub fn is_task_completed(&self) -> Option<bool> {
         match self {
             Self::Task { is_completed } => Some(*is_completed),
-            Self::Snippet {} | Self::Skill {} => None,
+            Self::Snippet {} | Self::Skill {} | Self::InitiativeDescription {} => None,
         }
     }
 }
@@ -59,7 +62,7 @@ pub struct SoupDocument<T = ()> {
 
     /// The owner of the document
     #[cfg_attr(feature = "schema", schema(value_type = String))]
-    pub owner_id: MacroUserIdStr<'static>,
+    pub owner_id: Owner,
 
     /// The name of the document
     pub name: String,
@@ -122,9 +125,12 @@ impl<T> SoupDocument<T> {
     pub fn entity_type(&self) -> EntityType {
         match &self.sub_type {
             Some(SoupDocumentSubType::Task { .. }) => EntityType::Task,
-            Some(SoupDocumentSubType::Snippet {} | SoupDocumentSubType::Skill {}) | None => {
-                EntityType::Document
-            }
+            Some(
+                SoupDocumentSubType::Snippet {}
+                | SoupDocumentSubType::Skill {}
+                | SoupDocumentSubType::InitiativeDescription {},
+            )
+            | None => EntityType::Document,
         }
     }
 }

@@ -28,6 +28,20 @@ const getImageExtensionsHeic = () => [
 ];
 const getVideoExtensions = () => blockNameToFileExtensions.video;
 
+export function isInlineVideoFileName(name: string) {
+  const ext = fileExtension(name);
+  return ext != null && getVideoExtensions().includes(ext);
+}
+
+export function isInlineMediaFileName(name: string) {
+  const ext = fileExtension(name);
+  return (
+    ext != null &&
+    (getImageExtensionsHeic().includes(ext) ||
+      getVideoExtensions().includes(ext))
+  );
+}
+
 async function processInlineMediaFiles(
   editor: LexicalEditor,
   files: File[],
@@ -84,8 +98,6 @@ async function onFilesReady(
   afterFileUpload?: (uploadedItemIds: string[]) => void,
   constrainedMediaDimensions?: { width: number; height: number }
 ): Promise<void> {
-  const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
-  const VIDEO_EXTENSIONS = getVideoExtensions();
   const mediaFiles: File[] = [];
   const filesToUpload: UploadInput[] = [];
 
@@ -94,11 +106,7 @@ async function onFilesReady(
       filesToUpload.push(entry);
     } else {
       const file = isFileUploadEntry(entry) ? entry.file : entry;
-      const ext = fileExtension(file.name);
-      if (
-        ext != null &&
-        (IMAGE_EXTENSIONS_HEIC.includes(ext) || VIDEO_EXTENSIONS.includes(ext))
-      ) {
+      if (isInlineMediaFileName(file.name)) {
         mediaFiles.push(file);
       } else {
         filesToUpload.push(entry);

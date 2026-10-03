@@ -259,6 +259,8 @@ pub enum CalendarRsvpScopeParam {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RsvpCalendarEventRequest {
+    /// The owned connected address whose attendance is changed. Validated by the domain.
+    pub responding_email: Option<String>,
     /// Calendar whose copy of the event is answered, for an event synced
     /// from more than one calendar. Omit to answer on the canonical copy.
     pub calendar_id: Option<Uuid>,
@@ -399,7 +401,7 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
 #[tracing::instrument(skip_all, err)]
 #[utoipa::path(
     post,
-    path = "/calendar/events",
+    path = "/events",
     tag = "calendar_events",
     request_body = CreateCalendarEventRequest,
     responses(
@@ -458,7 +460,7 @@ pub struct ListCalendarsResponse {
 #[tracing::instrument(skip_all, err)]
 #[utoipa::path(
     get,
-    path = "/calendar/calendars",
+    path = "/calendars",
     tag = "calendar_events",
     responses(
         (status = 200, description = "Calendars visible to the requester", body = ListCalendarsResponse),
@@ -510,7 +512,7 @@ fn update_scope(
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
     patch,
-    path = "/calendar/events/{event_id}",
+    path = "/events/{event_id}",
     tag = "calendar_events",
     params(("event_id" = Uuid, Path, description = "Calendar event entity id")),
     request_body = UpdateCalendarEventRequest,
@@ -567,7 +569,7 @@ where
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
     delete,
-    path = "/calendar/events/{event_id}",
+    path = "/events/{event_id}",
     tag = "calendar_events",
     params(
         ("event_id" = Uuid, Path, description = "Calendar event entity id"),
@@ -624,7 +626,7 @@ where
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
     put,
-    path = "/calendar/events/{event_id}/rsvp",
+    path = "/events/{event_id}/rsvp",
     tag = "calendar_events",
     params(("event_id" = Uuid, Path, description = "Calendar event entity id")),
     request_body = RsvpCalendarEventRequest,
@@ -667,6 +669,7 @@ where
             request.calendar_id,
             request.response,
             scope,
+            request.responding_email,
         )
         .await?;
     Ok(Json(event))

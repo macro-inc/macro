@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::{AnnouncedMessage, SessionAnnouncement};
+use crate::domain::model::{AnnouncedMessage, DeclinedMention, ResolvedReply, SessionAnnouncement};
 use crate::domain::ports::SessionAnnouncer;
 
 /// A [`SessionAnnouncer`] that records instead of posting. Cloning shares one
@@ -11,6 +11,8 @@ use crate::domain::ports::SessionAnnouncer;
 #[derive(Clone, Default)]
 pub struct AnnouncerMock {
     announced: Arc<Mutex<Vec<(SessionAnnouncement, AnnouncedMessage)>>>,
+    declined: Arc<Mutex<Vec<DeclinedMention>>>,
+    resolved: Arc<Mutex<Vec<ResolvedReply>>>,
     /// When set, every announce fails with this message.
     failure: Arc<Mutex<Option<String>>>,
 }
@@ -42,6 +44,25 @@ impl AnnouncerMock {
             .collect()
     }
 
+    /// Every mention declined, in order.
+    #[must_use]
+    pub fn declined(&self) -> Vec<DeclinedMention> {
+        self.declined
+            .lock()
+            .expect("announcer mock declined lock should not be poisoned")
+            .clone()
+    }
+
+    /// Every reply resolved, in order - for a coding kind too, since
+    /// deciding that there is nothing to patch is the real adapter's job.
+    #[must_use]
+    pub fn resolved(&self) -> Vec<ResolvedReply> {
+        self.resolved
+            .lock()
+            .expect("announcer mock resolved lock should not be poisoned")
+            .clone()
+    }
+
     /// The message each recorded announcement became, in order.
     #[must_use]
     pub fn announced_messages(&self) -> Vec<AnnouncedMessage> {
@@ -66,12 +87,48 @@ impl SessionAnnouncer for AnnouncerMock {
         }
 
         let message = AnnouncedMessage {
-            message_id: macro_uuid::generate_uuid_v7(),
+            message_id: if announcement.reuse_origin_message {
+                announcement.origin_message_id
+            } else {
+                macro_uuid::generate_uuid_v7()
+            },
         };
         self.announced
             .lock()
             .expect("announcer mock lock should not be poisoned")
             .push((announcement, message));
         Ok(message)
+    }
+
+    async fn resolve(&self, resolution: ResolvedReply) -> Result<()> {
+        if let Some(message) = self
+            .failure
+            .lock()
+            .expect("announcer mock failure lock should not be poisoned")
+            .clone()
+        {
+            return Err(HarnessError::Announce(rootcause::report!("{message}")));
+        }
+        self.resolved
+            .lock()
+            .expect("announcer mock resolved lock should not be poisoned")
+            .push(resolution);
+        Ok(())
+    }
+
+    async fn decline(&self, declined: DeclinedMention) -> Result<()> {
+        if let Some(message) = self
+            .failure
+            .lock()
+            .expect("announcer mock failure lock should not be poisoned")
+            .clone()
+        {
+            return Err(HarnessError::Announce(rootcause::report!("{message}")));
+        }
+        self.declined
+            .lock()
+            .expect("announcer mock declined lock should not be poisoned")
+            .push(declined);
+        Ok(())
     }
 }

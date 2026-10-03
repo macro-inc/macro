@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[derive(Clone, sqlx::FromRow)]
 pub struct CallChannelRow {
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The share permission ID for this call.
     pub share_permission_id: String,
 }
@@ -19,14 +19,14 @@ pub struct CallChannelRow {
 ///
 /// Checks both active calls and archived call records.
 #[tracing::instrument(err, skip(pool))]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn get_call_channel(
     pool: &PgPool,
     call_id: &Uuid,
 ) -> Result<Option<CallChannelRow>, sqlx::Error> {
-    sqlx::query_as::<_, CallChannelRow>(
+    sqlx::query_as!(
+        CallChannelRow,
         r#"
-        SELECT channel_id, share_permission_id
+        SELECT channel_id AS "channel_id?", share_permission_id AS "share_permission_id!"
         FROM calls
         WHERE id = $1
         UNION ALL
@@ -35,8 +35,8 @@ pub async fn get_call_channel(
         WHERE id = $1
         LIMIT 1
         "#,
+        call_id,
     )
-    .bind(call_id)
     .fetch_optional(pool)
     .await
 }
@@ -62,7 +62,7 @@ pub async fn get_call_channel_by_channel_id(
     sqlx::query_as!(
         CallChannelRow,
         r#"
-        SELECT channel_id AS "channel_id!", share_permission_id AS "share_permission_id!"
+        SELECT channel_id AS "channel_id?", share_permission_id AS "share_permission_id!"
         FROM calls
         WHERE channel_id = $1
         UNION ALL

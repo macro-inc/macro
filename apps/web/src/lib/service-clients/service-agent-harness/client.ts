@@ -2,6 +2,10 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
 import type {
+  AgentRepositoriesResponse,
+  AgentRepositoryBranchesResponse,
+  AgentSessionChangesPatchResponse,
+  AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -9,11 +13,15 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  DiscoverAgentCapabilitiesRequest,
+  DiscoverAgentCapabilitiesResponse,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SharePermissionV2,
+  UpdateSharePermissionRequestV2,
 } from './generated/schemas';
 
 export type { SandboxSize, SandboxSizeBody };
@@ -59,6 +67,21 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  discoverAgentCapabilities(
+    request: DiscoverAgentCapabilitiesRequest,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
+      `${agentHarnessHost}/agent-capabilities/discover`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+      }
+    );
+  },
+
   create(request: CreateAgentSessionRequest) {
     return fetchWithToken<CreateAgentSessionResponse>(
       `${agentHarnessHost}/agent-sessions`,
@@ -71,10 +94,56 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  /**
+   * The GitHub repositories the caller can select for a coding session, with
+   * the branch each one's sessions start on by default.
+   */
+  listRepositories() {
+    return fetchWithToken<AgentRepositoriesResponse>(
+      `${agentHarnessHost}/agent-repositories`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * The branches on one GitHub repository the caller can start a coding
+   * session from. `repoUrl` is the canonical `https://github.com/owner/name`
+   * form `listRepositories` and create-session share.
+   */
+  listRepositoryBranches(repoUrl: string) {
+    const params = new URLSearchParams({ repoUrl });
+    return fetchWithToken<AgentRepositoryBranchesResponse>(
+      `${agentHarnessHost}/agent-repositories/branches?${params}`,
+      { method: 'GET' }
+    );
+  },
+
   get(sessionId: string) {
     return fetchWithToken<AgentSessionResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'GET' }
+    );
+  },
+
+  getPermissions(sessionId: string) {
+    return fetchWithToken<SharePermissionV2>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/permissions`,
+      { method: 'GET' }
+    );
+  },
+
+  updatePermissions(
+    sessionId: string,
+    request: UpdateSharePermissionRequestV2
+  ) {
+    return fetchWithToken<SharePermissionV2>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/permissions`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        errorResponseHandler: sessionError,
+      }
     );
   },
 
@@ -92,6 +161,18 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  setArchived(sessionId: string, isArchived: boolean) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived }),
+        errorResponseHandler: sessionError,
       }
     ).then((result) => result.map(() => undefined));
   },
@@ -172,6 +253,37 @@ export const agentHarnessServiceClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ size }),
       }
+    );
+  },
+
+  /**
+   * The session's latest captured changes: changed files with statuses and
+   * line counts, plus how the latest capture attempt went.
+   */
+  getChanges(sessionId: string) {
+    return fetchWithToken<AgentSessionChangesResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/changes`,
+      { method: 'GET' }
+    );
+  },
+
+  /** The unified diff behind the session's latest changeset. 404 until one exists. */
+  getChangesPatch(sessionId: string) {
+    return fetchWithToken<AgentSessionChangesPatchResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/changes/patch`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * Capture the session's changes again now. Answers at once with the state
+   * as it stands; the capture lands through the `agent_session_changes`
+   * realtime event.
+   */
+  refreshChanges(sessionId: string) {
+    return fetchWithToken<AgentSessionChangesResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/changes/refresh`,
+      { method: 'POST' }
     );
   },
 

@@ -83,6 +83,12 @@ const EditBody = z
      * small inline edits. Requires `models.fast`.
      */
     mode: z.enum(['supervised', 'fast']).default('supervised'),
+    /**
+     * The agent or persona the edit runs as. Its name labels every cursor the
+     * edit draws, so readers see who is editing; omitted, cursors draw pooled
+     * names.
+     */
+    editor: z.object({ name: z.string().trim().min(1) }).optional(),
     typingAnimations: z.boolean().optional(),
     /** Animation speed multiplier applied while nobody is watching the doc. */
     unwatchedSpeed: z.number().min(1).default(2.0),
@@ -168,6 +174,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     prompt,
     models,
     mode,
+    editor,
     typingAnimations,
     unwatchedSpeed,
     interpret,
@@ -208,6 +215,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         span.setAttr('edit.mode', mode);
         span.setAttr('edit.interpret', interpret);
         span.setAttr('edit.propagate', propagate);
+        span.setAttr('edit.editor_named', editor !== undefined);
         let modelFallbacks = 0;
         try {
           const result = await runEditSession({
@@ -216,6 +224,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
             prompt,
             models: buildModels(env, models, mode, () => modelFallbacks++),
             mode,
+            editor,
             typingAnimations,
             sleep,
             interpret,

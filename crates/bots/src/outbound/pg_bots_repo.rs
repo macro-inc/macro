@@ -3,12 +3,14 @@
 #[cfg(test)]
 mod tests;
 
+mod owner_grants;
+
 use crate::domain::{
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotProfile, BotToken,
-        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, HarnessId, HarnessOwner, PatchBotRequest,
+        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotOwnerProfile, BotProfile,
+        BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
         UpdateAgentRequest,
     },
     ports::BotRepo,
@@ -42,6 +44,21 @@ fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {
     match owner {
         BotOwner::User { user_id } => (Some(user_id), None),
         BotOwner::Team { team_id } => (None, Some(team_id)),
+    }
+}
+
+fn require_persisted_owner(
+    bot_id: Uuid,
+    owner_user_id: Option<String>,
+    team_id: Option<Uuid>,
+) -> anyhow::Result<BotOwner> {
+    match (owner_user_id, team_id) {
+        (Some(user_id), None) => Ok(BotOwner::User { user_id }),
+        (None, Some(team_id)) => Ok(BotOwner::Team { team_id }),
+        (owner_user_id, team_id) => Err(anyhow::anyhow!(
+            "bot {bot_id} has owner_user_id={owner_user_id:?} team_id={team_id:?}"
+        )
+        .context("persisted bot must have exactly one owner")),
     }
 }
 
@@ -117,6 +134,8 @@ struct AgentRow {
     mcp_scope: String,
     mcp_app_slugs: Vec<String>,
     mcp_server_names: Vec<String>,
+    auto_accept_permissions: Option<bool>,
+    is_coding: bool,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -166,6 +185,8 @@ impl TryFrom<AgentRow> for Agent {
             channel_scope,
             channel_ids: row.channel_ids,
             mcp,
+            auto_accept_permissions: row.auto_accept_permissions,
+            is_coding: row.is_coding,
         })
     }
 }
@@ -356,9 +377,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -367,6 +388,8 @@ impl BotRepo for PgBotsRepo {
             &req.default_model,
             req.channel_scope.as_str(),
             req.mcp.scope_str(),
+            req.auto_accept_permissions,
+            req.is_coding,
         )
         .execute(&mut *tx)
         .await
@@ -401,6 +424,8 @@ impl BotRepo for PgBotsRepo {
             harness_id: req.harness_id,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
+            auto_accept_permissions: req.auto_accept_permissions,
+            is_coding: req.is_coding,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
         })
@@ -473,6 +498,8 @@ impl BotRepo for PgBotsRepo {
                 default_model = $5,
                 channel_scope = $6,
                 mcp_scope = $7,
+                auto_accept_permissions = $8,
+                is_coding = $9,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
@@ -483,6 +510,8 @@ impl BotRepo for PgBotsRepo {
             &req.default_model,
             req.channel_scope.as_str(),
             req.mcp.scope_str(),
+            req.auto_accept_permissions,
+            req.is_coding,
         )
         .execute(&mut *tx)
         .await
@@ -545,6 +574,8 @@ impl BotRepo for PgBotsRepo {
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
+            auto_accept_permissions: req.auto_accept_permissions,
+            is_coding: req.is_coding,
         }))
     }
 
@@ -574,6 +605,8 @@ impl BotRepo for PgBotsRepo {
                 a.harness_id,
                 a.default_model,
                 a.channel_scope,
+                a.auto_accept_permissions,
+                a.is_coding,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -927,6 +960,51 @@ impl BotRepo for PgBotsRepo {
         Ok(profiles)
     }
 
+    async fn get_owner_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotOwnerProfile>, Self::Err> {
+        if bot_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut profiles = bot_ids
+            .iter()
+            .filter_map(|id| bot_id::system_bot(*id).map(|bot| (*id, BotOwnerProfile::system(bot))))
+            .collect::<HashMap<_, _>>();
+        let ids = bot_ids
+            .iter()
+            .copied()
+            .filter_map(bot_id::NonSystemBotId::new)
+            .map(|id| id.get().as_uuid())
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            return Ok(profiles);
+        }
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, avatar_url, deleted_at, owner_user_id, team_id
+            FROM bots
+            WHERE id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get bot owner profiles")?;
+
+        for row in rows {
+            let id = BotId::new_from_uuid(row.id);
+            let owner = require_persisted_owner(row.id, row.owner_user_id, row.team_id)?;
+            profiles.insert(
+                id,
+                BotOwnerProfile::persisted(id, row.name, row.avatar_url, row.deleted_at, owner),
+            );
+        }
+        Ok(profiles)
+    }
+
     async fn get_agent(&self, bot_id: BotId) -> Result<Option<Agent>, Self::Err> {
         let row = sqlx::query_as!(
             AgentRow,
@@ -950,6 +1028,8 @@ impl BotRepo for PgBotsRepo {
                 a.harness_id,
                 a.default_model,
                 a.channel_scope,
+                a.auto_accept_permissions,
+                a.is_coding,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -985,13 +1065,13 @@ impl BotRepo for PgBotsRepo {
         row.map(Agent::try_from).transpose()
     }
 
-    async fn get_harness_owner(
+    async fn get_harness_facts(
         &self,
         harness_id: HarnessId,
-    ) -> Result<Option<HarnessOwner>, Self::Err> {
+    ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id
+            SELECT owner_user_id, team_id, allow_permission_bypass
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -1002,8 +1082,14 @@ impl BotRepo for PgBotsRepo {
         .context("failed to fetch harness owner")?;
 
         row.map(|row| match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => Ok(HarnessOwner::User { user_id }),
-            (None, Some(team_id)) => Ok(HarnessOwner::Team { team_id }),
+            (Some(user_id), None) => Ok(HarnessFacts {
+                owner: HarnessOwner::User { user_id },
+                allow_permission_bypass: row.allow_permission_bypass,
+            }),
+            (None, Some(team_id)) => Ok(HarnessFacts {
+                owner: HarnessOwner::Team { team_id },
+                allow_permission_bypass: row.allow_permission_bypass,
+            }),
             // Unreachable: harnesses_owner_check enforces exactly one owner.
             _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
         })

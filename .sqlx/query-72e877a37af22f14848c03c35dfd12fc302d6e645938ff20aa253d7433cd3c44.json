@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE slack_import_outbox o SET cancelled_at = clock_timestamp()\n                   FROM slack_import_conversation c WHERE o.job_id = $1 AND c.job_id = o.job_id\n                     AND c.slack_channel_id = o.slack_channel_id AND o.kind = 'import'\n                     AND o.published_at IS NULL AND o.cancelled_at IS NULL\n                     AND (o.generation <> c.event_generation OR c.status NOT IN ('queued', 'importing'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "72e877a37af22f14848c03c35dfd12fc302d6e645938ff20aa253d7433cd3c44"
+}

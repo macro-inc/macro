@@ -11,7 +11,7 @@ struct FakeCloud {
     history: Arc<tokio::sync::Mutex<Vec<Event>>>,
 }
 impl Cloud for FakeCloud {
-    async fn recent_sessions(&self) -> Result<Vec<SessionId>> {
+    async fn models(&self) -> Result<Vec<crate::domain::models::ModelOption>> {
         Ok(Vec::new())
     }
     async fn send_batch(&self, session: &SessionId, payloads: Vec<Value>) -> Result<()> {

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type Setter } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,6 +52,16 @@ vi.mock('../CallControls/CallControls', () => ({
   CallControls: () => null,
 }));
 
+vi.mock('../chat/CallChat', () => ({
+  default: (props: { callId: string; open: boolean; onClose: () => void }) => (
+    <aside hidden={!props.open} aria-label="Call chat">
+      <p>{props.callId}</p>
+      <input aria-label="Message this call" />
+      <button onClick={props.onClose}>Close sidebar</button>
+    </aside>
+  ),
+}));
+
 vi.mock('../TrackView', () => ({
   TrackView: (props: { track?: { sid?: string } }) => (
     <div data-testid={`track-${props.track?.sid ?? 'none'}`} />
@@ -75,6 +85,7 @@ type MockTrackPublication = {
 type ParticipantPublications = Record<string, MockTrackPublication | undefined>;
 
 type CallStateControls = {
+  setChannelId: Setter<string | null>;
   setAudioMuted: Setter<boolean>;
   setParticipants: Setter<Map<string, RemoteParticipant>>;
   setTrackVersion: Setter<number>;
@@ -86,10 +97,12 @@ function createTrack(sid: string): Track {
 
 function createRemoteParticipant(
   identity: string,
-  publications: ParticipantPublications
+  publications: ParticipantPublications,
+  name?: string
 ): RemoteParticipant {
   return {
     identity,
+    name,
     isAgent: false,
     getTrackPublication(source: string) {
       return publications[source];
@@ -101,6 +114,7 @@ function setUpCallState(
   initialParticipants: RemoteParticipant[] = []
 ): CallStateControls {
   const [audioMuted, setAudioMuted] = createSignal(false);
+  const [channelId, setChannelId] = createSignal<string | null>('channel-1');
   const [participants, setParticipants] = createSignal(
     new Map(
       initialParticipants.map((participant) => [
@@ -113,6 +127,8 @@ function setUpCallState(
   const localCameraTrack = createTrack('local-camera');
 
   mocks.callContext = {
+    activeChannelId: channelId,
+    activeCallId: () => 'call-id',
     connectionState: () => 'connected',
     isAudioMuted: audioMuted,
     isConnecting: () => false,
@@ -131,7 +147,7 @@ function setUpCallState(
     trackVersion,
   } as unknown as CallState;
 
-  return { setAudioMuted, setParticipants, setTrackVersion };
+  return { setChannelId, setAudioMuted, setParticipants, setTrackVersion };
 }
 
 beforeEach(() => {
@@ -139,6 +155,84 @@ beforeEach(() => {
 });
 
 describe('CallOverlay muted microphone badges', () => {
+  it('excludes standalone calls from team sharing even when the caller enables the control', () => {
+    const controls = setUpCallState();
+    controls.setChannelId(null);
+    render(() => <CallOverlay onLeave={() => undefined} showTeamSharing />);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    controls.setChannelId('channel-1');
+    expect(
+      screen.getByRole('checkbox', { name: 'Share with team' })
+    ).toBeTruthy();
+    controls.setChannelId(null);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('uses the guest name from the media session and hides team sharing for guests', () => {
+    const guest = createRemoteParticipant(
+      'guest|opaque-id',
+      {},
+      'Taylor Guest'
+    );
+    setUpCallState([guest]);
+    render(() => (
+      <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
+    ));
+    expect(screen.getByText('Taylor Guest')).toBeTruthy();
+    expect(
+      screen.getByRole('status', { name: 'Taylor Guest is muted' })
+    ).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('opens chat for a standalone meeting without a channel', async () => {
+    const controls = setUpCallState();
+    controls.setChannelId(null);
+    render(() => (
+      <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+    expect(
+      await screen.findByRole('textbox', { name: 'Message this call' })
+    ).toBeTruthy();
+    expect(screen.getByText('call-id')).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('does not mount authenticated message queries for a guest', () => {
+    const controls = setUpCallState();
+    controls.setChannelId(null);
+    render(() => <CallOverlay onLeave={() => undefined} showChat={false} />);
+    expect(screen.queryByRole('button', { name: 'Open chat' })).toBeNull();
+    expect(
+      screen.queryByRole('complementary', { name: 'Call chat' })
+    ).toBeNull();
+  });
+
+  it('opens the call thread without remounting video and restores focus when closed', async () => {
+    setUpCallState();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const video = screen.getByTestId('track-local-camera');
+    const toggle = screen.getByRole('button', { name: 'Open chat' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    const composer = await screen.findByRole('textbox', {
+      name: 'Message this call',
+    });
+    fireEvent.input(composer, { target: { value: 'Draft' } });
+    expect(screen.getByText('call-id')).toBeTruthy();
+    expect(screen.getByTestId('track-local-camera')).toBe(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+    expect(document.activeElement).toBe(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(screen.getByRole('textbox', { name: 'Message this call' })).toBe(
+      composer
+    );
+    expect((composer as HTMLInputElement).value).toBe('Draft');
+    expect(screen.getByTestId('track-local-camera')).toBe(video);
+  });
+
   it('shows local mute state on both the full tile and local PIP', () => {
     const controls = setUpCallState();
 
@@ -225,6 +319,7 @@ describe('CallOverlay muted microphone badges', () => {
     const tile = badge.parentElement;
 
     expect(tile?.classList).toContain('relative');
+    expect(tile?.querySelector('[data-testid="user-avatar"]')).not.toBeNull();
     expect(tile?.textContent).toContain('A');
     expect(tile?.querySelector('[data-testid="track-alex-camera"]')).toBeNull();
 

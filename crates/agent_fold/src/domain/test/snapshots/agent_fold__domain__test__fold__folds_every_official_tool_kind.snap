@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/fold.rs
-assertion_line: 381
 expression: agent.parts
 ---
 NonEmpty {
@@ -97,6 +96,8 @@ NonEmpty {
                         "foo": String("bar"),
                     },
                 ),
+                result: None,
+                error: None,
             },
         },
     ],

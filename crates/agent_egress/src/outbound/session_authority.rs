@@ -17,6 +17,7 @@
 
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::domain::{credentials::authenticate_session, error::AgentSessionError};
+use model_owner::Owner;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken};
@@ -56,6 +57,20 @@ where
                 )),
             })?;
 
+        // The grant is a person's: everything egress does, it does with the
+        // owner's credentials, and a bot or team has none to spend. Refused
+        // as an admission the token fails, in our own fixed words like every
+        // other gate here, rather than resolved as though the owner were a
+        // user.
+        let owner = match &session.owner_id {
+            Owner::User(owner) => owner.clone(),
+            Owner::Bot(_) | Owner::Team(_) => {
+                return Err(EgressError::Unauthenticated(
+                    "the session is not owned by a user",
+                ));
+            }
+        };
+
         // A repository is optional for MCP-only sessions. The domain service
         // requires one only for git requests; a malformed stored URL still
         // indicates a configuration error.
@@ -92,7 +107,7 @@ where
 
         Ok(SessionGrant {
             session: session.id,
-            owner: session.owner_id,
+            owner,
             repo,
             mcp_servers,
         })

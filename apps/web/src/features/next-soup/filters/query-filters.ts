@@ -167,12 +167,41 @@ export function filterSoupItemByRequestBody(
       { tag: 'reminder' },
       ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
     )
-    .with(
-      { tag: 'agentSession' },
-      ({ data }) =>
-        !isIdFilteredOut(body.agent_session_filters?.ids, data.id) &&
-        !isValueFilteredOut(body.agent_session_filters?.owners, data.ownerId)
-    )
+    .with({ tag: 'initiative' }, ({ data }) => {
+      const filters = body.initiative_filters;
+      // Match the server's opt-in rule; cached projects never leak into tasks
+      // or folders when an older Soup caller has no initiative filter.
+      const optedIn =
+        filters?.include === true ||
+        Boolean(filters?.initiative_ids?.length) ||
+        Boolean(filters?.owners?.length) ||
+        (filters?.name !== undefined && filters.name !== null) ||
+        (filters?.due_after !== undefined && filters.due_after !== null) ||
+        (filters?.due_before !== undefined && filters.due_before !== null);
+      return (
+        optedIn &&
+        !isIdFilteredOut(filters?.initiative_ids, data.id) &&
+        !isValueFilteredOut(filters?.owners, data.ownerId)
+      );
+    })
+    .with({ tag: 'agentSession' }, ({ data }) => {
+      const filters = body.agent_session_filters;
+      // Agent sessions are opt-in on the server: a body that neither includes
+      // them nor names ids or owners returns none.
+      const optedIn =
+        filters?.include === true ||
+        Boolean(filters?.ids?.length) ||
+        Boolean(filters?.owners?.length);
+      return (
+        optedIn &&
+        !isIdFilteredOut(filters?.ids, data.id) &&
+        !isValueFilteredOut(filters?.owners, data.ownerId)
+      );
+    })
+    .with({ tag: 'databaseRow' }, () => {
+      // A REST body cannot name a table, and rows are opt-in.
+      return false;
+    })
     .exhaustive();
 }
 

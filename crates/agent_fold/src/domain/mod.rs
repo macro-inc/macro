@@ -21,6 +21,10 @@ pub mod model_selection;
 pub mod ports;
 /// The domain service answering queries by folding on read.
 pub mod service;
+/// Agent-advertised session settings projected out of ACP.
+pub mod session_config;
+/// Unconfirmed client actions folded on a fork of the confirmed history.
+pub mod speculation;
 
 #[cfg(test)]
 mod test;

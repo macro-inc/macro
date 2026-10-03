@@ -317,7 +317,7 @@ function CreateApiKeyDialog(props: {
                     Cancel
                   </Button>
                   <Button
-                    variant="cta"
+                    variant="strong"
                     size="sm"
                     disabled={props.pending}
                     onClick={() => void submit()}
@@ -340,7 +340,7 @@ function CreateApiKeyDialog(props: {
                   <code class="font-mono">{USER_API_KEY_HEADER}</code>.
                 </div>
                 <div class="flex justify-end border-t border-edge-muted pt-4">
-                  <Button variant="cta" size="sm" onClick={close}>
+                  <Button variant="strong" size="sm" onClick={close}>
                     Done
                   </Button>
                 </div>
@@ -387,15 +387,13 @@ function ConfirmDialog(props: {
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"
-              class="rounded-xs"
               disabled={props.pending}
               onClick={props.onClose}
             >
               Cancel
             </Button>
             <Button
-              variant={props.danger ? 'danger' : 'accent'}
-              class="rounded-xs"
+              variant="strong"
               disabled={props.pending}
               onClick={props.onConfirm}
             >

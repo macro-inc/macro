@@ -2,7 +2,7 @@
 use crate::domain::{
     claude::ClaudeSessions,
     error::{HarnessError, Result},
-    model::SpawnContainer,
+    model::{AgentKind, SessionBlocker, SpawnContainer},
     model_load::{ClaudeModelProbe, ModelProbeError, RawModelProbe},
     ports::{ContainerManager, SandboxEgressProvisioner},
     sandbox::SandboxResizeEffect,
@@ -14,6 +14,7 @@ use agent_session::domain::{
     ports::{AgentSessionRepo, ExternalSessionRepo},
 };
 use claude_cloud_agents::domain::{model::Error, ports::CloudProvider, service::Session};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
 /// Adapts the Claude lifecycle service to the same provisioning port as other providers.
@@ -50,6 +51,14 @@ where
     Attach: Fn(Arc<Session<P::Client>>) -> ServerChannel + Send + Sync + 'static,
 {
     type Transport = ServerChannel;
+
+    async fn preflight(
+        &self,
+        _kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        self.sessions.preflight(owner).await
+    }
 
     async fn spawn(&self, command: SpawnContainer) -> Result<RuntimeAttachment<ServerChannel>> {
         let session = self.sessions.attach(command.session_id).await?;

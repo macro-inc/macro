@@ -26,6 +26,7 @@ use futures::future::join_all;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::MessageParent;
+use messages::outbound::broker::MessageTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
@@ -98,6 +99,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_channel_event(
         &self,
         event: Event<ChannelTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.messages` event envelope.
+    fn ingest_message_event(
+        &self,
+        event: Event<MessageTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 
     /// Ingest one `macro.webhooks` event envelope.
@@ -287,22 +294,6 @@ pub(crate) fn normalized_channel_event(
         ChannelTopicEvent::Created(metadata) => ("channel.created", metadata.channel_id),
         ChannelTopicEvent::Updated(metadata) => ("channel.updated", metadata.channel_id),
         ChannelTopicEvent::Deleted(metadata) => ("channel.deleted", metadata.channel_id),
-        ChannelTopicEvent::MessagePosted(metadata) => {
-            ("channel.message_posted", metadata.channel_id)
-        }
-        ChannelTopicEvent::Mentioned(metadata) => ("channel.mentioned", metadata.channel_id),
-        ChannelTopicEvent::MessagePatched(metadata) => {
-            ("channel.message_patched", metadata.channel_id)
-        }
-        ChannelTopicEvent::MessageDeleted(metadata) => {
-            ("channel.message_deleted", metadata.channel_id)
-        }
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-            ("channel.message_attachment_created", metadata.channel_id)
-        }
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
-            ("channel.message_attachment_removed", metadata.channel_id)
-        }
         ChannelTopicEvent::ParticipantAdded(metadata) => {
             ("channel.participant_added", metadata.channel_id)
         }
@@ -320,6 +311,42 @@ pub(crate) fn normalized_channel_event(
         CHANNEL_ENTITY_TYPE,
         &entity_id,
         broker_envelope,
+    ))
+}
+
+/// Normalize one message fact.
+///
+/// The entity is the message's parent, so access and `ids` filtering are by
+/// the channel or document that owns the conversation, and the parent travels
+/// in the payload for consumers to route on.
+pub(crate) fn normalized_message_event(
+    event: &Event<MessageTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, EntityType), WebhookEventIngestionError> {
+    let (event_name, parent) = match &event.event {
+        MessageTopicEvent::Posted(metadata) => ("message.posted", &metadata.parent),
+        MessageTopicEvent::Patched(metadata) => ("message.patched", &metadata.parent),
+        MessageTopicEvent::Deleted(metadata) => ("message.deleted", &metadata.parent),
+        MessageTopicEvent::Mentioned(metadata) => ("message.mentioned", &metadata.parent),
+        MessageTopicEvent::AttachmentCreated(metadata) => {
+            ("message.attachment_created", &metadata.parent)
+        }
+        MessageTopicEvent::AttachmentRemoved(metadata) => {
+            ("message.attachment_removed", &metadata.parent)
+        }
+    };
+    let entity_id = parent.entity_id();
+
+    let broker_envelope = serde_json::to_value(event)?;
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            parent.entity_type(),
+            &entity_id,
+            broker_envelope,
+        ),
+        parent.access_entity_type(),
     ))
 }
 
@@ -392,18 +419,36 @@ fn normalized_event(
 ///
 /// Not the bot the event names: that is what a subscriber filters on, and a
 /// bot is not an entity anyone holds access to.
-pub(crate) struct TriggerAudience {
-    pub(crate) entity_id: String,
-    pub(crate) entity_type: EntityType,
+pub(crate) enum TriggerAudience {
+    /// Whoever currently holds access to an entity.
+    Entity {
+        entity_id: String,
+        entity_type: EntityType,
+    },
+    /// Named people, when nothing was posted anywhere to hold access to.
+    People(Vec<MacroUserIdStr<'static>>),
 }
 
 impl TriggerAudience {
     /// Whoever may currently read the conversation's parent.
     fn parent(parent: &MessageParent) -> Self {
-        Self {
+        Self::Entity {
             entity_id: parent.entity_id(),
             entity_type: parent.access_entity_type(),
         }
+    }
+
+    /// The one person who asked for a session from the composer: nothing was
+    /// posted, so nobody else's access is in question. Their runtime, or
+    /// their team's, is who serves it.
+    fn requester(owner: &str) -> Result<Self, WebhookEventIngestionError> {
+        let owner = MacroUserIdStr::try_from(owner.to_owned()).map_err(|_| {
+            WebhookEventIngestionError::InvalidEntityId {
+                entity_type: "user",
+                entity_id: owner.to_owned(),
+            }
+        })?;
+        Ok(Self::People(vec![owner]))
     }
 }
 
@@ -420,13 +465,27 @@ pub(crate) fn normalized_agent_trigger_event(
 ) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
     use agent_trigger::domain::broker_events::AgentTriggerEventName;
 
-    let (bot_id, parent) = match &event.event {
-        AgentTriggerTopicEvent::New(new) => new
-            .mention()
-            .map(|mention| (mention.bot_id, mention.message.parent)),
-        AgentTriggerTopicEvent::Existing(existing) => existing
-            .session_message()
-            .map(|message| (message.bot_id, message.message.parent)),
+    let (bot_id, audience) = match &event.event {
+        AgentTriggerTopicEvent::New(
+            agent_trigger::domain::broker_events::NewAgentSessionEvent::AssignedToTask(assigned),
+        ) => Some((assigned.bot_id, TriggerAudience::parent(&assigned.parent))),
+        AgentTriggerTopicEvent::New(new) => match (new.mention(), new.requested()) {
+            (Some(mention), _) => Some((
+                mention.bot_id,
+                TriggerAudience::parent(&mention.message.parent),
+            )),
+            (None, Some(requested)) => Some((
+                requested.bot_id,
+                TriggerAudience::requester(&requested.owner)?,
+            )),
+            (None, None) => None,
+        },
+        AgentTriggerTopicEvent::Existing(existing) => existing.session_message().map(|message| {
+            (
+                message.bot_id,
+                TriggerAudience::parent(&message.message.parent),
+            )
+        }),
     }
     // Both trigger enums are non-exhaustive on purpose; an unknown shape
     // has no bot to route to. Permanent, so the consumer skips it.
@@ -434,7 +493,6 @@ pub(crate) fn normalized_agent_trigger_event(
         entity_type: "bot",
         entity_id: "unrecognized agent-trigger event shape".to_owned(),
     })?;
-    let audience = TriggerAudience::parent(&parent);
     let event_name: &'static str = AgentTriggerEventName::from(&event.event).into();
     let broker_envelope = serde_json::to_value(event)?;
     let bot_id = bot_id.to_string();
@@ -503,6 +561,7 @@ pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> Lifecycl
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
+        | AgentSessionLifecycleEvent::CommandRejected(_)
         | AgentSessionLifecycleEvent::Settled(_)
         | AgentSessionLifecycleEvent::WaitingForInput(_)
         | AgentSessionLifecycleEvent::InputReceived(_)
@@ -541,6 +600,16 @@ where
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_message_event(
+        &self,
+        event: Event<MessageTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (event, entity_type) = normalized_message_event(&event)?;
+        self.resolve_entity_access_and_enqueue(event, entity_type)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
     async fn ingest_webhook_event(
         &self,
         event: Event<WebhookTopicEvent>,
@@ -555,9 +624,13 @@ where
         event: Event<AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         let (event, audience) = normalized_agent_trigger_event(&event)?;
-        let accessors = self
-            .users_with_access(&audience.entity_id, audience.entity_type)
-            .await?;
+        let accessors = match audience {
+            TriggerAudience::Entity {
+                entity_id,
+                entity_type,
+            } => self.users_with_access(&entity_id, entity_type).await?,
+            TriggerAudience::People(people) => people,
+        };
         let workspace_ids = self
             .repository
             .resolve_workspace_ids(accessors)
@@ -583,9 +656,8 @@ where
             } => {
                 let mut accessors = vec![owner];
                 if let Some(parent) = origin_parent {
-                    let audience = TriggerAudience::parent(&parent);
                     accessors.extend(
-                        self.users_with_access(&audience.entity_id, audience.entity_type)
+                        self.users_with_access(&parent.entity_id(), parent.access_entity_type())
                             .await?,
                     );
                 }

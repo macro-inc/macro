@@ -214,7 +214,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                 _ => return None,
             };
             Some(build_notification_exists_clause(
-                "m.channel_id",
+                "m.parent_entity_id",
                 "channel",
                 &format!(
                     "n.secondary_event_item_type = 'channel_message' AND n.secondary_event_item_id = m.id::text AND {}",
@@ -229,7 +229,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
             r#"EXISTS (
                 SELECT 1 FROM comms_messages m
                 JOIN comms_channel_participants cp
-                    ON cp.channel_id = m.channel_id
+                    ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text
                     AND cp.user_id = $1
                     AND cp.left_at IS NULL
                 WHERE m.id = {id_sql}::uuid
@@ -326,4 +326,27 @@ pub(super) fn includes_email_threads(filter: Option<&EntityFilterAst>, link_ids:
             filter.and_then(|f| f.properties_filter.as_deref()),
             &[PropertyEntityType::Thread],
         )
+}
+
+/// Initiative candidates use the same listing policy and filters as normal Soup pages.
+pub(super) fn initiative_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
+    use super::expanded::dynamic::{build_initiative_filter, initiative_access_clause};
+    format!(
+        "EXISTS (SELECT 1 FROM initiative i WHERE i.id::text = {id_sql} AND {} {} {})",
+        initiative_access_clause(),
+        build_initiative_filter(filter.and_then(|f| f.initiative_filter.as_deref())),
+        build_properties_filter(
+            filter.and_then(|f| f.properties_filter.as_deref()),
+            "i.id::text"
+        )
+    )
+}
+
+pub(super) fn includes_initiatives(filter: Option<&EntityFilterAst>) -> bool {
+    super::expanded::dynamic::initiative_opted_in(
+        filter.and_then(|f| f.initiative_filter.as_deref()),
+    ) && properties_filter_can_apply_to(
+        filter.and_then(|f| f.properties_filter.as_deref()),
+        &[PropertyEntityType::Initiative],
+    )
 }

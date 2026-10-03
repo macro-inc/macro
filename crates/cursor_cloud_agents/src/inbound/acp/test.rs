@@ -26,6 +26,19 @@ type Service = CursorSessionService<
     crate::domain::ports::NoArtifactStore,
 >;
 
+#[cfg(feature = "postgres")]
+#[test]
+fn admission_error_has_sanitized_retryable_protocol_details() {
+    use agent_session::domain::error::AiAdmissionError;
+    let error = prompt_error(&SessionError::Admission(AiAdmissionError::Unavailable));
+    let value = serde_json::to_value(error).unwrap();
+    assert_eq!(value["message"], AiAdmissionError::Unavailable.to_string());
+    assert_eq!(
+        value["data"],
+        serde_json::json!({"code": "ai_billing_unavailable", "retryable": true})
+    );
+}
+
 /// The client's end of a served connection.
 struct TestClient {
     to_agent: mpsc::UnboundedSender<TransportFrame>,
@@ -72,7 +85,7 @@ impl TestClient {
         }));
         loop {
             let frame = self.next_frame().await;
-            if method != "session/load" || frame.get("id") == Some(&serde_json::json!(id)) {
+            if frame.get("id") == Some(&serde_json::json!(id)) {
                 return frame;
             }
             assert!(
@@ -80,9 +93,24 @@ impl TestClient {
                     frame["method"].as_str(),
                     Some("session/update" | "_session/turn_complete")
                 ),
-                "load emits only replay facts before its response"
+                "expected the response or a session update, got {frame}"
             );
         }
+    }
+
+    /// The `available_commands_update` that follows `session/new` / `session/load`.
+    async fn expect_available_commands(&mut self, session: &str) -> Vec<serde_json::Value> {
+        let frame = self.next_frame().await;
+        assert_eq!(frame["method"], "session/update", "{frame}");
+        assert_eq!(frame["params"]["sessionId"], session);
+        assert_eq!(
+            frame["params"]["update"]["sessionUpdate"], "available_commands_update",
+            "{frame}"
+        );
+        frame["params"]["update"]["availableCommands"]
+            .as_array()
+            .unwrap_or_else(|| panic!("availableCommands is an array in {frame}"))
+            .clone()
     }
 }
 
@@ -113,6 +141,28 @@ fn serve_over_channel_with_default_model(
     default_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
+    serve_over_channel_with_models(cursor, default_model, None, configure)
+}
+
+/// [`serve_over_channel`], for a session whose host record names a model.
+///
+/// The other half of [`serve_over_channel_with_default_model`]: both are fixed
+/// at construction, because the hosted deployment builds one service per
+/// session and hands it both preferences there.
+fn serve_over_channel_with_host_model(
+    cursor: FakeCursor,
+    host_model: Option<&str>,
+    configure: impl FnOnce(&Service),
+) -> (Arc<Service>, TestClient) {
+    serve_over_channel_with_models(cursor, None, host_model, configure)
+}
+
+fn serve_over_channel_with_models(
+    cursor: FakeCursor,
+    default_model: Option<&str>,
+    host_model: Option<&str>,
+    configure: impl FnOnce(&Service),
+) -> (Arc<Service>, TestClient) {
     let notifier = AcpNotifier::new();
     let service = Arc::new(
         CursorSessionService::new(
@@ -122,7 +172,8 @@ fn serve_over_channel_with_default_model(
             Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
             crate::domain::ports::NoArtifactStore,
         )
-        .with_default_model(default_model.map(str::to_owned)),
+        .with_default_model(default_model.map(str::to_owned))
+        .with_host_model(host_model.map(str::to_owned)),
     );
     configure(&service);
     let (agent_end, client_end) = Channel::duplex();
@@ -411,6 +462,12 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
         .as_str()
         .expect("a session id")
         .to_owned();
+    let commands = next_client_frame(&mut client_frames).await;
+    assert_eq!(commands["method"], "session/update");
+    assert_eq!(
+        commands["params"]["update"]["sessionUpdate"],
+        "available_commands_update"
+    );
 
     send_client_frame(
         &mut client_writer,
@@ -671,7 +728,6 @@ async fn session_load_answers_for_restored_sessions_only() {
             SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
             None,
-            None,
         );
     });
 
@@ -718,17 +774,29 @@ fn offered_models() -> Vec<CursorModel> {
             display_name: "GPT-5.5".to_owned(),
             variants: vec![
                 ModelVariant {
-                    params: vec![ModelParam {
-                        id: "reasoning".to_owned(),
-                        value: "low".to_owned(),
-                    }],
+                    params: vec![
+                        ModelParam {
+                            id: "reasoning".to_owned(),
+                            value: "low".to_owned(),
+                        },
+                        ModelParam {
+                            id: "fast".to_owned(),
+                            value: "true".to_owned(),
+                        },
+                    ],
                     is_default: false,
                 },
                 ModelVariant {
-                    params: vec![ModelParam {
-                        id: "reasoning".to_owned(),
-                        value: "medium".to_owned(),
-                    }],
+                    params: vec![
+                        ModelParam {
+                            id: "reasoning".to_owned(),
+                            value: "medium".to_owned(),
+                        },
+                        ModelParam {
+                            id: "fast".to_owned(),
+                            value: "true".to_owned(),
+                        },
+                    ],
                     is_default: true,
                 },
             ],
@@ -768,6 +836,71 @@ async fn session_new_advertises_the_models_as_a_config_option() {
         .map(|entry| entry["value"].as_str().expect("a value id"))
         .collect();
     assert_eq!(values, vec!["composer-2.5", "gpt-5.5"]);
+}
+
+/// `session/new` advertises Cursor's cloud slash commands after the session
+/// exists, which is how the agents-block composer learns to open `/`.
+#[tokio::test]
+async fn session_new_advertises_cursor_slash_commands() {
+    let (_service, _cursor, mut client) = harness();
+
+    let opened = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let session = expect_result(&opened)["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    let commands = client.expect_available_commands(&session).await;
+    let names: Vec<String> = commands
+        .iter()
+        .map(|command| command["name"].as_str().expect("a command name").to_owned())
+        .collect();
+    let expected: Vec<String> = crate::domain::slash_commands::cursor_slash_commands()
+        .into_iter()
+        .map(|command| command.name)
+        .collect();
+    assert_eq!(
+        names, expected,
+        "session/new must advertise the curated catalog, in catalog order"
+    );
+}
+
+/// `session/load` re-advertises the same catalog, so a resumed session's `/`
+/// menu is not empty until the next `session/new`.
+#[tokio::test]
+async fn session_load_advertises_cursor_slash_commands() {
+    let cursor = FakeCursor::new();
+    crate::testing::script_legacy_history(&cursor);
+    let (_service, mut client) = serve_over_channel(cursor, |service| {
+        service.restore_session(
+            SessionId::new("cursor-acp-3"),
+            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+            None,
+        );
+    });
+
+    let loaded = client
+        .call(
+            1,
+            "session/load",
+            serde_json::json!({"sessionId": "cursor-acp-3", "cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    expect_result(&loaded);
+    let commands = client.expect_available_commands("cursor-acp-3").await;
+    let names: Vec<&str> = commands
+        .iter()
+        .map(|command| command["name"].as_str().expect("a command name"))
+        .collect();
+    assert!(
+        names.contains(&"goal"),
+        "a resumed session must still advertise commands, got {names:?}"
+    );
 }
 
 /// With two models of one family in the listing, the select goes out as ACP
@@ -838,7 +971,7 @@ async fn a_listing_with_families_is_advertised_as_headed_groups() {
 /// run carries it — the point being that Cursor honours `model` on a follow-up
 /// run, so a change does not have to wait for a new agent.
 #[tokio::test]
-async fn setting_the_model_changes_what_the_next_run_asks_for() {
+async fn setting_the_model_and_effort_changes_what_the_next_run_asks_for() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
     let (_service, mut client) =
@@ -872,6 +1005,22 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
     // Answered with the whole option set, so a client folds config from one
     // shape whichever response carried it.
     assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["id"], "reasoning_effort");
+    assert_eq!(result["configOptions"][1]["currentValue"], "medium");
+
+    let response = client
+        .call(
+            3,
+            "session/set_config_option",
+            serde_json::json!({
+                "sessionId": session,
+                "configId": "reasoning_effort",
+                "value": "low",
+            }),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][1]["currentValue"], "low");
 
     // And the run actually asks for it. This is the behaviour the whole feature
     // rests on: Cursor honours `model` on a follow-up run, so the choice does
@@ -890,7 +1039,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
     events.send(CursorEvent::Done).expect("stream open");
     client
         .call(
-            3,
+            4,
             "session/prompt",
             serde_json::json!({
                 "sessionId": session,
@@ -911,11 +1060,17 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
     assert_eq!(asked.id, "gpt-5.5");
     assert_eq!(
         asked.params,
-        vec![ModelParam {
-            id: "reasoning".to_owned(),
-            value: "medium".to_owned(),
-        }],
-        "the default variant's params travel with the id"
+        vec![
+            ModelParam {
+                id: "reasoning".to_owned(),
+                value: "low".to_owned(),
+            },
+            ModelParam {
+                id: "fast".to_owned(),
+                value: "true".to_owned(),
+            }
+        ],
+        "the selected effort travels as Cursor's accepted model variant"
     );
 }
 
@@ -959,6 +1114,53 @@ async fn setting_an_unoffered_model_is_refused() {
     );
 }
 
+/// A refusal the person can act on answers the prompt with its notice in the
+/// error's `data` - where the fold reads it - and a one-sentence message,
+/// never the report with its source locations.
+#[tokio::test]
+async fn a_usage_limit_refusal_answers_the_prompt_with_a_notice() {
+    let cursor = FakeCursor::new();
+    cursor.script_usage_limit_rejection();
+    let (_service, mut client) = serve_over_channel(cursor, |_| {});
+
+    let session = expect_result(
+        &client
+            .call(
+                1,
+                "session/new",
+                serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+            )
+            .await,
+    )["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+
+    let response = client
+        .call(
+            2,
+            "session/prompt",
+            serde_json::json!({
+                "sessionId": session,
+                "prompt": [{ "type": "text", "text": "do it" }],
+            }),
+        )
+        .await;
+
+    let error = response.get("error").expect("a refused prompt is an error");
+    assert_eq!(error["data"]["kind"], "provider_usage_limit");
+    assert_eq!(error["data"]["title"], "Cursor usage limit reached");
+    assert_eq!(
+        error["data"]["link"]["url"],
+        "https://www.cursor.com/dashboard?tab=settings"
+    );
+    let message = error["message"].as_str().expect("a message");
+    assert!(
+        !message.contains("usage_limit_exceeded") && !message.contains(".rs:"),
+        "cursor's body and the report stay in the logs: {message}"
+    );
+}
+
 /// A restored session's next run asks for the model it was using before the
 /// restart, params re-resolved from the live model table.
 ///
@@ -970,14 +1172,14 @@ async fn a_restored_session_keeps_its_model() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
     crate::testing::script_legacy_history(&cursor);
-    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
-        service.restore_session(
-            SessionId::new("cursor-acp-3"),
-            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
-            None,
-            Some("gpt-5.5".to_owned()),
-        );
-    });
+    let (service, mut client) =
+        serve_over_channel_with_host_model(cursor.clone(), Some("gpt-5.5"), |service| {
+            service.restore_session(
+                SessionId::new("cursor-acp-3"),
+                Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+                None,
+            );
+        });
 
     // The picker is repopulated at load, current value included — this is the
     // other half of the regression, where the options came back empty.
@@ -1019,10 +1221,16 @@ async fn a_restored_session_keeps_its_model() {
     assert_eq!(asked.id, "gpt-5.5");
     assert_eq!(
         asked.params,
-        vec![ModelParam {
-            id: "reasoning".to_owned(),
-            value: "medium".to_owned(),
-        }],
+        vec![
+            ModelParam {
+                id: "reasoning".to_owned(),
+                value: "medium".to_owned(),
+            },
+            ModelParam {
+                id: "fast".to_owned(),
+                value: "true".to_owned(),
+            }
+        ],
         "params come from the live table's default variant, not from persistence"
     );
 }
@@ -1036,14 +1244,14 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
     crate::testing::script_legacy_history(&cursor);
-    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
-        service.restore_session(
-            SessionId::new("cursor-acp-3"),
-            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
-            None,
-            Some("claude".to_owned()),
-        );
-    });
+    let (service, mut client) =
+        serve_over_channel_with_host_model(cursor.clone(), Some("claude"), |service| {
+            service.restore_session(
+                SessionId::new("cursor-acp-3"),
+                Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+                None,
+            );
+        });
 
     let loaded = client
         .call(
@@ -1091,7 +1299,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
     let cursor = FakeCursor::new();
     let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
         // Restored with *no* agent: the session opened, never prompted, died.
-        service.restore_session(SessionId::new("cursor-acp-3"), None, None, None);
+        service.restore_session(SessionId::new("cursor-acp-3"), None, None);
     });
 
     let loaded = client
@@ -1249,7 +1457,6 @@ async fn load_queues_all_native_history_before_its_response_and_repeats_without_
             SessionId::new("restored"),
             Some(crate::domain::model::CursorAgentId::new("agent")),
             None,
-            None,
         );
     });
     let mut first = Vec::new();
@@ -1266,6 +1473,9 @@ async fn load_queues_all_native_history_before_its_response_and_repeats_without_
                 frame["method"].as_str(),
                 Some("session/update" | "_session/turn_complete")
             ));
+            if frame["params"]["update"]["sessionUpdate"] == "available_commands_update" {
+                continue;
+            }
             replay.push(
                 frame["params"]
                     .get("update")

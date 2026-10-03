@@ -1,210 +1,133 @@
-//! This daemon's one connection to the harness service, and the one harness
-//! process behind it.
-//!
-//! A daemon serves a single registered harness, and a harness's runtime is a
-//! single connection: ACP initializes per connection and tags every
-//! session-scoped message with a `sessionId`, so one socket and one harness
-//! process carry every session of every agent bound to this harness. The
-//! service decides which sessions those are - it binds a session when work
-//! arrives for it - so nothing here is per-session or per-bot at all.
-//!
-//! What that buys: a harness starts once per daemon rather than once per
-//! session, so only the first mention after boot pays for a cold agent.
+//! The daemon's persistent connection to the harness service and the ACP
+//! process behind it. Connecting when the daemon starts lets the service probe
+//! models before the first agent is created. One connection carries every
+//! session of every agent bound to this harness.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use agent_runtime_protocol::domain::connection::RuntimeChannel;
-use tokio_retry::RetryIf;
-use tokio_retry::strategy::{ExponentialBackoff, FixedInterval};
+use tokio::sync::watch;
+use tokio::time::Instant;
+use tokio_retry::strategy::ExponentialBackoff;
 use tokio_tungstenite::tungstenite;
+use tokio_util::task::AbortOnDropHandle;
 
 use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness;
 use crate::outbound::link;
 
-/// A dial races the delivery that asked for it, so it retries quickly and
-/// briefly: a proxy or service mid restart is worth waiting out, a longer
-/// outage is better answered by failing the delivery and being redelivered.
-const DIAL_ATTEMPTS: usize = 3;
-const DIAL_RETRY_DELAY: Duration = Duration::from_millis(500);
+#[cfg(test)]
+mod test;
 
-/// How many times a dropped connection is rebuilt before the daemon waits for
-/// its next delivery to try again. Bounded because a bridge that fails the
-/// instant it starts - a harness binary that is missing, say - would otherwise
-/// rebuild itself forever. Nobody is waiting on these, so they back off.
-const REBUILD_ATTEMPTS: usize = 4;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// The daemon's connection to its harness's sessions.
 ///
-/// At most one is live. The flag is the claim on it: a delivery that finds it
-/// unset dials, and the task serving the connection clears it on the way out,
-/// so "set" always means "somebody is serving, or about to be".
+/// Owns one connection supervisor, independent of trigger delivery. Dropping
+/// the runtime aborts the supervisor and drops its bridge, which closes the
+/// socket and terminates the ACP process group.
 pub struct Runtime {
-    gateway_url: String,
-    token: String,
-    harness: Harness,
-    cwd: PathBuf,
-    live: Arc<AtomicBool>,
+    connected: watch::Receiver<bool>,
+    _task: AbortOnDropHandle<()>,
 }
 
 impl Runtime {
-    /// A runtime that dials with the given credentials and spawns the given
-    /// harness.
-    pub fn new(
+    /// Start connecting with the given credentials and keep the harness
+    /// available for model discovery and agent sessions until dropped.
+    pub fn start(
         macro_api: &MacroApi,
         credentials: &HarnessCredentials,
         harness: Harness,
         cwd: &Path,
     ) -> Self {
-        Self {
-            gateway_url: macro_api.gateway_url(),
-            token: credentials.token.clone(),
+        let (connected_tx, connected) = watch::channel(false);
+        let task = tokio::spawn(serve(
+            macro_api.gateway_url(),
+            credentials.token.clone(),
             harness,
-            cwd: cwd.to_owned(),
-            live: Arc::new(AtomicBool::new(false)),
+            cwd.to_owned(),
+            connected_tx,
+        ));
+        Self {
+            connected,
+            _task: AbortOnDropHandle::new(task),
         }
     }
 
-    /// Ensure this bot's runtime is connected, dialing if it is not. Returns
-    /// once the dial has succeeded (or was unnecessary), with the harness
-    /// bridged in a background task.
+    /// Wait briefly for the supervisor to connect before dispatching a prompt.
+    /// Callers never open a second connection while it is reconnecting.
     pub async fn ensure_connected(&self) -> Result<(), tungstenite::Error> {
-        if self
-            .live
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return Ok(());
+        let mut connected = self.connected.clone();
+        match tokio::time::timeout(CONNECT_TIMEOUT, connected.wait_for(|ready| *ready)).await {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(_)) => Err(tungstenite::Error::ConnectionClosed),
+            Err(_) => Err(tungstenite::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "the runtime gateway did not connect in time",
+            ))),
         }
-
-        let channel = match dial(&self.token, &self.gateway_url, dial_strategy()).await {
-            Ok(channel) => channel,
-            Err(error) => {
-                self.live.store(false, Ordering::Release);
-                return Err(error);
-            }
-        };
-
-        tokio::spawn(serve(
-            self.gateway_url.clone(),
-            channel,
-            self.token.clone(),
-            self.harness.clone(),
-            self.cwd.clone(),
-            Arc::clone(&self.live),
-        ));
-        Ok(())
     }
 }
 
-/// Bridge the harness until the connection ends for good, rebuilding through
-/// failures that look transient. Holds the claim for its whole life - including
-/// across rebuilds, so a reconnecting runtime is never raced by a second one -
-/// and releases it on the way out.
+/// Reconnect even after a clean close or a long outage: model discovery must
+/// recover without requiring an agent mention. Authentication failures stop
+/// the supervisor until the user re-pairs or restarts the daemon.
 async fn serve(
     gateway_url: String,
-    channel: RuntimeChannel,
     token: String,
     harness: Harness,
     cwd: PathBuf,
-    live: Arc<AtomicBool>,
+    connected: watch::Sender<bool>,
 ) {
-    tracing::info!("harness bridge starting");
-    // A bridge that ends cleanly is a runtime that is done being asked for
-    // anything; the next delivery dials again.
-    match harness::bridge(&harness, &cwd, channel).await {
-        Ok(()) => tracing::info!("harness bridge ended"),
-        Err(error) => {
-            tracing::warn!(error = ?error, "harness bridge ended with an error");
-            rebuild(&gateway_url, &token, &harness, &cwd).await;
+    let mut backoff = reconnect_strategy();
+    loop {
+        match tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token)).await {
+            Ok(Ok(channel)) => {
+                connected.send_replace(true);
+                tracing::info!("harness bridge starting");
+                let started = Instant::now();
+                match harness::bridge(&harness, &cwd, channel).await {
+                    Ok(()) => tracing::info!("harness bridge ended; reconnecting"),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "harness bridge ended; reconnecting");
+                    }
+                }
+                connected.send_replace(false);
+                if started.elapsed() >= MAX_RECONNECT_DELAY {
+                    backoff = reconnect_strategy();
+                }
+            }
+            Ok(Err(error)) => {
+                if !worth_redialing(&error) {
+                    tracing::error!(error = ?error, "runtime connection refused; check configuration or re-pair");
+                    return;
+                }
+                tracing::warn!(error = ?error, "runtime connection failed; reconnecting");
+            }
+            Err(_) => tracing::warn!("runtime connection timed out; reconnecting"),
         }
-    }
-    live.store(false, Ordering::Release);
-}
-
-/// Dial and serve again, as one retried operation: ending cleanly stops it, as
-/// does a gateway verdict no retry can change.
-async fn rebuild(gateway_url: &str, token: &str, harness: &Harness, cwd: &Path) {
-    let outcome = RetryIf::start(
-        rebuild_strategy(),
-        || async {
-            let channel = dial(token, gateway_url, dial_strategy())
-                .await
-                .map_err(ServeError::Dial)?;
-            tracing::info!("harness bridge restarting");
-            harness::bridge(harness, cwd, channel)
-                .await
-                .map_err(ServeError::Bridge)
-        },
-        worth_rebuilding,
-    )
-    .await;
-
-    match outcome {
-        Ok(()) => tracing::info!("harness bridge ended"),
-        Err(error) => tracing::warn!(
-            error = ?error,
-            "could not keep a harness bridge up; waiting for the next delivery"
-        ),
+        tokio::time::sleep(backoff.next().unwrap_or(MAX_RECONNECT_DELAY)).await;
     }
 }
 
-/// Why serving the runtime stopped.
-#[derive(Debug, thiserror::Error)]
-enum ServeError {
-    #[error(transparent)]
-    Dial(tungstenite::Error),
-    #[error(transparent)]
-    Bridge(harness::BridgeError),
-}
-
-/// Whether rebuilding could plausibly go better. A failed bridge says nothing
-/// about the next one, so only the gateway's own verdict stops this.
-fn worth_rebuilding(error: &ServeError) -> bool {
-    match error {
-        ServeError::Dial(error) => worth_redialing(error),
-        ServeError::Bridge(_) => true,
-    }
-}
-
-/// Dial the gateway, retrying on the failures a retry can fix.
-async fn dial(
-    token: &str,
-    gateway_url: &str,
-    strategy: impl IntoIterator<Item = Duration>,
-) -> Result<RuntimeChannel, tungstenite::Error> {
-    RetryIf::start(strategy, || link::dial(gateway_url, token), worth_redialing).await
-}
-
-/// Whether dialing again could plausibly answer differently. A 4xx is the
-/// gateway's verdict on this harness - credentials refused or revoked - and
-/// asking again only repeats it.
+/// Retry transport failures, server errors, and temporary HTTP refusals.
+/// Other 4xx responses require an operator to fix configuration or credentials.
 fn worth_redialing(error: &tungstenite::Error) -> bool {
-    if let tungstenite::Error::Http(response) = error
-        && response.status().is_client_error()
-    {
-        if response.status() == tungstenite::http::StatusCode::UNAUTHORIZED
-            || response.status() == tungstenite::http::StatusCode::FORBIDDEN
-        {
-            tracing::error!(
-                status = %response.status(),
-                "the gateway refused this harness's credentials; press p to re-pair"
-            );
-        }
+    if matches!(error, tungstenite::Error::Url(_)) {
         return false;
     }
-    true
+    let tungstenite::Error::Http(response) = error else {
+        return true;
+    };
+    let status = response.status();
+    !status.is_client_error()
+        || status == tungstenite::http::StatusCode::REQUEST_TIMEOUT
+        || status == tungstenite::http::StatusCode::TOO_MANY_REQUESTS
 }
 
-fn dial_strategy() -> impl Iterator<Item = Duration> {
-    FixedInterval::new(DIAL_RETRY_DELAY).take(DIAL_ATTEMPTS - 1)
-}
-
-fn rebuild_strategy() -> impl Iterator<Item = Duration> {
+fn reconnect_strategy() -> ExponentialBackoff {
     ExponentialBackoff::from_millis(2)
         .factor(500)
-        .take(REBUILD_ATTEMPTS - 1)
+        .max_delay(MAX_RECONNECT_DELAY)
 }

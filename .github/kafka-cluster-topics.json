@@ -1,4 +1,5 @@
 [
+  "macro.activity",
   "macro.agent_session_lifecycle",
   "macro.agent_sessions",
   "macro.bots",
@@ -6,9 +7,11 @@
   "macro.calls",
   "macro.channels",
   "macro.chats",
+  "macro.databases",
   "macro.documents",
   "macro.email",
   "macro.example",
+  "macro.initiatives",
   "macro.mentions",
   "macro.messages",
   "macro.notifications",

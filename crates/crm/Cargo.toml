@@ -17,6 +17,7 @@ ai_tools = [
 ]
 axum = [
   "dep:axum",
+  "dep:messages",
   "dep:macro_authorization",
   "dep:macro_uuid",
   "dep:model-error-response",
@@ -26,8 +27,23 @@ axum = [
   "entity_access/ports",
   "ports",
 ]
-default = ["ai_tools", "inbound", "outbound", "ports"]
+# Links archived call records to CRM records from the call topic.
+call_link = [
+  "dep:call",
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:models_properties",
+  "dep:rdkafka",
+  "dep:rootcause",
+  "dep:sqlx",
+  "dep:tokio",
+  "macro_event_broker/outbound",
+  "ports",
+]
+default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
+# Read-only company/contact identity for other domains. Pulls only sqlx + ports.
+lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
   "dep:macro_user_id",
   "dep:models_properties",
@@ -51,7 +67,14 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
+call = { path = "../call", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access", default-features = false }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
+messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
+rdkafka = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 # AI toolset dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -79,6 +102,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
 macro_user_id = { path = "../macro_user_id" }
 properties = { path = "../properties", default-features = false, features = [
   "outbound",

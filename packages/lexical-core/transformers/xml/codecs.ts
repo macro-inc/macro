@@ -36,7 +36,8 @@ function encodeFormat(format: number): Record<string, string> {
   );
 }
 
-function el(
+/** One element for the shared XML builder; attributes are optional. */
+export function el(
   tag: string,
   kids: FxpNode[],
   attrs: Record<string, string> = {}

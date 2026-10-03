@@ -19,7 +19,11 @@ type TooltipProps = ParentProps<{
   as?: 'div' | 'span';
   class?: string;
   label: string;
+  /** Allows non-interactive tooltip targets, such as disabled actions, to receive keyboard focus. */
+  tabIndex?: number;
   disabled?: boolean;
+  /** Override visibility, for example while a nested control has keyboard focus. */
+  open?: boolean;
 }>;
 
 export type TooltipClassOptions = {
@@ -43,6 +47,7 @@ export function tooltipClasses(options: TooltipClassOptions = {}): string {
 export function Tooltip(props: TooltipProps) {
   const [triggerRef, setTriggerRef] = createSignal<HTMLElement>();
   const [open, setOpen] = createSignal(false);
+  const isOpen = () => props.open ?? open();
 
   if (import.meta.env.MODE === 'test') {
     return <>{props.children}</>;
@@ -104,12 +109,13 @@ export function Tooltip(props: TooltipProps) {
   );
 
   onCleanup(() => setOpen(false));
+  const visible = () => isOpen() && !props.disabled && tooltipsEnabled();
 
   return (
     <KobalteTooltip
-      open={open()}
+      open={visible()}
       onOpenChange={(isOpen) => {
-        setOpen(isOpen);
+        setOpen(isOpen && !props.disabled && tooltipsEnabled());
       }}
       placement={props.placement ?? 'bottom'}
       ignoreSafeArea={true}
@@ -126,11 +132,12 @@ export function Tooltip(props: TooltipProps) {
           setTriggerRef(ref);
         }}
         class={cn('inline-flex items-center', props.class)}
+        tabIndex={props.tabIndex}
         as={props.as ?? 'div'}
       >
         {props.children}
       </KobalteTooltip.Trigger>
-      <Show when={open()}>
+      <Show when={visible()}>
         <KobalteTooltip.Portal>
           <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
             <Surface class={tooltipClasses()} depth={3}>

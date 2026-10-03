@@ -61,6 +61,11 @@ pub struct CollectedArtifact {
     pub uri: String,
     /// Size in bytes, as Cursor listed it.
     pub size_bytes: u64,
+    /// UTF-8 body when this file can be shown as a code block. Absent for
+    /// images, videos, and anything we could not decode or that was too
+    /// large to put in the journal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 /// Media types this crate infers from a file extension, when the download did
@@ -84,6 +89,10 @@ const MIME_BY_EXTENSION: [(&str, &str); 14] = [
 
 /// What a store answers with when it is serving bytes it cannot identify.
 const OPAQUE_MIME_TYPES: [&str; 2] = ["application/octet-stream", "binary/octet-stream"];
+
+/// The largest text body we will copy into the journal for an inline
+/// preview. Bigger files stay a link; the bytes are already re-hosted.
+const MAX_INLINE_TEXT_BYTES: usize = 1024 * 1024;
 
 /// The media type to store `name` under.
 ///
@@ -118,8 +127,9 @@ pub fn mime_type(name: &str, served: Option<&str>) -> String {
 /// differently on reload is a bug the reader sees.
 ///
 /// Images inline as markdown; videos use the editor's `<m-video>` block,
-/// which is what Macro's document format renders a player from; everything
-/// else is a link, which is the honest rendering of a file nobody can preview.
+/// which is what Macro's document format renders a player from; text files
+/// whose body we kept become a fenced `txt` code block; everything else is
+/// a link, which is the honest rendering of a file nobody can preview.
 #[must_use]
 pub fn artifact_markdown(artifacts: &[CollectedArtifact]) -> String {
     // A blank line before each entry: the first separates this from whatever
@@ -156,7 +166,66 @@ fn entry_markdown(artifact: &CollectedArtifact) -> String {
         .unwrap_or_default();
         return format!("<m-video>{video}</m-video>");
     }
+    if let Some(text) = &artifact.text {
+        return fenced_txt_block(text);
+    }
     format!("[{}]({})", artifact.name, artifact.uri)
+}
+
+/// The UTF-8 body to keep on a collected artifact, when the file is a
+/// text preview the conversation can show as a code block.
+#[must_use]
+pub fn inline_text(name: &str, mime_type: &str, bytes: &[u8]) -> Option<String> {
+    if !is_inlineable_text(name, mime_type) || bytes.len() > MAX_INLINE_TEXT_BYTES {
+        return None;
+    }
+    String::from_utf8(bytes.to_vec()).ok()
+}
+
+fn is_inlineable_text(name: &str, mime_type: &str) -> bool {
+    let base = mime_type
+        .split(';')
+        .next()
+        .unwrap_or(mime_type)
+        .trim()
+        .to_ascii_lowercase();
+    if base == "text/plain" {
+        return true;
+    }
+    matches!(
+        name.rsplit('.')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "txt" | "log"
+    )
+}
+
+/// A fenced `txt` block whose fence is longer than any backtick run in
+/// `content`, so a file that itself contains fences still parses as one
+/// block.
+fn fenced_txt_block(content: &str) -> String {
+    let fence = code_fence(content);
+    if content.ends_with('\n') {
+        format!("{fence}txt\n{content}{fence}")
+    } else {
+        format!("{fence}txt\n{content}\n{fence}")
+    }
+}
+
+fn code_fence(content: &str) -> String {
+    let mut longest = 2;
+    let mut run = 0usize;
+    for ch in content.chars() {
+        if ch == '`' {
+            run += 1;
+            longest = longest.max(run);
+        } else {
+            run = 0;
+        }
+    }
+    "`".repeat(longest + 1)
 }
 
 #[cfg(test)]
@@ -164,27 +233,78 @@ mod test {
     use super::*;
 
     fn collected(name: &str, mime_type: &str) -> CollectedArtifact {
+        collected_text(name, mime_type, None)
+    }
+
+    fn collected_text(name: &str, mime_type: &str, text: Option<&str>) -> CollectedArtifact {
         CollectedArtifact {
             key: format!("artifacts/{name}@2026-09-16T00:00:00Z"),
             name: name.to_owned(),
             mime_type: mime_type.to_owned(),
             uri: format!("https://files.macro.com/{name}"),
             size_bytes: 12,
+            text: text.map(str::to_owned),
         }
     }
 
     #[test]
-    fn images_inline_videos_embed_and_the_rest_link() {
+    fn images_inline_videos_embed_text_fences_and_the_rest_link() {
         let markdown = artifact_markdown(&[
             collected("shot.png", "image/png"),
             collected("walkthrough.mp4", "video/mp4"),
-            collected("notes.txt", "text/plain"),
+            collected_text("notes.txt", "text/plain", Some("hello\nworld")),
+            collected("bundle.zip", "application/zip"),
         ]);
         assert_eq!(
             markdown,
             "\n\n![shot.png](https://files.macro.com/shot.png)\
              \n\n<m-video>{\"url\":\"https://files.macro.com/walkthrough.mp4\",\"srcType\":\"url\"}</m-video>\
-             \n\n[notes.txt](https://files.macro.com/notes.txt)"
+             \n\n```txt\nhello\nworld\n```\
+             \n\n[bundle.zip](https://files.macro.com/bundle.zip)"
+        );
+    }
+
+    #[test]
+    fn a_text_file_without_a_kept_body_stays_a_link() {
+        assert_eq!(
+            artifact_markdown(&[collected("notes.txt", "text/plain")]),
+            "\n\n[notes.txt](https://files.macro.com/notes.txt)"
+        );
+    }
+
+    #[test]
+    fn a_fence_inside_the_file_does_not_close_the_block() {
+        let markdown = artifact_markdown(&[collected_text(
+            "notes.txt",
+            "text/plain",
+            Some("already\n```\nfenced"),
+        )]);
+        assert_eq!(markdown, "\n\n````txt\nalready\n```\nfenced\n````");
+    }
+
+    #[test]
+    fn plain_text_bytes_are_kept_and_the_rest_are_not() {
+        assert_eq!(
+            inline_text("notes.txt", "text/plain", b"hello"),
+            Some("hello".into())
+        );
+        assert_eq!(
+            inline_text("notes.txt", "text/plain; charset=utf-8", b"hello"),
+            Some("hello".into())
+        );
+        assert_eq!(
+            inline_text("trace.log", "application/octet-stream", b"log"),
+            Some("log".into())
+        );
+        assert_eq!(inline_text("shot.png", "image/png", b"png"), None);
+        assert_eq!(inline_text("notes.txt", "text/plain", b"\xff"), None);
+        assert_eq!(
+            inline_text(
+                "notes.txt",
+                "text/plain",
+                &vec![b'x'; MAX_INLINE_TEXT_BYTES + 1]
+            ),
+            None
         );
     }
 

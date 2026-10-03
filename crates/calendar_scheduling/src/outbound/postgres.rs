@@ -114,6 +114,30 @@ impl Repository for PostgresRepository {
         }
         records.into_iter().map(decode).collect()
     }
+    async fn host_booking_counts(
+        &self,
+        profile: Uuid,
+        hosts: &[String],
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<std::collections::BTreeMap<String, i64>, Error> {
+        let rows = sqlx::query!(
+            r#"SELECT host AS "host!", count(*) AS "count!"
+               FROM scheduling_booking
+               CROSS JOIN LATERAL jsonb_array_elements_text(record->'booking'->'hosts') AS host
+               WHERE profile_id = $1 AND starts_at >= $2 AND starts_at < $3
+                 AND status <> 'cancelled' AND host = ANY($4)
+               GROUP BY host"#,
+            profile,
+            start,
+            end,
+            hosts
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db_error)?;
+        Ok(rows.into_iter().map(|row| (row.host, row.count)).collect())
+    }
     async fn busy(
         &self,
         hosts: &[String],
@@ -165,7 +189,9 @@ impl Repository for PostgresRepository {
         }
         let json = encode(&record)?;
         sqlx::query!("INSERT INTO scheduling_booking (id, profile_id, request_id, event_type_id, starts_at, ends_at, status, record, recovery_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", record.booking.id, record.profile_id, record.request_id, record.booking.event_type_id, record.booking.starts_at, record.booking.ends_at, status(record.booking.status), json, record.operation.as_ref().map(|o| o.retry_at)).execute(&mut *tx).await.map_err(db_error)?;
-        for host in &record.booking.hosts {
+        let mut hosts: Vec<_> = record.booking.hosts.iter().collect();
+        hosts.sort();
+        for host in hosts {
             sqlx::query!("INSERT INTO scheduling_host_claim (booking_id, user_id, occupied) VALUES ($1,$2,tstzmultirange(tstzrange($3,$4,'[)')))", record.booking.id, host, record.busy_start, record.busy_end).execute(&mut *tx).await.map_err(db_error)?;
         }
         tx.commit().await.map_err(db_error)?;

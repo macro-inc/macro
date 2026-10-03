@@ -36,31 +36,30 @@ import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
-import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
-import type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
-import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
+import type { BotOwnerProfile } from './generated/schemas/botOwnerProfile';
 import type { BotToken } from './generated/schemas/botToken';
 import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
-import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
+import type { ChannelLabel } from './generated/schemas/channelLabel';
+import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
+import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
+import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
-import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
-import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
@@ -80,15 +79,10 @@ import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequ
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
-import type { CrmComment } from './generated/schemas/crmComment';
-import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityType';
-import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
-import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
-import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
@@ -96,8 +90,9 @@ import type { DocumentPreview } from './generated/schemas/documentPreview';
 import type { DocumentResponseMetadataWithContent } from './generated/schemas/documentResponseMetadataWithContent';
 import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
-import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
-import type { EditCrmCommentRequest } from './generated/schemas/editCrmCommentRequest';
+import type { EmailFollowup } from './generated/schemas/emailFollowup';
+import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
+import type { EmailReminderPage } from './generated/schemas/emailReminderPage';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
@@ -113,8 +108,6 @@ import type { GetDocumentProcessingResultResponse } from './generated/schemas/ge
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
 import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentSearchResponse';
 import type { GetInstructionsDocumentResponse } from './generated/schemas/getInstructionsDocumentResponse';
-import type { GetMessageWithContextParams } from './generated/schemas/getMessageWithContextParams';
-import type { GetMessageWithContextResponse } from './generated/schemas/getMessageWithContextResponse';
 import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
 import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
@@ -126,47 +119,57 @@ import type { GithubPullRequestsResponse } from './generated/schemas/githubPullR
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
+import type { ImportPage } from './generated/schemas/importPage';
+import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
+import type { JobId } from './generated/schemas/jobId';
+import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
+import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
+import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
-import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
 import type { PostGroupedSoupAstInitialRequest } from './generated/schemas/postGroupedSoupAstInitialRequest';
 import type { PostGroupedSoupAstRequest } from './generated/schemas/postGroupedSoupAstRequest';
-import type { PostMessageRequest } from './generated/schemas/postMessageRequest';
-import type { PostMessageResponse } from './generated/schemas/postMessageResponse';
-import type { PostReactionRequest } from './generated/schemas/postReactionRequest';
 import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest';
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
-import type { PostTypingRequest } from './generated/schemas/postTypingRequest';
 import type { Project } from './generated/schemas/project';
 import type { Reminder } from './generated/schemas/reminder';
+import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
 import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
+import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
+import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
+import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
+import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
+import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
+import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
-import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
+import type { UploadGrant } from './generated/schemas/uploadGrant';
 import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
@@ -175,7 +178,7 @@ import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
 
-export type { ItemType } from './itemType';
+export type { HistoryItemType, ItemType } from './itemType';
 export {
   blockNameToItemType,
   DEFAULT_ITEM_TYPE,
@@ -183,6 +186,7 @@ export {
   stringToItemType,
 } from './itemType';
 
+import { databasesClient } from './databases';
 import type {
   CollabSurfaceResponse,
   CollabSurfaceTokenResponse,
@@ -257,12 +261,7 @@ export type { ApiAttachmentEntityReference } from './generated/schemas/apiAttach
 export type { ApiAttachmentGenericReference } from './generated/schemas/apiAttachmentGenericReference';
 export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachment';
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
-export type { ApiChannelContextMessage } from './generated/schemas/apiChannelContextMessage';
-export type { ApiChannelMessage } from './generated/schemas/apiChannelMessage';
-export type { ApiChannelMessagesPage as ChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
 export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
-export type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
-export type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 
 export type IdResponse = { id: string };
@@ -301,6 +300,7 @@ export type HarnessOwner =
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
+  allow_permission_bypass: boolean;
   id: string;
   kind: 'macrod';
   name: string;
@@ -316,6 +316,7 @@ export type Harness = {
 export type HarnessPairing = PairingDetails;
 
 type ApproveHarnessPairingRequest = {
+  allow_permission_bypass?: boolean;
   name?: string;
   team_id?: string;
 };
@@ -355,7 +356,6 @@ type CreateBotTokenResponse = {
   bearer_token: string;
 };
 
-type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
 export type ChannelAttachmentType = 'static' | 'dss';
@@ -395,7 +395,91 @@ const { showPaywall } = usePaywallState();
 /** Machine-readable code the backend returns when a document name is too long. */
 export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
+type SlackImportJobArgs = { jobId: JobId; signal?: AbortSignal };
+
 export const storageServiceClient = {
+  /** Macro Databases — see `./databases.ts`. */
+  databases: databasesClient,
+
+  async createSlackImport(args: {
+    body: SlackCreateRequest;
+    signal?: AbortSignal;
+  }) {
+    return dssFetch<ImportProgress>('/slack/imports', {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+      signal: args.signal,
+    });
+  },
+
+  async listSlackImports(
+    args: ListSlackImportsParams & { signal?: AbortSignal } = {}
+  ) {
+    const params = new URLSearchParams();
+    if (args.before) params.set('before', args.before);
+    const query = params.toString();
+    return dssFetch<ImportPage>(`/slack/imports${query ? `?${query}` : ''}`, {
+      method: 'GET',
+      signal: args.signal,
+    });
+  },
+
+  async getSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}`,
+      {
+        method: 'GET',
+        signal: args.signal,
+      }
+    );
+  },
+
+  async registerSlackImportUploads(
+    args: SlackImportJobArgs & { body: SlackRegisterRequest }
+  ) {
+    return dssFetch<UploadGrant[]>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/uploads`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        signal: args.signal,
+      }
+    );
+  },
+
+  async completeSlackImportUploads(
+    args: SlackImportJobArgs & { body: SlackCompleteRequest }
+  ) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/uploads/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        signal: args.signal,
+      }
+    );
+  },
+
+  async finalizeSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/finalize`,
+      {
+        method: 'POST',
+        signal: args.signal,
+      }
+    );
+  },
+
+  async cancelSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/cancel`,
+      {
+        method: 'POST',
+        signal: args.signal,
+      }
+    );
+  },
+
   async ping() {
     return (await dssFetch<SuccessResponse>(`/ping`)).map(
       (result) => result.data
@@ -676,6 +760,18 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getBotOwnerProfiles(args: { ids: string[]; signal?: AbortSignal }) {
+    const query = new URLSearchParams();
+    args.ids.forEach((id) => query.append('ids', id));
+    const qs = query.toString();
+    return (
+      await dssFetch<BotOwnerProfile[]>(`/bots/profiles${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        signal: args.signal,
+      })
+    ).map((result) => result);
+  },
+
   async patchBot(args: WithBotId & PatchBotRequest) {
     const { bot_id, ...request } = args;
     return (
@@ -839,92 +935,6 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
-  async postMessage(
-    args: WithChannelId & { message: PostMessageRequest; nonce?: string }
-  ) {
-    const { channel_id, message, nonce } = args;
-    const uniqueMentions = Array.from(new Set(message.mentions));
-    const sendMessage = { ...message, mentions: uniqueMentions, nonce };
-    return (
-      await dssFetch<PostMessageResponse>(`/channels/${channel_id}/message`, {
-        method: 'POST',
-        body: JSON.stringify(sendMessage),
-      })
-    ).map((result) => result);
-  },
-
-  async patchMessage(
-    args: PatchMessageRequest &
-      WithChannelId &
-      WithMessageId & { nonce?: string }
-  ) {
-    const {
-      channel_id,
-      content,
-      message_id,
-      mentions,
-      attachment_ids_to_delete,
-      attachments_to_add,
-      nonce,
-    } = args;
-    return (
-      await dssFetch<MessageResponse>(
-        `/channels/${channel_id}/message/${message_id}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({
-            content,
-            mentions,
-            attachment_ids_to_delete,
-            attachments_to_add,
-            nonce,
-          }),
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async deleteMessage(
-    args: WithChannelId & WithMessageId & { nonce?: string }
-  ) {
-    const { channel_id, message_id, nonce } = args;
-    const params = new URLSearchParams();
-    if (nonce) params.append('nonce', nonce);
-    const query = params.toString();
-    return (
-      await dssFetch<MessageResponse>(
-        `/channels/${channel_id}/message/${message_id}${query ? `?${query}` : ''}`,
-        {
-          method: 'DELETE',
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async postReaction(
-    args: PostReactionRequest & WithChannelId & { nonce?: string }
-  ) {
-    const { channel_id, action, emoji, message_id, nonce } = args;
-    return (
-      await dssFetch<MessageResponse>(`/channels/${channel_id}/reaction`, {
-        method: 'POST',
-        body: JSON.stringify({ action, emoji, message_id, nonce }),
-      })
-    ).map((result) => result);
-  },
-
-  async postTypingUpdate(
-    args: PostTypingRequest & WithChannelId & { nonce?: string }
-  ) {
-    const { channel_id, action, thread_id, nonce } = args;
-    return (
-      await dssFetch<MessageResponse>(`/channels/${channel_id}/typing`, {
-        method: 'POST',
-        body: JSON.stringify({ action, thread_id, nonce }),
-      })
-    ).map((result) => result);
-  },
-
   async addParticipantsToChanenl(args: AddParticipantsRequest & WithChannelId) {
     const { channel_id, participants } = args;
     return (
@@ -995,119 +1005,6 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify({ channel_ids }),
       })
-    ).map((result) => result);
-  },
-
-  async getChannelMessages(
-    args: WithChannelId & {
-      limit: number;
-      next_cursor: string | null;
-      previous_cursor: string | null;
-      load_around_message_id: string | null;
-    }
-  ) {
-    const {
-      channel_id,
-      limit,
-      next_cursor,
-      previous_cursor,
-      load_around_message_id,
-    } = args;
-    const params = new URLSearchParams();
-    params.append('limit', limit.toString());
-    if (load_around_message_id) {
-      params.append('load_around_message_id', load_around_message_id);
-    } else if (next_cursor) {
-      params.append('cursor', next_cursor);
-    } else if (previous_cursor) {
-      params.append('previous_cursor', previous_cursor);
-    }
-    return (
-      await dssFetch<ApiChannelMessagesPage>(
-        `/channels/${channel_id}/messages?${params.toString()}`,
-        { method: 'GET' }
-      )
-    ).map((result) => result);
-  },
-
-  async getChannelMessagesCatchUp(
-    args: WithChannelId & {
-      after: string;
-      limit: number;
-      next_cursor: string | null;
-      previous_cursor: string | null;
-    }
-  ) {
-    const { channel_id, after, limit, next_cursor, previous_cursor } = args;
-    const params = new URLSearchParams();
-    params.append('after', after);
-    params.append('limit', limit.toString());
-    if (next_cursor) {
-      params.append('cursor', next_cursor);
-    } else if (previous_cursor) {
-      params.append('previous_cursor', previous_cursor);
-    }
-    return (
-      await dssFetch<ApiChannelMessagesPage>(
-        `/channels/${channel_id}/messages/catch-up?${params.toString()}`,
-        { method: 'GET' }
-      )
-    ).map((result) => result);
-  },
-
-  async postChannelMessages(
-    args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
-  ) {
-    const { channel_id, filters, limit } = args;
-    const params = new URLSearchParams();
-    if (limit !== undefined) params.append('limit', limit.toString());
-    const query = params.toString();
-    return (
-      await dssFetch<ApiChannelMessagesPage>(
-        `/channels/${channel_id}/messages${query ? `?${query}` : ''}`,
-        {
-          method: 'POST',
-          body: JSON.stringify(filters),
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async getThreadReplies(args: WithChannelId & WithMessageId) {
-    const { channel_id, message_id } = args;
-    return (
-      await dssFetch<Array<ApiThreadReply>>(
-        `/channels/${channel_id}/messages/${message_id}/replies`,
-        { method: 'GET' }
-      )
-    ).map((result) => result);
-  },
-
-  async resolveChannelMessage(args: WithChannelId & WithMessageId) {
-    const { channel_id, message_id } = args;
-    return (
-      await dssFetch<ApiResolvedChannelMessage>(
-        `/channels/${channel_id}/messages/${message_id}/resolve`,
-        { method: 'GET' }
-      )
-    ).map((result) => result);
-  },
-
-  async getMessageWithContext(
-    args: WithChannelId &
-      WithMessageId &
-      GetMessageWithContextParams & { signal?: AbortSignal }
-  ) {
-    const { channel_id, message_id, before, after, signal } = args;
-    const params = new URLSearchParams();
-    if (before !== undefined) params.append('before', before.toString());
-    if (after !== undefined) params.append('after', after.toString());
-    const query = params.toString();
-    return (
-      await dssFetch<GetMessageWithContextResponse>(
-        `/channels/${channel_id}/messages/${message_id}/context${query ? `?${query}` : ''}`,
-        { method: 'GET', signal }
-      )
     ).map((result) => result);
   },
 
@@ -2058,16 +1955,6 @@ export const storageServiceClient = {
   },
 
   annotations: {
-    async getComments({ documentId }) {
-      return (
-        await dssFetch<ThreadResponse>(
-          `/annotations/comments/document/${documentId}`,
-          {
-            method: 'GET',
-          }
-        )
-      ).map((result) => ({ data: result.data }));
-    },
     async getAnchors({ documentId }) {
       return (
         await dssFetch<AnchorResponse>(
@@ -2077,17 +1964,6 @@ export const storageServiceClient = {
           }
         )
       ).map((result) => ({ data: result.data }));
-    },
-    async createComment({ documentId, body }) {
-      return (
-        await dssFetch<CreateCommentResponse>(
-          `/annotations/comments/document/${documentId}`,
-          {
-            method: 'POST',
-            body: JSON.stringify(body),
-          }
-        )
-      ).map((result) => result);
     },
     async createAnchor({ documentId, body }) {
       return (
@@ -2100,17 +1976,6 @@ export const storageServiceClient = {
         )
       ).map((result) => result);
     },
-    async deleteComment({ commentId, body }) {
-      return (
-        await dssFetch<DeleteCommentResponse>(
-          `/annotations/comments/comment/${commentId}`,
-          {
-            method: 'DELETE',
-            body: JSON.stringify(body),
-          }
-        )
-      ).map((result) => result);
-    },
     async deleteAnchor({ body }) {
       return (
         await dssFetch<DeleteUnthreadedAnchorResponse>(`/annotations/anchors`, {
@@ -2118,15 +1983,6 @@ export const storageServiceClient = {
           body: JSON.stringify(body),
         })
       ).map((result) => result);
-    },
-    async editComment({ commentId, body }) {
-      return await dssFetch<EditCommentResponse>(
-        `/annotations/comments/comment/${commentId}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify(body),
-        }
-      );
     },
     async editAnchor({ body }) {
       return (
@@ -2578,6 +2434,42 @@ export const storageServiceClient = {
     },
   },
 
+  channelLabels: {
+    async preview(rule: ChannelLabelRule, signal?: AbortSignal) {
+      return await dssFetch<SmartTagPreview>('/channel-labels/preview', {
+        method: 'POST',
+        body: JSON.stringify(rule),
+        signal,
+      });
+    },
+    /** Every label of the caller's team; `channelIds` is limited to channels the caller is in. */
+    async list() {
+      return await dssFetch<ChannelLabelsList>('/channel-labels');
+    },
+    async create(params: CreateChannelLabelRequest) {
+      return await dssFetch<ChannelLabel>('/channel-labels', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+    async rename(labelId: string, params: RenameChannelLabelRequest) {
+      return await dssFetch<ChannelLabel>(
+        `/channel-labels/${encodeURIComponent(labelId)}`,
+        { method: 'PATCH', body: JSON.stringify(params) }
+      );
+    },
+    async remove(labelId: string) {
+      return await dssFetch(`/channel-labels/${encodeURIComponent(labelId)}`, {
+        method: 'DELETE',
+      });
+    },
+    async setChannelLabel(channelId: string, params: SetChannelLabelRequest) {
+      return await dssFetch(
+        `/channel-labels/channels/${encodeURIComponent(channelId)}`,
+        { method: 'PUT', body: JSON.stringify(params) }
+      );
+    },
+  },
   favorites: {
     async getFavorites(params?: ListFavoritesParams) {
       const query = new URLSearchParams();
@@ -2614,6 +2506,46 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async listEmailReminders(params: ListEmailRemindersParams) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (Array.isArray(value)) {
+          for (const item of value) query.append(key, item);
+        } else if (value !== undefined && value !== null) {
+          query.set(key, String(value));
+        }
+      }
+      return await dssFetch<EmailReminderPage>(
+        `/reminders/email/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+    async listCollection(params: ListReminderCollectionParams) {
+      const query = new URLSearchParams();
+      if (params.completed !== undefined)
+        query.set('completed', String(params.completed));
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.cursor) query.set('cursor', params.cursor);
+      return await dssFetch<ReminderCollectionPage>(
+        `/reminders/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+
+    async getEmailFollowup(threadId: string) {
+      return (
+        await dssFetch<{ followup: EmailFollowup | null }>(
+          `/reminders/email/${threadId}`,
+          { method: 'GET' }
+        )
+      ).map((response) => response.followup);
+    },
+    async setEmailFollowup(threadId: string, command: EmailFollowupCommand) {
+      return await dssFetch<EmailFollowup>(`/reminders/email/${threadId}`, {
+        method: 'PUT',
+        body: JSON.stringify(command),
+      });
+    },
     async createReminder(params: CreateReminderRequest) {
       return await dssFetch<Reminder>('/reminders', {
         method: 'POST',
@@ -2705,6 +2637,18 @@ export const storageServiceClient = {
       { method: 'GET', signal }
     );
   },
+  async searchContacts({
+    query,
+    limit,
+    signal,
+  }: SearchContactsParams & { signal?: AbortSignal }) {
+    const params = new URLSearchParams({ query: query ?? '' });
+    if (limit) params.set('limit', String(limit));
+    return await dssFetch<SearchContactsResponse>(
+      `/crm/contacts?${params.toString()}`,
+      { method: 'GET', signal }
+    );
+  },
   async setContactName({
     contactId,
     ...body
@@ -2778,52 +2722,6 @@ export const storageServiceClient = {
   },
   async resetCrmTeamStages() {
     return await dssFetch('/crm/stages', { method: 'DELETE' });
-  },
-  crmComments: {
-    async list({
-      entityType,
-      entityId,
-    }: {
-      entityType: CrmCommentEntityType;
-      entityId: string;
-    }) {
-      return await dssFetch<CrmCommentThread[]>(
-        `/crm/comments/${entityType}/${entityId}`,
-        { method: 'GET' }
-      );
-    },
-    async create({
-      entityType,
-      entityId,
-      body,
-    }: {
-      entityType: CrmCommentEntityType;
-      entityId: string;
-      body: CreateCrmCommentRequest;
-    }) {
-      return await dssFetch<CrmCommentThread>(
-        `/crm/comments/${entityType}/${entityId}`,
-        { method: 'POST', body: JSON.stringify(body) }
-      );
-    },
-    async edit({
-      commentId,
-      body,
-    }: {
-      commentId: string;
-      body: EditCrmCommentRequest;
-    }) {
-      return await dssFetch<CrmComment>(`/crm/comment/${commentId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-    },
-    async delete({ commentId }: { commentId: string }) {
-      return await dssFetch<DeleteCrmCommentResult>(
-        `/crm/comment/${commentId}`,
-        { method: 'DELETE' }
-      );
-    },
   },
 } satisfies StorageServiceClient &
   typeof enhancements &

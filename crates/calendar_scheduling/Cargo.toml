@@ -11,6 +11,8 @@ inbound = ["dep:axum", "dep:macro_authorization"]
 calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id"]
 
 [dependencies]
+email_validator = { path = "../email_validator" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 serde = { workspace = true }

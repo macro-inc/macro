@@ -25,12 +25,16 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
         // Tasks are documents with a task sub-type.
         PropertyEntityType::Document | PropertyEntityType::Task => Some(EntityType::Document),
         PropertyEntityType::Project => Some(EntityType::Project),
+        PropertyEntityType::Initiative => Some(EntityType::Initiative),
         PropertyEntityType::Chat => Some(EntityType::Chat),
         PropertyEntityType::Channel => Some(EntityType::Channel),
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
         PropertyEntityType::CallRecord => Some(EntityType::Call),
         PropertyEntityType::Company => Some(EntityType::CrmCompany),
-        PropertyEntityType::CalendarEvent | PropertyEntityType::User => None,
+        PropertyEntityType::CalendarEvent
+        | PropertyEntityType::Contact
+        | PropertyEntityType::User
+        | PropertyEntityType::DatabaseRow => None,
     }
 }
 

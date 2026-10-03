@@ -4,6 +4,7 @@ import { refetchHistory } from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
 import { createMemo } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
   getSaveModificationData,
   hashModificationData,
@@ -11,58 +12,23 @@ import {
 } from '../util/buildModificationData';
 
 export function useDoEdit() {
-  const [, setNumOperations] = usePdfDocument().state.signals.numOperations;
-  return () => setNumOperations((prev) => prev + 1);
+  return usePdfDocument().model.commands.recordEdit;
 }
 
-const useSaveWrapper = () => {
-  const { isSaving, savingCount } = usePdfDocument().state.signals;
-  const [, setIsSaving] = isSaving;
-  const [getSavingCount, setSavingCount] = savingCount;
-
-  return (save: () => Promise<void>, shouldSave: () => boolean) => {
-    return async () => {
-      let saving = false;
-      try {
-        if (!shouldSave()) return;
-        saving = true;
-        setIsSaving(true);
-        setSavingCount((prev) => prev + 1);
-        await save();
-      } catch (e) {
-        console.error('Error saving PDF', e);
-      } finally {
-        if (saving) {
-          const count = getSavingCount() - 1;
-          setSavingCount(count);
-          if (count === 0) {
-            setIsSaving(false);
-          }
-        }
-      }
-    };
-  };
-};
-
 export function useHasModificationData() {
-  const { highlights, modificationData } = usePdfDocument().state.stores;
-  const [highlightStoreValue] = highlights;
-  const [pdfModificationValue] = modificationData;
+  const pdf = usePdfDocument();
 
   return () =>
-    Object.keys(highlightStoreValue).length > 0 ||
-    pdfModificationValue.placeables.length > 0;
+    pdf.annotations.hasHighlights() ||
+    pdf.model.modificationData.placeables.length > 0;
 }
 
 export function useSaveModificationData() {
   const pdf = usePdfDocument();
-  const saveWrapper = useSaveWrapper();
-  const [pdfModificationValue] = pdf.state.stores.modificationData;
-  const [tableOfContents] = pdf.state.stores.tableOfContents;
-  const [serverModificationData] = pdf.state.signals.serverModificationData;
+  const pdfModificationValue = pdf.model.modificationData;
 
   const serverModificationDataHash = createMemo(() => {
-    const modificationData_ = serverModificationData();
+    const modificationData_ = pdf.model.serverSnapshot();
     if (!modificationData_) return '';
     const hash = hashModificationDataSync(modificationData_);
     return hash;
@@ -73,7 +39,6 @@ export function useSaveModificationData() {
     const placeables = pdfModificationValue.placeables ?? [];
     const { modificationData } = getSaveModificationData({
       placeables,
-      TOCItems: tableOfContents.items,
       pinnedTerms: [],
     });
     const sha = hashModificationDataSync(modificationData);
@@ -84,7 +49,6 @@ export function useSaveModificationData() {
     const placeables = pdfModificationValue.placeables ?? [];
     const { modificationData } = getSaveModificationData({
       placeables,
-      TOCItems: tableOfContents.items,
       pinnedTerms: [],
     });
 
@@ -103,17 +67,13 @@ export function useSaveModificationData() {
     await Promise.all(serverSaves);
   };
 
-  const wrapped = saveWrapper(save, shouldSave);
-
-  return wrapped;
+  return () => pdf.persistence.runSave(save, shouldSave);
 }
 
 export function usePdfSaveLocation() {
   const pdf = usePdfDocument();
-  const saveWrapper = useSaveWrapper();
-  const [viewer] = pdf.state.signals.rootViewer;
-  const [prevLocationHash, setPrevLocationHash] =
-    pdf.state.signals.viewLocation;
+  const viewer = usePdfViewer().root.instance;
+  const prevLocationHash = pdf.persistedViewLocation;
   const userId = useUserId();
 
   const shouldSave = () => {
@@ -126,7 +86,7 @@ export function usePdfSaveLocation() {
 
   const save = async () => {
     const location = viewer()?.getLocationHash();
-    setPrevLocationHash(location);
+    pdf.setPersistedViewLocation(location);
     if (location == null) {
       await storageServiceClient.deleteDocumentViewLocation({
         documentId: pdf.documentId(),
@@ -139,9 +99,7 @@ export function usePdfSaveLocation() {
     }
   };
 
-  const wrapped = saveWrapper(save, shouldSave);
-
-  return wrapped;
+  return () => pdf.persistence.runSave(save, shouldSave);
 }
 
 export const usePdfSave = () => {

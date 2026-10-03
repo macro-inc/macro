@@ -28,13 +28,24 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   checked?: boolean;
   highlighted?: boolean;
   hovered?: boolean;
+  /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
+  actions?: JSX.Element;
+  /** Persistent status/action immediately before the timestamp. */
+  leadingAction?: JSX.Element;
+  /** Collection-owned completion of a reminder occurrence. */
+  onToggleReminderDone?: () => Promise<void>;
   hideContentHits?: boolean;
+  /** Resolved app display name for a linked GitHub PR author, when available. */
+  authorDisplayName?: string;
   /** Opt-in by the data-owning view; keep nonessential setup off initial render. */
   deferInteractions?: boolean;
   /** Hide the multi-select checkbox (e.g. read-only embeds outside soup). */
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   onMouseMove?: () => void;
+  showCalendarAttendance?: boolean;
+  /** Lets standalone collections own their tag-filter navigation. */
+  onFilterByTag?: (optionId: string) => void;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -53,7 +64,12 @@ const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
   entity: WithNotification<EntityData>;
+  /** Persistent schedule metadata, including on touch and notification rows. */
+  scheduleStatus?: JSX.Element;
+  actions?: JSX.Element;
+  leadingAction?: JSX.Element;
   checked?: boolean;
+  authorDisplayName?: string;
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   unread: boolean;
@@ -63,6 +79,8 @@ export interface LayoutProps {
   streamState?: StreamEvent;
   setSnippetContainerRef: (el: HTMLElement) => void;
   chars: number;
+  showCalendarAttendance?: boolean;
+  onFilterByTag?: (optionId: string) => void;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -165,6 +183,6 @@ export function RowIndicator(props: {
 
 export function InboxDivider() {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-muted" />
+    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-divider" />
   );
 }

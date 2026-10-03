@@ -1,21 +1,18 @@
+import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { getPermissions } from '@core/component/SharePermissions';
 import { buildEntityData } from '@entity';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-
-const fileOperations: FileOperation[] = [
-  { op: 'copy' },
-  { op: 'rename' },
-  { op: 'moveToProject' },
-  { op: 'delete' },
-];
 
 export function FileDetailBreadcrumbItem(props: {
   value: string;
@@ -25,13 +22,22 @@ export function FileDetailBreadcrumbItem(props: {
   userAccessLevel: AccessLevel;
   blockType: BlockName | BlockAlias;
   fallbackName?: string;
+  operations?: FileOperation[];
   onClose: () => void;
   onDuplicate: (id: string, name: string) => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  const fileOperations = (): FileOperation[] => [
+    { op: 'copy' },
+    { op: 'rename' },
+    { op: 'moveToProject' },
+    ...(props.operations ?? []),
+    { op: 'delete' },
+  ];
   const documentId = () => props.documentMetadata.documentId;
   const documentName = () =>
     props.documentMetadata.documentName ?? props.fallbackName ?? 'Untitled';
+  useSplitDisplayName(documentName);
 
   useBlockEntityCommands({
     id: documentId(),
@@ -55,25 +61,32 @@ export function FileDetailBreadcrumbItem(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-          <ViewBreadcrumbs.Button
-            class="gap-1.5"
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={documentName()}
+          <DocumentTitleHoverCard
+            documentId={documentId()}
+            name={documentName()}
+            ownerId={props.documentMetadata.owner}
+            createdAt={props.documentMetadata.createdAt}
+            updatedAt={props.documentMetadata.updatedAt}
           >
-            <EntityIcon
-              targetType={props.blockType}
-              size="xs"
-              class="shrink-0"
-            />
-            <span class="truncate">{documentName()}</span>
-          </ViewBreadcrumbs.Button>
+            <ViewBreadcrumbs.Button
+              class="gap-1.5"
+              isActive={item.isActive()}
+              onClick={item.onSelect}
+            >
+              <EntityIcon
+                targetType={props.blockType}
+                size="xs"
+                class="shrink-0"
+              />
+              <span class="truncate">{documentName()}</span>
+            </ViewBreadcrumbs.Button>
+          </DocumentTitleHoverCard>
           <div class="shrink-0">
             <SplitFileMenu
               id={documentId()}
               itemType="document"
               name={documentName()}
-              ops={fileOperations}
+              ops={fileOperations()}
               entityKind={props.blockType}
               permissions={getPermissions(props.userAccessLevel)}
               onDuplicate={(id) => props.onDuplicate(id, documentName())}

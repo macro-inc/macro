@@ -10,6 +10,7 @@ describe('parseGettingStartedSnapshot', () => {
     ).toEqual({
       completedActionIds: ['set-name'],
       collapsedSectionIds: ['basics'],
+      chatIdsByAction: {},
     });
   });
 
@@ -17,6 +18,7 @@ describe('parseGettingStartedSnapshot', () => {
     expect(parseGettingStartedSnapshot('{}')).toEqual({
       completedActionIds: [],
       collapsedSectionIds: [],
+      chatIdsByAction: {},
     });
   });
 
@@ -28,6 +30,7 @@ describe('parseGettingStartedSnapshot', () => {
     ).toEqual({
       completedActionIds: ['set-name'],
       collapsedSectionIds: [],
+      chatIdsByAction: {},
     });
   });
 
@@ -37,6 +40,7 @@ describe('parseGettingStartedSnapshot', () => {
     ).toEqual({
       completedActionIds: ['renamed-action'],
       collapsedSectionIds: [],
+      chatIdsByAction: {},
     });
   });
 
@@ -49,4 +53,29 @@ describe('parseGettingStartedSnapshot', () => {
   it('returns null for malformed JSON', () => {
     expect(parseGettingStartedSnapshot('{')).toBeNull();
   });
+
+  it('keeps valid chat mappings and drops invalid chat ids', () => {
+    expect(
+      parseGettingStartedSnapshot(
+        JSON.stringify({
+          chatIdsByAction: {
+            brief: 'chat-1',
+            tasks: 12,
+            inbox: null,
+            empty: '',
+          },
+        })
+      )?.chatIdsByAction
+    ).toEqual({ brief: 'chat-1' });
+  });
+
+  it.each([null, [], 'chat-1', 12])(
+    'ignores malformed chat mappings: %j',
+    (value) => {
+      expect(
+        parseGettingStartedSnapshot(JSON.stringify({ chatIdsByAction: value }))
+          ?.chatIdsByAction
+      ).toEqual({});
+    }
+  );
 });

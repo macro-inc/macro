@@ -19,13 +19,9 @@ export const NavRow = (props: NavRowProps) => {
     <Button
       variant="ghost"
       {...rest}
-      // Rows paint a single background, like Home items. Suppress Button's
-      // additional hover/press scrim so hover never doubles up to selection.
       class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 px-2 text-ink-extra-muted bg-none!',
-        local.active
-          ? 'bg-active text-ink not-disabled:hover:bg-active'
-          : 'not-disabled:hover:bg-hover not-disabled:hover:text-ink',
+        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 px-2 text-ink-extra-muted',
+        local.active ? 'bg-hover text-ink' : '',
         local.class
       )}
     />

@@ -39,6 +39,16 @@ describe('extractChannelMentionsFromMarkdown', () => {
     }
   });
 
+  it('never sends a project mention as a channel reference', () => {
+    // A reference would share the project with the channel; nor is the
+    // initiative id a document.
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${documentMention('project-1', 'initiative')} ${documentMention('doc-1', 'md')}`
+      )
+    ).toEqual([{ entityType: 'document', entityId: 'doc-1' }]);
+  });
+
   it('extracts user mentions and re-tags bot principals', () => {
     const markdown =
       '<m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention> and ' +
@@ -71,4 +81,12 @@ describe('extractChannelMentionsFromMarkdown', () => {
       { entityType: 'user', entityId: 'macro|a@b.com' },
     ]);
   });
+});
+
+it('preserves authored groups for server-side recipient expansion', () => {
+  expect(
+    extractChannelMentionsFromMarkdown(
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>'
+    )
+  ).toEqual([{ entityType: 'group', entityId: 'here' }]);
 });

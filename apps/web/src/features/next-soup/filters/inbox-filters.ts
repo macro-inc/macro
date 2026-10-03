@@ -113,6 +113,7 @@ export function signalFilter(entity: EntityData): boolean {
     case 'email':
       if (!ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return true;
       return isSignalEmail(entity) || entity.isDraft;
+    case 'initiative':
     case 'project':
       return true;
     case 'channel_message':
@@ -142,6 +143,9 @@ export function signalFilter(entity: EntityData): boolean {
       // Calendar events are gated into the Inbox by their event-alarm
       // notifications, same as reminders.
       return true;
+    case 'database':
+      // Databases are not Soup entities and never reach the Inbox.
+      return false;
   }
 }
 

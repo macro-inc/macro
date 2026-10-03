@@ -2,6 +2,11 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { EmojiSelector } from '@core/component/Emoji/EmojiSelector';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { focusInput } from '@core/directive/focusInput';
+import type {
+  MessageActionEvent,
+  MessageActionHandler,
+  MessageActions,
+} from '@core/messages/types';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -18,11 +23,6 @@ import {
   Show,
 } from 'solid-js';
 import { renderIcon } from '../Message/render-icon';
-import type {
-  MessageActionEvent,
-  MessageActionHandler,
-  MessageActions,
-} from '../Message/types';
 import { useMessageActionDrawer } from './message-action-drawer-context';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '👎', '😂', '😡'] as const;

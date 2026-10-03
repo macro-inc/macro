@@ -4,44 +4,51 @@
  * `POST /agent-sessions` does not answer until its Daytona sandbox is booted,
  * cloned and answering — minutes, not milliseconds. Waiting on that before
  * opening anything means staring at a spinner for the whole provision, so the
- * block opens immediately against a placeholder id minted here, and adopts
- * the real one when the create lands.
+ * session's id is minted here and the block opens against it immediately;
+ * the create carries the same id, so the URL, the sidebar row and every
+ * reference are final from the first frame and nothing has to be adopted
+ * or rewritten when the server answers.
  *
  * The registry is module-level on purpose: the create is in flight before any
  * block mounts, and must survive the mount either way round — resolving
- * before the block is on screen is normal, not a race.
+ * before the block is on screen is normal, not a race. It is what tells a
+ * block "not created yet" apart from "a session to load": an id in here is
+ * waiting on its create; any other id is loaded as it is.
  *
  * Everything downstream of the block reads its session id as
  * `Accessor<string | undefined>`, so "not created yet" is the same absence
  * they already handle while the GET is in flight.
  */
 
-import { markMessageSent } from '@core/util/message-send-motion';
+import { AgentSession } from '@core/agent-session/AgentSession';
+import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
+import type {
+  CreateAgentSessionRequest,
+  PromptAttachment,
+} from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
-
-/**
- * Placeholder ids are prefixed so a session id can never be mistaken for one:
- * real ids are UUIDs.
- */
-const PLACEHOLDER_PREFIX = 'pending-';
+import { v7 as uuidv7 } from 'uuid';
+import { effortConfigOption } from '../state/session-config';
+import { confirmSessionControl } from './confirm-session-control';
 
 export type PendingSession = {
-  /** The real session id, once the create resolves. */
+  /** The session's id, once the create has made it real. */
   sessionId: Accessor<string | undefined>;
   /** The create failed — this block has nothing to become. */
   failed: Accessor<boolean>;
   /** The startup error returned by the service. */
   error: Accessor<string | undefined>;
+  /**
+   * The first prompt, so the block can show it as sent from the moment it
+   * opens rather than once the create has answered.
+   */
+  prompt: string | undefined;
+  /** Unsent composer context supplied by an Ask AI action. */
+  initialInput?: string;
 };
 
 const pending = new Map<string, PendingSession>();
-
-/** Whether `id` is a placeholder this module minted rather than a session. */
-export function isPlaceholderSessionId(id: string): boolean {
-  return id.startsWith(PLACEHOLDER_PREFIX);
-}
 
 /**
  * Options captured by the preflight composer before a session exists.
@@ -49,10 +56,23 @@ export function isPlaceholderSessionId(id: string): boolean {
 export type StartPendingSessionOptions = {
   /** Persisted managed persona to run; omitted for Macro Coder. */
   botId?: string;
-  /** First prompt, delivered after any model override. */
+  /** Unsent composer context; never issued as a prompt. */
+  initialInput?: string;
+  /** First prompt. */
   prompt?: string;
-  /** Optional model switch applied before the first prompt. */
+  /** Uploaded SFS files delivered with the first prompt. */
+  attachments?: PromptAttachment[];
+  /** The sender, so the first prompt is attributed as the log will. */
+  userId?: string;
+  /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
+  /**
+   * Context the surface opening the session gives the agent: its runtime reads it as
+   * instructions, so neither the composer nor the sent prompt shows it.
+   */
+  instructions?: string;
+  /** Opaque harness setting confirmed before the first prompt. */
+  effortOverride?: { configId: string; value: string };
   /**
    * Explicit GitHub repository for the managed Cursor session.
    */
@@ -62,24 +82,32 @@ export type StartPendingSessionOptions = {
 };
 
 /**
- * Start creating a managed session and return the placeholder to open a block
+ * Start creating a managed session and return its id, to open a block
  * against right now. The POST runs unattended; nothing awaits it.
+ *
+ * The id is minted here and sent with the create - a v7 UUID like the ones
+ * the harness mints for actions, so it sorts by time with the server's own.
  */
 export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
-  const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
+  const id = uuidv7();
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
-  pending.set(placeholder, {
+  pending.set(id, {
     sessionId,
     failed: () => error() !== undefined,
     error,
+    prompt: options.prompt?.trim() || undefined,
+    initialInput: options.initialInput,
   });
 
   void agentHarnessServiceClient
     .create({
+      id,
       ...(options.botId ? { botId: options.botId } : {}),
+      ...(options.modelOverride ? { model: options.modelOverride } : {}),
+      ...(options.instructions ? { instructions: options.instructions } : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),
@@ -92,36 +120,81 @@ export function startPendingSession(
         );
         return;
       }
-      const id = result.value.session.id;
-      if (options.modelOverride) {
-        const changed = await agentHarnessServiceClient.control(id, {
-          type: 'setModel',
-          model: options.modelOverride,
-        });
-        if (changed.isErr()) {
+      // Normally the id this tab minted; an older service may mint its own.
+      const created = result.value.session.id;
+      void refetchSoupEntity(created, 'agentSession', { created: true });
+      // Hold the block in preflight while selected settings are confirmed,
+      // then adopt the session before issuing the first prompt so that prompt
+      // is folded speculatively while its POST is in flight.
+      const prompt = options.prompt?.trim() ?? '';
+      if (
+        options.modelOverride ||
+        options.effortOverride ||
+        prompt ||
+        options.attachments?.length
+      ) {
+        const session = AgentSession.acquire(created);
+        try {
+          if (options.modelOverride || options.effortOverride) {
+            await session.load();
+            if (options.modelOverride) {
+              await confirmSessionControl(session, {
+                type: 'setModel',
+                model: options.modelOverride,
+              });
+            }
+            if (options.effortOverride) {
+              const snapshot = await session.snapshot();
+              const effort = effortConfigOption(
+                snapshot.metadata.configOptions
+              );
+              if (
+                effort?.id !== options.effortOverride.configId ||
+                !effort.options.some(
+                  (option) => option.value === options.effortOverride?.value
+                )
+              ) {
+                throw new Error(
+                  'The selected effort is no longer available for this model.'
+                );
+              }
+              await confirmSessionControl(session, {
+                type: 'setConfigOption',
+                ...options.effortOverride,
+              });
+            }
+          }
+          setSessionId(created);
+          if (prompt || options.attachments?.length) {
+            const delivered = await session.issue(
+              {
+                type: 'prompt',
+                prompt,
+                ...(options.attachments?.length
+                  ? { attachments: options.attachments }
+                  : {}),
+              },
+              { userId: options.userId ?? result.value.session.ownerId }
+            );
+            if (delivered.isErr()) {
+              setError(
+                delivered.error.map((error) => error.message).join(' ') ||
+                  'The first message could not be sent.'
+              );
+            }
+          }
+        } catch (error) {
           setError(
-            changed.error.map((error) => error.message).join(' ') ||
-              'The selected model could not be applied.'
+            error instanceof Error
+              ? error.message
+              : 'The selected settings could not be applied.'
           );
-          return;
+        } finally {
+          session.release();
         }
+      } else {
+        setSessionId(created);
       }
-      const prompt = options.prompt?.trim();
-      if (prompt) {
-        const delivered = await agentHarnessServiceClient.control(id, {
-          type: 'prompt',
-          prompt,
-        });
-        if (delivered.isErr()) {
-          setError(
-            delivered.error.map((error) => error.message).join(' ') ||
-              'The first message could not be sent.'
-          );
-          return;
-        }
-        markMessageSent(`agent:${id}:${delivered.value.actionId}`);
-      }
-      setSessionId(id);
     })
     .catch(() =>
       setError(
@@ -129,24 +202,22 @@ export function startPendingSession(
       )
     );
 
-  return placeholder;
+  return id;
 }
 
 /**
- * The pending session behind a placeholder, or undefined when there is none —
- * a placeholder URL reloaded in a new tab, whose create belonged to the tab
- * that is gone.
+ * The create in flight for `id`, or undefined when there is none: the id is
+ * a session to load as it is - including one whose create belonged to a tab
+ * that is gone, which then loads (or fails to) like any other.
  */
-export function pendingSession(
-  placeholder: string
-): PendingSession | undefined {
-  return pending.get(placeholder);
+export function pendingSession(id: string): PendingSession | undefined {
+  return pending.get(id);
 }
 
 /**
- * Drop a resolved placeholder. Called once the block has adopted the real id,
- * so the map does not grow for the life of the tab.
+ * Drop a settled create. Called once the block has seen it land or fail, so
+ * the map does not grow for the life of the tab.
  */
-export function forgetPendingSession(placeholder: string): void {
-  pending.delete(placeholder);
+export function forgetPendingSession(id: string): void {
+  pending.delete(id);
 }

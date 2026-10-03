@@ -14,6 +14,19 @@ export default defineConfig({
       target: './service-auth/openapi.json',
     },
   },
+  calendarService: {
+    output: {
+      client: 'fetch',
+      target: './service-calendar/generated/client.ts',
+      schemas: './service-calendar/generated/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-calendar/openapi.json',
+    },
+  },
   cognitionService: {
     output: {
       client: 'fetch',
@@ -177,9 +190,10 @@ export default defineConfig({
           /^Document(Created|Updated|Deleted|Copied)Metadata$/,
           /^Channel(Created|Updated|Deleted)Metadata$/,
           /^ChannelParticipant(Added|Removed)Metadata$/,
-          /^ChannelMessage(Posted|Patched|Deleted)Metadata$/,
-          /^ChannelMessageAttachment(Created|Removed)Metadata$/,
-          /^ChannelMentionedMetadata$/,
+          /^MessageTopicEvent$/,
+          /^Message(Posted|Patched|Deleted|Mentioned)Metadata$/,
+          /^MessageAttachment(Created|Removed)Metadata$/,
+          /^MessageEventAttachment$/,
           /^ChannelEventAttachment$/,
           /^ChannelSender$/,
         ],

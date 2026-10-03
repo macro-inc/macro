@@ -3,7 +3,6 @@ import { SidePanel } from '@components/app/side-panel';
 import { blockDataSignalAs, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { createMethodRegistration } from '@core/orchestrator';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
@@ -15,8 +14,8 @@ import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import type { PdfBlockData } from '../definition';
+import { createPdfRouteTarget } from '../primitives/create-pdf-route-target';
 import { type LocationSearchParams, URL_PARAMS } from '../signal/location';
-import { ModalsProvider } from './ModalsProvider';
 import {
   PdfDocument,
   PdfDocumentContent,
@@ -30,6 +29,9 @@ export default function BlockPdf() {
   useBlockEntityCommands();
   const documentId = useBlockId();
   const isNested = useIsNestedBlock();
+  const target = isNested
+    ? () => undefined
+    : createPdfRouteTarget(() => documentId);
   const metadata = blockMetadataSignal.get;
   const documentName = useBlockDocumentName('Unknown Filename');
   const canComment = useCanComment();
@@ -52,7 +54,6 @@ export default function BlockPdf() {
         viewLocation={data()?.viewLocation}
         modificationData={data()?.documentMetadata.modificationData}
         isNested={isNested}
-        hotkeyScope={blockHotkeyScopeSignal.get()}
         portalScope="block"
         permissions={{
           canComment: canComment(),
@@ -60,6 +61,7 @@ export default function BlockPdf() {
           isOwner: isOwner(),
         }}
         locationParams={getLocationParams(searchParams)}
+        navigationTarget={target()}
         registerMethods={registerMethods}
       >
         <PdfBlockContent />
@@ -70,27 +72,24 @@ export default function BlockPdf() {
 
 function PdfBlockContent() {
   const pdf = usePdfDocument();
-  const [showTabBar] = pdf.state.signals.showTabBar;
 
   return (
-    <ModalsProvider>
-      <Show when={!pdf.isNested()} fallback={<PdfDocumentContent />}>
-        <SidePanel.Layout>
-          <PdfSidePanelSections />
-          <div class="flex size-full min-w-0 flex-col overflow-hidden">
-            <TopBar />
-            <Show when={showTabBar()}>
-              <div class="flex px-2 justify-between min-h-11 items-center gap-2">
-                <div class="overflow-x-auto overflow-y-hidden grow customScrollbar w-0">
-                  <Tabs />
-                </div>
+    <Show when={!pdf.isNested()} fallback={<PdfDocumentContent />}>
+      <SidePanel.Layout floating>
+        <PdfSidePanelSections />
+        <div class="flex size-full min-w-0 flex-col overflow-hidden">
+          <TopBar />
+          <Show when={pdf.tabs.isVisible()}>
+            <div class="flex px-2 justify-between min-h-11 items-center gap-2">
+              <div class="overflow-x-auto overflow-y-hidden grow customScrollbar w-0">
+                <Tabs />
               </div>
-            </Show>
-            <PdfDocumentContent />
-          </div>
-        </SidePanel.Layout>
-      </Show>
-    </ModalsProvider>
+            </div>
+          </Show>
+          <PdfDocumentContent />
+        </div>
+      </SidePanel.Layout>
+    </Show>
   );
 }
 

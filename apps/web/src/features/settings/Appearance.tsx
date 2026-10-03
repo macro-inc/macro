@@ -648,8 +648,7 @@ function ActiveThemeRow() {
 
 export function Appearance() {
   return (
-    // Soften any stray `b4` edge in the theme editor to the muted `b3` tone.
-    <div class="h-full" style={{ '--b4l': 'var(--b3l)' }}>
+    <div class="h-full">
       <SettingsPage title="Appearance">
         <SettingsSection title="Color Theme">
           {/* Establish a container so the rows can stack (label/description over

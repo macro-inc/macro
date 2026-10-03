@@ -91,7 +91,7 @@ function InvalidInviteLink() {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={() => navigate('/')}
       >
         Go to Home
@@ -110,7 +110,7 @@ function UnauthenticatedView(props: { onLogin: () => void }) {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={props.onLogin}
       >
         Sign In to Continue
@@ -131,12 +131,7 @@ function JoinConfirmation(props: { onJoin: () => void }) {
           Confirm that you want to join this channel.
         </p>
       </div>
-      <Button
-        variant="outline"
-        size="md"
-        class="w-full rounded-xs"
-        onClick={props.onJoin}
-      >
+      <Button variant="outline" size="md" class="w-full" onClick={props.onJoin}>
         Join Channel
       </Button>
     </div>
@@ -153,7 +148,7 @@ function ServerError(props: { onRetry: () => void }) {
       <Button
         variant="outline"
         size="md"
-        class="w-full rounded-xs"
+        class="w-full"
         onClick={props.onRetry}
       >
         Try Again

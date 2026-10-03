@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT subject, body_text, has_attachments FROM email_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "has_attachments",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "edefa1a786af8acc7aec70203f3fc41661123b2be3a6dba1337c21d842c85dcc"
+}

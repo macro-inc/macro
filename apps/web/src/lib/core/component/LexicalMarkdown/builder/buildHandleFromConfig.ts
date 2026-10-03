@@ -149,7 +149,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   }
 
   // Text paste handling
-  plugins.use(textPastePlugin());
+  plugins.use(textPastePlugin(config.resolveAppLink));
 
   // Markdown paste handling (rich & full editors only)
   if (config.type !== 'plain-text') {
@@ -235,7 +235,6 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       plugins.use(
         agentCommandsPlugin({
           menu: agentCommandsMenuOps,
-          commands: config.agentCommands.commands,
         })
       );
     }

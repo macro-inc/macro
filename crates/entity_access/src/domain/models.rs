@@ -399,6 +399,30 @@ pub struct Entity {
     pub entity_type: EntityType,
 }
 
+/// A live conversation whose current access can be inherited by its agent session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentSessionParent {
+    /// Document discussion, including documents with legacy string identifiers.
+    Document(String),
+    /// Call chat, identified by the active or archived call.
+    Call(Uuid),
+}
+
+impl From<AgentSessionParent> for Entity {
+    fn from(parent: AgentSessionParent) -> Self {
+        match parent {
+            AgentSessionParent::Document(entity_id) => Self {
+                entity_id,
+                entity_type: EntityType::Document,
+            },
+            AgentSessionParent::Call(call_id) => Self {
+                entity_id: call_id.to_string(),
+                entity_type: EntityType::Call,
+            },
+        }
+    }
+}
+
 /// Authentication context retained for a bot entity-access receipt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BotReceiptAuth {
@@ -647,7 +671,7 @@ impl<T: RequiredPermission> EntityAccessReceipt<T> {
 #[derive(Debug, Clone)]
 pub struct CallChannelInfo {
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The share permission ID for this call.
     pub share_permission_id: String,
 }

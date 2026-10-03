@@ -1,5 +1,7 @@
 pub mod grouping;
 
+mod exclusions;
+
 #[cfg(test)]
 mod test;
 
@@ -427,6 +429,11 @@ impl SoupRequest<Option<EntityFilterAst>> {
         if self.link_ids.is_empty() {
             return None;
         }
+        // CRM-scoped requests must still reach email's authorization precheck,
+        // even when their id filter cannot match any threads.
+        if crm_scope.is_none() && exclusions::email(entity_ast) {
+            return None;
+        }
 
         // A properties filter that cannot match threads makes the email
         // branch empty, so the sub-request is skipped. Otherwise it is ANDed
@@ -514,6 +521,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_call_request(&self) -> Option<GetCallRecordsRequest> {
+        if exclusions::call(self.entity_ast()) {
+            return None;
+        }
         // A def-less tag filter (entity_type None on every literal) applies to
         // calls, which carry tags; it is folded into the call filter below and
         // rendered as a `properties.values` EXISTS by the call query. Any other
@@ -695,7 +705,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
-        if self.properties_filter_blocks_propertyless() {
+        if self.properties_filter_blocks_propertyless() || exclusions::channel(self.entity_ast()) {
             return None;
         }
         Some(GetChannelsRequest {
@@ -736,7 +746,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_comms_thread_request(&self) -> Option<GetThreadReplyRowsRequest> {
-        if self.properties_filter_blocks_propertyless() {
+        if self.properties_filter_blocks_propertyless()
+            || exclusions::channel_thread(self.entity_ast())
+        {
             return None;
         }
         let query = match &self.cursor {
@@ -782,7 +794,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
     }
 
     pub(crate) fn build_foreign_entity_query(&self) -> Option<ForeignEntityListQuery> {
-        if self.properties_filter_blocks_propertyless() {
+        if self.properties_filter_blocks_propertyless()
+            || exclusions::foreign_entity(self.entity_ast())
+        {
             return None;
         }
         match &self.cursor {
@@ -1269,6 +1283,20 @@ pub struct EnrichedSoupItem {
     /// when the page was ordered by `notified_at`. Clients sort and bucket
     /// the notified feed on this value.
     pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<SoupItem<SoupPropertiesField>> for EnrichedSoupItem {
+    /// An item enriched with its properties alone, as
+    /// [`SoupService::get_user_soup_with_properties`](super::ports::SoupService::get_user_soup_with_properties)
+    /// answers it.
+    fn from(item: SoupItem<SoupPropertiesField>) -> Self {
+        Self {
+            item,
+            frecency_score: None,
+            touched_at: None,
+            notified_at: None,
+        }
+    }
 }
 
 /// A soup request with optional grouping configuration.

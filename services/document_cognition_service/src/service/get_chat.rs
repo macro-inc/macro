@@ -42,7 +42,7 @@ pub async fn get_chat(
     #[allow(deprecated)]
     Ok(ChatResponse {
         id: chat.id,
-        user_id: chat.user_id,
+        user_id: chat.user_id.principal_id(),
         name: chat.name,
         model: chat.model,
         messages,

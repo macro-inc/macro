@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
@@ -50,6 +51,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
+model_owner = { path = "../model_owner" }
 notification = { path = "../notification" }
 messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
@@ -86,3 +88,4 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
 model_user = { path = "../model_user" }
+tower = { workspace = true }

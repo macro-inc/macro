@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
 import {
   buildReplyTargetMarkdown,
+  readReplyTargetData,
   stripLeadingReplyTargetMarkdown,
 } from '../nodes/ReplyTargetNode';
 import { EXTERNAL_TRANSFORMERS } from '../transformers';
@@ -14,7 +15,7 @@ import {
 import { markdownToEmbeddingText, markdownToPlainText } from '../utils/parsers';
 
 const data = {
-  channelId: 'channel-1',
+  parent: { type: 'channel' as const, id: 'channel-1' },
   targetMessageId: 'reply-1',
   targetThreadId: 'thread-1',
   displayText: 'A one-line preview',
@@ -32,6 +33,42 @@ describe('ReplyTargetNode', () => {
     });
     expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
   });
+
+  it('reads saved channel references without a snapshot migration', () => {
+    const { parent, ...rest } = data;
+    const legacy = `<m-reply-target>${JSON.stringify({ channelId: parent.id, ...rest })}</m-reply-target>`;
+    const state = markdownToSerializedEditorStateWithIds(legacy);
+    expect(state.root.children[0]).toMatchObject({
+      type: 'reply-target',
+      ...data,
+    });
+  });
+
+  it.each([
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ] as const)('round-trips a %s reply target', (type) => {
+    const target = {
+      ...data,
+      parent: { type, id: 'parent-1' },
+    };
+    const markdown = buildReplyTargetMarkdown(target);
+    const state = markdownToSerializedEditorStateWithIds(markdown);
+    expect(state.root.children[0]).toMatchObject(target);
+    expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
+  });
+
+  it.each(['unknown', 'email', 'project'])(
+    'rejects unsupported parent %s',
+    (type) => {
+      expect(
+        readReplyTargetData({ ...data, parent: { type, id: 'parent-1' } })
+      ).toBeUndefined();
+    }
+  );
 
   it('exposes its preview to plain text and embedding conversion', () => {
     expect(markdownToPlainText(markdown)).toBe(data.displayText);

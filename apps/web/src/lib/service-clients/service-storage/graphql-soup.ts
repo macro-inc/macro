@@ -8,10 +8,13 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
+import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
   normalizedCacheExchange,
 } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
+import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   createTauriCacheHost,
@@ -19,8 +22,10 @@ import {
   entityFromArgument,
 } from '@graphql-cache/index';
 import { registerCacheHost } from '@graphql-cache/lifecycle';
+import { isOwnerLockUnavailableError } from '@graphql-cache/protocol';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -39,6 +44,7 @@ import {
   createClient,
   type DocumentInput,
   fetchExchange,
+  type Operation,
   type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
@@ -47,7 +53,10 @@ import {
   createClient as createGraphqlWsClient,
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
+import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
+import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
+import { emailCacheDeletionKeys } from './email-cache-deletions';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -55,6 +64,8 @@ import type { SoupPage } from './generated/schemas/soupPage';
 import type { SoupProperty } from './generated/schemas/soupProperty';
 import type { SoupReminderSchedule } from './generated/schemas/soupReminderSchedule';
 import {
+  type ChannelListItemFieldsFragment,
+  type ChannelListNotificationFieldsFragment,
   type GraphqlEntityType,
   type GraphqlReminderScheduleType,
   type GroupedSoupInput,
@@ -65,9 +76,11 @@ import {
   type SoupInitialInput,
   type SoupInput,
   type SoupNotificationFieldsFragment,
+  type SoupNotificationNavigationMetadataFieldsFragment,
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
@@ -235,21 +248,40 @@ export async function dssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  const transportInit = graphqlSoupTransportRequest(init);
-  const response = await authorizedDssGraphqlFetch(input, transportInit);
-  const legacyInit = legacyProjectionRequest(transportInit);
-  if (
-    legacyInit === undefined ||
-    !(await isLegacyProjectionValidationError(response))
-  ) {
-    return response;
-  }
+  return Telemetry.span('graphql.transport', async (span) => {
+    const started = performance.now();
+    try {
+      const transportInit = graphqlSoupTransportRequest(init);
+      span.event('request_dispatch');
+      const response = await authorizedDssGraphqlFetch(input, transportInit);
+      span.setAttr('graphql.response_headers_ms', performance.now() - started);
+      span.setAttr('http.response.status_code', response.status);
+      span.event('response_headers');
+      const legacyInit = legacyProjectionRequest(transportInit);
+      if (legacyInit === undefined) return response;
 
-  // A mixed deployment remains network-correct: retry without the additive
-  // metadata field and suppress v2 local authority for this session. Backfill
-  // still refuses to checkpoint missing required Document supplements.
-  soupProjectionServerSupported = false;
-  return await authorizedDssGraphqlFetch(input, legacyInit);
+      // This includes body delivery and JSON parsing, not just validation CPU.
+      const inspectStarted = performance.now();
+      const legacy = await isLegacyProjectionValidationError(response);
+      span.setAttr(
+        'graphql.response_inspection_ms',
+        performance.now() - inspectStarted
+      );
+      span.event('response_inspected');
+      span.setAttr('graphql.legacy_retry', legacy);
+      if (!legacy) return response;
+
+      // A mixed deployment remains network-correct: retry without the additive
+      // metadata field and suppress v2 local authority for this session. Backfill
+      // still refuses to checkpoint missing required Document supplements.
+      soupProjectionServerSupported = false;
+      return await authorizedDssGraphqlFetch(input, legacyInit);
+    } catch (error) {
+      // Transport errors may contain query URLs; record a category only.
+      span.setAttr('graphql.transport_failed', true);
+      throw error;
+    }
+  });
 }
 
 const graphqlSoupClient = createClient({
@@ -262,7 +294,9 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
-function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
+function createGraphqlSoupWebSocketClient(
+  onConnected: () => void
+): GraphqlWsClient {
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -277,6 +311,7 @@ function createGraphqlSoupWebSocketClient(): GraphqlWsClient {
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
+    on: { connected: onConnected },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
 }
@@ -312,8 +347,12 @@ function disposeUncachedRealtimeClient(): void {
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
 
-  const websocketClient = createGraphqlSoupWebSocketClient();
-  const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
+    suspendOnPagehide: !isTauri(),
+  });
+  const websocketClient = createGraphqlSoupWebSocketClient(
+    subscriptionsLifecycle.connected
+  );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
@@ -333,6 +372,9 @@ function getUncachedRealtimeClient(): Client {
 }
 
 let cacheInitializationFailed = false;
+// Changes when the session abandons its cache so reactive readers of the
+// availability getters below (query options, effects) move to network paths.
+const [cacheAvailability, setCacheAvailability] = createSignal(0);
 
 /**
  * Whether the normalized cache is active for soup GraphQL queries.
@@ -340,6 +382,7 @@ let cacheInitializationFailed = false;
  * process (graphql_cache_plugin).
  */
 export function graphqlCacheEnabled(): boolean {
+  cacheAvailability();
   if (cacheInitializationFailed) return false;
   if (!isTauri() && browserCacheClientActivated) return true;
   return getBrowserTursoCacheRolloutDecision().enabled;
@@ -364,10 +407,12 @@ function fallbackAfterInitializationFailure(): void {
   } catch {
     // Initialization-failure cleanup cannot alter GraphQL transport fallback.
   }
+  setCacheAvailability((version) => version + 1);
 }
 
 /** Returns the persistent normalized-cache host after client initialization. */
 export function getGraphqlCacheHost(): CacheHost | undefined {
+  cacheAvailability();
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
 
@@ -395,20 +440,61 @@ export function getGraphqlSoupClient(): Client {
   if (cachedClient) return cachedClient;
   disposeUncachedRealtimeClient();
   cachedClient = (() => {
+    const reportCacheError = (
+      error: unknown,
+      phase: 'initialization' | 'operation',
+      operationKind?: Operation['kind']
+    ) => {
+      try {
+        // Navigation deliberately rejects outstanding reads, and a tab on
+        // another deployed build can own the database. Neither is an error;
+        // unexpected disposal still reports.
+        if (
+          error instanceof CacheNavigationError ||
+          isOwnerLockUnavailableError(error)
+        )
+          return;
+        // Caught cache failures never reach window.unhandledrejection. Report
+        // them through the Datadog-bound exporter without query/variable data.
+        Telemetry.error(error, {
+          'error.source': 'graphql-cache',
+          'cache.backend': native ? 'native' : 'turso-wasm-opfs',
+          'cache.phase': phase,
+          ...(operationKind ? { 'cache.operation_kind': operationKind } : {}),
+        });
+      } catch {
+        // Observability must not prevent network fallback or cache cleanup.
+      }
+    };
     let host: CacheHost | undefined;
     let websocketClient: GraphqlWsClient | undefined;
     let unregisterHost: () => void = () => undefined;
-    const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
+      suspendOnPagehide: !native,
+    });
     const cleanup = () => {
       unregisterHost();
       // Unsubscribing emits urql teardown operations; keep the cache host
       // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      // Retires the host: operations still running on this client, and any
+      // caller that captured the host, fall back to the network from here.
       host?.dispose();
       if (websocketClient) void websocketClient.dispose();
     };
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
+      // Another context holds the database: a tab on another deployed build,
+      // or a closing tab whose worker still has the files open. This page
+      // simply runs uncached until it reloads.
+      if (isOwnerLockUnavailableError(error)) {
+        fallbackAfterInitializationFailure();
+        console.info(
+          `[graphql-cache] ${error.message}; using the network until reload`
+        );
+        return;
+      }
+      reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure();
       toast.failure('Local cache unavailable', {
         subtext: 'Macro will continue without local caching for this session.',
@@ -420,14 +506,20 @@ export function getGraphqlSoupClient(): Client {
     };
     try {
       const scope = getOrCreateCacheScope();
-      host = native
-        ? createTauriCacheHost({ scope, onInitializationError })
-        : createWorkerCacheHost({
-            scope,
-            onInitializationError,
-            rolloutCohort: rollout.cohort,
-          });
-      const graphqlWsClient = createGraphqlSoupWebSocketClient();
+      host = createRetirableCacheHost(
+        native
+          ? createTauriCacheHost({ scope, onInitializationError })
+          : createWorkerCacheHost({
+              scope,
+              onInitializationError,
+              rolloutCohort: rollout.cohort,
+              // A newer deploy took the local cache over: move to it.
+              onSuperseded: () => reloadForNewerBuild(),
+            })
+      );
+      const graphqlWsClient = createGraphqlSoupWebSocketClient(
+        subscriptionsLifecycle.connected
+      );
       websocketClient = graphqlWsClient;
       const client = createClient({
         url: `${dssHost}/items/soup/graphql`,
@@ -435,6 +527,13 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
+            deletedRecordKeys: emailCacheDeletionKeys,
+            onCacheError: (error, operation) => {
+              // Initialization failure already reports before retiring the host;
+              // rejected in-flight operations must not report it again.
+              if (!host || cachedCacheHost !== host) return;
+              reportCacheError(error, 'operation', operation.kind);
+            },
             entityResolvers: {
               GraphqlUser: {
                 emailThread: entityFromArgument('GraphqlSoupEmailThread', [
@@ -449,9 +548,10 @@ export function getGraphqlSoupClient(): Client {
             extractIdentity: (data) =>
               (data as Partial<SoupQuery | GroupSoupQuery> | undefined)?.user
                 ?.id,
-            // Transport failures remain queued with their optimistic layer;
-            // GraphQL application errors are permanent and roll back.
-            shouldRetryMutation: (error) => error.networkError != null,
+            // Preserve the optimistic layer on transport failures and on
+            // application failures the server explicitly allows us to retry.
+            shouldRetryMutation: shouldRetryGraphqlMutation,
+            delegateRevalidation: delegateChannelNotificationRefresh,
           }),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           fetchExchange,
@@ -466,10 +566,12 @@ export function getGraphqlSoupClient(): Client {
       browserCacheClientActivated = !native;
       return client;
     } catch (error) {
+      reportCacheError(error, 'initialization');
       cleanup();
       cachedCacheHost = undefined;
       cachedCacheCleanup = undefined;
       cacheInitializationFailed = true;
+      setCacheAvailability((version) => version + 1);
       console.warn('graphql cache init failed; using uncached client', error);
       return isFeatureEnabled(enableGraphqlSoup)
         ? getUncachedRealtimeClient()
@@ -503,7 +605,9 @@ export type GraphqlGroupedSoupPage = {
   }>;
 };
 
-export type GraphqlSoupItem = SoupQuery['user']['soup']['items'][number];
+export type GraphqlSoupItem =
+  | SoupQuery['user']['soup']['items'][number]
+  | (ChannelListItemFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
 type GraphqlProperty = Extract<
   GraphqlSoupEntity,
@@ -579,7 +683,7 @@ export function mapGraphqlProperties(
       display_name: property.displayName,
       data_type: property.dataType,
       is_multi_select: property.isMultiSelect,
-      specific_entity_type: property.specificEntityType ?? undefined,
+      specific_entity_type: property.specificEntityType ?? null,
       is_system: property.isSystem,
       is_metadata: property.isMetadata,
       owner: { scope: 'system' as const },
@@ -602,6 +706,9 @@ function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
     }))
     .with({ __typename: 'GraphqlSkillSubType' }, () => ({
       type: 'skill' as const,
+    }))
+    .with({ __typename: 'GraphqlInitiativeDescriptionSubType' }, () => ({
+      type: 'initiative_description' as const,
     }))
     .exhaustive();
 }
@@ -662,8 +769,26 @@ type NotifEventMember<Tag extends NotifEvent['tag']> = Extract<
   content: { hasAttachments?: boolean };
 };
 
+// Accept legacy notification projections that omitted optional presentation
+// fields alongside full notification reads. Keep required event data typed.
+type GraphqlNotificationMetadata = {
+  [Name in SoupNotificationNavigationMetadataFieldsFragment['__typename']]: Extract<
+    SoupNotificationNavigationMetadataFieldsFragment,
+    { __typename: Name }
+  > &
+    Partial<
+      Extract<SoupNotificationFieldsFragment['metadata'], { __typename: Name }>
+    >;
+}[SoupNotificationNavigationMetadataFieldsFragment['__typename']];
+
+type GraphqlNotification =
+  | SoupNotificationFieldsFragment
+  | ChannelListNotificationFieldsFragment;
+
+// Convert the GraphQL union and aliased fields into the shared tag/content
+// payload used to render, stack, and navigate REST, realtime, and GraphQL notifications.
 function mapGraphqlNotificationMetadata(
-  metadata: SoupNotificationFieldsFragment['metadata']
+  metadata: GraphqlNotificationMetadata
 ): NotifEvent {
   return match(metadata)
     .with(
@@ -728,6 +853,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.mentionedInDocumentCommentText,
             senderProfilePictureUrl:
               metadata.mentionedInDocumentCommentSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.mentionedInDocumentCommentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'mentioned_in_document_comment'>
     )
@@ -748,6 +875,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.repliedToDocumentCommentThreadText,
             senderProfilePictureUrl:
               metadata.repliedToDocumentCommentThreadSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.repliedToDocumentCommentThreadSenderDisplayName,
           },
         }) satisfies NotifEventMember<'replied_to_document_comment_thread'>
     )
@@ -768,8 +897,53 @@ function mapGraphqlNotificationMetadata(
             text: metadata.commentedOnDocumentText,
             senderProfilePictureUrl:
               metadata.commentedOnDocumentSenderProfilePictureUrl,
+            senderDisplayName: metadata.commentedOnDocumentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'commented_on_document'>
+    )
+    .with(
+      { __typename: 'GraphqlInitiativeDiscussionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'initiative_discussion',
+          content: {
+            projectName: metadata.initiativeDiscussionProjectName,
+            owner: metadata.initiativeDiscussionOwner,
+            reason: match(metadata.initiativeDiscussionReason)
+              .with('MENTION', () => 'mention' as const)
+              .with('REPLY', () => 'reply' as const)
+              .with('ASSIGNEE', () => 'assignee' as const)
+              .with('OWNER', () => 'owner' as const)
+              .exhaustive(),
+            messageId: metadata.initiativeDiscussionMessageId,
+            threadId: metadata.initiativeDiscussionThreadId,
+            text: metadata.initiativeDiscussionText,
+            senderDisplayName: metadata.initiativeDiscussionSenderDisplayName,
+            senderProfilePictureUrl:
+              metadata.initiativeDiscussionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'initiative_discussion'>
+    )
+    .with(
+      { __typename: 'GraphqlCrmDiscussionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'crm_discussion',
+          content: {
+            recordName: metadata.crmDiscussionRecordName,
+            reason: match(metadata.crmDiscussionReason)
+              .with('MENTION', () => 'mention' as const)
+              .with('REPLY', () => 'reply' as const)
+              .with('OWNER', () => 'owner' as const)
+              .exhaustive(),
+            messageId: metadata.crmDiscussionMessageId,
+            threadId: metadata.crmDiscussionThreadId,
+            text: metadata.crmDiscussionText,
+            senderDisplayName: metadata.crmDiscussionSenderDisplayName,
+            senderProfilePictureUrl:
+              metadata.crmDiscussionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'crm_discussion'>
     )
     .with(
       { __typename: 'GraphqlChannelInviteMetadata' },
@@ -803,6 +977,24 @@ function mapGraphqlNotificationMetadata(
               metadata.channelMessageSendSenderProfilePictureUrl,
           },
         }) satisfies NotifEventMember<'channel_message_send'>
+    )
+    .with(
+      { __typename: 'GraphqlChannelMessageReactionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'channel_message_reaction',
+          content: {
+            messageId: metadata.channelMessageReactionMessageId,
+            threadId: metadata.channelMessageReactionThreadId,
+            messageContent: metadata.channelMessageReactionMessageContent,
+            emoji: metadata.channelMessageReactionEmoji,
+            channelType:
+              metadata.channelMessageReactionChannelType.toLowerCase() as ChannelType,
+            channelName: metadata.channelMessageReactionChannelName,
+            senderProfilePictureUrl:
+              metadata.channelMessageReactionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'channel_message_reaction'>
     )
     .with(
       { __typename: 'GraphqlChannelReplyMetadata' },
@@ -902,6 +1094,7 @@ function mapGraphqlNotificationMetadata(
           content: {
             reminderId: metadata.reminderReminderId,
             description: metadata.reminderDescription,
+            scheduledFor: metadata.reminderScheduledFor,
           },
         }) satisfies NotifEventMember<'reminder'>
     )
@@ -1157,7 +1350,7 @@ function mapGraphqlNotificationMetadata(
  * notification must go through this mapper.
  */
 export function mapGraphqlNotification(
-  record: SoupNotificationFieldsFragment
+  record: GraphqlNotification
 ): Omit<ApiUserNotification, 'owner_id'> {
   return {
     id: record.id,
@@ -1176,9 +1369,9 @@ export function mapGraphqlNotification(
 }
 
 function mapGraphqlNotifications(
-  notifications: SoupNotificationFieldsFragment[]
+  notifications: GraphqlNotification[] | undefined
 ) {
-  return notifications.map(mapGraphqlNotification);
+  return notifications?.map(mapGraphqlNotification);
 }
 
 /**
@@ -1215,9 +1408,32 @@ function mapGraphqlReminderSchedule(entity: {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
+  // Rows are read by the database SQL engine, never listed as Soup items.
+  if (item.__typename === 'GraphqlSoupDatabaseRow') return null;
+
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
+    .with(
+      { __typename: 'GraphqlSoupInitiative' },
+      (entity) =>
+        ({
+          tag: 'initiative',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.displayName ?? 'Untitled project',
+            ownerId: entity.metadata.ownerId ?? '',
+            descriptionDocumentId: entity.descriptionDocumentId ?? null,
+            createdAt: entity.metadata.createdAt ?? '',
+            updatedAt: entity.metadata.updatedAt ?? '',
+            viewedAt: entity.metadata.viewedAt,
+            properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
     .with(
       { __typename: 'GraphqlSoupDocument' },
       (entity) =>
@@ -1252,8 +1468,17 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           data: {
             id: entity.id,
             name: entity.sessionName,
+            isArchived: entity.isArchived,
             ownerId: entity.ownerId,
             botId: entity.botId,
+            harness: entity.harness,
+            repoUrl: entity.repoUrl,
+            repoBranch: entity.repoBranch,
+            pullRequestUrl: entity.pullRequestUrl,
+            workingBranch: entity.workingBranch,
+            pullRequestState: entity.pullRequestState?.toLowerCase() ?? null,
+            pullRequestId: entity.pullRequestId,
+            turnState: entity.turnState,
             bot: entity.bot,
             threadId: entity.threadId,
             status: entity.status,
@@ -1401,6 +1626,14 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               entity.latestNonThreadMessage
             ),
             notifications: mapGraphqlNotifications(entity.notifications),
+            unreadNotifications:
+              'unreadNotifications' in entity
+                ? entity.unreadNotifications.map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
+                    createdAt: notification.createdAt,
+                  }))
+                : undefined,
           },
         }) as SoupApiItem
     )
@@ -1442,7 +1675,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           is_favorited: entity.isFavorited,
           data: {
             callId: entity.id,
-            channelId: entity.channelId,
+            channelId: entity.callChannelId ?? null,
             channelName: entity.channelName ?? undefined,
             createdBy: entity.createdBy,
             customName: entity.customName ?? undefined,
@@ -1457,6 +1690,12 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               userId: participant.userId,
               joinedAt: participant.joinedAt,
               leftAt: participant.leftAt ?? undefined,
+            })),
+            guests: entity.guests.map((guest) => ({
+              id: guest.id,
+              displayName: guest.displayName,
+              joinedAt: guest.joinedAt,
+              leftAt: guest.leftAt ?? undefined,
             })),
             properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),

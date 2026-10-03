@@ -1,0 +1,46 @@
+.pricing-savings { --ps-ink: var(--c1); --ps-ink-muted: var(--c4); --ps-ink-faint: color-mix(in srgb, var(--c4) 70%, transparent); --ps-edge: color-mix(in srgb, var(--b4) 70%, transparent); --ps-edge-muted: color-mix(in srgb, var(--b4) 35%, transparent); --ps-surface: var(--b0); --ps-panel: var(--b1); --ps-hover: color-mix(in srgb, var(--c1) 6%, transparent); --ps-active: color-mix(in srgb, var(--c1) 12%, transparent); width: 100%; }
+.pricing-savings-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; max-width: 920px; margin: 0 auto; }
+.pricing-savings-tools { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.pricing-savings-tools > li { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 20px 8px 8px; border: 1px solid var(--ps-edge-muted); border-radius: 16px; background: var(--ps-surface); transition: border-color 180ms ease; }
+.pricing-savings-tools > li[data-selected=true] { border-color: color-mix(in srgb, var(--ps-ink) 22%, transparent); }
+.pricing-savings-toggle { display: flex; flex: 1; align-items: center; gap: 14px; min-width: 0; align-self: stretch; padding: 0 12px; border: 0; border-radius: 10px; background: none; color: var(--ps-ink); font: 500 16px/1.4 Inter, body; text-align: left; }
+.pricing-savings-toggle:hover { background: var(--ps-hover); }
+.pricing-savings-check { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border: 1px solid var(--ps-edge); border-radius: 6px; color: transparent; transition: background 150ms ease, color 150ms ease; }
+.pricing-savings-check svg { width: 14px; height: 14px; }
+.pricing-savings-toggle[aria-pressed=true] .pricing-savings-check { border-color: var(--ps-ink); background: var(--ps-ink); color: var(--ps-surface); }
+.pricing-savings-icon { flex: none; width: 22px; height: 22px; }
+.pricing-savings-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pricing-savings-tools > li[data-selected=false] :is(.pricing-savings-icon, .pricing-savings-name, .pricing-savings-price) { opacity: .45; }
+.pricing-savings-plans { display: inline-flex; flex: none; padding: 2px; border: 1px solid var(--ps-edge-muted); border-radius: 999px; }
+.pricing-savings-plans button { padding: 4px 12px; border: 0; border-radius: 999px; background: none; color: var(--ps-ink-muted); font: 500 12px/1.5 Inter, body; }
+.pricing-savings-plans button:hover { color: var(--ps-ink); }
+.pricing-savings-plans button[aria-pressed=true] { background: var(--ps-active); color: var(--ps-ink); }
+.pricing-savings-price { flex: none; min-width: 128px; color: var(--ps-ink); font: 500 16px/1.4 Inter, body; font-variant-numeric: tabular-nums; text-align: right; }
+.pricing-savings-price span { margin-left: 2px; color: var(--ps-ink-muted); font-size: 12px; font-weight: 400; }
+.pricing-savings-summary { position: sticky; top: 96px; align-self: start; display: flex; flex-direction: column; gap: 28px; padding: 28px; border: 1px solid var(--ps-edge-muted); border-radius: 20px; background: var(--ps-panel); }
+.pricing-savings-result { display: flex; flex-direction: column; gap: 6px; margin: 0; color: var(--ps-ink-muted); font: 400 14px/1.6 Inter, body; text-wrap: balance; }
+.pricing-savings-result strong { margin: 4px 0 2px; overflow-wrap: anywhere; color: var(--ps-ink); font: 315 52px/1.05 display; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.pricing-savings-seats { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 24px; border-bottom: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 400 14px/1.5 Inter, body; }
+.pricing-savings-stepper { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--ps-edge-muted); border-radius: 999px; }
+.pricing-savings-stepper button { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--ps-ink-muted); }
+.pricing-savings-stepper button:hover:not(:disabled) { background: var(--ps-hover); color: var(--ps-ink); }
+.pricing-savings-stepper button:disabled { opacity: .3; }
+.pricing-savings-stepper svg { width: 14px; height: 14px; }
+.pricing-savings-stepper input { width: 56px; border: 0; background: none; color: var(--ps-ink); font: 500 15px/1.5 Inter, body; font-variant-numeric: tabular-nums; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.pricing-savings-stepper input::-webkit-inner-spin-button, .pricing-savings-stepper input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+.pricing-savings-macro { display: flex; justify-content: space-between; gap: 16px; padding-top: 24px; border-top: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 400 14px/1.5 Inter, body; }
+.pricing-savings-macro span:last-child { color: var(--ps-ink); font-variant-numeric: tabular-nums; }
+.pricing-savings-result span:last-child { color: var(--ps-ink-faint); }
+.pricing-savings-note { max-width: 560px; margin: 28px auto 0; color: var(--ps-ink-faint); font: 400 12px/1.7 Inter, body; text-align: center; text-wrap: balance; }
+.pricing-savings :focus-visible { outline: 2px solid var(--ps-ink-muted); outline-offset: 2px; }
+@media (max-width: 767px) {
+  .pricing-savings-body { grid-template-columns: minmax(0, 1fr); }
+  .pricing-savings-summary { position: static; }
+}
+@media (max-width: 479px) {
+  .pricing-savings-tools > li { flex-wrap: wrap; gap: 8px 12px; padding: 8px 16px 12px 8px; }
+  .pricing-savings-toggle { flex-basis: 100%; min-height: 48px; }
+  .pricing-savings-plans { margin-left: 12px; }
+  .pricing-savings-price { width: auto; margin-left: auto; }
+  .pricing-savings-result strong { font-size: 44px; }
+}

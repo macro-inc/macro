@@ -4,26 +4,13 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import {
-  CompanyDisplayMenu,
-  CompanyViewsMenu,
-} from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
 import { CollapsibleToolbarItem } from '@components/app/split-layout/components/CollapsibleItem';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@components/app/split-layout/components/SplitToolbar';
+import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 
-export function SoupFiltersBar(props: {
-  variant?: 'default' | 'tag';
-  hasPreviewItems: boolean;
-  onPreviewEngage: () => void;
-  onPreviewOpenChange?: (open: boolean) => void;
-}) {
+export function SoupFiltersBar(props: { variant?: 'default' | 'tag' }) {
   const { resetToTabDefaults, consolidatedFiltersList } =
     useFilterRefinements();
 
@@ -35,16 +22,12 @@ export function SoupFiltersBar(props: {
     const content = panel.handle.content();
     return content.type === 'component' && content.id === 'search';
   });
-  const isCompaniesView = createMemo(() => {
-    const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'companies';
-  });
   const isTagView = createMemo(() => props.variant === 'tag');
 
   // The inbox hides sort (it's fixed to updated_at for this view).
-  const isInboxView = createMemo(() => {
+  const isHomeView = createMemo(() => {
     const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'inbox';
+    return content.type === 'component' && content.id === 'home';
   });
 
   const CollapsibleGroup = () => (
@@ -72,41 +55,20 @@ export function SoupFiltersBar(props: {
           when={!isSearchView() && !isTagView()}
           fallback={
             <Show when={isTagView()} fallback={<SearchFiltersRow />}>
-              <Show when={!isInboxView()}>
+              <Show when={!isHomeView()}>
                 <SoupViewContextSort />
               </Show>
               <CollapsibleGroup />
             </Show>
           }
         >
-          <Show when={!isInboxView()}>
+          <Show when={!isHomeView()}>
             <SoupViewContextSort />
           </Show>
           <CollapsibleGroup />
           <CollapsibleFilter />
-          <Show when={isCompaniesView()}>
-            <CompanyDisplayMenu />
-          </Show>
         </Show>
       </SplitToolbarLeft>
-      <SplitToolbarRight>
-        <Show when={isCompaniesView()}>
-          <CollapsibleToolbarItem id="soup-toolbar-views" priority={2}>
-            {(isCollapsed) => <CompanyViewsMenu hideLabel={isCollapsed()} />}
-          </CollapsibleToolbarItem>
-        </Show>
-        <CollapsibleToolbarItem id="soup-toolbar-preview" priority={3}>
-          {(isCollapsed) => (
-            <PreviewButton
-              disabled={!props.hasPreviewItems}
-              disabledLabel="No items to preview"
-              onEngage={props.onPreviewEngage}
-              onOpenChange={props.onPreviewOpenChange}
-              hideLabel={isCollapsed()}
-            />
-          )}
-        </CollapsibleToolbarItem>
-      </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
       <Show when={!isSearchView() && !isTagView()}>
         <SoupActiveFiltersBar

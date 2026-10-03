@@ -1,8 +1,9 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
-    ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
+    AgentAssignedToTaskEvent, AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent,
+    ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata,
+    ThreadMessageKind,
 };
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
@@ -15,7 +16,19 @@ use messages::domain::events::MessagePostedMetadata;
 use messages::domain::models::MessageParent;
 
 use super::*;
-use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
+use crate::domain::model::{
+    AgentKind, AgentRuntimeConfig, HarnessCommand, MentionOrigin, OpenSession, SessionOrigin,
+    StaticFileLinks,
+};
+use agent_runtime_protocol::domain::action::PromptAttachment;
+use channels::domain::broker_events::ChannelEventAttachment;
+
+fn mention_origin(open: &OpenSession) -> &MentionOrigin {
+    let SessionOrigin::Mention(origin) = &open.origin else {
+        panic!("expected a mention origin");
+    };
+    origin
+}
 
 fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
     Some(AgentRuntimeConfig {
@@ -33,6 +46,10 @@ fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
         instructions: "configured instructions".to_owned(),
         mcp_servers: AgentMcpServers::OwnerConnections,
     })
+}
+
+fn links() -> StaticFileLinks {
+    StaticFileLinks::new("https://static.example/")
 }
 
 fn user() -> MacroUserIdStr<'static> {
@@ -98,6 +115,7 @@ fn a_mention_for_our_bot_opens_a_session() {
     let routed = route_agent_trigger(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
         runtime(AgentKind::InMemory),
+        &links(),
     )
     .expect("a mention for our bot should yield work");
 
@@ -108,11 +126,11 @@ fn a_mention_for_our_bot_opens_a_session() {
     assert_eq!(open.runtime.kind, AgentKind::InMemory);
     assert_eq!(open.runtime.model, "configured-model");
     assert_eq!(open.runtime.instructions, "configured instructions");
-    assert_eq!(open.origin.message_id, Uuid::from_u128(2));
+    assert_eq!(mention_origin(&open).message_id, Uuid::from_u128(2));
     // A top-level mention roots its own thread.
-    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
-    assert_eq!(open.origin.sender, user());
-    assert_eq!(open.origin.content, "@claude fix the tests");
+    assert_eq!(mention_origin(&open).thread_id, Uuid::from_u128(2));
+    assert_eq!(mention_origin(&open).sender, user());
+    assert_eq!(mention_origin(&open).content, "@claude fix the tests");
 }
 
 #[test]
@@ -128,12 +146,12 @@ fn a_threaded_mention_answers_into_its_thread() {
     ));
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(event, runtime(AgentKind::InMemory))
+        route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
             .expect("the mention should yield work")
     else {
         panic!("a new-session event should open");
     };
-    assert_eq!(open.origin.thread_id, thread);
+    assert_eq!(mention_origin(&open).thread_id, thread);
 }
 
 #[test]
@@ -142,6 +160,7 @@ fn a_foreign_bots_open_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
             None,
+            &links(),
         )
         .unwrap_err(),
         Skipped::ForeignBot
@@ -151,7 +170,7 @@ fn a_foreign_bots_open_is_skipped() {
 #[test]
 fn an_unresolved_existing_session_is_treated_as_external() {
     assert!(matches!(
-        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), None),
+        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), None, &links()),
         Ok(RoutedTrigger::Announce(_, _))
     ));
 }
@@ -162,6 +181,7 @@ fn a_bot_authored_mention_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
             runtime(AgentKind::InMemory),
+            &links(),
         )
         .unwrap_err(),
         Skipped::NotFromUser
@@ -176,6 +196,7 @@ fn any_user_mention_can_open_a_managed_agent() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
             runtime(AgentKind::InMemory),
+            &links(),
         ),
         Ok(RoutedTrigger::Command(_, HarnessCommand::Open(_)))
     ));
@@ -186,6 +207,7 @@ fn a_managed_channel_message_forwards_to_its_session() {
     let routed = route_agent_trigger(
         channel_message(MACRO_CODER_BOT_ID),
         runtime(AgentKind::SandboxedCoder),
+        &links(),
     )
     .expect("a channel event for our bot should yield work");
 
@@ -214,8 +236,12 @@ fn a_managed_channel_message_forwards_to_its_session() {
 fn an_external_channel_message_announces_only() {
     // The external bot's own runtime delivers the prompt; this deployment
     // only posts the chip, whichever bot it manages itself.
-    let routed = route_agent_trigger(channel_message(BotId::TEST_A), runtime(AgentKind::External))
-        .expect("an external existing-session event should yield work");
+    let routed = route_agent_trigger(
+        channel_message(BotId::TEST_A),
+        runtime(AgentKind::External),
+        &links(),
+    )
+    .expect("an external existing-session event should yield work");
 
     let RoutedTrigger::Announce(session_id, prompt) = routed else {
         panic!("an external existing-session event should announce");
@@ -242,7 +268,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         },
     ));
     assert_eq!(
-        route_agent_trigger(event, runtime(AgentKind::External)).unwrap_err(),
+        route_agent_trigger(event, runtime(AgentKind::External), &links()).unwrap_err(),
         Skipped::NotFromUser
     );
 }
@@ -266,13 +292,13 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
             message: document_message(ChannelSender::new_from_user(user())),
         }));
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(opened, runtime(AgentKind::InMemory))
+        route_agent_trigger(opened, runtime(AgentKind::InMemory), &links())
             .expect("a document mention for our bot should open")
     else {
         panic!("a new-session event should open");
     };
-    assert_eq!(open.origin.parent, document());
-    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
+    assert_eq!(mention_origin(&open).parent, document());
+    assert_eq!(mention_origin(&open).thread_id, Uuid::from_u128(2));
 
     let followed =
         AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
@@ -282,12 +308,98 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
             message: document_message(ChannelSender::new_from_user(user())),
         }));
     let RoutedTrigger::Announce(session_id, prompt) =
-        route_agent_trigger(followed, None).expect("an external follow-up announces")
+        route_agent_trigger(followed, None, &links()).expect("an external follow-up announces")
     else {
         panic!("an external existing-session event should announce");
     };
     assert_eq!(session_id, AgentSessionId::TEST_A);
     assert_eq!(prompt.origin.parent, document());
+}
+
+fn assigned_to_task() -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
+        AgentAssignedToTaskEvent {
+            bot_id: BotId::TEST_A,
+            parent: document(),
+            discussion_id: Uuid::from_u128(2),
+            actor: user(),
+            prompt: "Complete the assigned task".to_owned(),
+        },
+    ))
+}
+
+#[test]
+fn assigning_a_managed_agent_opens_on_the_task_discussion() {
+    let event = assigned_to_task();
+    assert_eq!(agent_trigger_bot_id(&event), Some(BotId::TEST_A));
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
+        route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
+            .expect("a managed assignment opens a session")
+    else {
+        panic!("an assignment should open a session");
+    };
+    assert_eq!(open.bot_id, BotId::TEST_A);
+    let SessionOrigin::TaskAssignment(origin) = open.origin else {
+        panic!("an assignment must retain its own origin");
+    };
+    assert_eq!(origin.parent, document());
+    assert_eq!(origin.discussion_id, Uuid::from_u128(2));
+    assert_eq!(origin.actor, user());
+    assert_eq!(origin.prompt, "Complete the assigned task");
+}
+
+#[test]
+fn assigning_an_external_agent_leaves_session_creation_to_its_runtime() {
+    assert_eq!(
+        route_agent_trigger(assigned_to_task(), runtime(AgentKind::External), &links(),)
+            .unwrap_err(),
+        Skipped::ForeignBot,
+    );
+}
+
+#[test]
+fn task_discussion_followups_keep_the_managed_and_external_session_origin() {
+    let thread_id = Uuid::from_u128(7);
+    let message_id = Uuid::from_u128(8);
+    let followed =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+            bot_id: BotId::TEST_A,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: MessagePostedMetadata {
+                message_id,
+                thread_id: Some(thread_id),
+                root_id: thread_id,
+                content: "Include a regression test".to_owned(),
+                ..document_message(ChannelSender::new_from_user(user()))
+            },
+        }));
+    let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) =
+        route_agent_trigger(followed.clone(), runtime(AgentKind::InMemory), &links())
+            .expect("a managed follow-up delivers")
+    else {
+        panic!("a managed follow-up should deliver");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(
+        deliver.action,
+        AgentAction::prompt("Include a regression test")
+    );
+    let origin = deliver.announce.expect("a task follow-up announces");
+    assert_eq!(origin.parent, document());
+    assert_eq!(origin.thread_id, thread_id);
+    assert_eq!(origin.message_id, message_id);
+
+    let RoutedTrigger::Announce(session_id, prompt) =
+        route_agent_trigger(followed, runtime(AgentKind::External), &links())
+            .expect("an external follow-up announces")
+    else {
+        panic!("an external follow-up should announce");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(prompt.origin.parent, document());
+    assert_eq!(prompt.origin.thread_id, thread_id);
+    assert_eq!(prompt.origin.message_id, message_id);
 }
 
 #[test]
@@ -297,6 +409,7 @@ fn any_user_can_follow_up_to_their_cursor_session() {
         route_agent_trigger(
             channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user)),
             runtime(AgentKind::Cursor),
+            &links(),
         ),
         Ok(RoutedTrigger::Command(_, HarnessCommand::Deliver(_)))
     ));
@@ -309,6 +422,7 @@ fn any_user_can_follow_up_to_a_coder_session() {
     let routed = route_agent_trigger(
         channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(user)),
         runtime(AgentKind::SandboxedCoder),
+        &links(),
     )
     .expect("channel users may follow up");
     assert!(matches!(
@@ -325,6 +439,7 @@ fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
             ChannelSender::new_from_bot(BotId::TEST_B),
         ),
         runtime(AgentKind::SandboxedCoder),
+        &links(),
     )
     .expect("explicit bot mentions continue to reach managed sessions");
 
@@ -332,4 +447,83 @@ fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
         panic!("a managed bot-authored follow-up should deliver");
     };
     assert_eq!(deliver.actor, None);
+}
+
+fn attached(entity_type: &str, id: u128) -> ChannelEventAttachment {
+    ChannelEventAttachment {
+        attachment_id: Uuid::from_u128(id),
+        entity_type: entity_type.to_owned(),
+        entity_id: Uuid::from_u128(id).to_string(),
+        created_at: Utc::now(),
+    }
+}
+
+fn message_with_files(sender: ChannelSender<'static>) -> ChannelMessagePostedMetadata {
+    ChannelMessagePostedMetadata {
+        attachments: vec![
+            attached("static/image", 0x10),
+            // Documents reach the agent as mentions, never as file links.
+            attached("document", 0x11),
+            attached("static/video", 0x12),
+        ],
+        ..message(sender)
+    }
+}
+
+/// The files a message carries reach the agent with its words - as links
+/// it can fetch, since the static file service is where the bytes live.
+#[test]
+fn a_mention_with_attached_files_opens_with_them_as_prompt_attachments() {
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+        AgentBotMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: message_with_files(ChannelSender::new_from_user(user())),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(
+        mention_origin(&open).attachments,
+        vec![
+            PromptAttachment::new(
+                format!("https://static.example/file/{}", Uuid::from_u128(0x10)),
+                "image",
+            )
+            .mime_type("image/*"),
+            PromptAttachment::new(
+                format!("https://static.example/file/{}", Uuid::from_u128(0x12)),
+                "video",
+            )
+            .mime_type("video/*"),
+        ]
+    );
+}
+
+#[test]
+fn a_managed_channel_message_with_files_delivers_them_as_prompt_attachments() {
+    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+        ChannelEventMetadata {
+            bot_id: MACRO_CODER_BOT_ID,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: message_with_files(ChannelSender::new_from_user(user())),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::SandboxedCoder), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Deliver(deliver)) = routed else {
+        panic!("a managed existing-session event should deliver");
+    };
+    let AgentAction::Prompt(prompt) = deliver.action else {
+        panic!("a channel message becomes a prompt");
+    };
+    assert_eq!(prompt.prompt, "@claude fix the tests");
+    assert_eq!(
+        prompt.attachments.len(),
+        2,
+        "the document is not a file link"
+    );
+    assert_eq!(prompt.attachments[0].mime_type.as_deref(), Some("image/*"));
+    assert_eq!(prompt.attachments[1].mime_type.as_deref(), Some("video/*"));
 }

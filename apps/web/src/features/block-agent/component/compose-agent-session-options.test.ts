@@ -1,78 +1,45 @@
+import { CLAUDE_BOT_ID } from '@core/constant/claudeAgent';
+import { CODEX_BOT_ID } from '@core/constant/codexAgent';
+import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { describe, expect, it } from 'vitest';
 import {
-  agentRuntimeDescription,
   harnessDisplayName,
-  isManagedHarness,
-  modelPillLabel,
-  overrideModelOptions,
-  type PersonaOption,
-  personaDefaultLabel,
-  shortlistModelOptions,
+  harnessTitle,
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+  showsSessionHarness,
 } from './compose-agent-session-options';
 
-const MODELS = [
-  { id: 'anthropic/claude-sonnet-5', name: 'Sonnet 5' },
-  { id: 'anthropic/claude-opus-5', name: 'Opus 5' },
-];
+describe('sessionRepositoryUrl', () => {
+  const repoUrl = 'https://github.com/macro-inc/macro';
 
-const CODER: PersonaOption = {
-  id: 'macro-coder',
-  name: 'Macro Coder',
-  handle: 'coder',
-  harness: 'sandbox',
-};
-
-const ENGINEER: PersonaOption = {
-  ...CODER,
-  id: 'bot-1',
-  botId: 'bot-1',
-  name: 'Test Engineer',
-  handle: 'test-engineer',
-  defaultModel: 'anthropic/claude-sonnet-5',
-};
-
-describe('agentRuntimeDescription', () => {
-  it('describes in-memory agents without implying a local sandbox', () => {
-    for (const harness of ['in-memory', 'macro-inmem']) {
-      expect(agentRuntimeDescription({ ...ENGINEER, harness })).toBe(
-        'Starts quickly and runs in-memory. Great for workspace tasks'
-      );
-    }
+  it('shows the repository of a coding session', () => {
+    expect(sessionRepositoryUrl({ harness: 'cursor', repoUrl })).toBe(repoUrl);
+    expect(sessionRepositoryUrl({ harness: 'macrod', repoUrl })).toBe(repoUrl);
   });
 
-  it('describes Cursor coding work', () => {
-    expect(agentRuntimeDescription({ ...ENGINEER, harness: 'cursor' })).toBe(
-      'Bring in Cursor for some heavier coding work'
+  it('hides the default repository stamped on a chat session', () => {
+    expect(sessionRepositoryUrl({ harness: 'in-memory', repoUrl })).toBe(
+      undefined
+    );
+    expect(sessionRepositoryUrl({ harness: 'macro-inmem', repoUrl })).toBe(
+      undefined
     );
   });
 
-  it('names the local agent and its owner', () => {
-    expect(
-      agentRuntimeDescription({ ...ENGINEER, harness: 'macrod' }, 'Wolf')
-    ).toBe('Do work locally using Test Engineer owned by Wolf');
-  });
-
-  it('does not invent an owner while their name is unavailable', () => {
-    expect(agentRuntimeDescription({ ...ENGINEER, harness: 'macrod' })).toBe(
-      'Do work locally using Test Engineer'
+  it('is empty without a session or repository', () => {
+    expect(sessionRepositoryUrl(undefined)).toBe(undefined);
+    expect(sessionRepositoryUrl({ harness: 'cursor', repoUrl: null })).toBe(
+      undefined
     );
-  });
-});
-
-describe('overrideModelOptions', () => {
-  it('lists every model when the persona has no default', () => {
-    expect(overrideModelOptions(CODER, MODELS)).toEqual(MODELS);
-  });
-
-  it('drops the persona default so it is not offered twice', () => {
-    expect(overrideModelOptions(ENGINEER, MODELS)).toEqual([MODELS[1]]);
   });
 });
 
 describe('harnessDisplayName', () => {
   it('names Macro runtimes after the product', () => {
-    expect(harnessDisplayName('in-memory')).toBe('Macro');
-    expect(harnessDisplayName('sandbox')).toBe('Macro');
+    expect(harnessDisplayName('in-memory')).toBe('Macro Agent');
+    expect(harnessDisplayName('macro-inmem')).toBe('Macro Agent');
+    expect(harnessDisplayName('sandbox')).toBe('Macro Agent');
   });
 
   it('names the Cursor runtime', () => {
@@ -84,105 +51,61 @@ describe('harnessDisplayName', () => {
   });
 });
 
-describe('isManagedHarness', () => {
-  it('accepts the runtimes the deployment provisions', () => {
-    expect(isManagedHarness('in-memory')).toBe(true);
-    expect(isManagedHarness('macro-inmem')).toBe(true);
-    expect(isManagedHarness('cursor')).toBe(true);
-    expect(isManagedHarness('claude-cloud')).toBe(true);
+describe('harnessTitle', () => {
+  it('uses the product name for Macro slugs instead of title-casing them', () => {
+    expect(harnessTitle('macro-inmem')).toBe('Macro Agent');
+    expect(harnessTitle('in-memory')).toBe('Macro Agent');
+    expect(harnessTitle('sandbox')).toBe('Macro Agent');
   });
 
-  it('refuses external daemons', () => {
-    expect(isManagedHarness('macrod')).toBe(false);
-    expect(isManagedHarness('harness-123')).toBe(false);
+  it('title-cases other slugs', () => {
+    expect(harnessTitle('claude-code')).toBe('Claude Code');
+    expect(harnessTitle('codex-cloud')).toBe('Codex Cloud');
+    expect(harnessTitle(undefined)).toBe('Agent session');
   });
 });
 
-describe('shortlistModelOptions', () => {
-  it('shows a short list in full', () => {
-    expect(shortlistModelOptions(ENGINEER, MODELS)).toEqual({
-      featured: [MODELS[1]],
-      more: [],
-    });
-  });
+describe('sessionHarnessTitle', () => {
+  it.each([
+    [CURSOR_BOT_ID, 'Cursor'],
+    [CODEX_BOT_ID, 'Codex Cloud'],
+    [CLAUDE_BOT_ID, 'Claude Cloud'],
+  ] as const)(
+    'names a %s session from the bot even when the row says opencode',
+    (botId, title) => {
+      expect(sessionHarnessTitle({ harness: 'opencode', botId })).toBe(title);
+    }
+  );
 
-  it('caps a long catalog and keeps the rest behind more', () => {
-    const catalog = [
-      { id: 'auto', name: 'Auto' },
-      { id: 'grok', name: 'Cursor Grok 4.6' },
-      { id: 'opus', name: 'Claude Opus 5' },
-      { id: 'opus-thinking', name: 'Claude Opus 5 Thinking' },
-      { id: 'sonnet', name: 'Claude Sonnet 5' },
-      { id: 'sonnet-thinking', name: 'Claude Sonnet 5 Thinking' },
-      { id: 'gpt', name: 'GPT-5.6 Sol' },
-      { id: 'gpt-fast', name: 'GPT-5.6 Sol Fast' },
-      { id: 'gemini', name: 'Gemini 3.8 Flash' },
-    ];
-    const shortlist = shortlistModelOptions(CODER, catalog, 5);
-
-    expect(shortlist.featured.map((model) => model.id)).toEqual([
-      'auto',
-      'grok',
-      'opus',
-      'sonnet',
-      'gpt',
-    ]);
-    expect(shortlist.more.map((model) => model.id)).toEqual([
-      'opus-thinking',
-      'sonnet-thinking',
-      'gpt-fast',
-      'gemini',
-    ]);
-    expect(shortlist.featured.length + shortlist.more.length).toBe(
-      catalog.length
+  it('title-cases other sessions from their stored slug', () => {
+    expect(sessionHarnessTitle({ harness: 'claude-cloud' })).toBe(
+      'Claude Cloud'
     );
   });
 
-  it('never features the persona default', () => {
-    const catalog = Array.from({ length: 8 }, (_, index) => ({
-      id: `m${index}`,
-      name: `Model ${index}`,
-    }));
-    const persona = { ...CODER, defaultModel: 'm0' };
-    const shortlist = shortlistModelOptions(persona, catalog, 3);
-
-    expect(shortlist.featured).toHaveLength(3);
-    expect(
-      [...shortlist.featured, ...shortlist.more].some(
-        (model) => model.id === 'm0'
-      )
-    ).toBe(false);
+  it('uses the product name for Macro slugs', () => {
+    expect(sessionHarnessTitle({ harness: 'macro-inmem' })).toBe('Macro Agent');
+    expect(sessionHarnessTitle({ harness: 'in-memory' })).toBe('Macro Agent');
   });
 });
 
-describe('personaDefaultLabel', () => {
-  it('is generic without a known default', () => {
-    expect(personaDefaultLabel(CODER, MODELS)).toBe('default');
+describe('showsSessionHarness', () => {
+  it('hides the Details row for in-memory chat agents', () => {
+    expect(showsSessionHarness({ harness: 'in-memory' })).toBe(false);
+    expect(showsSessionHarness({ harness: 'macro-inmem' })).toBe(false);
+    expect(showsSessionHarness({})).toBe(false);
   });
 
-  it('names the default model when the persona has one', () => {
-    expect(personaDefaultLabel(ENGINEER, MODELS)).toBe('default (Sonnet 5)');
+  it('keeps the Details row for coding runtimes', () => {
+    expect(showsSessionHarness({ harness: 'cursor' })).toBe(true);
+    expect(showsSessionHarness({ harness: 'claude-cloud' })).toBe(true);
+    expect(showsSessionHarness({ harness: 'sandbox' })).toBe(true);
+    expect(showsSessionHarness({ harness: 'my-laptop' })).toBe(true);
   });
 
-  it('falls back to the raw id for models the catalog does not know', () => {
+  it('keeps the Details row for first-party coding bots stamped opencode', () => {
     expect(
-      personaDefaultLabel({ ...ENGINEER, defaultModel: 'acme/x' }, MODELS)
-    ).toBe('default (acme/x)');
-  });
-});
-
-describe('modelPillLabel', () => {
-  it('shows the override when one is set', () => {
-    expect(modelPillLabel('anthropic/claude-opus-5', ENGINEER, MODELS)).toBe(
-      'Opus 5'
-    );
-  });
-
-  it('shows the persona default otherwise', () => {
-    expect(modelPillLabel('', ENGINEER, MODELS)).toBe('default (Sonnet 5)');
-  });
-
-  it('shows a neutral label when nothing is known', () => {
-    expect(modelPillLabel('', CODER, MODELS)).toBe('default');
+      showsSessionHarness({ harness: 'opencode', botId: CURSOR_BOT_ID })
+    ).toBe(true);
   });
 });

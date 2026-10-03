@@ -1,3 +1,4 @@
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type {
   Completion,
@@ -19,7 +20,6 @@ import type {
   MarkStore,
   ThreadStore,
 } from '../comments/commentType';
-import type { Diff } from '../types';
 
 type MdData = {
   editor?: LexicalEditor;
@@ -66,12 +66,12 @@ const initialFindAndReplaceState: FindAndReplaceState = {
 type MarkdownCommentsState = {
   marks: MarkStore;
   activeMarkIds: string[];
-  activeCommentThread: number | null;
-  highlightedCommentId: number | null;
+  activeCommentThread: ThreadId | null;
+  highlightedCommentId: CommentId | null;
   comments: CommentStore;
   threads: ThreadStore;
   commentMarksInitialized: boolean;
-  highlightedCommentThreads: number[];
+  highlightedCommentThreads: ThreadId[];
 };
 
 export function createMarkdownDocumentState() {
@@ -81,9 +81,6 @@ export function createMarkdownDocumentState() {
   const [findAndReplace, setFindAndReplace] = createStore<FindAndReplaceState>(
     structuredClone(initialFindAndReplaceState)
   );
-
-  const [rewriting, setRewriting] = createSignal(false);
-  const [revisions, setRevisions] = createSignal<Diff[]>();
 
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [generatedAndWaiting, setGeneratedAndWaiting] = createSignal(false);
@@ -112,12 +109,6 @@ export function createMarkdownDocumentState() {
       setError,
       findAndReplace,
       setFindAndReplace,
-    },
-    rewrite: {
-      rewriting,
-      setRewriting,
-      revisions,
-      setRevisions,
     },
     generation: {
       isGenerating,

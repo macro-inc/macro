@@ -3,12 +3,9 @@ import { createMemo, createSelector } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { isThreadPlaceable } from '../type/placeables';
 
-// true if user owns the comment placeable (by uuid)
 export const useOwnedCommentPlaceableSelector = () => {
   const pdf = usePdfDocument();
   const userId = useUserId();
-  const [anchors] = pdf.state.resources.anchors;
-  const [newPlaceable] = pdf.state.signals.newPlaceable;
   const ownedCommentAnchorUuids = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) {
@@ -16,14 +13,15 @@ export const useOwnedCommentPlaceableSelector = () => {
       return [];
     }
 
+    const anchors = pdf.annotations.anchors();
     const owned =
-      anchors()
+      anchors
         ?.filter(
           (anchor) =>
             anchor.anchorType === 'placeable' && anchor.owner === currentUserId
         )
         .map((anchor) => anchor.uuid) ?? [];
-    const newComment = newPlaceable();
+    const newComment = pdf.markup.draft();
     if (
       newComment &&
       isThreadPlaceable(newComment) &&
@@ -40,33 +38,11 @@ export const useOwnedCommentPlaceableSelector = () => {
   return ownedCommentSelector;
 };
 
-export const useOwnedCommentSelector = () => {
-  const pdf = usePdfDocument();
-  const userId = useUserId();
-  const [comments] = pdf.state.stores.comments;
-  const ownedCommentIds = createMemo(() => {
-    const currentUserId = userId();
-    if (!currentUserId) {
-      console.error('User ID not found, cannot get owned comments');
-      return [];
-    }
-    return comments
-      .filter((comment) => comment.owner === currentUserId)
-      .map((comment) => comment.id);
-  });
-  const ownedCommentSelector = createSelector(
-    ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
-  );
-  return ownedCommentSelector;
-};
-
 export const useOwnedHighlightSelector = () => {
   const pdf = usePdfDocument();
   const userId = useUserId();
-  const highlightsUuidMap = pdf.state.derived.highlightsUuidMap;
   const ownedHighlightSelector = createSelector(
-    highlightsUuidMap,
+    pdf.annotations.highlightsByUuid,
     (uuid: string, owned) => {
       if (!owned) return false;
       const highlight = owned[uuid];

@@ -93,6 +93,7 @@ export function MessageContainer(props: MessageContainerProps) {
   return (
     <EmailMessageView
       message={props.message}
+      renderInvitation={rendering.renderInvitation}
       renderAvatar={rendering.renderAvatar}
       viewerEmail={threadContext.viewerEmail()}
       isTouch={threadContext.isTouch()}

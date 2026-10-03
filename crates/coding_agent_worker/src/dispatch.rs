@@ -41,6 +41,7 @@ impl WorkExecutor for Dispatcher {
     async fn execute(&self, work: TriggerWork) -> Result<(), DispatchError> {
         match work {
             TriggerWork::OpenAndPrompt {
+                reuse_origin_message,
                 bot,
                 sender,
                 parent,
@@ -49,6 +50,9 @@ impl WorkExecutor for Dispatcher {
                 content,
             } => {
                 let request = CreateAgentSessionRequest {
+                    // The service mints the id: nothing here opens a surface
+                    // on it before the create answers.
+                    id: None,
                     // A harness serves many agents, so the token implies no
                     // bot: name the mentioned agent, and the service verifies
                     // it is bound to this harness.
@@ -62,6 +66,7 @@ impl WorkExecutor for Dispatcher {
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {
+                        reuse_origin_message,
                         // Keep `channel_id` populated for channel parents so a
                         // pre-parent harness, which ignores `parent` and reads
                         // `channel_id` as a required UUID, still deserializes
@@ -70,7 +75,11 @@ impl WorkExecutor for Dispatcher {
                             messages::domain::models::MessageParent::Channel(channel_id) => {
                                 Some(*channel_id)
                             }
-                            messages::domain::models::MessageParent::Document(_) => None,
+                            messages::domain::models::MessageParent::Document(_)
+                            | messages::domain::models::MessageParent::Call(_)
+                            | messages::domain::models::MessageParent::Initiative(_)
+                            | messages::domain::models::MessageParent::CrmCompany(_)
+                            | messages::domain::models::MessageParent::CrmContact(_) => None,
                         },
                         parent: Some(parent),
                         thread_id: Some(thread_id),
@@ -81,6 +90,9 @@ impl WorkExecutor for Dispatcher {
                     // whatever the binary in its config was built with, so
                     // there is nothing to state here.
                     instructions: None,
+                    // Likewise the model: an external session runs on
+                    // whatever this runtime is configured with.
+                    model: None,
                 };
                 let created = match self.api.create_session(&request, &sender).await {
                     Ok(created) => created,
@@ -119,6 +131,36 @@ impl WorkExecutor for Dispatcher {
                 // or a 409 on a repeat create (session already exists) is how
                 // a follow-up lands on the same session.
                 self.api.prompt(session, &sender, &content).await?;
+                Ok(())
+            }
+            TriggerWork::OpenRequested {
+                session,
+                bot,
+                sender,
+            } => {
+                // Same create as a mention, minus the thread: the requester is
+                // waiting on this id, so the session is created under it. No
+                // prompt here - whoever asked sends their own through the
+                // session once this create answers them.
+                let request = CreateAgentSessionRequest {
+                    id: Some(session.as_uuid()),
+                    bot_id: Some(bot.as_uuid()),
+                    workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
+                    prompt: None,
+                    repo_url: self.workspace.repo_url.clone(),
+                    repo_branch: None,
+                    owner: Some(sender.as_ref().to_owned()),
+                    thread: None,
+                    instructions: None,
+                    model: None,
+                };
+                self.api.create_session(&request, &sender).await?;
+                // Be dialed in before the prompt the requester is about to
+                // send arrives, so it lands on a runtime that is serving.
+                self.runtime
+                    .ensure_connected()
+                    .await
+                    .map_err(DispatchError::Dial)?;
                 Ok(())
             }
             TriggerWork::PromptExisting {

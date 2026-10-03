@@ -102,6 +102,9 @@ fn test() -> Job {
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
+        // The default 10-minute idle timeout can stop the server during long
+        // link or test phases, which resets the stats reported at the end.
+        .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
         .add_step(steps::checkout(false, false))
@@ -109,6 +112,7 @@ fn test() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
@@ -166,6 +170,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
+                  - '.github/services-config.json'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
         ))

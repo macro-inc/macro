@@ -24,7 +24,7 @@ fn enums_round_trip_through_strings() {
             status.as_ref()
         );
     }
-    for initiator in [Initiator::Onboarding, Initiator::Chat] {
+    for initiator in [Initiator::Onboarding, Initiator::Chat, Initiator::Archive] {
         assert_eq!(Initiator::from_str(initiator.as_ref()).unwrap(), initiator);
     }
     for run in [
@@ -36,6 +36,33 @@ fn enums_round_trip_through_strings() {
         RunStatus::Dismissed,
     ] {
         assert_eq!(RunStatus::from_str(run.as_ref()).unwrap(), run);
+    }
+}
+
+#[test]
+fn canonical_slack_ids_reject_names_and_wrong_namespaces() {
+    for id in ["C0123456789", "GABC123", "D123", "C1"] {
+        assert_eq!(SlackConversationId::new(id).unwrap().as_str(), id);
+    }
+    for id in [
+        "",
+        "C",
+        "general",
+        "#general",
+        "#C0123456789",
+        "Channels",
+        " C123",
+        "C123 ",
+        "T123",
+        "C../123",
+        "Cé",
+    ] {
+        assert!(SlackConversationId::new(id).is_none(), "{id}");
+    }
+    assert!(SlackConversationId::new(&format!("C{}", "A".repeat(64))).is_none());
+    assert_eq!(SlackWorkspaceId::new("T123").unwrap().as_str(), "T123");
+    for id in ["", "T", "team", "Tlower", "C123", " T123"] {
+        assert!(SlackWorkspaceId::new(id).is_none(), "{id}");
     }
 }
 

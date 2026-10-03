@@ -13,13 +13,14 @@ use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChannel};
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use agent_session::domain::model::AgentSessionId;
+use ai_billing::domain::{AiAdmissionService, DisabledAiAdmissionService};
 use dashmap::DashMap;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::{AgentIdentity, TurnEngine};
 use crate::domain::mcp::DynMcpToolConnector;
-use crate::domain::replay::{FrameSource, replay_history};
+use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort};
 use crate::domain::session::{SessionState, SessionStore};
 
 #[cfg(test)]
@@ -31,7 +32,7 @@ pub struct SessionFacts {
     /// The session the agent serves.
     pub id: AgentSessionId,
     /// The session's owner; turns act on their behalf.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// Model id stamped on the session row.
     pub model: String,
     /// The bot's display name and `@` handle, folded into every turn's
@@ -67,6 +68,7 @@ impl Drop for LiveAgent {
 /// Provisions and tears down in-process agents, one per session.
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
+    admission: Arc<dyn AiAdmissionService>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
     enable_dev_commands: bool,
@@ -92,6 +94,7 @@ impl InMemAgentManager {
     ) -> Self {
         Self {
             engine,
+            admission: Arc::new(DisabledAiAdmissionService),
             frames,
             mcp,
             enable_dev_commands: false,
@@ -99,6 +102,14 @@ impl InMemAgentManager {
             live: DashMap::new(),
             tokens: DashMap::new(),
         }
+    }
+
+    /// Inject the host's configured admission capability for every new turn.
+    /// Production hosts must set this; the constructor defaults to disabled.
+    #[must_use]
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// The egress token `attach` was handed for `session`, if this process
@@ -139,10 +150,19 @@ impl InMemAgentManager {
         if !self.store.contains_key(&facts.id) {
             // Loaded before taking the entry so the read never blocks the
             // map; `or_insert_with` still wins any race to create it.
-            let history = replay_history(self.frames.frames(facts.id).await);
+            let frames = self.frames.frames(facts.id).await;
+            let restored_effort = replay_reasoning_effort(&frames);
+            let reasoning_effort =
+                if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
+                    restored_effort
+                } else {
+                    agent::ReasoningEffort::default()
+                };
+            let history = replay_history(frames);
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
+                reasoning_effort,
                 identity: facts.identity.clone(),
                 instructions: facts.instructions.clone(),
                 history,
@@ -155,6 +175,7 @@ impl InMemAgentManager {
             session_id: facts.id,
             owner: facts.owner,
             engine: Arc::clone(&self.engine),
+            admission: Arc::clone(&self.admission),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),

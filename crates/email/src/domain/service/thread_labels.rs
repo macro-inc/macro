@@ -11,6 +11,13 @@ use uuid::Uuid;
 
 use super::EmailServiceImpl;
 
+/// Facts captured before a label write, used only if provider enqueue fails.
+struct ThreadLabelRollback<'a> {
+    all_ids: &'a [Uuid],
+    changed_ids: &'a [Uuid],
+    inbox_visible: Option<bool>,
+}
+
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
 where
     T: EmailRepo,
@@ -75,6 +82,123 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    pub(crate) async fn mark_thread_unread_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+
+        // Resolve from the authorized thread's inbox, never the caller's primary
+        // inbox: multi-inbox users have a distinct UNREAD label for each link.
+        let unread_label = self
+            .email_repo
+            .list_labels_by_link_id(link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .into_iter()
+            .find(|label| label.provider_label_id == system_labels::UNREAD)
+            .ok_or(EmailErr::LabelNotFound)?;
+
+        self.update_thread_labels_impl(&link, thread_id, unread_label.id, true)
+            .await?;
+        Ok(())
+    }
+
+    /// Resolve the owning inbox server-side, including delegated inboxes.
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, archived))]
+    pub(crate) async fn set_thread_archived_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id.clone())
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+        if !archived {
+            self.ensure_thread_has_received_messages(thread_id, link.id)
+                .await?;
+        }
+        let label = self
+            .email_repo
+            .list_labels_by_link_id(link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .into_iter()
+            .find(|label| label.provider_label_id == system_labels::INBOX)
+            .ok_or(EmailErr::LabelNotFound)?;
+        self.update_thread_labels_with_actor(&link, thread_id, label.id, !archived, Some(macro_id))
+            .await?;
+        Ok(())
+    }
+
+    /// Inbox sorting timestamps disappear after archive/provider sync. Determine
+    /// whether a thread can be restored from its messages, not current labels.
+    async fn ensure_thread_has_received_messages(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        let messages = self
+            .email_repo
+            .get_thread_label_messages(thread_id, link_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        if messages
+            .iter()
+            .any(|message| !message.is_draft && !message.is_sent)
+        {
+            return Ok(());
+        }
+
+        // A sent message addressed back to its sender is also received mail.
+        // Drafts never establish received-message history, even if self-addressed.
+        let sent_ids: Vec<_> = messages
+            .iter()
+            .filter(|message| message.is_sent && !message.is_draft)
+            .map(|message| message.db_id)
+            .collect();
+        if sent_ids.is_empty() {
+            return Err(EmailErr::ThreadHasNoInboundMessages);
+        }
+        let (senders, recipients) = tokio::try_join!(
+            async {
+                self.email_repo
+                    .senders_by_message_ids(&sent_ids)
+                    .await
+                    .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))
+            },
+            async {
+                self.email_repo
+                    .recipients_by_message_ids(&sent_ids)
+                    .await
+                    .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))
+            },
+        )?;
+        if sent_ids.iter().any(|id| {
+            senders.get(id).is_some_and(|sender| {
+                recipients.get(id).is_some_and(|recipients| {
+                    recipients
+                        .iter()
+                        .any(|(recipient, _)| recipient.email.eq_ignore_ascii_case(&sender.email))
+                })
+            })
+        }) {
+            return Ok(());
+        }
+        Err(EmailErr::ThreadHasNoInboundMessages)
+    }
+
     #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,
@@ -101,6 +225,19 @@ where
         thread_id: Uuid,
         label_id: Uuid,
         add: bool,
+    ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        self.update_thread_labels_with_actor(link, thread_id, label_id, add, None)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, link))]
+    pub(super) async fn update_thread_labels_with_actor(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        label_id: Uuid,
+        add: bool,
+        actor: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
         let label = self
             .email_repo
@@ -147,9 +284,25 @@ where
                 .collect(),
             Err(e) => {
                 let err = anyhow::Error::from(e);
+                if provider_label_id == system_labels::INBOX {
+                    return Err(EmailErr::RepoErr(err));
+                }
                 tracing::warn!(error=?err, "failed to snapshot message labels; revert would cover all messages");
                 all_ids.clone()
             }
+        };
+
+        let previous_inbox_visible = if provider_label_id == system_labels::INBOX {
+            Some(
+                self.email_repo
+                    .thread_by_id(thread_id)
+                    .await
+                    .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+                    .ok_or(EmailErr::ThreadNotFound)?
+                    .inbox_visible,
+            )
+        } else {
+            None
         };
 
         // Optimistic DB update: update all messages first
@@ -193,8 +346,11 @@ where
                 self.revert_label_db_changes(
                     link,
                     thread_id,
-                    &all_ids,
-                    &changed_ids,
+                    ThreadLabelRollback {
+                        all_ids: &all_ids,
+                        changed_ids: &changed_ids,
+                        inbox_visible: previous_inbox_visible,
+                    },
                     &provider_label_id,
                     add,
                 )
@@ -234,7 +390,7 @@ where
         // writes are committed and the provider sync is queued. The provider
         // echo of this change finds no label diff during inbox sync, so each
         // change publishes only once.
-        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids);
+        self.publish_thread_label_events(link, thread_id, &label, add, &cancelled_send_ids, actor);
 
         Ok(UpdateThreadLabelsResult {
             successful_ids: all_ids,
@@ -252,11 +408,26 @@ where
         &self,
         link: &Link,
         thread_id: Uuid,
-        all_ids: &[Uuid],
-        changed_ids: &[Uuid],
+        snapshot: ThreadLabelRollback<'_>,
         provider_label_id: &str,
         add: bool,
     ) {
+        let ThreadLabelRollback {
+            all_ids,
+            changed_ids,
+            inbox_visible,
+        } = snapshot;
+        if let Some(inbox_visible) = inbox_visible {
+            if let Err(e) = self
+                .email_repo
+                .set_thread_inbox_state(thread_id, link.id, changed_ids, !add, inbox_visible)
+                .await
+            {
+                let err = anyhow::Error::from(e);
+                tracing::error!(error=?err, "failed to revert thread inbox state after enqueue failure");
+            }
+            return;
+        }
         if !changed_ids.is_empty() {
             let db_result = if add {
                 self.email_repo
@@ -313,9 +484,9 @@ where
         }
     }
 
-    /// Apply a thread label change to the DB: the label rows plus the
-    /// denormalized read/starred state for system labels. The label write is
-    /// a hard error; the denormalized side effects are logged and skipped.
+    /// Apply a thread label change to the DB. UNREAD/read flags and INBOX/
+    /// visibility commit atomically; a failure propagates before provider sync
+    /// or events. Other labels retain their best-effort starred side effect.
     async fn apply_label_db_changes(
         &self,
         link: &Link,
@@ -324,6 +495,21 @@ where
         provider_label_id: &str,
         add: bool,
     ) -> Result<(), EmailErr> {
+        if provider_label_id == system_labels::INBOX {
+            return self
+                .email_repo
+                .set_thread_inbox_state(thread_id, link.id, message_ids, add, add)
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)));
+        }
+        if provider_label_id == system_labels::UNREAD {
+            return self
+                .email_repo
+                .set_thread_read_state(thread_id, link.id, message_ids, !add)
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)));
+        }
+
         let db_result = if add {
             self.email_repo
                 .insert_message_labels_batch(message_ids, provider_label_id, link.id)
@@ -340,26 +526,7 @@ where
             return Err(EmailErr::RepoErr(err));
         }
 
-        // Side effects for system labels
-        if provider_label_id == system_labels::UNREAD {
-            if let Err(e) = self
-                .email_repo
-                .update_message_read_status_batch(message_ids, link.id, !add)
-                .await
-            {
-                let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update message read status");
-            }
-            // Keep the denormalized thread flag in sync — soup previews read it.
-            if let Err(e) = self
-                .email_repo
-                .update_thread_read_status(thread_id, link.id, !add)
-                .await
-            {
-                let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update thread read status");
-            }
-        } else if provider_label_id == system_labels::STARRED
+        if provider_label_id == system_labels::STARRED
             && let Err(e) = self
                 .email_repo
                 .update_message_starred_status_batch(message_ids, link.id, add)
@@ -384,11 +551,12 @@ where
         label: &LinkLabel,
         add: bool,
         cancelled_send_ids: &[Uuid],
+        actor: Option<macro_user_id::user_id::MacroUserIdStr<'static>>,
     ) {
         let event = EmailMacroEvent::thread_label_change(
             link.id,
             link.macro_id.clone(),
-            None,
+            actor.clone(),
             thread_id,
             LabelRef {
                 label_id: Some(label.id),
@@ -408,7 +576,7 @@ where
                 MessageSendCancelledMetadata {
                     link_id: link.id,
                     owner: link.macro_id.clone(),
-                    actor: None,
+                    actor: actor.clone(),
                     message_id: *message_id,
                     thread_id,
                     reason: SendCancelReason::ThreadTrashed,

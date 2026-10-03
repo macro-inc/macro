@@ -78,14 +78,32 @@ async fn insert_initiative(pool: &PgPool, owner: &str, link: LinkShare) -> anyho
     .await?;
 
     let initiative_id = Uuid::now_v7();
+    let description_document_id = Uuid::now_v7().to_string();
     sqlx::query!(
         r#"
-        INSERT INTO initiative (id, name, owner_user_id, share_permission_id)
-        VALUES ($1, 'Test initiative', $2, $3)
+        INSERT INTO "Document" (id, name, owner)
+        VALUES ($1, 'Test initiative description', $2)
+        "#,
+        description_document_id,
+        owner,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO initiative (
+            id,
+            name,
+            owner_user_id,
+            share_permission_id,
+            description_document_id
+        )
+        VALUES ($1, 'Test initiative', $2, $3, $4)
         "#,
         initiative_id,
         owner,
         share_permission_id,
+        description_document_id,
     )
     .execute(pool)
     .await?;

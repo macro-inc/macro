@@ -7,18 +7,18 @@ import GearIcon from '@phosphor/gear.svg';
 import LinkIcon from '@phosphor/link.svg';
 import { Button } from '@ui';
 import { Suspense } from 'solid-js';
-import { createSchedulingSource } from './queries/source';
+import { useSchedulingProfileQuery } from './queries/source';
 
 function Actions() {
   const user = useUserId();
   const settings = useSettingsState();
-  const source = createSchedulingSource(() => ({
+  const source = useSchedulingProfileQuery(() => ({
     id: user() ?? 'me',
     name: 'Personal',
     canEdit: true,
   }));
   const copy = async () => {
-    const profile = source.profile();
+    const profile = source.isSuccess ? source.data : undefined;
     if (!profile?.revision || !profile.eventTypes.some((e) => e.enabled)) {
       settings.openSettings('Calendar');
       return;
@@ -37,7 +37,7 @@ function Actions() {
         variant="ghost"
         size="sm"
         label="Copy booking link"
-        disabled={source.loading()}
+        disabled={source.isPending}
         onClick={() => void copy()}
       >
         <LinkIcon class="size-3.5" />

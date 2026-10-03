@@ -1,4 +1,3 @@
-import { useReactiveColorString } from '@theme/signals/themeReactive';
 import { createEffect, For, on, onCleanup, onMount, Show } from 'solid-js';
 import { Module, type ModuleLogo, type ModuleState } from './Module';
 import { MODULE_LOGOS } from './moduleLogos';
@@ -280,8 +279,6 @@ export function SetupGraphic(props: {
    *  module's `linked` state. */
   poweredUp?: boolean;
 }) {
-  const accentColor = useReactiveColorString('a0');
-  const inkColor = useReactiveColorString('c0');
   const modules = () => props.modules ?? DEFAULT_MODULES;
   // Connectors follow their modules: one per shown module whose connector
   // isn't disabled and isn't in the `linked` state (which hides it), carrying
@@ -333,8 +330,8 @@ export function SetupGraphic(props: {
   // the onset.
   const illuminateLeds = () => {
     darkenLeds();
-    const accent = accentColor();
-    const ink = inkColor();
+    const accent = 'var(--color-accent)';
+    const ink = 'var(--color-ink)';
     const lit = `drop-shadow(0 0 1.5px ${accent})`;
     const bright = `drop-shadow(0 0 4px ${accent})`;
     const motion = !reducedMotion();

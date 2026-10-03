@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use bot_id::{BotId, NonSystemBotId};
 use entity_access::domain::models::{
     EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -19,6 +20,7 @@ use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
 use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
 };
+use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
     UploadExtractFolderRequest, UploadFolderStatus,
@@ -342,6 +344,10 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
 }
 
+fn owner(value: &str) -> Owner {
+    Owner::from_principal_str(value).unwrap()
+}
+
 #[test]
 fn event_actor_user_id_only_maps_authenticated_users() {
     let user_id = user_id("macro|actor@example.com");
@@ -370,7 +376,7 @@ async fn publish_project_event_records_the_serialized_envelope() {
         "project-id",
         ProjectCreatedMetadata {
             project_id: "project-id".to_string(),
-            owner: user_id("macro|owner@example.com"),
+            owner: owner("macro|owner@example.com"),
             name: "Project".to_string(),
             parent_project_id: None,
             created_at: None,
@@ -399,7 +405,7 @@ fn publish_project_event_errors_are_non_fatal() {
         "project-id",
         ProjectCreatedMetadata {
             project_id: "project-id".to_string(),
-            owner: user_id("macro|owner@example.com"),
+            owner: owner("macro|owner@example.com"),
             name: "Project".to_string(),
             parent_project_id: None,
             created_at: None,
@@ -409,11 +415,11 @@ fn publish_project_event_errors_are_non_fatal() {
     service.publish_project_event(&event);
 }
 
-fn project(id: &str, owner: &str, parent_id: Option<&str>) -> Project {
+fn project(id: &str, owner_id: &str, parent_id: Option<&str>) -> Project {
     Project {
         id: id.to_string(),
         name: id.to_string(),
-        user_id: owner.to_string(),
+        user_id: owner(owner_id),
         parent_id: parent_id.map(str::to_string),
         created_at: None,
         updated_at: None,
@@ -439,7 +445,7 @@ fn receipt(
 fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
     BasicProject {
         id: id.to_string(),
-        user_id: user_id("macro|owner@example.com"),
+        user_id: owner("macro|owner@example.com"),
         parent_id: parent_id.map(|id| id.to_string()),
         name: "Project".to_string(),
         deleted_at: deleted.then(chrono::Utc::now),
@@ -537,6 +543,39 @@ async fn content_attributes_owner_access_to_owned_items() {
 }
 
 #[tokio::test]
+async fn content_does_not_attribute_bot_or_team_owned_items_to_the_user() {
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_project_children().return_once(|_| {
+        Box::pin(async {
+            Ok(vec![
+                Item::Project(project(
+                    "bot-owned",
+                    "bot|00000000-0000-0000-0000-00000000a1a1",
+                    Some("root"),
+                )),
+                Item::Project(project(
+                    "team-owned",
+                    "01234567-89ab-cdef-0123-456789abcdef",
+                    Some("root"),
+                )),
+            ])
+        })
+    });
+    let service = service(repo, RecordingBulkUpload::default());
+
+    let content = service
+        .get_project_content(receipt(
+            EntityAccessAuth::Authenticated(user_id("macro|owner@example.com")),
+            AccessLevel::Edit,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(content[0].user_access_level, AccessLevel::Edit);
+    assert_eq!(content[1].user_access_level, AccessLevel::Edit);
+}
+
+#[tokio::test]
 async fn content_attributes_owner_access_to_every_item_for_internal_receipts() {
     let mut repo = MockProjectRepo::new();
     repo.expect_get_project_children().return_once(|_| {
@@ -565,19 +604,19 @@ async fn pending_projects_isolate_status_failures_and_root_mismatches() {
         Box::pin(async {
             Ok(vec![
                 ProjectWithUploadRequest {
-                    project: project("failed", "owner", None),
+                    project: project("failed", "macro|owner@example.com", None),
                     upload_request_id: Some("failed".to_string()),
                 },
                 ProjectWithUploadRequest {
-                    project: project("mismatch", "owner", None),
+                    project: project("mismatch", "macro|owner@example.com", None),
                     upload_request_id: Some("mismatch".to_string()),
                 },
                 ProjectWithUploadRequest {
-                    project: project("nested", "owner", Some("root")),
+                    project: project("nested", "macro|owner@example.com", Some("root")),
                     upload_request_id: Some("nested".to_string()),
                 },
                 ProjectWithUploadRequest {
-                    project: project("without-request", "owner", None),
+                    project: project("without-request", "macro|owner@example.com", None),
                     upload_request_id: None,
                 },
             ])
@@ -621,7 +660,7 @@ async fn preview_deduplicates_ids_before_calling_repository() {
                 Ok(vec![ProjectPreviewV2::Found(ProjectPreviewData {
                     id: "one".to_string(),
                     name: "One".to_string(),
-                    owner: "owner".to_string(),
+                    owner: owner("macro|owner@example.com"),
                     path: Vec::new(),
                     updated_at: None,
                 })])
@@ -652,7 +691,8 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
         .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_create_project()
         .withf(move |args| {
-            args.name == expected_name
+            args.owner == owner("macro|owner@example.com")
+                && args.name == expected_name
                 && args.parent_id.as_deref() == Some(parent_id.to_string().as_str())
                 && args.share_permission.link_share.is_none()
                 && args.share_permission.link_share_access_level.is_none()
@@ -675,7 +715,7 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
 
     service
         .create_project(
-            user_id("macro|owner@example.com"),
+            &CreationPrincipal::User(user_id("macro|owner@example.com")),
             CreateProjectRequest {
                 name: accepted_name,
                 project_parent_id: Some(parent_id),
@@ -685,7 +725,7 @@ async fn create_uses_grapheme_limit_and_orchestrates_parent_side_effects() {
         .unwrap();
     let error = service
         .create_project(
-            user_id("macro|owner@example.com"),
+            &CreationPrincipal::User(user_id("macro|owner@example.com")),
             CreateProjectRequest {
                 name: "👨‍👩‍👧‍👦".repeat(101),
                 project_parent_id: None,
@@ -714,7 +754,7 @@ async fn create_project_publishes_repository_metadata_after_success() {
         Box::pin(async move {
             let mut created = project(
                 &project_id.to_string(),
-                "ignored-repository-owner",
+                "macro|ignored-repository-owner@example.com",
                 Some(&parent_id.to_string()),
             );
             created.name = "Repository name".to_string();
@@ -735,7 +775,7 @@ async fn create_project_publishes_repository_metadata_after_success() {
 
     let result = service
         .create_project(
-            user_id("macro|actor@example.com"),
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
             CreateProjectRequest {
                 name: "Requested name".to_string(),
                 project_parent_id: Some(parent_id),
@@ -775,7 +815,7 @@ async fn create_project_failures_publish_no_event() {
 
     let validation_error = service
         .create_project(
-            user_id("macro|actor@example.com"),
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
             CreateProjectRequest {
                 name: "x".repeat(101),
                 project_parent_id: None,
@@ -784,7 +824,7 @@ async fn create_project_failures_publish_no_event() {
         .await;
     let repository_error = service
         .create_project(
-            user_id("macro|actor@example.com"),
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
             CreateProjectRequest {
                 name: "Project".to_string(),
                 project_parent_id: None,
@@ -821,7 +861,7 @@ async fn create_project_succeeds_when_event_publication_fails() {
 
     let result = service
         .create_project(
-            user_id("macro|actor@example.com"),
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
             CreateProjectRequest {
                 name: "Project".to_string(),
                 project_parent_id: None,
@@ -841,7 +881,7 @@ async fn create_project_resolves_share_permission_from_team_default() {
     let project_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
     repo.expect_get_team_default_link_share()
-        .withf(|user_id| user_id == "macro|actor@example.com")
+        .withf(|owner| owner == &Owner::User(user_id("macro|actor@example.com")))
         .returning(|_| Box::pin(async { Ok(Some(TeamLinkShareDefault(Some(LinkShare::Team)))) }));
     repo.expect_create_project()
         .withf(|args| {
@@ -861,7 +901,7 @@ async fn create_project_resolves_share_permission_from_team_default() {
 
     service
         .create_project(
-            user_id("macro|actor@example.com"),
+            &CreationPrincipal::User(user_id("macro|actor@example.com")),
             CreateProjectRequest {
                 name: "Project".to_string(),
                 project_parent_id: None,
@@ -869,6 +909,56 @@ async fn create_project_resolves_share_permission_from_team_default() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn team_bot_creates_a_bot_owned_project_and_publishes_the_bot_owner() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_default_link_share()
+        .withf(|owner| owner == &Owner::Bot(BotId::TEST_A))
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create_project()
+        .withf(|args| args.owner == Owner::Bot(BotId::TEST_A) && args.name == "Bot project")
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "bot|00000000-0000-0000-0000-00000000b07a",
+                    None,
+                ))
+            })
+        });
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    service
+        .create_project(
+            &CreationPrincipal::TeamBot {
+                bot: NonSystemBotId::new(BotId::TEST_A).unwrap(),
+                team: Uuid::from_u128(0x7ea3),
+            },
+            CreateProjectRequest {
+                name: "Bot project".to_string(),
+                project_parent_id: None,
+            },
+        )
+        .await
+        .unwrap();
+
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].payload["event_type"], "project.created");
+    assert_eq!(
+        published[0].payload["metadata"]["owner"],
+        "bot|00000000-0000-0000-0000-00000000b07a"
+    );
 }
 
 #[tokio::test]
@@ -916,6 +1006,7 @@ async fn edit_project_publishes_requested_update_metadata() {
     for case in cases {
         let project_id = Uuid::new_v4();
         let mut repo = MockProjectRepo::new();
+        repo.expect_get_team_share_facts().times(0);
         if case
             .requested_parent
             .as_deref()
@@ -1080,7 +1171,7 @@ async fn edit_project_failures_publish_no_event() {
     repo.expect_is_project_recursively_nested()
         .return_once(|_, _| Box::pin(async { Ok(true) }));
     repo.expect_edit_project()
-        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable")) }));
+        .return_once(|_| Box::pin(async { Err(anyhow::anyhow!("database unavailable").into()) }));
     let event_broker = TestEventBroker::default();
     let published = event_broker.published();
     let service = mutation_service_with_event_broker(
@@ -1137,6 +1228,7 @@ async fn edit_project_failures_publish_no_event() {
 async fn edit_project_succeeds_when_event_publication_fails() {
     let project_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts().times(0);
     repo.expect_edit_project().return_once(move |_| {
         Box::pin(async move {
             Ok(project(
@@ -1183,6 +1275,7 @@ async fn owner_edit_propagates_move_and_updates_all_modified_timestamps() {
             args.project_id == project_id.to_string()
                 && args.update_parent
                 && args.parent_id.as_deref() == Some(new_parent_id.to_string().as_str())
+                && args.team_share.is_none()
         })
         .return_once(move |_| {
             Box::pin(async move {
@@ -1236,7 +1329,7 @@ async fn empty_parent_clears_persistence_and_eam_parent_argument() {
     let old_parent_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
     repo.expect_edit_project()
-        .withf(|args| args.update_parent && args.parent_id.is_none())
+        .withf(|args| args.update_parent && args.parent_id.is_none() && args.team_share.is_none())
         .return_once(move |_| {
             Box::pin(async move {
                 Ok(project(
@@ -1272,6 +1365,7 @@ async fn empty_parent_clears_persistence_and_eam_parent_argument() {
 async fn edit_name_limit_counts_unicode_graphemes() {
     let project_id = Uuid::new_v4();
     let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts().times(0);
     repo.expect_edit_project().return_once(move |_| {
         Box::pin(async move {
             Ok(project(
@@ -1714,7 +1808,7 @@ fn upload_document(id: &str, file_type: FileType) -> DocumentMetadata {
     DocumentMetadata::new_document(
         id,
         7,
-        user_id("macro|owner@example.com"),
+        model_owner::Owner::User(user_id("macro|owner@example.com")),
         id,
         Some(file_type),
         "0123456789abcdef",
@@ -2243,4 +2337,297 @@ async fn upload_extract_uses_fixed_request_id() {
 
     assert_eq!(response.request_id, fixed_id.to_string());
     assert_eq!(*request_ids.lock().unwrap(), vec![fixed_id]);
+}
+
+use models_permissions::share_permission::team_share::{TeamShareFacts, TeamShareLevel};
+
+const OTHER_USER: &str = "macro|other@example.com";
+const TEAM_ID: Uuid = Uuid::from_u128(0xb2222222_2222_2222_2222_222222222222);
+
+fn owner_user() -> MacroUserIdStr<'static> {
+    user_id("macro|owner@example.com")
+}
+
+fn team_share_facts(
+    project_id: Uuid,
+    owner: MacroUserIdStr<'static>,
+    owner_team_id: Option<Uuid>,
+    revision: i64,
+) -> TeamShareFacts {
+    TeamShareFacts {
+        entity: EntityType::Project.with_entity_string(project_id.to_string()),
+        owner: owner.into(),
+        owner_team_id,
+        current: None,
+        revision,
+    }
+}
+
+fn team_share_args(level: Option<AccessLevel>) -> PatchProjectRequestV2 {
+    PatchProjectRequestV2 {
+        name: None,
+        project_parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            team_share_access_level: Some(level),
+            channel_share_permissions: None,
+        }),
+    }
+}
+
+#[tokio::test]
+async fn edit_without_team_share_field_does_not_load_facts_or_send_command() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts().times(0);
+    repo.expect_edit_project()
+        .withf(|args| args.team_share.is_none())
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    None,
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+    let mut request = patch_request(None, None);
+    request.name = Some("Renamed".to_string());
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            request,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(published.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn edit_with_team_share_level_forwards_authorized_command() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), 0);
+    let expected_facts = facts.clone();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .withf(move |id| id == project_id.to_string())
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project()
+        .withf(move |args| {
+            let Some(command) = args.team_share.as_ref() else {
+                return false;
+            };
+            command.expected() == &expected_facts
+                && command.target().is_some_and(|grant| {
+                    grant.team_id == TEAM_ID && grant.level == TeamShareLevel::Edit
+                })
+                && command.next_revision() == 1
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    None,
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(Some(AccessLevel::Edit)),
+        )
+        .await
+        .unwrap();
+
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(
+        published[0].payload["metadata"]["share_permission_updated"],
+        true
+    );
+}
+
+#[tokio::test]
+async fn edit_with_team_share_null_forwards_clear_command() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project()
+        .withf(|args| {
+            args.team_share
+                .as_ref()
+                .is_some_and(|command| command.target().is_none() && command.next_revision() == 1)
+        })
+        .return_once(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    None,
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(None),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn edit_team_share_by_non_owner_returns_unauthorized_and_publishes_nothing() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, user_id(OTHER_USER), Some(TEAM_ID), 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project().times(0);
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    let result = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(Some(AccessLevel::View)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::Unauthorized)));
+    assert!(published.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn edit_team_share_owner_level_returns_bad_request() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project().times(0);
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    let result = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(Some(AccessLevel::Owner)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn edit_team_share_without_owner_team_returns_bad_request() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), None, 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project().times(0);
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    let result = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(Some(AccessLevel::Edit)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn edit_team_share_exhausted_revision_returns_conflict() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), i64::MAX);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project().times(0);
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    let result = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(Some(AccessLevel::Edit)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::Conflict(_))));
+}
+
+#[tokio::test]
+async fn edit_repo_conflict_does_not_publish_event() {
+    let project_id = Uuid::new_v4();
+    let facts = team_share_facts(project_id, owner_user(), Some(TEAM_ID), 0);
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(move |_| Box::pin(async move { Ok(facts) }));
+    repo.expect_edit_project()
+        .return_once(|_| Box::pin(async { Err(ProjectError::Conflict("stale".into())) }));
+    let event_broker = TestEventBroker::default();
+    let published = event_broker.published();
+    let service = mutation_service_with_event_broker(
+        repo,
+        RecordingEam::default(),
+        RecordingIndexer::default(),
+        event_broker,
+    );
+
+    let result = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            team_share_args(Some(AccessLevel::Edit)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::Conflict(_))));
+    assert!(published.lock().unwrap().is_empty());
 }

@@ -1,5 +1,7 @@
 use super::*;
 
+mod admission;
+
 fn meta(
     identifier: Option<&str>,
     description: Option<&str>,

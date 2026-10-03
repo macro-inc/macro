@@ -2,12 +2,13 @@ import {
   ViewSidebar,
   CollapsibleSection as WorkspaceSection,
 } from '@app/components/view-shell';
-import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createContext,
   createSignal,
@@ -15,7 +16,6 @@ import {
   type JSX,
   Match,
   Show,
-  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -48,7 +48,11 @@ function SectionScrollArea(props: {
         }}
       >
         <div role="group" class={props.class}>
-          <Suspense>{props.children}</Suspense>
+          <DebugSuspense
+            name={`ChannelsView.rail-section.${props.activityLabel ?? props.activityTargetId ?? 'unknown'}`}
+          >
+            {props.children}
+          </DebugSuspense>
         </div>
       </Scroll>
       <Show when={activity.direction()}>
@@ -89,13 +93,26 @@ function SectionScrollArea(props: {
   );
 }
 
+/**
+ * How an open section claims height in its flex column.
+ *
+ * - `half`: natural height, capped at half the column and shrinkable. Two
+ *   `half` siblings split the column; a third sibling is starved to zero
+ *   once both hit the cap, so keep `half` sections in a column of their own.
+ * - `fill`: grows into whatever the column has left.
+ * - `content`: natural height, never shrunk below it, capped at a third of
+ *   the column so a long list still leaves room for its siblings.
+ */
+type CollapsibleSectionSizing = 'half' | 'fill' | 'content';
+
 function CollapsibleSectionRoot(props: {
   open: boolean;
-  fillAvailable?: boolean;
+  sizing?: CollapsibleSectionSizing;
   class?: string;
   children: JSX.Element;
 }) {
   let sectionRef: HTMLElement | undefined;
+  const sizing = () => props.sizing ?? 'half';
 
   return (
     <SectionContainerContext.Provider value={() => sectionRef}>
@@ -103,10 +120,12 @@ function CollapsibleSectionRoot(props: {
         ref={sectionRef}
         class={cn(
           'group/sidebar-section flex min-h-0 flex-col gap-(--sidebar-section-content-gap)',
-          props.open && props.fillAvailable && 'flex-1',
-          props.open && !props.fillAvailable && 'shrink',
           !props.open && 'shrink-0',
-          props.open && !props.fillAvailable && 'max-h-[calc(50%_-_0.375rem)]',
+          props.open && sizing() === 'fill' && 'flex-1',
+          props.open &&
+            sizing() === 'half' &&
+            'shrink max-h-[calc(50%_-_0.375rem)]',
+          props.open && sizing() === 'content' && 'shrink-0 max-h-1/3',
           props.class
         )}
       >
@@ -120,10 +139,12 @@ function CollapsibleSectionHeader(props: {
   focused: boolean;
   focusWithin: boolean;
   class?: string;
+  ref?: (element: HTMLElement) => void;
   children: JSX.Element;
 }) {
   return (
     <WorkspaceSection.Header
+      ref={props.ref}
       class={cn(
         'w-full rounded-lg text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
         props.focused && 'bg-hover text-ink-muted',

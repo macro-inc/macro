@@ -10,7 +10,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { safeFetch } from '@core/util/safeFetch';
 
-const host = `${SERVER_HOSTS['email-service']}/calendar/scheduling`;
+const host = `${SERVER_HOSTS['calendar-service']}/scheduling`;
 const scope = (teamId?: string) =>
   teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
 const json = (body: unknown) => ({

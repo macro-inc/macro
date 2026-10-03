@@ -1,5 +1,6 @@
-//! EditDocument tool — thin wrapper over [`EditingWorkerPort`].
+//! EditDocument tool — permission/token boundary for the domain AI-editing use case.
 
+use crate::domain::ai_editing::{AiEditError, AiEditRequest};
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
     DocumentService,
@@ -21,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use super::DocumentToolContext;
 
 #[cfg(test)]
-mod test;
+pub(super) mod test;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
@@ -108,7 +109,8 @@ where
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        ctx.entity_access_service
+        let receipt = ctx
+            .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
                 &request_context.user_id,
                 None,
@@ -144,39 +146,42 @@ where
             internal_error: e.into(),
         })?;
 
+        // The edit is presented as the bot this tool acts as: readers watching
+        // the document see its name on the cursor, the same name the activity
+        // feed attributes the edit to.
+        let editor = ctx.actor_editor_name();
+
         // Honor user cancellation: if the request is cancelled mid-edit, drop the
         // in-flight worker call (closing the HTTP connection so the worker aborts
         // its own LLM work) and surface a `cancelled` tool error -- matching how
         // the chat stream renders cancellation for tool calls that never returned.
+        let editing = ctx.ai_editing();
+        let edit = AiEditRequest {
+            document_token: &document_token,
+            instructions: &self.instructions,
+            mode: self.mode(),
+            editor,
+        };
         let result = tokio::select! {
+            biased;
             _ = request_context.cancel.cancelled() => {
                 return Err(ToolCallError {
                     description: "cancelled".to_string(),
                     internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
                 });
             }
-            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions, self.mode()) => r,
+            r = editing.edit(receipt, &request_context.user_id, edit) => r,
         }
-        .map_err(|e| ToolCallError {
-            description: e.to_string(),
-            internal_error: e,
+        .map_err(|error| {
+            let description = match &error {
+                AiEditError::Admission(error) => format!("{}: {error}", error.code()),
+                AiEditError::Worker(error) => error.to_string(),
+            };
+            ToolCallError {
+                description,
+                internal_error: error.into(),
+            }
         })?;
-
-        // The worker runs several models on the caller's behalf; record each so
-        // their tokens land on the usage ledger (attributed to this user).
-        let entity = macro_uuid::string_to_uuid(&self.document_id).ok();
-        for u in &result.usage {
-            let cx = ai_usage::UsageContext::new(
-                ai_usage::AiFeature::AiEditing,
-                request_context.user_id.clone(),
-            )
-            .with_entity(entity);
-            ctx.recorder.record(cx.into_event(
-                u.model.clone(),
-                u.input_tokens as u64,
-                u.output_tokens as u64,
-            ));
-        }
 
         let summary = if result.clarification.is_some() {
             "Paused for clarification; no edits applied.".to_string()

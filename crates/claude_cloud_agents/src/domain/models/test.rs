@@ -66,19 +66,18 @@ fn rejects_duplicate_aliases_malformed_catalogs_and_unsuccessful_responses() {
 
 #[derive(Clone)]
 struct AccountCloud {
-    histories: Vec<Vec<Event>>,
-    reads: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    models: Vec<ModelOption>,
+    fails: bool,
 }
 impl Cloud for AccountCloud {
-    async fn recent_sessions(&self) -> Result<Vec<super::super::model::SessionId>> {
-        (0..self.histories.len())
-            .map(|i| super::super::model::SessionId::parse(&format!("cse_{i}")))
-            .collect()
+    async fn models(&self) -> Result<Vec<ModelOption>> {
+        if self.fails {
+            return Err(Error::Http(403));
+        }
+        Ok(self.models.clone())
     }
-    async fn history(&self, session: &super::super::model::SessionId) -> Result<Vec<Event>> {
-        self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let i: usize = session.as_str().trim_start_matches("cse_").parse().unwrap();
-        Ok(self.histories[i].clone())
+    async fn history(&self, _: &super::super::model::SessionId) -> Result<Vec<Event>> {
+        panic!("model discovery must not read any transcript")
     }
     async fn send(&self, _: &super::super::model::SessionId, _: serde_json::Value) -> Result<()> {
         panic!("discovery is read-only")
@@ -100,32 +99,40 @@ impl Cloud for AccountCloud {
 }
 
 #[tokio::test]
-async fn discovery_is_bounded_account_scoped_and_skips_uninitialized_sessions() {
+async fn discovery_returns_account_models_without_any_sessions() {
     let first = AccountCloud {
-        histories: vec![
-            vec![],
-            vec![event(json!([{"value":"account-a","displayName":"A"}]))],
-        ],
-        reads: Default::default(),
+        models: vec![ModelOption {
+            model: Model::parse("claude-fable-5-1").unwrap(),
+            name: "Claude Fable 5.1".into(),
+            description: None,
+        }],
+        fails: false,
     };
     let second = AccountCloud {
-        histories: vec![vec![event(
-            json!([{"value":"account-b","displayName":"B"}]),
-        )]],
-        reads: Default::default(),
+        models: vec![ModelOption {
+            model: Model::parse("another-account-model").unwrap(),
+            name: "Another account model".into(),
+            description: None,
+        }],
+        fails: false,
     };
-    assert_eq!(
-        discover(&first).await.unwrap().options()[0].model.id(),
-        "account-a"
-    );
-    assert_eq!(
-        discover(&second).await.unwrap().options()[0].model.id(),
-        "account-b"
-    );
-    let empty = AccountCloud {
-        histories: vec![vec![]; 6],
-        reads: Default::default(),
+    let fable = Model::parse("claude-fable-5-1").unwrap();
+    let catalog = discover(&first).await.unwrap();
+    assert!(catalog.contains(&Model::default()));
+    assert!(catalog.contains(&fable));
+    assert_eq!(catalog.options()[1].name, "Claude Fable 5.1");
+    assert!(!discover(&second).await.unwrap().contains(&fable));
+}
+
+#[tokio::test]
+async fn discovery_surfaces_errors_and_does_not_fall_back_to_history() {
+    let mut cloud = AccountCloud {
+        models: vec![],
+        fails: true,
     };
-    assert_eq!(discover(&empty).await.unwrap(), Catalog::Unknown);
-    assert_eq!(empty.reads.load(std::sync::atomic::Ordering::SeqCst), 5);
+    assert!(matches!(discover(&cloud).await, Err(Error::Http(403))));
+    cloud.fails = false;
+    let catalog = discover(&cloud).await.unwrap();
+    assert_eq!(catalog.options().len(), 1);
+    assert!(catalog.contains(&Model::default()));
 }

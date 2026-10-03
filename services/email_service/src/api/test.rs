@@ -17,7 +17,6 @@ fn sample_app() -> Router {
             .route("/health", get(ok))
             .route("/email/messages", get(ok))
             .route("/gmail/webhook", get(ok))
-            .route("/calendar/notifications", get(ok))
             .route("/internal/ping", get(ok)),
     )
 }
@@ -62,8 +61,6 @@ async fn existing_paths_stay_and_are_also_served_under_the_prefix() {
         "/email/email/messages",
         "/gmail/webhook",
         "/email/gmail/webhook",
-        "/calendar/notifications",
-        "/email/calendar/notifications",
         "/internal/ping",
         "/email/internal/ping",
     ] {

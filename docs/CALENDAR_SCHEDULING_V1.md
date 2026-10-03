@@ -43,8 +43,8 @@ current-period bookings and escapes spreadsheet formulas.
   provider ID; cancellation can replay after the canonical calendar record disappears.
   Uncertain writes retain reservations, return a private receipt, and retry automatically.
   Repeated failures require operator attention; see the release checklist below.
-- Hosted activation still requires both scheduling migrations and the updated email
-  service. The port 3007 browser fixture uses explicitly labelled sample data and
+- Hosted activation still requires both scheduling migrations and the updated calendar
+  service. The isolated browser fixture uses explicitly labelled sample data and
   the real UI components; its mutations do not send invitations or change Cal.com.
 
 ## Verification
@@ -63,11 +63,6 @@ retries the same booking request and receives its existing receipt. Narrow 390px
 layouts were checked for event types, availability, insights, and confirmation.
 These fixture checks do not replace the connected-account rollout checks below.
 
-The pre-production pass ran 36 scheduling tests (including PostgreSQL and HTTP),
-140 calendar-domain/provider tests, and 23 frontend tests. TypeScript, the email-service
-composition check, scheduling Clippy (all features/targets), and `just check` passed.
-Five review passes completed after fixes.
-
 An isolated full local stack also applied both migrations and verified actual sign-in,
 personal event creation/editing/duplication, persisted weekly-hour edits, collective team
 host selection, read-only team membership, and team Insights. This caught and fixed editor
@@ -77,8 +72,12 @@ Real Google OAuth, invitations, and Meet remain the connected-account rollout ga
 
 ## Pre-production release checklist
 
+Connected-account checks remain an outstanding rollout gate. Dedicated Google-connected
+test accounts were unavailable for the PR readiness pass; local fixtures and automated
+tests do not verify real invitations, OAuth, or Meet creation.
+
 - Apply `20260918164303_calendar_scheduling.sql`, then `20260918175703_scheduling_recovery.sql`
-  before deploying the email service. Both are additive; the second adds a nullable retry
+  before deploying the calendar service. Both are additive; the second adds a nullable retry
   timestamp, partial recovery index, and bounded per-profile request budgets.
 - Keep the existing `CALENDAR_SYNC_ENABLED` switch enabled for scheduling routes and recovery.
   New configuration cannot turn on manual approval. Automatic provider invitations remain active.
@@ -97,14 +96,14 @@ Real Google OAuth, invitations, and Meet remain the connected-account rollout ga
 
 ## Recovery and monitoring
 
-The email service polls every 15 seconds, at most 25 operations per pass. Each claim has a
+The calendar service polls every 15 seconds, at most 25 operations per pass. Each claim has a
 five-minute lease, an incremented operation attempt, and a booking revision. All edits use the
 revision, protecting against confirmed → processing → confirmed races. Provider errors back off
 from five minutes to one hour; the third recovery attempt emits an operator-attention error.
 Completed claims clear their due timestamp. Disconnected/inaccessible calendars keep reservations
 until access is restored; recovery never interprets lost permission as a successful deletion.
 
-Use the email-service logs for `scheduling operation queued for recovery`, `scheduling operation
+Use the calendar-service logs for `scheduling operation queued for recovery`, `scheduling operation
 recovered`, `scheduling recovery requires operator attention`, and `scheduling completion persistence
 unavailable`. Alert on operator-attention/persistence errors and sustained scheduling 5xx. During
 rollout, also check overdue rows so a stopped worker cannot hide behind missing logs:

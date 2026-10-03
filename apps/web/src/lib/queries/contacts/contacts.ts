@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactsKeys } from './keys';
 
-function contactsQueryOptions() {
+export function contactsQueryOptions() {
   return {
     queryKey: contactsKeys.all.queryKey,
     queryFn: () => throwOnErr(() => contactsClient.getContacts()),
@@ -15,16 +15,18 @@ function contactsQueryOptions() {
 }
 
 /** The raw contacts query — for callers that need its loading state. */
-export function useContactsQuery() {
-  return useQuery(() => contactsQueryOptions());
+export function useContactsQuery(enabled: Accessor<boolean> = () => true) {
+  return useQuery(() => ({ ...contactsQueryOptions(), enabled: enabled() }));
 }
 
 /**
  * Returns contacts as IUser objects.
  * Compatible with the previous createResource-based implementation.
  */
-export function useContacts(): Accessor<IUser[]> {
-  const query = useContactsQuery();
+export function useContacts(
+  enabled: Accessor<boolean> = () => true
+): Accessor<IUser[]> {
+  const query = useContactsQuery(enabled);
   return createMemo(() => {
     if (!query.isSuccess) return [];
     const contacts = query.data.contacts;

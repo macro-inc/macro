@@ -1,10 +1,14 @@
+import {
+  isDraftThreadId,
+  type Root,
+  type ThreadId,
+} from '@core/comments/commentType';
 import { MinimizedThread } from '@core/comments/MinimizedThreads';
 import {
   CommentsContext,
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
-import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
 import {
@@ -18,39 +22,15 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { CommentThreadDrawer } from './CommentThreadDrawer';
 import { createCommentLayout } from './commentLayout';
-import {
-  useCreateComment,
-  useDeleteComment,
-  useUpdateComment,
-} from './commentOperations';
+import { useCreateMessageComment } from './messageCommentOperations';
 
 const useCommentsContext = (
   setThreadHeight: CommentsContextType['setThreadHeight']
 ): CommentsContextType => {
-  const { documentId, permissions, state } = useMarkdownDocument();
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const documentKind = kind();
   const { comments: commentState, setCommentState } = state;
-  const ownedCommentIds = createMemo(() => {
-    const userId = useUserId()();
-    if (!userId) {
-      console.error('User ID not found, cannot get owned comment placeables');
-      return [];
-    }
-    const owned = Object.values(commentState.comments)
-      .filter((c) => !!c)
-      .filter((c) => c.owner === userId)
-      .map((c) => c.id);
-    return owned;
-  });
-  const ownedCommentSelector = createSelector(
-    ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
-  );
-
-  const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
-
-  const getCommentById = (id: number) => commentState.comments[id];
+  const createComment = useCreateMessageComment();
 
   const commentsContext: CommentsContextType = {
     setActiveThread: (threadId) =>
@@ -58,16 +38,12 @@ const useCommentsContext = (
     setThreadHeight,
     canComment: permissions.canComment,
     isDocumentOwner: permissions.isOwner,
-    getCommentById,
     documentId: documentId(),
-    ownedComment: ownedCommentSelector,
-    commentOperations: {
-      createComment,
-      deleteComment,
-      updateComment,
-    },
-    inComment: true,
+    documentType: documentKind === 'document' ? 'md' : documentKind,
+    messageOperations: { createComment },
     highlightedCommentId: () => commentState.highlightedCommentId,
+    clearHighlightedComment: () =>
+      setCommentState('highlightedCommentId', null),
   };
   return commentsContext;
 };
@@ -90,15 +66,25 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
     }
 
     // new threads will take priority
-    if (set.has(-1)) {
-      return new Set([-1]);
+    const draft = [...set].find(isDraftThreadId);
+    if (draft !== undefined) {
+      return new Set([draft]);
     }
 
     return set;
   });
-  const isActiveSelector = createSelector(activeThreads, (id: number, ids) => {
-    return ids.has(id);
-  });
+  const isActiveSelector = createSelector(
+    activeThreads,
+    (id: ThreadId, ids) => {
+      return ids.has(id);
+    }
+  );
+
+  // A caret inside resolved text does not unfold its thread; only opening it
+  // from the margin or a link does.
+  const isThreadActive = (thread: Root) =>
+    isActiveSelector(thread.threadId) &&
+    (!thread.resolved || commentState.activeCommentThread === thread.threadId);
 
   const commentsContext = useCommentsContext(setThreadHeights);
 
@@ -124,7 +110,7 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
                             <MinimizedThread
                               comment={thread()}
                               layout={layout()}
-                              isActive={isActiveSelector(thread().threadId)}
+                              isActive={isThreadActive(thread())}
                               maxHeight={maxHeight()}
                               expandable={!isTouchDevice()}
                             />
@@ -133,7 +119,7 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
                           <Thread
                             comment={thread()}
                             layout={layout()}
-                            isActive={isActiveSelector(thread().threadId)}
+                            isActive={isThreadActive(thread())}
                             maxHeight={maxHeight()}
                           />
                         </Show>

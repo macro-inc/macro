@@ -39,6 +39,13 @@ type MacroAppUrlParsed = {
   block: BlockName | BlockAlias | undefined;
   params: Record<string, string> | undefined;
 };
+export type MentionLinkResolver = (url: string) =>
+  | {
+      id: string;
+      block: BlockName | BlockAlias;
+      params: Record<string, string>;
+    }
+  | undefined;
 
 const IgnoredParams = new Set(['referral_code']);
 
@@ -60,7 +67,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
     }
 
     const pathParts: string[] = url.pathname.split('/').filter((part) => part);
-    if (pathParts.length < 3) {
+    if (pathParts.length !== 3) {
       return {
         isValid: false,
         id: undefined,
@@ -69,8 +76,9 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       };
     }
 
-    const _block: string = pathParts[1];
-    if (!ValidBlockNames.includes(_block as any)) {
+    const routeBlock = pathParts[1] === 'agents' ? 'agent' : pathParts[1];
+    const block = ValidBlockNames.find((name) => name === routeBlock);
+    if (!block) {
       return {
         isValid: false,
         id: undefined,
@@ -78,7 +86,6 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
         params: undefined,
       };
     }
-    const block: BlockName | BlockAlias = _block as BlockName | BlockAlias;
 
     const idRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -114,7 +121,18 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
   }
 }
 
-function registerTextPastePlugin(editor: LexicalEditor) {
+export function resolvePastedMacroAppUrl(
+  text: string,
+  resolveAppLink?: MentionLinkResolver
+) {
+  const legacy = parseMacroAppUrl(text);
+  return legacy.isValid ? legacy : resolveAppLink?.(text);
+}
+
+function registerTextPastePlugin(
+  editor: LexicalEditor,
+  resolveAppLink?: MentionLinkResolver
+) {
   return mergeRegister(
     editor.registerCommand(
       PASTE_COMMAND,
@@ -143,12 +161,11 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             return true;
           }
 
-          const parsedMacroAppUrl = parseMacroAppUrl(pastedText);
-          if (
-            !parsedMacroAppUrl.isValid ||
-            !parsedMacroAppUrl.id ||
-            !parsedMacroAppUrl.block
-          ) {
+          const parsedMacroAppUrl = resolvePastedMacroAppUrl(
+            pastedText,
+            resolveAppLink
+          );
+          if (!parsedMacroAppUrl?.id || !parsedMacroAppUrl.block) {
             // Large plain-text pastes collapse into a block-level PasteNode
             // (Anthropic-style "pasted" chip). Only handle genuine plain text
             // pastes: defer to the richer paste handlers for HTML / Lexical
@@ -203,6 +220,7 @@ function registerTextPastePlugin(editor: LexicalEditor) {
   );
 }
 
-export function textPastePlugin() {
-  return (editor: LexicalEditor) => registerTextPastePlugin(editor);
+export function textPastePlugin(resolveAppLink?: MentionLinkResolver) {
+  return (editor: LexicalEditor) =>
+    registerTextPastePlugin(editor, resolveAppLink);
 }

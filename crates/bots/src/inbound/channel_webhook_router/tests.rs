@@ -1,15 +1,15 @@
 use super::*;
 use crate::domain::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
-    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-    PatchBotRequest, UpdateAgentRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner,
+    BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+    CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
 };
 use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode, header},
 };
-use channels::domain::models::{PostMessageRequest, Sender};
+use channels::domain::models::Sender;
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
@@ -173,6 +173,15 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
+    async fn patch_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
         unimplemented!()
     }
@@ -211,6 +220,10 @@ impl BotService for TestBotService {
         _bot_id: BotId,
     ) -> Result<Bot, BotError> {
         unimplemented!()
+    }
+
+    async fn get_owner_profiles(&self, _ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        Ok(Vec::new())
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
@@ -467,11 +480,22 @@ impl EntityAccessService for TestAccessService {
     }
 }
 
+/// The post as the shared message service received it.
+#[derive(Debug, Clone)]
+struct PostedRequest {
+    content: String,
+    mentions: Vec<messages::domain::models::SimpleMention>,
+    thread_id: Option<Uuid>,
+    attachments: Vec<messages::domain::models::NewAttachment>,
+    nonce: Option<String>,
+    triggered_by: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct PostedMessage {
     actor: Sender,
     channel_id: Uuid,
-    req: PostMessageRequest,
+    req: PostedRequest,
 }
 
 #[derive(Clone, Copy)]
@@ -496,6 +520,15 @@ impl TestChannelPoster {
 
 #[async_trait::async_trait]
 impl messages::domain::api::MessageCommands for TestChannelPoster {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!("channel webhooks do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
@@ -517,13 +550,12 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
             .push(PostedMessage {
                 actor: actor.clone(),
                 channel_id,
-                req: PostMessageRequest {
+                req: PostedRequest {
                     content: input.content.clone(),
                     mentions: input.mentions.clone(),
                     thread_id: input.thread_id,
-                    attachments: Vec::new(),
+                    attachments: input.attachments.clone(),
                     nonce: input.nonce.clone(),
-                    notification_policy: input.notification_policy,
                     triggered_by: triggered_by.clone(),
                 },
             });

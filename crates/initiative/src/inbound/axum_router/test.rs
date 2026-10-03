@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+
+mod access;
 use std::sync::{Arc, Mutex};
 
 use axum::http::{StatusCode, header};
@@ -29,8 +31,9 @@ use super::*;
 use crate::domain::{
     models::{
         AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRequest,
-        InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
-        InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment, UpdateInitiativeRequest,
+        DescriptionDocumentId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+        InitiativeList, InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment,
+        UpdateInitiativeRequest,
     },
     ports::InitiativeService,
 };
@@ -47,6 +50,10 @@ fn existing_id() -> InitiativeId {
 
 fn unknown_id() -> InitiativeId {
     InitiativeId::from_uuid(Uuid::from_u128(99))
+}
+
+fn description_document_id() -> DescriptionDocumentId {
+    DescriptionDocumentId::from_uuid(Uuid::from_u128(2))
 }
 
 fn now() -> DateTime<Utc> {
@@ -86,7 +93,7 @@ fn sample_detail() -> InitiativeDetail {
     InitiativeDetail {
         id: existing_id(),
         name: "Launch".to_string(),
-        description: None,
+        description_document_id: description_document_id(),
         owner_id: user(),
         member_ids: Vec::new(),
         task_ids: Vec::new(),
@@ -102,7 +109,7 @@ fn sample_list() -> InitiativeList {
         initiatives: vec![InitiativeSummary {
             id: existing_id(),
             name: "Launch".to_string(),
-            description: None,
+            description_document_id: description_document_id(),
             updated_at: now(),
         }],
     }
@@ -286,8 +293,9 @@ enum ServiceCall {
     Create { name: String },
     Get,
     Update,
-    Assign(Vec<TaskAssignment>),
+    Assign(Vec<AssignTasksResult>),
     Unassign { task_id: String },
+    Clear { task_id: String },
     Delete,
 }
 
@@ -316,6 +324,54 @@ fn reject_name(name: &str) -> Result<(), InitiativeError> {
 }
 
 impl InitiativeService for FakeInitiativeService {
+    async fn summary(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        Err(InitiativeError::NotFound)
+    }
+
+    async fn create_attributed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        _attribution: activity::Attribution,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        self.create(user_id, request).await
+    }
+    async fn page(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: crate::domain::reads::InitiativePageRequest,
+    ) -> Result<crate::domain::reads::InitiativePage, InitiativeError> {
+        Ok(crate::domain::reads::InitiativePage {
+            initiatives: Vec::new(),
+            next_cursor: None,
+        })
+    }
+
+    async fn tasks_page(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _request: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeTasksPage, InitiativeError> {
+        Ok(crate::domain::reads::InitiativeTasksPage {
+            task_ids: Vec::new(),
+            next_cursor: None,
+            total: 0,
+        })
+    }
+
+    async fn task_references(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: crate::domain::reads::TaskInitiativeReferencesRequest,
+    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
+        Ok(crate::domain::reads::TaskInitiativeReferences {
+            references: Vec::new(),
+        })
+    }
+
     async fn create(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -368,13 +424,12 @@ impl InitiativeService for FakeInitiativeService {
         _receipt: EntityAccessReceipt<EditAccessLevel>,
         assignments: Vec<TaskAssignment>,
     ) -> Result<AssignTasksResponse, InitiativeError> {
-        self.record(ServiceCall::Assign(assignments.clone()));
-        Ok(AssignTasksResponse {
+        let response = AssignTasksResponse {
             results: assignments
                 .into_iter()
                 .map(|assignment| AssignTasksResult {
                     status: match &assignment {
-                        TaskAssignment::Candidate { .. } => AssignTaskStatus::Assigned,
+                        TaskAssignment::Authorized { .. } => AssignTaskStatus::Assigned,
                         TaskAssignment::NotFound { .. } => AssignTaskStatus::NotFound,
                         TaskAssignment::SkippedNoPermission { .. } => {
                             AssignTaskStatus::SkippedNoPermission
@@ -383,17 +438,37 @@ impl InitiativeService for FakeInitiativeService {
                     task_id: assignment.task_id().to_string(),
                 })
                 .collect(),
-        })
+        };
+        self.record(ServiceCall::Assign(response.results.clone()));
+        Ok(response)
     }
 
     async fn unassign_task(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_id: &str,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), InitiativeError> {
         self.record(ServiceCall::Unassign {
-            task_id: task_id.to_string(),
+            task_id: task_receipt.entity().entity_id.clone(),
         });
+        Ok(())
+    }
+
+    async fn clear_task(
+        &self,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<(), InitiativeError> {
+        self.record(ServiceCall::Clear {
+            task_id: task_receipt.entity().entity_id.clone(),
+        });
+        Ok(())
+    }
+
+    async fn grant_assignees(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), InitiativeError> {
         Ok(())
     }
 
@@ -552,6 +627,32 @@ async fn create_returns_200() {
 }
 
 #[tokio::test]
+async fn create_response_points_at_the_description_document_instead_of_inlining_text() {
+    let response = send(
+        build_router(
+            FakeInitiativeService::default(),
+            FakeEntityAccessService::default(),
+        ),
+        authed(axum::http::Request::post("/"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(json_body(serde_json::json!({
+                "name": "Launch",
+                "description": "## Goals"
+            })))
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = read_json(response).await;
+    assert_eq!(
+        body["descriptionDocumentId"],
+        serde_json::json!(description_document_id().to_string())
+    );
+    assert!(body.get("description").is_none());
+}
+
+#[tokio::test]
 async fn get_returns_200() {
     let service = FakeInitiativeService::default();
     let response = send(
@@ -614,8 +715,9 @@ async fn assign_tasks_returns_200() {
     );
     assert_eq!(
         service.calls(),
-        vec![ServiceCall::Assign(vec![TaskAssignment::Candidate {
-            task_id: TASK_OK.to_string()
+        vec![ServiceCall::Assign(vec![AssignTasksResult {
+            task_id: TASK_OK.to_string(),
+            status: AssignTaskStatus::Assigned,
         }])]
     );
 }

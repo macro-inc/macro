@@ -6,12 +6,45 @@ import {
   MODEL_PRETTYNAME,
   Model,
   modelsForPlan,
+  PAID_MODELS,
   type TModel,
 } from '@core/component/AI/constant';
-import { fireEvent, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ModelOption, ModelSelector } from './ModelSelector';
+
+const state = vi.hoisted(() => ({ dev: false, mobile: false }));
+vi.mock('@core/constant/featureFlags', () => ({
+  get DEV_MODE_ENV() {
+    return state.dev;
+  },
+}));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => state.mobile }));
+vi.mock('@components/app/mobile/MobileDrawer', () => {
+  const Slot = (props: { children?: JSX.Element }) => (
+    <div>{props.children}</div>
+  );
+  return {
+    MobileDrawer: Object.assign(Slot, {
+      Trigger: Slot,
+      Portal: Slot,
+      Overlay: Slot,
+      Content: Slot,
+      Handle: Slot,
+      Close: Slot,
+      ScrollBody: Slot,
+      Section: Slot,
+      Item: Slot,
+    }),
+  };
+});
+
+beforeEach(() => {
+  state.dev = false;
+  state.mobile = false;
+});
+afterEach(cleanup);
 
 // Render the Kobalte dropdown as a transparent passthrough so the menu items
 // are always in the DOM — we're testing ModelSelector's own logic (which models
@@ -32,7 +65,13 @@ vi.mock('@ui', () => {
       {p.children}
     </div>
   );
-  return { cn, Dropdown };
+  return {
+    cn,
+    Dropdown,
+    Button: (props: { children?: JSX.Element }) => (
+      <button type="button">{props.children}</button>
+    ),
+  };
 });
 
 // Neutralize SVG imports; tag the lock so we can assert it renders.
@@ -49,9 +88,10 @@ vi.mock('@phosphor-icons/core/regular/lock-simple.svg?component-solid', () => ({
   default: () => <span data-testid="lock-icon" />,
 }));
 
-const ALL_PAID: ModelOption[] = (Object.values(Model) as TModel[]).map(
-  (id) => ({ id, available: true })
-);
+const ALL_PAID: ModelOption[] = PAID_MODELS.map((id) => ({
+  id,
+  available: true,
+}));
 
 /** Find the menu item row for a model by its pretty name. */
 function itemFor(container: HTMLElement, model: TModel): HTMLElement {
@@ -75,12 +115,42 @@ describe('ModelSelector: availability', () => {
     );
   });
 
+  it('does not list retired Anthropic models', () => {
+    const { container } = render(() => (
+      <ModelSelector models={ALL_PAID} onSelect={() => {}} />
+    ));
+    for (const retired of ['Fable', 'Sonnet 5 ', 'Opus 5 ']) {
+      expect(container.textContent).not.toContain(retired);
+    }
+    expect(container.textContent).toContain('Sonnet 5.5');
+    expect(container.textContent).toContain('Opus 5.5');
+    expect(container.textContent).toContain('Haiku 4.5');
+  });
+
+  it.each([
+    { dev: false, mobile: false },
+    { dev: true, mobile: false },
+    { dev: false, mobile: true },
+    { dev: true, mobile: true },
+  ])(
+    'gates usage multipliers on dev ($dev), mobile=$mobile',
+    ({ dev, mobile }) => {
+      state.dev = dev;
+      state.mobile = mobile;
+      const { container } = render(() => (
+        <ModelSelector models={ALL_PAID} onSelect={() => {}} />
+      ));
+      expect(container.textContent?.includes('× usage')).toBe(dev);
+    }
+  );
+
   it('grays out and locks inaccessible models, leaving accessible ones clean', () => {
     // A free user: only the fast model is available.
     const freeAllowed = modelsForPlan(false);
-    const options: ModelOption[] = (Object.values(Model) as TModel[]).map(
-      (id) => ({ id, available: freeAllowed.includes(id) })
-    );
+    const options: ModelOption[] = PAID_MODELS.map((id) => ({
+      id,
+      available: freeAllowed.includes(id),
+    }));
     const { container } = render(() => (
       <ModelSelector models={options} onSelect={() => {}} />
     ));
@@ -89,7 +159,7 @@ describe('ModelSelector: availability', () => {
     expect(available.className).not.toContain('opacity-50');
     expect(available.querySelector('[data-testid="lock-icon"]')).toBeNull();
 
-    const locked = itemFor(container, Model.opus5);
+    const locked = itemFor(container, Model.opus55);
     expect(locked.className).toContain('opacity-50');
     expect(locked.querySelector('[data-testid="lock-icon"]')).not.toBeNull();
   });
@@ -116,15 +186,16 @@ describe('ModelSelector: selection routing', () => {
     const onSelect = vi.fn();
     const onLocked = vi.fn();
     const freeAllowed = modelsForPlan(false);
-    const options: ModelOption[] = (Object.values(Model) as TModel[]).map(
-      (id) => ({ id, available: freeAllowed.includes(id) })
-    );
+    const options: ModelOption[] = PAID_MODELS.map((id) => ({
+      id,
+      available: freeAllowed.includes(id),
+    }));
     const { container } = render(() => (
       <ModelSelector models={options} onSelect={onSelect} onLocked={onLocked} />
     ));
 
-    fireEvent.click(itemFor(container, Model.opus5)); // locked for a free user
-    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
+    fireEvent.click(itemFor(container, Model.opus55)); // locked for a free user
+    expect(onLocked).toHaveBeenCalledWith(Model.opus55);
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
@@ -134,7 +205,7 @@ describe('ModelSelector: what is shown is what is sent', () => {
   // model accessor. Picking a model updates that single source, so the request
   // can never diverge from what the selector displays.
   function Harness() {
-    const [model, setModel] = createSignal<TModel>(Model.opus5);
+    const [model, setModel] = createSignal<TModel>(Model.opus55);
     return (
       <>
         {/* stand-in for the value sendMessage() reads */}
@@ -153,22 +224,23 @@ describe('ModelSelector: what is shown is what is sent', () => {
 
     // Initial state: trigger shows the selected model.
     const trigger = container.querySelector('[data-trigger]')!;
-    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.opus5]);
-    expect(getByTestId('would-send').textContent).toBe(Model.opus5);
+    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.opus55]);
+    expect(getByTestId('would-send').textContent).toBe(Model.opus55);
 
     // Select a different model -> both the trigger and the would-send value move
     // together to exactly that model.
-    fireEvent.click(itemFor(container, Model.sonnet5));
-    expect(getByTestId('would-send').textContent).toBe(Model.sonnet5);
-    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.sonnet5]);
+    fireEvent.click(itemFor(container, Model.sonnet55));
+    expect(getByTestId('would-send').textContent).toBe(Model.sonnet55);
+    expect(trigger.textContent).toContain(MODEL_PRETTYNAME[Model.sonnet55]);
   });
 
   it('a free user cannot select an inaccessible model into the would-send value', () => {
     const onLocked = vi.fn();
     const freeAllowed = modelsForPlan(false);
-    const options: ModelOption[] = (Object.values(Model) as TModel[]).map(
-      (id) => ({ id, available: freeAllowed.includes(id) })
-    );
+    const options: ModelOption[] = PAID_MODELS.map((id) => ({
+      id,
+      available: freeAllowed.includes(id),
+    }));
     function FreeHarness() {
       const [model, setModel] = createSignal<TModel>(Model.haiku45);
       return (
@@ -185,10 +257,10 @@ describe('ModelSelector: what is shown is what is sent', () => {
     }
     const { container, getByTestId } = render(() => <FreeHarness />);
 
-    fireEvent.click(itemFor(container, Model.opus5)); // locked
+    fireEvent.click(itemFor(container, Model.opus55)); // locked
     // The would-send value is unchanged; only the paywall fired.
     expect(getByTestId('would-send').textContent).toBe(Model.haiku45);
-    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
+    expect(onLocked).toHaveBeenCalledWith(Model.opus55);
   });
 });
 

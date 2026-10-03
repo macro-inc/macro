@@ -13,7 +13,7 @@ import {
 } from '../primitives/booking-flow';
 
 function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return date.toISOString().slice(0, 10);
 }
 
 export function PublicBookingView(props: {
@@ -24,9 +24,6 @@ export function PublicBookingView(props: {
   onReceipt: (r: BookingReceipt) => void;
 }) {
   const flow = createBookingFlow(props.source, props.profile.id);
-  const [month, setMonth] = createSignal(
-    new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  );
   const [date, setDate] = createSignal('');
   const [zone, setZone] = createSignal(
     Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -56,16 +53,19 @@ export function PublicBookingView(props: {
       .map((k) => parts.find((p) => p.type === k)?.value)
       .join('-');
   };
+  const currentMonth = () => new Date(`${today().slice(0, 7)}-01T00:00:00Z`);
+  const [month, setMonth] = createSignal(currentMonth());
   const days = () =>
     Array.from(
       {
         length: new Date(
-          month().getFullYear(),
-          month().getMonth() + 1,
-          0
-        ).getDate(),
+          Date.UTC(month().getUTCFullYear(), month().getUTCMonth() + 1, 0)
+        ).getUTCDate(),
       },
-      (_, i) => new Date(month().getFullYear(), month().getMonth(), i + 1)
+      (_, i) =>
+        new Date(
+          Date.UTC(month().getUTCFullYear(), month().getUTCMonth(), i + 1)
+        )
     );
   const choose = (value: string) => {
     setDate(value);
@@ -167,7 +167,9 @@ export function PublicBookingView(props: {
                       disabled={flow.submitting() || flow.uncertain()}
                       onChange={(value) => {
                         setZone(value);
-                        if (date()) choose(date());
+                        setMonth(currentMonth());
+                        setDate('');
+                        flow.reset();
                       }}
                     />
                   </Field>
@@ -257,6 +259,7 @@ export function PublicBookingView(props: {
                   <div class="mt-5 flex items-center justify-between">
                     <span class="font-medium">
                       {month().toLocaleDateString([], {
+                        timeZone: 'UTC',
                         month: 'long',
                         year: 'numeric',
                       })}
@@ -265,20 +268,15 @@ export function PublicBookingView(props: {
                       <Button
                         variant="ghost"
                         label="Previous month"
-                        disabled={
-                          month() <=
-                          new Date(
-                            new Date().getFullYear(),
-                            new Date().getMonth(),
-                            1
-                          )
-                        }
+                        disabled={month() <= currentMonth()}
                         onClick={() =>
                           setMonth(
                             new Date(
-                              month().getFullYear(),
-                              month().getMonth() - 1,
-                              1
+                              Date.UTC(
+                                month().getUTCFullYear(),
+                                month().getUTCMonth() - 1,
+                                1
+                              )
                             )
                           )
                         }
@@ -291,9 +289,11 @@ export function PublicBookingView(props: {
                         onClick={() =>
                           setMonth(
                             new Date(
-                              month().getFullYear(),
-                              month().getMonth() + 1,
-                              1
+                              Date.UTC(
+                                month().getUTCFullYear(),
+                                month().getUTCMonth() + 1,
+                                1
+                              )
                             )
                           )
                         }
@@ -310,7 +310,7 @@ export function PublicBookingView(props: {
                         </span>
                       )}
                     </For>
-                    <For each={Array.from({ length: month().getDay() })}>
+                    <For each={Array.from({ length: month().getUTCDay() })}>
                       {() => <span />}
                     </For>
                     <For each={days()}>
@@ -320,11 +320,12 @@ export function PublicBookingView(props: {
                           class="h-auto w-full aspect-square"
                           disabled={dateKey(d) < today()}
                           aria-label={d.toLocaleDateString([], {
+                            timeZone: 'UTC',
                             dateStyle: 'full',
                           })}
                           onClick={() => choose(dateKey(d))}
                         >
-                          {d.getDate()}
+                          {d.getUTCDate()}
                         </Button>
                       )}
                     </For>

@@ -1,6 +1,7 @@
+import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import type { EmailThreadSource } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 
@@ -9,11 +10,14 @@ export function toEmailThread(thread: ApiThread): EmailThread {
   return {
     access_level: thread.access_level,
     db_id: thread.db_id,
+    created_at: thread.created_at,
+    updated_at: thread.updated_at,
     inbox_visible: thread.inbox_visible,
     is_read: thread.is_read,
     latest_inbound_message_ts: thread.latest_inbound_message_ts,
     link_id: thread.link_id,
     messages: thread.messages.map((message) => ({
+      calendar_invitations: message.calendar_invitations,
       attachments: message.attachments.map((attachment) => ({
         content_id: attachment.content_id,
         db_id: attachment.db_id,
@@ -91,13 +95,64 @@ export function createEmailThreadSource(
   query: ThreadQueryResult<ThreadQueryData>
 ): EmailThreadSource {
   // Status guards prevent a pending Solid resource from suspending its owner.
-  const thread = createMemo(() => {
-    if (!query.isSuccess && !query.isError) return undefined;
-    const data = query.data?.thread;
-    return data?.db_id === threadId() ? toEmailThread(data) : undefined;
-  });
+  const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
+    (previous) => {
+      const requested = threadId();
+      if (!query.isSuccess && !query.isError) {
+        // Resolving a local handle changes the query key, but must not unmount
+        // an open composer while the same thread's canonical page loads.
+        return {
+          requested,
+          thread:
+            previous?.requested === requested ? previous.thread : undefined,
+        };
+      }
+      const data = query.data?.thread;
+      if (!data) return { requested };
+      // Cache aliases and the async identity lookup have separate subscribers.
+      // Keep the last verified row until both observe the canonical identity.
+      return {
+        requested,
+        thread:
+          data.db_id === requested || data.db_id === query.resolvedThreadId
+            ? toEmailThread(data)
+            : previous?.requested === requested
+              ? previous.thread
+              : undefined,
+      };
+    }
+  );
+  const thread = () => snapshot().thread;
+  // Memo equality prevents ordinary email refreshes from revalidating calendar state.
+  const scheduling = createMemo(
+    () => {
+      const current = thread();
+      return (
+        current && {
+          threadId: current.db_id,
+          invitations: JSON.stringify(
+            current.messages
+              .filter((message) => message.calendar_invitations?.length)
+              .map((message) => [message.db_id, message.calendar_invitations])
+          ),
+        }
+      );
+    },
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.threadId === b?.threadId && a?.invitations === b?.invitations,
+    }
+  );
+  // Only a change inside an already-loaded thread, never its first load or a switch.
+  createEffect(
+    on(scheduling, (next, previous) => {
+      if (next && next.threadId === previous?.threadId)
+        invalidateInvitationScheduling(next.threadId);
+    })
+  );
   return {
-    id: threadId,
+    id: () => thread()?.db_id ?? query.resolvedThreadId ?? threadId(),
     thread,
     isError: () => query.isError,
     isLoading: () => query.isLoading,

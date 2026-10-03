@@ -1,36 +1,37 @@
-import { createCalendarBlockRange } from '@block-calendar/calendar-range';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
+import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
+import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import {
   getChannelParams,
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
-import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
+import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
+  OpenSplitResult,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
 import type { BlockAlias, BlockName } from '@core/block';
-import {
-  type ItemLike,
-  itemToBlockName,
-  resolveBlockAlias,
-} from '@core/constant/allBlocks';
+import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
-  enableReminders,
+  enableProjects,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
-import type { EntityType, NotificationType } from '@core/types';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import type { NotificationType } from '@core/types';
 import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
-import { getReminderById } from '@queries/reminders/reminders';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import { projectRouteId } from '../projects/core/route';
+import {
+  getDocumentCommentLocation,
+  type NotificationEntityOverride,
+} from './document-comment-location';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
-import { DefaultNotificationBlockNameResolver } from './notification-resolvers';
 import type { NotificationSource } from './notification-source';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
 import {
@@ -54,12 +55,7 @@ async function goToLocationInSplit(
   await handle?.goToLocationFromParams(params);
 }
 
-/**
- * Opens a split if it is not already open. When `sourceHandle` names the
- * split the navigation originates from and that split is an engaged preview
- * controller, the open is redirected into its viewer split (via the
- * openWithSplit redirect) and never steals the keyboard from the controller.
- */
+/** Opens or activates the requested content from the source split. */
 function openSplitIfNotOpen(
   layoutManager: SplitManager,
   type: BlockName | BlockAlias | 'component',
@@ -68,24 +64,34 @@ function openSplitIfNotOpen(
     newSplit?: boolean;
     params?: Record<string, unknown>;
     sourceHandle?: SplitHandle;
+    onApplied?: VoidFunction;
   } = {}
 ) {
+  let onApplied = options.onApplied;
+  const reportApplied = () => {
+    const callback = onApplied;
+    onApplied = undefined;
+    callback?.();
+  };
+  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
+    if (!result) return;
+    if (result.status === 'opened' || result.status === 'reused') {
+      reportApplied();
+    }
+  };
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
-    const isSourcesViewer =
-      options.sourceHandle?.isControllerSplit() &&
-      options.sourceHandle.viewerId() === existing.id;
-    if (!isSourcesViewer) existing.activate();
+    existing.activate();
+    reportApplied();
   } else {
-    layoutManager.openWithSplit(
-      { type, id },
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: options.newSplit,
-        handle: options.sourceHandle,
-      }
-    );
+    const result = layoutManager.openWithSplit(contentReference(type, id), {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+      ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    });
+    reportImmediateResult(result);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params);
@@ -106,6 +112,10 @@ export function getChannelNotificationParams(
     .with({ tag: 'channel_message_send' }, (m) => ({
       messageId: m.content.messageId,
       threadId: undefined,
+    }))
+    .with({ tag: 'channel_message_reaction' }, (m) => ({
+      messageId: m.content.messageId,
+      threadId: m.content.threadId ?? undefined,
     }))
     .with({ tag: 'channel_message_reply' }, (m) => ({
       messageId: m.content.messageId,
@@ -128,7 +138,8 @@ async function openChannelNotification(
   notification: UnifiedNotification,
   layoutManager: SplitManager,
   newSplit: boolean = false,
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
 ) {
   const channelId = notification.entity_id;
   const { messageId, threadId } = getChannelNotificationParams(notification);
@@ -137,6 +148,7 @@ async function openChannelNotification(
     openSplitIfNotOpen(layoutManager, 'channel', channelId, {
       newSplit,
       sourceHandle,
+      onApplied,
     });
     return;
   }
@@ -146,37 +158,8 @@ async function openChannelNotification(
     splitManager: layoutManager,
     preferNewSplit: newSplit,
     sourceHandle,
+    ...(onApplied ? { onApplied } : {}),
   });
-}
-
-// Minimal entity shape — the live entity from the UI is authoritative when
-// available (notification metadata is a snapshot at notification time and may
-// lack `subType` for older events).
-type NotificationEntityOverride = {
-  fileType?: string | null;
-  subType?: { type: string } | null;
-};
-
-// Resolve the block type for a document notification, honoring `subType` so
-// that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
-// 'task' block alias instead of raw 'md'. Prefers the live entity's fields
-// over the notification-metadata snapshot when provided.
-function safeDocumentContentToBlockName(
-  content: NotificationEntityOverride,
-  entity?: NotificationEntityOverride
-) {
-  return itemToBlockName({
-    type: 'document',
-    fileType: entity?.fileType ?? content.fileType ?? undefined,
-    subType: entity?.subType ?? content.subType ?? undefined,
-  } as ItemLike);
-}
-
-function resolveBlockCommentParamName(type: BlockName | BlockAlias) {
-  const resolved = resolveBlockAlias(type);
-  if (resolved === 'md' || resolved === 'spreadsheet')
-    return MD_URL_PARAMS.commentId;
-  if (resolved === 'pdf') return PDF_URL_PARAMS.annotationId;
 }
 
 type NotSupportedError = {
@@ -189,12 +172,21 @@ type NotFoundError = {
   notificationId: string;
 };
 
-type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
+type NavigationDeferredError = {
+  tag: 'NavigationDeferredError';
+  notificationId: string;
+};
+
+type OpenNotificationFromIdError =
+  | NotSupportedError
+  | NotFoundError
+  | NavigationDeferredError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
   entity?: NotificationEntityOverride,
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
   const tag = notification.notification_metadata.tag as NotificationType;
 
@@ -204,7 +196,13 @@ function getSupportedHandler(
         P.union(...CHANNEL_EVENT_TYPES),
         () =>
           (lm: SplitManager, newSplit: boolean = false) =>
-            openChannelNotification(notification, lm, newSplit, sourceHandle)
+            openChannelNotification(
+              notification,
+              lm,
+              newSplit,
+              sourceHandle,
+              onApplied
+            )
       )
       .with(
         'ai_response',
@@ -213,6 +211,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'chat', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       .with('new_email', () => {
@@ -222,6 +221,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'email', meta.content.threadId, {
             newSplit,
             sourceHandle,
+            onApplied,
           });
         };
       })
@@ -232,6 +232,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       .with('invite_to_team', () => null)
@@ -242,6 +243,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             })
       )
       // Every agent-session kind opens the session itself: the chip in the
@@ -266,6 +268,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'agent', meta.content.sessionId, {
               newSplit,
               sourceHandle,
+              onApplied,
             });
           };
         }
@@ -277,6 +280,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'task', meta.content.taskId, {
             newSplit,
             sourceHandle,
+            onApplied,
           });
         };
       })
@@ -297,6 +301,7 @@ function getSupportedHandler(
             openSplitIfNotOpen(lm, 'pr', notification.entity_id, {
               newSplit,
               sourceHandle,
+              onApplied,
             });
             return;
           }
@@ -307,88 +312,56 @@ function getSupportedHandler(
           }
 
           openExternalUrl(url);
+          onApplied?.();
         };
       })
-      .with('mentioned_in_document_comment', () => {
+      .with('initiative_discussion', () => {
+        if (!isFeatureEnabled(enableProjects)) return null;
         const meta = notification.notification_metadata;
-        if (meta.tag !== 'mentioned_in_document_comment') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('replied_to_document_comment_thread', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'replied_to_document_comment_thread') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('commented_on_document', () => {
-        const meta = notification.notification_metadata;
-        if (meta.tag !== 'commented_on_document') return null;
-
-        const blockName = safeDocumentContentToBlockName(meta.content, entity);
-        const commentParamName = resolveBlockCommentParamName(blockName);
-        const params = commentParamName
-          ? {
-              [commentParamName]: meta.content.commentId.toString(),
-            }
-          : undefined;
-
-        return async (lm: SplitManager, newSplit: boolean = false) =>
-          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
-            newSplit,
-            params,
-            sourceHandle,
-          });
-      })
-      .with('reminder', () => {
-        // The notification points at the reminder itself, so there is nothing to
-        // open until the reminder is fetched and its referenced entity read. A
-        // standalone reminder references nothing and opens nothing.
-        return async (lm: SplitManager, newSplit: boolean = false) => {
-          // A reminder created before the flag closed still has a live
-          // notification; opening it would reach reminder surfaces the user is
-          // no longer meant to have.
-          if (!isFeatureEnabled(enableReminders)) return;
-          const reminder = await getReminderById(notification.entity_id);
-          const entityType = reminder?.entityType;
-          const entityId = reminder?.entityId;
-          if (!entityType || !entityId) return;
-
-          const blockName = await DefaultNotificationBlockNameResolver(
-            entityId,
-            entityType as EntityType
+        if (
+          meta.tag !== 'initiative_discussion' ||
+          notification.entity_type !== 'initiative'
+        )
+          return null;
+        return async (lm: SplitManager, newSplit = false) => {
+          openSplitIfNotOpen(
+            lm,
+            'component',
+            projectRouteId({
+              id: notification.entity_id,
+              section: 'overview',
+              discussionId: meta.content.messageId,
+            }),
+            { newSplit, sourceHandle, onApplied }
           );
-          if (!blockName) return;
+        };
+      })
+      .with(
+        P.union(
+          'mentioned_in_document_comment',
+          'replied_to_document_comment_thread',
+          'commented_on_document'
+        ),
+        () => {
+          const location = getDocumentCommentLocation(notification, entity);
+          if (!location) return null;
 
-          openSplitIfNotOpen(lm, blockName, entityId, {
-            newSplit,
-            sourceHandle,
+          return async (lm: SplitManager, newSplit: boolean = false) =>
+            openSplitIfNotOpen(lm, location.blockName, notification.entity_id, {
+              newSplit,
+              params: location.params,
+              sourceHandle,
+              onApplied,
+            });
+        }
+      )
+      .with('reminder', () => {
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          openReminderDetail(notification.entity_id, {
+            manager: lm,
+            handle: sourceHandle,
+            openInNewSplit: newSplit,
+            ...(onApplied ? { onApplied } : {}),
           });
         };
       })
@@ -400,7 +373,10 @@ function getSupportedHandler(
           // A reminder delivered before the flag closed still has a live
           // notification; opening it must not reach a surface the user is no
           // longer meant to have.
-          if (!isFeatureEnabled(enableCalendarUi)) return;
+          if (!isFeatureEnabled(enableCalendarUi)) {
+            onApplied?.();
+            return;
+          }
           const content = meta.content;
           const time = content.startsAt
             ? {
@@ -411,17 +387,34 @@ function getSupportedHandler(
             : content.startDate
               ? { kind: 'allDay' as const, startDate: content.startDate }
               : undefined;
-          const range = time ? createCalendarBlockRange(time) : undefined;
-          openSplitIfNotOpen(lm, 'calendar', CALENDAR_BLOCK_ID, {
-            newSplit,
-            sourceHandle,
-            params: {
+          const range = time ? createCalendarRange(time) : undefined;
+          openCalendarView(
+            {
               eventId: content.eventId,
               occurrenceKey: content.occurrenceKey,
               range,
             },
-          });
+            {
+              manager: lm,
+              handle: sourceHandle,
+              openInNewSplit: newSplit,
+              ...(onApplied ? { onApplied } : {}),
+            }
+          );
         };
+      })
+      .with('crm_discussion', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'crm_discussion') return null;
+        const blockName =
+          notification.entity_type === 'crm_contact' ? 'contact' : 'company';
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+            newSplit,
+            params: { [COMMENT_LINK_PARAM]: meta.content.messageId },
+            sourceHandle,
+            onApplied,
+          });
       })
       .with('inbox_reauth_required', () => null)
       .exhaustive()
@@ -439,12 +432,17 @@ export function openNotification(
   entity?: NotificationEntityOverride,
   /**
    * The split this navigation originates from (e.g. the list whose row was
-   * clicked). Routes the open through that split's preview viewer when its
-   * preview mode is engaged.
+   * clicked).
    */
-  sourceHandle?: SplitHandle
+  sourceHandle?: SplitHandle,
+  options: { onApplied?: VoidFunction } = {}
 ): ResultAsync<void, NotSupportedError> {
-  const handler = getSupportedHandler(notification, entity, sourceHandle);
+  const handler = getSupportedHandler(
+    notification,
+    entity,
+    sourceHandle,
+    options.onApplied
+  );
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
@@ -476,14 +474,32 @@ export function openSingleStackNotification(
 export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  options: { canOpen?: () => boolean; onApplied?: VoidFunction } = {}
 ): ResultAsync<void, OpenNotificationFromIdError> {
+  const openIfReady = (notification: UnifiedNotification) => {
+    if (options.canOpen && !options.canOpen()) {
+      return errAsync({
+        tag: 'NavigationDeferredError' as const,
+        notificationId,
+      });
+    }
+    return openNotification(
+      notification,
+      layoutManager,
+      false,
+      undefined,
+      undefined,
+      { onApplied: options.onApplied }
+    );
+  };
+
   // Check notification source first
   const cached = notificationSource
     .notifications()
     .find((n) => n.id === notificationId);
   if (cached) {
-    return openNotification(cached, layoutManager);
+    return openIfReady(cached);
   }
 
   // Fetch if not in notification source
@@ -494,6 +510,6 @@ export function openNotificationFromId(
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };
       return errAsync(err);
     }
-    return openNotification(unified, layoutManager);
+    return openIfReady(unified);
   });
 }

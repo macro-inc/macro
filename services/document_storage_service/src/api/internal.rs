@@ -103,7 +103,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents",
             post(
-                documents_hex::inbound::axum_router::create_document::create_document_handler::<
+                documents_hex::inbound::axum_router::create_document::create_document_internal_handler::<
                     DocumentService,
                     EntityAccessService,
                     AuthorizationService,
@@ -134,6 +134,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/documents/{document_id}/snapshot",
             put(
                 documents_hex::inbound::axum_router::put_snapshot::put_snapshot_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                    AuthorizationService,
+                >,
+            ),
+        )
+        .route(
+            "/documents/{document_id}/sync-content-updated",
+            post(
+                documents_hex::inbound::axum_router::sync_content_updated::sync_content_updated_handler::<
                     DocumentService,
                     EntityAccessService,
                     AuthorizationService,

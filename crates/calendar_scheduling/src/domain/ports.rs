@@ -29,6 +29,14 @@ pub trait Repository: Send + Sync + 'static {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<BookingRecord>, Error>> + Send;
+    /// Count active assignments per candidate host without loading booking records.
+    fn host_booking_counts(
+        &self,
+        profile: Uuid,
+        hosts: &[String],
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> impl Future<Output = Result<std::collections::BTreeMap<String, i64>, Error>> + Send;
     /// Read all active host claims, including those owned by other profiles.
     fn busy(
         &self,

@@ -1,10 +1,11 @@
 //! Bot ports.
 
 use super::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotProfile,
-    BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-    HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
+    BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
+    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
+    UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -87,6 +88,12 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotProfile>, Self::Err>> + Send;
 
+    /// Load owner profiles, including soft-deleted rows.
+    fn get_owner_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id.
     fn get_agent(
         &self,
@@ -100,11 +107,11 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Get the owner of an active registered harness.
-    fn get_harness_owner(
+    /// Get ownership and permission capabilities of an active registered harness.
+    fn get_harness_facts(
         &self,
         harness_id: HarnessId,
-    ) -> impl Future<Output = Result<Option<HarnessOwner>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<HarnessFacts>, Self::Err>> + Send;
 
     /// Check whether a bot is an active channel participant.
     fn bot_active_in_channel(
@@ -227,6 +234,15 @@ pub trait BotService: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
+    /// Change part of a manageable agent's instructions or settings, keeping
+    /// everything the patch leaves unnamed - owner and profile included.
+    fn patch_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
+
     /// List agents the caller can manage or start a managed session as.
     fn list_agents(
         &self,
@@ -260,6 +276,12 @@ pub trait BotService: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
+
+    /// Load owner profiles in request order.
+    fn get_owner_profiles(
+        &self,
+        ids: &[BotId],
+    ) -> impl Future<Output = Result<Vec<BotOwnerProfile>, BotError>> + Send;
 
     /// Get the authenticated bot's own record.
     fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;
@@ -362,6 +384,16 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
+/// Whether a Pipedream app slug is one an agent may pin.
+///
+/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
+/// the directory could not be asked, and the slug must not be stored.
+pub trait McpAppCatalog: Send + Sync + 'static {
+    /// `true` when `slug` is a connectable Pipedream app.
+    fn is_connectable_app(&self, slug: &str)
+    -> impl Future<Output = Result<bool, BotError>> + Send;
+}
+
 /// Bot service error.
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {
@@ -374,6 +406,9 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The MCP app directory could not answer, so a slug was not stored.
+    #[error("{0}")]
+    Unavailable(String),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

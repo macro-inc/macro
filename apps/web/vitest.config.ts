@@ -40,11 +40,15 @@ export default defineConfig({
       '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
+      '../../packages/machine/vitest.config.ts',
       {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
         test: {
-          include: ['src/lib/core/**/*.{test,spec}.{ts,tsx}'],
+          include: [
+            'src/lib/core/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/split-router/**/*.{test,spec}.{ts,tsx}',
+          ],
           name: 'core',
         },
       },
@@ -57,6 +61,7 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         // Resolve solid-js to its reactive browser build (the default
         // server-side build is inert), needed by the solid/ bindings.
         plugins: [tsconfigPaths(), solidPlugin()],
@@ -72,6 +77,7 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         plugins: [tsconfigPaths(), solidPlugin()],
         ssr: {
           resolve: {
@@ -85,12 +91,14 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         test: {
           include: ['scripts/**/*.{test,spec}.{ts,tsx}'],
           name: 'scripts',
         },
       },
       {
+        extends: false,
         test: {
           environment: 'jsdom',
           globals: true,
@@ -99,6 +107,7 @@ export default defineConfig({
         },
       },
       {
+        extends: false,
         plugins: [tsconfigPaths()],
         test: {
           environment: 'jsdom',
@@ -191,7 +200,7 @@ export default defineConfig({
           resolve: { conditions: ['browser', 'development'] },
         },
         test: {
-          deps: { optimizer: { web: { enabled: false } } },
+          deps: { optimizer: { client: { enabled: false } } },
           include: ['src/components/view-shell/**/*.{test,spec}.{ts,tsx}'],
           name: 'view-shell',
         },
@@ -204,6 +213,7 @@ export default defineConfig({
           exclude: [
             ...configDefaults.exclude,
             'src/components/view-shell/**/*',
+            'src/features/scheduling/**/*',
             'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email,email-message,email-thread,email-compose}/**/*',
           ],
           include: [
@@ -214,7 +224,9 @@ export default defineConfig({
             'src/lib/fullcalendar-solid/**/*.{test,spec}.{ts,tsx}',
             'src/lib/persistence/**/*.{test,spec}.{ts,tsx}',
             'src/lib/utils/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/workers/slack-import/**/*.{test,spec}.{ts,tsx}',
             'src/routes/**/*.{test,spec}.{ts,tsx}',
+            'src/observability/**/*.{test,spec}.{ts,tsx}',
           ],
           name: 'app',
         },

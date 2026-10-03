@@ -24,6 +24,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
+use entity_registry::NonUserOwners;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model::response::GenericErrorResponse;
 use serde::Deserialize;
@@ -49,6 +50,8 @@ pub struct ProjectRouterState<T, Svc, Auth> {
     pub access_service: Arc<Svc>,
     /// Request authorization state.
     pub authorization_state: MacroAuthorizationState<Auth>,
+    /// Whether a team bot with no acting user may own what it creates.
+    pub non_user_owners: NonUserOwners,
 }
 
 // A derived implementation would unnecessarily require all service types to be `Clone`.
@@ -58,6 +61,7 @@ impl<T, Svc, Auth> Clone for ProjectRouterState<T, Svc, Auth> {
             service: self.service.clone(),
             access_service: self.access_service.clone(),
             authorization_state: self.authorization_state.clone(),
+            non_user_owners: self.non_user_owners,
         }
     }
 }
@@ -71,6 +75,12 @@ impl<T, Svc, Auth> FromRef<ProjectRouterState<T, Svc, Auth>> for Arc<Svc> {
 impl<T, Svc, Auth> FromRef<ProjectRouterState<T, Svc, Auth>> for MacroAuthorizationState<Auth> {
     fn from_ref(state: &ProjectRouterState<T, Svc, Auth>) -> Self {
         state.authorization_state.clone()
+    }
+}
+
+impl<T, Svc, Auth> FromRef<ProjectRouterState<T, Svc, Auth>> for NonUserOwners {
+    fn from_ref(state: &ProjectRouterState<T, Svc, Auth>) -> Self {
+        state.non_user_owners
     }
 }
 
@@ -89,6 +99,7 @@ impl IntoResponse for ProjectError {
             | Self::NameTooLong { .. }
             | Self::CannotModifyDeleted
             | Self::RecursiveNesting => StatusCode::BAD_REQUEST,
+            Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

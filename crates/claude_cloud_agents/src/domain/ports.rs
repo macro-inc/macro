@@ -1,5 +1,6 @@
 //! Capabilities needed by the Claude session adapter.
 use super::model::{Event, Result, SessionId};
+use super::models::{Model, ModelOption};
 use futures::Stream;
 use std::{future::Future, pin::Pin};
 
@@ -19,8 +20,12 @@ pub trait CloudLifecycle: Cloud {
     /// Ensure the owner's selected environment allows this deployment's MCP host.
     /// Must finish before creating a container, whose network policy is fixed.
     fn prepare_mcp_access(&self, host: &str) -> impl Future<Output = Result<()>> + Send;
-    /// Create a conversation with this agent's instructions.
-    fn create(&self, instructions: &str) -> impl Future<Output = Result<SessionId>> + Send;
+    /// Create a conversation with this agent's instructions and starting model.
+    fn create(
+        &self,
+        instructions: &str,
+        model: &Model,
+    ) -> impl Future<Output = Result<SessionId>> + Send;
     /// Archive the owner's conversation reversibly.
     fn archive(&self, session: &SessionId) -> impl Future<Output = Result<()>> + Send;
 }
@@ -46,8 +51,9 @@ impl ToolPermissions for DenyToolPermissions {
 
 /// Account-scoped provider operations. Implementors must never choose another user's credential.
 pub trait Cloud: Clone + Send + Sync + 'static {
-    /// At most five recent sessions visible through this account's credential.
-    fn recent_sessions(&self) -> impl Future<Output = Result<Vec<SessionId>>> + Send;
+    /// Complete model catalog fetched directly with this account's credential.
+    /// Discovery must not read transcripts, create sessions, or spend inference.
+    fn models(&self) -> impl Future<Output = Result<Vec<ModelOption>>> + Send;
     /// Submit one event. Mutations are not automatically retried.
     fn send(
         &self,

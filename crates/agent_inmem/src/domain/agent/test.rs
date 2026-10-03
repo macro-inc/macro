@@ -3,16 +3,21 @@ use std::sync::Arc;
 use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, SessionNotification,
-    TextContent,
+    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
+    SessionConfigKind, SessionConfigOptionCategory, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionNotification, SetSessionConfigOptionRequest, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
+use ai_billing::domain::{
+    AiAdmissionError, AiAdmissionService, DenyReason, DisabledAiAdmissionService,
+};
 use rig_agent::agent::StreamingError;
 use rig_agent::completion::PromptError;
 
 use super::*;
 use crate::domain::engine::TurnEngine;
-use crate::testing::{HangingEngine, ScriptedEngine};
+use crate::testing::{HangingEngine, ScriptedEngine, TestAdmission};
+use macro_user_id::user_id::MacroUserIdStr;
 
 struct Harness {
     notifications: std::sync::Mutex<Vec<SessionNotification>>,
@@ -52,16 +57,32 @@ async fn with_agent<Engine, Out>(
 where
     Engine: TurnEngine,
 {
+    with_admission(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, _| scenario(connection, session).await,
+    )
+    .await
+}
+
+async fn with_admission<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
     let store = Arc::new(SessionStore::new());
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
-        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
         engine,
+        admission,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -72,7 +93,7 @@ where
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
-    let agent = tokio::spawn(serve(state, agent_channel));
+    let agent = tokio::spawn(serve(Arc::clone(&state), agent_channel));
 
     let harness = Arc::new(Harness {
         notifications: std::sync::Mutex::new(Vec::new()),
@@ -118,7 +139,7 @@ where
                     .send_request(NewSessionRequest::new("/"))
                     .block_task()
                     .await?;
-                let out = scenario(connection, session.session_id).await;
+                let out = scenario(connection, session.session_id, state).await;
                 Ok((session.config_options, out))
             },
         )
@@ -142,20 +163,349 @@ fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
 }
 
 #[tokio::test]
+async fn direct_acp_denials_preserve_history_and_allow_retry() {
+    for failure in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "reply".into(),
+        )]));
+        let admission = Arc::new(TestAdmission::new(Ok(())));
+        with_admission(
+            engine.clone(),
+            admission.clone(),
+            async |connection, session, state| {
+                connection
+                    .send_request(text_prompt(&session, "first"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                *admission.result.lock().unwrap() = Err(failure);
+                let error = connection
+                    .send_request(text_prompt(&session, "denied"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let error = serde_json::to_value(error).unwrap();
+                assert_eq!(error["message"], failure.to_string());
+                assert_eq!(error["data"]["code"], failure.code());
+                assert_eq!(error["data"]["retryable"], failure.is_retryable());
+                assert_eq!(engine.requests().len(), 1);
+                assert_eq!(state.store.get(&state.session_id).unwrap().history.len(), 2);
+                assert!(
+                    state
+                        .active_cancel
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .all(CancellationToken::is_cancelled)
+                );
+
+                // Loading and deterministic configuration still work with exhausted quota.
+                connection
+                    .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                    .block_task()
+                    .await
+                    .unwrap();
+                connection
+                    .send_request(SetSessionConfigOptionRequest::new(
+                        session.clone(),
+                        MODEL_CONFIG_ID,
+                        SessionConfigValueId::new("other-model"),
+                    ))
+                    .block_task()
+                    .await
+                    .unwrap();
+                assert_eq!(admission.calls.lock().unwrap().len(), 2);
+                *admission.result.lock().unwrap() = Ok(());
+                connection
+                    .send_request(text_prompt(&session, "retry"))
+                    .block_task()
+                    .await
+                    .unwrap();
+            },
+        )
+        .await;
+        assert_eq!(engine.requests()[1].messages, ["first", "reply", "retry"]);
+        assert_eq!(engine.requests()[1].model, "other-model");
+        assert!(
+            admission
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(user, feature)| user == "macro|owner@macro.com"
+                    && *feature == ai_usage::AiFeature::AgentSession)
+        );
+    }
+}
+
+#[tokio::test]
+async fn deterministic_commands_skip_admission_but_provider_commands_do_not() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, _| {
+            for command in ["/compact", "/ask choose | a | b"] {
+                connection
+                    .send_request(text_prompt(&session, command))
+                    .block_task()
+                    .await
+                    .unwrap();
+            }
+            assert!(admission.calls.lock().unwrap().is_empty());
+            // Unknown/development command text that reaches the provider is still gated.
+            connection
+                .send_request(text_prompt(&session, "/develop something"))
+                .block_task()
+                .await
+                .unwrap_err();
+            assert_eq!(admission.calls.lock().unwrap().len(), 1);
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn queued_turns_check_admission_only_when_they_can_execute() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Ok(())));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            *admission.result.lock().unwrap() = Err(AiAdmissionError::Unavailable);
+            drop(lock);
+            prompt.block_task().await.unwrap_err();
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
+async fn cancelling_a_queued_turn_skips_admission_and_engine() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Unavailable)));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let _lock = state.turn_lock.lock().await;
+            let prompt = connection.send_request(text_prompt(&session, "cancel queued"));
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while state.active_cancel.lock().unwrap().is_empty() {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+    assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+struct WaitingAdmission(tokio::sync::Notify);
+
+impl AiAdmissionService for WaitingAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: ai_usage::AiFeature,
+    ) -> ai_billing::domain::AdmissionFuture<'a> {
+        Box::pin(async move {
+            self.0.notify_one();
+            std::future::pending().await
+        })
+    }
+}
+
+#[tokio::test]
+async fn cancel_during_billing_does_not_start_engine_or_write_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let admission = Arc::new(WaitingAdmission(tokio::sync::Notify::new()));
+    with_admission(
+        engine.clone(),
+        admission.clone(),
+        async |connection, session, state| {
+            let prompt = connection.send_request(text_prompt(&session, "cancel during admission"));
+            tokio::time::timeout(Duration::from_secs(5), admission.0.notified())
+                .await
+                .unwrap();
+            connection
+                .send_notification(CancelNotification::new(session))
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(5), prompt.block_task())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(response.stop_reason, StopReason::Cancelled);
+            assert!(
+                state
+                    .store
+                    .get(&state.session_id)
+                    .unwrap()
+                    .history
+                    .is_empty()
+            );
+            assert!(
+                state
+                    .active_cancel
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(CancellationToken::is_cancelled)
+            );
+        },
+    )
+    .await;
+    assert!(engine.requests().is_empty());
+}
+
+#[tokio::test]
 async fn new_session_advertises_the_engine_supported_models() {
     let (_notifications, config_options, ()) =
         with_agent(Arc::new(ScriptedEngine::new(vec![])), async |_, _| {}).await;
 
     let selection = agent_fold::domain::model_selection::model_selection(&config_options)
         .expect("session/new should advertise a model select");
-    assert_eq!(selection.current, "test-model");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
     assert_eq!(
         selection
             .options
             .iter()
             .map(|model| (model.id.as_str(), model.name.as_str()))
             .collect::<Vec<_>>(),
-        vec![("test-model", "test-model"), ("other-model", "other-model")]
+        vec![
+            ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
+            ("other-model", "other-model")
+        ]
+    );
+
+    let effort = config_options
+        .iter()
+        .find(|option| option.id.to_string() == REASONING_EFFORT_CONFIG_ID)
+        .expect("session/new should advertise reasoning effort");
+    assert_eq!(
+        effort.category,
+        Some(SessionConfigOptionCategory::ThoughtLevel)
+    );
+    let SessionConfigKind::Select(effort) = &effort.kind else {
+        panic!("reasoning effort should be a select");
+    };
+    assert_eq!(effort.current_value.to_string(), "default");
+    let SessionConfigSelectOptions::Ungrouped(options) = &effort.options else {
+        panic!("reasoning effort should be ungrouped");
+    };
+    assert_eq!(
+        options
+            .iter()
+            .map(|option| option.value.to_string())
+            .collect::<Vec<_>>(),
+        ["default", "low", "medium", "high", "xhigh", "max"]
+    );
+}
+
+#[tokio::test]
+async fn changing_reasoning_effort_applies_to_the_next_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (_notifications, _config_options, ()) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    SessionConfigValueId::new("low"),
+                ))
+                .block_task()
+                .await
+                .expect("the effort selection should be accepted");
+            connection
+                .send_request(text_prompt(&session, "be quick"))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        })
+        .await;
+
+    assert_eq!(
+        engine.requests()[0].reasoning_effort,
+        agent::ReasoningEffort::Low
+    );
+}
+
+#[tokio::test]
+async fn new_session_advertises_its_slash_commands() {
+    let (notifications, _config_options, ()) = with_agent(
+        Arc::new(ScriptedEngine::new(vec![])),
+        async |connection, session| {
+            // A round trip so the advertisement, sent right after the
+            // session/new response, has landed before the client is torn down.
+            connection
+                .send_request(text_prompt(&session, "/compact"))
+                .block_task()
+                .await
+                .expect("compaction should complete");
+        },
+    )
+    .await;
+
+    let advertised = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::AvailableCommandsUpdate(update) => Some(update),
+            _ => None,
+        })
+        .expect("session/new is followed by an available_commands_update");
+    let names = advertised
+        .available_commands
+        .iter()
+        .map(|command| command.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["ask"]);
+    assert!(
+        advertised.available_commands[0].input.is_some(),
+        "/ask carries a hint for its question"
     );
 }
 
@@ -196,12 +546,14 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
             SessionUpdate::AgentMessageChunk(_) => "message",
             SessionUpdate::ToolCall(_) => "tool_call",
             SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+            SessionUpdate::AvailableCommandsUpdate(_) => "commands",
             _ => "other",
         })
         .collect();
     assert_eq!(
         kinds,
         vec![
+            "commands",
             "thought",
             "message",
             "tool_call",
@@ -286,12 +638,64 @@ async fn turns_accumulate_history_and_send_the_model() {
 
     let requests = engine.requests();
     assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0].model, "test-model");
+    assert_eq!(requests[0].model, "anthropic/claude-sonnet-5-5");
     assert_eq!(requests[0].messages, vec!["first".to_owned()]);
     // The second turn carries the first turn's prompt and reply.
     assert_eq!(
         requests[1].messages,
         vec!["first".to_owned(), "ok".to_owned(), "second".to_owned()]
+    );
+}
+
+#[tokio::test]
+async fn attached_files_reach_the_model_and_stay_in_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "blue".into(),
+    )]));
+    let image = "https://static.example/file/11111111-1111-4111-8111-111111111111";
+    let notes = "https://static.example/file/22222222-2222-4222-8222-222222222222";
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        let prompt = PromptRequest::new(
+            session.clone(),
+            vec![
+                ContentBlock::Text(TextContent::new("what color is this?")),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("screenshot.png", image).mime_type("image/png".to_owned()),
+                ),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
+                ),
+            ],
+        );
+        connection
+            .send_request(prompt)
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(text_prompt(&session, "and now?"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    // The image rides the user message as an image URL the provider fetches;
+    // the text file has no image form, so it is named to the model instead.
+    assert_eq!(requests[0].messages, vec!["what color is this?".to_owned()]);
+    assert_eq!(requests[0].images, vec![image.to_owned()]);
+    // History keeps the files: a follow-up still shows the model the image.
+    assert_eq!(requests[1].images, vec![image.to_owned()]);
+    assert_eq!(
+        requests[1].messages,
+        vec![
+            "what color is this?".to_owned(),
+            "blue".to_owned(),
+            "and now?".to_owned()
+        ]
     );
 }
 
@@ -325,6 +729,48 @@ async fn compact_clears_history_without_running_a_turn() {
         requests[1].messages,
         vec!["after".to_owned()],
         "compaction empties the conversation"
+    );
+}
+
+#[tokio::test]
+async fn compact_with_a_file_attached_is_a_prompt_about_the_file() {
+    // The command word alone is the control. With a file alongside, the user
+    // is asking about that file, and compacting would drop it unseen.
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    let notes = "https://static.example/file/33333333-3333-4333-8333-333333333333";
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "remember this"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(PromptRequest::new(
+                session.clone(),
+                vec![
+                    ContentBlock::Text(TextContent::new("/compact")),
+                    ContentBlock::ResourceLink(
+                        ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
+                    ),
+                ],
+            ))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2, "the attached prompt runs a turn");
+    assert_eq!(
+        requests[1].messages,
+        vec![
+            "remember this".to_owned(),
+            "ok".to_owned(),
+            "/compact".to_owned()
+        ],
+        "the conversation is kept, not compacted"
     );
 }
 
@@ -363,7 +809,13 @@ async fn engine_cancellation_is_not_rendered_as_an_error_message() {
         .await;
 
     assert_eq!(response.stop_reason, StopReason::Cancelled);
-    assert!(notifications.is_empty());
+    assert!(
+        notifications.iter().all(|notification| matches!(
+            notification.update,
+            SessionUpdate::AvailableCommandsUpdate(_)
+        )),
+        "only the session-open command advertisement, no error message"
+    );
 }
 
 #[tokio::test]
@@ -415,12 +867,15 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
-        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        admission: Arc::new(DisabledAiAdmissionService),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -506,12 +961,15 @@ where
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("test-model".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
-        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        owner: model_owner::Owner::User(
+            MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        ),
         engine,
+        admission: Arc::new(DisabledAiAdmissionService),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -1027,3 +1485,78 @@ async fn ask_without_form_support_explains_instead_of_asking() {
 
 mod model_selection;
 mod telemetry;
+
+#[tokio::test]
+async fn effort_is_validated_and_model_changes_return_complete_options() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    with_agent(engine, async |connection, session| {
+        let selected = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                REASONING_EFFORT_CONFIG_ID,
+                "max",
+            ))
+            .block_task()
+            .await
+            .expect("Sonnet accepts max");
+        assert_eq!(
+            selected.config_options.len(),
+            2,
+            "effort response retains model control"
+        );
+        let changed = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("model accepted");
+        assert_eq!(
+            changed.config_options.len(),
+            1,
+            "unsupported model removes effort control"
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    "low"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    "unknown-model"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        let restored = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session,
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        let SessionConfigKind::Select(effort) = &restored.config_options[1].kind else {
+            panic!("effort select");
+        };
+        assert_eq!(
+            effort.current_value.to_string(),
+            "default",
+            "invalid effort is reset on model change"
+        );
+    })
+    .await;
+}

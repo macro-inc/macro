@@ -80,8 +80,10 @@ impl AgentSessionRepo for StubSessions {
         Ok(AgentSession {
             repo_branch: self.repo_branch.clone(),
             id,
-            owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
-                .expect("valid user id"),
+            owner_id: model_owner::Owner::User(
+                MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
+                    .expect("valid user id"),
+            ),
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,
@@ -95,6 +97,7 @@ impl AgentSessionRepo for StubSessions {
             pull_request_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -174,6 +177,10 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("naming sessions is the session actor's job")
     }
 
+    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+        unimplemented!("archiving sessions is the harness service's job")
+    }
+
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
         unimplemented!("naming sessions is the session actor's job")
     }
@@ -195,6 +202,21 @@ impl AgentSessionRepo for StubSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn list_queued_actions(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Vec<agent_session::domain::model::StoredQueuedAction>> {
+        unimplemented!("the manager never reads the queue")
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        _id: AgentSessionId,
+        _entries: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        unimplemented!("the manager never writes the queue")
     }
 }
 
@@ -405,35 +427,49 @@ impl CursorApiKeys for StubKeys {
     }
 }
 
-/// A user who reaches no repository through the GitHub App: the chooser
-/// short-circuits on an empty listing, so these tests drive the whole spawn
+struct UnavailableKeys;
+
+impl CursorApiKeys for UnavailableKeys {
+    async fn resolve(&self, _owner: &MacroUserIdStr<'_>) -> Result<ResolvedCursorConfig> {
+        Err(HarnessError::Container("key decryption failed".to_owned()))
+    }
+}
+
+/// A user who reaches one repository through the GitHub App: the chooser
+/// short-circuits on a single candidate, so these tests drive the whole spawn
 /// path without a model call.
-struct NoRepositories;
+struct OneRepository;
 
 #[async_trait::async_trait]
-impl ReachableRepositories for NoRepositories {
-    async fn for_user(&self, _user: &MacroUserIdStr<'_>) -> Result<Vec<String>> {
-        Ok(Vec::new())
+impl ReachableRepositories for OneRepository {
+    async fn for_user(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::model::ReachableRepository>> {
+        Ok(vec![crate::domain::model::ReachableRepository {
+            url: "https://github.com/macro-inc/macro".into(),
+            default_branch: Some("main".into()),
+        }])
     }
 }
 
 fn manager(
     base_url: String,
     sessions: StubSessions,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+) -> CursorContainerManager<StubSessions, StubKeys, OneRepository, NoArtifactStore> {
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
-fn manager_with_keys(
+fn manager_with_keys<Keys: CursorApiKeys>(
     base_url: String,
     sessions: StubSessions,
-    keys: StubKeys,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+    keys: Keys,
+) -> CursorContainerManager<StubSessions, Keys, OneRepository, NoArtifactStore> {
     CursorContainerManager::with_memory_journal(
         keys,
         base_url,
         sessions,
-        Arc::new(NoRepositories),
+        Arc::new(OneRepository),
         NoArtifactStore,
     )
 }
@@ -812,6 +848,48 @@ fn a_pipe_is_not_idle_while_a_command_is_pending() {
     assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, true));
 }
 
+/// The warning for a pipe kept open past its deadline: silent for the first
+/// half hour a turn holds it, then once per half hour after, and re-armed
+/// as soon as the pipe is either free or active again.
+#[test]
+fn a_pipe_held_open_past_its_deadline_warns_once_per_interval() {
+    let minute = std::time::Duration::from_secs(60);
+    let armed = HELD_OPEN_WARNING_INTERVAL;
+
+    // Idle but not yet past the deadline, or past it and free: nothing to say.
+    assert_eq!(held_open_warning(minute, true, armed), (false, armed));
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, false, armed),
+        (false, armed)
+    );
+
+    // Held past the deadline, but for less than the interval: not yet.
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, true, armed),
+        (false, armed)
+    );
+    assert_eq!(
+        held_open_warning(armed - minute, true, armed),
+        (false, armed)
+    );
+
+    // The interval reached: warn, and wait a whole interval for the next.
+    let (warn, next) = held_open_warning(armed, true, armed);
+    assert!(warn);
+    assert_eq!(next, armed * 2);
+    assert_eq!(
+        held_open_warning(armed + minute, true, next),
+        (false, next),
+        "the same stretch does not warn on every tick"
+    );
+    let (warn, next) = held_open_warning(armed * 2, true, next);
+    assert!(warn);
+    assert_eq!(next, armed * 3);
+
+    // Activity resumed: the threshold is re-armed for the next stretch.
+    assert_eq!(held_open_warning(minute, true, next), (false, armed));
+}
+
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]
@@ -848,6 +926,44 @@ async fn teardown_archives_and_forgets() {
             .await
             .expect("get"),
         None
+    );
+}
+
+#[tokio::test]
+async fn preflight_only_requests_a_connection_when_no_key_is_saved() {
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    for (keys, expected) in [
+        (StubKeys::connected(), None),
+        (StubKeys::absent(), Some(SessionBlocker::CursorNotConnected)),
+    ] {
+        let manager = manager_with_keys(
+            "http://127.0.0.1:1".to_owned(),
+            StubSessions::default(),
+            keys,
+        );
+        assert_eq!(
+            manager.preflight(AgentKind::Cursor, &owner).await.unwrap(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn preflight_propagates_key_errors_instead_of_requesting_a_connection() {
+    let manager = manager_with_keys(
+        "http://127.0.0.1:1".to_owned(),
+        StubSessions::default(),
+        UnavailableKeys,
+    );
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+
+    let error = manager
+        .preflight(AgentKind::Cursor, &owner)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, HarnessError::Container(message) if message == "key decryption failed")
     );
 }
 
@@ -965,9 +1081,35 @@ fn count(frames: &[serde_json::Value], pointer: &str, value: &str) -> usize {
         .count()
 }
 
+/// Whether this frame is the slash-command catalog, not conversation history.
+fn is_available_commands_update(frame: &serde_json::Value) -> bool {
+    frame
+        .pointer("/params/update/sessionUpdate")
+        .and_then(|found| found.as_str())
+        == Some("available_commands_update")
+}
+
+/// Consume the `available_commands_update` that follows a successful load so
+/// leftover catalog frames do not precede the next initialize or look like
+/// unsolicited history.
+async fn drain_available_commands_update(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+) {
+    let frames = collect_until(receiver, is_available_commands_update).await;
+    assert_eq!(
+        frames.len(),
+        1,
+        "session/load is followed by the slash-command catalog and nothing else: {frames:?}"
+    );
+}
+
 /// The recovery handshake as the session actor performs it: `initialize`,
 /// then `session/load`. Returns the history replayed before the load's
 /// response after asserting the load succeeded and only history preceded it.
+///
+/// The catalog notification that follows a successful load is drained, the
+/// same way the Cursor fold helpers do, so a leftover metadata frame cannot
+/// poison the next handshake.
 async fn reload(
     sender: &super::super::pipe::PipeSender,
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
@@ -1005,7 +1147,12 @@ async fn reload(
             ),
             "only history travels before a load's response, got {frame}"
         );
+        assert!(
+            !is_available_commands_update(frame),
+            "the catalog is advertised after the load result, not as history: {frame}"
+        );
     }
+    drain_available_commands_update(receiver).await;
     replayed
 }
 
@@ -1048,53 +1195,53 @@ async fn resume_delivered_session(
 }
 
 /// A run driven from cursor.com while the Macro session sits idle: the mirror
-/// captures it silently and asks the host to reload. The host's standard
-/// `initialize` + `session/load` then shows both runs, a repeated load shows
-/// exactly the same, and the mirror asks for nothing more.
+/// streams it to the host as it happens, the way a turn streams, and
+/// checkpoints it without asking for a reload. Every frame is traffic on the
+/// pipe, so the idle reaper sees the run as the activity it is. A later
+/// load shows both runs, and the mirror finds nothing more.
 #[tokio::test]
-async fn an_idle_foreign_run_is_recovered_through_a_client_load() {
+async fn an_idle_foreign_run_streams_live_to_the_host() {
     let (base_url, _, _) = fake_cursor_api().await;
     let (sender, mut receiver, before) = resume_delivered_session(base_url, "bc-idle").await;
     assert_eq!(count(&before, "/method", "_session/turn_complete"), 1);
 
-    let idle = collect_until(&mut receiver, |message| message == "reload_required").await;
-    assert_eq!(
-        idle.len(),
-        1,
-        "an idle mirror asks for a reload and publishes no frames: {idle:?}"
+    let live = collect_until(&mut receiver, |message| {
+        message.pointer("/params/_meta/macroCursorRunCheckpoint")
+            == Some(&serde_json::json!("run-foreign"))
+    })
+    .await;
+    assert!(
+        !live.iter().any(|message| message == "reload_required"),
+        "a streamed run needs no reload: {live:?}"
     );
-
-    let recovered = reload(&sender, &mut receiver, 3).await;
     assert_eq!(
-        count(&recovered, "/method", "_session/turn_complete"),
+        count(&live, "/params/update/sessionUpdate", "user_message_chunk"),
+        1,
+        "the cursor.com prompt streams with its run: {live:?}"
+    );
+    assert_eq!(count(&live, "/method", "_session/turn_complete"), 1);
+
+    let loaded = reload(&sender, &mut receiver, 3).await;
+    assert_eq!(
+        count(&loaded, "/method", "_session/turn_complete"),
         2,
-        "both runs are history: {recovered:?}"
+        "both runs are history: {loaded:?}"
     );
     assert_eq!(
         count(
-            &recovered,
+            &loaded,
             "/params/update/sessionUpdate",
             "user_message_chunk"
         ),
         2
     );
-    assert!(
-        recovered.len() > before.len(),
-        "history grows, it is not replaced"
-    );
 
-    let again = reload(&sender, &mut receiver, 5).await;
-    assert_eq!(
-        again, recovered,
-        "a repeated load replays the same history once"
-    );
-
-    // Two further mirror ticks pass without another reload: what was loaded
-    // is checkpointed, not rediscovered.
+    // Two further mirror ticks pass quietly: the streamed run is
+    // checkpointed, not rediscovered.
     let quiet = tokio::time::timeout(std::time::Duration::from_millis(2500), receiver.recv()).await;
     assert!(
         quiet.is_err(),
-        "nothing more may arrive after recovery, got {quiet:?}"
+        "nothing more may arrive after the run, got {quiet:?}"
     );
 }
 

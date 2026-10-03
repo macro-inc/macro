@@ -11,15 +11,28 @@ fn app_info() -> AppInfo {
 }
 
 #[test]
-fn update_check_url_preserves_base_path_prefix() {
-    let client = BundleClient::new("https://gateway.macro.com/auth/".parse().unwrap());
+fn update_check_url_joins_gateway_prefix_with_or_without_trailing_slash() {
+    // Regression: appending to `/auth/` without removing the empty final segment
+    // produced `/auth//update/...`, which the production gateway rejects with 404.
+    for base in [
+        "https://gateway.macro.com/auth/",
+        "https://gateway.macro.com/auth",
+    ] {
+        let client = BundleClient::new(base.parse().unwrap());
+        let request = AppInfo {
+            current_bundle_build: 1790022571617,
+            native_build: 183,
+            ..app_info()
+        };
 
-    let url = client.update_check_url(app_info()).unwrap();
+        let url = client.update_check_url(request).unwrap();
 
-    assert_eq!(
-        url.as_str(),
-        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7"
-    );
+        assert_eq!(
+            url.as_str(),
+            "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=1790022571617&native_build=183",
+            "incorrect update URL for base {base}"
+        );
+    }
 }
 
 #[test]

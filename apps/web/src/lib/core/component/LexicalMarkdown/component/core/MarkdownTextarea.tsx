@@ -53,6 +53,7 @@ import {
 } from '../../plugins';
 import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
+import type { MentionLinkResolver } from '../../plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
@@ -128,6 +129,7 @@ interface MarkdownTextareaProps {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  resolveAppLink?: MentionLinkResolver;
   autoLinkMatchMode?: AutoLinkMatchMode;
   /**
    * Show a floating format toolbar (headings, lists, inline styles, links)
@@ -235,7 +237,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     )
     .use(tabIndentationPlugin())
     .use(listSwipeIndentPlugin(props.editable))
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(
       mentionsPlugin({
         menu: mentionsMenuOperations,
@@ -380,6 +382,10 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
             });
           }}
           contentEditable={props.editable()}
+          role="textbox"
+          aria-multiline="true"
+          aria-readonly={!props.editable()}
+          aria-label={props.placeholder || 'Message'}
         />
 
         <DecoratorRenderer editor={editor} />

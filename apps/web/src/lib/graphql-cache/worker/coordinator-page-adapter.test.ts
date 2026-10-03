@@ -4,7 +4,10 @@ import {
   type DedicatedWorkerLike,
   type SharedWorkerLike,
 } from './coordinator-page-adapter';
-import { CACHE_COORDINATOR_PROTOCOL_VERSION } from './coordinator-protocol';
+import {
+  CACHE_COORDINATOR_PROTOCOL_VERSION,
+  cacheDatabaseIdentity,
+} from './coordinator-protocol';
 
 class FakeCoordinatorPort extends EventTarget {
   readonly messages: Array<{ message: unknown; transfer: Transferable[] }> = [];
@@ -170,6 +173,241 @@ describe('CacheCoordinatorPageAdapter', () => {
         (message as { kind?: string }).kind === 'attach-engine-port'
     );
     expect(attach?.transfer).toHaveLength(1);
+  });
+
+  it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
+    const port = new FakeCoordinatorPort();
+    const progress = vi.fn();
+    const error = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onStartupProgress: progress,
+      onTerminalError: error,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    const loading = {
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 2,
+      phase: 'loading-assets',
+      databaseAction: 'open-existing',
+      timeoutMs: 300_000,
+    };
+    port.receive(loading);
+    port.receive(loading);
+    port.receive({ ...loading, ownerEpoch: 1 });
+    expect(progress).toHaveBeenCalledTimes(1);
+    port.receive({ ...loading, phase: 'opening-database', timeoutMs: 20_000 });
+    expect(progress).toHaveBeenCalledTimes(2);
+    port.receive(loading);
+    expect(error).toHaveBeenCalledOnce();
+    expect(port.closed).toBe(true);
+  });
+
+  it('forwards the owner-lock phases in order and rejects stepping back', async () => {
+    const port = new FakeCoordinatorPort();
+    const progress = vi.fn();
+    const error = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onStartupProgress: progress,
+      onTerminalError: error,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    const phase = (name: string, timeoutMs: number) => ({
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 1,
+      phase: name,
+      databaseAction: 'open-existing',
+      timeoutMs,
+    });
+    port.receive(phase('loading-assets', 300_000));
+    port.receive(phase('awaiting-owner-lock', 15_000));
+    port.receive(phase('awaiting-owner-lock', 15_000));
+    port.receive(phase('opening-database', 20_000));
+    expect(progress.mock.calls.map(([message]) => message.phase)).toEqual([
+      'loading-assets',
+      'awaiting-owner-lock',
+      'opening-database',
+    ]);
+    expect(error).not.toHaveBeenCalled();
+
+    port.receive(phase('awaiting-owner-lock', 15_000));
+
+    expect(error).toHaveBeenCalledOnce();
+    expect(port.closed).toBe(true);
+  });
+
+  const registeredAdapter = async (
+    options: Partial<Parameters<typeof createCacheCoordinatorPageAdapter>[0]>
+  ) => {
+    const port = new FakeCoordinatorPort();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      ...options,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    return port;
+  };
+
+  const removeStale = (ownerEpoch: number) => ({
+    ...version,
+    kind: 'remove-stale-databases',
+    tabId: 'tab-a',
+    ownerEpoch,
+  });
+
+  it('relays that another context holds the database', async () => {
+    const onCacheUnavailable = vi.fn();
+    const port = await registeredAdapter({ onCacheUnavailable });
+
+    port.receive({
+      ...version,
+      kind: 'cache-unavailable',
+      reason: 'another app version holds the database',
+    });
+
+    expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
+      'another app version holds the database'
+    );
+  });
+
+  it('registers with its build time and relays a newer build taking over', async () => {
+    const onCacheSuperseded = vi.fn();
+    const port = await registeredAdapter({
+      buildTime: 1_790_000_000_000,
+      onCacheSuperseded,
+    });
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      buildTime: 1_790_000_000_000,
+    });
+
+    port.receive({
+      ...version,
+      kind: 'cache-superseded',
+      reason: 'a newer version of the app took over the local cache',
+    });
+
+    expect(onCacheSuperseded).toHaveBeenCalledExactlyOnceWith(
+      'a newer version of the app took over the local cache'
+    );
+  });
+
+  it('registers as an unstamped build outside app bundles', async () => {
+    const port = await registeredAdapter({});
+
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      buildTime: 0,
+    });
+  });
+
+  it('deletes stale databases in a disposable worker, once, for its own engine', async () => {
+    const cleanupWorker = new FakeWorker();
+    const createCleanupWorker = vi.fn(() => cleanupWorker);
+    const listOpfsRootNames = vi.fn(async () => [
+      'graphql-cache:scope:s1.v1.t1',
+      'graphql-cache:scope:s1.v1.t1-wal',
+      cacheDatabaseIdentity('scope'),
+      'unrelated.db',
+    ]);
+    const observations: Array<Record<string, unknown>> = [];
+    const port = await registeredAdapter({
+      createCleanupWorker,
+      listOpfsRootNames,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+
+    // Only the engine's current owner cleans up.
+    port.receive(removeStale(1));
+    await Promise.resolve();
+    expect(listOpfsRootNames).not.toHaveBeenCalled();
+    port.receive(election(1));
+    port.receive(removeStale(1));
+
+    await vi.waitFor(() => expect(cleanupWorker.messages).toHaveLength(1));
+    expect(cleanupWorker.messages[0]?.message).toEqual({
+      ...version,
+      kind: 'remove-stale-databases',
+      scope: 'scope',
+    });
+    const reply = FakeMessageChannel.instances.at(-1)?.port1 as unknown as {
+      onmessage: (event: MessageEvent<unknown>) => void;
+    };
+    reply.onmessage(
+      new MessageEvent('message', {
+        data: {
+          ...version,
+          kind: 'stale-databases-removed',
+          removed: 1,
+          inUse: 0,
+          keptWithQueuedMutations: 1,
+          failed: false,
+        },
+      })
+    );
+    await vi.waitFor(() => expect(cleanupWorker.terminated).toBe(true));
+    expect(
+      observations.filter((observation) =>
+        String(observation.ownerEvent).startsWith('stale-')
+      )
+    ).toEqual([
+      expect.objectContaining({
+        ownerEvent: 'stale-databases-removed',
+        outcome: 'success',
+        count: 1,
+      }),
+      expect.objectContaining({ ownerEvent: 'stale-database-kept', count: 1 }),
+    ]);
+
+    port.receive(removeStale(1));
+    await Promise.resolve();
+    expect(createCleanupWorker).toHaveBeenCalledOnce();
+  });
+
+  it('starts no cleanup worker when only its own database exists', async () => {
+    const createCleanupWorker = vi.fn(() => new FakeWorker());
+    const listOpfsRootNames = vi.fn(async () => [
+      cacheDatabaseIdentity('scope'),
+      `${cacheDatabaseIdentity('scope')}-wal`,
+    ]);
+    const port = await registeredAdapter({
+      createCleanupWorker,
+      listOpfsRootNames,
+    });
+    port.receive(election(1));
+
+    port.receive(removeStale(1));
+
+    await vi.waitFor(() => expect(listOpfsRootNames).toHaveBeenCalledOnce());
+    await Promise.resolve();
+    expect(createCleanupWorker).not.toHaveBeenCalled();
   });
 
   it('terminates and clears a failed worker before reporting owner loss', async () => {
@@ -775,7 +1013,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     const firstWorker = new FakeWorker();
     const workers = [firstWorker, new FakeWorker()];
     const dedicatedFactory = vi.fn(() => workers.shift() as FakeWorker);
-    const replacements: number[] = [];
+    const replacements = vi.fn();
     const terminalErrors: string[] = [];
     const adapter = createCacheCoordinatorPageAdapter({
       scope: 'scope',
@@ -785,7 +1023,7 @@ describe('CacheCoordinatorPageAdapter', () => {
         port: coordinatorPort as unknown as MessagePort,
       }),
       createDedicatedWorker: dedicatedFactory,
-      onEngineReplaced: (epoch) => replacements.push(epoch),
+      onEngineReplaced: replacements,
       onTerminalError: (error) => terminalErrors.push(error.message),
     });
     const started = adapter.start();
@@ -797,11 +1035,13 @@ describe('CacheCoordinatorPageAdapter', () => {
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
+      openOutcome: 'opened-existing',
     });
     coordinatorPort.receive({
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
+      openOutcome: 'reset-corrupt',
     });
     coordinatorPort.receive({
       ...version,
@@ -812,7 +1052,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     });
     coordinatorPort.receive(election(1));
 
-    expect(replacements).toEqual([1]);
+    expect(replacements).toHaveBeenCalledExactlyOnceWith(1, 'opened-existing');
     expect(dedicatedFactory).toHaveBeenCalledOnce();
     expect(firstWorker.messages).toHaveLength(1);
     expect(firstWorker.messages[0]?.message).toMatchObject({

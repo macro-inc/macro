@@ -1,8 +1,8 @@
 {
-  "version": "2.0.7",
+  "version": "2.0.8",
   "bundle": {
     "iOS": {
-      "bundleVersion": "179"
+      "bundleVersion": "183"
     }
   }
 }

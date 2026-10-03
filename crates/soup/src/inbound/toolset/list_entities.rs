@@ -146,7 +146,7 @@ pub enum EntityItem {
         #[serde(skip_serializing_if = "Option::is_none")]
         file_type: Option<String>,
         /// The document's sub type: "task" for Macro tasks, "snippet" for snippets,
-        /// "skill" for skills.
+        /// "skill" for skills, "initiative_description" for an initiative's description.
         #[serde(skip_serializing_if = "Option::is_none")]
         sub_type: Option<String>,
         /// Tags on the document visible to the user.
@@ -262,6 +262,7 @@ impl EntityItem {
                         SoupDocumentSubType::Task { .. } => "task",
                         SoupDocumentSubType::Snippet {} => "snippet",
                         SoupDocumentSubType::Skill {} => "skill",
+                        SoupDocumentSubType::InitiativeDescription {} => "initiative_description",
                     }
                     .to_string()
                 }),
@@ -311,8 +312,14 @@ impl EntityItem {
             SoupItem::Reminder(_) => {
                 unreachable!("ListEntities tool does not surface Reminder rows")
             }
+            SoupItem::Initiative(_) => {
+                unreachable!("ListEntities tool does not surface Initiative rows")
+            }
             SoupItem::AgentSession(_) => {
                 unreachable!("ListEntities tool does not surface AgentSession rows")
+            }
+            SoupItem::DatabaseRow(_) => {
+                unreachable!("ListEntities tool does not surface DatabaseRow rows")
             }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
@@ -356,6 +363,7 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Document(doc) => &doc.extra.properties,
             SoupItem::Chat(chat) => &chat.extra.properties,
             SoupItem::Project(project) => &project.extra.properties,
+            SoupItem::Initiative(initiative) => &initiative.extra.properties,
             SoupItem::EmailThread(thread) => &thread.extra.properties,
             SoupItem::CalendarEvent(event) => &event.extra.properties,
             SoupItem::CrmCompany(company) => &company.extra.properties,
@@ -364,7 +372,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             | SoupItem::Call(_)
             | SoupItem::ForeignEntity(_)
             | SoupItem::Reminder(_)
-            | SoupItem::AgentSession(_) => return false,
+            | SoupItem::AgentSession(_)
+            | SoupItem::DatabaseRow(_) => return false,
         };
         properties
             .iter()
@@ -544,6 +553,7 @@ impl ListEntities {
         };
 
         let ast = EntityFilterAst {
+            favorites_only: None,
             calendar_event_filter: None,
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
@@ -569,6 +579,9 @@ impl ListEntities {
             reminder_filter: None,
             // Agent sessions are opt-in too; unset keeps them off the tool surface.
             agent_session_filter: None,
+            initiative_filter: None,
+            // Database rows are opt-in as well; the tool never names a table.
+            database_row_filter: None,
             properties_filter,
         };
 
@@ -588,6 +601,7 @@ impl ListEntities {
         };
 
         EntityFilterAst {
+            favorites_only: ast.favorites_only,
             calendar_event_filter: if include_types.contains(&ItemType::CalendarEvent) {
                 ast.calendar_event_filter
             } else {
@@ -644,6 +658,8 @@ impl ListEntities {
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
             reminder_filter: ast.reminder_filter,
             agent_session_filter: ast.agent_session_filter,
+            initiative_filter: None,
+            database_row_filter: None,
             properties_filter: ast.properties_filter,
         }
     }

@@ -6,6 +6,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
 import { invalidateAllSoup } from '../soup/cache';
+import { controlAgentSession } from './control';
 
 export function useCreateAgentSessionMutation() {
   return useMutation(() => ({
@@ -22,8 +23,6 @@ export function useAgentSessionControlMutation() {
   return useMutation(() => ({
     retry: false,
     mutationFn: (vars: { sessionId: string; request: ControlRequest }) =>
-      throwOnErr(() =>
-        agentHarnessServiceClient.control(vars.sessionId, vars.request)
-      ),
+      throwOnErr(() => controlAgentSession(vars.sessionId, vars.request)),
   }));
 }

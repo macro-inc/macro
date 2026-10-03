@@ -2,15 +2,34 @@
 
 use agent_client_protocol::RawJsonRpcParams;
 use agent_client_protocol::schema::v1::{ContentBlock, ToolKind};
+use agent_runtime_protocol::domain::action::PromptAttachment;
+
+use crate::domain::model::MessagePart;
 
 /// The text carried by a content block, if it carries any.
 pub(super) fn content_block_text(block: ContentBlock) -> Option<String> {
     match block {
         ContentBlock::Text(text) => Some(text.text),
         // Images, audio, resource links and embedded resources have no text
-        // to fold. Rendering them is a separate problem from this one.
+        // to fold. Resource links fold to attachment parts instead - see
+        // [`user_content_part`]; the rest are not rendered yet.
         _ => None,
     }
+}
+
+/// What a user's content block folds to: prose, or an attachment for the
+/// `resource_link` blocks a prompt's files travel as. `None` for the block
+/// kinds this side never sends in a prompt.
+pub(super) fn user_content_part(block: ContentBlock) -> Option<MessagePart> {
+    if let Some(attachment) = PromptAttachment::from_content_block(&block) {
+        return Some(MessagePart::Attachment {
+            uri: attachment.uri,
+            name: attachment.name,
+            mime_type: attachment.mime_type,
+            size: attachment.size,
+        });
+    }
+    content_block_text(block).map(|text| MessagePart::Text { text })
 }
 
 pub(super) fn tool_kind_name(kind: ToolKind) -> &'static str {

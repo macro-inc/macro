@@ -312,7 +312,7 @@ export default function StaticMarkdownStreamDebug() {
                 {progress()}%
               </div>
             </div>
-            <div class="min-h-[420px] flex-1 overflow-auto rounded-sm border border-edge-muted bg-message p-4">
+            <div class="min-h-[420px] flex-1 overflow-auto rounded-sm border border-edge-muted bg-surface-1 p-4">
               <Show
                 when={renderedText().length > 0}
                 fallback={

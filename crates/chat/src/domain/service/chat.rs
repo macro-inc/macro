@@ -24,6 +24,7 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
@@ -160,11 +161,7 @@ where
     ToolSetContext: Clone + Send + Sync + 'static,
 {
     #[tracing::instrument(err, skip(self))]
-    async fn create(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, owner: Owner, args: CreateChatArgs) -> Result<String> {
         if args.name.graphemes(true).count() > 100 {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
@@ -174,15 +171,12 @@ where
 
         // The owner's team default link-share preference decides the initial
         // share permission; without a team the chat default (public/view) applies.
-        let team_default = self
-            .repo
-            .get_team_default_link_share(user_id.as_ref())
-            .await?;
+        let team_default = self.repo.get_team_default_link_share(&owner).await?;
         let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
 
         let chat_id = self
             .repo
-            .create(user_id.clone(), args, share_permission)
+            .create(owner.clone(), args, share_permission)
             .await?;
 
         if let Some(project_id) = &project_id
@@ -204,7 +198,7 @@ where
 
         self.publish_chat_event(&ChatMacroEvent::created(ChatCreatedMetadata {
             chat_id: chat_id.clone(),
-            owner: user_id,
+            owner,
             name,
             project_id,
         }));
@@ -269,16 +263,14 @@ where
 
         // The copier becomes the owner, so their team default decides the
         // copy's initial share permission.
-        let team_default = self
-            .repo
-            .get_team_default_link_share(user_id.as_ref())
-            .await?;
+        let owner = Owner::User(user_id.to_owned());
+        let team_default = self.repo.get_team_default_link_share(&owner).await?;
         let share_permission = SharePermissionV2::new_chat_share_permission(team_default);
 
         let new_chat_id = self
             .repo
             .copy_chat(
-                user_id.to_owned(),
+                owner,
                 chat_id,
                 CopyChatArgs {
                     name: name.clone(),

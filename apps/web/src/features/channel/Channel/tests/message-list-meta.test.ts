@@ -1,6 +1,5 @@
-import { senderFromStorageId } from '@queries/channel/message-sender';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import { senderFromStorageId } from '@queries/messages/message-sender';
+import type { MessageListItem, MessageSender } from '@service-storage/messages';
 import { describe, expect, it } from 'vitest';
 import { buildChannelMessageListMeta } from '../message-list-meta';
 
@@ -8,11 +7,19 @@ function createMessage(
   id: string,
   createdAt: string,
   senderId = 'user-1',
-  sender: ApiMessageSender = senderFromStorageId(senderId)
-): ApiChannelMessage {
+  sender: MessageSender = senderFromStorageId(senderId)
+): MessageListItem {
   return {
     id,
-    channel_id: 'channel-1',
+    mentions: [],
+    state: {
+      root_id: id,
+      user_id: 'user-1',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      resolved: false,
+    },
+    parent: { type: 'channel', id: 'channel-1' },
     content: '',
     created_at: createdAt,
     updated_at: createdAt,
@@ -112,7 +119,7 @@ describe('buildChannelMessageListMeta', () => {
 
   it('does not group agent messages triggered by different users, despite a shared bot sender_id', () => {
     const botId = 'bot|00000000-0000-0000-0000-000000000000';
-    const agentSender = (triggeredBy: string): ApiMessageSender => ({
+    const agentSender = (triggeredBy: string): MessageSender => ({
       type: 'bot',
       id: '00000000-0000-0000-0000-000000000000',
       name: 'Macro',

@@ -1,11 +1,17 @@
 use crate::domain::{
-    models::{AccessError, AccessGrant, EntityType, ForeignEntityAuthEntity, UserTeamInfo},
+    models::{
+        AccessError, AccessGrant, AccessLevel, EntityType, ForeignEntityAuthEntity, UserTeamInfo,
+    },
     ports::ExplainAccessRepository,
 };
 use crate::outbound::pg_access_repo::queries;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use models_entity_access_management::EntityAccessSourceType;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// PostgreSQL-backed implementation of [`ExplainAccessRepository`].
 #[derive(Clone)]
@@ -114,6 +120,31 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 Ok(queries::agent_session_access::explain_agent_session_access(
                     &self.pool,
                     &session_id,
+                    &source_ids,
+                )
+                .await?)
+            }
+            EntityType::Database => {
+                let database_id = parse_uuid(entity_id, "Invalid database ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::list_entity_access_grants(
+                    &self.pool,
+                    &database_id,
+                    EntityType::Database,
+                    &source_ids,
+                )
+                .await?)
+            }
+            EntityType::DatabaseRow => {
+                let row_id = parse_uuid(entity_id, "Invalid database row ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::database_row_access::explain_database_row_access(
+                    &self.pool,
+                    &row_id,
                     &source_ids,
                 )
                 .await?)
@@ -257,6 +288,34 @@ async fn explain_calendar_event_access(
     .fetch_optional(pool)
     .await?;
 
+    // Mirrors the access query: a channel share counts only for a current
+    // participant while the event is live and not private or confidential.
+    let channel_grants = sqlx::query!(
+        r#"
+        SELECT
+            grant_row.source_type AS "source_type!: EntityAccessSourceType",
+            grant_row.source_id,
+            grant_row.access_level AS "access_level!: AccessLevel",
+            grant_row.granted_from_project_id
+        FROM calendar_events event
+        JOIN entity_access grant_row
+          ON grant_row.entity_id = event.id
+         AND grant_row.entity_type = 'calendar_event'
+         AND grant_row.source_type = 'channel'
+        JOIN comms_channel_participants participant
+          ON participant.channel_id::text = grant_row.source_id
+         AND participant.user_id = $2
+         AND participant.left_at IS NULL
+        WHERE event.id = $1
+          AND event.status <> 'cancelled'
+          AND event.visibility IN ('default', 'public')
+        "#,
+        event_id,
+        user_id.as_ref(),
+    )
+    .fetch_all(pool)
+    .await?;
+
     Ok(is_owner
         .map(|is_owner| {
             if is_owner {
@@ -266,6 +325,16 @@ async fn explain_calendar_event_access(
             }
         })
         .into_iter()
+        .chain(
+            channel_grants
+                .into_iter()
+                .map(|row| AccessGrant::EntityAccess {
+                    source_type: row.source_type,
+                    source_id: row.source_id,
+                    access_level: row.access_level,
+                    granted_from_project_id: row.granted_from_project_id,
+                }),
+        )
         .collect())
 }
 

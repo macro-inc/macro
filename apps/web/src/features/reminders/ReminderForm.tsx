@@ -1,18 +1,27 @@
 import { toast } from '@core/component/Toast/Toast';
 import {
   type CronParts,
-  describeCron,
+  DEFAULT_WEEKDAYS,
   getDefaultTimezone,
+  isCronRepresentable,
   isValidCronParts,
   type ScheduleFrequency,
   WEEKDAY_OPTIONS,
 } from '@core/util/cron';
+import { parseTime, useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { TZDateMini } from '@date-fns/tz';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import RepeatIcon from '@phosphor/repeat.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
-import { Button, cn } from '@ui';
+import { ActionDialogShell, Button, Dropdown, Input } from '@ui';
 import {
   createEffect,
+  createMemo,
   createSignal,
+  createUniqueId,
   For,
   type JSX,
   Match,
@@ -20,12 +29,24 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import {
+  EventDateField,
+  EventTimeInput,
+} from '../calendar/components/composer/EventDateTimeInputs';
+import { describeReminderRecurrence } from './core/recurrence-label';
+import { formatReminderOccurrence } from './core/schedule-instant';
+import {
+  describeReminderSchedule,
+  formatReminderInstant,
   isRecurring,
   onceSchedule,
+  parseLocalReminderDateTime,
   REMINDER_DEFAULT_TIME,
   REMINDER_DESCRIPTION_MAX_LENGTH,
   recurringSchedule,
+  reminderQuickPresets,
   repeatPartsFromDate,
   repeatPartsFromSchedule,
 } from './reminder-schedule';
@@ -63,24 +84,22 @@ export interface ReminderFormProps {
   placeholder: string;
   /** A standalone reminder has no entity to name it after, so it needs a title. */
   descriptionRequired?: boolean;
+  /** Attached creation keeps a personal note optional and secondary. */
+  optionalNote?: boolean;
   /** A card or chip for the entity this reminder is about, shown above the title. */
   reference?: JSX.Element;
   submitLabel: string;
   pending?: boolean;
+  error?: string;
+  /** Dialog hosts provide their heading and use a padded body with a fixed footer. */
+  header?: JSX.Element;
+  layout?: 'dialog' | 'inline';
   autofocus?: boolean;
-  /**
-   * Cancel reverts the fields to what they were seeded with rather than only
-   * bubbling `onCancel` — for an editor that stays open (the split view), so a
-   * cancelled edit undoes itself instead of tearing the panel down.
-   */
+  /** Revert unsaved editor fields before notifying the host of cancellation. */
   revertOnCancel?: boolean;
-  /** Notified when the fields drift from (or return to) their seeded values. */
+  /** Notified when the form drifts from (or returns to) its seeded values. */
   onDirtyChange?: (dirty: boolean) => void;
-  /**
-   * Cancel. `wasDirty` is whether there were unsaved edits when it was clicked:
-   * with `revertOnCancel`, those edits have already been reverted, so the host
-   * can keep the panel open on a revert and only dismiss on a clean cancel.
-   */
+  /** Cancel with whether the form contained unsaved changes. */
   onCancel: (wasDirty: boolean) => void;
   onSubmit: (values: ReminderFormValues) => void;
 }
@@ -92,9 +111,12 @@ function toDateInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** `HH:MM` for a date in local time — the value a `<input type="time">` takes. */
+/** Native local time, retaining seconds when the instant carries them. */
 function toTimeInput(date: Date): string {
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const minuteTime = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return date.getSeconds() === 0
+    ? minuteTime
+    : `${minuteTime}:${pad(date.getSeconds())}`;
 }
 
 /** Whether two picker recurrences say the same thing, ignoring day order. */
@@ -119,6 +141,44 @@ function atDefault(now: Date): Date {
     0
   );
   return result;
+}
+
+const ALL_WEEKDAYS = WEEKDAY_OPTIONS.map((option) => option.value);
+
+const REPEAT_PRESETS = [
+  { value: 'once', label: 'Does not repeat' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekdays', label: 'Weekdays' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+] as const;
+
+type RepeatPreset = (typeof REPEAT_PRESETS)[number]['value'];
+type RepeatChoice = RepeatPreset | 'custom';
+
+function repeatPresetFromShape(
+  repeat: RepeatKind,
+  parts: CronParts
+): RepeatPreset {
+  if (repeat === 'once') return 'once';
+  if (repeat === 'month') return 'monthly';
+  if (sameDays(parts.daysOfWeek, ALL_WEEKDAYS)) return 'daily';
+  if (sameDays(parts.daysOfWeek, DEFAULT_WEEKDAYS)) return 'weekdays';
+  return 'weekly';
+}
+
+function sameDays(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((day) => b.includes(day));
+}
+
+/** Compact but exact enough to compare the quick choices before selecting one. */
+function formatQuickPreset(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: timezone,
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 }
 
 /** The control values to open with, derived from the reminder (or the defaults). */
@@ -172,15 +232,6 @@ function gmtOffset(
   return { minutes, text: `${match[1]}${match[2]}:${match[3]}` };
 }
 
-/** A short zone tag ("EDT", "GMT+5:30") for the schedule summary and once view. */
-function shortZone(zone: string, instant = new Date()): string {
-  return (
-    new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' })
-      .formatToParts(instant)
-      .find((part) => part.type === 'timeZoneName')?.value ?? zone
-  );
-}
-
 /**
  * Every IANA zone the runtime lists, labelled with its current GMT offset and
  * ordered by that offset so the list reads west-to-east. Built once — the set
@@ -223,10 +274,26 @@ export function ReminderForm(props: ReminderFormProps) {
   const isEdit = props.initialSchedule !== undefined;
 
   const localZone = getDefaultTimezone();
+  const openedAt = new Date();
   const [description, setDescription] = createSignal(seed.description);
   const [repeat, setRepeat] = createSignal<RepeatKind>(seed.repeat);
   const [onceDate, setOnceDate] = createSignal(seed.onceDate);
   const [onceTime, setOnceTime] = createSignal(seed.onceTime);
+  // Presets and parsed durations carry an instant as well as wall-clock fields.
+  // Keep it so the repeated hour at DST fall-back does not collapse to the
+  // browser's first interpretation of an ambiguous `YYYY-MM-DDTHH:MM` value.
+  // Existing one-shots need the same treatment: their ISO timestamp says
+  // which copy of a repeated wall time they use, while the native fields do not.
+  const initialSelectedOnceInstant = isEdit
+    ? seed.originalSchedule.type === 'once'
+      ? new Date(seed.originalSchedule.remindAt)
+      : props.initialRemindAt
+        ? new Date(props.initialRemindAt)
+        : undefined
+    : undefined;
+  const [selectedOnceInstant, setSelectedOnceInstant] = createSignal<
+    Date | undefined
+  >(initialSelectedOnceInstant);
   const [repeatParts, setRepeatParts] = createSignal<CronParts>(seed.parts);
   // A recurring cron fires at a wall-clock time in this zone. It defaults to the
   // reminder's stored zone (or the viewer's, for a new recurrence) and is
@@ -234,30 +301,125 @@ export function ReminderForm(props: ReminderFormProps) {
   const [timezone, setTimezone] = createSignal(
     seed.recurringTimezone ?? localZone
   );
+  const [whenQuery, setWhenQuery] = createSignal('');
+  const [showCustomTime, setShowCustomTime] = createSignal(false);
+  // Keep an explicit cadence choice separate from its cron shape. Weekly can
+  // intentionally contain Mon–Fri or all seven days while the user is still
+  // editing toward another set (for example Mon–Sat); shape inference alone
+  // would relabel it Weekdays/Daily and hide the weekday controls mid-edit.
+  const [selectedRepeatPreset, setSelectedRepeatPreset] =
+    createSignal<RepeatPreset>(repeatPresetFromShape(seed.repeat, seed.parts));
+  const storedCronIsCustom =
+    isEdit &&
+    props.initialSchedule !== undefined &&
+    isRecurring(props.initialSchedule) &&
+    !isCronRepresentable(props.initialSchedule.cron);
+  const [customScheduleReplaced, setCustomScheduleReplaced] =
+    createSignal(false);
+  // Week and month have different editable day shapes. Remember each shape
+  // once it is intentional so crossing cadences can seed a missing shape from
+  // the selected occurrence without throwing away edits when switching back.
+  const initialSavedWeeklyDays =
+    !storedCronIsCustom &&
+    seed.repeat === 'week' &&
+    !sameDays(seed.parts.daysOfWeek, ALL_WEEKDAYS) &&
+    !sameDays(seed.parts.daysOfWeek, DEFAULT_WEEKDAYS)
+      ? [...seed.parts.daysOfWeek]
+      : undefined;
+  const [savedWeeklyDays, setSavedWeeklyDays] = createSignal<
+    string[] | undefined
+  >(initialSavedWeeklyDays);
+  const initialSavedMonthlyDay =
+    !storedCronIsCustom && seed.repeat === 'month'
+      ? seed.parts.dayOfMonth
+      : undefined;
+  const [savedMonthlyDay, setSavedMonthlyDay] = createSignal<
+    string | undefined
+  >(initialSavedMonthlyDay);
+  const quickPresets = reminderQuickPresets(openedAt);
+
+  const dateOptions = useDateSearch({
+    query: whenQuery,
+    baseDate: openedAt,
+    defaultTime: REMINDER_DEFAULT_TIME,
+    maxItems: 4,
+  });
 
   // What the schedule controls were seeded to, so an untouched edit can be told
-  // from a real change without depending on second-level precision the pickers
-  // do not carry.
+  // from a real change at the native picker's second-level precision.
   const initialRepeat = seed.repeat;
   const initialOnceDate = seed.onceDate;
   const initialOnceTime = seed.onceTime;
+  const initialOnceInstant =
+    seed.originalSchedule.type === 'once'
+      ? new Date(seed.originalSchedule.remindAt)
+      : new Date(`${initialOnceDate}T${initialOnceTime}`);
   const initialParts = seed.parts;
   const initialTimezone = seed.recurringTimezone ?? localZone;
 
+  const formId = createUniqueId();
+  const descriptionId = createUniqueId();
+  const whenLabelId = createUniqueId();
+  const whenInputId = createUniqueId();
+  const whenOptionsId = createUniqueId();
+  const [noteOpen, setNoteOpen] = createSignal(false);
+  let whenRef: HTMLInputElement | undefined;
   let titleRef: HTMLInputElement | undefined;
+  let errorRef: HTMLDivElement | undefined;
+  let customControlsRef: HTMLDivElement | undefined;
   onMount(() => {
-    if (props.autofocus) titleRef?.focus();
+    if (props.autofocus) (props.optionalNote ? whenRef : titleRef)?.focus();
   });
 
-  const onceDateTime = () => new Date(`${onceDate()}T${onceTime()}`);
+  const pickedOnceDateTime = () =>
+    selectedOnceInstant() ?? parseLocalReminderDateTime(onceDate(), onceTime());
+  const typedTime = () => parseTime(whenQuery())?.time;
+  const typedWallTimeIsInvalid = () => {
+    const time = typedTime();
+    const option = dateOptions()[0];
+    return (
+      time !== undefined &&
+      option !== undefined &&
+      (option.date.getHours() !== time.hours ||
+        option.date.getMinutes() !== time.minutes)
+    );
+  };
+  const typedOnceDateTime = () => {
+    if (!whenQuery().trim()) return undefined;
+    if (typedWallTimeIsInvalid()) return undefined;
+    const option = dateOptions()[0];
+    if (!option) return undefined;
+    return new Date(option.date);
+  };
+  const onceDateTime = () => typedOnceDateTime() ?? pickedOnceDateTime();
+  const typedWhenIsValid = () =>
+    !whenQuery().trim() || typedOnceDateTime() !== undefined;
+  const customWallTimeIsInvalid = () =>
+    showCustomTime() &&
+    !whenQuery().trim() &&
+    selectedOnceInstant() === undefined &&
+    onceDate() !== '' &&
+    onceTime() !== '' &&
+    parseLocalReminderDateTime(onceDate(), onceTime()) === undefined;
+  const customTimeIsMissing = () =>
+    showCustomTime() && !whenQuery().trim() && onceTime() === '';
 
   /** Whether the schedule controls still hold exactly what they were seeded to. */
   const scheduleUntouched = () => {
+    if (storedCronIsCustom && customScheduleReplaced()) return false;
     if (repeat() !== initialRepeat) return false;
-    return repeat() === 'once'
-      ? onceDate() === initialOnceDate && onceTime() === initialOnceTime
-      : samePartsShape(repeatParts(), initialParts) &&
-          timezone() === initialTimezone;
+    if (repeat() === 'once') {
+      const date = onceDateTime();
+      return (
+        typedWhenIsValid() &&
+        date !== undefined &&
+        date.getTime() === initialOnceInstant.getTime()
+      );
+    }
+    return (
+      samePartsShape(repeatParts(), initialParts) &&
+      timezone() === initialTimezone
+    );
   };
 
   /**
@@ -273,50 +435,100 @@ export function ReminderForm(props: ReminderFormProps) {
     return titleChanged || !scheduleUntouched();
   };
 
-  // Let the host reflect the unsaved state (e.g. a dot on the split's title).
   createEffect(() => props.onDirtyChange?.(isDirty()));
+  createEffect(() => {
+    if (!props.error) return;
+    queueMicrotask(() =>
+      errorRef?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    );
+  });
 
   const reset = () => {
     setDescription(seed.description);
     setRepeat(seed.repeat);
     setOnceDate(seed.onceDate);
     setOnceTime(seed.onceTime);
+    setSelectedOnceInstant(
+      initialSelectedOnceInstant
+        ? new Date(initialSelectedOnceInstant.getTime())
+        : undefined
+    );
     setRepeatParts(seed.parts);
     setTimezone(initialTimezone);
+    setWhenQuery('');
+    setShowCustomTime(false);
+    setSelectedRepeatPreset(repeatPresetFromShape(seed.repeat, seed.parts));
+    setCustomScheduleReplaced(false);
+    setSavedWeeklyDays(
+      initialSavedWeeklyDays ? [...initialSavedWeeklyDays] : undefined
+    );
+    setSavedMonthlyDay(initialSavedMonthlyDay);
   };
 
   const cancel = () => {
     const wasDirty = isDirty();
-    // Revert the edits in place; the host decides whether to also dismiss.
     if (props.revertOnCancel && wasDirty) reset();
     props.onCancel(wasDirty);
   };
 
-  const setRepeatKind = (kind: RepeatKind) => {
-    const wasOnce = repeat() === 'once';
-    setRepeat(kind);
-    if (kind === 'once') return;
-    // Coming from a one-shot, seed the recurrence from the date and time the
-    // one-shot fields currently hold rather than the mount-time parts, so
-    // switching to Weekly or Monthly lands on that weekday and time. Those
-    // fields are the viewer's local wall-clock but the cron is read in
-    // `timezone()`, so take the weekday and time of that instant AS SEEN in
-    // that zone — otherwise the local time would be reinterpreted in a
-    // different zone and the reminder would fire at another moment. Between two
-    // recurring kinds, keep the parts the user set and only flip frequency.
-    if (wasOnce) {
-      const from = onceDateTime();
-      if (!Number.isNaN(from.getTime())) {
-        const inZone = TZDateMini.tz(timezone(), from.getTime());
-        setRepeatParts(repeatPartsFromDate(inZone, kind));
-        return;
-      }
+  const seedRepeatParts = (kind: ScheduleFrequency) => {
+    const from = onceDateTime();
+    if (from) {
+      const inZone = TZDateMini.tz(timezone(), from.getTime());
+      return repeatPartsFromDate(inZone, kind);
     }
-    setRepeatParts((parts) => ({ ...parts, frequency: kind }));
+    return { ...repeatParts(), frequency: kind };
   };
 
-  const updateParts = (patch: Partial<CronParts>) =>
+  const selectRepeat = (option: RepeatPreset) => {
+    setSelectedRepeatPreset(option);
+    if (option === 'once') {
+      setCustomScheduleReplaced(true);
+      setRepeat('once');
+      return;
+    }
+
+    const frequency: ScheduleFrequency =
+      option === 'monthly' ? 'month' : 'week';
+    const seeded = seedRepeatParts(frequency);
+    const canPreserveEditedTime =
+      repeat() !== 'once' && (!storedCronIsCustom || customScheduleReplaced());
+    const parts: CronParts = {
+      ...repeatParts(),
+      frequency,
+      time: canPreserveEditedTime ? repeatParts().time : seeded.time,
+    };
+    if (option === 'weekly') {
+      const days = savedWeeklyDays() ?? seeded.daysOfWeek;
+      parts.daysOfWeek = [...days];
+      setSavedWeeklyDays([...days]);
+    }
+    if (option === 'monthly') {
+      const day = savedMonthlyDay() ?? seeded.dayOfMonth;
+      parts.dayOfMonth = day;
+      setSavedMonthlyDay(day);
+    }
+    setRepeat(frequency);
+    setRepeatParts({
+      ...parts,
+      ...(option === 'daily' ? { daysOfWeek: [...ALL_WEEKDAYS] } : {}),
+      ...(option === 'weekdays' ? { daysOfWeek: [...DEFAULT_WEEKDAYS] } : {}),
+    });
+    setCustomScheduleReplaced(true);
+  };
+
+  const selectRepeatValue = (value: string) => {
+    const option = REPEAT_PRESETS.find((preset) => preset.value === value);
+    if (option) selectRepeat(option.value);
+  };
+
+  const updateParts = (patch: Partial<CronParts>) => {
+    setCustomScheduleReplaced(true);
+    if (patch.dayOfMonth !== undefined && repeat() === 'month') {
+      setSavedMonthlyDay(patch.dayOfMonth);
+    }
     setRepeatParts((parts) => ({ ...parts, ...patch }));
+  };
 
   const toggleDay = (value: string) => {
     const days = repeatParts().daysOfWeek;
@@ -325,8 +537,105 @@ export function ReminderForm(props: ReminderFormProps) {
     const next = days.includes(value)
       ? days.filter((day) => day !== value)
       : [...days, value];
-    if (next.length > 0) updateParts({ daysOfWeek: next });
+    if (next.length > 0) {
+      setSavedWeeklyDays([...next]);
+      updateParts({ daysOfWeek: next });
+    }
   };
+
+  const selectOnceDate = (date: Date) => {
+    setWhenQuery('');
+    setSelectedOnceInstant(new Date(date));
+    setOnceDate(toDateInput(date));
+    setOnceTime(toTimeInput(date));
+  };
+
+  const toggleCustomTime = () => {
+    const opening = !showCustomTime();
+    if (opening && whenQuery().trim()) {
+      const option = dateOptions()[0];
+      const intendedTime = typedTime();
+      if (typedWallTimeIsInvalid() && option && intendedTime) {
+        // Carry the requested wall time into Custom so its existing DST-gap
+        // validation can explain the problem instead of silently discarding it.
+        setSelectedOnceInstant(undefined);
+        setOnceDate(toDateInput(option.date));
+        setOnceTime(`${pad(intendedTime.hours)}:${pad(intendedTime.minutes)}`);
+        setWhenQuery('');
+      } else {
+        const typed = typedOnceDateTime();
+        if (typed) selectOnceDate(typed);
+        else setWhenQuery('');
+      }
+    }
+    setShowCustomTime(opening);
+    if (opening) {
+      queueMicrotask(() =>
+        customControlsRef?.scrollIntoView?.({
+          block: 'nearest',
+          inline: 'nearest',
+          behavior: 'smooth',
+        })
+      );
+    }
+  };
+
+  const repeatChoice = (): RepeatChoice => {
+    if (storedCronIsCustom && !customScheduleReplaced()) return 'custom';
+    return selectedRepeatPreset();
+  };
+
+  const repeatLabel = () =>
+    match(repeatChoice())
+      .with('once', () => 'Does not repeat')
+      .with('custom', () => 'Custom schedule')
+      .with('daily', () => 'Daily')
+      .with('weekdays', () => 'Weekdays')
+      .with('weekly', () => 'Weekly')
+      .with('monthly', () => 'Monthly')
+      .exhaustive();
+
+  const schedulePreview = createMemo(() => {
+    if (repeat() === 'once') {
+      if (!typedWhenIsValid()) return;
+      const date = onceDateTime();
+      return date
+        ? {
+            label: date.getTime() <= openedAt.getTime() ? 'Due' : 'Scheduled',
+            text:
+              formatReminderOccurrence(date, localZone) ??
+              'Schedule unavailable',
+          }
+        : undefined;
+    }
+    if (
+      storedCronIsCustom &&
+      !customScheduleReplaced() &&
+      props.initialSchedule?.type === 'recurring'
+    ) {
+      const recurrence = describeReminderRecurrence(
+        props.initialSchedule.cron
+      ).cadence;
+      if (!props.initialRemindAt) return { label: undefined, text: recurrence };
+      const date = new Date(props.initialRemindAt);
+      const instant = formatReminderOccurrence(
+        date,
+        props.initialSchedule.timezone
+      );
+      return instant
+        ? {
+            label: date.getTime() <= openedAt.getTime() ? 'Due' : 'Next',
+            text: `${instant} · ${recurrence}`,
+          }
+        : { label: undefined, text: 'Schedule unavailable' };
+    }
+    return {
+      label: undefined,
+      text: describeReminderSchedule(
+        recurringSchedule(repeatParts(), timezone())
+      ),
+    };
+  });
 
   const submit = () => {
     // Editing without touching the schedule keeps the stored one verbatim, so
@@ -343,7 +652,7 @@ export function ReminderForm(props: ReminderFormProps) {
 
     if (repeat() === 'once') {
       const date = onceDateTime();
-      if (Number.isNaN(date.getTime())) return;
+      if (!date) return;
       // The controls can sit open long enough for a picked time to slip into the
       // past; re-check rather than let the API reject it with an opaque failure.
       if (date.getTime() <= Date.now()) {
@@ -378,188 +687,496 @@ export function ReminderForm(props: ReminderFormProps) {
     if (props.descriptionRequired && !description().trim()) return false;
     if (props.pending) return false;
     return repeat() === 'once'
-      ? !Number.isNaN(onceDateTime().getTime())
+      ? typedWhenIsValid() && onceDateTime() !== undefined
       : isValidCronParts(repeatParts());
   };
 
   return (
-    <div class="flex flex-col gap-4 text-sm">
-      {/* Outside the <form> on purpose: the reference card carries its own
+    <div class="flex min-h-0 flex-col text-sm">
+      <Dynamic
+        component={props.layout === 'dialog' ? ActionDialogShell.Body : 'div'}
+        class={
+          props.layout === 'dialog'
+            ? undefined
+            : 'min-h-0 space-y-5 overflow-y-auto'
+        }
+      >
+        {props.header}
+        {/* Outside the <form> on purpose: the reference card carries its own
           buttons (Copy Link, etc.), and a button inside a form submits it —
           which here would save-and-close the panel on a stray click. */}
-      <Show when={props.reference}>{(node) => node()}</Show>
+        <Show when={props.reference}>{(node) => node()}</Show>
 
-      <form
-        class="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-      >
-        <input
-          ref={titleRef}
-          type="text"
-          value={description()}
-          onInput={(event) => setDescription(event.currentTarget.value)}
-          placeholder={props.placeholder}
-          aria-label="Reminder description"
-          // Counts UTF-16 code units where the service counts characters, so this
-          // only ever stops short of the real limit, never past it. The
-          // description resolvers apply the exact cap.
-          maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
-          class="w-full rounded-md border border-edge-muted bg-surface px-2 py-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
-        />
-
-        <div class="flex flex-col gap-2">
-          <span class="text-xs font-medium text-ink-muted">Repeat</span>
-          <div class="flex gap-1">
-            <For
-              each={
-                [
-                  { value: 'once', label: 'Does not repeat' },
-                  { value: 'week', label: 'Weekly' },
-                  { value: 'month', label: 'Monthly' },
-                ] as const
+        <form
+          id={formId}
+          class="flex flex-col gap-3"
+          aria-busy={props.pending}
+          inert={props.pending}
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit();
+          }}
+        >
+          <fieldset
+            class="flex min-w-0 flex-col gap-3"
+            disabled={props.pending}
+          >
+            <Show
+              when={!props.optionalNote || noteOpen()}
+              fallback={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="self-start"
+                  onClick={() => {
+                    setNoteOpen(true);
+                    queueMicrotask(() => titleRef?.focus());
+                  }}
+                >
+                  Add a note
+                </Button>
               }
             >
-              {(option) => (
-                <button
-                  type="button"
-                  class={cn(
-                    'flex-1 rounded border px-2 py-1.5 text-xs',
-                    repeat() === option.value
-                      ? 'border-edge bg-active text-ink'
-                      : 'border-edge-muted text-ink-muted hover:text-ink'
-                  )}
-                  onClick={() => setRepeatKind(option.value)}
+              <div class="flex flex-col gap-2">
+                <label
+                  for={descriptionId}
+                  class="text-xs font-medium text-ink-muted"
                 >
-                  {option.label}
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-
-        <Switch>
-          <Match when={repeat() === 'once'}>
-            <div class="flex flex-col gap-2">
-              <div class="flex items-center gap-2">
-                <input
-                  type="date"
-                  aria-label="Date"
-                  value={onceDate()}
-                  onInput={(event) => setOnceDate(event.currentTarget.value)}
-                  class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                />
-                <input
-                  type="time"
-                  aria-label="Time"
-                  value={onceTime()}
-                  onInput={(event) => setOnceTime(event.currentTarget.value)}
-                  class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                  {props.optionalNote ? 'Note' : 'Reminder'}
+                </label>
+                <Input
+                  id={descriptionId}
+                  ref={titleRef}
+                  type="text"
+                  value={description()}
+                  onInput={(event) => setDescription(event.currentTarget.value)}
+                  placeholder={props.placeholder}
+                  aria-label="Reminder description"
+                  // Counts UTF-16 code units where the service counts characters, so this
+                  // only ever stops short of the real limit, never past it. The
+                  // description resolvers apply the exact cap.
+                  maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+                  size="lg"
                 />
               </div>
-              <span class="text-xs text-ink-muted">
-                {localZone.replace(/_/g, ' ')} ({shortZone(localZone)})
-              </span>
-            </div>
-          </Match>
-          <Match when={repeat() === 'week'}>
-            <div class="flex flex-col gap-3">
-              <div class="flex gap-1">
-                <For each={WEEKDAY_OPTIONS}>
-                  {(day) => (
-                    <button
-                      type="button"
-                      class={cn(
-                        'flex-1 rounded border px-1 py-1.5 text-xs',
-                        repeatParts().daysOfWeek.includes(day.value)
-                          ? 'border-edge bg-active text-ink'
-                          : 'border-edge-muted text-ink-muted hover:text-ink'
-                      )}
-                      aria-pressed={repeatParts().daysOfWeek.includes(
-                        day.value
-                      )}
-                      onClick={() => toggleDay(day.value)}
+            </Show>
+
+            <Show when={repeat() === 'once'}>
+              <section
+                class="flex flex-col gap-2"
+                aria-labelledby={whenLabelId}
+              >
+                <label
+                  id={whenLabelId}
+                  for={whenInputId}
+                  class="text-xs font-medium text-ink-muted"
+                >
+                  When
+                </label>
+                <Input
+                  id={whenInputId}
+                  ref={whenRef}
+                  type="text"
+                  value={whenQuery()}
+                  onInput={(event) => setWhenQuery(event.currentTarget.value)}
+                  placeholder="Try “tomorrow 9am” or “in 30 minutes”"
+                  autocomplete="off"
+                  aria-controls={whenOptionsId}
+                  aria-expanded={whenQuery().trim().length > 0}
+                  aria-invalid={!typedWhenIsValid()}
+                  size="lg"
+                />
+                <Show when={whenQuery().trim()}>
+                  <div
+                    id={whenOptionsId}
+                    class="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-edge-muted bg-panel p-1"
+                    aria-label="Matching reminder times"
+                  >
+                    <Show
+                      when={
+                        dateOptions().length > 0 && !typedWallTimeIsInvalid()
+                      }
+                      fallback={
+                        <Show
+                          when={typedWallTimeIsInvalid()}
+                          fallback={
+                            <span class="px-2 py-1.5 text-xs text-failure-ink">
+                              No date found. Try “tomorrow 9am” or use Custom.
+                            </span>
+                          }
+                        >
+                          <span
+                            class="px-2 py-1.5 text-xs text-failure-ink"
+                            role="alert"
+                          >
+                            That local time doesn’t exist because the clocks
+                            change. Choose a time before or after the gap.
+                          </span>
+                        </Show>
+                      }
                     >
-                      {day.label}
-                    </button>
-                  )}
-                </For>
+                      <For each={dateOptions()}>
+                        {(option) => (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            class="min-h-10 justify-between gap-3 text-left"
+                            onClick={() => selectOnceDate(option.date)}
+                          >
+                            <span class="min-w-0 truncate">
+                              {option.displayText}
+                            </span>
+                            <span class="shrink-0 text-xs text-ink-muted">
+                              {option.secondaryText}
+                            </span>
+                          </Button>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+                </Show>
+
+                <div
+                  class="grid min-w-0 grid-cols-2 gap-2"
+                  aria-label="Quick reminder times"
+                >
+                  <Show when={!showCustomTime()}>
+                    <For each={quickPresets}>
+                      {(preset) => (
+                        <Button
+                          type="button"
+                          variant={
+                            onceDateTime()?.getTime() === preset.date.getTime()
+                              ? 'accent'
+                              : 'outline'
+                          }
+                          fullWidth
+                          class="h-auto min-h-12 min-w-0 flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-left whitespace-normal"
+                          data-reminder-quick-preset={preset.id}
+                          aria-label={`${preset.label}, ${formatReminderInstant(preset.date, localZone)}`}
+                          aria-pressed={
+                            onceDateTime()?.getTime() === preset.date.getTime()
+                          }
+                          onClick={() => {
+                            setShowCustomTime(false);
+                            selectOnceDate(preset.date);
+                          }}
+                        >
+                          <span class="max-w-full truncate text-xs font-medium text-ink">
+                            {preset.label}
+                          </span>
+                          <span class="max-w-full truncate text-[11px] font-normal text-ink-muted">
+                            {formatQuickPreset(preset.date, localZone)}
+                          </span>
+                        </Button>
+                      )}
+                    </For>
+                  </Show>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={showCustomTime() ? 'accent' : 'outline'}
+                    fullWidth
+                    class="col-span-2 min-w-0 justify-start rounded-[10px] px-3"
+                    aria-pressed={showCustomTime()}
+                    onClick={toggleCustomTime}
+                  >
+                    <CalendarBlankIcon class="size-4" />
+                    Choose date &amp; time
+                  </Button>
+                </div>
+
+                <Show when={showCustomTime()}>
+                  <div
+                    ref={customControlsRef}
+                    class="rounded-[10px] border border-edge-muted bg-input/50 p-3"
+                  >
+                    <div class="grid min-w-0 gap-2 min-[360px]:grid-cols-2">
+                      <div class="flex min-w-0 flex-col gap-1">
+                        <span class="text-xxs font-medium text-ink-muted">
+                          Date
+                        </span>
+                        <EventDateField
+                          label="Custom reminder"
+                          value={onceDate()}
+                          invalid={customWallTimeIsInvalid()}
+                          disabled={props.pending}
+                          portalScope="local"
+                          appearance="bare"
+                          class="h-9 w-full rounded-md border border-edge-muted bg-control px-2 hover:bg-hover focus-visible:border-accent"
+                          onChange={(value) => {
+                            setWhenQuery('');
+                            const selected = selectedOnceInstant();
+                            if (!selected || toDateInput(selected) !== value) {
+                              setSelectedOnceInstant(undefined);
+                            }
+                            setOnceDate(value);
+                          }}
+                        />
+                      </div>
+                      <div class="flex min-w-0 flex-col">
+                        <EventTimeInput
+                          id={`${formId}-custom-time`}
+                          label="Time"
+                          value={onceTime()}
+                          disabled={props.pending}
+                          invalid={
+                            customTimeIsMissing() || customWallTimeIsInvalid()
+                          }
+                          step={1}
+                          onClear={() => {
+                            setWhenQuery('');
+                            setSelectedOnceInstant(undefined);
+                            setOnceTime('');
+                          }}
+                          onChange={(option) => {
+                            setWhenQuery('');
+                            setSelectedOnceInstant(undefined);
+                            setOnceTime(option.value);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <Show
+                    when={customTimeIsMissing()}
+                    fallback={
+                      <Show when={customWallTimeIsInvalid()}>
+                        <p class="text-xs text-failure-ink" role="alert">
+                          That local time doesn’t exist because the clocks
+                          change. Choose a time before or after the gap.
+                        </p>
+                      </Show>
+                    }
+                  >
+                    <p class="text-xs text-failure-ink" role="alert">
+                      Choose a time for this reminder.
+                    </p>
+                  </Show>
+                </Show>
+              </section>
+            </Show>
+
+            <Show when={!whenQuery().trim() ? schedulePreview() : undefined}>
+              {(preview) => (
+                <p
+                  class="flex min-w-0 items-start gap-2 rounded-lg border border-edge-muted bg-hover px-3 py-2 text-xs text-ink-muted"
+                  aria-live="polite"
+                >
+                  <CalendarBlankIcon class="mt-0.5 size-3.5 shrink-0 text-ink-extra-muted" />
+                  <span class="min-w-0">
+                    <Show when={preview().label}>
+                      {(label) => (
+                        <span class="font-medium text-ink">{label()}: </span>
+                      )}
+                    </Show>
+                    {preview().text}
+                  </span>
+                </p>
+              )}
+            </Show>
+
+            <Dropdown placement="bottom-start">
+              <Dropdown.Trigger
+                fullWidth
+                aria-label={`Repeat, ${repeatLabel()}`}
+                class="min-h-10 min-w-0 justify-start gap-2 rounded-[10px] px-3"
+              >
+                <RepeatIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                <span class="shrink-0 font-medium text-ink">Repeat</span>
+                <span class="min-w-0 flex-1 truncate text-left font-normal text-ink-muted">
+                  {repeatLabel()}
+                </span>
+                <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+              </Dropdown.Trigger>
+              <Dropdown.Content
+                portalScope="local"
+                class="w-56 max-w-[calc(100vw-1rem)]"
+              >
+                <Dropdown.Group>
+                  <Dropdown.RadioGroup
+                    value={repeatChoice()}
+                    onChange={selectRepeatValue}
+                  >
+                    <Show
+                      when={storedCronIsCustom && !customScheduleReplaced()}
+                    >
+                      <Dropdown.RadioItem
+                        value="custom"
+                        disabled
+                        class="justify-between"
+                      >
+                        Custom schedule
+                        <Dropdown.ItemIndicator>
+                          <CheckIcon class="size-3.5 text-accent" />
+                        </Dropdown.ItemIndicator>
+                      </Dropdown.RadioItem>
+                    </Show>
+                    <For each={REPEAT_PRESETS}>
+                      {(option) => (
+                        <Dropdown.RadioItem
+                          value={option.value}
+                          closeOnSelect
+                          class="justify-between"
+                        >
+                          {option.label}
+                          <Dropdown.ItemIndicator>
+                            <CheckIcon class="size-3.5 text-accent" />
+                          </Dropdown.ItemIndicator>
+                        </Dropdown.RadioItem>
+                      )}
+                    </For>
+                  </Dropdown.RadioGroup>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+
+            <Show when={storedCronIsCustom && !customScheduleReplaced()}>
+              <p class="text-xs text-ink-muted">
+                This repeat schedule stays unchanged unless you choose a
+                replacement.
+              </p>
+            </Show>
+
+            <Show
+              when={
+                repeat() !== 'once' &&
+                (!storedCronIsCustom || customScheduleReplaced())
+              }
+            >
+              <div class="flex min-w-0 flex-col gap-3 rounded-[10px] border border-edge-muted bg-input/40 p-3">
+                <Switch>
+                  <Match when={repeat() === 'week'}>
+                    <div class="flex flex-col gap-3">
+                      <Show when={repeatChoice() === 'weekly'}>
+                        <div class="flex flex-col gap-1.5">
+                          <span class="text-xs font-medium text-ink-muted">
+                            Repeat on
+                          </span>
+                          <div
+                            class="flex min-w-0 flex-wrap items-center gap-1.5"
+                            aria-label="Repeat on"
+                          >
+                            <For each={WEEKDAY_OPTIONS}>
+                              {(day) => (
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  class="rounded-full text-xxs"
+                                  variant={
+                                    repeatParts().daysOfWeek.includes(day.value)
+                                      ? 'accent'
+                                      : 'ghost'
+                                  }
+                                  aria-label={day.fullLabel}
+                                  aria-pressed={repeatParts().daysOfWeek.includes(
+                                    day.value
+                                  )}
+                                  onClick={() => toggleDay(day.value)}
+                                >
+                                  {day.label[0]}
+                                </Button>
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      </Show>
+                      <TimeField
+                        value={repeatParts().time}
+                        disabled={props.pending}
+                        onChange={(time) => updateParts({ time })}
+                      />
+                    </div>
+                  </Match>
+                  <Match when={repeat() === 'month'}>
+                    <div class="grid min-w-0 gap-3 min-[360px]:grid-cols-2">
+                      <label class="flex items-center gap-2 text-sm text-ink-muted">
+                        Day
+                        <Input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={repeatParts().dayOfMonth}
+                          onInput={(event) =>
+                            updateParts({
+                              dayOfMonth: event.currentTarget.value,
+                            })
+                          }
+                          class="w-20 text-sm"
+                        />
+                      </label>
+                      <TimeField
+                        value={repeatParts().time}
+                        disabled={props.pending}
+                        onChange={(time) => updateParts({ time })}
+                      />
+                    </div>
+                  </Match>
+                </Switch>
+
+                <label class="flex min-w-0 flex-col gap-1.5 text-xs text-ink-muted">
+                  <span class="font-medium">Timezone</span>
+                  <TimezoneSelect
+                    value={timezone()}
+                    onChange={(value) => {
+                      setCustomScheduleReplaced(true);
+                      setTimezone(value);
+                    }}
+                    options={TIMEZONE_OPTIONS}
+                  />
+                </label>
               </div>
-              <TimeField
-                value={repeatParts().time}
-                onChange={(time) => updateParts({ time })}
-              />
-            </div>
-          </Match>
-          <Match when={repeat() === 'month'}>
-            <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-sm text-ink-muted">
-                Day
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={repeatParts().dayOfMonth}
-                  onInput={(event) =>
-                    updateParts({ dayOfMonth: event.currentTarget.value })
-                  }
-                  class="w-16 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                />
-              </label>
-              <TimeField
-                value={repeatParts().time}
-                onChange={(time) => updateParts({ time })}
-              />
-            </div>
-          </Match>
-        </Switch>
+            </Show>
 
-        <Show when={repeat() !== 'once'}>
-          <div class="flex flex-col gap-2">
-            <label class="flex items-center gap-2 text-xs text-ink-muted">
-              <span class="font-medium">Timezone</span>
-              <TimezoneSelect
-                value={timezone()}
-                onChange={setTimezone}
-                options={TIMEZONE_OPTIONS}
-              />
-            </label>
-            <span class="truncate text-xs text-ink-muted">
-              {describeCron(repeatParts())} · {shortZone(timezone())}
-            </span>
-          </div>
+            <Show when={props.error}>
+              {(error) => (
+                <div
+                  ref={errorRef}
+                  class="rounded-lg border border-failure/40 bg-failure-bg px-3 py-2 text-xs text-failure-ink"
+                  role="alert"
+                >
+                  {error()}
+                </div>
+              )}
+            </Show>
+          </fieldset>
+        </form>
+      </Dynamic>
+      <Dynamic
+        component={props.layout === 'dialog' ? ActionDialogShell.Footer : 'div'}
+        class={
+          props.layout === 'dialog'
+            ? undefined
+            : 'mt-4 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-muted pt-3'
+        }
+      >
+        <Show when={isEdit && isDirty()}>
+          <span class="flex items-center gap-1.5 text-xs text-ink-muted">
+            <span class="size-1.5 rounded-full bg-warning" />
+            Unsaved changes
+          </span>
         </Show>
-
-        <div class="flex items-center gap-3 pt-2">
-          <Show when={isEdit && isDirty()}>
-            <span class="flex items-center gap-1.5 text-xs text-ink-muted">
-              <span class="size-1.5 rounded-full bg-warning" />
-              Unsaved changes
-            </span>
+        <Button
+          type="button"
+          variant="ghost"
+          class="ml-auto"
+          disabled={props.pending}
+          onClick={cancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form={formId}
+          variant="strong"
+          disabled={!canSubmit() || (isEdit && !isDirty())}
+        >
+          <Show when={props.pending} fallback={props.submitLabel}>
+            <SpinnerIcon class="size-4 animate-spin" />
+            <span class="sr-only">Saving reminder</span>
           </Show>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="ml-auto rounded-lg"
-            onClick={cancel}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            size="sm"
-            depth={3}
-            class="rounded-lg border-0"
-            disabled={!canSubmit() || (isEdit && !isDirty())}
-          >
-            {props.submitLabel}
-          </Button>
-        </div>
-      </form>
+        </Button>
+      </Dynamic>
     </div>
   );
 }
@@ -567,17 +1184,27 @@ export function ReminderForm(props: ReminderFormProps) {
 /** A time-of-day field for the recurring schedule. `At HH:MM`. */
 function TimeField(props: {
   value: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const id = createUniqueId();
   return (
-    <label class="flex items-center gap-2 text-sm text-ink-muted">
-      At
-      <input
-        type="time"
+    <div class="flex min-w-0 flex-col">
+      <EventTimeInput
+        id={`reminder-repeat-time-${id}`}
+        label="At"
         value={props.value}
-        onInput={(event) => props.onChange(event.currentTarget.value)}
-        class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+        disabled={props.disabled}
+        invalid={props.value === ''}
+        step={60}
+        onClear={() => props.onChange('')}
+        onChange={(option) => props.onChange(option.value)}
       />
-    </label>
+      <Show when={props.value === ''}>
+        <span class="mt-1 text-xs text-failure-ink" role="alert">
+          Choose a time.
+        </span>
+      </Show>
+    </div>
   );
 }

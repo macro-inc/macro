@@ -267,12 +267,7 @@ async fn a_reloaded_session_re_announces_the_same_artifacts() {
         harness.journal.clone(),
         FakeArtifactStore::new(),
     ));
-    restored.restore_session(
-        session.clone(),
-        Some(CursorAgentId::new("bc-fake")),
-        None,
-        None,
-    );
+    restored.restore_session(session.clone(), Some(CursorAgentId::new("bc-fake")), None);
     restored
         .replay_session(&session)
         .await
@@ -283,6 +278,28 @@ async fn a_reloaded_session_re_announces_the_same_artifacts() {
     assert!(
         cursor.calls().is_empty(),
         "a load re-announces from the journal, never from the provider"
+    );
+}
+
+#[tokio::test]
+async fn a_txt_artifact_arrives_as_a_fenced_code_block() {
+    let harness = harness();
+    harness
+        .cursor
+        .script_artifact_listing(vec![listing("artifacts/notes.txt", "t1", 12)]);
+    harness
+        .cursor
+        .script_artifact_body("artifacts/notes.txt", Some("text/plain"), b"hello\nworld");
+    let session = harness.service.new_session(Path::new(""), Vec::new());
+
+    turn(&harness, &session, "run-fake-1", "done").await;
+
+    assert_eq!(
+        chunks(&harness.notifier),
+        vec![
+            "done".to_owned(),
+            "\n\n```txt\nhello\nworld\n```".to_owned(),
+        ]
     );
 }
 

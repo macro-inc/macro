@@ -20,7 +20,7 @@ beforeAll(async () => {
   Stream = wasm.FoldStream;
 }, 300_000);
 
-it('decodes durable DTOs, reconciles overlap, and keeps raw frame consumers', () => {
+it('decodes durable DTOs, reconciles overlap, and folds a batch like a stream', () => {
   const session = '00000000-0000-0000-0000-00000000000a';
   const chunk = (text: string) => ({
     direction: 'to_server' as const,
@@ -43,32 +43,36 @@ it('decodes durable DTOs, reconciles overlap, and keeps raw frame consumers', ()
     createdAt: '2026-08-13T00:00:00.000002Z',
     userId: 'macro|reader@example.com',
   };
+  const confirmed = (row: typeof boundary) => ({ kind: 'confirmed' as const, row });
   const stream = new Stream(session);
-  const raw = new Stream(session);
+  const other = new Stream(session);
   try {
-    expect(stream.snapshot([boundary])).toEqual(raw.extend([boundary]));
-    expect(stream.push_rows([boundary, boundary])).toEqual([]);
+    // A snapshot and the same row confirmed derive the same view.
+    stream.push([{ kind: 'snapshot', rows: [boundary] }]);
+    other.push([{ kind: 'snapshot', rows: [] }]);
+    other.push([confirmed(boundary)]);
+    expect(stream.messages()).toEqual(other.messages());
+    // Rows the snapshot already holds, and rows behind its cursor, change nothing.
+    expect(stream.push([confirmed(boundary), confirmed(boundary)])).toEqual([]);
     expect(
-      stream.push_rows([
-        {
+      stream.push([
+        confirmed({
           ...boundary,
           id: '00000000-0000-0000-0000-000000000009',
           createdAt: '2026-08-13T00:00:00.000001Z',
-        },
+        }),
       ])
     ).toEqual([]);
+    // A new row folds, and both streams still agree.
     const live = { ...boundary, id: '00000000-0000-0000-0000-000000000003' };
-    expect(stream.push_rows([live])).toEqual(raw.push(live));
-    expect(stream.messages()).toEqual(raw.messages());
-    // Raw protocol APIs still accept frames with no durable metadata.
-    raw.snapshot([]);
-    expect(raw.extend([chunk('raw')])).toHaveLength(1);
-    expect(raw.push(chunk(' tail'))).not.toEqual([]);
-    expect(stream.snapshot([])).toEqual([]);
-    expect(stream.push_rows([boundary])).not.toEqual([]);
+    expect(stream.push([confirmed(live)])).toEqual(other.push([confirmed(live)]));
+    expect(stream.messages()).toEqual(other.messages());
+    // A fresh snapshot resets the committed tier: the boundary folds again.
+    expect(stream.push([{ kind: 'snapshot', rows: [] }])).not.toEqual([]);
+    expect(stream.push([confirmed(boundary)])).not.toEqual([]);
   } finally {
     stream.free();
-    raw.free();
+    other.free();
   }
 });
 
@@ -82,17 +86,19 @@ it('preserves replacement events and later updates within one durable batch', ()
     id: `00000000-0000-0000-0000-${index.toString(16).padStart(12, '0')}`,
     createdAt: '2026-08-13T00:00:00Z',
   }));
+  const confirmed = (row: (typeof rows)[number]) => ({ kind: 'confirmed' as const, row });
   const stream = new Stream(session);
-  const raw = new Stream(session);
+  const one = new Stream(session);
   try {
-    stream.snapshot(rows.slice(0, 10));
-    raw.extend(rows.slice(0, 10));
-    const expected = rows.slice(10).flatMap((row) => raw.push(row));
+    stream.push([{ kind: 'snapshot', rows: rows.slice(0, 10) }]);
+    one.push([{ kind: 'snapshot', rows: rows.slice(0, 10) }]);
+    const expected = rows.slice(10).flatMap((row) => one.push([confirmed(row)]));
     expect(expected.some((event) => event.kind === 'replace')).toBe(true);
-    expect(stream.push_rows(rows.slice(5))).toEqual(expected);
-    expect(stream.messages()).toEqual(raw.messages());
+    // Overlap with the snapshot is dropped; the rest folds as if one at a time.
+    expect(stream.push(rows.slice(5).map(confirmed))).toEqual(expected);
+    expect(stream.messages()).toEqual(one.messages());
   } finally {
     stream.free();
-    raw.free();
+    one.free();
   }
 });

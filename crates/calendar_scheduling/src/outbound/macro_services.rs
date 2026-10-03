@@ -51,7 +51,7 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
         end: DateTime<Utc>,
         exclude_event: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
-        let mut busy = vec![];
+        let mut events = vec![];
         for host in hosts {
             let calendars = self
                 .mutations
@@ -86,41 +86,55 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             if rows.len() > 2000 {
                 return Err(Error::CalendarUnavailable);
             }
-            for (event, occurrence) in rows {
-                if occurrence.is_cancelled
-                    || Some(event.id) == exclude_event
-                    || event.transparency == EventTransparency::Transparent
-                {
-                    continue;
-                }
-                let (start, end) = match occurrence.time {
-                    EventTime::Timed {
-                        starts_at, ends_at, ..
-                    } => (starts_at, ends_at),
-                    // All-day dates lack a source zone in this domain projection. Conservatively
-                    // cover every possible UTC offset rather than expose an occupied local day.
-                    EventTime::AllDay {
-                        start_date,
-                        end_date,
-                    } => (
-                        start_date
-                            .and_hms_opt(0, 0, 0)
-                            .ok_or(Error::CalendarUnavailable)?
-                            .and_utc()
-                            - Duration::hours(14),
-                        end_date
-                            .and_hms_opt(0, 0, 0)
-                            .ok_or(Error::CalendarUnavailable)?
-                            .and_utc()
-                            + Duration::hours(12),
-                    ),
-                };
-                busy.push(BusyRange {
-                    host: host.clone(),
-                    start,
-                    end,
+            events.extend(
+                rows.into_iter()
+                    .map(|(event, occurrence)| (host.clone(), event, occurrence)),
+            );
+        }
+        let excluded_uid = events
+            .iter()
+            .find(|(_, event, _)| Some(event.id) == exclude_event)
+            .map(|(_, event, _)| event.ical_uid.clone());
+        let mut busy = vec![];
+        for (host, event, occurrence) in events {
+            let mut owned = event.attendees.iter().filter(|a| a.is_self).peekable();
+            let declined = owned.peek().is_some()
+                && owned.all(|a| {
+                    a.response_status
+                        == calendar_events::domain::models::AttendeeResponseStatus::Declined
                 });
+            if occurrence.is_cancelled
+                || Some(event.id) == exclude_event
+                || excluded_uid
+                    .as_ref()
+                    .is_some_and(|uid| !uid.is_empty() && *uid == event.ical_uid)
+                || event.transparency == EventTransparency::Transparent
+                || declined
+            {
+                continue;
             }
+            let (start, end) = match occurrence.time {
+                EventTime::Timed {
+                    starts_at, ends_at, ..
+                } => (starts_at, ends_at),
+                // All-day dates lack a source zone; conservatively cover every UTC offset.
+                EventTime::AllDay {
+                    start_date,
+                    end_date,
+                } => (
+                    start_date
+                        .and_hms_opt(0, 0, 0)
+                        .ok_or(Error::CalendarUnavailable)?
+                        .and_utc()
+                        - Duration::hours(14),
+                    end_date
+                        .and_hms_opt(0, 0, 0)
+                        .ok_or(Error::CalendarUnavailable)?
+                        .and_utc()
+                        + Duration::hours(12),
+                ),
+            };
+            busy.push(BusyRange { host, start, end });
         }
         Ok(busy)
     }
@@ -202,6 +216,14 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
                 tracing::error!(error=?error,"scheduling calendar creation failed");
                 Error::CalendarUnavailable
             })?;
+        if event.google_meet
+            && result
+                .conference_url
+                .as_ref()
+                .is_none_or(|url| url.is_empty())
+        {
+            return Err(Error::CalendarUnavailable);
+        }
         Ok((
             result.id,
             result

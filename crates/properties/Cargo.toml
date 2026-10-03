@@ -53,6 +53,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
+model_owner = { path = "../model_owner" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }

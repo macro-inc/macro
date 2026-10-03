@@ -3,6 +3,11 @@ import {
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
+import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
+import {
+  getChannelListRevalidations,
+  revalidateChannelLists,
+} from '../../queries/soup/graphql/channel-list-revalidation';
 import {
   type NotificationEntityInput,
   type NotificationUpdateOperation,
@@ -101,7 +106,10 @@ export async function executeGraphqlUpdateNotifications(
     UpdateNotificationsDocument,
     variables,
     optimisticData,
-    { uuid: crypto.randomUUID() }
+    {
+      uuid: crypto.randomUUID(),
+      revalidations: getChannelListRevalidations(client),
+    }
   ).toPromise();
 
   // A retryable transport failure keeps the normalized optimistic layer in
@@ -115,6 +123,10 @@ export async function executeGraphqlUpdateNotifications(
     };
   }
 
+  // Without the normalized exchange there is no durable revalidation runner.
+  if (!result.error && optimisticMutationDispositionOf(result) === undefined) {
+    await revalidateChannelLists(client);
+  }
   return result;
 }
 
@@ -141,7 +153,9 @@ export async function executeGraphqlUpdateNotificationsForEntities(
     },
   };
 
-  return await client
+  const result = await client
     .mutation(UpdateNotificationsForEntityDocument, variables)
     .toPromise();
+  if (!result.error && result.data) await revalidateNotificationReaders(client);
+  return result;
 }

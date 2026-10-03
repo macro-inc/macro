@@ -1,5 +1,5 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -21,7 +21,7 @@ pub enum AgentSessionLiteral {
     Id(Uuid),
     /// Filter by the session's owner.
     #[serde(rename = "o")]
-    Owner(MacroUserIdStr<'static>),
+    Owner(Owner),
 }
 
 impl ExpandFrame<AgentSessionLiteral> for AgentSessionFilters {
@@ -45,7 +45,7 @@ impl ExpandFrame<AgentSessionLiteral> for AgentSessionFilters {
 
         let owners = owners
             .iter()
-            .map(|owner| MacroUserIdStr::parse_from_str(owner).map(CowLike::into_owned))
+            .map(|owner| Owner::from_principal_str(owner))
             .try_expand(|r| r.map(AgentSessionLiteral::Owner), Expr::or)?;
 
         Ok([include, ids, owners].into_iter().fold_with(Expr::and))

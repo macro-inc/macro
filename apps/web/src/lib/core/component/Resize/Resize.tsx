@@ -34,6 +34,8 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
 type ZoneProps = {
   direction: 'horizontal' | 'vertical';
   gutter?: number;
+  /** Paint a divider in each gutter. Defaults to true. */
+  showDividers?: boolean;
   minSize?: number;
   class?: string;
   id?: string;
@@ -108,7 +110,6 @@ function Zone(props: ParentProps<ZoneProps>) {
       minSize?: number;
       maxSize?: number;
       redistributionPreferredSize?: number;
-      shareGroup?: string;
     }
   ) {
     solver.updatePanel(id, config);
@@ -219,6 +220,7 @@ function Zone(props: ParentProps<ZoneProps>) {
                     offset={panel().offset + panel().size}
                     index={actualIndex}
                     resizable={gutterEnabled()}
+                    showDivider={props.showDividers ?? true}
                     nudge={solver.moveHandle}
                     onChangeStart={beginResizeChange}
                     onChangeEnd={endResizeChange}
@@ -257,13 +259,6 @@ type PanelProps = {
   minSize: number;
   maxSize?: number;
   redistributionPreferredSize?: number;
-  /**
-   * Panels sharing a `shareGroup` count as ONE unit for automatic share
-   * allocation: an incoming member carves its share out of the group, a
-   * departing member returns it, and redistribution-preference deltas settle
-   * within the group before touching other panels.
-   */
-  shareGroup?: string;
   /**
    * Initial target size for the panel at registration time.
    * - number: interpreted as a percentage (e.g., 25 = 25%)
@@ -325,7 +320,6 @@ function Panel(props: ParentProps<PanelProps>) {
     minSize: props.minSize,
     maxSize: props.maxSize ?? Infinity,
     redistributionPreferredSize: props.redistributionPreferredSize,
-    shareGroup: props.shareGroup,
     target: getTarget(),
   });
 
@@ -346,7 +340,6 @@ function Panel(props: ParentProps<PanelProps>) {
       minSize: next.minSize,
       maxSize: next.maxSize,
       redistributionPreferredSize: next.redistributionPreferredSize,
-      shareGroup: next.shareGroup,
     });
 
     if (hidden) {
@@ -412,6 +405,7 @@ function Panel(props: ParentProps<PanelProps>) {
  * @property nudge - Function to call when the gutter is moved, with index and movement amount
  */
 type GutterProps = {
+  showDivider: boolean;
   offset: number;
   index: number;
   /** Draggable and keyboard-focusable; otherwise a static divider. */
@@ -561,15 +555,16 @@ function Gutter(props: GutterProps) {
       onPointerDown={props.resizable ? onPointerDown : undefined}
       onKeyDown={props.resizable ? onKeyDown : undefined}
     >
-      {/* The always-on 1px divider between the two panels. Touch layouts keep
-          their own spacing and do not draw it. */}
-      <div
-        class={cn(
-          'absolute border-edge-muted touch:hidden',
-          horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
-        )}
-        style={barStyle('1px')}
-      />
+      {/* Spaced panels can omit the divider while retaining resize feedback. */}
+      <Show when={props.showDivider}>
+        <div
+          class={cn(
+            'absolute border-edge-muted touch:hidden',
+            horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
+          )}
+          style={barStyle('1px')}
+        />
+      </Show>
       {/* Hover, focus and drag feedback paints over the divider. */}
       <Show when={props.resizable}>
         <div

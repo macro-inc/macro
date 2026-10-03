@@ -1,4 +1,4 @@
-import { toBaseRelative } from '@app/constants/routerBase';
+import { useParams, useNavigate as useSplitNavigate } from '@app/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -10,11 +10,13 @@ import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
   isSoloSettings,
   type SettingsTab,
-  settingsTabFromSplitPath,
   useSettingsState,
 } from '@core/constant/SettingsState';
-import { stripSettingsSplitFromUrl } from '@core/constant/settingsSplitUrl';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import {
+  settingsSlugToTab,
+  settingsTabToSlug,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
@@ -23,10 +25,11 @@ import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
-import { useLocation, useNavigate } from '@solidjs/router';
-import { Button, cn, Layer, SideNav } from '@ui';
+import { Button, cn, Input, Layer, SideNav } from '@ui';
 import {
+  createMemo,
   createRenderEffect,
   createSignal,
   For,
@@ -36,6 +39,7 @@ import {
   untrack,
 } from 'solid-js';
 import { SettingsTabContent } from './SettingsTabContent';
+import { filterSettingsTabGroups } from './settingsSearch';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
@@ -48,7 +52,8 @@ const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
-  const location = useLocation();
+  const params = useParams<{ tab?: string }>();
+
   // Sync the active page from the docked split's URL (`settings/<slug>`). Read
   // the live URL reactively — not static mount props — so browser back/forward
   // and direct navigation stay in sync: reconcile reuses this component on
@@ -58,9 +63,11 @@ export function SettingsPanelComponentWrapper() {
   // activeTabId read is untracked so a tab click (which sets it, then updates
   // the URL) isn't reverted by this effect firing before the URL catches up.
   createRenderEffect(() => {
-    const tab = settingsTabFromSplitPath(location.pathname);
-    if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+    const tab = settingsSlugToTab(params.tab ?? '') ?? 'Account';
+
+    if (untrack(activeTabId) !== tab) setActiveTabId(tab);
   });
+
   return (
     <Show when={!isMobile()} fallback={<MobileSettingsDeepLink />}>
       <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />
@@ -70,19 +77,14 @@ export function SettingsPanelComponentWrapper() {
 
 /** Old settings URLs still open their section, over the restored app surface. */
 function MobileSettingsDeepLink() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { openSettings } = useSettingsState();
+  const params = useParams<{ tab?: string }>();
+  const { openSettings, restoreMobileDeepLink } = useSettingsState();
+
   onMount(() => {
-    const tab = settingsTabFromSplitPath(location.pathname) ?? activeTabId();
-    openSettings(tab);
-    navigate(
-      stripSettingsSplitFromUrl(
-        `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
-      ),
-      { replace: true }
-    );
+    openSettings(settingsSlugToTab(params.tab ?? '') ?? 'Account');
+    restoreMobileDeepLink();
   });
+
   return null;
 }
 
@@ -100,10 +102,29 @@ export function SettingsPanel(props: SettingsPanelProps) {
     activeTabId,
     selectTab,
   } = useSettingsState();
-  const { groups, flatTabs } = useSettingsTabs();
+  const splitNavigate = useSplitNavigate();
+  const { searchGroups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
 
   const variant = () => props.variant ?? 'split';
+  const activeNavigationTab = () =>
+    activeTabId() === 'Harness' ? 'Agents' : activeTabId();
+
+  const [searchQuery, setSearchQuery] = createSignal('');
+
+  const filteredGroups = createMemo(() =>
+    filterSettingsTabGroups(searchGroups(), searchQuery())
+  );
+
+  // Runtimes is a search-only row. While it is on screen, highlight that row
+  // for the Harness tab; otherwise the standing Agents row stands in for it.
+  const showsHarnessResult = () =>
+    filteredGroups().some((group) =>
+      group.items.some((item) => item.tab === 'Harness')
+    );
+  const isItemActive = (tab: SettingsTab) =>
+    activeTabId() === tab ||
+    (tab === 'Agents' && activeTabId() === 'Harness' && !showsHarnessResult());
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -145,13 +166,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
     hotkey: 'escape',
   });
 
+  const selectRoutedTab = (tab: SettingsTab) => {
+    selectTab(tab, (next) => {
+      splitNavigate(`/settings/${settingsTabToSlug(next)}`);
+    });
+  };
+
   // Helper to navigate to a tab by index
   function navigateToTabIndex(index: number): boolean {
     const tabs = flatTabs();
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        selectTab(tab.tab);
+        selectRoutedTab(tab.tab);
         return true;
       }
     }
@@ -159,7 +186,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    return flatTabs().findIndex((tab) => tab.tab === activeTabId());
+    return flatTabs().findIndex((tab) => tab.tab === activeNavigationTab());
   }
 
   function handleNextTab() {
@@ -213,7 +240,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const handleTabChange = (value: string) => {
     if (flatTabs().some((tab) => tab.tab === value)) {
-      selectTab(value as SettingsTab);
+      selectRoutedTab(value as SettingsTab);
     }
   };
 
@@ -235,7 +262,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const moveToSplitButton = () => (
     <Button
-      class="p-1 rounded-md"
+      class="p-1"
       label="Move to split"
       onClick={() => moveSettingsToSplit()}
     >
@@ -267,7 +294,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
                 contentClass="px-(--mobile-chrome-gutter)"
                 items={tabItems()}
-                value={activeTabId()}
+                value={activeNavigationTab()}
                 onChange={handleTabChange}
               />
             }
@@ -287,7 +314,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <div class="mx-2 shrink-0">
                 <TabsInsetDropdown
                   list={tabItems()}
-                  value={activeTabId()}
+                  value={activeNavigationTab()}
                   onChange={handleTabChange}
                 />
               </div>
@@ -298,7 +325,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={!isMobile()}>
           <SplitHeaderRight>
             <Button
-              class="p-1 rounded-lg"
+              class="p-1"
               label="Open fullscreen"
               onClick={() => moveSettingsToSolo()}
             >
@@ -325,24 +352,44 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 {moveToSplitButton()}
               </div>
             </Show>
-            <For each={groups()}>
-              {(group) => (
-                <SideNav.Group label={group.label}>
-                  <For each={group.items}>
-                    {(item) => (
-                      <SideNav.Item
-                        icon={item.icon}
-                        active={activeTabId() === item.tab}
-                        onSelect={() => handleTabChange(item.tab)}
-                        class="text-xs py-1.5"
-                      >
-                        {item.label}
-                      </SideNav.Item>
-                    )}
-                  </For>
-                </SideNav.Group>
-              )}
-            </For>
+            <div class="relative">
+              <MagnifyingGlassIcon class="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-ink-muted pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search settings..."
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                size="sm"
+                class="pl-8"
+              />
+            </div>
+            <Show
+              when={filteredGroups().length > 0}
+              fallback={
+                <div class="text-xs text-ink-muted text-center py-4">
+                  No settings found
+                </div>
+              }
+            >
+              <For each={filteredGroups()}>
+                {(group) => (
+                  <SideNav.Group label={group.label}>
+                    <For each={group.items}>
+                      {(item) => (
+                        <SideNav.Item
+                          icon={item.icon}
+                          active={isItemActive(item.tab)}
+                          onSelect={() => selectRoutedTab(item.tab)}
+                          class="text-xs py-1.5"
+                        >
+                          {item.label}
+                        </SideNav.Item>
+                      )}
+                    </For>
+                  </SideNav.Group>
+                )}
+              </For>
+            </Show>
             <div class="mt-auto border-t border-edge-muted pt-2">
               <button
                 type="button"
@@ -378,7 +425,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   {backToApp()}
                   <TabsInsetDropdown
                     list={tabItems()}
-                    value={activeTabId()}
+                    value={activeNavigationTab()}
                     onChange={handleTabChange}
                   />
                   <div class="flex-1" />

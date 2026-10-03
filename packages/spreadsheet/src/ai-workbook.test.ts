@@ -483,3 +483,64 @@ it('uses selected-sheet local names in private AI calculations without changing 
   expect(result.results[0]).toMatchObject({ type: 'number', value: 25 });
   expect(doc.version().encode()).toEqual(before);
 });
+
+it('extends numeric and financial date series through the AI edit tool, then calculates cross-sheet formulas', () => {
+  const doc = document();
+  const edit = prepareSpreadsheetEdit(
+    doc,
+    {
+      action: 'edit',
+      expectedRevision: 'v',
+      operations: [
+        { type: 'add_sheet', name: "Owner's budget" },
+        {
+          type: 'set_cells',
+          sheetId: "Owner's budget",
+          cells: [
+            { address: 'A1', value: '1' },
+            { address: 'A2', value: '2' },
+            { address: 'B1', value: '2026-01-31' },
+            { address: 'B2', value: '2026-02-28' },
+            { address: 'C1', value: '=A1*10' },
+            { address: 'C2', value: '=A2*10' },
+          ],
+        },
+        {
+          type: 'fill_cells',
+          sheetId: "Owner's budget",
+          sourceRange: 'A1:C2',
+          targetRange: 'A1:C4',
+        },
+        {
+          type: 'set_cells',
+          sheetId: 'sheet1',
+          cells: [{ address: 'A1', value: "=SUM('Owner''s budget'!C1:C4)" }],
+        },
+      ],
+    },
+    calculator
+  );
+  doc.import(edit.update);
+  const input = readSpreadsheetWorkbook(doc).find(
+    (sheet) => sheet.name === "Owner's budget"
+  )!;
+  expect(input.cells.A4.value).toBe('4');
+  expect(input.cells.B3.value).toBe('2026-03-31');
+  expect(input.cells.B4.value).toBe('2026-04-30');
+  expect(input.cells.C4.value).toBe('=A4*10');
+  const before = doc.version().encode();
+  const result = calculateSpreadsheetForAi(
+    doc,
+    'v',
+    {
+      action: 'calculate',
+      formulas: [
+        { formula: "=SUM('Owner''s budget'!C1:C4)" },
+        { formula: '=Sheet1!A1' },
+      ],
+    },
+    calculator
+  );
+  expect(result.results.map((cell) => cell.value)).toEqual([100, 100]);
+  expect(doc.version().encode()).toEqual(before);
+});

@@ -5,7 +5,7 @@ use agent_runtime_protocol::domain::{
 };
 use clap::Parser;
 use claude_cloud_agents::{
-    domain::{model::SessionId, service::Session},
+    domain::{model::SessionId, models, service::Session},
     inbound::acp,
     outbound::{credentials::FileCredentials, http::Client},
 };
@@ -20,6 +20,12 @@ struct Args {
     /// Existing cloud conversation. Omitting this creates one new conversation.
     #[arg(long)]
     session: Option<String>,
+    /// Discover choices without creating a session or spending inference.
+    #[arg(long)]
+    discover_only: bool,
+    /// Select a discovered model before sending the smoke prompt.
+    #[arg(long)]
+    model: Option<String>,
 }
 
 fn send(channel: &ServerChannel, value: Value) {
@@ -51,9 +57,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let credentials = FileCredentials::open(args.credentials).await?;
     let client = Client::new(credentials, args.owner).await?;
+    if args.discover_only {
+        for option in models::discover(&client).await?.options() {
+            println!("{}: {}", option.model.id(), option.name);
+        }
+        return Ok(());
+    }
     let id = match args.session {
         Some(id) => SessionId::parse(&id)?,
-        None => client.create("").await?,
+        None => {
+            client
+                .create(
+                    "",
+                    &models::Model::parse(args.model.as_deref().unwrap_or("default"))?,
+                )
+                .await?
+        }
     };
     println!("Testing Claude cloud session {}", id.as_str());
     let session = Session::new(client, id.clone());
@@ -72,6 +91,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loaded.get("result").is_some(),
         "history load failed: {loaded}"
     );
+    if let Some(model) = args.model {
+        send(
+            &channel,
+            json!({"jsonrpc":"2.0","id":4,"method":"session/set_config_option","params":{"sessionId":id.as_str(),"configId":"model","value":model}}),
+        );
+        let selected = response(&mut channel, 4).await;
+        assert!(
+            selected.get("result").is_some(),
+            "model selection failed: {selected}"
+        );
+    }
     send(
         &channel,
         json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":id.as_str(),"prompt":[{"type":"text","text":"Reply exactly MACRO_CLAUDE_HARNESS_OK. Do not use tools, read files, access the network, or modify anything."}]}}),

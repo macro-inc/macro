@@ -225,3 +225,72 @@ async fn rejects_malformed_later_pagination_response_without_leaking_token() {
     assert!(!error.contains("sensitive-user-token"));
     assert_eq!(server.finish().len(), 2);
 }
+
+#[tokio::test]
+async fn lists_repository_branches_across_pages_and_stops_on_a_short_page() {
+    let first_page: Vec<_> = (1..=100)
+        .map(|n| serde_json::json!({ "name": format!("branch-{n}") }))
+        .collect();
+    let server = MockServer::start(vec![
+        MockResponse::json(serde_json::json!(first_page)),
+        MockResponse::json(serde_json::json!([{ "name": "develop" }])),
+    ]);
+    let client = GithubSyncClientImpl::with_api_base_url(server.base_url.clone());
+
+    let branches = client
+        .list_repository_branches("ghs-scoped", "macro-inc", "macro")
+        .await
+        .unwrap();
+
+    assert_eq!(branches.len(), 101);
+    assert_eq!(branches[0], "branch-1");
+    assert_eq!(branches[100], "develop");
+    let requests = server.finish();
+    assert!(
+        requests[0].starts_with("GET /repos/macro-inc/macro/branches?per_page=100&page=1 HTTP/1.1")
+    );
+    assert!(
+        requests[1].starts_with("GET /repos/macro-inc/macro/branches?per_page=100&page=2 HTTP/1.1")
+    );
+    for request in requests {
+        let lowercase_request = request.to_ascii_lowercase();
+        assert!(lowercase_request.contains("authorization: bearer ghs-scoped"));
+        assert!(lowercase_request.contains("accept: application/vnd.github+json"));
+    }
+}
+
+#[tokio::test]
+async fn an_empty_repository_is_an_empty_branch_list() {
+    let server = MockServer::start(vec![MockResponse {
+        status: "404 Not Found",
+        body: "{\"message\":\"Git Repository is empty.\"}".to_string(),
+    }]);
+    let client = GithubSyncClientImpl::with_api_base_url(server.base_url.clone());
+
+    let branches = client
+        .list_repository_branches("ghs-scoped", "macro-inc", "empty")
+        .await
+        .unwrap();
+
+    assert!(branches.is_empty());
+    server.finish();
+}
+
+#[tokio::test]
+async fn rejects_an_unsuccessful_branch_list_without_leaking_the_token() {
+    let server = MockServer::start(vec![MockResponse {
+        status: "403 Forbidden",
+        body: "{\"message\":\"forbidden\"}".to_string(),
+    }]);
+    let client = GithubSyncClientImpl::with_api_base_url(server.base_url.clone());
+
+    let error = client
+        .list_repository_branches("sensitive-install-token", "macro-inc", "macro")
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("403 Forbidden"));
+    assert!(!error.contains("sensitive-install-token"));
+    server.finish();
+}

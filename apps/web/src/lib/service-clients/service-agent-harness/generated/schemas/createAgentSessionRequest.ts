@@ -5,7 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequestBotId';
+import type { CreateAgentSessionRequestId } from './createAgentSessionRequestId';
 import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
+import type { CreateAgentSessionRequestModel } from './createAgentSessionRequestModel';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
@@ -35,30 +37,47 @@ default coding persona. On an external request, bot callers may omit it
 (their own identity is used) and must not name another bot; user callers
 must supply a bot they own. */
   botId?: CreateAgentSessionRequestBotId;
+  /** Id to create the session under, minted by the caller. Lets a surface
+open on the session's final id - URL, history row, references - the
+moment the user acts, rather than after this request answers (which
+for a managed sandbox can take a while). Omitted, the service mints
+one. Answers 409 if a session already holds the id. On an external
+request it is how a runtime answering a composer request names the
+id it was handed, so the requester waiting on that id finds the session. */
+  id?: CreateAgentSessionRequestId;
   /** Instructions the session's runtime works under, for its whole life.
 
 Recorded on the session whichever runtime serves it. Only the
 in-process one acts on them today; `agent_harness`'s `AgentKind`
 records what each of the others will need to. */
   instructions?: CreateAgentSessionRequestInstructions;
-  /** The user who owns the session. Ignored for user callers, who always
-own their own sessions, and for harness callers, whose verified acting
-user (owner or confirmed team member) owns the session instead;
-required for bot callers without verified acting-user claims.
+  /** Model the managed session runs on, overriding the persona's. Managed
+sessions only: an external runtime picks its own.
 
-For bot callers this is a claim, not a verified fact: it is scoped to
-the bot's own sessions, but the named user owns the session on the
-bot's say-so. */
+The session's model from the moment it exists, which is what a caller
+choosing one before the first prompt means. Selecting a model *during*
+a session is a control action instead, and reads as one in its
+transcript. */
+  model?: CreateAgentSessionRequestModel;
+  /** The user who owns the session. Ignored for user callers, who always
+own their own sessions, for harness callers, whose verified acting
+user owns the session, and for bots that already act for a verified
+user. A bot without one may name a user here. That claim is trusted
+for the bot's own sessions. With no claim, a team bot owns the session
+itself only while non-user owners are enabled. Every other bot still
+needs an owner. */
   owner?: CreateAgentSessionRequestOwner;
   /** First prompt to deliver once the session is running. Managed sessions
 only - an external runtime sends its own first prompt through the
 control endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
-  /** Starting branch for a managed coding session's selected repository. */
+  /** Starting branch for a managed coding session's selected repository.
+Omitted, the session starts on the repository's default branch. */
   repoBranch?: CreateAgentSessionRequestRepoBranch;
-  /** Explicit GitHub repository for a managed Cursor session. Access is
-checked for the session owner. For external sessions this is
-informational: cloning it is the runtime operator's job. */
+  /** Explicit GitHub repository for a managed Cursor session, as one of the
+urls `GET /agent-repositories` lists for the caller. Access is checked
+for the session owner. For external sessions this is informational:
+cloning it is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;
   /** Absolute directory the bot's harness runs in on its runtime. Present

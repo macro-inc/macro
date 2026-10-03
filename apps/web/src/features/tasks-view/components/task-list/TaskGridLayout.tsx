@@ -1,9 +1,8 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayNameParts, tryMacroId } from '@core/user';
 import {
   Entity,
   isProjectContainedEntity,
   MultiSelectCheckbox,
+  OwnerLabel,
   ProjectBreadCrumb,
   type TaskEntityWithProperties,
   UnreadIndicator,
@@ -14,6 +13,7 @@ import {
 } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
+import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
   PropertiesProvider,
@@ -21,20 +21,15 @@ import {
 } from '@property/context/PropertiesContext';
 import { EntityRowTags } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
-import { useUserId } from '@queries/auth';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, Show, Suspense } from 'solid-js';
-import { ListPropertyValue } from './ListPropertyValue';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
-  TASK_GRID_TEMPLATE_AREAS_WIDE,
-  TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR,
-  TASK_GRID_TEMPLATE_COLUMNS_WIDE,
-  TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR,
   type TaskGridColumn,
+  taskGridTemplate,
 } from './task-grid-template';
 
 const EPOCH = new Date(0).toISOString();
@@ -45,7 +40,7 @@ const EPOCH = new Date(0).toISOString();
  */
 function buildStubProperty(col: TaskGridColumn): Property {
   const stubSoup: SoupProperty = {
-    id: col.defId,
+    id: `pending:${col.defId}`,
     definition: {
       id: col.defId,
       display_name: col.label,
@@ -64,19 +59,11 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
+  projectSlot?: JSX.Element;
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
-  const currentId = useUserId();
   const entity = () => props.entity;
-  const isShared = () => props.entity.ownerId !== currentId();
-
-  // Get owner's first name for the Created By column
-  const ownerDisplayName = () =>
-    isShared()
-      ? getDisplayNameParts(tryMacroId(props.entity.ownerId)).firstName ||
-        'Unknown'
-      : 'Me';
 
   const propertyMap = createMemo(() => {
     const map = new Map<string, Property>();
@@ -129,14 +116,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
           'gap-2 grid grid-rows-[1fr]'
         )}
-        style={{
-          'grid-template-columns': props.hideCheckbox
-            ? TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR
-            : TASK_GRID_TEMPLATE_COLUMNS_WIDE,
-          'grid-template-areas': props.hideCheckbox
-            ? TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR
-            : TASK_GRID_TEMPLATE_AREAS_WIDE,
-        }}
+        style={taskGridTemplate({
+          indicator: !props.hideCheckbox,
+          project: props.projectSlot !== undefined,
+        })}
       >
         <Show when={!props.hideCheckbox}>
           <Entity.Slot placement="indicator" class="relative size-full group">
@@ -182,13 +165,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
               </span>
             )}
           </Show>
-          {/* Show shared badges on narrow/medium containers, hide on wide (>1220px) */}
-          <Show when={isShared()}>
-            {/* Narrow: "shared this with you" tooltip */}
+          <Show when={props.isShared}>
             <span class="@min-[841px]/u-list:hidden">
               <SharedBadgeSmall ownerId={props.entity.ownerId} />
             </span>
-            {/* Medium (841px-1220px): "Created by" tooltip */}
             <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
               <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
             </span>
@@ -208,6 +188,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
               class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
             >
               <ListPropertyValue
+                entityId={props.entity.id}
                 property={
                   propertyMap().get(col.defId) ?? buildStubProperty(col)
                 }
@@ -216,13 +197,20 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           )}
         </For>
 
-        {/* Created By column - only shown on wide containers (>1220px) */}
+        <Show when={props.projectSlot !== undefined}>
+          <Entity.Slot
+            placement="initiative"
+            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+          >
+            {props.projectSlot}
+          </Entity.Slot>
+        </Show>
+
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center gap-1.5 min-w-0 overflow-hidden text-xs ph-no-capture"
+          class="hidden @min-[1221px]/u-list:flex items-center min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
-          <UserIcon id={props.entity.ownerId} size="sm" showTooltip={true} />
-          <span class="truncate text-ink-muted">{ownerDisplayName()}</span>
+          <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
         </Entity.Slot>
 
         <Entity.Slot

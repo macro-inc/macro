@@ -5,7 +5,9 @@ import {
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { References } from '@core/component/References';
+import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
 
@@ -49,6 +51,12 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
         order={40}
       />
       <ReferencesSectionConditional threadId={props.threadId} />
+      <SidePanel.Footer>
+        <EntityMetadata
+          createdAt={emailCtx.thread()?.created_at}
+          updatedAt={emailCtx.thread()?.updated_at}
+        />
+      </SidePanel.Footer>
     </>
   );
 }
@@ -59,7 +67,9 @@ function ReferencesSectionConditional(props: { threadId: string }) {
     () => 'email'
   );
 
-  const count = () => references.data?.length ?? 0;
+  // This condition sits outside the section's Suspense boundary. A pending
+  // resource read here would hide the surrounding email view on reconnect.
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { entityIsMuted, muteItemForEntity } from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications';
+import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
@@ -23,6 +24,15 @@ type MakeMuteActionOptions = {
 export const makeMuteAction = (options: MakeMuteActionOptions) => {
   const muteMutation = useMuteItemMutation();
   const unmuteMutation = useUnmuteItemMutation();
+
+  const snooze = (entities: EntityData[]) => {
+    openSnoozeNotifications(
+      entities.flatMap((entity) => {
+        const item = muteItemForEntity(entity);
+        return item ? [item] : [];
+      })
+    );
+  };
 
   const canExecute = (entity: EntityData): boolean =>
     muteItemForEntity(entity) !== undefined;
@@ -86,5 +96,5 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     await execute(entities);
   };
 
-  return { canExecute, isMuted, execute, executeWithSoup };
+  return { canExecute, isMuted, execute, executeWithSoup, snooze };
 };

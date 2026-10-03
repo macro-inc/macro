@@ -11,7 +11,7 @@ storage and provider operations.
 
 Apply MacroDB migrations `20260918164303_calendar_scheduling.sql` and
 `20260918175703_scheduling_recovery.sql`, then deploy the
-updated email service with its existing `CALENDAR_SYNC_ENABLED` setting enabled.
+updated calendar service with its existing `CALENDAR_SYNC_ENABLED` setting enabled.
 The migration uses PostgreSQL multiranges (PostgreSQL 14+) and `btree_gist` for
 atomic host conflict exclusion. Each host needs a connected, writable primary
 calendar with calendar sync ready. All connected calendars are checked for busy
@@ -35,7 +35,7 @@ original event/schedule snapshots for management after a link is edited or remov
 
 Booking queries accept a half-open `from`/`to` range of start times, up to 733 days
 (room for two full comparison years across daylight-saving changes). They return the
-complete range or a clear error when more than 5,000 records match. Insights must not
+complete range or a clear error when more than 5,000 records match. The management UI starts with a 61-day range and exposes date controls so large profiles can narrow it; round-robin balancing uses aggregate host counts and is independent of this list limit. Insights must not
 interpret failures as an empty dataset. Reschedule counts increase only after a
 successful move; old records default to zero, without reconstructing unknown history.
 Attendance defaults to unknown and may be recorded only after a confirmed meeting has
@@ -47,7 +47,7 @@ can be counted as completed, but this alone is not evidence of attendance.
 - `cargo test -p calendar_scheduling --features postgres,inbound` with `DATABASE_URL` pointing
   to a disposable PostgreSQL server and `SQLX_OFFLINE` unset. The SQLx integration
   tests create isolated test databases and apply the actual scheduling migration.
-- `SQLX_OFFLINE=true cargo check -p email_service` checks production composition.
+- `SQLX_OFFLINE=true cargo check -p calendar_service` checks production composition.
 - In `apps/web`, `bun --bun x vitest run --config src/features/scheduling/vitest.config.ts`
   checks client validation and request races/retries.
 - `/src/features/scheduling/browser-test/index.html` on the Vite dev server mounts
@@ -60,7 +60,7 @@ A booking holds its host reservations before calling the provider. An uncertain
 provider write leaves the booking `failed` (or `processing` after a process crash),
 with reservations retained to avoid duplicate meetings. Durable operation intents, stable
 provider creation IDs, pinned calendars, and version-fenced retries recover these states after
-five minutes. The email-service worker runs every 15 seconds; repeated failures back off and
+five minutes. The calendar-service worker runs every 15 seconds; repeated failures back off and
 emit operator-attention errors. Keyed deletion works even after local calendar projection
 retirement. Completion-persistence failures still return the durable private receipt. Rescheduling reserves the old and new intervals until the provider
 accepts the update, then releases the old interval. Calendar projections without a

@@ -36,29 +36,6 @@ describe('booking flow', () => {
     expect(flow.slots()).toEqual([slot]);
     expect(flow.loading()).toBe(false);
   });
-  it('retries a failed submission with the same idempotency key', async () => {
-    const receipt = { token: 'token' } as BookingReceipt;
-    const book = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValueOnce(receipt);
-    const flow = createRoot(() =>
-      createBookingFlow({ slots: vi.fn(), book }, 'profile')
-    );
-    flow.select('2026-10-02T09:00:00Z');
-    const details = {
-      name: 'Guest',
-      email: 'guest@example.com',
-      timeZone: 'UTC',
-      answers: {},
-    };
-    await flow.submit('event', details);
-    await flow.submit('event', details);
-    expect(book.mock.calls[0][2].requestId).toEqual(
-      book.mock.calls[1][2].requestId
-    );
-    expect(flow.receipt()).toBe(receipt);
-  });
   it('prevents a second submission while the first is pending', async () => {
     const pending = deferred<BookingReceipt>();
     const book = vi.fn().mockReturnValue(pending.promise);
@@ -109,6 +86,7 @@ it('holds the original request across navigation and edited details after an unc
   });
   expect(book.mock.calls[1]).toEqual(book.mock.calls[0]);
   expect(flow.uncertain()).toBe(false);
+  expect(flow.receipt()?.token).toBe('t');
 });
 
 it('allows a different time after a definite rejection', async () => {

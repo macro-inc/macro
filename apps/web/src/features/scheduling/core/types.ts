@@ -68,6 +68,7 @@ export type Booking = {
   rescheduledAt: string | null;
   location: string;
   answers: Record<string, string>;
+  questionLabels?: Record<string, string>;
 };
 export type PublicEvent = Pick<
   EventType,

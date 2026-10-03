@@ -1,14 +1,16 @@
 import type { FacetSelection } from '@app/features/soup';
 
 /**
- * Tab ids match the legacy mail view's `VIEW_TAB_LISTS.mail` values (`important`
- * is the Signal tab) so entity actions keyed on `${view}-${tab}` — mark done,
- * the sender-policy bucket — keep working unchanged.
+ * Existing tab ids match the legacy mail view (`important` is Signal).
+ * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
  */
 export type EmailTab =
   | 'important'
   | 'noise'
+  | 'favorites'
   | 'sent'
+  | 'scheduled'
+  | 'reminders'
   | 'calendar'
   | 'drafts'
   | 'shared'
@@ -42,11 +44,6 @@ export type EmailViewState = {
    */
   inboxIds: string[] | undefined;
   facets: FacetSelection;
-  /**
-   * The thread last opened from this view. Restored into the in-view detail on
-   * the next visit, the way the Channels view reopens its selected channel.
-   */
-  openThreadId?: string;
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];
 };

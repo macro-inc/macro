@@ -1,3 +1,4 @@
+import type { BackgroundEffect } from '@core/media/background-effect';
 import type { CallTokenResponse } from '@service-call/client';
 import type { NativeCallState } from './native-call-state';
 import {
@@ -9,13 +10,37 @@ import {
 
 type CallSessionControllerOptions = {
   nativeCall: NativeCallState | undefined;
-  jsConnect: (tokenResponse: CallTokenResponse) => Promise<void>;
+  jsConnect: (
+    tokenResponse: CallTokenResponse,
+    metadata?: CallSessionConnectMetadata
+  ) => Promise<void>;
   jsDisconnect: () => Promise<void>;
   clearOptimisticJoin: () => void;
 };
 
+/** Live capture tracks acquired before joining, e.g. by a waiting room. */
+export type CallPrejoinTracks = {
+  microphone?: MediaStreamTrack;
+  camera?: MediaStreamTrack;
+};
+
+export function stopPrejoinTracks(tracks: CallPrejoinTracks | undefined) {
+  tracks?.microphone?.stop();
+  tracks?.camera?.stop();
+}
+
 export type CallSessionConnectMetadata = {
   channelTitle?: string | null;
+  microphoneEnabled?: boolean;
+  cameraEnabled?: boolean;
+  microphoneDeviceId?: string;
+  cameraDeviceId?: string;
+  speakerDeviceId?: string;
+  backgroundEffect?: BackgroundEffect;
+  /** Session-owned tracks: reuse without prompting again, or stop if unused. */
+  localTracks?: CallPrejoinTracks;
+  /** Public meeting pages use the browser media controls on every platform. */
+  useBrowserSession?: boolean;
 };
 
 export type CallSessionDisconnectOptions = {
@@ -34,32 +59,46 @@ export type CallSessionController = {
 export function createCallSessionController(
   options: CallSessionControllerOptions
 ): CallSessionController {
+  const browser = createJsLivekitSessionController(options);
   if (isNativeIosCallKitEnabled()) {
     if (!options.nativeCall) {
       throw new Error(
         'Native call state is required for iOS CallKit call sessions'
       );
     }
-    return createNativeCallKitSessionController({
+    const native = createNativeCallKitSessionController({
       nativeCall: options.nativeCall,
       jsDisconnect: options.jsDisconnect,
       clearOptimisticJoin: options.clearOptimisticJoin,
     });
+    let active = native;
+    return {
+      shouldRequestToken: native.shouldRequestToken,
+      connectWithToken: (token, metadata) => {
+        active =
+          token.channelId === null || metadata?.useBrowserSession
+            ? browser
+            : native;
+        return active.connectWithToken(token, metadata);
+      },
+      disconnect: (disconnectOptions) => active.disconnect(disconnectOptions),
+    };
   }
 
-  return createJsLivekitSessionController({
-    jsConnect: options.jsConnect,
-    jsDisconnect: options.jsDisconnect,
-  });
+  return browser;
 }
 
 function createJsLivekitSessionController(options: {
-  jsConnect: (tokenResponse: CallTokenResponse) => Promise<void>;
+  jsConnect: (
+    tokenResponse: CallTokenResponse,
+    metadata?: CallSessionConnectMetadata
+  ) => Promise<void>;
   jsDisconnect: () => Promise<void>;
 }): CallSessionController {
   return {
     shouldRequestToken: () => true,
-    connectWithToken: (tokenResponse) => options.jsConnect(tokenResponse),
+    connectWithToken: (tokenResponse, metadata) =>
+      options.jsConnect(tokenResponse, metadata),
     disconnect: () => options.jsDisconnect(),
   };
 }
@@ -92,6 +131,11 @@ function createNativeCallKitSessionController(options: {
       return !shouldSkip;
     },
     connectWithToken: async (tokenResponse, metadata) => {
+      // The native call captures its own media.
+      stopPrejoinTracks(metadata?.localTracks);
+      if (!tokenResponse.channelId) {
+        throw new Error('Native channel calls require a channel');
+      }
       const channelTitle = metadata?.channelTitle ?? null;
       await startNativeCallKitOutgoingCall(
         {

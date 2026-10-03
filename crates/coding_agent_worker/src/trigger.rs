@@ -5,7 +5,8 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerEventName, AgentTriggerTopicEvent, OpeningMention, SessionMessage,
+    AgentSessionRequestedEvent, AgentTriggerEventName, AgentTriggerTopicEvent,
+    NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 use macro_event_broker::Event;
@@ -27,6 +28,8 @@ pub enum TriggerWork {
     /// Open a session for a mention, serve it, and forward the mention as
     /// its first prompt.
     OpenAndPrompt {
+        /// Update the bot response reserved by a task assignment.
+        reuse_origin_message: bool,
         /// The mentioned agent the session runs for. One harness serves many
         /// agents, so the daemon must name the bot when creating the session.
         bot: BotId,
@@ -40,6 +43,18 @@ pub enum TriggerWork {
         message_id: Uuid,
         /// The mention's text: the first prompt, and the announcement quote.
         content: String,
+    },
+    /// Open a session somebody asked for from the composer, under the id
+    /// they are waiting on. No thread, so nothing is announced anywhere;
+    /// the app shows the session directly and sends its own first prompt
+    /// through the session once this create answers.
+    OpenRequested {
+        /// The id to create the session under.
+        session: AgentSessionId,
+        /// The agent the session runs for.
+        bot: BotId,
+        /// Who asked; owns the session.
+        sender: MacroUserIdStr<'static>,
     },
     /// Forward a message into a session that already exists, serving it
     /// first if this daemon is not already. Just the prompt: the harness
@@ -69,6 +84,31 @@ pub enum Skipped {
 /// Translate one trigger event into this daemon's work, or a reason to skip.
 pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::Requested(
+            AgentSessionRequestedEvent {
+                bot_id,
+                session_id,
+                owner,
+            },
+        )) => {
+            let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;
+            Ok(TriggerWork::OpenRequested {
+                session: session_id,
+                bot: bot_id,
+                sender,
+            })
+        }
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
+            Ok(TriggerWork::OpenAndPrompt {
+                reuse_origin_message: true,
+                bot: assigned.bot_id,
+                sender: assigned.actor,
+                parent: assigned.parent,
+                thread_id: assigned.discussion_id,
+                message_id: assigned.discussion_id,
+                content: assigned.prompt,
+            })
+        }
         AgentTriggerTopicEvent::New(event) => {
             let Some(OpeningMention { bot_id, message }) = event.mention() else {
                 return Err(Skipped::Unrecognized);
@@ -79,6 +119,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
+                reuse_origin_message: false,
                 bot: bot_id,
                 sender,
                 parent: message.parent,

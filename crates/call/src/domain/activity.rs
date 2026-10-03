@@ -52,6 +52,18 @@ impl ActivitySource for CallTopicEvent {
             // and the call itself is a new entity (soup item).
             CallTopicEvent::Started(m) => {
                 let actor = Actor::new_from_user(m.created_by.clone());
+                let Some(channel_id) = m.channel_id else {
+                    return Ingest::Insert(vec![Activity::common(
+                        event_id,
+                        0,
+                        actor,
+                        None,
+                        EntityType::Call,
+                        m.call_id.to_string(),
+                        CommonAction::Created,
+                        m.created_at,
+                    )]);
+                };
                 Ingest::Insert(vec![
                     Activity::from_domain(
                         event_id,
@@ -59,7 +71,7 @@ impl ActivitySource for CallTopicEvent {
                         actor.clone(),
                         None,
                         CallStartedActivity {
-                            channel_id: m.channel_id.to_string(),
+                            channel_id: channel_id.to_string(),
                             call_id: m.call_id.to_string(),
                         },
                         m.created_at,

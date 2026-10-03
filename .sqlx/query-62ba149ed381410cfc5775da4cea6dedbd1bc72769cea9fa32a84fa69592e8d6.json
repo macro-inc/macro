@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO ai_billing_period_allowance (\n            user_id, period_start, billed_users, included_cents_by_user, updated_at\n        )\n        VALUES ($1, $2, $3, $4, $5)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "TextArray",
+        "Int8Array",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62ba149ed381410cfc5775da4cea6dedbd1bc72769cea9fa32a84fa69592e8d6"
+}

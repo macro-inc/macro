@@ -14,6 +14,7 @@ import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
@@ -131,6 +132,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const markdownEditor = createConfiguredDiscussionMarkdownEditor({
     type: 'markdown',
     namespace: props.markdownNamespace ?? 'discussion-input-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     users: props.participants,
     scrollContainer,
@@ -219,6 +221,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
   };
 
   props.onReady?.({
+    snapshot: createSnapshot,
     clear: () => {
       // On iOS, blur before clearing so dictation finalizes and discards its buffer
       const root = markdownEditor.lexical.getRootElement();

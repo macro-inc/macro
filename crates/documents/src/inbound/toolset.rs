@@ -1,42 +1,56 @@
 //! Toolset inbound adapter for Documents.
 
+mod comment_on_document;
 mod create_document;
 mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
+mod resolve_document_comment;
 mod spreadsheet;
+mod upload_file;
 
+#[cfg(test)]
+mod comment_test;
 #[cfg(test)]
 mod test;
 
 use crate::{
+    domain::comments::{DocumentCommentReader, DocumentComments},
     domain::create::DocumentCreator,
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
-    domain::ports::editing::EditingWorkerService,
+    domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
+        comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
         edit_document::EditDocument,
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
+        resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
+        upload_file::UploadFile,
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
-        markdown_init::LexicalSyncMarkdownInitializer,
+        lexical_comment_marks::LexicalCommentMarks, markdown_init::LexicalSyncMarkdownInitializer,
     },
 };
-use activity::{Actor, Attribution};
-use ai_toolset::AsyncToolCollection;
+use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{
+    models::{AccessError, BotAccessScope, EntityAccessReceipt, EntityType},
+    ports::EntityAccessService,
+};
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{api::MessageServiceApi, ports::MessageError, service::MessageWrite};
+use model_owner::CreationPrincipal;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+use uuid::Uuid;
 
 /// Default backend-owned document creation use case for document tools.
 pub type DefaultDocumentToolCreator<DSvc> = DocumentCreator<
@@ -69,11 +83,20 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
+    /// A document's comment threads, read by the ReadContent tool.
+    pub comments: Arc<dyn DocumentComments>,
+
+    /// Shared message service the comment tools reply and resolve through.
+    pub messages: Arc<dyn MessageServiceApi>,
+
     /// Permission-scoped deterministic spreadsheet workflows.
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
+
+    /// Shared admission used by the domain AI-editing use case.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
 
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
@@ -82,6 +105,13 @@ pub struct DocumentToolContext<
     /// The bot these tools act as, on behalf of the requesting user. Defaults
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
+
+    /// The display name of [`Self::actor`] as the host knows it, set with
+    /// [`Self::with_actor_name`]. First-party bots need none: their names are
+    /// compile-time constants. A user- or team-owned bot is a row the host has
+    /// already read, so it hands the name over rather than have every tool
+    /// look it up again.
+    actor_name: Option<EditorName>,
 }
 
 impl<
@@ -98,10 +128,14 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            comments: self.comments.clone(),
+            messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            admission: self.admission.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
+            actor_name: self.actor_name.clone(),
         }
     }
 }
@@ -120,6 +154,7 @@ impl<
         sync_service_client: SyncServiceClient,
         editing: EDSvc,
         document_permission_jwt_secret: String,
+        messages: Arc<dyn MessageServiceApi>,
     ) -> Self {
         let service = Arc::new(service);
         let lexical_client = Arc::new(lexical_client);
@@ -133,6 +168,10 @@ impl<
             ReqwestDocumentBytesUploader::default(),
             NoOpDocumentMentionTracker,
         );
+        let comments = Arc::new(DocumentCommentReader::new(
+            messages.clone(),
+            LexicalCommentMarks::new(lexical_client.clone()),
+        ));
         let editing = Arc::new(editing);
         let spreadsheet = Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
             service.clone(),
@@ -147,11 +186,33 @@ impl<
             sync_service_client,
             creator,
             editing,
+            comments,
+            messages,
             spreadsheet,
             document_permission_jwt_secret,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
+            actor_name: None,
         }
+    }
+
+    /// Configure admission for AI edits; deterministic operations do not use it.
+    pub fn with_admission(
+        mut self,
+        admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    ) -> Self {
+        self.admission = admission;
+        self
+    }
+
+    /// The AI-editing use case using the currently injected services.
+    pub fn ai_editing(&self) -> crate::domain::ai_editing::AiEditingService<EDSvc> {
+        crate::domain::ai_editing::AiEditingService::new(
+            self.editing.clone(),
+            self.admission.clone(),
+            self.recorder.clone(),
+        )
     }
 
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
@@ -166,9 +227,47 @@ impl<
         self
     }
 
-    /// Attribution for a write these tools make for `user`.
-    pub fn attribution(&self, user: MacroUserIdStr<'static>) -> Attribution {
-        Attribution::delegated(Actor::new_from_bot(self.actor), user)
+    /// Set the display name of the bot these tools act as. A blank name is
+    /// no name: the actor's own is used, when it has one.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.actor_name = EditorName::new(name);
+        self
+    }
+
+    /// The name readers see on what these tools write as it happens - the
+    /// label on the cursor the editing worker draws: the host-supplied name,
+    /// else the first-party bot's own. `None` for a user- or team-owned bot
+    /// the host did not name.
+    pub fn actor_editor_name(&self) -> Option<EditorName> {
+        self.actor_name
+            .clone()
+            .or_else(|| bot_id::system_bot(self.actor).and_then(|bot| EditorName::new(bot.name)))
+    }
+
+    /// Mint the bot's comment capability on the document on behalf of the
+    /// requesting user: the same comment access the web composer requires.
+    pub async fn require_comment_write(
+        &self,
+        request_context: &RequestContext,
+        document_id: Uuid,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, ToolCallError> {
+        self.entity_access_service
+            .generate_bot_entity_access_receipt::<MessageWrite>(
+                self.actor,
+                BotAccessScope::user(request_context.user_id.clone()),
+                &document_id.to_string(),
+                EntityType::Document,
+            )
+            .await
+            .map_err(comment_access_error)
+    }
+
+    /// Who these tools create entities as when acting for `user`.
+    pub fn creation_principal(&self, user: MacroUserIdStr<'static>) -> CreationPrincipal {
+        CreationPrincipal::BotForUser {
+            bot: self.actor,
+            user,
+        }
     }
 }
 
@@ -184,9 +283,47 @@ where
         .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ResolveDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+}
+
+fn comment_access_error(err: AccessError) -> ToolCallError {
+    let description = match err {
+        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+            "you need comment access to the document to comment on it"
+        }
+        AccessError::NotFound(_) => "document not found",
+        AccessError::BadRequest(_) => "invalid document id",
+        AccessError::Unavailable(_) | AccessError::Internal(_) => {
+            "failed to verify access to the document"
+        }
+    };
+    ToolCallError {
+        description: description.to_string(),
+        internal_error: err.into(),
+    }
+}
+
+fn comment_error(description: &'static str) -> impl FnOnce(MessageError) -> ToolCallError {
+    move |err| {
+        let description = match &err {
+            MessageError::NotFound => "comment thread not found on this document".to_string(),
+            MessageError::Forbidden => {
+                "you need comment access to the document to comment on it".to_string()
+            }
+            MessageError::Invalid(reason) => format!("{description}: {reason}"),
+            MessageError::Conflict => format!("{description}: message id already exists"),
+            MessageError::Repository(_) => description.to_string(),
+        };
+        ToolCallError {
+            description,
+            internal_error: anyhow::Error::new(err),
+        }
+    }
 }

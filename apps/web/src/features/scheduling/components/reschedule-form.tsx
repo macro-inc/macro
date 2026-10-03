@@ -43,6 +43,7 @@ export function RescheduleForm(props: {
   const save = async (e: SubmitEvent) => {
     e.preventDefault();
     if (!selected() || saving()) return;
+    setError('');
     setSaving(true);
     try {
       await props.submit(selected());
@@ -66,6 +67,7 @@ export function RescheduleForm(props: {
       >
         <TextInput
           type="date"
+          disabled={saving()}
           required
           value={date()}
           onInput={(e) => void load(e.currentTarget.value)}
@@ -92,6 +94,7 @@ export function RescheduleForm(props: {
           <Field label="Time">
             <SelectInput
               label="Time"
+              disabled={saving()}
               value={selected()}
               onChange={setSelected}
               options={slots().map((s) => ({
@@ -119,7 +122,7 @@ export function RescheduleForm(props: {
         >
           {saving() ? 'Rescheduling…' : 'Confirm new time'}
         </Button>
-        <Button variant="ghost" onClick={props.onCancel}>
+        <Button variant="ghost" disabled={saving()} onClick={props.onCancel}>
           Keep current time
         </Button>
       </div>

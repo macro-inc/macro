@@ -33,6 +33,14 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
 }));
 
+// This suite exercises legacy chat model persistence, including the flag-off Soup input.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
+vi.mock('@app/features/agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => null,
+}));
+
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
   useCanAutofocusSplitContent: () => false,
@@ -85,7 +93,13 @@ vi.mock('@core/signal/permissions', () => ({ useCanEdit: () => () => true }));
 vi.mock('@core/util/message-send-motion', () => ({ markMessageSent: vi.fn() }));
 vi.mock('@queries/auth', () => ({ invalidateUserQuota: vi.fn() }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({ withMentions: () => mocks.editor }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => mocks.editor,
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/signal/mention-attachment-callbacks', () => ({
   createMentionAttachmentCallbacks: () => ({}),
@@ -199,7 +213,7 @@ it('preserves a real soup composer selection when creating and opening its first
   });
   const composer = render(() => <SoupChatInput />);
   fireEvent.click(
-    screen.getByRole('button', { name: 'Choose model, Sonnet 5' })
+    screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
   );
   const dialog = await screen.findByRole('dialog', { name: 'Select model' });
   fireEvent.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
@@ -223,7 +237,7 @@ it('preserves a real soup composer selection when creating and opening its first
         {
           chat: {
             id: 'selected-first-chat',
-            model: Model.sonnet5,
+            model: Model.sonnet55,
             messages: [],
           },
         } as unknown as ChatData
@@ -305,8 +319,8 @@ it.each([true, false])(
       </ChatInputProvider>
     ));
     const trigger = mobile
-      ? screen.getByRole('button', { name: 'Choose model, Sonnet 5' })
-      : screen.getByRole('button', { name: 'Sonnet 5' });
+      ? screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
+      : screen.getByRole('button', { name: 'Sonnet 5.5' });
     if (mobile) fireEvent.click(trigger);
     else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
     if (mobile) {

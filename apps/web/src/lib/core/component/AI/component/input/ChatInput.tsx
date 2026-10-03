@@ -1,11 +1,18 @@
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '@app/features/dictation/components/dictation-controls';
+import { createComposerDictation } from '@app/features/dictation/composer-dictation';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHasPaidAccess } from '@core/auth/license';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
 import {
   defaultModelForPlan,
-  Model,
+  type Model,
   modelsForPlan,
+  PAID_MODELS,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
@@ -77,7 +84,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   // upsell at all.
   const modelOptions = createMemo(() => {
     const allowed = modelsForPlan(hasPaidAccess());
-    return Object.values(Model).map((id) => ({
+    return PAID_MODELS.map((id) => ({
       id,
       available: allowed.includes(id),
     }));
@@ -134,6 +141,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const [markdownText, setMarkdownText] = createSignal('');
   const [isFocused, setIsFocused] = createSignal(false);
+  const dictation = createComposerDictation(() => props.editor.lexical);
 
   createEffect(() => {
     const uploaded = uploadQueue.popComplete();
@@ -160,6 +168,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const hasAttachedFiles = () => attachments.attached().length > 0;
   const hasUploadingAttachments = () => uploadQueue.uploading().length > 0;
   const canSendMessage = () =>
+    !dictation.active() &&
     (!isEmptyInput() || hasAttachedFiles()) &&
     !generating() &&
     !hasUploadingAttachments();
@@ -172,6 +181,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       (isTouchDevice() && props.variant !== 'default')
   );
   const isCollapsed = () =>
+    !dictation.active() &&
     props.collapseOnBlur &&
     isTouchDevice() &&
     !isTallVariant() &&
@@ -213,12 +223,21 @@ export function ChatInput(props: ChatInputComponentProps) {
       },
     })
     .onEnter((e) => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSendMessage()) {
         sendMessage({ metaKey: e?.metaKey });
       }
       return true;
     })
-    .onEscape((e) => props.onEscape?.(e) ?? false)
+    .onEscape((e) => {
+      if (dictation.active()) {
+        dictation.cancel();
+        return true;
+      }
+      return props.onEscape?.(e) ?? false;
+    })
     .onChange((md) => {
       setMarkdownText(md);
       props.onChange?.(md);
@@ -245,7 +264,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       variant="ghost"
       size="icon-composer"
-      class="rounded-full text-ink not-touch:text-composer-ink touch:size-6"
+      class="text-ink not-touch:text-composer-ink touch:size-6"
       label="Attach files"
       aria-label="Attach files"
       onClick={() => {
@@ -265,7 +284,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'rounded-full touch:size-7.5 [&_svg]:stroke-[4px]',
+        'touch:size-7.5 [&_svg]:stroke-[4px]',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
@@ -299,6 +318,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />
+      <DictationButton dictation={dictation} />
       <Show when={generating() && props.onStop} fallback={<SendButton />}>
         <StopButton />
       </Show>
@@ -346,7 +366,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       />
       <ComposerSurface
         class={cn(
-          'h-auto',
+          'relative h-auto',
           composerLayout.isCompact() &&
             !hasAttachments() &&
             'touch:rounded-full',
@@ -354,7 +374,10 @@ export function ChatInput(props: ChatInputComponentProps) {
         )}
       >
         <div
+          inert={dictation.active()}
+          classList={{ invisible: dictation.active() }}
           onFocusOut={(e) => {
+            if (dictation.active()) return;
             const next = e.relatedTarget as Node | null;
             if (next && containerRef.contains(next)) return;
             setIsFocused(false);
@@ -408,6 +431,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                   models={modelOptions()}
                   onSelect={() => {}}
                 />
+                <div class="size-7 not-touch:size-[33.75px] shrink-0" />
                 <div class="size-7 not-touch:size-[33.75px] shrink-0" />
               </div>
             </Show>
@@ -488,8 +512,10 @@ export function ChatInput(props: ChatInputComponentProps) {
             </div>
           </div>
         </div>
+        <DictationPanel dictation={dictation} />
         <ConsentDialog />
       </ComposerSurface>
+      <DictationFeedback dictation={dictation} />
     </div>
   );
 }

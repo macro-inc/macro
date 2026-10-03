@@ -6,8 +6,8 @@ const RECENT_REPOSITORY_LIMIT = 8;
 
 /**
  * Repositories handed to coders from this composer, newest first and scoped
- * to the signed-in user. There is no server-side list of a person's
- * repositories yet, so the ones they have typed are the recents.
+ * to the signed-in user. The picker offers listed recents ahead of the rest
+ * of the GitHub App listing. A new conversation still starts on Automatic.
  */
 export function createRecentRepositories(userId: string | undefined) {
   const storage = createUserScopedStorage('agents-view-repositories-v1');

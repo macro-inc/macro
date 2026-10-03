@@ -163,6 +163,8 @@ impl CreateDraftRequest {
             // Drafts carry no actor; attribution happens when the draft is
             // actually sent.
             actor: None,
+            draft_client_binding: None,
+            thread_client_binding: None,
         }
     }
 }

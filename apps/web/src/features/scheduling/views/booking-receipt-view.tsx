@@ -15,6 +15,8 @@ export function BookingReceiptView(props: {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
   const cancel = async () => {
+    if (busy()) return;
+    setError('');
     setBusy(true);
     try {
       await props.cancel();
@@ -113,7 +115,11 @@ export function BookingReceiptView(props: {
                     >
                       {busy() ? 'Cancelling…' : 'Confirm cancellation'}
                     </Button>
-                    <Button variant="ghost" onClick={() => setConfirm(false)}>
+                    <Button
+                      variant="ghost"
+                      disabled={busy()}
+                      onClick={() => setConfirm(false)}
+                    >
                       Keep booking
                     </Button>
                   </Show>
@@ -130,8 +136,14 @@ export function BookingReceiptView(props: {
                   timeZone={r().scheduleTimeZone}
                   load={props.loadSlots}
                   submit={async (start) => {
-                    await props.reschedule(start);
-                    setRescheduling(false);
+                    setError('');
+                    setBusy(true);
+                    try {
+                      await props.reschedule(start);
+                      setRescheduling(false);
+                    } finally {
+                      setBusy(false);
+                    }
                   }}
                   onCancel={() => setRescheduling(false)}
                 />

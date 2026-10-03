@@ -2,13 +2,15 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerTopicEvent, OpeningMention, SessionMessage,
+    AgentTriggerTopicEvent, NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 
+use agent_runtime_protocol::domain::action::AgentAction;
+
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand,
-    MentionOrigin, OpenSession,
+    MentionOrigin, OpenSession, SessionOrigin, StaticFileLinks, TaskAssignmentOrigin,
 };
 
 /// What one trigger event asks this deployment to do.
@@ -52,8 +54,27 @@ pub fn agent_trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
     runtime: Option<AgentRuntimeConfig>,
+    links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
+            let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
+                return Err(Skipped::ForeignBot);
+            };
+            Ok(RoutedTrigger::Command(
+                AgentSessionId::new(),
+                HarnessCommand::Open(OpenSession {
+                    bot_id: assigned.bot_id,
+                    runtime,
+                    origin: SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+                        parent: assigned.parent,
+                        discussion_id: assigned.discussion_id,
+                        actor: assigned.actor,
+                        prompt: assigned.prompt,
+                    }),
+                }),
+            ))
+        }
         AgentTriggerTopicEvent::New(event) => {
             let Some(OpeningMention { bot_id, message }) = event.mention() else {
                 return Err(Skipped::Unrecognized);
@@ -71,7 +92,7 @@ pub fn route_agent_trigger(
                 HarnessCommand::Open(OpenSession {
                     bot_id,
                     runtime,
-                    origin: MentionOrigin {
+                    origin: SessionOrigin::Mention(MentionOrigin {
                         parent: message.parent,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
@@ -79,7 +100,8 @@ pub fn route_agent_trigger(
                         message_id: message.message_id,
                         sender,
                         content: message.content,
-                    },
+                        attachments: links.prompt_attachments(&message.attachments),
+                    }),
                 }),
             ))
         }
@@ -94,6 +116,7 @@ pub fn route_agent_trigger(
                 return Err(Skipped::Unrecognized);
             };
             let origin = AnnounceOrigin {
+                reuse_origin_message: false,
                 parent: message.parent,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
                 message_id: message.message_id,
@@ -105,7 +128,10 @@ pub fn route_agent_trigger(
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction::prompt(
-                        message.content,
+                        AgentAction::prompt_with_attachments(
+                            message.content,
+                            links.prompt_attachments(&message.attachments),
+                        ),
                         message.sender.as_user().cloned(),
                         Some(origin),
                     )),

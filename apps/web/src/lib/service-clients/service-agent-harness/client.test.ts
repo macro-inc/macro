@@ -48,3 +48,23 @@ describe('session request errors', () => {
     expect(error.message).toBe('Agent request failed (HTTP 502).');
   });
 });
+
+describe('repository listing', () => {
+  it("asks the harness for the caller's repositories", () => {
+    agentHarnessServiceClient.listRepositories();
+    expect(fetchWithToken).toHaveBeenCalledWith(
+      'https://harness.example.com/agent-repositories',
+      { method: 'GET' }
+    );
+  });
+
+  it("asks the harness for one repository's branches", () => {
+    agentHarnessServiceClient.listRepositoryBranches(
+      'https://github.com/macro-inc/macro'
+    );
+    expect(fetchWithToken).toHaveBeenCalledWith(
+      'https://harness.example.com/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro',
+      { method: 'GET' }
+    );
+  });
+});

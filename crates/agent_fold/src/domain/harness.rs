@@ -243,6 +243,16 @@ pub trait HarnessReader: Sync {
         macro_tools::mcp_tool(name)
     }
 
+    /// A tool's own arguments, out of whatever this harness wrapped them in
+    /// when it wrote `rawInput`. The neutral reading is `rawInput` as it is:
+    /// most harnesses write the arguments bare, and only a harness that
+    /// routes every external tool through one dispatcher of its own (Cursor's
+    /// `mcp`) has a wrapper to take off. `None` when the frame carries no
+    /// input.
+    fn tool_input(&self, frame: &ToolFrame<'_>) -> Option<Value> {
+        frame.raw_input.cloned()
+    }
+
     /// An external tool's own result, out of whatever this harness wrapped it
     /// in when it wrote `rawOutput`, plus the error text when the wrapper
     /// reported failure. The neutral reading is MCP's envelope.

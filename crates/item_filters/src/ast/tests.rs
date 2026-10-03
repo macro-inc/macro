@@ -1631,3 +1631,94 @@ fn requests_crm_scope_reflects_email_crm_scope_tag() {
     ast.email_filter.crm_scope = Some(CrmScope::Domains(vec!["example.com".into()]));
     assert!(ast.requests_crm_scope());
 }
+
+#[test]
+fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
+    let empty = EntityFilterAst::new_from_filters(EntityFilters::default()).unwrap();
+    assert!(empty.is_none());
+    let filter = EntityFilters {
+        initiative_filters: crate::InitiativeFilters {
+            include: true,
+            name: Some("Launch".into()),
+            ..Default::default()
+        },
+        property_filters: vec![crate::PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000002".into(),
+            entity_type: Some("INITIATIVE".into()),
+            option_ids: vec!["00000000-0000-0000-0000-000000000001".into()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    assert!(ast.initiative_filter.is_some());
+    assert!(ast.properties_filter.is_some());
+}
+
+#[test]
+fn database_rows_are_requested_by_naming_a_table_or_a_row_outside_a_not() {
+    use database_row::{DatabaseRowLiteral, database_rows_requested};
+    let table = Uuid::from_u128(0x7ab1e);
+    let row = Uuid::from_u128(0x0001);
+
+    assert!(!database_rows_requested(None));
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::TableId(table)
+    ))));
+    assert!(database_rows_requested(Some(&Expr::or(
+        Expr::val(DatabaseRowLiteral::TableId(table)),
+        Expr::val(DatabaseRowLiteral::Id(row)),
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::TableId(table)
+    )))));
+    assert!(database_rows_requested(Some(&Expr::and(
+        Expr::val(DatabaseRowLiteral::TableId(table)),
+        Expr::is_not(Expr::val(DatabaseRowLiteral::Id(row))),
+    ))));
+
+    assert_eq!(
+        serde_json::to_value(EntityFilterAst {
+            database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(table)))),
+            ..EntityFilterAst::default()
+        })
+        .unwrap()["drf"],
+        json!({ "l": { "t": "00000000-0000-0000-0000-00000007ab1e" } })
+    );
+}
+
+#[test]
+fn crm_document_literals_round_trip_through_the_rest_ast() {
+    let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
+    let tree = json!({
+        "|": [
+            { "l": { "prop": {
+                "pd": "00000001-0000-0000-0000-00000000000c",
+                "v": { "er": company_id }
+            } } },
+            { "l": { "eap": { "Domain": "acme.com" } } }
+        ]
+    });
+    let expr: Expr<document::DocumentLiteral> = serde_json::from_value(tree.clone()).unwrap();
+
+    let Expr::Or(left, right) = &expr else {
+        panic!("expected an OR, got {expr:?}")
+    };
+    assert_matches!(
+        left.as_ref(),
+        Expr::Literal(document::DocumentLiteral::Property(
+            properties::PropertiesLiteral {
+                entity_type: None,
+                value: properties::PropertyMatchValue::EntityRef(_),
+                ..
+            }
+        ))
+    );
+    assert_matches!(
+        right.as_ref(),
+        Expr::Literal(document::DocumentLiteral::EmailAttachmentParticipant(
+            email::Email::Domain(domain)
+        )) if domain == "acme.com"
+    );
+    assert_eq!(serde_json::to_value(&expr).unwrap(), tree);
+}

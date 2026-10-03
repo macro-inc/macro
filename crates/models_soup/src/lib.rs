@@ -14,12 +14,16 @@ pub mod chat;
 pub mod comms;
 /// CRM company models for Soup responses.
 pub mod crm_company;
+/// Database row models for Soup responses.
+pub mod database_row;
 /// Document models for Soup responses.
 pub mod document;
 /// Email thread models for Soup responses.
 pub mod email_thread;
 /// Foreign entity models for Soup responses.
 pub mod foreign_entity;
+/// Initiative models for Soup responses.
+pub mod initiative;
 /// Unified Soup feed item model.
 pub mod item;
 /// Project models for Soup responses.

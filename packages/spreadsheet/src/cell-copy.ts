@@ -1,4 +1,5 @@
 import type { CellCopy } from './calculation';
+import { inferFillSeries } from './fill-series';
 import {
   type CellPosition,
   type CellSelection,
@@ -115,15 +116,41 @@ export function rangeCopies(
   );
 }
 
-/** Repeat a source rectangle into an adjacent vertical or horizontal region. */
+/** Extend numeric/date sequences; repeat text and translate formulas. */
 export function fillCopies(
   cells: SpreadsheetCells,
   source: CellSelection,
-  target: CellSelection
+  target: CellSelection,
+  mode: 'series' | 'copy' = 'series'
 ): CellCopy[] {
   const from = selectionBounds(source);
   const to = selectionBounds(target);
   const copies: CellCopy[] = [];
+  const vertical = to.left === from.left && to.right === from.right;
+  const horizontal = to.top === from.top && to.bottom === from.bottom;
+  const series = new Map<number, ReturnType<typeof inferFillSeries>>();
+  if (mode === 'series' && (vertical || horizontal)) {
+    const start = vertical ? from.left : from.top;
+    const end = vertical ? from.right : from.bottom;
+    for (let lane = start; lane <= end; lane++) {
+      const entries: SpreadsheetCell[] = [];
+      for (
+        let index = vertical ? from.top : from.left;
+        index <= (vertical ? from.bottom : from.right);
+        index++
+      ) {
+        entries.push(
+          cells[
+            cellAddress({
+              row: vertical ? index : lane,
+              column: vertical ? lane : index,
+            })
+          ] ?? { value: '' }
+        );
+      }
+      series.set(lane, inferFillSeries(entries));
+    }
+  }
   const mod = (value: number, size: number) => ((value % size) + size) % size;
   for (let row = to.top; row <= to.bottom; row++) {
     for (let column = to.left; column <= to.right; column++) {
@@ -138,10 +165,14 @@ export function fillCopies(
         row: from.top + mod(row - from.top, from.bottom - from.top + 1),
         column: from.left + mod(column - from.left, from.right - from.left + 1),
       };
+      const cell = cells[cellAddress(position)] ?? { value: '' };
+      const generated = series.get(vertical ? column : row)?.(
+        vertical ? row - from.top : column - from.left
+      );
       copies.push({
         from: position,
         to: { row, column },
-        cell: cells[cellAddress(position)] ?? { value: '' },
+        cell: generated === undefined ? cell : { ...cell, value: generated },
       });
     }
   }

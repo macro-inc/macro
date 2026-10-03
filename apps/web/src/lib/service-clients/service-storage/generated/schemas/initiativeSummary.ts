@@ -4,16 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { DescriptionDocumentId } from './descriptionDocumentId';
 import type { InitiativeId } from './initiativeId';
-import type { InitiativeSummaryDescription } from './initiativeSummaryDescription';
 
 /**
  * List-row view of an initiative.
  */
 export interface InitiativeSummary {
-  /** Optional description. */
-  description?: InitiativeSummaryDescription;
+  /** The markdown document holding the description; open it in the editor. */
+  descriptionDocumentId: DescriptionDocumentId;
   /** Opaque identifier. */
   id: InitiativeId;
   /** Display name. */

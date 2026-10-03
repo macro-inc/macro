@@ -12,6 +12,7 @@ import {
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
+import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
 const EMAIL_ENTRY_STATE_KEY = 'email.view';
@@ -21,7 +22,18 @@ const emailLocalStateStorage = createUserScopedStorage(
 );
 
 const emailTabSchema = z
-  .enum(['important', 'noise', 'sent', 'calendar', 'drafts', 'shared', 'all'])
+  .enum([
+    'important',
+    'noise',
+    'favorites',
+    'sent',
+    'scheduled',
+    'reminders',
+    'calendar',
+    'drafts',
+    'shared',
+    'all',
+  ])
   .catch('important');
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
@@ -31,7 +43,6 @@ const emailEntryStateSchemaWithDefaults = z.object({
   tab: emailTabSchema.default('important'),
   search: z.string().default(''),
   facets: emailFacetsSchema.default({}),
-  openThreadId: z.string().optional(),
 });
 
 type EmailEntryState = z.infer<typeof emailEntryStateSchemaWithDefaults>;
@@ -44,7 +55,11 @@ const emailEntryStateSchema = emailEntryStateSchemaWithDefaults.catch(
 
 // The legacy mail view stores the raw `string[] | undefined` under its key;
 // anything else restores as "every inbox".
-const inboxIdsEntrySchema = z.array(z.string()).optional().catch(undefined);
+const inboxIdsEntrySchema = z
+  .array(z.string())
+  .optional()
+  .catch(undefined)
+  .transform(normalizeInboxSelection);
 
 const emailListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -86,7 +101,6 @@ function createEmailEntryStorage(options: {
         tab: restored.tab,
         search: restored.search,
         facets: normalizeFacetSelection(restored.facets),
-        openThreadId: restored.openThreadId,
       };
     },
     select: (state): EmailEntryState => ({
@@ -94,23 +108,18 @@ function createEmailEntryStorage(options: {
       tab: state.tab,
       search: state.search,
       facets: normalizeFacetSelection(state.facets),
-      ...(state.openThreadId === undefined
-        ? {}
-        : { openThreadId: state.openThreadId }),
     }),
   });
 }
 
-// Split entry state is gone after a reload, so the parts of the view worth
-// coming back to — tab, inbox scope, filters, and the open thread — are also
-// kept per user, the way the Channels view keeps its selected channel. The
-// search text is deliberately per visit.
+// Split entry state is gone after a reload, so tab, inbox scope, and filters
+// are also kept per user. Detail selection belongs to the route, while search
+// text remains deliberately scoped to one visit.
 const emailLocalStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: emailTabSchema.default('important'),
   inboxIds: inboxIdsEntrySchema,
   facets: emailFacetsSchema.default({}),
-  openThreadId: z.string().optional(),
 });
 
 type EmailLocalState = z.infer<typeof emailLocalStateSchemaWithDefaults>;
@@ -125,11 +134,8 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
   return {
     version: 1,
     tab: state.tab,
-    ...(state.inboxIds === undefined ? {} : { inboxIds: [...state.inboxIds] }),
+    inboxIds: normalizeInboxSelection(state.inboxIds),
     facets: normalizeFacetSelection(state.facets),
-    ...(state.openThreadId === undefined
-      ? {}
-      : { openThreadId: state.openThreadId }),
   };
 }
 
@@ -158,7 +164,6 @@ function createEmailLocalStateStorage(options: {
           tab: restored.tab,
           inboxIds: restored.inboxIds,
           facets: normalizeFacetSelection(restored.facets),
-          openThreadId: restored.openThreadId,
         };
       } catch {
         return undefined;

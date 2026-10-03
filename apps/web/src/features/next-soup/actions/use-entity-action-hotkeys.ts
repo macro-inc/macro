@@ -8,7 +8,7 @@ import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { type EntityData, isTaskEntity } from '@entity';
+import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { type Accessor, onCleanup } from 'solid-js';
@@ -127,20 +127,7 @@ export const useEntityActionHotkeys = (
 
   const openNextEntity: EntityActionNavigationHandler = ({ entity }) => {
     if (!splitHandle) return;
-    if (!entity) {
-      if (splitHandle.isControllerSplit()) splitHandle.resetPreview();
-      return;
-    }
-
-    if (splitHandle.isControllerSplit()) {
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        mergeHistory: true,
-        referredFrom: splitHandle.referredFrom(),
-        notificationSource,
-      });
-      return;
-    }
+    if (!entity) return;
 
     const handleContent = splitHandle.content()?.type;
     if (!handleContent) return;
@@ -294,28 +281,56 @@ export const useEntityActionHotkeys = (
   }).withGroup(group);
 
   if (options.enableDeleteHotkey !== false) {
-    // Delete - 'delete', 'backspace'
+    const deleteDescription = () => {
+      const count = getEntitiesForAction().length;
+      return count > 1 ? 'Delete items' : 'Delete item';
+    };
+    const runDelete = () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(deleteAction.canExecute)) return false;
+
+      deleteAction.executeWithSoup(entities, list);
+      return true;
+    };
+    const canDelete = () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(deleteAction.canExecute);
+    };
+    const isEmailSelection = () => {
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(isEmailEntity);
+    };
+
+    // Delete - 'delete', 'backspace'. Registered as 'add' so it coexists on
+    // those keys with the email registration below rather than one eclipsing
+    // the other; their conditions are mutually exclusive, so exactly one of
+    // the two is ever live — and the command menu, which dedupes by
+    // description, shows a single Delete row with the key that applies.
     registerHotkey({
       hotkey: ['delete', 'backspace'],
       hotkeyToken: TOKENS.entity.action.delete,
       scopeId,
-      description: () => {
-        const count = getEntitiesForAction().length;
-        return count > 1 ? 'Delete items' : 'Delete item';
-      },
-      keyDownHandler: () => {
-        const entities = getEntitiesForAction();
-        if (entities.length === 0) return false;
-        if (!entities.every(deleteAction.canExecute)) return false;
+      description: deleteDescription,
+      keyDownHandler: runDelete,
+      condition: () => canDelete() && !isEmailSelection(),
+      registrationType: 'add',
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
 
-        deleteAction.executeWithSoup(entities, list);
-        return true;
-      },
-      condition: () => {
-        if (condition && !condition()) return false;
-        const entities = getEntitiesForAction();
-        return entities.length > 0 && entities.every(deleteAction.canExecute);
-      },
+    // Email selections also answer to '#', the key mail clients bind to
+    // Trash, so the same keystroke deletes a thread here and from inside an
+    // open thread. '#' arrives as 'shift+3' and prints back as '#'.
+    registerHotkey({
+      hotkey: ['shift+3', 'delete', 'backspace'],
+      hotkeyToken: TOKENS.email.trash,
+      scopeId,
+      description: deleteDescription,
+      keyDownHandler: runDelete,
+      condition: () => canDelete() && isEmailSelection(),
+      registrationType: 'add',
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
@@ -400,6 +415,26 @@ export const useEntityActionHotkeys = (
   }).withGroup(group);
 
   // Mute notifications (command menu only, no keybinding)
+  registerHotkey({
+    scopeId,
+    description: 'Snooze notifications…',
+    keywords: ['pause', 'morning', 'weekend', 'notifications'],
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (!entities.length || !entities.every(muteAction.canExecute))
+        return false;
+      muteAction.snooze(entities);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.mute,
     scopeId,
@@ -550,10 +585,8 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Set a reminder - 'h'. This shares the scope with the list's 'h' ("Collapse
-  // item", handlerPriority 4), so 'add' keeps both registered instead of one
-  // evicting the other. Collapse sorts first and returns false when there is
-  // nothing to collapse, which falls through to here.
+  // H reminds on entity rows. The higher-priority collapse handler consumes
+  // H only on group headers; 'add' keeps both actions in the same scope.
   registerHotkey({
     hotkey: ['h'],
     hotkeyToken: TOKENS.entity.action.createReminder,
@@ -734,7 +767,12 @@ export const useEntityActionHotkeys = (
       keyDownHandler: () => {
         const entities = getEntitiesForAction();
         if (entities.length === 0) return false;
-        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        if (
+          !entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
+        )
+          return false;
         setCompanyPropertyAction.execute(entities, field);
         return true;
       },
@@ -743,7 +781,9 @@ export const useEntityActionHotkeys = (
         const entities = getEntitiesForAction();
         return (
           entities.length > 0 &&
-          entities.every(setCompanyPropertyAction.canExecute)
+          entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
         );
       },
       scopeId,

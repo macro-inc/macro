@@ -57,6 +57,8 @@ topics! {
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
     MacroProjectsTopic => "macro.projects",
+    /// Initiative lifecycle and task membership changes.
+    MacroInitiativesTopic => "macro.initiatives",
     /// Property definition, option, and entity property value mutation events.
     MacroPropertiesTopic => "macro.properties",
     /// Team lifecycle, invite, and membership events.
@@ -75,10 +77,14 @@ topics! {
     MacroMentionsTopic => "macro.mentions",
     /// Notifications awaiting delivery through WebSocket connections.
     MacroNotificationsTopic => "macro.notifications",
+    /// Recorded activity rows awaiting delivery to realtime subscribers.
+    MacroActivityTopic => "macro.activity",
     /// AI chat lifecycle and message events.
     MacroChatsTopic => "macro.chats",
     /// Calendar event changes, from provider sync and user mutations alike.
     MacroCalendarTopic => "macro.calendar",
     /// Agent session lifecycle facts: opened, turns, waiting for input, settled, stopped, renamed, deleted.
     MacroAgentSessionLifecycleTopic => "macro.agent_session_lifecycle",
+    /// Database lifecycle (created, renamed, trashed, restored, purged) and table-change events.
+    MacroDatabasesTopic => "macro.databases",
 }

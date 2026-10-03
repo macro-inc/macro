@@ -25,6 +25,7 @@ function BaseToolCall(props: ToolCallProps) {
     <Tool.Root grouped={grouped()} muted={!!error}>
       <Tool.Row
         align={props.align}
+        grouped={grouped()}
         icon={props.icon}
         trailing={error ? <span class="text-ink">Failed</span> : undefined}
       >
@@ -39,7 +40,7 @@ function BaseToolCall(props: ToolCallProps) {
 
 function BaseToolResponse(props: ToolResponseProps) {
   return (
-    <Tool.Root>
+    <Tool.Root grouped={props.renderContext.grouped}>
       <div class="px-3 py-2">{props.children && props.children}</div>
     </Tool.Root>
   );

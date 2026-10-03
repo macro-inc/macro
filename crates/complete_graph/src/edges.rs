@@ -16,7 +16,8 @@ use graphql_email::{
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
-    GraphqlNotification, SoupNotificationEdgeReader, load_entity_notifications,
+    GraphqlNotification, GraphqlNotificationFilter, SoupNotificationEdgeReader,
+    load_entity_notifications,
 };
 use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
@@ -67,9 +68,11 @@ where
 {
     type Property = GraphqlProperty;
     type Notification = GraphqlNotification;
+    type NotificationFilter = GraphqlNotificationFilter;
     type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
     type AgentSessionEdges = SoupAgentSessionEdges;
+    type InitiativeEdges = SoupInitiativeEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -116,6 +119,10 @@ where
         Ok(Some(encode_cache_projection_supplement(&supplement)?))
     }
 
+    fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {
+        SoupInitiativeEdges { initiative_id }
+    }
+
     fn agent_session_edges(bot_id: Uuid) -> Self::AgentSessionEdges {
         SoupAgentSessionEdges {
             bot_id: BotId::new_from_uuid(bot_id),
@@ -132,8 +139,10 @@ where
     async fn resolve_notifications(
         &self,
         ctx: &Context<'_>,
+        filter: Option<GraphqlNotificationFilter>,
+        limit: Option<i32>,
     ) -> async_graphql::Result<Vec<Self::Notification>> {
-        load_entity_notifications::<NR>(ctx, self.entity.clone()).await
+        load_entity_notifications::<NR>(ctx, self.entity.clone(), filter, limit).await
     }
 
     async fn resolve_is_favorited(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
@@ -277,8 +286,10 @@ where
     async fn notifications(
         &self,
         ctx: &Context<'_>,
+        filter: Option<GraphqlNotificationFilter>,
+        limit: Option<i32>,
     ) -> async_graphql::Result<Vec<GraphqlNotification>> {
-        self.resolve_notifications(ctx).await
+        self.resolve_notifications(ctx, filter, limit).await
     }
 
     /// Whether the authenticated viewer has favorited this entity.
@@ -366,6 +377,18 @@ where
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 
+    /// Complete body-free metadata for local draft edits and discards.
+    async fn mail_draft_state(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailDraftState>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .draft_state
+            .clone()
+            .map(Into::into))
+    }
+
     /// Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
     async fn mail_all_preview(
         &self,
@@ -427,6 +450,55 @@ where
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<GraphqlSoupEmailMessage>> {
         load_latest_email_message::<ER>(ctx, self.thread_id).await
+    }
+}
+
+/// Initiative detail fields composed onto the canonical Soup entity.
+#[derive(Clone)]
+pub struct SoupInitiativeEdges {
+    /// Initiative whose domain-authorized details are requested.
+    initiative_id: Uuid,
+}
+
+#[Object]
+impl SoupInitiativeEdges {
+    /// Collaborators, independent of assignees.
+    async fn member_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<String>> {
+        let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;
+        Ok(detail.member_ids.iter().map(ToString::to_string).collect())
+    }
+
+    /// Associated task identifiers visible to this viewer.
+    async fn task_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ID>> {
+        let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;
+        Ok(detail.task_ids.iter().cloned().map(ID).collect())
+    }
+
+    /// Current sharing state.
+    async fn share_permission(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<graphql_initiative::GraphqlInitiativeSharePermission> {
+        let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;
+        Ok(detail.share_permission.clone().into())
+    }
+
+    /// Number of associated tasks this viewer can see.
+    async fn task_count(&self, ctx: &Context<'_>) -> async_graphql::Result<u32> {
+        Ok(
+            graphql_initiative::load_initiative_summary(ctx, self.initiative_id)
+                .await?
+                .task_count,
+        )
+    }
+
+    /// Number of completed associated tasks this viewer can see.
+    async fn completed_task_count(&self, ctx: &Context<'_>) -> async_graphql::Result<u32> {
+        Ok(
+            graphql_initiative::load_initiative_summary(ctx, self.initiative_id)
+                .await?
+                .completed_task_count,
+        )
     }
 }
 

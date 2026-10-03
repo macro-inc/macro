@@ -39,6 +39,7 @@ pub mod get_location;
 pub mod get_short_id;
 pub mod put_interaction;
 pub mod put_snapshot;
+pub mod sync_content_updated;
 pub mod system_skills;
 pub mod task_duplicates;
 pub mod team_share;
@@ -54,6 +55,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
+use entity_registry::NonUserOwners;
 use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
@@ -177,6 +179,8 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     pub creator: DefaultDocumentCreator<T>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
+    /// Whether a team bot with no acting user may own what it creates.
+    pub non_user_owners: NonUserOwners,
 }
 
 // Manual Clone impl so T, Svc, and Auth don't need to be Clone.
@@ -192,6 +196,7 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            non_user_owners: self.non_user_owners,
         }
     }
 }
@@ -205,6 +210,12 @@ impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for Arc<Svc> {
 impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for MacroAuthorizationState<Auth> {
     fn from_ref(state: &DocumentRouterState<T, Svc, Auth>) -> Self {
         state.authorization_state.clone()
+    }
+}
+
+impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for NonUserOwners {
+    fn from_ref(state: &DocumentRouterState<T, Svc, Auth>) -> Self {
+        state.non_user_owners
     }
 }
 

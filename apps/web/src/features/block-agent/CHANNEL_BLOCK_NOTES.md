@@ -154,8 +154,8 @@ Signals are the interface; no factory imports another factory's file — Channel
    at the bottom of every cached variant — but **only if the newest page has no
    `previous_cursor`** (i.e. we're actually at the bottom of the conversation, channel-messages.ts:278).
    Returns rollback context.
-2. **mutationFn**: `postMessage({ ..., nonce: optimisticId })` — server echoes the nonce in the WS broadcast.
-3. **onSuccess**: `replaceOptimisticMessage` swaps `optimisticId → data.id` in place (no refetch);
+2. **mutationFn**: `postMessage({ ..., id: optimisticId, nonce: optimisticId })` — the server keeps the id and echoes the nonce in the WS broadcast.
+3. **onSuccess**: no id swap, since the optimistic message already carries its final id (`newMessageId`);
    refresh soup entity so channel lists re-sort.
 4. **onError**: toast + `rollbackInsertChannelMessage` (remove the optimistic row).
 5. **onSettled**: `softInvalidateTargetCaches` — `invalidateQueries({ refetchType: 'inactive' })`,
@@ -236,7 +236,7 @@ and each `*InTargetCaches` helper applies the change to all three cache families
   Channel stores both `onChange`-mirrored snapshot and `onReady` handle in signals (Channel.tsx:204–207).
 - **Send** (Channel.tsx:623–648): `buildPostMessageSendPayload({ snapshot, participantIds })`
   (`Input/message-payload.ts:96`) expands mentions (`@here` fan-out, bot re-tagging) and maps
-  attachments; then `sendMessageMutation.mutate({ channelID, senderId, optimisticId: crypto.randomUUID(), ...payload }, { onError })`.
+  attachments; then `sendMessageMutation.mutate({ channelID, senderId, optimisticId: newMessageId(), ...payload }, { onError })`.
   - **Restore-on-error**: the input cleared itself on send; `onError` restores the failed
     snapshot via `handle.restoreSnapshot(snapshot)` — but only if the user hasn't typed new
     sendable content meanwhile (`hasSendableInputContent(current)` check, :643).
@@ -267,32 +267,26 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
    and exposes a small handle (`goToLatest`, `getStateSnapshot`, maybe `goToTurn`).
 2. **The factory decomposition.** Build the stateful surface as `create*` factories with
    accessor-in/accessor-out interfaces, composed in the root:
-   - `createAgentSessionFeed` — the analog of `createFoldedMessages` + `createMessageIndex`:
-     resource that fetches the log, opens the fold machine, follows live frames, and exposes a
-     reconciled *ordered* store of folded messages (the block needs an ordered list, not the
-     channel's `(sessionId, turn, author)` lookup — that shape exists in
-     `agent-session-stream.ts`'s sink; keep `reconcile()` so streaming appends don't remount rows).
-     Reuse `beginAgentSessionStream`/`followAgentSession` (or `subscribeAgentSessionLog`) —
-     the buffering seam and one-machine-per-session refcounting are already solved there;
-     do NOT refetch-per-frame.
-   - `createSessionStatusController` — session status / turn-in-flight / streaming signals
-     (derive from the feed's frames; this is our analog of `threadListScrollState` + typing).
-   - `createPermissionPrompts` — pending permission requests as a store keyed by request id,
-     with `respond(id, outcome)`; model it on `createDeleteMessageConfirmation` (a factory that
-     owns pending state *and* returns the UI component) if prompts render as a dialog, or on
-     `threadManager` if they render inline per-message.
-   - `createComposerController` — the busy/enabled state machine: analog of
-     `channelInputSnapshot`/`channelInputHandle` signals + `onSend` in Channel.tsx:623. Own
-     `isSending`/`isTurnRunning`, gate `onSend`, and implement **restore-on-error** exactly as
-     Channel does (restore snapshot only if input is still empty).
+   - `createAgentSession` (`context/create-agent-session.ts`) — the Solid face of the
+     shared `AgentSession` class (`lib/core/agent-session/AgentSession.ts`): the class owns
+     the fold machine, the realtime subscription, the REST calls, and *speculation*; the
+     wrapper owns a reconciled ordered store and applies fold events to it. One instance per
+     session id, refcounted across the block, the agents view, and the magic chip.
+   - There is no status or composer controller. "What is the agent doing" is the fold's
+     `metadata.turn` discriminant (`idle | starting | running | stopping | blocked |
+     disconnected`), and "is this message still on the wire" is `message.pending`. The
+     composer reads both and keeps no state.
+   - `createElicitationController` — the live question and the one POST that answers it.
+   - `createQueueController` — the server-side action queue, baselined once per socket.
 3. **Late-bound handles as signals** for anything the child publishes upward (input handle,
    scroll navigation), with `awaitCondition` in the adapter if orchestrator methods need them.
-4. **Optimistic send with nonce-style dedup.** When sending a prompt: append an optimistic
-   user-turn row to the feed store immediately, key it by a client id, and adopt/replace when
-   the corresponding frame (or server ack) arrives — the exact pattern of
-   `optimisticInsertChannelMessage` + `adoptAgentSessionPlaceholder`. The channel's prompt-echo
-   problem (`hide-duplicate-prompts.ts`, flagged as a stopgap in Channel.tsx:241–250) is the
-   cautionary tale: decide the dedup key (client nonce in the frame?) up front.
+4. **Optimistic send (implemented, in the fold).** `AgentSession.issue` speculates the
+   action into the machine before the POST: the machine forks its confirmed state, folds the
+   frame the harness will log (built by the same `AgentAction::to_runtime`), and marks the
+   derived messages `pending`. The confirmed row promotes it in place by action id (by
+   content for a stop), a foreign row rebases the suffix behind it, a failed POST retracts
+   it. Nothing is predicted about the runtime's answer: a pending stop reads as `stopping`,
+   never as a closed turn. See `crates/agent_fold/src/domain/speculation.rs`.
 5. **Scroll (implemented)**: reuse `ThreadList` directly, as described in section 5.
    If history restoration is later added, use its `measurements` snapshot contract,
    not the retired Virtua cache or a second pinning loop.

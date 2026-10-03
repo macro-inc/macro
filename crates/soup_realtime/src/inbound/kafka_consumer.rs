@@ -1,13 +1,15 @@
 //! Kafka consumer for entity events that change realtime Soup items.
 //!
-//! Delivery is at least once: offsets are committed only after successful
-//! domain processing. Malformed and recognized-but-irrelevant events are
-//! poison/ignored records and are committed so they cannot wedge a partition.
+//! Delivery is best effort with bounded retries: offsets are committed after
+//! successful domain processing or a logged terminal failure. Exhausted retries
+//! discard the rest of that event so it cannot wedge a partition. Malformed and
+//! recognized-but-irrelevant events are also committed. Cancellation leaves the
+//! in-flight event uncommitted; partial delivery and replay can produce duplicates.
 
 #[cfg(test)]
 mod test;
 
-use std::future::Future;
+use std::{future::Future, time::Duration};
 
 use crate::domain::{
     models::{Patch, SoupRealtimePatch},
@@ -21,10 +23,13 @@ use channels::domain::{
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
-use kafka_util::{GroupName, KafkaEventConsumer};
+use initiative::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
+use messages::domain::models::MessageParent;
+use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
@@ -32,12 +37,17 @@ use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use tokio_retry::{Retry, strategy::ExponentialBackoff};
+use tracing::Instrument as _;
 
 /// Consumer group used for Soup-affecting entity event offsets.
 struct SoupRealtimeConsumerGroup;
 
 impl GroupName for SoupRealtimeConsumerGroup {
     const GROUP_NAME: &'static str = "soup-realtime";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type SoupRealtimeKafkaAdapter = KafkaConsumerAdapter<SoupRealtimeConsumerGroup, DeclaredMacroEvent>;
@@ -51,7 +61,9 @@ macro_event_broker::declare_topics!(
         ChatMacroEvent,
         EmailMacroEvent,
         ChannelMacroEvent,
+        MessageMacroEvent,
         PropertyMacroEvent,
+        InitiativeMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -140,6 +152,27 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         | DocumentTopicEvent::Purged(_) => {}
     }
     updates
+}
+
+fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
+            vec![update(EntityType::Initiative, change.initiative_id)]
+        }
+        InitiativeTopicEvent::Purged { initiative_id } => {
+            vec![delete(EntityType::Initiative, initiative_id)]
+        }
+        InitiativeTopicEvent::TasksChanged(change) => {
+            let mut patches = Vec::new();
+            for membership in &change.changes {
+                push_unique_update(&mut patches, EntityType::Document, &membership.task_id);
+                for id in [membership.from, membership.to].into_iter().flatten() {
+                    push_unique_update(&mut patches, EntityType::Initiative, &id.to_string());
+                }
+            }
+            patches
+        }
+    }
 }
 
 fn patches_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimePatch> {
@@ -314,11 +347,15 @@ fn channel_and_thread_entities(
 fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityType> {
     match ReferencedShareItemType::from_raw(entity_type)? {
         ReferencedShareItemType::AgentSession => Some(EntityType::AgentSession),
+        // Databases use their own list and table-change gateway events.
+        ReferencedShareItemType::Database => None,
         ReferencedShareItemType::Document => Some(EntityType::Document),
         ReferencedShareItemType::Chat => Some(EntityType::Chat),
         ReferencedShareItemType::Project => Some(EntityType::Project),
         ReferencedShareItemType::EmailThread => Some(EntityType::EmailThread),
         ReferencedShareItemType::Call => Some(EntityType::Call),
+        // A shared event is previewed in place, never listed in the soup.
+        ReferencedShareItemType::CalendarEvent => None,
     }
 }
 
@@ -343,13 +380,37 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::MessagePosted(metadata) => {
-            let mut patches = channel_and_thread_entities(
-                metadata.channel_id,
-                metadata.message_id,
-                metadata.thread_id,
-            );
-            let channel = entity(EntityType::Channel, metadata.channel_id);
+        ChannelTopicEvent::ParticipantAdded(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::ParticipantRemoved(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::Created(metadata) => {
+            vec![update(EntityType::Channel, metadata.channel_id)]
+        }
+        ChannelTopicEvent::Deleted(metadata) => {
+            vec![delete(EntityType::Channel, metadata.channel_id)]
+        }
+    }
+}
+
+/// Message facts carry their parent. Channel messages are Soup items, so a
+/// channel post, edit, deletion, or attachment change patches the channel
+/// and its thread; document discussions are not Soup items and patch nothing.
+fn patches_from_message_event(event: &MessageTopicEvent) -> Vec<SoupRealtimePatch> {
+    let channel = |parent: &MessageParent| match parent {
+        MessageParent::Channel(channel_id) => Some(*channel_id),
+        _ => None,
+    };
+    match event {
+        MessageTopicEvent::Posted(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let mut patches =
+                channel_and_thread_entities(channel_id, metadata.message_id, metadata.thread_id);
+            let channel = entity(EntityType::Channel, channel_id);
             for mention in &metadata.mentions {
                 push_channel_reference_update(
                     &mut patches,
@@ -360,13 +421,17 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
             }
             patches
         }
-        ChannelTopicEvent::MessagePatched(metadata) => channel_and_thread_entities(
-            metadata.channel_id,
-            metadata.message_id,
-            metadata.thread_id,
-        ),
-        ChannelTopicEvent::MessageDeleted(metadata) => {
-            let channel = entity(EntityType::Channel, metadata.channel_id);
+        MessageTopicEvent::Patched(metadata) => match channel(&metadata.parent) {
+            Some(channel_id) => {
+                channel_and_thread_entities(channel_id, metadata.message_id, metadata.thread_id)
+            }
+            None => Vec::new(),
+        },
+        MessageTopicEvent::Deleted(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let channel = entity(EntityType::Channel, channel_id);
             let thread_patch = match metadata.thread_id {
                 Some(thread_id) => Patch::Updated(entity(EntityType::ChannelMessage, thread_id)),
                 None => Patch::Deleted(entity(EntityType::ChannelMessage, metadata.message_id)),
@@ -376,8 +441,11 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
                 SoupRealtimePatch::new(thread_patch, channel),
             ]
         }
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-            let channel = entity(EntityType::Channel, metadata.channel_id);
+        MessageTopicEvent::AttachmentCreated(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let channel = entity(EntityType::Channel, channel_id);
             let mut patches = vec![SoupRealtimePatch::for_entity(Patch::Updated(
                 channel.clone(),
             ))];
@@ -391,24 +459,12 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
             }
             patches
         }
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::ParticipantAdded(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::ParticipantRemoved(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::Created(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
-        }
-        ChannelTopicEvent::Deleted(metadata) => {
-            vec![delete(EntityType::Channel, metadata.channel_id)]
-        }
-        // Mentions carry no entity change beyond the message_posted event
-        // emitted alongside them.
-        ChannelTopicEvent::Mentioned(_) => Vec::new(),
+        MessageTopicEvent::AttachmentRemoved(metadata) => channel(&metadata.parent)
+            .map(|channel_id| vec![update(EntityType::Channel, channel_id)])
+            .unwrap_or_default(),
+        // Mentions carry no entity change beyond the posted fact emitted
+        // alongside them.
+        MessageTopicEvent::Mentioned(_) => Vec::new(),
     }
 }
 
@@ -421,8 +477,13 @@ fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<Ent
         PropertyEntityType::Document | PropertyEntityType::Task => Some(EntityType::Document),
         PropertyEntityType::Project => Some(EntityType::Project),
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
-        // Soup channels do not expose properties, and users are not Soup items.
-        PropertyEntityType::Channel | PropertyEntityType::User => None,
+        PropertyEntityType::Initiative => Some(EntityType::Initiative),
+        PropertyEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
+        // Soup channels do not expose properties; users and CRM contacts are
+        // not Soup items.
+        PropertyEntityType::Channel | PropertyEntityType::User | PropertyEntityType::Contact => {
+            None
+        }
     }
 }
 
@@ -440,6 +501,18 @@ fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePa
         }
         PropertyTopicEvent::EntityPropertyDeleted(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)
+        }
+        PropertyTopicEvent::EntityPropertiesCleared(metadata)
+            if metadata.entity_type == PropertyEntityType::Initiative
+                && metadata.actor_user_id.is_none()
+                && metadata.actor.is_none()
+                && metadata.on_behalf_of.is_none() =>
+        {
+            // Initiative deletion clears properties with an internal receipt after
+            // publishing Purged. The topics have no shared ordering; refreshing here
+            // could replace the deletion with a stale replica row. User/bot clears
+            // remain ordinary property updates below.
+            Vec::new()
         }
         PropertyTopicEvent::EntityPropertiesCleared(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)
@@ -467,39 +540,90 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             patches_from_channel_event(&event.event().event)
         }
+        DeclaredMacroEvent::InitiativeMacroEvent(event) => {
+            patches_from_initiative_event(&event.event().event)
+        }
+        DeclaredMacroEvent::MessageMacroEvent(event) => {
+            patches_from_message_event(&event.event().event)
+        }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)
         }
     }
 }
 
+/// Total publication attempts per patch before discarding its source event.
+const MAX_NOTIFY_ATTEMPTS: usize = 5;
+
+/// Retries after one, two, four, and eight seconds.
+fn notify_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(2)
+        .factor(500)
+        .take(MAX_NOTIFY_ATTEMPTS - 1)
+}
+
 /// Commit-safe outcome after processing one entity event.
 enum EventOutcome {
-    /// Every affected item was successfully sent through the domain service.
+    /// Every affected item was successfully published through the domain service.
     Notified,
     /// A recognized event does not change a Soup-visible entity.
     Ignored,
+    /// A patch exhausted its retries; the remaining event was logged and discarded.
+    Dropped,
 }
 
-#[tracing::instrument(skip(service, event), err)]
-fn process_event<S: SoupRealtimeService>(
+#[tracing::instrument(skip(service, event, commit))]
+async fn process_event<S: SoupRealtimeService>(
     service: &S,
     event: &DeclaredMacroEvent,
-) -> Result<EventOutcome, Report> {
+    commit: impl FnOnce(),
+) -> EventOutcome {
     let patches = patches_from_event(event);
-    if patches.is_empty() {
+    let mut outcome = if patches.is_empty() {
         tracing::trace!("ignoring event without a Soup patch");
-        return Ok(EventOutcome::Ignored);
+        EventOutcome::Ignored
+    } else {
+        EventOutcome::Notified
+    };
+
+    let patch_count = patches.len();
+    for (index, patch) in patches.into_iter().enumerate() {
+        let result = Retry::start(notify_retry_strategy(), || {
+            service.notify_users(patch.clone())
+        })
+        .await
+        .inspect_err(|error| {
+            tracing::error!(
+                error = ?error,
+                patch = ?patch,
+                attempts = MAX_NOTIFY_ATTEMPTS,
+                skipped_patch_count = patch_count - index - 1,
+                "discarding realtime Soup source event after exhausting notification retries"
+            );
+        });
+        if result.is_err() {
+            outcome = EventOutcome::Dropped;
+            break;
+        }
     }
 
-    for patch in patches {
-        service.notify_users(patch)?;
-    }
-    Ok(EventOutcome::Notified)
+    commit();
+    outcome
 }
 
 fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage<'_>) {
-    let _ = consumer.inner().commit_message(message, CommitMode::Async);
+    let _ = consumer
+        .inner()
+        .commit_message(message, CommitMode::Async)
+        .inspect_err(|error| {
+            tracing::error!(
+                error = ?error,
+                topic = message.topic(),
+                partition = message.partition(),
+                offset = message.offset(),
+                "failed to commit realtime Soup source offset"
+            );
+        });
 }
 
 impl SoupRealtimeServiceImpl {
@@ -507,9 +631,12 @@ impl SoupRealtimeServiceImpl {
     ///
     /// The consumer subscribes to every existing entity topic with events that
     /// can change a Soup item under the `soup-realtime` group. It commits malformed
-    /// and recognized-but-ignored events, and commits affecting events only after
-    /// [`SoupRealtimeService`] succeeds. Exhausted service retries return without
-    /// committing so a future supervisor restart can redeliver the record.
+    /// and recognized-but-ignored events immediately. Affecting events are committed
+    /// after every patch succeeds or a patch exhausts its five publication attempts.
+    /// Exhaustion logs an error and discards the remaining event before committing,
+    /// intentionally preferring consumer progress over delivery during persistent
+    /// failures. Shutdown during processing or retry backoff leaves the event
+    /// uncommitted for replay.
     #[tracing::instrument(skip(self, shutdown), fields(brokers), err)]
     pub async fn run_entity_update_consumer(
         &self,
@@ -537,14 +664,17 @@ impl SoupRealtimeServiceImpl {
                 result = consumer.recv() => {
                     let Ok(message) = result else { continue; };
                     let kafka_message = message.inner();
-                    let _message_span = tracing::info_span!(
+                    let span = tracing::info_span!(
                         "realtime_soup_source_event",
                         topic = kafka_message.topic(),
                         partition = kafka_message.partition(),
                         offset = kafka_message.offset(),
-                    )
-                    .entered();
-                    let event = match message.decode_payload() {
+                    );
+                    let decoded = {
+                        let _guard = span.enter();
+                        message.decode_payload()
+                    };
+                    let event = match decoded {
                         Ok(event) => event,
                         Err(_) => {
                             commit_logged(&consumer, kafka_message);
@@ -552,9 +682,15 @@ impl SoupRealtimeServiceImpl {
                         }
                     };
 
-                    let _ = process_event(self,&event);
-
-                    commit_logged(&consumer, kafka_message);
+                    // Do not advance until delivery succeeds or the event reaches
+                    // the logged terminal-drop outcome after bounded retries.
+                    tokio::select! {
+                        biased;
+                        _ = &mut shutdown => break,
+                        _ = process_event(self, &event, || {
+                            commit_logged(&consumer, kafka_message);
+                        }).instrument(span) => {}
+                    }
                 }
             }
         }

@@ -3,10 +3,11 @@ import type { CacheRequest } from '../protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   type CacheEngineRuntimeOptions,
-  installCacheEngineWorker,
+  installCacheEngineWorker as installRuntime,
 } from './cache-engine-runtime';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  cacheDatabaseIdentity,
   databaseOwnerLockName,
   type PageToEngineEnvelope,
 } from './coordinator-protocol';
@@ -18,10 +19,13 @@ import {
   EFFECT_WORKER_REQUEST_TAG,
   EFFECT_WORKER_RESPONSE_TAG,
 } from './effect-worker-transport';
+import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
+import type { CacheWasmModule } from './wasm-module';
 import type { CacheWorkerCoreOptions } from './worker-core';
 
 class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
+  autoOpen = true;
   closed = false;
   started = false;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
@@ -29,6 +33,18 @@ class FakePort extends EventTarget {
 
   postMessage(message: unknown): void {
     this.messages.push(message);
+    const payload = effectPayload(message) as
+      | { kind?: string; ownerEpoch?: number }
+      | undefined;
+    if (this.autoOpen && payload?.kind === 'owner-lock-acquired') {
+      queueMicrotask(() =>
+        this.receive({
+          ...version,
+          kind: 'open-engine',
+          ownerEpoch: payload.ownerEpoch,
+        })
+      );
+    }
   }
 
   close(): void {
@@ -70,6 +86,33 @@ const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
 
+type RuntimeCore = ReturnType<
+  NonNullable<CacheEngineRuntimeOptions['createCore']>
+>;
+
+/** Like CacheWorkerCore over WASM: initialization holds the owner lock and
+ * asks for the storage grant before its first storage access. */
+const installCacheEngineWorker = (options: CacheEngineRuntimeOptions): void => {
+  const createCore = options.createCore;
+  installRuntime({
+    ...options,
+    createCore:
+      createCore &&
+      ((coreOptions: CacheWorkerCoreOptions): RuntimeCore => {
+        const core = createCore(coreOptions);
+        return {
+          ...core,
+          handleRequest: async (port, request) => {
+            if (request.kind === 'init') {
+              await coreOptions.onOwnerLockAcquired?.();
+            }
+            return await core.handleRequest(port, request);
+          },
+        };
+      }),
+  });
+};
+
 const activation = (
   databaseAction: 'open-existing' | 'wipe-before-open' = 'open-existing'
 ): PageToEngineEnvelope => ({
@@ -109,6 +152,7 @@ const registerTab = async (
     scope: 'scope',
     tabId,
     livenessLockName: `graphql-cache-tab:scope:${tabId}`,
+    buildTime: 0,
   });
 };
 
@@ -171,6 +215,261 @@ const cacheResponses = (port: FakePort) =>
   );
 
 describe('cache engine worker runtime', () => {
+  it('does not touch storage until it holds the owner lock and the coordinator grants opening', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    direct.autoOpen = false;
+    let finishLoading!: () => void;
+    const prepare = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoading = resolve;
+        })
+    );
+    const handleRequest = vi.fn(async (port, request: CacheRequest) => {
+      port.postMessage({ id: request.id, ok: true, result: null });
+    });
+    installCacheEngineWorker({
+      scope,
+      ownerLockIsHeld: async () => true,
+      createCore: () => ({
+        prepare,
+        handleRequest,
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(handleRequest).not.toHaveBeenCalled();
+    expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(0);
+    finishLoading();
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'owner-lock-acquired')).toHaveLength(1)
+    );
+    expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(1);
+    expect(handleRequest).not.toHaveBeenCalled();
+    direct.receive({ ...version, kind: 'open-engine', ownerEpoch: 7 });
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+    );
+    expect(handleRequest).toHaveBeenCalledOnce();
+  });
+
+  it('fatals on a storage grant before it holds the owner lock', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    direct.autoOpen = false;
+    const handleRequest = vi.fn();
+    installCacheEngineWorker({
+      scope,
+      createCore: () => ({
+        prepare: () => new Promise<void>(() => undefined),
+        handleRequest,
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    direct.receive({ ...version, kind: 'open-engine', ownerEpoch: 7 });
+
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-fatal')).toEqual([
+        expect.objectContaining({ reason: 'unexpected database-open grant' }),
+      ])
+    );
+    expect(handleRequest).not.toHaveBeenCalled();
+  });
+
+  it('reports failed asset loading without initializing or opening storage', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    const handleRequest = vi.fn();
+    installCacheEngineWorker({
+      scope,
+      createCore: () => ({
+        prepare: async () => {
+          throw new Error('WASM download failed');
+        },
+        handleRequest,
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'activation-failed')).toHaveLength(1)
+    );
+    expect(handleRequest).not.toHaveBeenCalled();
+    expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(0);
+    expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(0);
+  });
+
+  it('retries a busy owner lock, reporting each attempt, and opens once it frees', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    const sleep = vi.fn(async (_delayMs: number) => undefined);
+    installRuntime({
+      scope,
+      sleep,
+      ownerLockIsHeld: async () => true,
+      createCore: (coreOptions) => ({
+        handleRequest: async (port, request) => {
+          if (request.kind === 'init') {
+            for (const attempt of [1, 2]) {
+              await coreOptions.onOwnerLockBusy?.(attempt);
+            }
+            await coreOptions.onOwnerLockAcquired?.();
+          }
+          port.postMessage({ id: request.id, ok: true, result: null });
+        },
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+    );
+    expect(messagesOfKind(direct, 'owner-lock-busy')).toEqual([
+      expect.objectContaining({ tabId: 'tab-a', ownerEpoch: 7 }),
+      expect.objectContaining({ tabId: 'tab-a', ownerEpoch: 7 }),
+    ]);
+    expect(sleep.mock.calls.map(([delayMs]) => delayMs)).toEqual(
+      OWNER_LOCK_RETRY_DELAYS_MS.slice(0, 2)
+    );
+  });
+
+  it('gives up on an owner lock that stays busy without touching storage', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    installRuntime({
+      scope,
+      sleep: async () => undefined,
+      createCore: (coreOptions) => ({
+        handleRequest: async (port, request) => {
+          try {
+            for (let attempt = 1; ; attempt += 1) {
+              await coreOptions.onOwnerLockBusy?.(attempt);
+            }
+          } catch (error) {
+            port.postMessage({
+              id: request.id,
+              ok: false,
+              error: (error as Error).message,
+            });
+          }
+        },
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'owner-lock-unavailable')).toEqual([
+        {
+          ...version,
+          kind: 'owner-lock-unavailable',
+          tabId: 'tab-a',
+          ownerEpoch: 7,
+        },
+      ])
+    );
+    expect(messagesOfKind(direct, 'owner-lock-busy')).toHaveLength(
+      OWNER_LOCK_RETRY_DELAYS_MS.length + 1
+    );
+    expect(messagesOfKind(direct, 'activation-failed')).toHaveLength(0);
+    expect(messagesOfKind(direct, 'owner-lock-acquired')).toHaveLength(0);
+  });
+
+  it('reports database files another context kept open as storage-busy', async () => {
+    for (const databaseAction of [
+      'open-existing',
+      'wipe-before-open',
+    ] as const) {
+      const scope = new FakeWorkerScope();
+      const direct = new FakePort();
+      installRuntime({
+        scope,
+        ownerLockIsHeld: async () => true,
+        createCore: (coreOptions) => ({
+          handleRequest: async (port, request) => {
+            await coreOptions.onOwnerLockAcquired?.();
+            coreOptions.onStorageBusy?.();
+            port.postMessage({
+              id: request.id,
+              ok: false,
+              error:
+                'OPFS sync handle open failed (NoModificationAllowedError)',
+            });
+          },
+          addPort: vi.fn(),
+          drain: vi.fn(),
+        }),
+      });
+      scope.activate(activation(databaseAction), direct);
+
+      await vi.waitFor(() =>
+        expect(messagesOfKind(direct, 'activation-failed')).toEqual([
+          expect.objectContaining({
+            tabId: 'tab-a',
+            ownerEpoch: 7,
+            reason: 'OPFS sync handle open failed (NoModificationAllowedError)',
+            failureCode: 'storage-busy',
+          }),
+        ])
+      );
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(0);
+    }
+  });
+
+  it('deletes stale databases when started as a cleanup worker', async () => {
+    const scope = new FakeWorkerScope();
+    const reply = new FakePort();
+    const removeStaleCacheDatabase = vi.fn(
+      async (_scope: string, identity: string) =>
+        identity === 'graphql-cache:scope:s0.v0.t1'
+          ? { outcome: 'removed' as const }
+          : { outcome: 'queued-mutations' as const, queuedMutations: 2 }
+    );
+    installRuntime({
+      scope,
+      loadWasm: async () =>
+        ({ removeStaleCacheDatabase }) as unknown as CacheWasmModule,
+      listOpfsRootNames: async () => [
+        'graphql-cache:scope:s0.v0.t1',
+        'graphql-cache:scope:s0.v0.t1-wal',
+        'graphql-cache:scope:s0.v0.t0',
+        cacheDatabaseIdentity('scope'),
+        `${cacheDatabaseIdentity('scope')}-wal`,
+      ],
+    });
+
+    scope.onmessage?.({
+      data: { ...version, kind: 'remove-stale-databases', scope: 'scope' },
+      ports: [reply],
+    } as unknown as MessageEvent);
+
+    await vi.waitFor(() => expect(scope.closed).toBe(true));
+    expect(removeStaleCacheDatabase.mock.calls).toEqual([
+      ['scope', 'graphql-cache:scope:s0.v0.t1'],
+      ['scope', 'graphql-cache:scope:s0.v0.t0'],
+    ]);
+    expect(reply.messages).toEqual([
+      {
+        ...version,
+        kind: 'stale-databases-removed',
+        removed: 1,
+        inUse: 0,
+        keptWithQueuedMutations: 1,
+        failed: false,
+      },
+    ]);
+    expect(reply.closed).toBe(true);
+  });
+
   it('selects atomic recovery-open and only proves wipe after initialization', async () => {
     const scope = new FakeWorkerScope();
     const direct = new FakePort();

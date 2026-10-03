@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 244
 expression: messages
 input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
 ---
@@ -20,6 +21,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -469,6 +471,10 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                                 ],
                             },
                         ),
+                        result: Some(
+                            String("The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.\n\nNote: The user's next message may contain a correction or preference. Pay close attention — if they explain what went wrong or how they'd prefer you to work, consider saving that to memory for future sessions."),
+                        ),
+                        error: None,
                     },
                 },
             ],
@@ -476,6 +482,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -493,6 +500,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -623,6 +631,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -640,6 +649,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -823,6 +833,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -840,6 +851,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -1906,6 +1918,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -1923,6 +1936,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -1950,6 +1964,10 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                                 "skill": String("cloud-storage-hexagonal-architecture"),
                             },
                         ),
+                        result: Some(
+                            String("Launching skill: cloud-storage-hexagonal-architecture"),
+                        ),
+                        error: None,
                     },
                 },
                 ToolUse {
@@ -2725,6 +2743,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -2742,6 +2761,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -3633,10 +3653,37 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
             6,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                a3e2cbd5-6886-4a2b-a3d1-2ef1fac45288,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetConfigOption {
+                        config_id: "mode",
+                        value: "bypassPermissions",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+        pending: false,
+    },
+    FoldedMessage {
+        id: TurnId(
+            7,
         ),
         author: User {
             user_id: None,
@@ -3657,5 +3704,32 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
             ],
         },
         stop: None,
+        pending: false,
+    },
+    FoldedMessage {
+        id: TurnId(
+            8,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                0937d42c-b2e1-49fe-bd3f-4914ae2075e2,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetConfigOption {
+                        config_id: "effort",
+                        value: "max",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+        pending: false,
     },
 ]

@@ -29,11 +29,12 @@ export type ModelCatalog = {
 const RECOMMENDED_PREFIXES = [
   'Auto',
   'Cursor Grok 4.6',
-  'Claude Opus 5',
-  'Claude Sonnet 5',
+  'Opus 5.5',
+  'Sonnet 5.5',
   'GPT-5.6 Sol',
   'Gemini 3.8 Flash',
   'Codex',
+  'GLM 5.3',
   'Kimi K3',
 ] as const;
 
@@ -195,11 +196,16 @@ export function modelFamilyHint(
   return family === option.label ? undefined : family;
 }
 
-/** Whether a search query hits this model by name or by its heading. */
+/**
+ * Whether a search query hits this model by name, by its heading, or by its
+ * id — a name displayed as "Sonnet 5.5" should still be findable by typing the
+ * vendor out of its `anthropic/claude-sonnet-5-5` slug.
+ */
 export function matchesModelQuery(option: CatalogModelOption, query: string) {
   const family = option.group ?? inferModelFamily(option.label);
   return (
     option.label.toLowerCase().includes(query) ||
-    family.toLowerCase().includes(query)
+    family.toLowerCase().includes(query) ||
+    option.id.toLowerCase().includes(query)
   );
 }

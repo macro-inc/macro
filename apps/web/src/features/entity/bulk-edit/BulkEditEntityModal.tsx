@@ -1,6 +1,6 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
-import { Dialog, Surface } from '@ui';
+import { ActionDialogShell, Dialog } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -8,7 +8,7 @@ import {
   type Setter,
   Show,
 } from 'solid-js';
-import { BulkDeleteView } from './BulkDeleteView';
+import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
 import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
@@ -20,6 +20,7 @@ const BulkEditEntityModalContent = (props: {
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 }) => {
   const handleFinish = () => {
     props.setIsOpen(false);
@@ -36,6 +37,8 @@ const BulkEditEntityModalContent = (props: {
   return (
     <Dialog
       open={props.isOpen()}
+      position="center"
+      class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
       onOpenChange={(open) => {
         if (!open) {
           handleCancel();
@@ -43,36 +46,33 @@ const BulkEditEntityModalContent = (props: {
         props.setIsOpen(open);
       }}
     >
-      <Surface depth={2} class="rounded-xl">
-        <div class="*:max-h-[75vh]">
-          <div class="flex flex-col text-ink">
-            <Show when={props.view === 'rename'}>
-              <BulkRenameEntitiesView
-                entities={props.entities}
-                onFinish={handleFinish}
-                onCancel={handleCancel}
-                onError={handleError}
-              />
-            </Show>
-            <Show when={props.view === 'moveToProject'}>
-              <BulkMoveToProjectView
-                entities={props.entities}
-                onFinish={handleFinish}
-                onCancel={handleCancel}
-                onError={handleError}
-              />
-            </Show>
-            <Show when={props.view === 'delete'}>
-              <BulkDeleteView
-                entities={props.entities}
-                onFinish={handleFinish}
-                onCancel={handleCancel}
-                onError={handleError}
-              />
-            </Show>
-          </div>
-        </div>
-      </Surface>
+      <ActionDialogShell>
+        <Show when={props.view === 'rename'}>
+          <BulkRenameEntitiesView
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onError={handleError}
+          />
+        </Show>
+        <Show when={props.view === 'moveToProject'}>
+          <BulkMoveToProjectView
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onError={handleError}
+          />
+        </Show>
+        <Show when={props.view === 'delete'}>
+          <BulkDeleteView
+            onPartialDelete={props.onPartialDelete}
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onError={handleError}
+          />
+        </Show>
+      </ActionDialogShell>
     </Dialog>
   );
 };
@@ -105,6 +105,7 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'entity-edit',
@@ -116,6 +117,7 @@ export const openBulkEditModal = (props: {
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 }) => {
   setModalOpen(true);
   setGlobalModalProps(props);
@@ -155,6 +157,7 @@ export const GlobalBulkEditEntityModal = () => {
           onFinish={handleFinish}
           onCancel={handleCancel}
           onError={handleError}
+          onPartialDelete={props().onPartialDelete}
         />
       )}
     </Show>

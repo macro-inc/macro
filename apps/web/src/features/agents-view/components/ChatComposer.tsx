@@ -1,10 +1,23 @@
 import type { AgentInputProps } from '@app/features/block-agent/ui';
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '@app/features/dictation/components/dictation-controls';
+import { createComposerDictation } from '@app/features/dictation/composer-dictation';
+import { InputProvider } from '@channel/Input/context';
+import { Input } from '@channel/Input/Input';
+import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
+import PlusIcon from '@phosphor/plus.svg';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
@@ -20,13 +33,19 @@ import { createChatComposerTip } from '../primitives/chat-composer-tip';
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
   autoFocus?: boolean;
+  collapseOnBlur?: boolean;
+  /** Portaled controls retain their anchor when focus leaves the composer. */
+  controlsOpen?: boolean;
   registerFocus?: (focus: () => void) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
   selector: JSX.Element;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
   session?: AgentInputProps;
+  attachments?: InputAttachmentData[];
+  onAttachFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   drawer?: JSX.Element;
   drawerOpen?: boolean;
   placeholder?: string;
@@ -35,21 +54,49 @@ export function ChatComposer(props: {
     () => props.draft.trim().length === 0,
     !props.session
   );
+  const attachments = () => props.attachments ?? [];
+  const hasContent = () => !!props.draft.trim() || attachments().length > 0;
+  const hasPendingAttachments = () =>
+    attachments().some((file) => file.pending);
+  const canAttach = () => !!props.onAttachFiles && !disabled();
+  const attachFiles = (files: File[]) => {
+    if (canAttach() && files.length > 0) props.onAttachFiles?.(files);
+  };
+  const [isDraggedOver, setIsDraggedOver] = createSignal(false);
+  const inputCommands: InputCommands = {
+    send: async () => false,
+    attachFiles: async (files) => attachFiles(files),
+    removeAttachment: (attachment) => props.onRemoveAttachment?.(attachment),
+    toggleFormatRibbon: () => {},
+    close: () => {},
+  };
+  const [content, setContent] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
-  createResizeObserver(layout, (_, element) => {
+  createResizeObserver(content, (_, element) => {
+    // Content held offscreen by a pending Suspense reports 0; pinning that
+    // would animate the surface up from nothing once it attaches.
+    if (!element.isConnected) return;
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
+  const [focused, setFocused] = createSignal(false);
+  const collapsed = () =>
+    isTouchDevice() &&
+    props.collapseOnBlur &&
+    !focused() &&
+    !props.controlsOpen;
+  const drawerOpen = () => props.drawerOpen && !collapsed();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
-    !props.draft.trim() &&
-    props.session?.busy &&
-    props.session.hasQueuedMessages &&
+    !hasContent() &&
+    !props.session?.sendNextHeld &&
+    props.session?.hasQueuedMessages &&
     props.session.onStop &&
     !disabled();
   const editor = buildConfig('chat')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
     .withMentions({ showOpenTabs: true, block: 'agent' })
     .withEmojis()
@@ -57,9 +104,19 @@ export function ChatComposer(props: {
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        void handleFileFolderDrop(files, directories, (entries) =>
+          attachFiles(entries.map((entry) => entry.file))
+        );
+      },
+    })
     .onEnter((_event, markdown) => {
-      if (markdown.trim()) send(markdown);
-      else if (canSendNext()) props.session?.onStop?.();
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
+      if (markdown.trim() || attachments().length > 0) send(markdown);
+      else if (canSendNext()) sendNext();
       return true;
     })
     .onFocusLeave({
@@ -80,8 +137,16 @@ export function ChatComposer(props: {
     editor.withSkills();
   }
 
+  const dictation = createComposerDictation(() => editor.lexical);
+
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
+    mode: () =>
+      collapsed()
+        ? 'collapsed'
+        : isTouchDevice() && props.collapseOnBlur
+          ? 'expanded'
+          : 'auto',
   });
 
   // Apply host-supplied drafts (Home suggestions) to the existing editor.
@@ -91,6 +156,12 @@ export function ChatComposer(props: {
   });
 
   onMount(() => {
+    if (props.collapseOnBlur) {
+      makeEventListener(document, 'pointerdown', (event) => {
+        if (event.target instanceof Node && !container?.contains(event.target))
+          setFocused(false);
+      });
+    }
     props.registerFocus?.(() => editor.controls.focus());
     props.session?.registerFocus?.(() => editor.controls.focus());
     props.session?.registerQuoteInsert?.((text) => {
@@ -107,10 +178,21 @@ export function ChatComposer(props: {
 
   const send = (markdown = editor.controls.getMarkdown()) => {
     const prompt = markdown.trim();
-    if (!prompt || disabled()) return;
+    if (
+      (!prompt && attachments().length === 0) ||
+      hasPendingAttachments() ||
+      dictation.active() ||
+      disabled()
+    )
+      return;
+    const attached = attachments();
     editor.controls.clear();
     props.onDraftChange('');
-    props.onSend(prompt);
+    props.onSend(prompt, attached);
+  };
+
+  const sendNext = () => {
+    if (canSendNext()) (props.session?.onSendNext ?? props.session?.onStop)?.();
   };
 
   const focusEditor = (event: Event) => {
@@ -126,111 +208,199 @@ export function ChatComposer(props: {
   };
 
   return (
-    <div ref={container} data-keep-keyboard class="min-w-0">
-      <ComposerSurface
-        as="div"
-        data-agent-composer="chat"
-        class="relative z-10 min-w-0 rounded-[32px] transition-[height] duration-150 ease-out motion-reduce:transition-none"
-        style={{ height: height() === undefined ? undefined : `${height()}px` }}
-        onPointerDown={focusEditor}
-        onMouseDown={focusEditor}
+    <InputProvider
+      value={{
+        view: () => ({
+          mode: 'channel',
+          attachments: attachments(),
+          isDraggedOver: isDraggedOver(),
+          hasPendingAttachments: hasPendingAttachments(),
+        }),
+        commands: inputCommands,
+      }}
+    >
+      <div
+        ref={container}
+        data-keep-keyboard
+        class="min-w-0"
+        onFocusIn={() => setFocused(true)}
+        onFocusOut={(event) => {
+          // iOS control taps can blur with no relatedTarget before click.
+          // Collapse only for a known outside focus or pointer interaction.
+          if (
+            event.relatedTarget instanceof Node &&
+            !event.currentTarget.contains(event.relatedTarget)
+          )
+            setFocused(false);
+        }}
       >
-        <div
-          ref={setLayout}
-          data-composer-compact={isCompact()}
-          class="group/composer flex min-w-0 data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch items-end gap-2 px-4 py-3"
+        <ComposerSurface
+          as="div"
+          data-agent-composer="chat"
+          class="relative z-10 min-w-0 rounded-[32px] touch:island touch:bg-chrome transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
+          style={{
+            height: height() === undefined ? undefined : `${height()}px`,
+          }}
+          onPointerDown={focusEditor}
+          onMouseDown={focusEditor}
         >
-          <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-1">
-            <MarkdownShell
-              class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
-              config={editor}
-              initialValue={props.draft}
-              placeholder={props.placeholder ?? tip()}
-              refFn={(element) =>
-                element.setAttribute('aria-label', 'Message the agent')
-              }
-              autofocus={
-                !isTouchDevice() &&
-                (props.autoFocus ?? props.session?.autofocus ?? true)
-              }
-            />
-          </div>
-          <div
-            data-composer-controls
-            class="flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none shrink-0 items-center"
-            role="group"
-            aria-label="Composer settings"
+          <Input.DropZone
+            onDragStart={(valid) => canAttach() && setIsDraggedOver(valid)}
+            onDragEnd={() => setIsDraggedOver(false)}
           >
-            <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-              {props.selector}
-              <Show
-                when={
-                  props.session?.busy &&
-                  props.session.onStop &&
-                  !props.draft.trim()
-                }
-                fallback={
-                  <SendButton
-                    appearance="composer"
-                    aria-label="Send"
-                    title={props.blockedReason}
-                    disabled={!props.draft.trim() || disabled()}
-                    onClick={() => send()}
-                  />
-                }
-              >
-                <Show
-                  when={canSendNext()}
-                  fallback={
-                    <Button
-                      variant="strong"
-                      size="icon-composer"
-                      label="Stop"
-                      disabled={disabled()}
-                      onClick={() => props.session?.onStop?.()}
-                    >
-                      <div class="size-3.5 rounded-sm bg-current" />
-                    </Button>
-                  }
-                >
-                  <SendButton
-                    appearance="composer"
-                    aria-label="Send next queued message"
-                    tooltip="Send next queued message"
-                    shortcut="Enter"
-                    onClick={() => props.session?.onStop?.()}
-                  />
-                </Show>
-              </Show>
-            </div>
-          </div>
-        </div>
-      </ComposerSurface>
-      <Show when={props.drawer}>
-        <div
-          class="composer-drawer"
-          data-open={props.drawerOpen ? '' : undefined}
-          aria-hidden={!props.drawerOpen}
-          inert={!props.drawerOpen}
-        >
-          <div class="composer-drawer-inner">
+            <Show when={canAttach()}>
+              <Input.DropOverlay
+                class="rounded-[32px]"
+                hint="Drop files here to send them to the agent"
+              />
+            </Show>
             <div
-              class="composer-drawer-content"
-              role="group"
-              aria-label="Repository settings"
+              ref={setContent}
+              data-composer-content
+              inert={dictation.active()}
+              classList={{ invisible: dictation.active() }}
             >
-              {props.drawer}
+              <Input.Attachments kind="media" class="pb-0" />
+              <Input.Attachments kind="document" class="pb-0" />
+              {/* Expanded text keeps the compact row's vertical inset:
+                  7.5px padding + half the button/line-height difference. */}
+              <div
+                ref={setLayout}
+                data-composer-compact={!drawerOpen() && isCompact()}
+                data-composer-coding={drawerOpen() || undefined}
+                data-composer-collapsed={collapsed() || undefined}
+                class="group/composer flex min-w-0 data-[composer-compact=false]:flex-wrap items-end gap-2 p-[7.5px] pl-3 data-[composer-compact=false]:pb-2.5 data-[composer-compact=false]:px-3 data-[composer-compact=false]:pt-[calc(7.5px_+_(33.75px_-_1.5rem)/2)] data-[composer-collapsed=true]:h-(--mobile-chrome-button-size) data-[composer-collapsed=true]:items-center data-[composer-collapsed=true]:py-0 data-[composer-collapsed=true]:pl-3.5 data-[composer-collapsed=true]:pr-[9.5px]"
+              >
+                <Show when={props.onAttachFiles}>
+                  <div
+                    data-composer-controls
+                    classList={{ hidden: !!collapsed() }}
+                    class="shrink-0 group-data-[composer-compact=false]/composer:order-1"
+                  >
+                    <Input.AttachFilesAction
+                      accept={null}
+                      disabled={disabled()}
+                    >
+                      <PlusIcon />
+                    </Input.AttachFilesAction>
+                  </div>
+                </Show>
+                <div
+                  classList={{
+                    'max-h-6 overflow-hidden': !!collapsed(),
+                    'max-h-[min(15rem,30dvh)]': !collapsed(),
+                  }}
+                  class="min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full overflow-y-auto px-[9.375px] group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px]"
+                >
+                  <MarkdownShell
+                    class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+                    config={editor}
+                    initialValue={props.draft}
+                    placeholder={
+                      isTouchDevice() ? '' : (props.placeholder ?? tip())
+                    }
+                    refFn={(element) =>
+                      element.setAttribute('aria-label', 'Message the agent')
+                    }
+                    autofocus={
+                      !isTouchDevice() &&
+                      (props.autoFocus ?? props.session?.autofocus ?? true)
+                    }
+                  />
+                </div>
+                <div
+                  data-composer-controls
+                  class="order-2 flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none group-data-[composer-compact=false]/composer:flex-1 shrink-0 items-center gap-2"
+                  role="group"
+                  aria-label="Composer settings"
+                >
+                  <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
+                    <div class="flex min-w-0 items-center gap-2">
+                      {props.selector}
+                      <div class={collapsed() ? 'hidden' : 'contents'}>
+                        <DictationButton
+                          dictation={dictation}
+                          disabled={disabled()}
+                        />
+                      </div>
+                    </div>
+                    <Show
+                      when={
+                        (props.session?.busy || canSendNext()) &&
+                        props.session?.onStop &&
+                        !hasContent()
+                      }
+                      fallback={
+                        <SendButton
+                          appearance="composer"
+                          aria-label="Send"
+                          title={props.blockedReason}
+                          disabled={
+                            !hasContent() ||
+                            hasPendingAttachments() ||
+                            disabled()
+                          }
+                          onClick={() => send()}
+                        />
+                      }
+                    >
+                      <Show
+                        when={canSendNext()}
+                        fallback={
+                          <Button
+                            variant="strong"
+                            size="icon-composer"
+                            label="Stop"
+                            disabled={disabled()}
+                            onClick={() => props.session?.onStop?.()}
+                          >
+                            <div class="size-3.5 rounded-sm bg-current" />
+                          </Button>
+                        }
+                      >
+                        <SendButton
+                          appearance="composer"
+                          aria-label="Send next queued message"
+                          tooltip="Send next queued message"
+                          shortcut="Enter"
+                          onClick={sendNext}
+                        />
+                      </Show>
+                    </Show>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Input.DropZone>
+          <DictationPanel dictation={dictation} />
+        </ComposerSurface>
+        <DictationFeedback dictation={dictation} />
+        <Show when={props.drawer}>
+          <div
+            class="composer-drawer"
+            data-open={drawerOpen() ? '' : undefined}
+            aria-hidden={!drawerOpen()}
+            inert={!drawerOpen()}
+          >
+            <div class="composer-drawer-inner">
+              <div
+                class="composer-drawer-content"
+                role="group"
+                aria-label="Repository settings"
+              >
+                {props.drawer}
+              </div>
             </div>
           </div>
-        </div>
-      </Show>
-    </div>
+        </Show>
+      </div>
+    </InputProvider>
   );
 }
 
 /** Adapt the session's controls to the same input used for a new Chat. */
 export function ChatSessionInput(props: AgentInputProps) {
-  const [draft, setDraft] = createSignal('');
+  const [draft, setDraft] = createSignal(props.initialInput ?? '');
   return (
     <ChatComposer
       draft={draft()}
@@ -238,6 +408,9 @@ export function ChatSessionInput(props: AgentInputProps) {
       selector={props.modelControl}
       onSend={props.onSend}
       session={props}
+      attachments={props.attachments}
+      onAttachFiles={props.onAttachFiles}
+      onRemoveAttachment={props.onRemoveAttachment}
     />
   );
 }

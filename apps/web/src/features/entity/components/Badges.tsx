@@ -1,9 +1,15 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayName, tryMacroId } from '@core/user';
+import { formatTimeZoneAbbreviation } from '@core/util/date';
+import ClockIcon from '@phosphor/clock.svg';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
+import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
+import { format } from 'date-fns/format';
+import { isThisYear } from 'date-fns/isThisYear';
+import { isToday } from 'date-fns/isToday';
+import { isTomorrow } from 'date-fns/isTomorrow';
 import type { ParentProps } from 'solid-js';
+import { OwnerLabel } from '../owner/owner-display';
 import type { CallStatus } from '../types/entity';
 
 function Badge(props: ParentProps<{ class?: string; title?: string }>) {
@@ -20,31 +26,28 @@ function Badge(props: ParentProps<{ class?: string; title?: string }>) {
   );
 }
 
-// TODO (seamus) : tool tip for now, better shared context later
 export function SharedBadge(props: { ownerId: string }) {
   return (
-    <Badge class="text-ink-extra-muted border-edge-muted pr-2">
-      <UserIcon id={props.ownerId} size="sm" />
+    <Badge class="text-ink-extra-muted border-edge-muted pr-2 max-w-48 min-w-0">
+      <span class="flex min-w-0 normal-case font-sans">
+        <OwnerLabel ownerId={props.ownerId} userAvatarOnly />
+      </span>
       shared
     </Badge>
   );
 }
 
 export function SharedBadgeSmall(props: { ownerId: string }) {
-  const id = () => tryMacroId(props.ownerId);
-  const name = () => getDisplayName(id()) || undefined;
-
   return (
     <HoverCard
       content={
         <div class="flex items-center gap-1.5 text-xs">
-          <UserIcon
-            id={props.ownerId}
-            size="sm"
+          <OwnerLabel
+            ownerId={props.ownerId}
             suppressClick
             showTooltip={false}
           />
-          <span>{name()} shared this with you</span>
+          <span>shared this with you</span>
         </div>
       }
     >
@@ -56,20 +59,16 @@ export function SharedBadgeSmall(props: { ownerId: string }) {
 }
 
 export function CreatedByBadgeSmall(props: { ownerId: string }) {
-  const id = () => tryMacroId(props.ownerId);
-  const name = () => getDisplayName(id()) || undefined;
-
   return (
     <HoverCard
       content={
         <div class="flex items-center gap-1.5 text-xs">
-          <UserIcon
-            id={props.ownerId}
-            size="sm"
+          <span>Created by</span>
+          <OwnerLabel
+            ownerId={props.ownerId}
             suppressClick
             showTooltip={false}
           />
-          <span>Created by {name()}</span>
         </div>
       }
     >
@@ -82,6 +81,43 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
 
 export function DraftBadge() {
   return <Badge class="text-warning border-edge-muted px-2">draft</Badge>;
+}
+
+function scheduledSendLabel(time: Date): string {
+  const clock = format(time, 'h:mm a');
+  if (isToday(time)) return `Today, ${clock}`;
+  if (isTomorrow(time)) return `Tomorrow, ${clock}`;
+  // Only an upcoming send reads as a weekday; an overdue one keeps its date.
+  const daysAway = differenceInCalendarDays(time, new Date());
+  if (daysAway > 0 && daysAway < 7) return format(time, 'EEE, h:mm a');
+  if (isThisYear(time)) return format(time, 'MMM d, h:mm a');
+  return format(time, 'MMM d, yyyy');
+}
+
+/** When a scheduled row sends; list layouts show it in the timestamp slot. */
+export function ScheduledBadge(props: { sendTime: string }) {
+  const sendTime = () => new Date(props.sendTime);
+  const overdue = () => sendTime().getTime() <= Date.now();
+  return (
+    <Badge
+      class={cn(
+        'ml-auto w-fit shrink-0 px-2',
+        overdue()
+          ? 'text-failure border-failure/20'
+          : 'text-accent border-accent/20'
+      )}
+      title={[
+        overdue() ? 'Overdue scheduled send' : 'Scheduled to send',
+        format(sendTime(), "EEE, MMM d, yyyy 'at' h:mm a"),
+        formatTimeZoneAbbreviation(sendTime()),
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <ClockIcon class="size-3" />
+      <span class="whitespace-nowrap">{scheduledSendLabel(sendTime())}</span>
+    </Badge>
+  );
 }
 
 function _ImportantBadge() {
@@ -131,44 +167,6 @@ export function CallChannelNameBadge(props: { channelName: string }) {
     >
       <HashIcon class="size-3 shrink-0" />
       <span class="truncate">{props.channelName}</span>
-    </Badge>
-  );
-}
-
-/**
- * What a reminder is about, beside its description.
- *
- * The same shape as {@link CallChannelNameBadge} — a reminder row is named by
- * its own text, so this is the only thing saying which entity it points at.
- * Presentational: the caller resolves the name and supplies the icon, since a
- * reminder can reference any entity type.
- */
-export function ReminderReferenceBadge(props: ParentProps<{ name: string }>) {
-  return (
-    <Badge
-      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
-      title={props.name}
-    >
-      {props.children}
-      <span class="truncate">{props.name}</span>
-    </Badge>
-  );
-}
-
-/**
- * How often a recurring reminder fires, e.g. "Every weekday at 9:00 AM".
- *
- * A reminder row shows its next firing in the timestamp column, which for a
- * recurring one says when it next comes due but not that it will come due
- * again. This is the part that says so.
- */
-export function ReminderRecurrenceBadge(props: { recurrence: string }) {
-  return (
-    <Badge
-      class="max-w-40 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
-      title={props.recurrence}
-    >
-      <span class="truncate">{props.recurrence}</span>
     </Badge>
   );
 }

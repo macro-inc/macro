@@ -5,7 +5,7 @@ import {
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { useSearchInputFocus } from '@property/utils';
+import { useSearchInputFocus } from '@property/utils/focus';
 import { Surface } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
 import {
@@ -35,7 +35,10 @@ type DateSelectorProps = {
   open?: boolean;
   onClose?: VoidFunction;
   selectedDate?: Date | null;
-  onSelectDate?: (date: Date | null) => void;
+  /** Return false (or reject) to leave the confirmed selection unchanged. */
+  onSelectDate?: (
+    date: Date | null
+  ) => void | boolean | Promise<void | boolean>;
   placeholder?: string;
   disablePriorToDate?: Date;
   disableAfterDate?: Date;
@@ -43,6 +46,14 @@ type DateSelectorProps = {
   /** Render content inline instead of in a portal (avoids keyboard positioning issues on mobile) */
   disablePortal?: boolean;
   disabled?: boolean;
+  triggerClass?: string;
+  triggerLabel?: string;
+  clearLabel?: string;
+  currentLabel?: string;
+  /** Show the selected date in the menu above its clear action. */
+  showCurrentValue?: boolean;
+  clearable?: boolean;
+  footer?: JSX.Element;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
@@ -122,11 +133,15 @@ export const DateSelector = (props: DateSelectorProps) => {
     switch (e.key) {
       case 'Delete':
       case 'Backspace': {
-        if (isNonComboboxInput || searchQuery().trim()) {
+        if (
+          props.clearable === false ||
+          isNonComboboxInput ||
+          searchQuery().trim()
+        ) {
           return;
         }
         e.preventDefault();
-        onChange(null);
+        void onChange(null);
 
         break;
       }
@@ -175,23 +190,20 @@ export const DateSelector = (props: DateSelectorProps) => {
     }
   };
 
-  const onChange = (option: DateSelectorOption | null) => {
+  const onChange = async (option: DateSelectorOption | null) => {
     if (option?.type === 'select-custom') {
       setMode('calendar');
       return;
     }
 
-    setSelectedOption(option);
-    if (!option) {
-      props.onSelectDate?.(null);
-      onOpenChange(false);
-      return;
-    }
-
-    const dateValue = option.date;
-
-    props.onSelectDate?.(dateValue);
     onOpenChange(false);
+    const dateValue = option?.date ?? null;
+    try {
+      const accepted = await props.onSelectDate?.(dateValue);
+      if (accepted !== false) setSelectedOption(option);
+    } catch {
+      // The caller owns request feedback. Keep showing the last confirmed value.
+    }
   };
 
   const options = createMemo(() => {
@@ -239,7 +251,7 @@ export const DateSelector = (props: DateSelectorProps) => {
     if (!value || !value.trim().length) {
       const currentDate = selectedDate() ?? new Date();
 
-      onChange({
+      void onChange({
         type: 'custom',
         date: startOfDay(currentDate),
       });
@@ -259,7 +271,7 @@ export const DateSelector = (props: DateSelectorProps) => {
     currentDate = setHours(currentDate, Number(hours));
     currentDate = setMinutes(currentDate, Number(mins));
 
-    onChange({ type: 'custom', date: currentDate });
+    void onChange({ type: 'custom', date: currentDate });
   };
 
   return (
@@ -286,7 +298,8 @@ export const DateSelector = (props: DateSelectorProps) => {
       <Show when={typeof props.trigger !== 'undefined'}>
         <Combobox.Control>
           <Combobox.Trigger
-            class="flex group/date-selector-trigger"
+            class={props.triggerClass ?? 'flex group/date-selector-trigger'}
+            aria-label={props.triggerLabel}
             tabIndex={0}
             onKeyDown={(e: KeyboardEvent) => {
               if (e.key === 'Enter') {
@@ -315,7 +328,7 @@ export const DateSelector = (props: DateSelectorProps) => {
             disableAfterDate={props.disableAfterDate}
             mode={mode()}
             onSelectDate={(date) => {
-              onChange({ type: 'custom', date });
+              void onChange({ type: 'custom', date });
               setInternalOpen(false);
             }}
           >
@@ -328,15 +341,25 @@ export const DateSelector = (props: DateSelectorProps) => {
               />
             </div>
 
-            <Show when={selectedOption()}>
-              {(option) => (
-                <CurrentValueDisplay
-                  selectedOption={option()}
-                  onClear={() => {
-                    onChange(null);
-                  }}
-                />
-              )}
+            <Show
+              when={
+                props.showCurrentValue !== false || props.clearable !== false
+              }
+            >
+              <Show when={selectedOption()}>
+                {(option) => (
+                  <CurrentValueDisplay
+                    selectedOption={option()}
+                    clearLabel={props.clearLabel}
+                    currentLabel={props.currentLabel}
+                    showValue={props.showCurrentValue !== false}
+                    clearable={props.clearable !== false}
+                    onClear={() => {
+                      void onChange(null);
+                    }}
+                  />
+                )}
+              </Show>
             </Show>
             <div class="p-1.5">
               <div class="max-h-56 overflow-y-auto overflow-x-hidden scrollbar-hidden">
@@ -382,6 +405,9 @@ export const DateSelector = (props: DateSelectorProps) => {
                 <code class="bg-active px-1">tomorrow</code>
               </div>
             </div>
+            <Show when={props.footer}>
+              <div class="border-t border-edge-muted p-1.5">{props.footer}</div>
+            </Show>
           </WithCustomDateMode>
         </Combobox.Content>
       </DateSelectorPortalWrapper>
@@ -392,6 +418,10 @@ export const DateSelector = (props: DateSelectorProps) => {
 interface CurrentValueDisplayProps {
   selectedOption: DateSelectorOption;
   onClear: VoidFunction;
+  clearLabel?: string;
+  currentLabel?: string;
+  showValue: boolean;
+  clearable: boolean;
 }
 
 const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
@@ -405,19 +435,28 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
   });
 
   return (
-    <div class="px-3 py-2 border-b border-edge-muted">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-ink-muted">Current:</span>
-          <span class="text-xs font-medium">{currentDateDisplay()}</span>
-        </div>
-        <button
-          onPointerDown={(e: PointerEvent) => e.preventDefault()}
-          onClick={props.onClear}
-          class="text-xs text-ink-muted hover:text-ink underline"
-        >
-          Clear
-        </button>
+    <div class="border-b border-edge-muted p-1.5">
+      <div class="flex items-center justify-between gap-3">
+        <Show when={props.showValue}>
+          <div class="flex min-w-0 flex-1 items-center gap-2 px-1.5">
+            <span class="shrink-0 text-xs text-ink-muted">
+              {props.currentLabel ?? 'Current:'}
+            </span>
+            <span class="min-w-0 truncate text-xs font-medium">
+              {currentDateDisplay()}
+            </span>
+          </div>
+        </Show>
+        <Show when={props.clearable}>
+          <button
+            onPointerDown={(e: PointerEvent) => e.preventDefault()}
+            onClick={props.onClear}
+            class="min-h-10 shrink-0 rounded-lg px-3 text-xs text-ink-muted underline hover:bg-hover hover:text-ink"
+            classList={{ 'w-full text-left': !props.showValue }}
+          >
+            {props.clearLabel ?? 'Clear'}
+          </button>
+        </Show>
       </div>
     </div>
   );

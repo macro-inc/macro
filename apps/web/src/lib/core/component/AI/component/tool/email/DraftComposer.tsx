@@ -24,10 +24,7 @@ import { ComposeLayout } from '@app/features/email-compose/views/compose-layout'
 import { EmailComposeToolbar } from '@app/features/email-compose/views/compose-toolbar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_EMAIL_SCHEDULED_SEND,
-  enableEmailSignatures,
-} from '@core/constant/featureFlags';
+import { enableEmailSignatures } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
@@ -215,11 +212,21 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const ctx: ComposeContextValue = {
     bodyActions: createComposeBodyActions(),
     isMobile,
-    scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
+    // The AI tool has its own execute contract and does not expose scheduled send.
+    scheduleEnabled: false,
     attachmentFailure: toast.failure,
     subject,
     attachments: () => [],
-    sendTime: () => undefined,
+    schedule: {
+      state: () => ({ type: 'editing', intent: { type: 'immediate' } }),
+      selectedTime: () => undefined,
+      confirmedTime: () => undefined,
+      actionLabel: () => 'Send email',
+      operation: () => 'idle',
+      onSelect: () => false,
+      onCancel: async () => false,
+      pickerDisabled: () => true,
+    },
     initialHtml: () => initialBody().html,
     initialMarkdown: () => initialBody().markdown,
     setRecipients: (field, value) => {
@@ -241,6 +248,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     },
     onSend: handleSend,
     disabled: () => isSending() || uiDisabled(),
+    primaryActionDisabled: () => isSending() || uiDisabled(),
     isSending,
     isSavingDraft: () => false,
     hasDraft: () => false,

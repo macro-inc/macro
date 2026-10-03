@@ -44,7 +44,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
 tokio-retry = { workspace = true }
-tokio-util = { workspace = true, features = ["rt"] }
+tokio-util = { workspace = true, features = ["compat", "rt"] }
 tokio-tungstenite = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
@@ -56,6 +56,9 @@ webbrowser = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
@@ -63,4 +66,4 @@ channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "net"] }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }

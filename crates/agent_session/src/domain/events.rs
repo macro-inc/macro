@@ -46,7 +46,11 @@ impl ThreadOrigin {
     pub fn new(parent: MessageParent, thread_id: Uuid, originating_message_id: Uuid) -> Self {
         let channel_id = match &parent {
             MessageParent::Channel(channel_id) => Some(*channel_id),
-            MessageParent::Document(_) => None,
+            MessageParent::Document(_)
+            | MessageParent::Call(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => None,
         };
         Self {
             parent,
@@ -195,6 +199,45 @@ pub struct TurnEndedMetadata {
     pub queued_remaining: usize,
 }
 
+/// Sanitized public details of a command refused before runtime execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandFailure {
+    /// Stable public denial or unavailability code.
+    pub code: String,
+    /// Public explanation, never an internal error report.
+    pub message: String,
+    /// Whether retrying later may succeed without a policy change.
+    pub retryable: bool,
+}
+
+#[cfg(feature = "admission")]
+impl From<ai_billing::AiAdmissionError> for CommandFailure {
+    fn from(error: ai_billing::AiAdmissionError) -> Self {
+        Self {
+            code: error.code().to_owned(),
+            message: error.to_string(),
+            retryable: error.is_retryable(),
+        }
+    }
+}
+
+/// An accepted command was refused before it could start a runtime turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct CommandRejectedMetadata {
+    /// The session.
+    pub identity: SessionIdentity,
+    /// The command that will not execute.
+    pub action_id: AgentActionId,
+    /// Who submitted the command, if acting on a user's behalf.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// The command's thread announcement, when one was created.
+    pub announcement_message_id: Option<Uuid>,
+    /// Safe details for clients and downstream consumers.
+    pub failure: CommandFailure,
+}
+
 /// A turn ended and nothing is queued: the agent has stopped working.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -250,6 +293,11 @@ pub struct SessionMentionedMetadata {
     /// The users named, already narrowed to those who can open the session
     /// and never including the author.
     pub mentioned: Vec<MacroUserIdStr<'static>>,
+    /// The channel or document message the prompt was posted as, when it
+    /// arrived from a thread rather than the session view. That message
+    /// already notified the users it named when it was posted.
+    #[serde(default)]
+    pub origin_message_id: Option<Uuid>,
 }
 
 /// The session's live actor is gone: idle teardown, transport loss, or crash.
@@ -307,6 +355,10 @@ pub enum AgentSessionLifecycleEvent {
     #[serde(rename = "agent_session.turn_ended")]
     #[strum_discriminants(strum(serialize = "agent_session.turn_ended"))]
     TurnEnded(TurnEndedMetadata),
+    /// An accepted command was refused before runtime execution.
+    #[serde(rename = "agent_session.command_rejected")]
+    #[strum_discriminants(strum(serialize = "agent_session.command_rejected"))]
+    CommandRejected(CommandRejectedMetadata),
     /// A turn ended with nothing queued behind it.
     #[serde(rename = "agent_session.settled")]
     #[strum_discriminants(strum(serialize = "agent_session.settled"))]
@@ -345,6 +397,7 @@ impl AgentSessionLifecycleEvent {
             Self::Opened(metadata) => &metadata.identity,
             Self::TurnStarted(metadata) => &metadata.identity,
             Self::TurnEnded(metadata) => &metadata.identity,
+            Self::CommandRejected(metadata) => &metadata.identity,
             Self::Settled(metadata) => &metadata.identity,
             Self::WaitingForInput(metadata) => &metadata.identity,
             Self::InputReceived(metadata) => &metadata.identity,

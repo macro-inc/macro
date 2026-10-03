@@ -6,46 +6,49 @@ import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { type EntityData, isGithubPrEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
+import { ReminderTitle } from './reminder-title';
 
 function extractRawTitle(entity: EntityData): JSX.Element {
-  return (
-    match<EntityData, JSX.Element>(entity)
-      .with({ type: 'document' }, (e) =>
-        formatDocumentName(e.name, e.fileType, {
-          fullyQualifiedBlockName: true,
-        })
-      )
-      .with({ type: 'project' }, (e) => e.name)
-      .with({ type: 'channel' }, (e) => e.name)
-      .with({ type: 'channel_message' }, (e) => e.channelName)
-      .with({ type: 'channel_thread' }, (e) => e.name)
-      .with({ type: 'email' }, (e) => e.name || '(No Subject)')
-      .with({ type: 'agent_session' }, (e) => e.name || 'Agent session')
-      .with({ type: 'chat' }, (e) => e.name)
-      .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
-      .with(
-        { type: 'automation' },
-        (e) => e.name || blockNameToDefaultFile('automation')
-      )
-      .when(isGithubPrEntity, (e) => (
-        <>
-          {e.metadata.name}{' '}
-          <span class="text-ink-extra-muted font-normal">
-            #{e.metadata.number}
-          </span>
-        </>
-      ))
-      .with({ type: 'foreign' }, (e) => e.name)
-      .with({ type: 'crm_company' }, (e) => e.name || 'Unknown Company')
-      .with(
-        { type: 'crm_contact' },
-        (e) => e.name || e.email || 'Unknown Contact'
-      )
-      // A reminder's name is its description — there is no separate title.
-      .with({ type: 'reminder' }, (e) => e.name || 'Reminder')
-      .with({ type: 'calendar_event' }, (e) => e.name || '(No title)')
-      .otherwise(() => 'Unknown')
-  );
+  return match<EntityData, JSX.Element>(entity)
+    .with({ type: 'document' }, (e) =>
+      formatDocumentName(e.name, e.fileType, {
+        fullyQualifiedBlockName: true,
+      })
+    )
+    .with({ type: 'initiative' }, (e) => e.name || 'Untitled project')
+    .with({ type: 'project' }, (e) => e.name)
+    .with({ type: 'channel' }, (e) => e.name)
+    .with({ type: 'channel_message' }, (e) => e.channelName)
+    .with({ type: 'channel_thread' }, (e) => e.name)
+    .with({ type: 'email' }, (e) => e.name || '(No Subject)')
+    .with({ type: 'agent_session' }, (e) => e.name || 'Agent session')
+    .with({ type: 'chat' }, (e) => e.name)
+    .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
+    .with(
+      { type: 'automation' },
+      (e) => e.name || blockNameToDefaultFile('automation')
+    )
+    .when(isGithubPrEntity, (e) => (
+      <>
+        {e.metadata.name}{' '}
+        <span class="text-ink-extra-muted font-normal">
+          #{e.metadata.number}
+        </span>
+      </>
+    ))
+    .with({ type: 'foreign' }, (e) => e.name)
+    .with({ type: 'crm_company' }, (e) => e.name || 'Unknown Company')
+    .with(
+      { type: 'crm_contact' },
+      (e) => e.name || e.email || 'Unknown Contact'
+    )
+    .with({ type: 'reminder' }, (e) => e.name || 'Reminder')
+    .with({ type: 'calendar_event' }, (e) => e.name || '(No title)')
+    .with(
+      { type: 'database' },
+      (entity) => entity.name || blockNameToDefaultFile('database')
+    )
+    .otherwise(() => 'Unknown');
 }
 
 function extractSearchHighlight(entity: EntityData): string | undefined {
@@ -54,6 +57,19 @@ function extractSearchHighlight(entity: EntityData): string | undefined {
 }
 
 export function EntityTitle(props: { entity: EntityData }) {
+  const reminder = () =>
+    props.entity.type === 'reminder' ? props.entity : undefined;
+  return (
+    <Show
+      when={reminder()}
+      fallback={<OrdinaryEntityTitle entity={props.entity} />}
+    >
+      {(entity) => <ReminderTitle entity={entity()} showNote />}
+    </Show>
+  );
+}
+
+function OrdinaryEntityTitle(props: { entity: EntityData }) {
   const titleData = () => {
     const searchHighlight = extractSearchHighlight(props.entity);
     if (searchHighlight) {

@@ -1,4 +1,5 @@
 //! Per-owner Codex authorization and provider mapping for hosted conversations.
+use crate::domain::{error::HarnessError, model::SessionBlocker};
 use agent_session::domain::{
     model::{AgentSessionId, ExternalSession},
     ports::{AgentSessionRepo, ExternalSessionRepo},
@@ -8,9 +9,24 @@ use codex_cloud_agents::domain::cloud::{
 };
 use codex_cloud_agents::domain::runtime::{CloudRuntime, CloudTarget, RuntimeIdentity};
 use codex_cloud_agents::domain::{Credentials, OAuth};
-use codex_connection::domain::ConnectionService;
+use codex_connection::domain::{ConnectionError, ConnectionService};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
+
+/// Resolve the owner's account and environment before provisioning a session.
+pub(crate) async fn connection_preflight(
+    connections: &dyn ConnectionService,
+    owner: &MacroUserIdStr<'_>,
+) -> crate::domain::error::Result<Option<SessionBlocker>> {
+    match connections.resolve(owner.as_ref()).await {
+        Ok(connection) if connection.environment_id.is_none() => {
+            Ok(Some(SessionBlocker::CodexEnvironmentNotConfigured))
+        }
+        Ok(_) => Ok(None),
+        Err(ConnectionError::NotConnected) => Ok(Some(SessionBlocker::CodexNotConnected)),
+        Err(error) => Err(HarnessError::Container(error.to_string())),
+    }
+}
 
 fn repository_identity(value: &str) -> Result<String, rootcause::Report> {
     let parsed = url::Url::parse(value).map_err(|_| {

@@ -1187,6 +1187,9 @@ where
 /// Wire-format entity filter AST accepted by soup AST endpoints.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
+    /// Restrict to the authenticated viewer's favorites before pagination when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[schema(value_type = serde_json::Value)]
@@ -1333,6 +1336,7 @@ impl ApiEntityFilterAst {
     #[tracing::instrument(err, skip(self))]
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1399,6 +1403,7 @@ impl ApiEntityFilterAst {
         };
 
         Ok(EntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1415,6 +1420,8 @@ impl ApiEntityFilterAst {
             reminder_filter,
             agent_session_filter,
             properties_filter,
+            initiative_filter: None,
+            database_row_filter: None,
         })
     }
 }

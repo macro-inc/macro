@@ -57,6 +57,8 @@ export type ThreadListScrollState = {
   distanceFromTop: number;
   distanceFromBottom: number;
   viewportSize: number;
+  /** Intersecting rows, excluding overscan and floating header/composer insets. */
+  visibleRange?: { first: string; last: string };
 };
 
 export type ThreadListScrollSnapshot = {
@@ -89,6 +91,8 @@ type ThreadListProps = {
   ) => void;
   /** Follow live messages only when the loaded window includes the latest page. */
   followOnAppend?: boolean;
+  /** Position messages when they do not fill the viewport. Defaults to end. */
+  shortListAlign?: 'start' | 'end';
   /** Keep this thread mounted while its message or reply is being positioned. */
   targetId?: string;
   /**
@@ -365,7 +369,9 @@ export function ThreadList(props: ThreadListProps) {
   }
 
   const shortListOffset = () =>
-    Math.max(0, viewportSize() - virtualizer.getTotalSize());
+    props.shortListAlign === 'start'
+      ? 0
+      : Math.max(0, viewportSize() - virtualizer.getTotalSize());
   // The adapter mutates its store by index. Snapshot those values and let Key
   // own each row's accessor by message ID, including while a row is removed.
   // A lookup into a shared map can disappear before queued row effects run.
@@ -452,6 +458,16 @@ export function ThreadList(props: ThreadListProps) {
           : 0;
     }
     previousScrollOffset = distanceFromTop;
+    const visibleRows = virtualizer
+      .getVirtualItems()
+      .filter(
+        (item) =>
+          item.end + shortListOffset() > distanceFromTop + insets().start &&
+          item.start + shortListOffset() <
+            distanceFromTop + el.clientHeight - insets().end
+      );
+    const firstVisible = visibleRows.at(0);
+    const lastVisible = visibleRows.at(-1);
     const state: ThreadListScrollState = {
       didInitialScroll: lifecycle.isReady(),
       isNearBottom: nearBottom,
@@ -460,6 +476,10 @@ export function ThreadList(props: ThreadListProps) {
       distanceFromTop,
       distanceFromBottom,
       viewportSize: el.clientHeight,
+      visibleRange:
+        firstVisible && lastVisible
+          ? { first: String(firstVisible.key), last: String(lastVisible.key) }
+          : undefined,
     };
     // Capture both before invoking callers, which may synchronously navigate.
     const snapshot = state.didInitialScroll

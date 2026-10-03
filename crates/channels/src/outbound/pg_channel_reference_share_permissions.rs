@@ -17,6 +17,9 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Postgres-backed share-permission adapter for channel message references.
 #[derive(Clone)]
 pub struct PgChannelReferenceSharePermissions<E> {
@@ -79,18 +82,21 @@ async fn ensure_referenced_item_visible_to_channel(
             .context("failed to insert thread share permissions")?;
     }
 
-    // Sessions use direct entity-access rows, not legacy SharePermission rows.
-    if item.entity_type() == ReferencedShareItemType::AgentSession {
+    // Session, calendar event and database channel grants are canonical
+    // entity-access rows, and a reference keeps any grant the owner already chose.
+    if matches!(
+        item.entity_type(),
+        ReferencedShareItemType::AgentSession
+            | ReferencedShareItemType::CalendarEvent
+            | ReferencedShareItemType::Database
+    ) {
         let mut transaction = db.begin().await?;
-        entity_access_db_utils::update_entity_access_channel_share_permissions(
+        entity_access_db_utils::channel_share::insert_if_absent(
             &mut transaction,
             &entity_id,
-            entity_access_db_utils::EntityType::AgentSession,
-            &[UpdateChannelSharePermission {
-                channel_id: channel_id.to_string(),
-                operation: UpdateOperation::Add,
-                access_level: Some(level),
-            }],
+            entity_access_db_type_for(item.entity_type()),
+            &channel_id,
+            level,
         )
         .await?;
         transaction.commit().await?;
@@ -139,11 +145,13 @@ async fn ensure_referenced_item_visible_to_channel(
 fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
     match item_type {
         ReferencedShareItemType::AgentSession => EntityType::AgentSession,
+        ReferencedShareItemType::Database => EntityType::Database,
         ReferencedShareItemType::Document => EntityType::Document,
         ReferencedShareItemType::Chat => EntityType::Chat,
         ReferencedShareItemType::Project => EntityType::Project,
         ReferencedShareItemType::EmailThread => EntityType::EmailThread,
         ReferencedShareItemType::Call => EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => EntityType::CalendarEvent,
     }
 }
 
@@ -152,10 +160,12 @@ fn entity_access_db_type_for(
 ) -> entity_access_db_utils::EntityType {
     match item_type {
         ReferencedShareItemType::AgentSession => entity_access_db_utils::EntityType::AgentSession,
+        ReferencedShareItemType::Database => entity_access_db_utils::EntityType::Database,
         ReferencedShareItemType::Document => entity_access_db_utils::EntityType::Document,
         ReferencedShareItemType::Chat => entity_access_db_utils::EntityType::Chat,
         ReferencedShareItemType::Project => entity_access_db_utils::EntityType::Project,
         ReferencedShareItemType::EmailThread => entity_access_db_utils::EntityType::EmailThread,
         ReferencedShareItemType::Call => entity_access_db_utils::EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => entity_access_db_utils::EntityType::CalendarEvent,
     }
 }

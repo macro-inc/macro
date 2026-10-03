@@ -15,6 +15,7 @@ import {
   schedulingPages,
 } from '../components/scheduling-workspace';
 import { useScheduling } from '../context/scheduling-context';
+import { reportDate, shiftReportDate } from '../core/insights';
 import {
   type AvailabilitySchedule,
   type EventType,
@@ -32,7 +33,16 @@ export function SchedulingSettingsView() {
   const scope = () =>
     capabilities.scopes().find((s) => s.id === scopeId()) ??
     capabilities.scopes()[0];
-  const source = capabilities.createSource(scope);
+  const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = reportDate(new Date(), browserZone);
+  const [bookingFrom, setBookingFrom] = createSignal(
+    shiftReportDate(today, -30)
+  );
+  const [bookingTo, setBookingTo] = createSignal(shiftReportDate(today, 30));
+  const source = capabilities.createSource(scope, () => ({
+    from: new Date(`${bookingFrom()}T00:00:00`).toISOString(),
+    to: new Date(`${shiftReportDate(bookingTo(), 1)}T00:00:00`).toISOString(),
+  }));
   const [page, setPage] = createSignal('Event types');
   const [event, setEvent] = createSignal<EventType>();
   const [schedule, setSchedule] = createSignal<AvailabilitySchedule>();
@@ -180,6 +190,41 @@ export function SchedulingSettingsView() {
           Team members can view scheduling. Owners and admins manage links and
           availability.
         </p>
+      </Show>
+      <Show when={page() === 'Bookings'}>
+        <div class="flex flex-wrap items-end gap-4">
+          <Field
+            label="From"
+            hint={`Dates in ${browserZone.replaceAll('_', ' ')}`}
+          >
+            <TextInput
+              type="date"
+              value={bookingFrom()}
+              max={bookingTo()}
+              onChange={(e) => {
+                if (
+                  e.currentTarget.value &&
+                  e.currentTarget.value <= bookingTo()
+                )
+                  setBookingFrom(e.currentTarget.value);
+              }}
+            />
+          </Field>
+          <Field label="Through">
+            <TextInput
+              type="date"
+              value={bookingTo()}
+              min={bookingFrom()}
+              onChange={(e) => {
+                if (
+                  e.currentTarget.value &&
+                  e.currentTarget.value >= bookingFrom()
+                )
+                  setBookingTo(e.currentTarget.value);
+              }}
+            />
+          </Field>
+        </div>
       </Show>
       <Show when={source.error()}>
         <div

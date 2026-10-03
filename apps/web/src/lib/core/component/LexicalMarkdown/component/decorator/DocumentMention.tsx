@@ -1,5 +1,7 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,
@@ -21,12 +23,15 @@ import {
   resolveBlockAlias,
   verifyBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_BLOCK_IN_BLOCK,
+  enableDatabases,
+} from '@core/constant/featureFlags';
 import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
@@ -42,6 +47,7 @@ import {
   type PreviewCalendarEventAccess,
   type PreviewItemNoAccess,
 } from '@queries/preview';
+import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -123,8 +129,8 @@ function SkillSlashText(props: {
   const systemSkills = useSystemSkillsQuery();
   const openSkill = createCallback((e: MouseEvent) => {
     if (systemSkills.isSystemSkillId(props.documentId)) return;
-    // Also keeps the outer mention click handler (read-only contexts) from
-    // opening the skill a second time.
+    // Also keeps the outer mention click handler from opening the skill a
+    // second time.
     e.stopPropagation();
     openDocument(
       'skill',
@@ -381,16 +387,68 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   // Only skill mentions need to distinguish built-ins from stored documents.
   // Ordinary mentions must not wait for a once-per-session skills request.
   return (
-    <Show
-      when={props.blockName === 'skill'}
+    <Switch
       fallback={
         <Suspense fallback={<DocumentMentionStatic {...props} />}>
           <DocumentMentionInner {...props} />
         </Suspense>
       }
     >
-      <SkillDocumentMention {...props} />
-    </Show>
+      <Match when={props.blockName === 'database'}>
+        <DatabaseMention {...props} />
+      </Match>
+      <Match when={props.blockName === 'skill'}>
+        <SkillDocumentMention {...props} />
+      </Match>
+    </Switch>
+  );
+}
+
+/** Databases have their own permission-checked metadata, not a document preview. */
+function DatabaseMention(props: DocumentMentionDecoratorProps) {
+  const enabled = useFeatureFlag(enableDatabases);
+  const detail = useDatabaseDetailQuery(() =>
+    enabled().enabled ? props.documentId : undefined
+  );
+  const name = () =>
+    detail.isSuccess ? detail.data.database.name : props.documentName;
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    if (!enabled().enabled || detail.isError) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openDocument(
+      'database',
+      props.documentId,
+      props.blockParams,
+      openInNewSplitForMention(event.shiftKey, true)
+    );
+  };
+  return (
+    <span
+      class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+      role={enabled().enabled ? 'link' : undefined}
+      tabIndex={enabled().enabled ? 0 : undefined}
+      on:mousedown={(event) => event.preventDefault()}
+      on:click={open}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') open(event);
+      }}
+    >
+      <MentionContainer
+        icon={<EntityIcon targetType="database" size="fill" />}
+        collapsed={props.collapsed}
+        text={
+          <span
+            data-document-mention="true"
+            data-document-id={props.documentId}
+            data-block-name="database"
+            data-document-name={name()}
+          >
+            {detail.isError ? 'Database unavailable' : name() || 'Database'}
+          </span>
+        }
+      />
+    </span>
   );
 }
 
@@ -539,24 +597,31 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return props.blockName;
   });
 
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+
+  const calendarOpen = createMemo(() =>
+    verifyBlockName(props.blockName) === 'calendar'
+      ? calendarMentionOpen(
+          item(),
+          props.documentId,
+          props.blockParams?.occurrenceKey
+        )
+      : undefined
+  );
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     // The calendar is a singleton block: open it aimed at the viewer's own
-    // copy of the meeting, which the preview resolved through the shared
-    // iCalendar UID.
-    if (verifyBlockName(props.blockName) === 'calendar') {
-      const i = item();
-      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
-      const paramKey = props.blockParams?.occurrenceKey;
+    // copy of the meeting. A meeting shared through the channel but absent
+    // from the viewer's calendars has nothing to open, so its read-only
+    // preview card is shown instead.
+    const target = calendarOpen();
+    if (target) {
+      if (target.kind === 'read_only') {
+        setPreviewCardOpen(true);
+        return;
+      }
       openCalendarEventSplit({
-        eventId: event?.viewerEventId ?? props.documentId,
-        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
-        // The preview's time only locates the instance it previewed; a
-        // mention aimed at a different instance derives its range from the
-        // occurrence key instead.
-        time:
-          !paramKey || paramKey === event?.occurrenceKey
-            ? event?.time
-            : undefined,
+        ...target.target,
         openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
       });
       return;
@@ -633,7 +698,10 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     });
   };
 
-  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+  // Native listeners: inside an editable editor (the agent and chat
+  // composers) the shell stops click propagation before Solid's delegated
+  // handlers run, which left the chip inert there.
+  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
     const i = item();
     if (
@@ -647,6 +715,9 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   return (
     <HoverCard
+      open={previewCardOpen()}
+      onOpenChange={setPreviewCardOpen}
+      keepOpenOnTriggerPress={calendarOpen()?.kind === 'read_only'}
       trigger={
         <span class="relative">
           <span

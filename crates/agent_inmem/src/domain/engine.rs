@@ -2,19 +2,29 @@
 
 use std::sync::Arc;
 
+use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
 use ai_tools::user_tool_review::UserToolReviewer;
-use macro_user_id::user_id::MacroUserIdStr;
+use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
+use model_owner::Owner;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use super::user_input::SharedUserInputRequester;
 
-/// The agent's display name and `@` handle, for the turn's system prompt.
+/// Who the agent is: the bot a session belongs to, by id and by name.
+///
+/// The name and handle go into the turn's system prompt so the model knows
+/// who it is; the id and name also make the turn's tools act as that bot, so
+/// what the agent writes is attributed to it - and presented under its name
+/// wherever a reader sees the write happen, such as the cursor the editing
+/// worker draws - rather than to Macro.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentIdentity {
+    /// The bot the session belongs to.
+    pub bot: BotId,
     /// Display name, e.g. `Grunk`.
     pub name: String,
     /// Stable `@` handle without a leading `@`, e.g. `grunk`.
@@ -23,12 +33,15 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
-    /// The user the turn acts on behalf of. Tools run with their identity and
-    /// token usage is recorded against them.
-    pub owner: MacroUserIdStr<'static>,
+    /// The session's owner, whom the turn acts on behalf of: tools run with
+    /// their identity and token usage is recorded against them. Both need a
+    /// person, which the engine asks of this rather than assumes.
+    pub owner: Owner,
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// Provider-independent effort selected for this session.
+    pub reasoning_effort: ReasoningEffort,
     /// Who this agent is. Folded into every turn's system prompt so the
     /// model can answer "who are you" even when the session has no
     /// instructions. `None` leaves the standing prompt unnamed.

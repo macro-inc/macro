@@ -1,8 +1,7 @@
 import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
-import type { IUser } from '@core/user/types';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem, MessageParent } from '@service-storage/messages';
 import type { Accessor, Setter } from 'solid-js';
 import type {
   ChannelMessageListMeta,
@@ -38,6 +37,8 @@ export type MessageEditState = {
 
 /** Reactive contract for positioning and releasing a channel navigation target. */
 export type ThreadTargetNavigation = {
+  /** A new request can revisit the same message without remounting the thread. */
+  requestKey?: Accessor<string | number | undefined>;
   targetThreadId: Accessor<string | undefined>;
   targetMessageId: Accessor<string | undefined>;
   targetReplyId: Accessor<string | undefined>;
@@ -52,13 +53,14 @@ export type ThreadTargetNavigation = {
 };
 
 export type ThreadProps = {
-  data: Accessor<ApiChannelMessage>;
-  channelId: Accessor<string>;
+  data: Accessor<MessageListItem>;
+  parent: Accessor<MessageParent>;
+  /** The enclosing view owns a floating input only in unified mode. */
+  inputMode?: 'inline' | 'unified';
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;
   messageEditor?: MessageEditor;
-  participants?: Accessor<IUser[]>;
   targetNavigation?: ThreadTargetNavigation;
   /** Whether the channel's Cmd+F find bar is currently open. */
   isFindBarOpen: Accessor<boolean>;
@@ -70,4 +72,11 @@ export type ThreadProps = {
   onClearSelection?: () => void;
   messageListScopeId?: string;
   isNewestThread?: boolean;
+  /**
+   * A single-root thread (a document's floating comment) stacks replies under
+   * the root on one straight rail instead of indenting and branching them.
+   */
+  monorail?: boolean;
+  /** Flat chat surfaces do not draw thread connector rails. */
+  hideRail?: boolean;
 } & ThreadState;

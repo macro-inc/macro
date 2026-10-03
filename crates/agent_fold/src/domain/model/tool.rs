@@ -215,19 +215,30 @@ pub enum ToolDetail {
         /// Text the call reported, when any.
         output: Option<String>,
     },
-    /// Anything else: ACP's `switch_mode`, and any kind - including `other`
-    /// itself, [`ToolKind`](agent_client_protocol::ToolKind)'s default for a
-    /// call that names no kind at all - this fold has no special rendering
-    /// for.
+    /// Anything else: ACP's `switch_mode`, a tool from an MCP server the fold
+    /// knows nothing about, and any kind - including `other` itself,
+    /// [`ToolKind`](agent_client_protocol::ToolKind)'s default for a call
+    /// that names no kind at all - this fold has no special rendering for.
+    /// What a reader wants is the exchange itself: the request the agent
+    /// made and the response it got, as JSON.
     Other {
         /// ACP's tool kind, as its wire string.
         #[serde(rename = "acpKind")]
         kind: String,
-        /// Text the call reported, when any.
+        /// Text the call reported in its content blocks, when any.
         output: Option<String>,
-        /// The tool's input, when reported.
+        /// The tool's own arguments, when reported - out of any wrapper the
+        /// harness put around them.
         #[specta(type = specta_typescript::Unknown)]
         input: Option<serde_json::Value>,
+        /// The tool's own result, when the harness reported one in
+        /// `rawOutput` - out of the harness's wrapper and MCP's envelope, so
+        /// an MCP tool's `structuredContent` (or its text, parsed when it is
+        /// JSON) arrives as the JSON the tool returned.
+        #[specta(type = specta_typescript::Unknown)]
+        result: Option<serde_json::Value>,
+        /// The error text, when the harness's wrapper reported failure.
+        error: Option<String>,
     },
     /// A Macro tool the fold knows by name - reached over Macro's MCP
     /// server, or called in-process by Macro's own agent. Input and output

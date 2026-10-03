@@ -5,6 +5,7 @@ import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
@@ -77,7 +78,7 @@ function JoinCallEmptyState(props: {
       <Button
         variant="cta"
         size="lg"
-        class="rounded-lg px-5"
+        class="px-5"
         onClick={props.onJoin}
         disabled={props.isJoining}
       >
@@ -108,13 +109,13 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
-  const handleRetry = async () => {
+  async function handleJoin() {
     try {
       await call.joinCall();
-    } catch {
-      // joinError is set inside useCall join mutation onError
+    } catch (error) {
+      console.error('Failed to join call', error);
     }
-  };
+  }
 
   return (
     <Switch
@@ -122,12 +123,19 @@ export function ChannelCallTab(props: {
         <JoinCallEmptyState
           channelId={props.channelId}
           isJoining={call.isJoining()}
-          onJoin={() => void call.joinCall()}
+          onJoin={handleJoin}
         />
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <CallOverlay onLeave={call.leaveCall} />
+        <div class="flex size-full min-h-0 flex-col">
+          <div class="px-2 pt-2">
+            <ActiveCallLink />
+          </div>
+          <div class="min-h-0 flex-1">
+            <CallOverlay onLeave={call.leaveCall} />
+          </div>
+        </div>
       </Match>
       <Match when={call.joinError()}>
         <div class="flex size-full flex-col items-center justify-center gap-3 text-ink-muted px-4">
@@ -139,7 +147,7 @@ export function ChannelCallTab(props: {
           </Show>
           <button
             type="button"
-            onClick={handleRetry}
+            onClick={handleJoin}
             disabled={call.isJoining()}
             class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >

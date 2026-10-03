@@ -189,8 +189,101 @@ The cache's validated envelopes, request ids, Web Locks, owner epochs,
 heartbeats, and replay policy remain application-owned. A normal `pagehide`
 uses a fenced navigation-departure message: the page terminates its dedicated
 worker, but the next owner opens the existing OPFS database. Only an
-unannounced liveness, heartbeat, transport, or engine failure selects
-`wipe-before-open`. Browsers missing the required worker, lock, or OPFS
+unannounced liveness, transport, or engine failure **after the database
+open grant** selects `wipe-before-open`. A missed heartbeat alone is not owner
+loss: background tabs and their dedicated workers may be suspended while the
+SharedWorker still runs. The coordinator probes the physical owner Web Lock
+without waiting or stealing it; a held lock (or a failed probe) retries the
+heartbeat without changing epochs or touching storage. A released lock confirms
+silent worker termination and triggers the usual fenced recovery. Read deadlines
+still bound callers waiting on an unresponsive engine.
+
+Protocol v6 separates startup into asset loading, taking the database owner
+lock, and database opening. The engine loads/compiles WASM without touching OPFS
+and reports `engine-assets-ready`. It then takes the owner lock only if it is
+free (`ifAvailable`), never queueing behind another holder: a busy lock is retried
+for about ten seconds with `owner-lock-busy` reports. Once it holds the lock it
+reports `owner-lock-acquired` and waits for the coordinator's `open-engine` grant;
+the coordinator records that storage may be touched before sending this grant.
+Pre-grant failures, including every failure while taking the lock, preserve the
+current open/reset requirement; an earlier required wipe is never forgotten.
+Startup phase budgets are relayed to every page, including late joiners: asset
+loading gets five minutes, taking the lock gets the retry window plus five
+seconds, and database opening gets twenty seconds, plus a five-second page
+response grace. Ordinary read deadlines remain ten seconds. Coordinator
+registration gets sixty seconds per attempt, with three attempts; engine recovery
+retains its bounded five retries. Exhausted bootstrap retries preserve the cache
+scope only when the coordinator explicitly proves storage was untouched, not from
+a page's last-seen phase. Missing/broken transports remain conservatively
+uncertain.
+
+A build's coordinator is usually a separate SharedWorker (its script URL is
+content-hashed), so after a deploy two builds can target one database. The newer
+build takes it over. Pages report their build time (`__APP_BUILD_TIME__`,
+stamped by Vite) when they register. When the lock stays busy while tabs of
+another build are alive (liveness locks of tabs this coordinator never
+registered; a departed tab's lock can outlast it), the coordinator posts a
+takeover request on the cross-build channel
+`graphql-cache-takeover:{database name}` (`coordinator-takeover.ts`, a contract
+every later build must keep). Only builds that open the same database join it,
+and only the coordinator whose engine holds the database answers:
+
+- **Yield**, if the requester is strictly newer. Every tab registered there gets
+  `cache-superseded`. Each page retires its host to the network. The owner's
+  page leaves the way a navigating page does: it terminates its engine, which
+  releases the owner lock without counting as a lost owner. An enqueue that was
+  already sent is reported as uncertain rather than sent again, because it may
+  be in the durable queue that the newer build replays. Nothing is elected
+  again. The requester's engine, still retrying the lock, opens the same
+  database with its data and queued mutations.
+- **Keep**, if the requester is not newer. The requester fails closed as below.
+
+A superseded page offers a persistent reload prompt. It reloads by itself only
+while hidden, online, not holding work (a call or an upload, via
+`holdAutomaticReload`), and not focused on a text field that holds text.
+Otherwise it retries the next time it is hidden or comes back online. A page
+that registers with a superseded coordinator later, for example after a
+rollback or from stale HTML, only runs uncached, because a reload could land on
+the same build again.
+
+A coordinator that holds nothing but gets a request from a newer build sends
+its tabs there too, without answering. When no yield arrives within a second
+(builds from before handover never answer), when the holder keeps the
+database, or when the engine exhausts its retries, the coordinator fails closed:
+it refuses queued requests with `owner-lock-unavailable` and tells every
+registered page `cache-unavailable`. Those pages retire their host for the rest
+of the page session, without quarantine, toast, or error report; only a tab
+that registers later tries again. Nothing waits in line for the lock, and a
+build only ever yields to a newer one. A rollback therefore leaves the rolled-back
+build uncached until the newer tabs close, instead of reloading tabs in a loop.
+
+The browser can also hand the owner lock to the next engine before a departing
+page's terminated worker has let go of the database files. Production logs show
+that gap outlasting two seconds after a reload. Every holder of these files
+first holds the owner lock, so a busy file seen while holding it is a predecessor
+still exiting, not damage. The OPFS adapter waits up to ten seconds for busy
+files within one open or wipe. If they stay busy, the engine reports
+`storage-busy`, and the coordinator fails closed as above. It keeps that
+attempt's open or wipe requirement instead of escalating a failed open to a
+wipe, which could not remove open files anyway.
+
+The physical database name embeds the storage versions,
+`graphql-cache:{scope}:s{epoch}.v{format}.t{storage}`, so builds with different
+compatibility epochs, record formats, or storage schemas use separate files and
+owner locks instead of resetting each other's data. Builds at the versions in
+use when names began to embed them (epoch 3, format 3, storage 11) keep the
+unversioned `graphql-cache:{scope}`, so that change moved no database and the
+next build still replays its queued mutations. Once an owner is active and no
+other build has live tabs, the coordinator lets that page delete stale
+databases of its scope: names for versions no newer than its own that it does
+not open, which includes the unversioned name once the versions move past it.
+A newer version is kept, because its build may come back after a rollback. The page lists OPFS and, only if a stale name exists,
+starts a disposable worker (a file Turso cannot read may poison its OPFS
+registry) that deletes each stale database whose owner lock is free and whose
+`mutation_queue` is empty. Databases still queueing mutations, or whose queue
+cannot be counted, are kept and reported.
+
+Browsers missing the required worker, lock, or OPFS
 capabilities use a storage-free no-op cache host. Tauri
 detection selects the native transport before browser capability checks. All
 paths remain behind the same `CacheHost` interface.
@@ -294,8 +387,16 @@ apps/web/src/lib/graphql-cache/ # JS glue
 - Turso backend for both Tauri native filesystem storage and browser OPFS:
   WAL mode, batch transactions, and physical reset on incompatible storage;
   tested natively and in headless Chromium.
-- Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
-  `approx_size` for GC (hardening phase).
+- Recovery browser fixtures require a matched production/test-hook WASM pair.
+  Run `just build-cache-wasm-browser-production` from `apps/web` to rebuild both;
+  a standalone Vite build reuses the generated artifacts. The fixture compares
+  embedded `cacheBuildInfo()` metadata (package version, GraphQL schema hash,
+  compatibility epoch, record format, and storage schema) before creating the
+  fixture database and again before fault injection. This matched-build check
+  is intentionally stricter than normal cache compatibility.
+- Stale-version DB cleanup for the current scope (browser) is done; see §4.2.
+  Deferred: cleanup of other scopes' databases (quarantined or rotated
+  scopes), `scan_prefix`/`approx_size` for GC (hardening phase).
 
 **Phase 3 — hosts + JS glue** *(done)*
 - ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id

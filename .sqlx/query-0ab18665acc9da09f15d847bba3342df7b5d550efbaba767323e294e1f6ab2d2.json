@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kind, name, folder, member_ids, creator_id, source_created_at, archived, message_count\n           FROM slack_import_conversation WHERE job_id = $1 AND slack_channel_id = 'C1'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "member_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "creator_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source_created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "message_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0ab18665acc9da09f15d847bba3342df7b5d550efbaba767323e294e1f6ab2d2"
+}

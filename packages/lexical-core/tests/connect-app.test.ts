@@ -12,6 +12,8 @@ import { markdownToEmbeddingText, markdownToPlainText } from '../utils/parsers';
 
 const TAG =
   '<m-connect-app>{"appSlug":"linear","name":"Linear"}</m-connect-app>';
+const HARNESS_TAG =
+  '<m-connect-app>{"appSlug":"cursor","name":"Cursor","target":"harness"}</m-connect-app>';
 
 function editorWith(markdown: string, transformers = ALL_TRANSFORMERS) {
   const editor = createEditor({
@@ -54,6 +56,27 @@ describe('connect-app chip', () => {
     expect(chip).toBeInstanceOf(ConnectAppNode);
     expect(chip?.getAppSlug()).toBe('linear');
     expect(chip?.getName()).toBe('Linear');
+    expect(chip?.getTarget()).toBe('connections');
+  });
+
+  it('parses the harness-targeted tag the Cursor bot posts and round-trips it', () => {
+    const editor = editorWith(`Almost: ${HARNESS_TAG}`);
+    const chip = inlineNodes(editor).find($isConnectAppNode);
+    expect(chip?.getAppSlug()).toBe('cursor');
+    expect(chip?.getTarget()).toBe('harness');
+    const exported = editor
+      .getEditorState()
+      .read(() => $convertToMarkdownString(ALL_TRANSFORMERS));
+    expect(exported).toContain(HARNESS_TAG);
+  });
+
+  it('falls back to the unknown-mention chip for a target it does not know', () => {
+    const editor = editorWith(
+      '<m-connect-app>{"appSlug":"cursor","name":"Cursor","target":"desktop"}</m-connect-app>'
+    );
+    const nodes = inlineNodes(editor);
+    expect(nodes.some($isConnectAppNode)).toBe(false);
+    expect(nodes.some($isUnknownMentionNode)).toBe(true);
   });
 
   it('renders inside the magic chip, which uses the external transformers', () => {
@@ -89,6 +112,9 @@ describe('connect-app chip', () => {
     );
     expect(markdownToEmbeddingText(`Do this: ${TAG}`)).toBe(
       'Do this: Connect Linear'
+    );
+    expect(markdownToPlainText(`Do this: ${HARNESS_TAG}`)).toBe(
+      'Do this: Connect Cursor'
     );
   });
 });

@@ -1,25 +1,44 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use macro_user_id::cowlike::CowLike;
+use entity_registry::BotFacts;
+use entity_registry_db_utils::{
+    InsertOutcome, NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType, WriteOutcome,
+    delete_entity,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
+use macro_uuid::{Uuid, generate_uuid_v7};
+use model_entity::EntityType;
+use model_owner::Owner;
+use serde_json::Value;
 use sqlx::PgPool;
 use std::str::FromStr;
 
+use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
+use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AlreadyRunningError, MAX_ACTION_TIME, Schedule,
-    ScheduledAction,
+    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
+    Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
-pub struct PgScheduledActionRepo {
+#[cfg(test)]
+mod test;
+
+/// PostgreSQL scheduled-action store.
+///
+/// Create registers the recorded owner and that owner's direct grants through
+/// `registrar`. Lookup, update, and delete address a row by id; `owner` is who
+/// the routine runs as, not an authorization predicate.
+pub struct PgScheduledActionRepo<B> {
     pool: PgPool,
+    registrar: OwnedEntityRegistrar<B>,
 }
 
-impl PgScheduledActionRepo {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+impl<B: BotFacts> PgScheduledActionRepo<B> {
+    /// Persist actions in `pool`, registering each created owner through `registrar`.
+    pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
+        Self { pool, registrar }
     }
 }
 
@@ -40,52 +59,156 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
     }
 }
 
-impl ScheduledActionRepo for PgScheduledActionRepo {
-    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
-        let owner = action.owner.to_string();
-        let timezone = action.timezone.to_string();
-        let kind = kind_to_str(&action.kind);
+/// One mapping for every action query, including management and dispatch.
+struct ActionRow {
+    id: Uuid,
+    owner: String,
+    name: String,
+    schedule: Option<String>,
+    kind: String,
+    timezone: Option<String>,
+    task: Value,
+    claimed: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    next_run_at: Option<DateTime<Utc>>,
+    enabled: bool,
+    trigger_type: String,
+    event_filters: Option<Value>,
+    configuration_revision: i64,
+    event_activated_at: Option<DateTime<Utc>>,
+}
 
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO scheduled_action (owner, name, schedule, kind, timezone, task, next_run_at, enabled)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at, updated_at, next_run_at, enabled
-            "#,
-            owner,
-            action.name,
-            action.schedule.as_str(),
-            kind,
-            timezone,
-            action.task,
-            action.next_run_at,
-            action.enabled,
-        )
-        .fetch_one(&self.pool)
-        .await?;
+impl TryFrom<ActionRow> for ScheduledAction {
+    type Error = anyhow::Error;
 
-        Ok(ScheduledAction {
+    fn try_from(row: ActionRow) -> Result<Self> {
+        let trigger = match row.trigger_type.as_str() {
+            "cron" => ActionTrigger::Cron {
+                schedule: Schedule::from_cron(row.schedule.context("cron schedule missing")?)?,
+                timezone: parse_timezone(&row.timezone.context("cron timezone missing")?)?,
+            },
+            "events" => ActionTrigger::Events {
+                filters: serde_json::from_value(
+                    row.event_filters.context("event filters missing")?,
+                )?,
+            },
+            other => bail!("unknown action trigger: {other}"),
+        };
+        Ok(Self {
             id: Some(row.id),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
+            owner: Owner::from_principal_str(&row.owner)?,
             name: row.name,
-            schedule: Schedule::from_cron(row.schedule)?,
+            trigger,
             kind: parse_kind(&row.kind)?,
             created_at: row.created_at,
             updated_at: row.updated_at,
-            timezone: parse_timezone(&row.timezone)?,
             task: row.task,
             claimed: row.claimed,
             next_run_at: row.next_run_at,
             enabled: row.enabled,
+            configuration_revision: ConfigurationRevision::try_from(row.configuration_revision)?,
+            event_activated_at: row.event_activated_at,
         })
     }
+}
 
-    async fn get_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
-        let owner = user_id.to_string();
+struct TriggerColumns {
+    trigger_type: &'static str,
+    schedule: Option<String>,
+    timezone: Option<String>,
+    event_filters: Option<Value>,
+}
 
-        let rows = sqlx::query!(
+impl TryFrom<&ActionTrigger> for TriggerColumns {
+    type Error = anyhow::Error;
+
+    fn try_from(trigger: &ActionTrigger) -> Result<Self> {
+        match trigger {
+            ActionTrigger::Cron { schedule, timezone } => Ok(Self {
+                trigger_type: "cron",
+                schedule: Some(schedule.as_str().to_owned()),
+                timezone: Some(timezone.to_string()),
+                event_filters: None,
+            }),
+            ActionTrigger::Events { filters } => Ok(Self {
+                trigger_type: "events",
+                schedule: None,
+                timezone: None,
+                event_filters: Some(serde_json::to_value(filters)?),
+            }),
+        }
+    }
+}
+
+impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
+    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+        let id = generate_uuid_v7();
+        let owner = action.owner.principal_id();
+        let trigger = TriggerColumns::try_from(&action.trigger)?;
+        let kind = kind_to_str(&action.kind);
+
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query_as!(
+            ActionRow,
             r#"
-            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at, updated_at, next_run_at, enabled
+            INSERT INTO scheduled_action
+                (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
+                 trigger_type, event_filters, configuration_revision, event_activated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                      updated_at, next_run_at, enabled, trigger_type, event_filters,
+                      configuration_revision, event_activated_at
+            "#,
+            id,
+            owner,
+            action.name,
+            trigger.schedule,
+            kind,
+            trigger.timezone,
+            action.task,
+            action.next_run_at,
+            action.enabled,
+            trigger.trigger_type,
+            trigger.event_filters,
+            action.configuration_revision.get(),
+            action.event_activated_at,
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let created = ScheduledAction::try_from(row)?;
+        match self
+            .registrar
+            .register_owned_entity(
+                &mut tx,
+                NewEntityRecord::new(
+                    id,
+                    RegisteredEntityType::ScheduledAction,
+                    created.owner.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| {
+                anyhow::anyhow!("failed to register scheduled action owner: {error:#}")
+            })? {
+            InsertOutcome::Inserted | InsertOutcome::AlreadyRegistered => {}
+        }
+        tx.commit().await?;
+        Ok(created)
+    }
+
+    async fn get_owned_actions(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<ScheduledAction>> {
+        let owner = owner.to_string();
+        let rows = sqlx::query_as!(
+            ActionRow,
+            r#"
+            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                   updated_at, next_run_at, enabled, trigger_type, event_filters,
+                   configuration_revision, event_activated_at
             FROM scheduled_action
             WHERE owner = $1
             "#,
@@ -93,37 +216,56 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         )
         .fetch_all(&self.pool)
         .await?;
+        rows.into_iter().map(ScheduledAction::try_from).collect()
+    }
 
-        rows.into_iter()
-            .map(|row| {
-                Ok(ScheduledAction {
-                    id: Some(row.id),
-                    owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
-                    name: row.name,
-                    schedule: Schedule::from_cron(row.schedule)?,
-                    kind: parse_kind(&row.kind)?,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    timezone: parse_timezone(&row.timezone)?,
-                    task: row.task,
-                    claimed: row.claimed,
-                    next_run_at: row.next_run_at,
-                    enabled: row.enabled,
-                })
-            })
-            .collect()
+    async fn get_actions_by_ids(&self, ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        let rows = sqlx::query_as!(
+            ActionRow,
+            r#"
+            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                   updated_at, next_run_at, enabled, trigger_type, event_filters,
+                   configuration_revision, event_activated_at
+            FROM scheduled_action
+            WHERE id = ANY($1)
+            "#,
+            ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(ScheduledAction::try_from).collect()
+    }
+
+    async fn get_action(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
+        sqlx::query_as!(
+            ActionRow,
+            r#"
+            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                   updated_at, next_run_at, enabled, trigger_type, event_filters,
+                   configuration_revision, event_activated_at
+            FROM scheduled_action
+            WHERE id = $1
+            "#,
+            *id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(ScheduledAction::try_from)
+        .transpose()
     }
 
     async fn get_next_unclaimed_actions(&self, limit: i64) -> Result<Vec<ScheduledAction>> {
         let stale_threshold = Utc::now() - MAX_ACTION_TIME;
-
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            ActionRow,
             r#"
-            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at, updated_at, next_run_at, enabled
+            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                   updated_at, next_run_at, enabled, trigger_type, event_filters,
+                   configuration_revision, event_activated_at
             FROM scheduled_action
-            WHERE enabled
+            WHERE enabled AND trigger_type = 'cron'
               AND (claimed IS NULL OR claimed < $1)
-            ORDER BY next_run_at ASC
+            ORDER BY next_run_at ASC, id ASC
             LIMIT $2
             "#,
             stale_threshold,
@@ -131,35 +273,17 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-
-        rows.into_iter()
-            .map(|row| {
-                Ok(ScheduledAction {
-                    id: Some(row.id),
-                    owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
-                    name: row.name,
-                    schedule: Schedule::from_cron(row.schedule)?,
-                    kind: parse_kind(&row.kind)?,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    timezone: parse_timezone(&row.timezone)?,
-                    task: row.task,
-                    claimed: row.claimed,
-                    next_run_at: row.next_run_at,
-                    enabled: row.enabled,
-                })
-            })
-            .collect()
+        rows.into_iter().map(ScheduledAction::try_from).collect()
     }
 
     async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
         let Some(id) = action.id else {
             bail!("cannot update action without id");
         };
-        let timezone = action.timezone.to_string();
+        let trigger = TriggerColumns::try_from(&action.trigger)?;
         let kind = kind_to_str(&action.kind);
-
-        let row = sqlx::query!(
+        let row = sqlx::query_as!(
+            ActionRow,
             r#"
             UPDATE scheduled_action
             SET name = $1,
@@ -169,70 +293,89 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
                 task = $5,
                 next_run_at = $6,
                 enabled = $7,
+                trigger_type = $8,
+                event_filters = $9,
+                configuration_revision = $10,
+                event_activated_at = $11,
                 updated_at = now()
-            WHERE id = $8
-            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at, updated_at, next_run_at, enabled
+            WHERE id = $12
+              AND configuration_revision = $10::bigint - 1
+              AND (
+                  claimed IS NULL OR claimed < $13
+                  OR (
+                      NOT $7 AND name = $1 AND kind = $3 AND task = $5
+                      AND trigger_type = $8
+                      AND schedule IS NOT DISTINCT FROM $2
+                      AND timezone IS NOT DISTINCT FROM $4
+                      AND event_filters IS NOT DISTINCT FROM $9
+                  )
+              )
+            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                      updated_at, next_run_at, enabled, trigger_type, event_filters,
+                      configuration_revision, event_activated_at
             "#,
             action.name,
-            action.schedule.as_str(),
+            trigger.schedule,
             kind,
-            timezone,
+            trigger.timezone,
             action.task,
             action.next_run_at,
             action.enabled,
+            trigger.trigger_type,
+            trigger.event_filters,
+            action.configuration_revision.get(),
+            action.event_activated_at,
             id,
+            Utc::now() - MAX_ACTION_TIME,
         )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(ScheduledAction {
-            id: Some(row.id),
-            owner: MacroUserIdStr::parse_from_str(&row.owner)?.into_owned(),
-            name: row.name,
-            schedule: Schedule::from_cron(row.schedule)?,
-            kind: parse_kind(&row.kind)?,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            timezone: parse_timezone(&row.timezone)?,
-            task: row.task,
-            claimed: row.claimed,
-            next_run_at: row.next_run_at,
-            enabled: row.enabled,
-        })
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(ActionPolicyError::UpdateConflict)?;
+        ScheduledAction::try_from(row)
     }
 
-    async fn delete_action(
-        &self,
-        id: &Uuid,
-        _macro_user_id: MacroUserIdStr<'static>,
-    ) -> Result<()> {
-        sqlx::query!(
+    async fn delete_action(&self, id: &Uuid) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        entity_access_db_utils::delete_entity_access_rows(&mut tx, id, EntityType::ScheduledAction)
+            .await
+            .context("failed to delete scheduled action grants")?;
+        let deleted = sqlx::query!(
             r#"
             DELETE FROM scheduled_action
             WHERE id = $1
             "#,
-            *id
+            *id,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
+        if deleted.rows_affected() != 0 {
+            match delete_entity(&mut tx, *id).await? {
+                WriteOutcome::Applied | WriteOutcome::NotFound => {}
+            }
+        }
+        tx.commit().await?;
         Ok(())
     }
 
-    async fn claim_action(&self, id: &Uuid) -> Result<()> {
+    async fn claim_action(&self, id: &Uuid, revision: ConfigurationRevision) -> Result<ClaimToken> {
+        let token = ClaimToken::generate();
         let now = Utc::now();
         let stale_threshold = now - MAX_ACTION_TIME;
 
         let result = sqlx::query!(
             r#"
             UPDATE scheduled_action
-            SET claimed = $1, updated_at = now()
+            SET claimed = $1, claim_token = $4, updated_at = now()
             WHERE id = $2
+              AND configuration_revision = $5
               AND (claimed IS NULL OR claimed < $3)
             "#,
             now,
             *id,
             stale_threshold,
+            token.as_uuid(),
+            revision.get(),
         )
         .execute(&self.pool)
         .await?;
@@ -241,17 +384,18 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             return Err(anyhow::Error::new(AlreadyRunningError { action_id: *id }));
         }
 
-        Ok(())
+        Ok(token)
     }
 
-    async fn release_action(&self, id: &Uuid) -> Result<()> {
+    async fn release_action(&self, id: &Uuid, token: ClaimToken) -> Result<()> {
         sqlx::query!(
             r#"
             UPDATE scheduled_action
-            SET claimed = NULL, updated_at = now()
-            WHERE id = $1
+            SET claimed = NULL, claim_token = NULL, updated_at = now()
+            WHERE id = $1 AND claim_token = $2
             "#,
             *id,
+            token.as_uuid(),
         )
         .execute(&self.pool)
         .await?;
@@ -307,38 +451,39 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
     }
 
     async fn update_next_run_at(&self, id: &Uuid) -> Result<()> {
-        // Fetch the schedule + timezone so we can recompute `next_run_at`
-        // without the caller having to hold the action in memory.
+        // Lock through the update so a concurrent trigger replacement cannot
+        // receive a firing time derived from the old schedule.
+        let mut tx = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"
-            SELECT schedule, timezone
+            SELECT schedule, timezone, trigger_type
             FROM scheduled_action
             WHERE id = $1
+            FOR UPDATE
             "#,
             *id,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await?;
 
-        let tz = parse_timezone(&row.timezone)?;
-        let schedule = Schedule::from_cron(row.schedule)?;
-        let Some(next_run_at) = schedule.next_run_after_now(tz) else {
-            // No future fire time — leave next_run_at untouched.
-            return Ok(());
-        };
-
-        sqlx::query!(
-            r#"
-            UPDATE scheduled_action
-            SET next_run_at = $1, updated_at = now()
-            WHERE id = $2
-            "#,
-            next_run_at,
-            *id,
-        )
-        .execute(&self.pool)
-        .await?;
-
+        if row.trigger_type == "cron" {
+            let tz = parse_timezone(&row.timezone.context("cron timezone missing")?)?;
+            let schedule = Schedule::from_cron(row.schedule.context("cron schedule missing")?)?;
+            if let Some(next_run_at) = schedule.next_run_after_now(tz) {
+                sqlx::query!(
+                    r#"
+                    UPDATE scheduled_action
+                    SET next_run_at = $1, updated_at = now()
+                    WHERE id = $2 AND trigger_type = 'cron'
+                    "#,
+                    next_run_at,
+                    *id,
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+        tx.commit().await?;
         Ok(())
     }
 

@@ -81,3 +81,39 @@ fn fuzzy_matching_rewards_prefix_and_freshness() {
     assert!(fuzzy_freshness_score(&recent, "qtr plan", 1_000).is_some());
     assert!(fuzzy_freshness_score(&recent, "missing", 1_000).is_none());
 }
+
+#[test]
+fn soup_entity_recency_prefers_viewed_at_over_newer_activity() {
+    for typename in [
+        "GraphqlSoupDocument",
+        "GraphqlSoupChat",
+        "GraphqlSoupProject",
+        "GraphqlSoupChannel",
+        "GraphqlSoupCrmCompany",
+    ] {
+        let mut record = string_record(&[
+            ("__typename", typename),
+            ("name", "Viewed entity"),
+            ("viewedAt", "2025-01-01T00:00:00Z"),
+            ("updatedAt", "2025-01-03T00:00:00Z"),
+            ("interactedAt", "2025-01-04T00:00:00Z"),
+            ("createdAt", "2024-12-01T00:00:00Z"),
+        ]);
+        let key = EntityKey::entity(typename, &["entity"]);
+        assert_eq!(
+            project_search_documents(&key, &record)[0].timestamp_ms,
+            parse_rfc3339_millis("2025-01-01T00:00:00Z").unwrap(),
+            "{typename} must retain viewed-first ordering"
+        );
+        record.fields.insert("viewedAt".into(), CacheValue::Null);
+        assert_eq!(
+            project_search_documents(&key, &record)[0].timestamp_ms,
+            parse_rfc3339_millis("2025-01-03T00:00:00Z").unwrap()
+        );
+        record.fields.remove("updatedAt");
+        assert_eq!(
+            project_search_documents(&key, &record)[0].timestamp_ms,
+            parse_rfc3339_millis("2024-12-01T00:00:00Z").unwrap()
+        );
+    }
+}

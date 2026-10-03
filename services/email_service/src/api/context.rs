@@ -13,8 +13,8 @@ use email::{
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use email_service::calendar_request_gate::RedisCalendarRequestGate;
 use email_service::calendar_tokens::CalendarTokenProviderAdapter;
-use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 
 use email_service::config::Config;
 use email_service::outbound::email_api::GmailApi;
@@ -35,16 +35,6 @@ use tokio_util::task::TaskTracker;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 pub(crate) type CalendarGrantService = CalendarService<PgCalendarRepository>;
-pub(crate) type SchedulingService = calendar_scheduling::domain::service::Service<
-    calendar_scheduling::outbound::postgres::PostgresRepository,
-    calendar_scheduling::outbound::macro_services::MacroCalendars<
-        CalendarGrantService,
-        CalendarMutationSvc,
-    >,
-    calendar_scheduling::outbound::macro_services::MacroDirectory<
-        teams::outbound::team_repo::TeamRepositoryImpl,
-    >,
->;
 pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
     GoogleCalendarClient<RedisCalendarRequestGate>,
@@ -70,6 +60,12 @@ pub(crate) type EmailSvc = EmailServiceImpl<
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
+    pub invitation_resolver: Arc<
+        calendar_events::domain::invitations::CalendarInvitationResolver<
+            calendar_events::outbound::pg::PgCalendarRepository,
+        >,
+    >,
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
     // The raw client is retained only for Gmail webhook JWKS/JWT authentication.
@@ -92,6 +88,5 @@ pub(crate) struct ApiContext {
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
     pub macro_event_broker: Arc<EmailEventBroker>,
     pub calendar_service: Arc<CalendarGrantService>,
-    pub scheduling_service: Arc<SchedulingService>,
     pub calendar_mutation_service: Arc<CalendarMutationSvc>,
 }

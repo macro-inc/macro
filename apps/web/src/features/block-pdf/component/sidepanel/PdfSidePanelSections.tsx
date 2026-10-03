@@ -11,22 +11,22 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 export function PdfSidePanelSections() {
   return (
     <>
-      <SidePanel.Section id="actions" title="Actions" defaultOpen order={10}>
-        <ActionsSectionContent />
-      </SidePanel.Section>
+      <SidePanel.HeaderActions>
+        <PdfHeaderActions />
+      </SidePanel.HeaderActions>
       <FileDetailsSection order={20} />
       <FilePropertiesSection order={30} />
     </>
   );
 }
 
-function ActionsSectionContent() {
+function PdfHeaderActions() {
   const documentId = useBlockId();
   const name = useBlockDocumentName('Unknown Filename');
   const fileType = () => blockMetadataSignal()?.fileType;
 
   return (
-    <div class="m-px flex items-center justify-start gap-2">
+    <div class="flex shrink-0 items-center gap-1">
       <AskMacroButton
         entity={{
           type: 'document',
