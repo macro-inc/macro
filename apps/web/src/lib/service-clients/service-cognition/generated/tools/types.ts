@@ -390,6 +390,46 @@ export type ReminderEntityType =
   | 'call'
   | 'calendar_event';
 /**
+ * Who executes the routine. Agent IDs refer to personas, never conversation IDs.
+ */
+export type RoutineTarget =
+  | {
+      /**
+       * Runtime model ID.
+       */
+      model: string;
+      type: 'model';
+    }
+  | {
+      /**
+       * Persona/bot UUID from ListBots. Use your own persona ID to schedule yourself.
+       */
+      agentId: string;
+      type: 'agent';
+    };
+/**
+ * A recurring or one-off schedule.
+ */
+export type RoutineSchedule =
+  | {
+      /**
+       * RFC3339 timestamp including UTC offset.
+       */
+      at: string;
+      type: 'once';
+    }
+  | {
+      /**
+       * Seconds, minutes, hours, day-of-month, month, weekday (optional year).
+       */
+      expression: string;
+      /**
+       * IANA time zone, e.g. America/New_York.
+       */
+      timezone: string;
+      type: 'cron';
+    };
+/**
  * A tag color from the fixed palette.
  */
 export type TagColor =
@@ -1179,6 +1219,21 @@ export type ProjectShareAccess = 'off' | 'view' | 'comment' | 'edit';
  * Scope admitted by a project's share link.
  */
 export type ProjectLinkScope = 'off' | 'public' | 'team';
+/**
+ * Exactly one update intention avoids partially-applied configuration/activation changes.
+ */
+export type RoutineChange =
+  | {
+      /**
+       * New activation state.
+       */
+      enabled: boolean;
+      type: 'enabled';
+    }
+  | {
+      configuration: RoutineConfiguration;
+      type: 'configuration';
+    };
 /**
  * Content of a web fetch response - either a successful result or an error
  */
@@ -3206,6 +3261,60 @@ export interface ToolReminder {
   enabled: boolean;
 }
 /**
+ * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListBots. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
+ */
+export interface CreateRoutine {
+  configuration: RoutineConfiguration;
+}
+/**
+ * Complete user-editable configuration, independent of execution bookkeeping.
+ */
+export interface RoutineConfiguration {
+  /**
+   * Short descriptive name.
+   */
+  name: string;
+  /**
+   * Instructions passed to the model or agent on every run.
+   */
+  instructions: string;
+  target: RoutineTarget;
+  schedule: RoutineSchedule;
+}
+/**
+ * Compact routine details returned to the caller.
+ */
+export interface RoutineInfo {
+  /**
+   * Routine identifier.
+   */
+  id: string;
+  /**
+   * Display name.
+   */
+  name: string;
+  /**
+   * Whether automatic runs are enabled.
+   */
+  enabled: boolean;
+  /**
+   * Cron expression or event trigger, as stored by the scheduler.
+   */
+  trigger: {
+    [k: string]: unknown;
+  };
+  /**
+   * Execution target and instructions.
+   */
+  task: {
+    [k: string]: unknown;
+  };
+  /**
+   * Next scheduled firing, absent after a one-off completes.
+   */
+  nextRunAt?: string | null;
+}
+/**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
@@ -4690,6 +4799,32 @@ export interface ListRemindersResponse {
   summary: string;
 }
 /**
+ * Find the authenticated user’s routines, including work delegated to other agents. Filter by name/instructions or enabled state. Returns up to 50 matches and the full count; narrow the query if truncated. Use ReadRoutine for history.
+ */
+export interface ListRoutines {
+  /**
+   * Optional text to match in the routine name or task.
+   */
+  query?: string | null;
+  /**
+   * Optional active/paused filter.
+   */
+  enabled?: boolean | null;
+}
+/**
+ * A bounded list with the full matching count.
+ */
+export interface RoutineList {
+  /**
+   * Matching routines (most recent first).
+   */
+  routines: RoutineInfo[];
+  /**
+   * Total matches before the response limit.
+   */
+  total: number;
+}
+/**
  * List up to 100 of the most recently updated skills the user can access, plus built-in skills. Skills are markdown documents containing instructions for AI to read and follow; after finding a relevant skill, read its instructions with ReadSkill using the returned document id. Use this to discover what skills exist; when looking for a specific skill by name or an older skill not in this list, use SearchSkills.
  */
 export type ListSkills = {};
@@ -5994,6 +6129,25 @@ export interface ProjectItem {
   updatedAt?: string | null;
 }
 /**
+ * Read a routine’s saved configuration and recent run history, including status and transcript references. Accepts personal routines and routines explicitly shared with your team; reading a transcript still requires its own access.
+ */
+export interface ReadRoutine {
+  /**
+   * Routine UUID from CreateRoutine or ListRoutines.
+   */
+  routineId: string;
+}
+/**
+ * Routine configuration and recent execution history.
+ */
+export interface RoutineDetails {
+  routine: RoutineInfo;
+  /**
+   * Most recent runs, up to fifty, including status and transcript references.
+   */
+  runs: unknown[];
+}
+/**
  * Read a skill's complete markdown instructions by its documentId from ListSkills or SearchSkills, or a skill mention. Supports user-authored and built-in skills. Read a relevant skill before performing the task and follow its instructions for that request. Returns the skill name and full content; only skill documents the user can view are readable.
  */
 export interface ReadSkill {
@@ -6781,6 +6935,16 @@ export interface UpdateReminder {
    * Mark the reminder as dealt with (true) or put it back on the active list (false).
    */
   completed?: boolean | null;
+}
+/**
+ * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first before replacing configuration. Select an agent to delegate the routine or a model to run as Macro. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes.
+ */
+export interface UpdateRoutine {
+  /**
+   * Routine UUID.
+   */
+  routineId: string;
+  change: RoutineChange;
 }
 /**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.

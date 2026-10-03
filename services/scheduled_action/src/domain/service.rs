@@ -107,7 +107,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
         }
         if !disable_only {
             self.targets.validate_task(&input.task, caller).await?;
-            action.next_run_at = next_run(&input.trigger)?;
+            if trigger_changed || (!action.enabled && input.enabled) {
+                action.next_run_at = next_run(&input.trigger)?;
+            }
         }
         action.event_activated_at = match &input.trigger {
             ActionTrigger::Cron { .. } => None,

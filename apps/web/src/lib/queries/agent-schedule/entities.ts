@@ -10,7 +10,7 @@ import { getCronTrigger } from './triggers';
 // reporting the action as running.
 const MAX_CLAIMED_MS = 20 * 60 * 1000;
 
-function isClaimActive(claimed: string | undefined | null): boolean {
+export function isClaimActive(claimed: string | undefined | null): boolean {
   if (!claimed) return false;
   return Date.now() - Date.parse(claimed) < MAX_CLAIMED_MS;
 }

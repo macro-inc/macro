@@ -12,9 +12,11 @@ const draftFields = {
   id: z.string().optional(),
   name: z.string(),
   prompt: z.string(),
-  frequency: z.enum(['week', 'month']),
+  frequency: z.enum(['week', 'month', 'once']),
   // Incomplete schedule inputs are valid drafts, even before they can be submitted.
   time: z.string(),
+  onceAt: z.string().optional(),
+  timezone: z.string().optional(),
   daysOfWeek: z.array(z.string()),
   dayOfMonth: z.string(),
   // Older clients saved routine activation with the draft.

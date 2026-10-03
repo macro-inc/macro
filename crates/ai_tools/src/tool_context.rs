@@ -1472,12 +1472,21 @@ pub fn build_activity_tool_context(
     ))
 }
 
-#[derive(Clone, Default)]
-pub struct NoOpScheduleContext;
+pub use routines::inbound::RoutineToolContext;
+
+/// Build the routine client from standard service URL and auth configuration.
+pub fn build_routine_tool_context() -> anyhow::Result<RoutineToolContext> {
+    Ok(RoutineToolContext {
+        service: Some(routines::outbound::RoutineClient::new(
+            macro_service_urls::ScheduledActionServiceUrl::new()?.as_ref(),
+            &macro_auth::InternalApiKey::new()?,
+        )?),
+    })
+}
 
 #[cfg(any(test, feature = "test-support"))]
-pub fn no_op_schedule_context() -> NoOpScheduleContext {
-    NoOpScheduleContext
+pub fn no_op_schedule_context() -> RoutineToolContext {
+    RoutineToolContext::default()
 }
 
 /// The full service context containing all API clients.
@@ -1512,7 +1521,7 @@ pub struct ToolServiceContext {
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     pub skill_tool_context: ToolSkillToolContext,
-    pub schedule_tool_context: NoOpScheduleContext,
+    pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
     /// Records token usage / cost for AI calls made with this context.

@@ -865,6 +865,7 @@ dependencies = [
  "lazy_static",
  "lexical_client",
  "lexical_mention_extractor",
+ "macro_auth",
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
@@ -899,6 +900,7 @@ dependencies = [
  "remote_env_var",
  "reqwest 0.13.4",
  "rootcause",
+ "routines",
  "schemars 1.2.1",
  "search_service_client",
  "secretsmanager_client",
@@ -15367,6 +15369,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "routines"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "macro_authorization",
+ "macro_user_id",
+ "reqwest 0.13.4",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "rowan"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15839,6 +15861,7 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
+ "teams",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

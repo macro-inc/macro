@@ -52,7 +52,11 @@ function sources() {
 }
 
 function row(name: string): HTMLButtonElement {
-  return screen.getByRole('button', { name });
+  const words = name.split(' ');
+  const timestamp = words.pop();
+  return screen.getByRole('button', {
+    name: new RegExp(`${words.join(' ')}.*${timestamp}$`),
+  });
 }
 
 describe('routine history', () => {
@@ -216,7 +220,7 @@ describe('routine history', () => {
     );
   });
 
-  it('keeps loading/empty states and the 50-row limit', () => {
+  it('loads history in bounded pages without fetching hidden transcripts', () => {
     const source = sources();
     const [pending, setPending] = createSignal(true);
     const [records, setRecords] = createSignal<HistoryRecord[]>([]);
@@ -229,7 +233,10 @@ describe('routine history', () => {
     setRecords(
       Array.from({ length: 51 }, (_, index) => record('chat', String(index)))
     );
-    expect(screen.getAllByRole('button')).toHaveLength(50);
+    expect(screen.getAllByRole('button')).toHaveLength(51);
     expect(source.createChatMetadata).toHaveBeenCalledTimes(50);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more runs' }));
+    expect(source.createChatMetadata).toHaveBeenCalledTimes(51);
+    expect(screen.queryByText('Load more runs')).toBeNull();
   });
 });

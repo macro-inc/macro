@@ -1,6 +1,6 @@
 import type { RoutineTarget } from '../core/routine-target';
 
-export type ScheduleFrequency = 'week' | 'month';
+export type ScheduleFrequency = 'week' | 'month' | 'once';
 
 export type ScheduleDraft = {
   id?: string;
@@ -13,4 +13,6 @@ export type ScheduleDraft = {
   /** 1-31 day-of-month when frequency === "month". */
   dayOfMonth: string;
   target: RoutineTarget;
+  onceAt?: string;
+  timezone?: string;
 };

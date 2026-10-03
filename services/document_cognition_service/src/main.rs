@@ -691,7 +691,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service.clone(),
             &document_tool_context,
         ),
-        schedule_tool_context: ai_tools::NoOpScheduleContext,
+        schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),

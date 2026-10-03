@@ -1,0 +1,23 @@
+[package]
+name = "routines"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+cron.workspace = true
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+reqwest.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

@@ -3,17 +3,15 @@ import { toast } from '@core/component/Toast/Toast';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Dialog, Surface } from '@ui';
+import { Button, Dialog, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   type JSX,
   on,
   Show,
 } from 'solid-js';
-import { routineTargetSchema } from '../core/routine-target';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
 import {
   clearAutomationComposerDraft,
@@ -21,18 +19,14 @@ import {
   saveAutomationComposerDraft,
 } from '../util/automationComposerStorage';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
-import { AutomationTimePicker } from './AutomationTimePicker';
 import {
   createEmptyDraft,
-  describeSchedule,
   draftToCreateBody,
-  FREQUENCY_OPTIONS,
-  getDefaultTimezone,
   getErrorMessage,
   INPUT_CLASS,
-  isValidTime,
-  WEEKDAY_OPTIONS,
+  validateRoutineDraft,
 } from './automationUtils';
+import { RoutineScheduleFields } from './RoutineScheduleFields';
 import type { ScheduleDraft } from './types';
 
 /**
@@ -85,27 +79,7 @@ export function AutomationComposer(): JSX.Element {
     })
   );
 
-  const currentSummary = createMemo(() =>
-    describeSchedule(draft(), getDefaultTimezone())
-  );
-
-  const formError = createMemo(() => {
-    if (!draft().prompt.trim()) return 'Prompt is required.';
-    if (!isValidTime(draft().time)) return 'Choose a valid time.';
-    if (draft().frequency === 'week' && draft().daysOfWeek.length === 0) {
-      return 'Select at least one day.';
-    }
-    if (draft().frequency === 'month') {
-      const day = Number(draft().dayOfMonth);
-      if (!Number.isInteger(day) || day < 1 || day > 31) {
-        return 'Pick a day between 1 and 31.';
-      }
-    }
-    if (!routineTargetSchema.safeParse(draft().target).success) {
-      return 'Choose a valid model or agent.';
-    }
-    return null;
-  });
+  const formError = createMemo(() => validateRoutineDraft(draft(), true));
 
   const createMutation = useCreateScheduleMutation({
     onSuccess: async (schedule) => {
@@ -119,13 +93,13 @@ export function AutomationComposer(): JSX.Element {
           { referredFrom: 'launcher' }
         );
       }
-      toast.success('Automation created', {
-        subtext: 'The automation is now scheduled.',
+      toast.success('Routine created', {
+        subtext: 'Your routine is scheduled.',
       });
     },
     onError: (error) => {
       setSubmitError(getErrorMessage(error));
-      toast.alert('Failed to create automation', {
+      toast.alert('Failed to create routine', {
         subtext: getErrorMessage(error),
       });
     },
@@ -142,14 +116,6 @@ export function AutomationComposer(): JSX.Element {
     createMutation.mutate(draftToCreateBody(draft()));
   }
 
-  const toggleClass = (active: boolean) =>
-    cn(
-      'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
-      active
-        ? 'border-accent/30 bg-accent/10 text-accent'
-        : 'border-edge-muted text-ink-muted hover:bg-hover'
-    );
-
   return (
     <Dialog
       open={automationComposerOpen()}
@@ -160,7 +126,7 @@ export function AutomationComposer(): JSX.Element {
           <div class="flex cursor-default flex-col text-ink">
             <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">
               <Dialog.Title class="m-0 p-0 text-sm font-semibold">
-                New Automation
+                New Routine
               </Dialog.Title>
               <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
                 &times;
@@ -178,7 +144,7 @@ export function AutomationComposer(): JSX.Element {
                 </label>
                 <input
                   class={INPUT_CLASS}
-                  placeholder="e.g. Morning standup summary"
+                  placeholder="e.g. Morning briefing"
                   value={draft().name}
                   onInput={(event) =>
                     setDraft((current) => ({
@@ -214,104 +180,9 @@ export function AutomationComposer(): JSX.Element {
               <div class="grid gap-3 border border-edge-muted rounded-sm p-3">
                 <div>
                   <p class="text-sm font-semibold">Schedule</p>
-                  <p class="mt-0.5 text-xs text-ink-muted">
-                    {currentSummary()}
-                  </p>
                 </div>
 
-                <div class="flex flex-wrap gap-1">
-                  <For each={FREQUENCY_OPTIONS}>
-                    {(option) => (
-                      <button
-                        type="button"
-                        class={toggleClass(draft().frequency === option.value)}
-                        onClick={() =>
-                          setDraft((current) => ({
-                            ...current,
-                            frequency: option.value,
-                          }))
-                        }
-                      >
-                        {option.label}
-                      </button>
-                    )}
-                  </For>
-                </div>
-
-                <Show when={draft().frequency === 'week'}>
-                  <div class="grid gap-1.5">
-                    <label class="text-xs font-medium text-ink-muted cursor-default">
-                      Days
-                    </label>
-                    <div class="flex flex-wrap gap-1">
-                      <For each={WEEKDAY_OPTIONS}>
-                        {(option) => {
-                          const active = () =>
-                            draft().daysOfWeek.includes(option.value);
-                          return (
-                            <button
-                              type="button"
-                              class={toggleClass(active())}
-                              onClick={() =>
-                                setDraft((current) => {
-                                  const has = current.daysOfWeek.includes(
-                                    option.value
-                                  );
-                                  return {
-                                    ...current,
-                                    daysOfWeek: has
-                                      ? current.daysOfWeek.filter(
-                                          (v) => v !== option.value
-                                        )
-                                      : [...current.daysOfWeek, option.value],
-                                  };
-                                })
-                              }
-                            >
-                              {option.label}
-                            </button>
-                          );
-                        }}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={draft().frequency === 'month'}>
-                  <div class="grid gap-1.5">
-                    <label class="text-xs font-medium text-ink-muted cursor-default">
-                      Day of Month
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      class={INPUT_CLASS}
-                      value={draft().dayOfMonth}
-                      onInput={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          dayOfMonth: event.currentTarget.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </Show>
-
-                <div class="grid gap-1.5">
-                  <label class="text-xs font-medium text-ink-muted cursor-default">
-                    Time
-                  </label>
-                  <AutomationTimePicker
-                    value={draft().time}
-                    onChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        time: value,
-                      }))
-                    }
-                  />
-                </div>
+                <RoutineScheduleFields draft={draft()} onChange={setDraft} />
               </div>
 
               <Show when={submitAttempted() && formError()}>

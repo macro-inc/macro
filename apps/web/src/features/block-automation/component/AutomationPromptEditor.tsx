@@ -19,7 +19,7 @@ export function AutomationPromptEditor(props: {
       <MarkdownShell
         config={editor}
         initialValue={props.initialValue}
-        placeholder=""
+        placeholder="Describe what should happen. Use @ to reference people, channels, or documents…"
         portalScope="local"
         class="min-h-45"
       />

@@ -82,6 +82,7 @@ impl ScheduledActionRepo for FakeRepo {
         &self,
         _id: &Uuid,
         _revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<ClaimToken> {
         unimplemented!()
     }
@@ -1018,4 +1019,38 @@ async fn configuration_updates_that_omit_activation_keep_it() {
         assert_eq!(updated.enabled, enabled);
         assert_eq!(updated.name, format!("renamed while enabled={enabled}"));
     }
+}
+
+#[tokio::test]
+async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
+    let svc = service(false);
+    let mut config = configuration(false);
+    let created = svc
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+    config.trigger = ActionTrigger::Cron {
+        schedule: crate::domain::models::Schedule::from_cron("0 0 9 1 1 * 2000".into()).unwrap(),
+        timezone: chrono_tz::UTC,
+    };
+    let firing = Utc::now() - chrono::Duration::minutes(1);
+    {
+        let mut actions = svc.repo.actions.lock().unwrap();
+        actions[0].trigger = config.trigger.clone();
+        actions[0].next_run_at = Some(firing);
+    }
+    config.name = "Renamed while waiting for the worker".into();
+    let updated = svc
+        .update_action(&id, update(config.clone()), user())
+        .await
+        .unwrap();
+    assert_eq!(updated.next_run_at, Some(firing));
+    svc.repo.actions.lock().unwrap()[0].next_run_at = None;
+    config.name = "Renamed after completion".into();
+    let updated = svc
+        .update_action(&id, update(config), user())
+        .await
+        .unwrap();
+    assert_eq!(updated.next_run_at, None);
 }

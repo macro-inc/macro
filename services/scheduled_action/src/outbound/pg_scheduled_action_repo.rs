@@ -51,7 +51,8 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
 }
 
 /// One mapping for every action query, including management and dispatch.
-struct ActionRow {
+#[derive(serde::Deserialize)]
+pub(super) struct ActionRow {
     id: Uuid,
     owner: String,
     name: String,
@@ -236,7 +237,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
                    configuration_revision, event_activated_at
             FROM scheduled_action
-            WHERE enabled AND trigger_type = 'cron'
+            WHERE enabled AND trigger_type = 'cron' AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
             ORDER BY next_run_at ASC, id ASC
             LIMIT $2
@@ -332,7 +333,12 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         Ok(())
     }
 
-    async fn claim_action(&self, id: &Uuid, revision: ConfigurationRevision) -> Result<ClaimToken> {
+    async fn claim_action(
+        &self,
+        id: &Uuid,
+        revision: ConfigurationRevision,
+        expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<ClaimToken> {
         let token = ClaimToken::generate();
         let now = Utc::now();
         let stale_threshold = now - MAX_ACTION_TIME;
@@ -343,6 +349,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             SET claimed = $1, claim_token = $4, updated_at = now()
             WHERE id = $2
               AND configuration_revision = $5
+              AND next_run_at IS NOT DISTINCT FROM $6
               AND (claimed IS NULL OR claimed < $3)
             "#,
             now,
@@ -350,6 +357,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             stale_threshold,
             token.as_uuid(),
             revision.get(),
+            expected_next_run_at,
         )
         .execute(&self.pool)
         .await?;
@@ -443,19 +451,20 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         if row.trigger_type == "cron" {
             let tz = parse_timezone(&row.timezone.context("cron timezone missing")?)?;
             let schedule = Schedule::from_cron(row.schedule.context("cron schedule missing")?)?;
-            if let Some(next_run_at) = schedule.next_run_after_now(tz) {
-                sqlx::query!(
-                    r#"
+            // An exhausted single-year cron must clear its previous firing;
+            // retaining it would let the polling dispatcher run it repeatedly.
+            let next_run_at = schedule.next_run_after_now(tz);
+            sqlx::query!(
+                r#"
                     UPDATE scheduled_action
                     SET next_run_at = $1, updated_at = now()
                     WHERE id = $2 AND trigger_type = 'cron'
                     "#,
-                    next_run_at,
-                    *id,
-                )
-                .execute(&mut *tx)
-                .await?;
-            }
+                next_run_at,
+                *id,
+            )
+            .execute(&mut *tx)
+            .await?;
         }
         tx.commit().await?;
         Ok(())

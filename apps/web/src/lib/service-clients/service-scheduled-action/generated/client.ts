@@ -13,6 +13,8 @@ import type {
   ListScheduledActionsParams,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
+  SharedRoutine,
+  ShareRoutine,
   UpdateScheduledAction,
 } from './schemas';
 
@@ -51,6 +53,144 @@ export const scheduledActionHealth = async (
     status: res.status,
     headers: res.headers,
   } as scheduledActionHealthResponse;
+};
+
+export type listTeamRoutinesResponse200 = {
+  data: SharedRoutine[];
+  status: 200;
+};
+
+export type listTeamRoutinesResponseSuccess = listTeamRoutinesResponse200 & {
+  headers: Headers;
+};
+
+export type listTeamRoutinesResponse = listTeamRoutinesResponseSuccess;
+
+export const getListTeamRoutinesUrl = () => {
+  return `/routines/team`;
+};
+
+export const listTeamRoutines = async (
+  options?: RequestInit
+): Promise<listTeamRoutinesResponse> => {
+  const res = await fetch(getListTeamRoutinesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamRoutinesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamRoutinesResponse;
+};
+
+export type getRoutineResponse200 = {
+  data: SharedRoutine;
+  status: 200;
+};
+
+export type getRoutineResponseSuccess = getRoutineResponse200 & {
+  headers: Headers;
+};
+
+export type getRoutineResponse = getRoutineResponseSuccess;
+
+export const getGetRoutineUrl = (id: string) => {
+  return `/routines/${id}`;
+};
+
+export const getRoutine = async (
+  id: string,
+  options?: RequestInit
+): Promise<getRoutineResponse> => {
+  const res = await fetch(getGetRoutineUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getRoutineResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getRoutineResponse;
+};
+
+export type getRoutineHistoryResponse200 = {
+  data: ActionExecutionRecord[];
+  status: 200;
+};
+
+export type getRoutineHistoryResponseSuccess = getRoutineHistoryResponse200 & {
+  headers: Headers;
+};
+
+export type getRoutineHistoryResponse = getRoutineHistoryResponseSuccess;
+
+export const getGetRoutineHistoryUrl = (id: string) => {
+  return `/routines/${id}/history`;
+};
+
+export const getRoutineHistory = async (
+  id: string,
+  options?: RequestInit
+): Promise<getRoutineHistoryResponse> => {
+  const res = await fetch(getGetRoutineHistoryUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getRoutineHistoryResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getRoutineHistoryResponse;
+};
+
+export type shareRoutineResponse200 = {
+  data: SharedRoutine;
+  status: 200;
+};
+
+export type shareRoutineResponseSuccess = shareRoutineResponse200 & {
+  headers: Headers;
+};
+
+export type shareRoutineResponse = shareRoutineResponseSuccess;
+
+export const getShareRoutineUrl = (id: string) => {
+  return `/routines/${id}/sharing`;
+};
+
+export const shareRoutine = async (
+  id: string,
+  shareRoutine: ShareRoutine,
+  options?: RequestInit
+): Promise<shareRoutineResponse> => {
+  const res = await fetch(getShareRoutineUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(shareRoutine),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: shareRoutineResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as shareRoutineResponse;
 };
 
 export type listScheduledActionsResponse200 = {

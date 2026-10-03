@@ -21,6 +21,7 @@ import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
 import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
+import RoutineIcon from '@phosphor/clock-clockwise.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
@@ -240,6 +241,15 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 <AgentIcon />
               </ViewSidebar.Icon>
               <span>Agents</span>
+            </ViewSidebar.Item>
+            <ViewSidebar.Item
+              active={props.activePage === 'routines'}
+              onClick={() => props.onOpenPage('routines')}
+            >
+              <ViewSidebar.Icon>
+                <RoutineIcon />
+              </ViewSidebar.Icon>
+              <span>Routines</span>
             </ViewSidebar.Item>
             <ViewSidebar.Item
               active={props.activePage === 'connections'}

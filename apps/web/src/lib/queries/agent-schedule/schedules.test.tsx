@@ -100,6 +100,30 @@ describe('routine activation', () => {
     expect(schedules()).toEqual([saved, other]);
   });
 
+  it('rolls back activation from a detail-only cache after an error', async () => {
+    queryClient.removeQueries({ queryKey: scheduledActionKeys.list.queryKey });
+    const detailKey = scheduledActionKeys.detail({
+      scheduleId: 'routine',
+    }).queryKey;
+    queryClient.setQueryData(detailKey, { ...routine, team_id: 'team' });
+    const respond = respondLater();
+    const pausing = mountMutation().mutateAsync({
+      scheduleId: 'routine',
+      enabled: false,
+    });
+    await vi.waitFor(() =>
+      expect(
+        queryClient.getQueryData<ScheduledAction>(detailKey)?.enabled
+      ).toBe(false)
+    );
+    respond(err([{ code: 'CONFLICT', message: 'Routine changed' }]));
+    await expect(pausing).rejects.toThrow('Routine changed');
+    expect(queryClient.getQueryData(detailKey)).toEqual({
+      ...routine,
+      team_id: 'team',
+    });
+  });
+
   it('restores only the activation it changed when saving fails', async () => {
     const respond = respondLater();
     const pausing = mountMutation().mutateAsync({

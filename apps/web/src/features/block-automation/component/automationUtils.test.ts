@@ -5,7 +5,9 @@ import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  onceFromCron,
   scheduleToDuplicateBody,
+  validateRoutineDraft,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
 
@@ -325,5 +327,56 @@ describe('cron automation payloads', () => {
     expect(scheduleToDuplicateBody(action)).toMatchObject({
       trigger: cron.trigger,
     });
+  });
+});
+
+describe('one-off routines', () => {
+  it('preserves the instant of a year-bounded cron in another timezone', () => {
+    const once = onceFromCron('0 0 9 3 10 * 2030', 'America/New_York');
+    expect(new Date(once!.onceAt).toISOString()).toBe(
+      '2030-10-03T13:00:00.000Z'
+    );
+  });
+  it('keeps an unchanged one-off trigger and its timezone when editing instructions', () => {
+    const routine = {
+      ...cron,
+      trigger: {
+        type: 'cron' as const,
+        schedule: '12 0 9 3 10 * 2030',
+        timezone: 'America/New_York',
+      },
+    };
+    const draft = loadedDraft(routine);
+    expect(draft.frequency).toBe('once');
+    expect(
+      draftToUpdateBody({ ...draft, prompt: 'New instructions' }, routine)
+    ).toEqual(expect.objectContaining({ trigger: routine.trigger }));
+    const created = draftToCreateBody(draft);
+    expect(
+      created && 'trigger' in created ? created.trigger : undefined
+    ).toEqual({
+      type: 'cron',
+      schedule: '12 0 13 3 10 * 2030',
+      timezone: 'UTC',
+    });
+  });
+  it('rejects past one-off creation but permits editing a completed routine', () => {
+    const once = {
+      ...draft(),
+      frequency: 'once' as const,
+      onceAt: '2000-01-01T09:00',
+    };
+    expect(validateRoutineDraft(once, true)).toBe(
+      'Choose a time in the future.'
+    );
+    expect(validateRoutineDraft(once)).toBeNull();
+  });
+  it('rejects empty weekdays and invalid timezones', () => {
+    expect(
+      validateRoutineDraft({ ...draft(), frequency: 'week', daysOfWeek: [] })
+    ).toBe('Select at least one day.');
+    expect(
+      validateRoutineDraft({ ...draft(), timezone: 'Mars/Olympus' })
+    ).toContain('valid time zone');
   });
 });

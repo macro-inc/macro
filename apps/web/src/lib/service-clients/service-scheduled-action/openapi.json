@@ -28,6 +28,127 @@
         }
       }
     },
+    "/routines/team": {
+      "get": {
+        "tags": ["crate::inbound::routine_sharing"],
+        "operationId": "list_team_routines",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SharedRoutine"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routines/{id}": {
+      "get": {
+        "tags": ["crate::inbound::routine_sharing"],
+        "operationId": "get_routine",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedRoutine"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routines/{id}/history": {
+      "get": {
+        "tags": ["crate::inbound::routine_sharing"],
+        "operationId": "get_routine_history",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActionExecutionRecord"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/routines/{id}/sharing": {
+      "put": {
+        "tags": ["crate::inbound::routine_sharing"],
+        "operationId": "share_routine",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRoutine"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedRoutine"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1014,6 +1135,33 @@
           }
         },
         "additionalProperties": false
+      },
+      "ShareRoutine": {
+        "type": "object",
+        "properties": {
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SharedRoutine": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ScheduledAction"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "team_id": {
+                "type": ["string", "null"],
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "description": "A routine and its optional audience. Personal routines are never inferred from membership."
       },
       "UpdateScheduledAction": {
         "oneOf": [

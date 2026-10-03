@@ -5,6 +5,7 @@ import { cn } from '@ui';
 import {
   type Accessor,
   createMemo,
+  createSignal,
   For,
   type JSX,
   Show,
@@ -16,6 +17,7 @@ export type HistoryRecord = {
   resource_id?: string | null;
   result: unknown;
   start_time?: string | null;
+  end_time?: string | null;
   is_success?: boolean | null;
 };
 
@@ -46,6 +48,27 @@ function HistoryRow(props: HistoryRowProps): JSX.Element {
     Boolean(
       props.resource && props.metadata.status === 'ready' && props.onOpen
     );
+  const outcome = () =>
+    !props.record.id
+      ? 'Running'
+      : props.record.is_success
+        ? 'Succeeded'
+        : 'Failed';
+  const duration = () => {
+    if (!props.record.start_time || !props.record.end_time) return '—';
+    const seconds = Math.max(
+      0,
+      Math.round(
+        (Date.parse(props.record.end_time) -
+          Date.parse(props.record.start_time)) /
+          1000
+      )
+    );
+    if (!Number.isFinite(seconds)) return '—';
+    return seconds < 60
+      ? `${seconds}s`
+      : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  };
   const name = () => {
     const metadata = props.metadata;
     if (metadata.status === 'ready')
@@ -76,6 +99,17 @@ function HistoryRow(props: HistoryRowProps): JSX.Element {
       </div>
       <span class="min-w-0 flex-1 truncate" title={name()}>
         {name()}
+      </span>
+      <span
+        class={cn(
+          'hidden shrink-0 text-xs sm:inline',
+          outcome() === 'Failed' ? 'text-failure' : 'text-ink-muted'
+        )}
+      >
+        {outcome()}
+      </span>
+      <span class="hidden w-16 shrink-0 text-right text-xs text-ink-muted sm:inline">
+        {duration()}
       </span>
       <span
         class={cn(
@@ -152,6 +186,7 @@ function ResolvedHistoryRow(props: {
 }
 
 export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
+  const [visibleCount, setVisibleCount] = createSignal(50);
   return (
     <Show
       when={props.records.length > 0}
@@ -161,10 +196,24 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
         </div>
       }
     >
-      <div class="min-h-0 h-full overflow-y-scroll">
-        <For each={props.records.slice(0, 50)}>
+      <div class="min-h-0 overflow-y-auto">
+        <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-3 text-xs text-ink-muted">
+          <span class="flex-1">Run</span>
+          <span class="hidden sm:inline">Status / Duration</span>
+          <span class="ml-4">Triggered</span>
+        </div>
+        <For each={props.records.slice(0, visibleCount())}>
           {(record) => <ResolvedHistoryRow record={record} history={props} />}
         </For>
+        <Show when={props.records.length > visibleCount()}>
+          <button
+            type="button"
+            class="w-full p-3 text-xs text-ink-muted hover:bg-hover"
+            onClick={() => setVisibleCount((count) => count + 50)}
+          >
+            Load more runs
+          </button>
+        </Show>
       </div>
     </Show>
   );

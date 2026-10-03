@@ -12,6 +12,7 @@ import type {
   InProgressExecution,
   ScheduledAction,
   SetScheduledActionEnabled,
+  SharedRoutine,
   UpdateScheduledAction,
 } from './generated/schemas';
 
@@ -34,7 +35,18 @@ function scheduledActionFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${scheduledActionHost}${url}`, init);
 }
 
+export type { SharedRoutine } from './generated/schemas';
+
 export const scheduledActionClient = {
+  listTeamRoutines: () =>
+    scheduledActionFetch<SharedRoutine[]>('/routines/team', { method: 'GET' }),
+  getRoutine: (id: string) =>
+    scheduledActionFetch<SharedRoutine>(`/routines/${id}`, { method: 'GET' }),
+  shareRoutine: (id: string, teamId: string | null) =>
+    scheduledActionFetch<SharedRoutine>(`/routines/${id}/sharing`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: teamId }),
+    }),
   // Include backend-managed routines so direct routes can identify them.
   // Cron-only entity lists filter these out before rendering.
   listSchedules: async () =>
@@ -90,7 +102,7 @@ export const scheduledActionClient = {
 
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ActionExecutionRecord[]>(
-      `/scheduled-actions/${args.scheduleId}/history`,
+      `/routines/${args.scheduleId}/history`,
       { method: 'GET' }
     ),
 };

@@ -63,11 +63,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Claim only while the stored configuration is still `revision`, so a
-    /// snapshot read before a pause or update can never start a run.
+    /// snapshot read before a pause or update can never start a run. The stored
+    /// firing must also match, fencing candidates fetched before a completed run.
     fn claim_action(
         &self,
         id: &Uuid,
         revision: ConfigurationRevision,
+        expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> impl Future<Output = Result<ClaimToken>> + Send;
 
     /// Release only this execution's claim; stale tokens must not mutate a newer run.

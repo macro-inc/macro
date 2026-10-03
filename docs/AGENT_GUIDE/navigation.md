@@ -50,7 +50,7 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
+| `/app/automation/<uuid>` | Routine settings and run history; event triggers are read-only |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
@@ -423,7 +423,7 @@ or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
 
-`Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
+`Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task, Project, and Channel open dialogs.
 When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
@@ -444,30 +444,44 @@ the static highlight.
 
 ## Routines (automations)
 
-Create → Automation creates an active cron-scheduled routine. Cron routines support
-editing instructions, schedule, and the **Execution target** model/agent picker,
-Rename, the **Active** switch, Duplicate, Run Now, and History links to run chats.
-The **Active** switch next to **Run Now** pauses or resumes the routine at once,
-separately from autosave and even while the draft is invalid. A paused routine
-shows no next run in its editor; routine lists mute its title and label it
-**Paused**. Edits autosave in order and never change whether the routine is
-active. **Run Now** stays disabled until the latest valid edit saves successfully;
-it also works while paused. A failed save keeps the selection visible with
-**Changes not saved** and **Retry save**. While running, configuration cannot be
-changed, and the switch can pause the routine but cannot resume it until the run
-ends. Duplicate retains the saved execution configuration and active state, not
-unsaved edits.
-If a background refresh fails, cached cron routines stay listed and their editor
-and queued autosave remain available. An initial load failure without cached data
-shows **Unable to load automation** instead. Cached event routines remain
-backend-managed even after a refresh failure.
+Open **Agents → Routines** for the **Mine** and **Team** lists. On the legacy
+or touch Agents screen, use the **Routines** button above the list. Search by
+routine name, creator, or agent. **History** opens that routine's Run History
+tab, including when its Settings tab is already open.
 
-Event-triggered routines are backend-managed through the scheduled-action API.
-They do not appear in the frontend's cron-only automation lists. Opening an
-API-created event routine at `/app/automation/<uuid>` shows **Backend-managed
-routine**, not a cron editor. This surface offers no event editing, duplication,
-or run/history controls; manage those through the API. It never replaces an
-event trigger with a cron schedule. There is no event-filter composer yet.
+**Create → Routine** (U) and **New Routine** open the creation dialog. Set a name,
+instructions, and the **Execution target** model/agent picker, which uses the
+same runtime models and agents as the composer. Choose **Once**, **Every week**, or **Every month**. Select all seven weekdays
+for a daily routine. Once uses your local date/time; repeating schedules
+have an editable IANA timezone. **Explore templates** offers editable Macro and
+integration starters. Referenced channels, projects, and integrations must be
+available to the selected agent.
+
+The **Active** switch pauses or resumes immediately, independently of draft
+validation. Settings autosave in order without changing activation. **Run Now**
+waits for the latest valid edit to save; it also works while paused. A failed
+save keeps the draft and offers **Retry save**. While running, configuration is
+locked; the routine can be paused but cannot resume until the run ends.
+Completed one-offs remain visible with their history and do not repeat.
+
+Under **Sharing**, choose a team to let its current members view the routine's
+instructions and run history. **Only me** revokes sharing. Personal routines do
+not appear for teammates automatically. Team viewers cannot edit, pause, or
+remove another person's routine. Run conversations keep their own permissions.
+
+**Run History** shows outcome, duration, and firing time. History loads fifty
+rows at a time; **Load more runs** reveals older records. Accessible run rows
+open the chat or agent session created by that run. Unavailable conversations
+remain non-clickable. Event-triggered routines also expose history and the
+owner's activation control; their event configuration remains API-managed.
+There is no event-filter composer.
+
+MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
+**ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the
+`botId` from **ListBots** as `agentId`, or `target.type: "model"` with a runtime
+model ID. `schedule.type: "once"` accepts a future RFC3339 `at` timestamp;
+`"cron"` accepts a six-field `expression` and IANA `timezone`. Routine ownership
+comes from the authenticated caller, never a model-supplied user ID.
 
 ## Command menu (Ctrl+K)
 

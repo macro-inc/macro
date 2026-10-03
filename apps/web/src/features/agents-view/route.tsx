@@ -14,7 +14,7 @@ import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { createRenderEffect, lazy, Show } from 'solid-js';
+import { createRenderEffect, createSignal, lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { parseAgentsRoute } from './core/route';
@@ -25,11 +25,15 @@ const SoupView = lazy(async () => ({
 const AgentsView = lazy(async () => ({
   default: (await import('./views/AgentsView')).AgentsView,
 }));
+const RoutinesPage = lazy(async () => ({
+  default: (await import('../routines/routines-page')).RoutinesPage,
+}));
 const McpConnections = lazy(async () => ({
   default: (await import('../settings/McpConnections')).McpConnections,
 }));
 
 function LegacyAgentsView() {
+  const [routines, setRoutines] = createSignal(false);
   const user = useUserContext();
   const preset = getViewPreset('agents', undefined, {
     userId: user.userId(),
@@ -37,13 +41,46 @@ function LegacyAgentsView() {
   });
   const entities = useAutomationEntities();
   return (
-    <SoupView
-      viewName="Agents"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-      additionalEntities={entities}
-    />
+    <div class="flex size-full flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+      <div
+        class="flex gap-1 border-b border-edge-muted px-4 py-2"
+        role="group"
+        aria-label="Agent workspace"
+      >
+        <button
+          type="button"
+          aria-pressed={!routines()}
+          class="rounded-md px-3 py-1.5 text-sm text-ink hover:bg-hover"
+          onClick={() => setRoutines(false)}
+        >
+          Agents
+        </button>
+        <button
+          type="button"
+          aria-pressed={routines()}
+          class="rounded-md px-3 py-1.5 text-sm text-ink hover:bg-hover"
+          onClick={() => setRoutines(true)}
+        >
+          Routines
+        </button>
+      </div>
+      <div class="min-h-0 flex-1 overflow-auto">
+        <Show
+          when={routines()}
+          fallback={
+            <SoupView
+              viewName="Agents"
+              initialFilters={preset?.filters}
+              initialClientFilters={preset?.clientFilters}
+              initialGroupBy={preset?.groupBy}
+              additionalEntities={entities}
+            />
+          }
+        >
+          <RoutinesPage />
+        </Show>
+      </div>
+    </div>
   );
 }
 
@@ -82,7 +119,25 @@ export const AgentsRouteView = withAuth(() => {
           <Show
             when={connectionsRequested()}
             fallback={
-              <Show when={route()} fallback={<LegacyAgentsView />}>
+              <Show
+                when={route()}
+                fallback={
+                  <Show
+                    when={(() => {
+                      const content = panel.handle.content();
+                      return (
+                        content.type === 'component' &&
+                        content.params?.agentPage === 'routines'
+                      );
+                    })()}
+                    fallback={<LegacyAgentsView />}
+                  >
+                    <div class="size-full overflow-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                      <RoutinesPage />
+                    </div>
+                  </Show>
+                }
+              >
                 {(current) => (
                   <RedirectSplit
                     to={{

@@ -27,6 +27,10 @@ use model::response::EmptyResponse;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        crate::inbound::routine_sharing::list,
+        crate::inbound::routine_sharing::read,
+        crate::inbound::routine_sharing::share,
+        crate::inbound::routine_sharing::history,
         crate::inbound::axum_router::health,
         crate::inbound::axum_router::list_actions,
         crate::inbound::axum_router::create_action,

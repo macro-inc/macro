@@ -3,10 +3,10 @@ import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
-  ActionExecutionRecord,
   CreateScheduledAction,
   InProgressExecution,
   ScheduledAction,
+  SharedRoutine,
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -19,6 +19,13 @@ const QUERY_REFETCH_BEHAVIOR = {
 };
 
 function upsertSchedule(schedule: ScheduledAction) {
+  if (schedule.id)
+    queryClient.setQueryData(
+      scheduledActionKeys.detail({ scheduleId: schedule.id }).queryKey,
+      (current: SharedRoutine | undefined) =>
+        current ? { ...current, ...schedule } : undefined
+    );
+
   queryClient.setQueryData(
     scheduledActionKeys.list.queryKey,
     (current: ScheduledAction[] | undefined) => {
@@ -43,6 +50,12 @@ function removeSchedule(scheduleId: string) {
 }
 
 function patchScheduleEnabled(scheduleId: string, enabled: boolean) {
+  queryClient.setQueryData(
+    scheduledActionKeys.detail({ scheduleId }).queryKey,
+    (current: ScheduledAction | undefined) =>
+      current ? { ...current, enabled } : undefined
+  );
+
   queryClient.setQueryData(
     scheduledActionKeys.list.queryKey,
     (current: ScheduledAction[] | undefined) =>
@@ -83,16 +96,23 @@ export function useScheduleHistoryQuery(
               scheduleId: currentScheduleId!,
             })
         ),
-      placeholderData: (prev: ActionExecutionRecord[] | undefined) => prev,
       ...QUERY_REFETCH_BEHAVIOR,
     };
   });
 }
 
 export function invalidateSchedules() {
-  return queryClient.invalidateQueries({
-    queryKey: scheduledActionKeys.list.queryKey,
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.list.queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.team.queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.detail._def,
+    }),
+  ]);
 }
 
 function _invalidateScheduleHistory(scheduleId: string) {
@@ -172,12 +192,23 @@ export function useSetScheduleEnabledMutation(
     >(
       {
         onMutate: async ({ scheduleId, enabled }) => {
-          await queryClient.cancelQueries({
-            queryKey: scheduledActionKeys.list.queryKey,
-          });
-          const previousEnabled = queryClient
-            .getQueryData<ScheduledAction[]>(scheduledActionKeys.list.queryKey)
-            ?.find((item) => item.id === scheduleId)?.enabled;
+          await Promise.all([
+            queryClient.cancelQueries({
+              queryKey: scheduledActionKeys.list.queryKey,
+            }),
+            queryClient.cancelQueries({
+              queryKey: scheduledActionKeys.detail({ scheduleId }).queryKey,
+            }),
+          ]);
+          const previousEnabled =
+            queryClient.getQueryData<ScheduledAction>(
+              scheduledActionKeys.detail({ scheduleId }).queryKey
+            )?.enabled ??
+            queryClient
+              .getQueryData<ScheduledAction[]>(
+                scheduledActionKeys.list.queryKey
+              )
+              ?.find((item) => item.id === scheduleId)?.enabled;
           patchScheduleEnabled(scheduleId, enabled);
           return { previousEnabled };
         },

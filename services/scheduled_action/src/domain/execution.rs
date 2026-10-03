@@ -212,7 +212,7 @@ where
                 executor.cancellation.cancelled(),
                 executor
                     .repo
-                    .claim_action(&id, action.configuration_revision),
+                    .claim_action(&id, action.configuration_revision, action.next_run_at),
             )
             .await;
             let token = match claim {

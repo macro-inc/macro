@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { createSearchParams } from '@app/lib/split-router';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -12,11 +13,16 @@ import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { formatDateAndTime } from '@entity';
 import CopyIcon from '@phosphor/copy.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
-import { scheduleToEntity } from '@queries/agent-schedule/entities';
+import {
+  isClaimActive,
+  scheduleToEntity,
+} from '@queries/agent-schedule/entities';
+import { useRoutineQuery } from '@queries/agent-schedule/routines';
 import {
   invalidateSchedules,
   useCreateScheduleMutation,
@@ -35,7 +41,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Match,
   on,
   onMount,
@@ -45,22 +50,19 @@ import {
 import { match } from 'ts-pattern';
 import { createRoutineAutosave } from '../primitives/routine-autosave';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
+import { routineSearch } from '../routine-search';
+import { RoutineSharing } from '../routine-sharing';
 import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
-import { AutomationTimePicker } from './AutomationTimePicker';
 import {
-  describeSchedule,
   draftFromSchedule,
   draftToUpdateBody,
-  FREQUENCY_OPTIONS,
-  getDefaultTimezone,
   getErrorMessage,
-  INPUT_CLASS,
-  isValidTime,
   scheduleToDuplicateBody,
-  WEEKDAY_OPTIONS,
+  validateRoutineDraft,
 } from './automationUtils';
+import { RoutineScheduleFields } from './RoutineScheduleFields';
 import type { ScheduleDraft } from './types';
 
 function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
@@ -89,15 +91,25 @@ function createAgentHistoryMetadata(id: string): Accessor<HistoryMetadata> {
 
 export function Automation() {
   const scheduleId = useBlockId();
+  const userId = useUserId();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit, replaceOrInsertSplit } = useSplitLayout();
 
   const schedulesQuery = useSchedulesQuery(() => true);
-  const schedule = createMemo(() =>
+  const routineQuery = useRoutineQuery(() => scheduleId);
+  const ownedSchedule = createMemo(() =>
     schedulesQuery.isSuccess || schedulesQuery.isError
       ? schedulesQuery.data?.find((item) => item.id === scheduleId)
       : undefined
   );
+  const schedule = () =>
+    (routineQuery.isSuccess || routineQuery.isError
+      ? routineQuery.data
+      : undefined) ?? ownedSchedule();
+  const isOwned = () => schedule()?.owner === userId();
+  const [search, setSearch] = createSearchParams(routineSearch);
+  const tab = () => search.tab;
+  const setTab = (tab: 'settings' | 'history') => setSearch({ tab });
   const cronTrigger = () => {
     const current = schedule();
     return current ? getCronTrigger(current) : undefined;
@@ -107,33 +119,18 @@ export function Automation() {
     return current ? scheduleToEntity(current) : undefined;
   };
   const status = () => scheduleEntity()?.status;
-  const isRunning = () => status()?.kind === 'running';
+  const isRunning = () => isClaimActive(schedule()?.claimed);
   const isActive = () => schedule()?.enabled ?? false;
 
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
 
-  const currentSummary = createMemo(() => {
-    const d = state();
-    if (!d) return '';
-    return describeSchedule(d, cronTrigger()?.timezone ?? getDefaultTimezone());
-  });
+  const isCompleted = () =>
+    state()?.frequency === 'once' && !schedule()?.next_run_at && !isRunning();
 
-  const formError = createMemo(() => {
-    const d = state();
-    if (!d) return null;
-    if (!d.prompt.trim()) return 'Prompt is required.';
-    if (!isValidTime(d.time)) return 'Choose a valid time.';
-    if (d.frequency === 'week' && d.daysOfWeek.length === 0) {
-      return 'Select at least one day.';
-    }
-    if (d.frequency === 'month') {
-      const day = Number(d.dayOfMonth);
-      if (!Number.isInteger(day) || day < 1 || day > 31) {
-        return 'Pick a day between 1 and 31';
-      }
-    }
-    return null;
-  });
+  const formError = () => {
+    const draft = state();
+    return draft ? validateRoutineDraft(draft) : null;
+  };
 
   const updateMutation = useUpdateScheduleMutation();
   const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
@@ -148,7 +145,7 @@ export function Automation() {
 
   function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();
-    if (!current || !cronTrigger() || isRunning()) return;
+    if (!isOwned() || !current || !cronTrigger() || isRunning()) return;
     const next = update(current);
     setRawState(next);
     if (next.name !== current.name) {
@@ -159,6 +156,7 @@ export function Automation() {
 
   function runNow(): void {
     if (
+      !isOwned() ||
       !cronTrigger() ||
       !state() ||
       formError() ||
@@ -190,7 +188,7 @@ export function Automation() {
 
   const historyQuery = useScheduleHistoryQuery(
     () => scheduleId,
-    () => Boolean(cronTrigger())
+    () => Boolean(schedule())
   );
   const history = createMemo(() =>
     historyQuery.isSuccess ? (historyQuery.data ?? []) : []
@@ -238,7 +236,7 @@ export function Automation() {
   // the scheduled-action API and evicts them from the schedules cache.
   const deleteAutomation = () => {
     const entity = scheduleEntity();
-    if (!entity) return;
+    if (!isOwned() || !entity) return;
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
@@ -256,22 +254,14 @@ export function Automation() {
 
   return (
     <Show
-      when={cronTrigger() && state()}
+      when={schedule()}
       fallback={
         <div class="flex size-full flex-col items-center justify-center gap-2 p-3 text-center text-sm text-ink-muted">
           <Switch fallback={<>Automation not found.</>}>
-            <Match when={schedulesQuery.isError && !schedule()}>
+            <Match when={routineQuery.isError && !schedule()}>
               Unable to load automation. Please try again.
             </Match>
-            <Match when={schedulesQuery.isPending}>Loading…</Match>
-            <Match when={schedule() && !cronTrigger()}>
-              <h1 class="font-semibold text-ink">Backend-managed routine</h1>
-              <p>
-                Event-triggered routines cannot be edited or duplicated here.
-                Manage this routine through the API. This editor only supports
-                cron schedules.
-              </p>
-            </Match>
+            <Match when={routineQuery.isPending}>Loading…</Match>
           </Switch>
         </div>
       }
@@ -288,10 +278,12 @@ export function Automation() {
                 />
                 <span
                   class="inline-block min-w-0 flex-1 truncate text-sm"
-                  onDblClick={() => setRenameOpen(true)}
+                  onDblClick={() => {
+                    if (isOwned() && cronTrigger()) setRenameOpen(true);
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setRenameOpen(true);
+                    if (isOwned() && cronTrigger()) setRenameOpen(true);
                   }}
                 >
                   {d().name || blockNameToDefaultFile('automation')}
@@ -313,24 +305,36 @@ export function Automation() {
               // lacks the cron), so supply it for entity-gated menu items.
               entity={scheduleEntity()}
               tools={[
-                {
-                  group: 'file',
-                  label: 'Rename',
-                  icon: RenameIcon,
-                  action: () => setRenameOpen(true),
-                },
-                {
-                  group: 'file',
-                  label: 'Duplicate',
-                  icon: CopyIcon,
-                  action: duplicateAutomation,
-                },
-                {
-                  group: 'delete',
-                  label: 'Delete',
-                  icon: TrashIcon,
-                  action: deleteAutomation,
-                },
+                ...(isOwned() && cronTrigger()
+                  ? [
+                      {
+                        group: 'file' as const,
+                        label: 'Rename',
+                        icon: RenameIcon,
+                        action: () => setRenameOpen(true),
+                      },
+                    ]
+                  : []),
+                ...(cronTrigger()
+                  ? [
+                      {
+                        group: 'file' as const,
+                        label: 'Duplicate',
+                        icon: CopyIcon,
+                        action: duplicateAutomation,
+                      },
+                    ]
+                  : []),
+                ...(isOwned() && cronTrigger()
+                  ? [
+                      {
+                        group: 'delete' as const,
+                        label: 'Delete',
+                        icon: TrashIcon,
+                        action: deleteAutomation,
+                      },
+                    ]
+                  : []),
               ]}
             />
           </SplitTitleFileMenu>
@@ -343,234 +347,226 @@ export function Automation() {
             }
           />
 
-          <div class="flex min-h-0 size-full cursor-default flex-col text-ink">
-            <div class="flex shrink-0 flex-col gap-3 p-3">
-              <div class="flex items-center gap-2">
-                <Button
-                  variant="accent"
-                  size="sm"
-                  class="cursor-default"
-                  disabled={
-                    runNowMutation.isPending ||
-                    isRunning() ||
-                    autosave.dirty() ||
-                    autosave.saving() ||
-                    Boolean(formError())
-                  }
-                  onClick={runNow}
-                >
-                  Run Now
-                </Button>
-                <ToggleSwitch
-                  label="Active"
-                  labelClass="text-xs text-ink-muted"
-                  checked={isActive()}
-                  // Resuming conflicts with the claim until the run finishes.
-                  disabled={
-                    setEnabledMutation.isPending || (isRunning() && !isActive())
-                  }
-                  onChange={(active) =>
-                    setEnabledMutation.mutate({ scheduleId, enabled: active })
-                  }
-                />
-                <div class="ml-auto text-xs font-mono text-right uppercase font-light">
-                  {match(status())
-                    .with({ kind: 'running' }, () => (
-                      <span class="flex items-center justify-end gap-1.5 text-accent">
-                        <span class="size-1.5 animate-pulse rounded-full bg-accent" />
-                        Running
-                      </span>
-                    ))
-                    .with({ kind: 'scheduled' }, ({ nextRunAt }) => (
-                      <span class="text-ink-extra-muted">
-                        Next run {formatDateAndTime(nextRunAt)}
-                      </span>
-                    ))
-                    .with(
-                      { kind: 'paused' },
-                      { kind: 'unscheduled' },
-                      undefined,
-                      () => undefined
-                    )
-                    .exhaustive()}
-                </div>
-              </div>
-
-              <div class="grid gap-1.5">
-                <h1 class="text-sm font-semibold">Execution target</h1>
-                <RoutineExecutionPicker
-                  target={d().target}
-                  onChange={(target) =>
-                    setState((current) => ({ ...current, target }))
-                  }
-                />
-                <Show when={isRunning()}>
-                  <p class="text-xs text-ink-muted">
-                    Configuration cannot be changed while running.
-                  </p>
-                </Show>
-              </div>
-
-              <div class="grid gap-1.5">
-                <h1 class="text-sm font-semibold">Instructions</h1>
-                <AutomationPromptEditor
-                  initialValue={d().prompt}
-                  onChange={(markdown) =>
-                    setState((current) => ({
-                      ...current,
-                      prompt: markdown,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <h1 class="text-sm font-semibold">Schedule</h1>
-                <p class="mt-0.5 text-xs text-ink-muted">{currentSummary()}</p>
-              </div>
-
-              <div class="flex flex-wrap gap-1">
-                <For each={FREQUENCY_OPTIONS}>
-                  {(option) => (
+          <div class="size-full overflow-y-auto text-ink">
+            <div class="mx-auto flex w-full max-w-4xl flex-col gap-7 px-5 py-6 sm:px-8 sm:py-9 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)]">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <h1 class="text-xl font-medium">
                     <button
                       type="button"
-                      class={cn(
-                        'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
-                        d().frequency === option.value
-                          ? 'border-accent/30 bg-accent/10 text-accent'
-                          : 'border-edge-muted text-ink-muted hover:bg-hover'
-                      )}
-                      onClick={() =>
-                        setState((current) => ({
-                          ...current,
-                          frequency: option.value,
-                        }))
-                      }
+                      disabled={!isOwned() || !cronTrigger()}
+                      class="max-w-full truncate text-left"
+                      title={cronTrigger() ? 'Rename routine' : undefined}
+                      onClick={() => setRenameOpen(true)}
                     >
-                      {option.label}
+                      {d().name || 'Untitled routine'}
                     </button>
-                  )}
-                </For>
-              </div>
-
-              <Show when={d().frequency === 'week'}>
-                <div class="grid gap-1.5">
-                  <label class="text-xs font-medium text-ink-muted cursor-default">
-                    Days
-                  </label>
-                  <div class="flex flex-wrap gap-1">
-                    <For each={WEEKDAY_OPTIONS}>
-                      {(option) => {
-                        const active = () =>
-                          d().daysOfWeek.includes(option.value);
-                        return (
-                          <button
-                            type="button"
-                            class={cn(
-                              'cursor-default border rounded-sm px-2 py-1 text-xs transition-colors',
-                              active()
-                                ? 'border-accent/30 bg-accent/10 text-accent'
-                                : 'border-edge-muted text-ink-muted hover:bg-hover'
-                            )}
-                            onClick={() =>
-                              setState((current) => {
-                                const has = current.daysOfWeek.includes(
-                                  option.value
-                                );
-                                return {
-                                  ...current,
-                                  daysOfWeek: has
-                                    ? current.daysOfWeek.filter(
-                                        (v) => v !== option.value
-                                      )
-                                    : [...current.daysOfWeek, option.value],
-                                };
-                              })
-                            }
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      }}
-                    </For>
+                  </h1>
+                  <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-ink-muted">
+                    <ToggleSwitch
+                      label="Active"
+                      labelClass="text-xs text-ink-muted"
+                      checked={isActive()}
+                      disabled={
+                        !isOwned() ||
+                        isCompleted() ||
+                        setEnabledMutation.isPending ||
+                        (isRunning() && !isActive())
+                      }
+                      onChange={(active) =>
+                        setEnabledMutation.mutate({
+                          scheduleId,
+                          enabled: active,
+                        })
+                      }
+                    />
+                    <Show when={isCompleted()}>
+                      <span>Completed</span>
+                    </Show>
+                    <Show when={!isOwned()}>
+                      <span>Shared with your team · View only</span>
+                    </Show>
+                    {match(status())
+                      .with({ kind: 'running' }, () => (
+                        <span class="text-accent">Running</span>
+                      ))
+                      .with({ kind: 'scheduled' }, ({ nextRunAt }) => (
+                        <span>Next run {formatDateAndTime(nextRunAt)}</span>
+                      ))
+                      .otherwise(() => undefined)}
                   </div>
                 </div>
+                <Show when={isOwned() && cronTrigger()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      runNowMutation.isPending ||
+                      isRunning() ||
+                      autosave.dirty() ||
+                      autosave.saving() ||
+                      Boolean(formError())
+                    }
+                    onClick={runNow}
+                  >
+                    Run Now
+                  </Button>
+                </Show>
+              </div>
+              <div
+                class="flex items-center gap-1 border-b border-edge-muted pb-3"
+                role="tablist"
+                aria-label="Routine details"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab() === 'settings'}
+                  class={cn(
+                    'rounded-md px-3 py-1.5 text-sm',
+                    tab() === 'settings'
+                      ? 'bg-hover text-ink'
+                      : 'text-ink-muted hover:bg-hover'
+                  )}
+                  onClick={() => setTab('settings')}
+                >
+                  Settings
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab() === 'history'}
+                  class={cn(
+                    'rounded-md px-3 py-1.5 text-sm',
+                    tab() === 'history'
+                      ? 'bg-hover text-ink'
+                      : 'text-ink-muted hover:bg-hover'
+                  )}
+                  onClick={() => setTab('history')}
+                >
+                  Run History
+                </button>
+                <Show when={tab() === 'settings' && isOwned() && cronTrigger()}>
+                  <span
+                    role="status"
+                    class="ml-auto text-xs text-ink-extra-muted"
+                  >
+                    {autosave.saving()
+                      ? 'Saving…'
+                      : autosave.dirty()
+                        ? 'Unsaved changes'
+                        : 'All changes saved'}
+                  </span>
+                </Show>
+              </div>
+              <Show when={tab() === 'settings'}>
+                <div role="tabpanel" aria-label="Settings" class="grid gap-7">
+                  <Show
+                    when={state()}
+                    fallback={
+                      <p class="text-sm text-ink-muted">
+                        This routine runs when its configured events occur.
+                        Event triggers and instructions are managed through the
+                        API.
+                      </p>
+                    }
+                  >
+                    {(draft) => (
+                      <fieldset
+                        disabled={!isOwned() || isRunning()}
+                        inert={!isOwned() || isRunning()}
+                        class="grid min-w-0 gap-7"
+                      >
+                        <section class="grid gap-3">
+                          <h2 class="text-sm font-medium">Schedule</h2>
+                          <div class="rounded-lg border border-edge-muted p-4">
+                            <RoutineScheduleFields
+                              draft={draft()}
+                              onChange={setState}
+                            />
+                          </div>
+                        </section>
+                        <section class="grid gap-3">
+                          <h2 class="text-sm font-medium">
+                            Agent instructions
+                          </h2>
+                          <AutomationPromptEditor
+                            initialValue={draft().prompt}
+                            onChange={(prompt) => {
+                              if (prompt === state()?.prompt) return;
+                              setState((current) => ({ ...current, prompt }));
+                            }}
+                          />
+                          <RoutineExecutionPicker
+                            target={draft().target}
+                            onChange={(target) =>
+                              setState((current) => ({ ...current, target }))
+                            }
+                          />
+                        </section>
+                      </fieldset>
+                    )}
+                  </Show>
+                  <Show when={isRunning()}>
+                    <p class="text-xs text-ink-muted">
+                      Configuration cannot be changed while running.
+                    </p>
+                  </Show>
+                  <Show when={autosave.error()}>
+                    <div role="alert" class="text-xs text-failure">
+                      Changes not saved. {getErrorMessage(autosave.error())}
+                      <button
+                        type="button"
+                        class="ml-2 underline"
+                        onClick={autosave.retry}
+                      >
+                        Retry save
+                      </button>
+                    </div>
+                  </Show>
+                  <Show when={formError()}>
+                    {(message) => (
+                      <p class="text-xs text-failure">{message()}</p>
+                    )}
+                  </Show>
+                  <Show when={isOwned()}>
+                    <section class="border-t border-edge-muted pt-5">
+                      <RoutineSharing id={scheduleId} />
+                    </section>
+                  </Show>
+                </div>
               </Show>
-
-              <Show when={d().frequency === 'month'}>
-                <div class="grid gap-1.5">
-                  <label class="text-xs font-medium text-ink-muted cursor-default">
-                    Day of Month
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    class={INPUT_CLASS}
-                    value={d().dayOfMonth}
-                    onInput={(event) =>
-                      setState((current) => ({
-                        ...current,
-                        dayOfMonth: event.currentTarget.value,
-                      }))
+              <Show when={tab() === 'history'}>
+                <div
+                  role="tabpanel"
+                  aria-label="Run History"
+                  class="overflow-hidden rounded-lg border border-edge-muted"
+                >
+                  <Show when={historyQuery.isError}>
+                    <div role="alert" class="p-4 text-sm text-failure">
+                      Could not load run history.{' '}
+                      <button
+                        class="underline"
+                        onClick={() => void historyQuery.refetch()}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </Show>
+                  <RoutineHistory
+                    records={history()}
+                    isPending={historyQuery.isPending}
+                    createChatMetadata={createChatHistoryMetadata}
+                    createAgentMetadata={createAgentHistoryMetadata}
+                    onOpen={(resource, newSplit) =>
+                      openWithSplit(resource, {
+                        activate: true,
+                        preferNewSplit: newSplit,
+                      })
                     }
                   />
                 </div>
               </Show>
-
-              <div class="grid gap-1.5">
-                <label class="text-xs font-medium text-ink-muted cursor-default">
-                  Time
-                </label>
-                <AutomationTimePicker
-                  value={d().time}
-                  onChange={(value) =>
-                    setState((current) => ({
-                      ...current,
-                      time: value,
-                    }))
-                  }
-                />
-              </div>
-
-              <Show when={autosave.error()}>
-                <div role="alert" class="text-xs text-failure">
-                  Changes not saved. {getErrorMessage(autosave.error())}
-                  <button
-                    type="button"
-                    class="ml-2 underline"
-                    onClick={autosave.retry}
-                  >
-                    Retry save
-                  </button>
-                </div>
-              </Show>
-
-              <Show when={formError()}>
-                {(message) => (
-                  <div class="border border-failure/20 bg-failure/5 rounded-sm px-2 py-1.5 text-xs text-failure">
-                    {message()}
-                  </div>
-                )}
-              </Show>
-            </div>
-
-            <div class="flex min-h-0 flex-1 flex-col">
-              <div class="border-b border-edge-muted px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                History
-              </div>
-              <RoutineHistory
-                records={history()}
-                isPending={historyQuery.isPending}
-                createChatMetadata={createChatHistoryMetadata}
-                createAgentMetadata={createAgentHistoryMetadata}
-                onOpen={(resource, newSplit) =>
-                  openWithSplit(resource, {
-                    activate: true,
-                    preferNewSplit: newSplit,
-                  })
-                }
-              />
             </div>
           </div>
         </>

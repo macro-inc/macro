@@ -50,6 +50,12 @@ function parsePayload(data: unknown): UpdatePayload | undefined {
 
 function patchClaimed(actionId: string, claimed: string | null): void {
   queryClient.setQueryData(
+    scheduledActionKeys.detail({ scheduleId: actionId }).queryKey,
+    (current: ScheduledAction | undefined) =>
+      current ? { ...current, claimed } : undefined
+  );
+
+  queryClient.setQueryData(
     scheduledActionKeys.list.queryKey,
     (current: ScheduledAction[] | undefined) => {
       if (!current) return current;
@@ -126,6 +132,13 @@ createConnectionWebsocketEffect((data) => {
     return;
   }
 
+  void queryClient.invalidateQueries({
+    queryKey: scheduledActionKeys.detail({ scheduleId: payload.action_id })
+      .queryKey,
+  });
+  void queryClient.invalidateQueries({
+    queryKey: scheduledActionKeys.list.queryKey,
+  });
   // stopped: drop the synthetic pending row immediately so the UI stops
   // showing it as running, then invalidate to refetch the server-persisted
   // record (with end_time, is_success, and a real id).

@@ -98,6 +98,7 @@ impl ScheduledActionRepo for FakeRepository {
         &self,
         _id: &Uuid,
         _revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<crate::domain::event_runs::ClaimToken> {
         Ok(crate::domain::event_runs::ClaimToken::generate())
     }

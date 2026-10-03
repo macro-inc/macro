@@ -1,0 +1,15 @@
+---
+title: ListRoutines
+description: "Find the authenticated user’s routines, including work delegated to other agents. Filter by name/instructions or enabled state. Returns up to 50 matches and the full count; narrow the query if truncated. Use ReadRoutine for history."
+---
+
+# ListRoutines
+
+Find the authenticated user’s routines, including work delegated to other agents. Filter by name/instructions or enabled state. Returns up to 50 matches and the full count; narrow the query if truncated. Use ReadRoutine for history.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | No | Optional text to match in the routine name or task. |
+| `enabled` | boolean | No | Optional active/paused filter. |

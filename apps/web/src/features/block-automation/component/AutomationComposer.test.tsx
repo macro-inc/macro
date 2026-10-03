@@ -378,7 +378,7 @@ describe('automation composer execution selection', () => {
   it('preserves validation for empty instructions, invalid time, weekdays, and monthly day', async () => {
     await mount();
     create();
-    expect(screen.getByText('Prompt is required.')).toBeTruthy();
+    expect(screen.getByText('Instructions are required.')).toBeTruthy();
     inputPrompt();
     fireEvent.input(screen.getByRole('textbox', { name: 'Time' }), {
       target: { value: '25:00' },

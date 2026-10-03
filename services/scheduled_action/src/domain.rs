@@ -5,5 +5,6 @@ pub mod models;
 pub mod ports;
 pub mod read_service;
 pub mod service;
+pub mod sharing;
 pub mod target_runner;
 pub mod target_validation;

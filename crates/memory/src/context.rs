@@ -274,7 +274,7 @@ pub async fn build_tool_service_context(
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         skill_tool_context,
-        schedule_tool_context: ai_tools::NoOpScheduleContext,
+        schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),

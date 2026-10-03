@@ -514,9 +514,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Automation',
+    label: 'Routine',
     icon: getIconConfig('automation').icon,
-    description: 'Create automation',
+    description: 'Schedule work for a model or agent',
     launcherHint: 'Scheduled agent runs',
     keywords: ['new', 'make', 'add', 'schedule', 'agent'],
     blockName: 'automation',

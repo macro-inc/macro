@@ -37,6 +37,9 @@ const schedule: ScheduledAction = {
 const historyKey = scheduledActionKeys.history({
   scheduleId: 'routine',
 }).queryKey;
+const detailKey = scheduledActionKeys.detail({
+  scheduleId: 'routine',
+}).queryKey;
 const chat = { type: 'chat', id: 'same-id' } as const;
 const agent = { type: 'agent', id: 'same-id' } as const;
 
@@ -69,6 +72,7 @@ beforeEach(() => {
   queryClient.clear();
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-28T12:00:00Z'));
+  queryClient.setQueryData(detailKey, { ...schedule, team_id: null });
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
     schedule,
     { ...schedule, id: 'other' },
@@ -90,6 +94,9 @@ describe('scheduled-action websocket synchronization', () => {
     const resource = fields.resource ?? chat;
     send(JSON.stringify(update('started', fields)));
     expect(schedules()?.[0].claimed).toBe('2026-09-28T12:00:00.000Z');
+    expect(queryClient.getQueryData<ScheduledAction>(detailKey)?.claimed).toBe(
+      '2026-09-28T12:00:00.000Z'
+    );
     expect(schedules()?.[1]).toEqual({ ...schedule, id: 'other' });
     expect(history()).toEqual([
       {
@@ -108,7 +115,15 @@ describe('scheduled-action websocket synchronization', () => {
     send(update('stopped', fields));
     expect(history()).toEqual([]);
     expect(schedules()?.[0].claimed).toBeUndefined();
-    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(
+      queryClient.getQueryData<ScheduledAction>(detailKey)?.claimed
+    ).toBeNull();
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: scheduledActionKeys.list.queryKey,
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: scheduledActionKeys.detail({ scheduleId: 'routine' }).queryKey,
+    });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: historyKey });
   });
 

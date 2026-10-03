@@ -7,9 +7,11 @@ import {
   DEFAULT_WEEKDAYS,
   describeCron,
   getDefaultTimezone,
+  isValidTime,
   parseCron as parseCronParts,
 } from '@core/util/cron';
 import { ThrownResultError } from '@core/util/result';
+import { TZDate } from '@date-fns/tz';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import type {
   CreateScheduledAction,
@@ -42,6 +44,7 @@ export const FREQUENCY_OPTIONS: Array<{
 }> = [
   { value: 'week', label: 'Every week' },
   { value: 'month', label: 'Every month' },
+  { value: 'once', label: 'Once' },
 ];
 
 function normalizePrompt(value: string) {
@@ -62,7 +65,7 @@ function deriveScheduleName(prompt: string) {
 /** The cron-editable parts of a draft, which is all the shared helpers need. */
 function cronParts(draft: ScheduleDraft): CronParts {
   return {
-    frequency: draft.frequency,
+    frequency: draft.frequency === 'once' ? 'week' : draft.frequency,
     time: draft.time,
     daysOfWeek: draft.daysOfWeek,
     dayOfMonth: draft.dayOfMonth,
@@ -70,7 +73,12 @@ function cronParts(draft: ScheduleDraft): CronParts {
 }
 
 export function describeSchedule(draft: ScheduleDraft, timezone: string) {
-  return describeCron(cronParts(draft), timezone);
+  if (draft.frequency === 'once') {
+    return draft.onceAt && !Number.isNaN(new Date(draft.onceAt).getTime())
+      ? `Once on ${formatDateTime(new Date(draft.onceAt).toISOString())}`
+      : 'Choose a date and time for a single run.';
+  }
+  return describeCron(cronParts(draft), draft.timezone ?? timezone);
 }
 
 type ParsedCron = Pick<
@@ -154,6 +162,8 @@ export function draftFromSchedule(
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
+    timezone: trigger.timezone,
+    ...onceFromCron(trigger.schedule, trigger.timezone),
   };
 }
 
@@ -183,11 +193,7 @@ function buildAgentTask(draft: ScheduleDraft): RoutineTask {
 export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
   return {
     name: draft.name.trim() || deriveScheduleName(draft.prompt),
-    trigger: {
-      type: 'cron',
-      schedule: buildCron(draft),
-      timezone: getDefaultTimezone(),
-    },
+    trigger: triggerFromDraft(draft),
     kind: 'Agent',
     task: buildAgentTask(draft),
     enabled: true,
@@ -219,7 +225,11 @@ export function draftToUpdateBody(
   // Preserve API-written cron expressions and raw task data when not edited.
   const parsed = parseCron(trigger.schedule);
   const scheduleChanged =
-    draft.frequency !== parsed.frequency ||
+    draft.frequency !==
+      (onceFromCron(trigger.schedule, trigger.timezone)?.frequency ??
+        parsed.frequency) ||
+    draft.onceAt !== onceFromCron(trigger.schedule, trigger.timezone)?.onceAt ||
+    (draft.timezone !== undefined && draft.timezone !== trigger.timezone) ||
     draft.time !== parsed.time ||
     draft.dayOfMonth !== parsed.dayOfMonth ||
     draft.daysOfWeek.join(',') !== parsed.daysOfWeek.join(',');
@@ -229,7 +239,7 @@ export function draftToUpdateBody(
         ? previous.name
         : draft.name.trim() || deriveScheduleName(draft.prompt),
     trigger: scheduleChanged
-      ? { ...trigger, schedule: buildCron(draft) }
+      ? triggerFromDraft(draft, trigger.timezone)
       : trigger,
     kind: previous.kind,
     task,
@@ -272,4 +282,79 @@ export function getErrorMessage(error: unknown) {
   }
 
   return 'Please try again.';
+}
+
+export function onceFromCron(
+  cron: string,
+  timezone = 'UTC'
+): { frequency: 'once'; onceAt: string } | undefined {
+  const parts = cron.trim().split(/\s+/);
+  if (
+    parts.length !== 7 ||
+    !/^\d{4}$/.test(parts[6]) ||
+    !parts.slice(0, 5).every((part) => /^\d+$/.test(part))
+  )
+    return;
+  const [second, minute, hour, day, month, , year] = parts.map(Number);
+  const date = new TZDate(year, month - 1, day, hour, minute, second, timezone);
+  if (Number.isNaN(date.getTime())) return;
+  const instant = new Date(date.getTime());
+  const local = new Date(
+    instant.getTime() - instant.getTimezoneOffset() * 60000
+  );
+  return { frequency: 'once', onceAt: local.toISOString().slice(0, 19) };
+}
+
+function triggerFromDraft(
+  draft: ScheduleDraft,
+  timezone = getDefaultTimezone()
+) {
+  if (draft.frequency === 'once') {
+    const date = new Date(draft.onceAt ?? '');
+    if (Number.isNaN(date.getTime()))
+      throw new Error('Choose a valid date and time.');
+    return {
+      type: 'cron' as const,
+      timezone: 'UTC',
+      schedule: `${date.getUTCSeconds()} ${date.getUTCMinutes()} ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} * ${date.getUTCFullYear()}`,
+    };
+  }
+  return {
+    type: 'cron' as const,
+    timezone: draft.timezone ?? timezone,
+    schedule: buildCron(draft),
+  };
+}
+
+export function validateRoutineDraft(
+  draft: ScheduleDraft,
+  creating = false
+): string | null {
+  if (!draft.prompt.trim()) return 'Instructions are required.';
+  if (!routineTargetSchema.safeParse(draft.target).success)
+    return 'Choose a valid model or agent.';
+  if (draft.frequency === 'once') {
+    const at = new Date(draft.onceAt ?? '').getTime();
+    if (!Number.isFinite(at)) return 'Choose a date and time.';
+    if (creating && at <= Date.now()) return 'Choose a time in the future.';
+    return null;
+  }
+  if (!isValidTime(draft.time)) return 'Choose a valid time.';
+  if (draft.frequency === 'week' && !draft.daysOfWeek.length)
+    return 'Select at least one day.';
+  if (
+    draft.frequency === 'month' &&
+    (!Number.isInteger(Number(draft.dayOfMonth)) ||
+      Number(draft.dayOfMonth) < 1 ||
+      Number(draft.dayOfMonth) > 31)
+  )
+    return 'Pick a day between 1 and 31.';
+  try {
+    new Intl.DateTimeFormat(undefined, {
+      timeZone: draft.timezone ?? getDefaultTimezone(),
+    });
+  } catch {
+    return 'Choose a valid time zone, such as America/New_York.';
+  }
+  return null;
 }

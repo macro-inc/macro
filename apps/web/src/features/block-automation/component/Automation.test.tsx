@@ -6,6 +6,21 @@ import type { RoutineTarget } from '../core/routine-target';
 import type { HistoryRecord } from '../views/routine-history';
 import { Automation } from './Automation';
 
+vi.mock('@app/lib/split-router', () => ({
+  createSearchParamsCodec: () => ({}),
+  createSearchParams: () => {
+    const [tab, setTab] = createSignal<'settings' | 'history'>('settings');
+    return [
+      {
+        get tab() {
+          return tab();
+        },
+      },
+      (next: { tab: 'settings' | 'history' }) => setTab(next.tab),
+    ];
+  },
+}));
+
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
   status: (): string => 'success',
@@ -31,6 +46,26 @@ const mocks = vi.hoisted(() => ({
   rename: (_value: string): void => {},
   duplicate: (): void => {},
 }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|owner@example.com',
+}));
+vi.mock('@queries/agent-schedule/routines', () => ({
+  useRoutineQuery: () => ({
+    get isSuccess() {
+      return mocks.status() === 'success';
+    },
+    get isError() {
+      return mocks.status() === 'error';
+    },
+    get isPending() {
+      return mocks.status() === 'pending';
+    },
+    get data() {
+      return mocks.readSchedules()[0];
+    },
+  }),
+}));
+vi.mock('../routine-sharing', () => ({ RoutineSharing: () => null }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({
   DEFAULT_MODEL: 'claude-sonnet-4-6',
@@ -72,10 +107,16 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   BlockSplitFileMenu: (props: {
     tools: { label: string; action: () => void }[];
   }) => {
-    mocks.duplicate = props.tools.find(
-      (tool) => tool.label === 'Duplicate'
-    )!.action;
-    return <button onClick={mocks.duplicate}>Duplicate</button>;
+    mocks.duplicate =
+      props.tools.find((tool) => tool.label === 'Duplicate')?.action ??
+      (() => {});
+    return (
+      <>
+        {props.tools.some((tool) => tool.label === 'Duplicate') && (
+          <button onClick={mocks.duplicate}>Duplicate</button>
+        )}
+      </>
+    );
   },
 }));
 vi.mock('./AutomationRenameModal', () => ({
@@ -407,7 +448,7 @@ describe('automation execution target autosave', () => {
   it('pauses a routine with an invalid draft without saving the draft', async () => {
     render(() => <Automation />);
     mocks.changePrompt('');
-    expect(screen.getByText('Prompt is required.')).toBeTruthy();
+    expect(screen.getByText('Instructions are required.')).toBeTruthy();
     fireEvent.click(activeSwitch());
     expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
@@ -515,6 +556,8 @@ describe('automation history integration', () => {
       await vi.advanceTimersByTimeAsync(300);
       const saved = mocks.update.mock.lastCall![0].body;
       setSchedules([{ ...cron, ...saved }]);
+      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
       fireEvent.click(screen.getByText('Run transcript'));
       expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
         { type: 'chat', id: 'chat-id' },
@@ -549,6 +592,7 @@ describe('automation history integration', () => {
       expect(
         screen.getByRole('textbox', { name: 'Instructions' })
       ).toBeTruthy();
+      fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
       const labels = screen.getAllByText(
         status === 'pending' ? 'Loading…' : 'Run unavailable'
       );
@@ -563,6 +607,7 @@ describe('automation history integration', () => {
     mocks.chatMetadata = () => ({});
     mocks.agentMetadata = () => undefined;
     render(() => <Automation />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
     const unavailable = screen.getAllByText('Run unavailable');
     expect(unavailable).toHaveLength(2);
     for (const label of unavailable) fireEvent.click(label);
@@ -574,14 +619,18 @@ describe('automation editor trigger guards', () => {
   it('shows an explicit backend-managed state on a direct event route', async () => {
     setSchedules([events]);
     render(() => <Automation />);
-    expect(screen.getByText('Backend-managed routine')).toBeTruthy();
     expect(
-      screen.getByText(/Manage this routine through the API/)
+      screen.getByText(
+        /Event triggers and instructions are managed through the API/
+      )
     ).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Run History' })).toBeTruthy();
     expect(screen.queryByText('Loading…')).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.queryByText('Duplicate')).toBeNull();
     expect(screen.queryByText('Run Now')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    expect(screen.getByText('Run transcript')).toBeTruthy();
     await vi.advanceTimersByTimeAsync(500);
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
@@ -619,6 +668,7 @@ describe('automation editor trigger guards', () => {
     expect(mocks.run).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
+    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
     fireEvent.click(screen.getByText('Run transcript'));
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       { type: 'chat', id: 'chat-id' },
@@ -630,7 +680,11 @@ describe('automation editor trigger guards', () => {
     render(() => <Automation />);
     mocks.changePrompt('Queued edit');
     setSchedules([events]);
-    expect(screen.getByText('Backend-managed routine')).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Event triggers and instructions are managed through the API/
+      )
+    ).toBeTruthy();
     mocks.rename('Stale rename');
     mocks.changePrompt('Stale prompt');
     mocks.duplicate();
@@ -707,7 +761,11 @@ describe('automation editor trigger guards', () => {
     mocks.changePrompt('Queued edit');
     setSchedules([events]);
     setStatus('error');
-    expect(screen.getByText('Backend-managed routine')).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Event triggers and instructions are managed through the API/
+      )
+    ).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
     mocks.rename('Stale rename');
     mocks.duplicate();
