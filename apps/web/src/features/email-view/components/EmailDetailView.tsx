@@ -6,6 +6,7 @@ import type { EmailThreadHost } from '@app/features/email-thread/context/email-t
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
+import { emailThreadRoute } from '@app/routes/routes';
 import { EmailThreadControls } from '@block-email/component/EmailThreadControls';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import {
@@ -41,7 +42,6 @@ import { createMemo, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
-import { emailThreadRoute } from '../route';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
 

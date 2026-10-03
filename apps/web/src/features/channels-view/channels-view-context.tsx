@@ -10,6 +10,7 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { channelDetailRoute, channelsSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
@@ -26,7 +27,6 @@ import {
   clampChannelsRailWidth,
 } from './constants';
 import { createChannelsViewPersistence } from './persistence';
-import { channelDetailRoute, channelsSplitRoute } from './route';
 import type {
   ChannelListSort,
   ChannelsQueryScope,

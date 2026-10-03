@@ -1,252 +1,354 @@
-import { describe, expect, expectTypeOf, it } from 'vitest';
-import { z } from 'zod';
-import { resolveNavigation } from '../navigation';
+import { simulate, step } from '@macro-inc/machine';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createRoutesManifest,
-  decodeRoute,
-  defineRoute,
-  defineRoutes,
-  routeParams,
-} from '../routes';
-import type {
-  SplitNavigate,
-  SplitRouteNavigationTarget,
-  SplitRouterEntry,
-  SplitRouteUnion,
-} from '../types';
+  runMiddleware,
+  type SplitRouterMiddleware,
+} from '../router/middleware';
+import { IDLE, type State as RunState, runDef } from '../router/run';
+import type { Navigation } from '../router/types';
+import {
+  type Event as GateEvent,
+  type State as GateState,
+  type UrlOutcome,
+  urlGateDef,
+} from '../router/url-gate';
+import { createRoutesManifest, decodePane } from '../routes/manifest';
+import type { Entry, PaneId } from '../routes/types';
+import { CANCELLED } from '../utils';
+import { appRoutes } from './fixtures';
 
-const workspaceDetailRoute = defineRoute({
-  id: 'workspace-detail',
-  path: 'detail/:documentId',
-  params: z.object({ documentId: z.string() }),
+const routes = createRoutesManifest(appRoutes);
+const entry = (
+  id: string,
+  path: string,
+  extra: Partial<Entry> = {}
+): Entry => ({
+  id,
+  location: { route: decodePane(routes, path.split('/').filter(Boolean))! },
+  ...extra,
 });
+const signal = () => new AbortController().signal;
 
-const workspacePageRoute = defineRoute({
-  id: 'workspace-page',
-  path: 'page/:page',
-  params: z.object({ page: z.coerce.number().int().positive() }),
+const pane = 'p1' as PaneId;
+const navigation = (id: string): Navigation => ({
+  cause: 'navigate',
+  targets: [{ pane, to: entry(id, '/home') }],
+  apply: () => ({ status: 'committed', pane }),
 });
+const first = navigation('e1');
+const second = navigation('e2');
+const third = navigation('e4');
+const entries = [entry('e3', '/mail')];
 
-const workspaceFolderRoute = defineRoute({
-  id: 'workspace-folder',
-  path: 'folder/:folderId',
-  params: z.object({ folderId: z.string() }),
-  children: [workspaceDetailRoute],
-});
+afterEach(() => vi.restoreAllMocks());
 
-const workspaceRoute = defineRoute({
-  id: 'workspace',
-  path: 'workspace',
-  search: ['workspace'],
-  children: [workspaceFolderRoute, workspacePageRoute],
-});
+describe('run', () => {
+  const guards: RunState = { t: 'guards', navigation: first };
+  const middleware: RunState = { t: 'middleware', navigation: first };
+  const preload: RunState = { t: 'preload', navigation: first, entries };
 
-const stateRoute = defineRoute({
-  id: 'state-root',
-  path: 'state',
-  state: z
-    .object({ trail: z.array(z.string()) })
-    .transform((state) => ({ ...state, length: state.trail.length })),
-  children: [{ id: 'state-child', path: 'child' }],
-});
-const stateChildRoute = stateRoute.children[0];
-
-const tree = defineRoutes({ definitions: [workspaceRoute] });
-const routes = createRoutesManifest(tree);
-const boundDetail = tree.definitions[0].children[0].children[0];
-const boundPage = tree.definitions[0].children[1];
-
-function entry(path: string[]): SplitRouterEntry {
-  return decodeRoute(routes, path)!;
-}
-
-function assertTypedRouteTargets(navigate: SplitNavigate<string>) {
-  navigate({
-    route: workspaceDetailRoute,
-    params: { documentId: 'document-1' },
-  });
-  navigate({ route: workspaceRoute });
-  navigate({ route: stateChildRoute }, { state: { trail: ['first'] } });
-  navigate(
-    { route: stateChildRoute },
-    {
-      state: (current) => ({
-        trail: [...(current?.trail ?? []), String(current?.length ?? 0)],
-      }),
-    }
-  );
-  // @ts-expect-error Routes without a state schema reject navigation state.
-  navigate({ route: workspaceRoute }, { state: { trail: [] } });
-  // @ts-expect-error Navigation uses the route state schema's input type.
-  navigate({ route: stateChildRoute }, { state: { length: 1 } });
-  navigate({ route: workspacePageRoute, params: { page: 2 } });
-  navigate({
-    route: boundDetail,
-    params: { folderId: 'folder', documentId: 'doc' },
-  });
-  // @ts-expect-error A tree-bound destination requires its ancestor params too.
-  navigate({ route: boundDetail, params: { documentId: 'doc' } });
-  // @ts-expect-error Ancestor fields keep their schema output types.
-  navigate({ route: boundDetail, params: { folderId: 4, documentId: 'doc' } });
-  // @ts-expect-error A route union cannot pair one route with another route's params.
-  const mismatched: SplitRouteNavigationTarget<
-    typeof boundDetail | typeof boundPage
-  > = { route: boundPage, params: { folderId: 'folder', documentId: 'doc' } };
-  void mismatched;
-  const destination: SplitRouteNavigationTarget<SplitRouteUnion<typeof tree>> =
-    { route: boundDetail, params: { folderId: 'folder', documentId: 'doc' } };
-  navigate(destination);
-  // @ts-expect-error navigation uses the schema output type
-  navigate({ route: workspacePageRoute, params: { page: '2' } });
-  // @ts-expect-error documentId is required by the route schema
-  navigate({ route: workspaceDetailRoute });
-  // @ts-expect-error documentId must be a string
-  navigate({
-    route: workspaceDetailRoute,
-    params: { documentId: 1 },
-  });
-}
-
-describe('split route navigation', () => {
-  it('requires params inferred from typed route schemas', () => {
-    expectTypeOf(assertTypedRouteTargets).toBeFunction();
+  it('moves from guards to middleware to preload, then commits', () => {
+    const run = simulate(runDef, IDLE, [
+      { t: 'navigate', navigation: first },
+      { t: 'allowed' },
+      { t: 'resolved', entries },
+      { t: 'preloaded' },
+    ]);
+    expect(run.state).toEqual(IDLE);
+    expect(run.commands).toEqual([{ t: 'commit', navigation: first, entries }]);
   });
 
-  it('round trips typed navigation params through route schemas', () => {
-    const current = entry(['workspace']);
-    const next = resolveNavigation(routes, current, current, {
-      route: workspacePageRoute,
-      params: { page: 2 },
+  it('is turned down by guards or middleware, and fails from any phase', () => {
+    expect(step(runDef, guards, { t: 'refused' })?.commands).toEqual([
+      { t: 'cancel', navigation: first, reason: 'refused' },
+    ]);
+    expect(
+      step(runDef, middleware, { t: 'middleware-cancelled' })?.commands
+    ).toEqual([{ t: 'cancel', navigation: first, reason: 'cancelled' }]);
+    expect(step(runDef, preload, { t: 'failed' })).toEqual({
+      state: IDLE,
+      commands: [{ t: 'cancel', navigation: first, reason: 'failed' }],
     });
+  });
 
-    expect(next?.location?.route?.matches).toEqual([
-      { id: 'workspace', params: {} },
-      { id: 'workspace-page', params: { page: 2 } },
+  it('ignores a report from a phase it has left', () => {
+    expect(step(runDef, middleware, { t: 'allowed' })).toBeUndefined();
+    expect(step(runDef, preload, { t: 'resolved', entries })).toBeUndefined();
+  });
+
+  it('lets a newer navigation replace the one in flight', () => {
+    const run = simulate(runDef, IDLE, [
+      { t: 'navigate', navigation: first },
+      { t: 'allowed' },
+      { t: 'navigate', navigation: second },
+    ]);
+    expect(run.state).toEqual({ t: 'guards', navigation: second });
+    expect(run.commands).toEqual([
+      { t: 'cancel', navigation: first, reason: 'superseded' },
     ]);
   });
 
-  it.each([['workspace'], ['workspace', 'folder', 'old-folder']])(
-    'uses explicit ancestor params from %j',
-    (...path) => {
-      const current = entry(path);
-      const next = resolveNavigation(routes, current, undefined, {
-        route: boundDetail,
-        params: { folderId: 'new-folder', documentId: 'document-1' },
-      });
-      expect(next?.location.route.matches).toEqual([
-        { id: 'workspace', params: {} },
-        { id: 'workspace-folder', params: { folderId: 'new-folder' } },
-        { id: 'workspace-detail', params: { documentId: 'document-1' } },
+  it('cancels with the reason it is aborted for', () => {
+    expect(
+      step(runDef, preload, { t: 'abort', reason: 'interrupted' })
+    ).toEqual({
+      state: IDLE,
+      commands: [{ t: 'cancel', navigation: first, reason: 'interrupted' }],
+    });
+  });
+
+  it('ignores reports and aborts while idle', () => {
+    expect(
+      step(runDef, IDLE, { t: 'abort', reason: 'superseded' })
+    ).toBeUndefined();
+    expect(step(runDef, IDLE, { t: 'preloaded' })).toBeUndefined();
+  });
+});
+
+describe('URL gate', () => {
+  const open: GateState = { t: 'open' };
+  const start = (navigating: Navigation, blocking = false): GateEvent => ({
+    t: 'start',
+    navigation: navigating,
+    blocking,
+  });
+  const settled = (navigating: Navigation, outcome: UrlOutcome): GateEvent => ({
+    t: 'settled',
+    navigation: navigating,
+    outcome,
+  });
+  const ACTION: GateEvent = { t: 'action' };
+  const LANDED: GateEvent = { t: 'revert-landed' };
+  const OPENED = { t: 'opened' };
+  const runs = (navigating: Navigation) => [
+    { t: 'cancel-pane-runs' },
+    { t: 'run', navigation: navigating },
+  ];
+  const revert = (navigating: Navigation) => ({
+    t: 'revert',
+    navigation: navigating,
+  });
+  const abort = (navigating: Navigation, reason: string) => ({
+    t: 'abort',
+    navigation: navigating,
+    reason,
+  });
+
+  it('lets actions straight through while no URL navigation runs', () => {
+    expect(step(urlGateDef, open, ACTION)).toEqual({
+      state: open,
+      commands: [OPENED],
+    });
+    expect(step(urlGateDef, open, start(first))?.commands).toEqual(runs(first));
+  });
+
+  it('keeps a replaced URL navigation to put back later, and its blocking', () => {
+    const run = simulate(urlGateDef, open, [start(first, true), start(second)]);
+    expect(run.state).toEqual({
+      t: 'navigating',
+      navigation: second,
+      blocking: true,
+      superseded: [first],
+    });
+    expect(run.commands).toEqual([...runs(first), ...runs(second)]);
+  });
+
+  it('opens once the current URL navigation commits, forgetting the ones it replaced', () => {
+    const run = simulate(urlGateDef, open, [
+      start(first),
+      start(second),
+      settled(second, 'committed'),
+    ]);
+    expect(run.state).toEqual(open);
+    expect(run.commands).toEqual([...runs(first), ...runs(second), OPENED]);
+  });
+
+  it.each(['refused', 'cancelled'] as const)(
+    'puts back a %s URL navigation, then the ones it replaced, newest first',
+    (outcome) => {
+      const run = simulate(urlGateDef, open, [
+        start(first),
+        start(second),
+        start(third),
+        settled(third, outcome),
+        LANDED,
+        LANDED,
+        LANDED,
+      ]);
+      expect(run.state).toEqual(open);
+      expect(run.commands.slice(6)).toEqual([
+        revert(third),
+        revert(second),
+        revert(first),
+        OPENED,
       ]);
     }
   );
 
-  it('serializes transformed ancestor outputs without validating them as inputs', () => {
-    const dated = defineRoutes({
-      definitions: [
-        defineRoute({
-          id: 'day',
-          path: 'day/:date',
-          params: z.object({
-            date: z.string().transform((date) => new Date(date)),
-          }),
-          serializeParams: ({ date }) => ({
-            date: date.toISOString().slice(0, 10),
-          }),
-          children: [
-            defineRoute({
-              id: 'day-item',
-              path: 'item/:id',
-              params: z.object({ id: z.string() }),
-            }),
-          ],
-        }),
-      ],
-    });
-    const manifest = createRoutesManifest({
-      definitions: [...tree.definitions, ...dated.definitions],
-    });
-    const current = decodeRoute(manifest, ['workspace'])!;
-    const date = new Date('2026-01-02T00:00:00Z');
-    const next = resolveNavigation(manifest, current, undefined, {
-      route: dated.definitions[0].children[0],
-      params: { date, id: 'one' },
-    });
-    expect(next?.location.route.matches).toEqual([
-      { id: 'day', params: { date } },
-      { id: 'day-item', params: { id: 'one' } },
+  it('opens after a failed URL navigation without putting its URL back', () => {
+    const run = simulate(urlGateDef, open, [
+      start(first),
+      settled(first, 'failed'),
     ]);
+    expect(run.state).toEqual(open);
+    expect(run.commands).toEqual([...runs(first), OPENED]);
   });
 
-  it('appends explicit child-relative paths to the current route', () => {
-    const current = entry(['workspace', 'folder', 'folder-1']);
-    const next = resolveNavigation(
-      routes,
-      current,
-      current,
-      './detail/document-1'
-    );
-
-    expect(next?.location?.route?.matches).toEqual([
-      { id: 'workspace', params: {} },
-      { id: 'workspace-folder', params: { folderId: 'folder-1' } },
-      { id: 'workspace-detail', params: { documentId: 'document-1' } },
-    ]);
-  });
-
-  it('navigates to a parent while preserving its params and search', () => {
-    const current = entry([
-      'workspace',
-      'folder',
-      'folder-1',
-      'detail',
-      'document-1',
-    ]);
-    current.location = {
-      ...current.location,
-      search: { workspace: { sort: ['name'] } },
+  it('ignores the outcome of a URL navigation that is no longer current', () => {
+    const navigating: GateState = {
+      t: 'navigating',
+      navigation: second,
+      blocking: false,
+      superseded: [first],
     };
-    const next = resolveNavigation(routes, current, current, { parent: true });
-
-    expect(next?.location).toEqual({
-      route: {
-        matches: [
-          { id: 'workspace', params: {} },
-          { id: 'workspace-folder', params: { folderId: 'folder-1' } },
-        ],
-      },
-      search: { workspace: { sort: ['name'] } },
-    });
+    expect(
+      step(urlGateDef, navigating, settled(first, 'committed'))
+    ).toBeUndefined();
   });
 
-  it('navigates by a typed route and preserves matching ancestor params', () => {
-    const current = entry(['workspace', 'folder', 'folder-1']);
-    const next = resolveNavigation(routes, current, current, {
-      route: workspaceDetailRoute,
-      params: { documentId: 'document-2' },
-    });
+  it('holds an action while a blocking URL navigation runs', () => {
+    const blocking: GateState = {
+      t: 'navigating',
+      navigation: first,
+      blocking: true,
+      superseded: [],
+    };
+    expect(step(urlGateDef, blocking, ACTION)).toBeUndefined();
+  });
 
-    expect(next?.location?.route?.matches).toEqual([
-      { id: 'workspace', params: {} },
-      { id: 'workspace-folder', params: { folderId: 'folder-1' } },
-      { id: 'workspace-detail', params: { documentId: 'document-2' } },
+  it('lets an action take over from any other URL navigation once its URLs are back', () => {
+    const run = simulate(urlGateDef, open, [
+      start(first),
+      start(second),
+      ACTION,
+      LANDED,
+      LANDED,
     ]);
-    expect(routeParams(next?.location?.route)).toEqual({
-      folderId: 'folder-1',
-      documentId: 'document-2',
+    expect(run.state).toEqual(open);
+    expect(run.commands.slice(4)).toEqual([
+      abort(second, 'interrupted'),
+      revert(second),
+      revert(first),
+      OPENED,
+    ]);
+  });
+
+  it('turns away a URL navigation that arrives while reverting and puts it back too', () => {
+    const run = simulate(urlGateDef, open, [
+      start(first),
+      ACTION,
+      start(second),
+      LANDED,
+      LANDED,
+    ]);
+    expect(run.state).toEqual(open);
+    expect(run.commands.slice(2)).toEqual([
+      abort(first, 'interrupted'),
+      revert(first),
+      abort(second, 'interrupted'),
+      revert(second),
+      OPENED,
+    ]);
+  });
+
+  it('puts back a URL navigation arriving mid-revert before the older ones still queued', () => {
+    const run = simulate(urlGateDef, open, [
+      start(first),
+      start(second),
+      settled(second, 'refused'),
+      start(third),
+      LANDED,
+      LANDED,
+      LANDED,
+    ]);
+    const reverts = run.commands.filter((command) => command.t === 'revert');
+
+    expect(run.state).toEqual(open);
+    expect(reverts).toEqual([revert(second), revert(third), revert(first)]);
+  });
+
+  it('aborts the URL navigation and opens on dispose, then turns everything away', () => {
+    const run = simulate(urlGateDef, open, [
+      start(first, true),
+      { t: 'dispose' },
+      ACTION,
+      start(second),
+    ]);
+    expect(run.state).toEqual({ t: 'disposed' });
+    expect(run.commands.slice(2)).toEqual([
+      abort(first, 'disposed'),
+      OPENED,
+      OPENED,
+      abort(second, 'disposed'),
+    ]);
+  });
+});
+
+describe('middleware', () => {
+  const navigatingTo = (to: Entry) => ({
+    to,
+    cause: 'navigate' as const,
+    signal: signal(),
+  });
+
+  it('follows redirects and keeps the entry identity', () => {
+    const middleware: SplitRouterMiddleware = (context) =>
+      context.to.location.route.matches.at(-1)?.id === 'block' &&
+      context.routes.byId.has('mail-thread')
+        ? context.redirect('/mail/t1')
+        : undefined;
+    const result = runMiddleware(
+      routes,
+      [middleware],
+      navigatingTo(entry('e1', '/md/d1'))
+    );
+    expect(result).toMatchObject({
+      id: 'e1',
+      location: {
+        route: {
+          matches: [{ id: 'app' }, { id: 'mail' }, { id: 'mail-thread' }],
+        },
+      },
     });
   });
 
-  it('returns undefined for invalid parent and route destinations', () => {
-    const current = entry(['workspace']);
+  it('cancels when a handler asks to', () => {
+    const result = runMiddleware(
+      routes,
+      [({ cancel }) => cancel()],
+      navigatingTo(entry('e1', '/home'))
+    );
+    expect(result).toBe(CANCELLED);
+  });
 
-    expect(
-      resolveNavigation(routes, current, current, { parent: true })
-    ).toBeUndefined();
-    expect(
-      resolveNavigation(routes, current, current, {
-        route: { id: 'missing' },
-      })
-    ).toBeUndefined();
+  it('awaits async handlers', async () => {
+    const result = runMiddleware(
+      routes,
+      [
+        async ({ path, redirect }) =>
+          path === '/drive' ? undefined : redirect('/drive'),
+      ],
+      navigatingTo(entry('e1', '/home'))
+    );
+    await expect(result).resolves.toMatchObject({
+      location: { route: { matches: [{ id: 'app' }, { id: 'drive' }] } },
+    });
+  });
+
+  it('falls back to the proposed entry on a redirect loop', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const original = entry('e1', '/home');
+    const result = runMiddleware(
+      routes,
+      [
+        ({ to, redirect }) =>
+          redirect(
+            to.location.route.matches[0].id === 'home' ? '/drive' : '/home'
+          ),
+      ],
+      navigatingTo(original)
+    );
+    expect(result).toBe(original);
+    expect(error).toHaveBeenCalled();
   });
 });

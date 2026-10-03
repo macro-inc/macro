@@ -655,6 +655,8 @@ export type GraphqlEntityFilterAst = {
   favoritesOnly?: boolean | null | undefined;
   /** The foreign entity filter to apply. */
   foreignEntityFilter?: GraphqlForeignEntityExpr | null | undefined;
+  /** The GitHub pull request filter to apply, on top of the foreign entity filter. */
+  githubPullRequestFilter?: GraphqlGithubPullRequestExpr | null | undefined;
   /** The initiative filter to apply. Initiatives are opt-in. */
   initiativeFilter?: GraphqlInitiativeExpr | null | undefined;
   /** The project filter to apply. */
@@ -854,6 +856,68 @@ export type GraphqlGithubPrReviewState =
   | 'CHANGES_REQUESTED'
   /** Review left comments without an approval decision. */
   | 'COMMENTED';
+
+/** The two operands of a recursive `GithubPullRequestFilterExpr` binary expression. */
+export type GraphqlGithubPullRequestBinaryExpr = {
+  /** Left expression. */
+  left: GraphqlGithubPullRequestExpr;
+  /** Right expression. */
+  right: GraphqlGithubPullRequestExpr;
+};
+
+/** A recursive `GithubPullRequestFilterExpr` filter expression. */
+export type GraphqlGithubPullRequestExpr =
+  {   /** Both expressions must match. */
+  and: GraphqlGithubPullRequestBinaryExpr; literal?: never; not?: never; or?: never; }
+  |  { and?: never;   /** Match a literal. */
+  literal: GraphqlGithubPullRequestLiteral; not?: never; or?: never; }
+  |  { and?: never; literal?: never;   /** Negate an expression. */
+  not: GraphqlGithubPullRequestExpr; or?: never; }
+  |  { and?: never; literal?: never; not?: never;   /** Either expression may match. */
+  or: GraphqlGithubPullRequestBinaryExpr; };
+
+/** GraphQL input representing a GitHub pull request literal. */
+export type GraphqlGithubPullRequestLiteral =
+  {   /** The numeric GitHub user id of an assignee. */
+  assignee: string; author?: never; draft?: never; involves?: never; label?: never; repositoryId?: never; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never;   /** The author's numeric GitHub user id option. */
+  author: string; draft?: never; involves?: never; label?: never; repositoryId?: never; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never;   /** The draft option. */
+  draft: boolean; involves?: never; label?: never; repositoryId?: never; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never;   /** The numeric GitHub user id of someone involved in the pull request. */
+  involves: string; label?: never; repositoryId?: never; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never; involves?: never;   /** The label name option. */
+  label: string; repositoryId?: never; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never; involves?: never; label?: never;   /** The numeric GitHub repository id option. */
+  repositoryId: string; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never; involves?: never; label?: never; repositoryId?: never;   /** The numeric GitHub user id of a requested reviewer. */
+  reviewRequested: string; reviewStatus?: never; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never; involves?: never; label?: never; repositoryId?: never; reviewRequested?: never;   /** The review status option. */
+  reviewStatus: GraphqlGithubPullRequestReviewStatus; reviewedBy?: never; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never; involves?: never; label?: never; repositoryId?: never; reviewRequested?: never; reviewStatus?: never;   /** The numeric GitHub user id of someone who submitted a review. */
+  reviewedBy: string; status?: never; }
+  |  { assignee?: never; author?: never; draft?: never; involves?: never; label?: never; repositoryId?: never; reviewRequested?: never; reviewStatus?: never; reviewedBy?: never;   /** The pull request state option. */
+  status: GraphqlGithubPullRequestState; };
+
+/** GraphQL input representing a GitHub pull request review status. */
+export type GraphqlGithubPullRequestReviewStatus =
+  /** The approved option. */
+  | 'APPROVED'
+  /** The changes requested option. */
+  | 'CHANGES_REQUESTED'
+  /** The no reviews option. */
+  | 'NONE'
+  /** The review required option. */
+  | 'REQUIRED';
+
+/** GraphQL input representing a GitHub pull request state. */
+export type GraphqlGithubPullRequestState =
+  /** The closed option. */
+  | 'CLOSED'
+  /** The merged option. */
+  | 'MERGED'
+  /** The open option. */
+  | 'OPEN';
 
 /** Grouping modes supported by grouped Soup. */
 export type GraphqlGroupByField =

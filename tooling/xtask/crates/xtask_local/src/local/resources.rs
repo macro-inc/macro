@@ -307,6 +307,12 @@ pub const BUCKETS: &[Bucket] = &[
         name: "agent-session-changes",
         env_key: "AGENT_SESSION_CHANGES_BUCKET",
     },
+    Bucket {
+        // The patch behind each pull request's Changes pane, shared with the
+        // agent sessions that work on that pull request.
+        name: "github-pull-request-patches",
+        env_key: "GITHUB_PULL_REQUEST_PATCH_BUCKET",
+    },
 ];
 
 /// Every local DynamoDB table and the env var that references it.

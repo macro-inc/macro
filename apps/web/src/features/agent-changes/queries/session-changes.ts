@@ -83,7 +83,7 @@ export function decodeSessionChanges(
   };
 }
 
-function queryStatus(query: {
+export function queryStatus(query: {
   isPending: boolean;
   isError: boolean;
   isSuccess: boolean;

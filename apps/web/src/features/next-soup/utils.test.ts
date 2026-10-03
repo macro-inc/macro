@@ -152,6 +152,7 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
 });
 
 import type { SerializedSearchParams } from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
   OpenWithSplitOptions,
@@ -996,13 +997,7 @@ describe('calendar view navigation', () => {
           }),
         }),
         entryMetadata: expect.objectContaining({
-          route: {
-            matches: [
-              expect.objectContaining({
-                id: 'view-calendar',
-              }),
-            ],
-          },
+          route: paneRoute(expect.objectContaining({ id: 'view-calendar' })),
           search: {
             calendar: expect.objectContaining({
               eventId: ['event-1'],
@@ -1084,12 +1079,10 @@ describe('Hosted details and Drive document routing', () => {
         type: 'component',
         id: 'reviews',
         entryMetadata: {
-          route: {
-            matches: [
-              { id: 'view-reviews', params: {} },
-              { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
-            ],
-          },
+          route: paneRoute(
+            { id: 'view-reviews', params: {} },
+            { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } }
+          ),
         },
       },
       expect.objectContaining({
@@ -1175,18 +1168,13 @@ describe('Hosted details and Drive document routing', () => {
           type: 'component',
           id: 'documents',
           entryMetadata: {
-            route: {
-              matches: [
-                { id: 'drive', params: {} },
-                {
-                  id: 'drive-document',
-                  params: {
-                    documentId: 'doc-1',
-                    documentType: fileType,
-                  },
-                },
-              ],
-            },
+            route: paneRoute(
+              { id: 'drive', params: {} },
+              {
+                id: 'drive-document',
+                params: { documentId: 'doc-1', documentType: fileType },
+              }
+            ),
           },
         },
         expect.objectContaining({
@@ -1910,15 +1898,13 @@ describe('getDocumentCommentTarget', () => {
         type: 'component',
         id: 'documents',
         entryMetadata: {
-          route: {
-            matches: [
-              { id: 'drive', params: {} },
-              {
-                id: 'drive-document',
-                params: { documentId: 'doc-1', documentType: 'md' },
-              },
-            ],
-          },
+          route: paneRoute(
+            { id: 'drive', params: {} },
+            {
+              id: 'drive-document',
+              params: { documentId: 'doc-1', documentType: 'md' },
+            }
+          ),
         },
       },
       expect.objectContaining({ activate: true, search: undefined })
@@ -2113,12 +2099,10 @@ describe('call navigation', () => {
         type: 'component',
         id: 'documents',
         entryMetadata: {
-          route: {
-            matches: [
-              { id: 'drive', params: {} },
-              { id: 'drive-call', params: { callId: 'call-1' } },
-            ],
-          },
+          route: paneRoute(
+            { id: 'drive', params: {} },
+            { id: 'drive-call', params: { callId: 'call-1' } }
+          ),
         },
       },
       expect.objectContaining({ allowDuplicate: true })
@@ -2146,12 +2130,10 @@ describe('call navigation', () => {
       type: 'component',
       id: 'documents',
       entryMetadata: {
-        route: {
-          matches: [
-            { id: 'drive', params: {} },
-            { id: 'drive-call', params: { callId: 'call-1' } },
-          ],
-        },
+        route: paneRoute(
+          { id: 'drive', params: {} },
+          { id: 'drive-call', params: { callId: 'call-1' } }
+        ),
       },
     });
     expect(targetSearch(openWithSplit, 'call-detail')).toMatchObject({

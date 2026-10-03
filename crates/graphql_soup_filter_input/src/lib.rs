@@ -31,6 +31,9 @@ use item_filters::{
         document::DocumentLiteral,
         email::{Email, EmailLiteral},
         foreign_entity::ForeignEntityLiteral,
+        github_pull_request::{
+            GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
+        },
         initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
@@ -377,6 +380,8 @@ pub struct GraphqlEntityFilterAst {
     crm_company_filter: Option<GraphqlCrmCompanyExpr>,
     /// The foreign entity filter to apply.
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
+    /// The GitHub pull request filter to apply, on top of the foreign entity filter.
+    github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
     /// The reminder filter to apply.
     reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
@@ -417,6 +422,7 @@ impl GraphqlEntityFilterAst {
             call_filter: optional_tree(self.call_filter)?,
             crm_company_filter: optional_tree(self.crm_company_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
+            github_pull_request_filter: optional_tree(self.github_pull_request_filter)?,
             reminder_filter: optional_tree(self.reminder_filter)?,
             agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
@@ -537,6 +543,13 @@ filter_expr_input!(
     GraphqlForeignEntityLiteral,
     ForeignEntityLiteral,
     "ForeignEntityFilterExpr"
+);
+filter_expr_input!(
+    GraphqlGithubPullRequestExpr,
+    GraphqlGithubPullRequestBinaryExpr,
+    GraphqlGithubPullRequestLiteral,
+    GithubPullRequestLiteral,
+    "GithubPullRequestFilterExpr"
 );
 filter_expr_input!(
     GraphqlReminderExpr,
@@ -1264,6 +1277,60 @@ impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
     }
 }
 
+/// GraphQL input representing a GitHub pull request literal.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlGithubPullRequestLiteral {
+    /// The numeric GitHub repository id option.
+    RepositoryId(String),
+    /// The author's numeric GitHub user id option.
+    Author(String),
+    /// The pull request state option.
+    Status(GraphqlGithubPullRequestState),
+    /// The numeric GitHub user id of someone involved in the pull request.
+    Involves(String),
+    /// The numeric GitHub user id of a requested reviewer.
+    ReviewRequested(String),
+    /// The draft option.
+    Draft(bool),
+    /// The numeric GitHub user id of an assignee.
+    Assignee(String),
+    /// The label name option.
+    Label(String),
+    /// The review status option.
+    ReviewStatus(GraphqlGithubPullRequestReviewStatus),
+    /// The numeric GitHub user id of someone who submitted a review.
+    ReviewedBy(String),
+}
+
+impl IntoFilterExpr<GithubPullRequestLiteral> for GraphqlGithubPullRequestLiteral {
+    /// Convert this value into the expr representation.
+    fn into_expr(self) -> InputResult<Expr<GithubPullRequestLiteral>> {
+        let literal = match self {
+            Self::RepositoryId(id) => {
+                GithubPullRequestLiteral::RepositoryId(id.parse().map_err(|_| {
+                    InputError::new(format!(
+                        "GithubPullRequestLiteral.repositoryId must be a number, got `{id}`"
+                    ))
+                })?)
+            }
+            Self::Author(id) => GithubPullRequestLiteral::Author(id),
+            Self::Status(status) => GithubPullRequestLiteral::Status(status.into_model()),
+            Self::Involves(id) => GithubPullRequestLiteral::Involves(id),
+            Self::ReviewRequested(id) => GithubPullRequestLiteral::ReviewRequested(id),
+            Self::Draft(draft) => GithubPullRequestLiteral::Draft(draft),
+            Self::Assignee(id) => GithubPullRequestLiteral::Assignee(id),
+            Self::Label(name) => GithubPullRequestLiteral::Label(name),
+            Self::ReviewStatus(status) => {
+                GithubPullRequestLiteral::ReviewStatus(status.into_model())
+            }
+            Self::ReviewedBy(id) => GithubPullRequestLiteral::ReviewedBy(id),
+        };
+        Ok(Expr::val(literal))
+    }
+}
+
 filter_expr_input!(
     GraphqlInitiativeExpr,
     GraphqlInitiativeBinaryExpr,
@@ -1335,5 +1402,56 @@ impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
             Self::TableId(id) => DatabaseRowLiteral::TableId(parse_id(id, "tableId")?),
             Self::Id(id) => DatabaseRowLiteral::Id(parse_id(id, "id")?),
         }))
+    }
+}
+
+/// GraphQL input representing a GitHub pull request state.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlGithubPullRequestState {
+    /// The open option.
+    Open,
+    /// The closed option.
+    Closed,
+    /// The merged option.
+    Merged,
+}
+
+impl GraphqlGithubPullRequestState {
+    /// Convert this GraphQL state into the filter model.
+    fn into_model(self) -> GithubPullRequestState {
+        match self {
+            Self::Open => GithubPullRequestState::Open,
+            Self::Closed => GithubPullRequestState::Closed,
+            Self::Merged => GithubPullRequestState::Merged,
+        }
+    }
+}
+
+/// GraphQL input representing a GitHub pull request review status.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlGithubPullRequestReviewStatus {
+    /// The no reviews option.
+    None,
+    /// The review required option.
+    Required,
+    /// The approved option.
+    Approved,
+    /// The changes requested option.
+    ChangesRequested,
+}
+
+impl GraphqlGithubPullRequestReviewStatus {
+    /// Convert this GraphQL review status into the filter model.
+    fn into_model(self) -> GithubPullRequestReviewStatus {
+        match self {
+            Self::None => GithubPullRequestReviewStatus::None,
+            Self::Required => GithubPullRequestReviewStatus::Required,
+            Self::Approved => GithubPullRequestReviewStatus::Approved,
+            Self::ChangesRequested => GithubPullRequestReviewStatus::ChangesRequested,
+        }
     }
 }

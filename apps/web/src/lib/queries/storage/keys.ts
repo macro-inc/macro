@@ -37,11 +37,32 @@ export const snippetRawKeys = createQueryKeys('snippetRaw', {
   }),
 });
 
+export const githubPullRequestRefreshKeys = createQueryKeys(
+  'githubPullRequestRefresh',
+  {
+    refresh: (githubKey: string) => ({
+      queryKey: [githubKey],
+    }),
+  }
+);
+
 export const documentGithubPullRequestsKeys = createQueryKeys(
   'documentGithubPullRequests',
   {
     list: (documentId: string) => ({
       queryKey: [documentId],
+    }),
+  }
+);
+
+export const githubPullRequestChangesKeys = createQueryKeys(
+  'githubPullRequestChanges',
+  {
+    summary: (foreignEntityId: string) => ({
+      queryKey: [foreignEntityId],
+    }),
+    patch: (foreignEntityId: string, changesetId: string) => ({
+      queryKey: [foreignEntityId, changesetId],
     }),
   }
 );
