@@ -191,10 +191,13 @@ async fn drive_turn(
     // reach the session actor as ACP frames, and the actor projects those onto
     // `invoke_agent` / `execute_tool` spans for every harness alike. Enriching
     // rig's spans too would report each turn twice.
+    // Calls stream as the model writes them, so the transcript shows a call
+    // from the moment it is named rather than once its arguments are whole.
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
-        .with_genai_telemetry(false);
+        .with_genai_telemetry(false)
+        .with_streamed_tool_calls();
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
             Arc::clone(&toolset),

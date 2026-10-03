@@ -43,6 +43,8 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// See [`Self::with_streamed_tool_calls`].
+    stream_tool_calls: bool,
 }
 
 impl AgentLoop {
@@ -65,6 +67,7 @@ impl AgentLoop {
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            stream_tool_calls: false,
         }
     }
 
@@ -139,6 +142,24 @@ impl AgentLoop {
     /// calls run with `RequestContext::genai_telemetry` off.
     pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
         self.genai_telemetry = enabled;
+        self
+    }
+
+    /// Report each tool call as soon as the model names it, then its
+    /// arguments as they stream ([`StreamPart::ToolCallStarted`],
+    /// [`StreamPart::ToolCallArgs`]), before the finished
+    /// [`StreamPart::ToolCall`]. Off by default: a host that only renders
+    /// finished calls has nothing to do with the extra parts.
+    ///
+    /// A streamed call is reported under rig's correlation id rather than the
+    /// provider's `call_id`, since only that id is known when the call
+    /// starts; its result carries the same one.
+    ///
+    /// [`StreamPart::ToolCallStarted`]: crate::StreamPart::ToolCallStarted
+    /// [`StreamPart::ToolCallArgs`]: crate::StreamPart::ToolCallArgs
+    /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
+    pub fn with_streamed_tool_calls(mut self) -> Self {
+        self.stream_tool_calls = true;
         self
     }
 
@@ -333,6 +354,7 @@ impl AgentLoop {
                 loaded_buffer,
                 register_loaded,
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                stream_tool_calls: self.stream_tool_calls,
             },
             recorder: self.recorder.clone(),
             usage_ctx,

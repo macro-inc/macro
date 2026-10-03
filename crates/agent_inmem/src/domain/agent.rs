@@ -11,11 +11,11 @@
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage};
-use agent::{StreamAccumulator, StreamPart, ToolResponse};
+use agent::{McpInfo, StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
     BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
@@ -48,6 +48,7 @@ use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
+use crate::domain::tool_stream::StreamingCalls;
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
     UserInputRequester,
@@ -778,12 +779,13 @@ async fn run_turn(
     });
 
     let mut accumulator = StreamAccumulator::new();
+    let mut streaming = StreamingCalls::default();
     let mut failure = None;
     let mut was_cancelled = false;
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
-                if let Some(update) = update_for_part(&part) {
+                if let Some(update) = update_for_part(&part, &mut streaming, Instant::now()) {
                     let notification = SessionNotification::new(acp_session_id.clone(), update);
                     if connection.send_notification(notification).is_err() {
                         // Nobody is listening; stop spending tokens.
@@ -818,7 +820,13 @@ async fn run_turn(
     }
 
     let mut turn_parts = accumulator.into_parts();
-    for (id, _name) in close_dangling_tool_calls(&mut turn_parts) {
+    // A call the turn ended while the model was still writing never ran and
+    // is not in the history; its open row closes all the same.
+    let unfinished = streaming.into_unfinished();
+    let dangling = close_dangling_tool_calls(&mut turn_parts)
+        .into_iter()
+        .map(|(id, _name)| id);
+    for id in unfinished.into_iter().chain(dangling) {
         let _ = connection.send_notification(SessionNotification::new(
             acp_session_id.clone(),
             SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
@@ -956,7 +964,16 @@ fn parse_ask(question: &str) -> (String, Vec<String>) {
 }
 
 /// The `session/update` a stream part renders as, if any.
-fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
+///
+/// A call the model is still writing opens `pending` and is peeked at as its
+/// arguments stream (see [`crate::domain::tool_stream`]); once finished it
+/// moves to `in_progress` with the real arguments. A call that arrives whole
+/// opens `in_progress` directly.
+fn update_for_part(
+    part: &StreamPart,
+    streaming: &mut StreamingCalls,
+    now: Instant,
+) -> Option<SessionUpdate> {
     match part {
         StreamPart::Content(text) => Some(SessionUpdate::AgentMessageChunk(ContentChunk::new(
             ContentBlock::from(text.clone()),
@@ -964,20 +981,41 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
         StreamPart::Thinking(text) => Some(SessionUpdate::AgentThoughtChunk(ContentChunk::new(
             ContentBlock::from(text.clone()),
         ))),
-        StreamPart::ToolCall(call) => {
-            let title = call
-                .mcp
-                .as_ref()
-                .and_then(|mcp| mcp.display_name.clone())
-                .unwrap_or_else(|| call.name.clone());
+        StreamPart::ToolCallStarted(start) => {
+            streaming.open(&start.id);
             Some(SessionUpdate::ToolCall(
-                AcpToolCall::new(call.id.clone(), title)
-                    .kind(tool_kind(&call.name))
-                    .status(ToolCallStatus::InProgress)
-                    .raw_input(call.json.clone())
-                    .meta(tool_call_meta(call)),
+                AcpToolCall::new(
+                    start.id.clone(),
+                    tool_title(&start.name, start.mcp.as_ref()),
+                )
+                .kind(tool_kind(&start.name))
+                .status(ToolCallStatus::Pending)
+                .meta(tool_call_meta(&start.name, start.mcp.as_ref())),
             ))
         }
+        StreamPart::ToolCallArgs { id, delta } => {
+            streaming.push_arguments(id, delta, now).map(|peek| {
+                SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                    id.clone(),
+                    ToolCallUpdateFields::new().raw_input(peek),
+                ))
+            })
+        }
+        StreamPart::ToolCall(call) if streaming.finish(&call.id) => {
+            Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                call.id.clone(),
+                ToolCallUpdateFields::new()
+                    .status(ToolCallStatus::InProgress)
+                    .raw_input(call.json.clone()),
+            )))
+        }
+        StreamPart::ToolCall(call) => Some(SessionUpdate::ToolCall(
+            AcpToolCall::new(call.id.clone(), tool_title(&call.name, call.mcp.as_ref()))
+                .kind(tool_kind(&call.name))
+                .status(ToolCallStatus::InProgress)
+                .raw_input(call.json.clone())
+                .meta(tool_call_meta(&call.name, call.mcp.as_ref())),
+        )),
         StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
             Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
                 id.clone(),
@@ -1003,19 +1041,25 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
 /// name rather than guess from the title: `macro.toolName` (an MCP tool as
 /// `mcp__<server>__<tool>`, the convention Claude Code set) and
 /// `macro.subagent` on a delegation.
-fn tool_call_meta(call: &agent::ToolCall) -> Meta {
-    let tool_name = match &call.mcp {
+fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
+    let tool_name = match mcp {
         Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
-        None => call.name.clone(),
+        None => name.to_owned(),
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if call.mcp.is_none() && call.name == SUBAGENT_TOOL {
+    if mcp.is_none() && name == SUBAGENT_TOOL {
         ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
     }
     let mut meta = Meta::new();
     meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
     meta
+}
+
+/// A tool call's title: an MCP tool's display name, else the tool's name.
+fn tool_title(name: &str, mcp: Option<&McpInfo>) -> String {
+    mcp.and_then(|mcp| mcp.display_name.clone())
+        .unwrap_or_else(|| name.to_owned())
 }
 
 /// A coarse [`ToolKind`] for a Macro tool name, for client iconography only.

@@ -27,7 +27,9 @@ pub use error::AgentError;
 pub use hook::{FinishedUserTool, PendingUserTool, UserToolFinisher};
 pub use model::metering::{MeteringContext, MeteringError, ProviderSupport, WireProtocol};
 pub use model::{PredefinedModel, ReasoningEffort};
-pub use stream::{ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
+pub use stream::{
+    ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolCallStart, ToolResponse, Usage,
+};
 pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_schema};
 
 pub use rig_core::completion::CompletionError;
