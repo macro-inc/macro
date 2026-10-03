@@ -6,10 +6,7 @@ import SparkleIcon from '@phosphor/sparkle.svg';
 import FilledSparkleIcon from '@phosphor-icons/core/fill/sparkle-fill.svg?component-solid';
 import { Show } from 'solid-js';
 import { AgentSessionCodeDetails } from '../components/AgentSessionCodeDetails';
-import {
-  AgentSessionRow,
-  AgentSessionStatusIndicator,
-} from '../components/AgentSessionRow';
+import { AgentSessionRow } from '../components/AgentSessionRow';
 import { kindForHarness, modeForKind, systemBotKind } from '../core/agent-kind';
 import { conversationState } from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
@@ -71,19 +68,11 @@ export function AgentSessionListItem(props: Props) {
       onOpen={props.onOpen}
       timestamp={compactAge(conversationTimestamp(props.entity))}
       leading={
-        <Show
-          when={props.surface === 'home'}
-          fallback={
-            <AgentSessionStatusIndicator
-              state={state()}
-              unread={props.unread}
-            />
-          }
-        >
+        props.surface === 'home' ? (
           <Show when={mode() === 'code'} fallback={<SparkleIcon />}>
             <FilledSparkleIcon />
           </Show>
-        </Show>
+        ) : undefined
       }
       trailing={
         <Show when={props.surface === 'home' && props.unread}>
