@@ -21,7 +21,10 @@ import { createUrlNavigation } from './url-navigation';
 
 export function createSplitRouter(options: SplitRouterOptions) {
   const routes = createRoutesManifest(options.routes);
-  const { history } = options;
+  const history =
+    typeof options.history === 'function'
+      ? options.history(routes)
+      : options.history;
   const [ready, setReady] = createSignal(false);
   let disposed = false;
 
@@ -57,12 +60,23 @@ export function createSplitRouter(options: SplitRouterOptions) {
       paneNavigation.carrySearch(pane, destination, mode),
   });
 
+  const urlNavigation = createUrlNavigation({
+    routes,
+    history,
+    panes,
+    url,
+    runner,
+    guards,
+    markReady: () => setReady(true),
+  });
+
   const paneNavigation = createPaneNavigation({
     routes,
     panes,
     url,
     runner,
     claims,
+    showAlone: urlNavigation.showAlone,
   });
 
   const paneList = createPaneList({
@@ -72,16 +86,6 @@ export function createSplitRouter(options: SplitRouterOptions) {
     runner,
     claims,
     navigation: paneNavigation,
-  });
-
-  const urlNavigation = createUrlNavigation({
-    routes,
-    history,
-    panes,
-    url,
-    runner,
-    guards,
-    markReady: () => setReady(true),
   });
 
   const disconnect = urlNavigation.connect();
@@ -130,8 +134,10 @@ export function createSplitRouter(options: SplitRouterOptions) {
     canGo: paneNavigation.canGo,
     open: paneList.open,
     close: paneList.close,
+    remove: paneList.remove,
     move: paneList.move,
     entry: panes.current,
+    history: panes.read,
     arrival: panes.arrival,
     pending: runner.pending,
     matches,

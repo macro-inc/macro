@@ -26,8 +26,15 @@ import {
 } from './fixtures';
 
 const routes = createRoutesManifest(appRoutes);
-const ids = (route: SplitRouteState | undefined) =>
+const matchIds = (route: SplitRouteState | undefined) =>
   route?.matches.map((match) => match.id);
+/** The pane route ids below the app route. */
+const ids = (route: SplitRouteState | undefined) =>
+  matchIds(route)?.filter((id) => id !== 'app');
+const decodeUrl = (path: string, search = '') =>
+  decodePanes(routes, { path, search, hash: '' }).panes.map((pane) =>
+    matchIds(pane.entry.location.route)
+  );
 const at = (path: string): SplitLocation => ({
   route: decodePane(routes, path.split('/').filter(Boolean))!,
 });
@@ -47,7 +54,7 @@ describe('route matching', () => {
       'drive',
       'drive-folder',
     ]);
-    expect(decodePane(routes, ['drive', 'folder', 'f1'])?.matches[1]).toEqual({
+    expect(decodePane(routes, ['drive', 'folder', 'f1'])?.matches[2]).toEqual({
       id: 'drive-folder',
       params: { folderId: 'f1' },
     });
@@ -82,6 +89,27 @@ describe('route matching', () => {
     expect(ids(decodePane(nested, ['elsewhere']))).toEqual(['not-found']);
   });
 
+  it('matches a route without a path only through its children', () => {
+    expect(matchIds(decodePane(routes, ['home']))).toEqual(['app', 'home']);
+    expect(decodePane(routes, [])).toBeUndefined();
+    expect(formatPane(routes, decodePane(routes, ['mail', 't1'])!)).toEqual([
+      'mail',
+      't1',
+    ]);
+  });
+
+  it('matches an empty pane with an empty path', () => {
+    const withBase = createRoutesManifest({
+      ...appRoutes,
+      definitions: [
+        defineRoute({ id: 'base', path: '' }),
+        ...appRoutes.definitions,
+      ],
+    });
+    expect(matchIds(decodePane(withBase, []))).toEqual(['base']);
+    expect(formatPanePath(withBase, decodePane(withBase, [])!)).toBe('/');
+  });
+
   it('expands adjacent optional params into prefixes only', () => {
     const pattern = compileRoutePattern({ path: 'a/:b?/:c?' });
     expect(pattern.alternatives.map((tokens) => tokens.length)).toEqual([
@@ -106,6 +134,21 @@ describe('route matching', () => {
         definitions: [defineRoute({ id: 'bad', path: '*rest/after' })],
       })
     ).toThrow(/catch-all/);
+    expect(() =>
+      createRoutesManifest({ ...appRoutes, definitions: [{ id: 'empty' }] })
+    ).toThrow(/has no path, so it needs children/);
+    expect(() =>
+      createRoutesManifest({
+        ...appRoutes,
+        definitions: [
+          home,
+          defineRoute({
+            id: 'layout',
+            children: [defineRoute({ id: 'nested-home', path: 'home' })],
+          }),
+        ],
+      })
+    ).toThrow(/Duplicate sibling split route path/);
   });
 });
 
@@ -139,7 +182,7 @@ describe('route queries', () => {
 });
 
 describe('panes codec', () => {
-  it('decodes each pane on its own, so one unmatched pane is not found', () => {
+  it('decodes each pane on its own, so an unmatched app pane is not found', () => {
     const decoded = decodePanes(routes, {
       path: '/mail/t1/~/no/such/place/~/drive',
       search: '',
@@ -148,30 +191,35 @@ describe('panes codec', () => {
     expect(decoded.panes.map((pane) => ids(pane.entry.location.route))).toEqual(
       [['mail', 'mail-thread'], ['not-found'], ['drive']]
     );
-    expect(decoded.panes[1]!.entry.location.route.matches[0].params).toEqual({
+    expect(decoded.panes[1]!.entry.location.route.matches[1]!.params).toEqual({
       segments: ['no', 'such', 'place'],
     });
   });
 
-  it('falls back to the default route for a pane only when nothing matches', () => {
-    const strict = createRoutesManifest({
+  it('redirects a URL no top-level route handles to the default route', () => {
+    const home = [['app', 'home']];
+    expect(decodeUrl('/no/such/place')).toEqual(home);
+    expect(decodeUrl('/')).toEqual(home);
+    expect(decodeUrl('/login/~/home')).toEqual(home);
+    expect(decodeUrl('/mail/~/login')).toEqual(home);
+    expect(decodeUrl('/login')).toEqual([['login']]);
+  });
+
+  it('shows a top-level catch-all as the 404 page', () => {
+    const withPage = createRoutesManifest({
       ...appRoutes,
-      definitions: [mailRoute, defineRoute({ id: 'home', path: 'home' })],
+      definitions: [
+        ...appRoutes.definitions,
+        defineRoute({ id: 'page-not-found', path: '*path' }),
+      ],
     });
-    const decoded = decodePanes(strict, {
-      path: '/mail/t1/~/unknown',
-      search: '',
-      hash: '',
-    });
-    expect(decoded.panes.map((pane) => ids(pane.entry.location.route))).toEqual(
-      [['mail', 'mail-thread'], ['home']]
-    );
-    expect(
-      ids(
-        decodePanes(strict, { path: '/', search: '', hash: '' }).panes[0]!.entry
-          .location.route
-      )
-    ).toEqual(['home']);
+    const decode = (path: string) =>
+      decodePanes(withPage, { path, search: '', hash: '' }).panes.map((pane) =>
+        matchIds(pane.entry.location.route)
+      );
+    expect(decode('/no/such/place')).toEqual([['page-not-found']]);
+    expect(decode('/home')).toEqual([['app', 'home']]);
+    expect(decode('/no/such/place/~/home')).toEqual([['app', 'home']]);
   });
 
   it('reads pane and entry ids back only when the pane count matches', () => {
@@ -250,16 +298,29 @@ describe('panes codec', () => {
     ).toBe('');
   });
 
+  it('keeps every unprefixed key while a route with externalSearch "*" shows', () => {
+    const login = { id: 'e1', location: at('/login') };
+    const encoded = encodePanes(
+      routes,
+      [{ paneId: 'p1' as PaneId, entry: login }],
+      { path: '/home', search: '?email=a&next=b&s0.drive.sort=name', hash: '' }
+    );
+    expect(encoded.search).toBe('?email=a&next=b');
+  });
+
   it('escapes a literal separator value so it round-trips', () => {
     const route = canonicalRoute(routes, {
-      matches: [{ id: 'block', params: { type: 'md', id: '~' } }],
+      matches: [
+        { id: 'app', params: {} },
+        { id: 'block', params: { type: 'md', id: '~' } },
+      ],
     })!;
     const path = formatPanePath(routes, route);
     expect(path).toBe('/md/%7E');
     expect(splitPanePaths(path)).toEqual([['md', '%7E']]);
     expect(
       decodePanes(routes, { path, search: '', hash: '' }).panes[0]!.entry
-        .location.route.matches[0].params
+        .location.route.matches[1]!.params
     ).toEqual({ type: 'md', id: '~' });
   });
 });
@@ -272,10 +333,10 @@ describe('target resolution', () => {
 
   it('resolves relative paths against the calling route', () => {
     expect(
-      ids(resolveTarget(routes, folder, 'md/d1', { depth: 1 })?.route)
+      ids(resolveTarget(routes, folder, 'md/d1', { depth: 2 })?.route)
     ).toEqual(['drive', 'drive-document']);
     expect(
-      resolveTarget(routes, folder, '../f2', { depth: 2 })?.route.matches[1]
+      resolveTarget(routes, folder, '../f2', { depth: 3 })?.route.matches[2]
     ).toEqual({ id: 'drive-folder', params: { folderId: 'f2' } });
     expect(ids(resolveTarget(routes, folder, '/mail/t2')?.route)).toEqual([
       'mail',

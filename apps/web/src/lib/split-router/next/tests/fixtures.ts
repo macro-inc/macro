@@ -60,15 +60,41 @@ export const notFoundRoute = defineRoute({
 });
 
 /** Declared out of order on purpose: matching must rank by specificity. */
-export const appRoutes = defineRoutes({
-  definitions: [notFoundRoute, blockRoute, homeRoute, mailRoute, driveRoute],
-  globalSearch: ['referral_code'],
-  defaultRoute: () => ({ matches: [{ id: 'home', params: {} }] }),
+export const appRoute = defineRoute({
+  id: 'app',
+  children: [notFoundRoute, blockRoute, homeRoute, mailRoute, driveRoute],
 });
 
-export const homeLocation: SplitLocation = {
-  route: { matches: [{ id: 'home', params: {} }] },
-};
+export const loginRoute = defineRoute({
+  id: 'login',
+  path: 'login',
+  externalSearch: '*',
+});
+
+export const appRoutes = defineRoutes({
+  definitions: [loginRoute, appRoute],
+  globalSearch: ['referral_code'],
+  defaultRoute: () => ({
+    matches: [
+      { id: 'app', params: {} },
+      { id: 'home', params: {} },
+    ],
+  }),
+});
+
+/** A location under the app route, whose children are the pane routes. */
+export function appLocation(id: string, params = {}): SplitLocation {
+  return {
+    route: {
+      matches: [
+        { id: 'app', params: {} },
+        { id, params },
+      ],
+    },
+  };
+}
+
+export const homeLocation = appLocation('home');
 
 /**
  * Opens new panes after their source, or in the source once `maxPanes` are

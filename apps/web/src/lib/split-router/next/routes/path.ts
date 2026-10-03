@@ -148,11 +148,12 @@ function expandOptionals(tokens: readonly PathToken[]): PathToken[][] {
   return variants;
 }
 
+/** A route without a path, or with `''`, consumes no segments. */
 export function compileRoutePattern(options: {
-  path: string;
+  path?: string;
   aliases?: readonly string[];
 }): RoutePattern {
-  const canonical = tokenize(options.path);
+  const canonical = options.path ? tokenize(options.path) : [];
   const aliases = (options.aliases ?? []).map(tokenize);
   const alternatives = [canonical, ...aliases].flatMap(expandOptionals);
 

@@ -51,6 +51,11 @@ export type SplitRouteClaim = {
   id: string;
 };
 
+export type SplitReference = {
+  type: string;
+  id: string;
+};
+
 /** Route metadata. Hosts extend this interface through declaration merging. */
 export interface SplitRouteInfo {
   readonly [key: string]: unknown;
@@ -98,7 +103,11 @@ export type SplitRouteDefinition<
   >,
 > = {
   id: string;
-  path: string;
+  /**
+   * Segments this route consumes. `''` matches an empty pane. Without a path
+   * the route only groups its `children`, which match where it would.
+   */
+  path?: string;
   aliases?: readonly string[];
   component?: TComponent;
   children?: readonly SplitRouteDefinition<TComponent>[];
@@ -112,14 +121,21 @@ export type SplitRouteDefinition<
     StandardSchemaV1.InferOutput<TParamsSchema>,
     SplitRouteClaim | undefined
   >;
+  /** The entity this route shows, for hosts that link to it; the router never reads it. */
+  toReference?: SplitRouteParamCallback<
+    StandardSchemaV1.InferOutput<TParamsSchema>,
+    SplitReference | undefined
+  >;
   /**
-   * Pane search namespaces this route adds. Leaving it undefined adds no
-   * restriction; a root route without `search` owns every namespace.
+   * Pane search namespaces this route adds, or `'*'` for every namespace.
+   * Leaving it undefined adds no restriction; a root route without `search`
+   * owns every namespace.
    */
-  search?: readonly string[];
-  /** Unprefixed query keys kept in the URL while this route is shown. */
+  search?: readonly string[] | '*';
+  /** Unprefixed query keys kept in the URL while this route is shown; `'*'` keeps them all. */
   externalSearch?:
     | readonly string[]
+    | '*'
     | ((entry: Readonly<Entry>) => readonly string[]);
   remountKey?: {
     bivarianceHack(
@@ -137,6 +153,11 @@ export type SplitRouteDefinition<
 /** Static route declarations. Do not mutate them during a router's lifetime. */
 export type SplitRoutes<TComponent = unknown> = {
   definitions: readonly SplitRouteDefinition<TComponent>[];
+  /**
+   * What an empty URL shows, and where URLs nothing handles redirect. A
+   * top-level route with a splat path handles every other first pane, as a
+   * 404 page would.
+   */
   defaultRoute: () => SplitRouteState;
   globalSearch?: readonly string[];
 };
@@ -219,13 +240,17 @@ export type InferSplitRouteParams<TRoute> = TRoute extends {
             : undefined
         >
       >
-    : SplitRouteParams;
+    : TRoute extends { path?: undefined }
+      ? {}
+      : SplitRouteParams;
 
 type LocalNavigationParams<TRoute> = TRoute extends { params: StandardSchemaV1 }
   ? InferSplitRouteParams<TRoute>
   : TRoute extends { path: infer TPath extends string }
     ? MergeRouteParams<{}, PathParams<TPath>>
-    : SplitRouteParams;
+    : TRoute extends { path?: undefined }
+      ? {}
+      : SplitRouteParams;
 
 // Type-only ancestry. Declaration helpers never add properties to supplied objects.
 declare const branchParams: unique symbol;
@@ -373,7 +398,8 @@ export type SplitRouteNavigationTarget<
 
 export type SplitNavigationTarget =
   | string
-  | { route: { id: string }; params?: unknown };
+  | { route: { id: string }; params?: unknown }
+  | { location: SplitLocation };
 
 export type SplitRouterStateUpdate<TInput = unknown, TOutput = TInput> =
   | TInput

@@ -3,7 +3,7 @@ import {
   type SplitRouteNode,
   type SplitRoutesManifest,
 } from '../routes/manifest';
-import { mergedParams } from '../routes/queries';
+import { routeParams } from '../routes/queries';
 import type { PreloadIntent, SplitLocation } from '../routes/types';
 import { isPromise } from '../utils';
 
@@ -45,7 +45,7 @@ function preloadNode(
   warmComponent(definition.component);
 
   const data = definition.preload?.({
-    params: mergedParams(location.route, depth + 1),
+    params: routeParams(location.route, depth + 1),
     search: location.search,
     intent,
     signal,

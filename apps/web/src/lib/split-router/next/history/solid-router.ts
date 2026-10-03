@@ -37,8 +37,6 @@ export type SolidBeforeLeaveEvent = Pick<
 export type SolidRouterHistoryOptions = {
   location: SolidRouterLocationLike;
   navigate: SolidRouterNavigate;
-  /** Whether a mount-relative path belongs to the router rather than another route. */
-  owns: (path: string) => boolean;
   /** Solid Router's `useBeforeLeave`; enables `intercept`. */
   beforeLeave?: (listener: (event: SolidBeforeLeaveEvent) => void) => void;
   /** The `base` passed to the Solid Router. */
@@ -85,7 +83,7 @@ function windowPath(mode: SolidRouterHistoryOptions['mode']): string {
 export function createSolidRouterHistory(
   options: SolidRouterHistoryOptions
 ): HistoryAdapter {
-  const { location, navigate, owns, beforeLeave } = options;
+  const { location, navigate, beforeLeave } = options;
   const base = normalizeBase(options.base);
   const listeners = createList<(change: ExternalChange) => void>();
   let reverting: (() => void)[] = [];
@@ -179,7 +177,6 @@ export function createSolidRouterHistory(
 
     const outsideBase = !toMount(untrack(() => location.pathname));
     if (outsideBase) return;
-    if (!owns(next.path)) return;
 
     const previous = last;
     last = { index: landed?.index ?? previous.index + 1, location: next };
@@ -222,13 +219,6 @@ export function createSolidRouterHistory(
     settleReverts();
   };
 
-  const ownedMount = (to: string) => {
-    const mount = toMount(to);
-    const owned = mount !== undefined && owns(mount.path);
-
-    return owned ? mount : undefined;
-  };
-
   const landedPath = options.landedPath ?? (() => windowPath(options.mode));
 
   /** Leaving the router's routes; a write still queued would pull the host back in. */
@@ -252,7 +242,7 @@ export function createSolidRouterHistory(
     handler: InterceptHandler,
     event: SolidBeforeLeaveEvent
   ) => {
-    const staysInRouter = ownedMount(landedPath()) !== undefined;
+    const staysInRouter = toMount(landedPath()) !== undefined;
     if (staysInRouter) return;
 
     leave(handler(undefined), event);
@@ -263,7 +253,7 @@ export function createSolidRouterHistory(
     event: SolidBeforeLeaveEvent,
     to: string
   ) => {
-    const mount = ownedMount(to);
+    const mount = toMount(to);
     if (!mount) {
       leave(handler(undefined), event);
       return;

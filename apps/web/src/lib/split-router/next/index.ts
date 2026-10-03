@@ -21,7 +21,7 @@ export type {
   Placement,
 } from './panes/types';
 export type { ClaimHolder } from './router/claims';
-export { createSplitRouter, type SplitRouter } from './router/create-router';
+export { createSplitRouter } from './router/create-router';
 export { PANE_LEVEL } from './router/leave-guards';
 export type {
   SplitRouterMiddleware,
@@ -41,11 +41,32 @@ export type {
   SplitPanePolicy,
   SplitRouterOptions,
 } from './router/types';
+export {
+  formatLocation,
+  formatPanePath,
+  parseLocation,
+  splitPanePaths,
+} from './routes/codec';
 export { defineRoute, defineRoutes } from './routes/define';
+export {
+  canonicalRoute,
+  createRoutesManifest,
+  decodePane,
+  type SplitRoutesManifest,
+} from './routes/manifest';
+export { decodeSegment } from './routes/path';
+export {
+  claimOf,
+  externalSearchKeys,
+  filterRouteSearch,
+  routeParams,
+} from './routes/queries';
+export { replacePaneSearchParams } from './routes/search';
 export {
   createSearchParamsCodec,
   type SearchParamsCodec,
   type SearchParamsCodecOptions,
+  takeLast,
 } from './routes/search-params';
 export type {
   DefinedSplitRoute,
@@ -63,6 +84,7 @@ export type {
   SerializedSearchParams,
   SplitLocation,
   SplitNavigationTarget,
+  SplitReference,
   SplitRouteClaim,
   SplitRouteDefinition,
   SplitRouteInfo,
@@ -76,7 +98,7 @@ export type {
   SplitSearchUpdate,
   WriteMode,
 } from './routes/types';
-export { SplitRouterProvider, useSplitRouter } from './solid/context';
+export { useOptionalSplitRouter, useSplitRouter } from './solid/context';
 export {
   type CreateSearchParamsOptions,
   createSearchParams,
@@ -90,13 +112,18 @@ export {
   useEntryProps,
   useMatches,
   useNavigate,
+  useOwnsSearchNamespace,
   usePane,
+  usePaneHistory,
   useParams,
   usePendingNavigation,
   useRouteParams,
   useRouteState,
 } from './solid/hooks';
-export { Outlet, type OutletProps } from './solid/outlet';
-export { PaneScope } from './solid/pane-scope';
+export type { OutletProps } from './solid/outlet';
+export type { RouteProps } from './solid/route';
+export type { RouterProps } from './solid/router';
+export { SplitRouter } from './solid/split-router';
 export { useBeforeLeave } from './solid/use-before-leave';
 export { useClaim } from './solid/use-claim';
+export { isRecord, isSafeName } from './utils';

@@ -5,6 +5,7 @@ import type {
   Entry,
   InferSplitRouteParams,
   InferSplitRoutePathParams,
+  SplitReference,
   SplitRouteClaim,
   SplitRouteInfo,
   SplitRoutePreloadContext,
@@ -15,7 +16,7 @@ import type {
 
 type SplitRouteDefinitionConstraint = {
   id: string;
-  path: string;
+  path?: string;
   aliases?: readonly string[];
   component?: unknown;
   children?: readonly SplitRouteDefinitionConstraint[];
@@ -23,9 +24,11 @@ type SplitRouteDefinitionConstraint = {
   state?: StandardSchemaV1;
   serializeParams?: unknown;
   claim?: unknown;
-  search?: readonly string[];
+  toReference?: unknown;
+  search?: readonly string[] | '*';
   externalSearch?:
     | readonly string[]
+    | '*'
     | ((entry: Readonly<Entry>) => readonly string[]);
   remountKey?: unknown;
   preload?: unknown;
@@ -35,6 +38,7 @@ type SplitRouteDefinitionConstraint = {
 type RouteParamCallbacks<TParams> = {
   serializeParams?: (params: TParams) => SplitRouteRawParams;
   claim?: (params: TParams) => SplitRouteClaim | undefined;
+  toReference?: (params: TParams) => SplitReference | undefined;
   remountKey?: (
     params: TParams,
     context: SplitRouteRemountContext
@@ -218,6 +222,21 @@ export function defineRoute<
   TDefinition & { path: TPath; params: TParamsSchema } & RouteParamCallbacks<
       StandardSchemaV1.InferOutput<TParamsSchema>
     >
+>;
+export function defineRoute<
+  const TDefinition extends SplitRouteDefinitionConstraint,
+>(
+  definition: TDefinition & {
+    path?: undefined;
+    aliases?: undefined;
+    params?: undefined;
+  } & RouteParamCallbacks<{}>
+): DefinedSplitRoute<
+  TDefinition & {
+    path?: undefined;
+    aliases?: undefined;
+    params?: undefined;
+  } & RouteParamCallbacks<{}>
 >;
 export function defineRoute(
   definition: SplitRouteDefinitionConstraint

@@ -11,12 +11,19 @@ import { defineRoute } from '../routes/define';
 import type {
   Entry,
   PaneId,
-  SplitLocation,
+  SplitRouteDefinition,
   SplitRoutes,
 } from '../routes/types';
 import { isPromise } from '../utils';
 import { createFakeSolidRouter } from './fake-solid-router';
-import { appRoutes, createTestPolicy, homeLocation } from './fixtures';
+import {
+  appLocation,
+  appRoute,
+  appRoutes,
+  createTestPolicy,
+  homeLocation,
+  loginRoute,
+} from './fixtures';
 
 function setup(
   url: string,
@@ -62,7 +69,6 @@ function setupSolid(url: string, ahead: readonly string[] = []) {
         location: solid.location,
         navigate: solid.navigate,
         base: '/app',
-        owns: () => true,
         beforeLeave: solid.beforeLeave,
         landedPath: solid.landed,
       }),
@@ -111,10 +117,20 @@ function slowRevertHistory(url: string) {
   return { history, adapter, landAll };
 }
 
+/** The level of a pane's first route, below the app route. */
+const PANE_ROUTE_LEVEL = 1;
+/** The pane route ids below the app route. */
 const routeIds = (entry: Entry | undefined) =>
-  entry?.location.route.matches.map((match) => match.id);
-const location = (id: string, params = {}): SplitLocation => ({
-  route: { matches: [{ id, params }] },
+  entry?.location.route.matches
+    .map((match) => match.id)
+    .filter((id) => id !== 'app');
+const location = appLocation;
+const withPaneRoutes = (...children: SplitRouteDefinition[]): SplitRoutes => ({
+  ...appRoutes,
+  definitions: [
+    loginRoute,
+    { ...appRoute, children: [...appRoute.children, ...children] },
+  ],
 });
 const never = () => new Promise<boolean>(() => {});
 
@@ -157,6 +173,45 @@ describe('split router', () => {
     ]);
   });
 
+  it('replaces a URL whose panes sit under different top-level routes with the default route', () => {
+    const { router, history } = track(setup('/login/~/home'));
+    expect(router.panes().map((id) => routeIds(router.entry(id)))).toEqual([
+      ['home'],
+    ]);
+    expect(history.entries().map((entry) => entry.path)).toEqual(['/home']);
+  });
+
+  it('turns a pane navigation outside the shared top-level route into a whole-window one, and Back rebuilds the panes', () => {
+    const { router, history, pane } = track(setup('/home/~/mail'));
+    router.navigate(pane(1), '/login');
+    expect(
+      router.panes().map((id) => router.entry(id)?.location.route.matches)
+    ).toEqual([[{ id: 'login', params: {} }]]);
+    expect(history.entries().map((entry) => entry.path)).toEqual([
+      '/home/~/mail',
+      '/login',
+    ]);
+
+    history.back();
+    expect(router.panes().map((id) => routeIds(router.entry(id)))).toEqual([
+      ['home'],
+      ['mail'],
+    ]);
+  });
+
+  it('skips entries under another top-level route on pane Back while other panes share the app route', () => {
+    const { router, pane } = track(setup('/home'));
+    router.navigate(pane(0), '/login');
+    router.navigate(pane(0), '/mail');
+    router.open('/drive', { newPane: true, source: pane(0) });
+    expect(router.panes()).toHaveLength(2);
+
+    expect(router.canGo(pane(0), -1)).toBe(true);
+    router.navigate(pane(0), -1);
+    expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
+    expect(router.canGo(pane(0), -1)).toBe(false);
+  });
+
   it('pane back replaces the browser entry and records how the pane arrived', () => {
     const { router, history, pane } = track(setup('/home'));
     router.navigate(pane(0), '/mail');
@@ -185,7 +240,7 @@ describe('split router', () => {
   it('a leave guard can refuse browser back, and the URL is put back', () => {
     const { router, history, pane } = track(setup('/home'));
     router.navigate(pane(0), '/mail');
-    router.registerGuard(pane(0), 0, () => false);
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, () => false);
     history.back();
     expect(routeIds(router.entry(pane(0)))).toEqual(['mail']);
     expect(history.index()).toBe(1);
@@ -200,7 +255,7 @@ describe('split router', () => {
     router.navigate(pane, '/mail');
     vi.runAllTimers();
     const mail = router.entry(pane);
-    router.registerGuard(pane, 0, () => false);
+    router.registerGuard(pane, PANE_ROUTE_LEVEL, () => false);
 
     solid.traverse(-1);
     await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -215,7 +270,7 @@ describe('split router', () => {
     let allow: (value: boolean) => void = () => {};
     router.registerGuard(
       pane(0),
-      0,
+      PANE_ROUTE_LEVEL,
       () =>
         new Promise<boolean>((resolve) => {
           allow = resolve;
@@ -254,7 +309,7 @@ describe('split router', () => {
 
   it('a superseded navigation settles even when its guard never does', async () => {
     const { router, pane } = track(setup('/home'));
-    const unregister = router.registerGuard(pane(0), 0, never);
+    const unregister = router.registerGuard(pane(0), PANE_ROUTE_LEVEL, never);
     const first = router.navigate(pane(0), '/mail');
     unregister();
     const second = router.navigate(pane(0), '/drive');
@@ -267,7 +322,7 @@ describe('split router', () => {
     const answers: ((allowed: boolean) => void)[] = [];
     router.registerGuard(
       pane(0),
-      0,
+      PANE_ROUTE_LEVEL,
       () => new Promise<boolean>((resolve) => answers.push(resolve))
     );
     const first = router.navigate(pane(0), '/mail');
@@ -283,7 +338,7 @@ describe('split router', () => {
     const { router, history, pane } = track(setup('/home'));
     router.navigate(pane(0), '/mail');
     let allow: (allowed: boolean) => void = () => {};
-    router.registerGuard(pane(0), 0, ({ cause }) =>
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) =>
       cause === 'external'
         ? true
         : new Promise<boolean>((resolve) => {
@@ -335,7 +390,7 @@ describe('split router', () => {
     const pane = router.panes()[0]!;
     router.navigate(pane, '/mail');
     vi.runAllTimers();
-    router.registerGuard(pane, 0, never);
+    router.registerGuard(pane, PANE_ROUTE_LEVEL, never);
     solid.traverse(-1);
 
     const rewrite = router.rewriteCurrent(pane, '/drive');
@@ -350,7 +405,7 @@ describe('split router', () => {
     const { router, history, pane } = track(setup('/home/~/drive'));
     router.navigate(pane(0), '/mail');
     let guardSignal: AbortSignal | undefined;
-    router.registerGuard(pane(0), 0, ({ signal }) => {
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ signal }) => {
       guardSignal = signal;
       return never();
     });
@@ -378,7 +433,7 @@ describe('split router', () => {
     const pane = router.panes()[0]!;
     router.navigate(pane, '/mail');
     vi.runAllTimers();
-    router.registerGuard(pane, 0, ({ cause }) =>
+    router.registerGuard(pane, PANE_ROUTE_LEVEL, ({ cause }) =>
       cause === 'external' ? never() : true
     );
     solid.traverse(-1);
@@ -603,7 +658,7 @@ describe('split router', () => {
       )
     );
     const guard = vi.fn(() => true);
-    router.registerGuard('pane-1' as PaneId, 0, guard);
+    router.registerGuard('pane-1' as PaneId, PANE_ROUTE_LEVEL, guard);
     expect(router.close('pane-1' as PaneId)).toBe(false);
     expect(router.panes()).toEqual(['pane-1', 'pane-2']);
     expect(guard).not.toHaveBeenCalled();
@@ -663,7 +718,7 @@ describe('split router', () => {
 
   it('a leave guard can keep a pane open', () => {
     const { router } = track(setup('/home/~/mail'));
-    router.registerGuard('pane-2' as PaneId, 0, () => false);
+    router.registerGuard('pane-2' as PaneId, PANE_ROUTE_LEVEL, () => false);
     expect(router.close('pane-2' as PaneId)).toBe(false);
     expect(router.panes()).toHaveLength(2);
   });
@@ -686,13 +741,9 @@ describe('split router', () => {
 
   it('commits in the same tick without data preloads and waits for them within a budget', async () => {
     const preload = vi.fn(() => new Promise(() => {}));
-    const routes: SplitRoutes = {
-      ...appRoutes,
-      definitions: [
-        ...appRoutes.definitions,
-        defineRoute({ id: 'slow', path: 'slow', preload }),
-      ],
-    };
+    const routes = withPaneRoutes(
+      defineRoute({ id: 'slow', path: 'slow', preload })
+    );
     const { router, pane } = track(
       setup('/home', { routes, preloadBudgetMs: 5 })
     );
@@ -709,19 +760,15 @@ describe('split router', () => {
 
   it('logs a preload that throws and still navigates', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const routes: SplitRoutes = {
-      ...appRoutes,
-      definitions: [
-        ...appRoutes.definitions,
-        defineRoute({
-          id: 'broken',
-          path: 'broken',
-          preload: () => {
-            throw new Error('boom');
-          },
-        }),
-      ],
-    };
+    const routes = withPaneRoutes(
+      defineRoute({
+        id: 'broken',
+        path: 'broken',
+        preload: () => {
+          throw new Error('boom');
+        },
+      })
+    );
     const { router, pane } = track(setup('/home', { routes }));
     expect(router.navigate(pane(0), '/broken')).toEqual({
       status: 'committed',
@@ -766,7 +813,7 @@ describe('split router', () => {
     const { router, pane } = track(setup('/home'));
     router.navigate(pane(0), '/mail');
     router.navigate(pane(0), '/drive');
-    router.registerGuard(pane(0), 0, never);
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, never);
     const back = router.navigate(pane(0), -1);
     expect(routeIds(router.pending(pane(0))?.to)).toEqual(['mail']);
 
@@ -861,7 +908,7 @@ describe('split router while other work is in flight', () => {
     router.navigate(pane(0), '/mail');
     router.navigate(pane(0), '/drive');
     const answers: ((allowed: boolean) => void)[] = [];
-    router.registerGuard(pane(0), 0, ({ cause }) => {
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) => {
       if (cause !== 'external') return true;
 
       return new Promise<boolean>((resolve) => answers.push(resolve));
@@ -882,7 +929,7 @@ describe('split router while other work is in flight', () => {
     let leave: (allowed: boolean) => void = () => {};
     router.registerGuard(
       pane(0),
-      0,
+      PANE_ROUTE_LEVEL,
       () =>
         new Promise<boolean>((resolve) => {
           leave = resolve;
@@ -1015,7 +1062,11 @@ describe('split router while other work is in flight', () => {
       setup('/home', {}, createTestPolicy({ closeLast }))
     );
     router.navigate(pane(0), '/drive');
-    router.registerGuard(pane(0), 0, ({ to }) => routeIds(to)?.[0] !== 'home');
+    router.registerGuard(
+      pane(0),
+      PANE_ROUTE_LEVEL,
+      ({ to }) => routeIds(to)?.[0] !== 'home'
+    );
 
     const isHome = (entry: Entry) => routeIds(entry)?.[0] === 'home';
     expect(await router.goBackTo(pane(0), isHome)).toBe(false);
@@ -1128,7 +1179,7 @@ describe('split router while other work is in flight', () => {
     const { router, pane } = track(setup('/home', { history: adapter }));
     router.navigate(pane(0), '/mail');
     router.navigate(pane(0), '/drive');
-    router.registerGuard(pane(0), 0, ({ cause }) =>
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) =>
       cause === 'external' ? never() : true
     );
 
@@ -1150,7 +1201,7 @@ describe('split router while other work is in flight', () => {
     router.navigate(pane(0), '/drive');
     router.navigate(pane(0), '/md/d1');
     let refuse: () => void = () => {};
-    router.registerGuard(pane(0), 0, ({ cause }) => {
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) => {
       if (cause !== 'external') return true;
 
       return new Promise<boolean>((resolve) => {
@@ -1185,7 +1236,7 @@ describe('split router while other work is in flight', () => {
     const { router, history, pane, paneStore } = track(setup('/home'));
     router.navigate(pane(0), '/mail');
     let allow: (allowed: boolean) => void = () => {};
-    router.registerGuard(pane(0), 0, ({ cause }) => {
+    router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) => {
       if (cause !== 'external') return true;
 
       return new Promise<boolean>((resolve) => {
@@ -1274,7 +1325,7 @@ describe('split router while other work is in flight', () => {
     const { router, solid } = track(setupSolid('/app/home', ['/settings']));
     vi.runAllTimers();
     const guard = vi.fn(() => false);
-    router.registerGuard(router.panes()[0]!, 0, guard);
+    router.registerGuard(router.panes()[0]!, PANE_ROUTE_LEVEL, guard);
 
     expect(solid.pop(1).defaultPrevented).toBe(true);
     expect(guard).toHaveBeenCalledTimes(1);

@@ -150,7 +150,7 @@ describe('browser history', () => {
       history.read()
     );
     expect(
-      decoded.panes.map((pane) => pane.entry.location.route.matches[0].params)
+      decoded.panes.map((pane) => pane.entry.location.route.matches[1]!.params)
     ).toEqual([
       { type: 'md', id: 'a' },
       { type: 'pdf', id: 'b' },
@@ -171,7 +171,6 @@ describe('Solid Router history', () => {
       navigate: router.navigate,
       beforeLeave: router.beforeLeave,
       base: '/app',
-      owns: () => true,
       ...options,
     });
 
@@ -249,18 +248,16 @@ describe('Solid Router history', () => {
     dispose();
   });
 
-  it('ignores locations outside the split panes', () => {
+  it('reports every location under its base and ignores the rest', () => {
     const router = createFakeSolidRouter('/app/home');
     const listener = vi.fn();
     const dispose = createRoot((dispose) => {
-      adapterFor(router, { owns: (path) => path !== '/login' }).subscribe(
-        listener
-      );
+      adapterFor(router).subscribe(listener);
       return dispose;
     });
-    router.show('/app/login', undefined);
+    router.show('/elsewhere', undefined);
     expect(listener).not.toHaveBeenCalled();
-    router.show('/app/mail', undefined);
+    router.show('/app/login', undefined);
     expect(listener).toHaveBeenCalledOnce();
     dispose();
   });
@@ -274,12 +271,10 @@ describe('Solid Router history', () => {
     ];
     const seen: (ExternalLocation | undefined)[] = [];
     const dispose = createRoot((dispose) => {
-      adapterFor(router, { owns: (path) => path !== '/login' }).intercept?.(
-        (location) => {
-          seen.push(location);
-          return verdicts.shift()!;
-        }
-      );
+      adapterFor(router).intercept?.((location) => {
+        seen.push(location);
+        return verdicts.shift()!;
+      });
       return dispose;
     });
 
@@ -287,7 +282,7 @@ describe('Solid Router history', () => {
     expect(blocked.preventDefault).toHaveBeenCalled();
     expect(seen[0]).toEqual({ path: '/mail/t1', search: '', hash: '' });
 
-    const deferred = router.leave('/app/login');
+    const deferred = router.leave('/elsewhere');
     expect(seen[1]).toBeUndefined();
     expect(deferred.preventDefault).toHaveBeenCalled();
     await Promise.resolve();

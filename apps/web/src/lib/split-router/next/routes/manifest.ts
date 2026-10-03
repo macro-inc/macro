@@ -102,11 +102,26 @@ function ownNamespaces(search: readonly string[] | undefined): string[] {
   return own;
 }
 
+/** A route without a path that lists no namespaces leaves the choice to its children. */
+function searchParent(
+  parent: SplitRouteNode | undefined
+): SplitRouteNode | undefined {
+  let node = parent;
+  while (node && isLayoutRoute(node) && node.definition.search === undefined) {
+    node = node.parent;
+  }
+
+  return node;
+}
+
 function branchSearch(
-  parent: SplitRouteNode | undefined,
-  search: readonly string[] | undefined
+  enclosing: SplitRouteNode | undefined,
+  search: readonly string[] | '*' | undefined
 ): readonly string[] | 'any' {
+  if (search === '*') return 'any';
+
   const own = ownNamespaces(search);
+  const parent = searchParent(enclosing);
   if (!parent) return search === undefined ? 'any' : own;
   if (parent.search === 'any') return 'any';
 
@@ -115,6 +130,10 @@ function branchSearch(
 
   return [...inherited, ...added];
 }
+
+/** A route without a path groups its children; only they can be matched. */
+const isLayoutRoute = (node: SplitRouteNode) =>
+  node.definition.path === undefined;
 
 function collectBranches<TComponent>(
   branches: RouteBranch<TComponent>[],
@@ -126,12 +145,14 @@ function collectBranches<TComponent>(
     const branchNodes = [...nodes, node];
     const branchPatterns = [...patterns, tokens];
 
-    branches.push({
-      nodes: branchNodes,
-      patterns: branchPatterns,
-      score: specificity(branchPatterns.flat()),
-      order: branches.length,
-    });
+    if (!isLayoutRoute(node as SplitRouteNode)) {
+      branches.push({
+        nodes: branchNodes,
+        patterns: branchPatterns,
+        score: specificity(branchPatterns.flat()),
+        order: branches.length,
+      });
+    }
 
     for (const child of node.children) {
       collectBranches(branches, child, branchNodes, branchPatterns);
@@ -178,11 +199,12 @@ function claimSiblingPaths(
   siblingPaths: string[],
   definition: Pick<SplitRouteDefinition, 'path' | 'aliases'>
 ): void {
+  if (definition.path === undefined) return;
+
   const paths = [definition.path, ...(definition.aliases ?? [])];
 
   for (const path of paths) {
     const key = patternKey(path);
-    if (!key) throw new Error(`Invalid split route path "${path}"`);
 
     if (siblingPaths.includes(key)) {
       throw new Error(`Duplicate sibling split route path "${key}"`);
@@ -219,21 +241,36 @@ function createNode<TComponent>(
   return node;
 }
 
+function assertLayoutHasChildren(definition: SplitRouteDefinition): void {
+  const isLayout = definition.path === undefined;
+  const hasChildren = (definition.children?.length ?? 0) > 0;
+  if (!isLayout || hasChildren) return;
+
+  throw new Error(
+    `Split route "${definition.id}" has no path, so it needs children`
+  );
+}
+
+/** Children of a route without a path sit beside its siblings, so they share sibling paths. */
 function compileNodes<TComponent>(
   byId: Map<string, SplitRouteNode<TComponent>>,
   definitions: readonly SplitRouteDefinition<TComponent>[],
-  parent?: SplitRouteNode<TComponent>
+  parent?: SplitRouteNode<TComponent>,
+  siblingPaths: string[] = []
 ): SplitRouteNode<TComponent>[] {
-  const siblingPaths: string[] = [];
-
   return definitions.map((definition) => {
     assertNewRouteId(byId, definition.id);
+    assertLayoutHasChildren(definition as SplitRouteDefinition);
     claimSiblingPaths(siblingPaths, definition);
 
     const children: SplitRouteNode<TComponent>[] = [];
     const node = createNode(definition, parent, children);
     byId.set(definition.id, node);
-    children.push(...compileNodes(byId, definition.children ?? [], node));
+
+    const isLayout = definition.path === undefined;
+    const childSiblings = isLayout ? siblingPaths : [];
+    const childDefinitions = definition.children ?? [];
+    children.push(...compileNodes(byId, childDefinitions, node, childSiblings));
 
     return node;
   });
@@ -281,17 +318,43 @@ function matchBranch(
   return { matches: matches as [SplitRouteMatch, ...SplitRouteMatch[]] };
 }
 
+function decodeAmong(
+  branches: readonly RouteBranch[],
+  segments: readonly string[]
+): SplitRouteState | undefined {
+  for (const branch of branches) {
+    const route = matchBranch(branch, segments);
+    if (route) return route;
+  }
+}
+
 /** The most specific route for one pane's decoded segments. */
 export function decodePane(
   routes: SplitRoutesManifest,
   segments: readonly string[]
 ): SplitRouteState | undefined {
-  if (segments.length === 0) return;
+  return decodeAmong(routes.branches, segments);
+}
 
-  for (const branch of routes.branches) {
-    const route = matchBranch(branch, segments);
-    if (route) return route;
-  }
+/** A splat nested in another route, like an in-pane not-found; it can't pick a URL's top-level route. */
+function isNestedCatchAll(branch: RouteBranch): boolean {
+  if (branch.nodes.length < 2) return false;
+
+  const tokens = branch.patterns.flat();
+
+  return tokens.length === 1 && tokens[0]!.type === 'catchAll';
+}
+
+/** The first pane picks the URL's top-level route. */
+export function decodeFirstPane(
+  routes: SplitRoutesManifest,
+  segments: readonly string[]
+): SplitRouteState | undefined {
+  const deciding = routes.branches.filter(
+    (branch) => !isNestedCatchAll(branch)
+  );
+
+  return decodeAmong(deciding, segments);
 }
 
 function isNonemptyBranch(value: unknown): value is { matches: unknown[] } {
@@ -376,6 +439,17 @@ export function leafNode<TComponent>(
   const branch = resolveBranch(routes, route);
 
   return branch[branch.length - 1]!;
+}
+
+/** The first route with a path; a pane's search carries over while it stays the same. */
+export function searchRootId(
+  routes: SplitRoutesManifest,
+  route: SplitRouteState
+): string {
+  const branch = resolveBranch(routes, route);
+  const index = branch.findIndex((node) => !isLayoutRoute(node));
+
+  return route.matches[Math.max(index, 0)]!.id;
 }
 
 export function defaultRoute(routes: SplitRoutesManifest): SplitRouteState {

@@ -36,6 +36,10 @@ export type SearchParamsCodec<T> = {
   validate(value: unknown): ValidationResult<T>;
 };
 
+export function takeLast<T>(values: readonly T[] | undefined): T | undefined {
+  return values?.at(-1);
+}
+
 function deserializeField(
   values: readonly string[],
   fallback: unknown

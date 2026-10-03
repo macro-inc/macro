@@ -1,13 +1,19 @@
 import deepEqual from 'fast-deep-equal';
 import { type Accessor, createMemo, untrack, useContext } from 'solid-js';
+import type { PaneSnapshot } from '../panes/types';
 import type { PendingNavigation } from '../router/runner';
 import type {
   NavigationResult,
   RouteMatchInfo,
   SplitNavigateOptions,
 } from '../router/types';
-import { getRouteEntryState, mergedParams } from '../routes/queries';
+import {
+  getRouteEntryState,
+  ownsNamespace,
+  routeParams,
+} from '../routes/queries';
 import type {
+  Entry,
   InferSplitRouteBranchParams,
   InferSplitRouteParams,
   InferSplitRouteState,
@@ -22,13 +28,24 @@ import type {
   SplitRouteState,
 } from '../routes/types';
 import type { MaybePromise } from '../utils';
-import { PaneContext, usePaneContext, useSplitRouter } from './context';
+import {
+  PaneContext,
+  useOptionalSplitRouter,
+  usePaneContext,
+  useSplitRouter,
+} from './context';
 import { createMemoRecord } from './memo-record';
+
+type NewPaneOption = {
+  /** Open the destination in a new pane, placed by the pane policy, instead of this one. */
+  newPane?: boolean;
+};
 
 export type SplitRouteNavigateOptions<TRoute> = Omit<
   SplitNavigateOptions,
   'state' | 'depth'
 > &
+  NewPaneOption &
   ([InferSplitRouteStateInput<TRoute>] extends [never]
     ? { state?: never }
     : {
@@ -45,7 +62,7 @@ export type SplitNavigate = {
   ): MaybePromise<NavigationResult>;
   (
     to: string | number,
-    options?: Omit<SplitNavigateOptions, 'depth'>
+    options?: Omit<SplitNavigateOptions, 'depth'> & NewPaneOption
   ): MaybePromise<NavigationResult>;
 };
 
@@ -76,7 +93,7 @@ export function useParams(through?: { id: string }): SplitRouteParams {
     const route = scope.entry()?.location.route;
     if (!route) return {};
 
-    return mergedParams(route, depthThrough(route, through));
+    return routeParams(route, depthThrough(route, through));
   });
 }
 
@@ -121,8 +138,19 @@ export function useNavigate(): SplitNavigate {
 
   const navigate = (
     to: SplitNavigationTarget | number,
-    options: SplitNavigateOptions = {}
-  ) => router.navigate(scope.pane(), to, { ...options, depth: scope.depth() });
+    options: SplitNavigateOptions & NewPaneOption = {}
+  ) => {
+    const { newPane, ...rest } = options;
+    const navigateOptions = { ...rest, depth: scope.depth() };
+
+    if (newPane && typeof to !== 'number') {
+      const target = { newPane: true as const, source: scope.pane() };
+
+      return router.open(to, target, navigateOptions);
+    }
+
+    return router.navigate(scope.pane(), to, navigateOptions);
+  };
 
   return navigate as SplitNavigate;
 }
@@ -167,4 +195,26 @@ export function useArrival(): Accessor<PaneArrival> {
   const scope = usePaneContext();
 
   return createMemo(() => router.arrival(scope.pane()));
+}
+
+/** The pane's entries and its position in them. */
+export function usePaneHistory(): Accessor<PaneSnapshot<Entry> | undefined> {
+  const router = useSplitRouter();
+  const scope = usePaneContext();
+
+  return () => router.history(scope.pane());
+}
+
+/** Whether the route this pane shows owns `namespace`; false outside a pane. */
+export function useOwnsSearchNamespace(namespace: string): Accessor<boolean> {
+  const router = useOptionalSplitRouter();
+  const scope = useContext(PaneContext);
+  if (!router || !scope) return () => false;
+
+  return () => {
+    const entry = scope.entry();
+    if (!entry) return false;
+
+    return ownsNamespace(router.routes, entry.location.route, namespace);
+  };
 }

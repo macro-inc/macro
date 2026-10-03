@@ -19,6 +19,11 @@ export function SplitRouterProvider(
   );
 }
 
+/** The router, or undefined outside a `<SplitRouterProvider>`. */
+export function useOptionalSplitRouter(): SplitRouter | undefined {
+  return useContext(SplitRouterContext);
+}
+
 export function useSplitRouter(): SplitRouter {
   const router = useContext(SplitRouterContext);
 

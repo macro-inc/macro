@@ -19,6 +19,7 @@ export type SplitRouterMiddlewareResult =
   | { type: 'cancel' };
 
 export type SplitRouterMiddlewareContext = {
+  routes: SplitRoutesManifest;
   /** The entry the pane is leaving, if any. */
   from: Readonly<Entry> | undefined;
   /** The proposed entry; it has not been applied yet. */
@@ -63,11 +64,14 @@ function recordVisit(visited: string[], path: string, entry: Entry): void {
 }
 
 function middlewareContext(
-  request: MiddlewareRequest,
+  run: MiddlewareRun,
   entry: Entry,
   path: string
 ): SplitRouterMiddlewareContext {
+  const { request } = run;
+
   return {
+    routes: run.routes,
     from: request.from,
     to: entry,
     path,
@@ -118,7 +122,7 @@ function runHandler(
   const handler = run.handlers[index];
   if (!handler) return entry;
 
-  const result = handler(middlewareContext(run.request, entry, path));
+  const result = handler(middlewareContext(run, entry, path));
 
   return andThen(result, (settled): Outcome<Entry> => {
     // A handler can settle after the navigation was called off.

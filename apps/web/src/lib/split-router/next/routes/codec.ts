@@ -1,6 +1,7 @@
 import deepEqual from 'fast-deep-equal';
 import { createId, isRecord } from '../utils';
 import {
+  decodeFirstPane,
   decodePane,
   defaultRoute,
   formatPane,
@@ -10,6 +11,7 @@ import { decodeSegment, SPLIT_PATH_SEPARATOR, splitSegments } from './path';
 import {
   externalSearchKeys,
   filterRouteSearch,
+  keepsAllExternalSearch,
   parseRouteEntryState,
 } from './queries';
 import {
@@ -74,15 +76,6 @@ export function splitPanePaths(path: string): string[][] {
 function encodeSegment(segment: string): string {
   // `~` is unreserved, so a literal value would read back as a pane separator.
   return segment === SPLIT_PATH_SEPARATOR ? '%7E' : encodeURIComponent(segment);
-}
-
-function decodePaneSegments(
-  routes: SplitRoutesManifest,
-  raw: readonly string[]
-): SplitRouteState {
-  const segments = raw.map(decodeSegment);
-
-  return decodePane(routes, segments) ?? defaultRoute(routes);
 }
 
 function readHistoryPane(value: unknown): SplitHistoryPane | undefined {
@@ -155,20 +148,41 @@ function defaultPanes(
 }
 
 /**
- * Each pane decodes on its own. A pane that matches nothing lands on the
- * catch-all route (or the default route when there is none); others are unaffected.
+ * The first pane picks the URL's top-level route, and every later pane must
+ * match under the same one. Undefined when nothing handles the URL.
  */
+function paneRoutes(
+  routes: SplitRoutesManifest,
+  parts: readonly (readonly string[])[]
+): SplitRouteState[] | undefined {
+  const [first, ...rest] = parts.map((raw) => raw.map(decodeSegment));
+  if (!first) return [];
+
+  const firstRoute = decodeFirstPane(routes, first);
+  if (!firstRoute) return;
+
+  const root = firstRoute.matches[0].id;
+  const restRoutes = rest.map((segments) => decodePane(routes, segments));
+  const sharesRoot = restRoutes.every((route) => route?.matches[0].id === root);
+  if (!sharesRoot) return;
+
+  return [firstRoute, ...(restRoutes as SplitRouteState[])];
+}
+
+/** The panes a URL shows. A URL nothing handles shows the default route, which the router writes back. */
 export function decodePanes(
   routes: SplitRoutesManifest,
   location: ExternalLocation,
   createEntryId: () => string = () => createId('entry')
 ): DecodedPanes {
   const parts = splitPanePaths(location.path);
+  const decoded = paneRoutes(routes, parts);
+  if (!decoded?.length) return defaultPanes(routes, createEntryId);
+
   const search = parsePaneSearch(location.search);
   const stored = storedPanes(location.state, parts.length);
 
-  const panes = parts.map((raw, position): DecodedPane => {
-    const route = decodePaneSegments(routes, raw);
+  const panes = decoded.map((route, position): DecodedPane => {
     const pane = stored?.[position];
     const entry: Entry = {
       id: pane?.entry ?? createEntryId(),
@@ -184,9 +198,7 @@ export function decodePanes(
     return pane ? { paneId: pane.pane, entry } : { entry };
   });
 
-  if (panes.length > 0) return { panes };
-
-  return defaultPanes(routes, createEntryId);
+  return { panes };
 }
 
 export function formatPanePath(
@@ -221,10 +233,12 @@ function panesSearch(
   previousSearch: string
 ): string {
   const owned = externalSearchKeys(routes, entries);
+  const keepsAll = keepsAllExternalSearch(routes, entries);
   const query = new URLSearchParams();
 
   for (const [key, value] of new URLSearchParams(previousSearch)) {
-    const keep = !isSplitSearchKey(key) && owned.includes(key);
+    const external = !isSplitSearchKey(key);
+    const keep = external && (keepsAll || owned.includes(key));
     if (keep) query.append(key, value);
   }
 

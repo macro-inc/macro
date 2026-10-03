@@ -4,6 +4,7 @@ import {
   decodePane,
   formatPane,
   type SplitRoutesManifest,
+  searchRootId,
 } from './manifest';
 import { decodeSegment } from './path';
 import { filterRouteSearch } from './queries';
@@ -143,6 +144,24 @@ function resolveRoute(
   return canonicalTarget(routes, matches);
 }
 
+/** A location resolved elsewhere, checked against the route table; it carries no search over. */
+function resolveLocation(
+  routes: SplitRoutesManifest,
+  location: SplitLocation
+): ResolvedRoute | undefined {
+  let route: SplitRouteState | undefined;
+
+  try {
+    route = canonicalRoute(routes, location.route);
+  } catch {
+    route = undefined;
+  }
+
+  if (!route) return;
+
+  return { route, search: location.search ?? {} };
+}
+
 function resolveDestination(
   routes: SplitRoutesManifest,
   current: SplitLocation | undefined,
@@ -150,19 +169,23 @@ function resolveDestination(
   depth: number | undefined
 ): ResolvedRoute | undefined {
   if (typeof to === 'string') return resolvePath(routes, current, to, depth);
+  if ('location' in to) return resolveLocation(routes, to.location);
   if (!('route' in to)) return;
 
   return resolveRoute(routes, current, to);
 }
 
 function carriedSearch(
+  routes: SplitRoutesManifest,
   current: SplitLocation | undefined,
   resolved: ResolvedRoute
 ): SplitSearchState | undefined {
   if (resolved.search !== undefined) return resolved.search;
   if (!current) return;
 
-  const sameRoot = current.route.matches[0].id === resolved.route.matches[0].id;
+  const sameRoot =
+    searchRootId(routes, current.route) ===
+    searchRootId(routes, resolved.route);
   if (!sameRoot) return;
 
   return current.search;
@@ -181,7 +204,7 @@ export function resolveTarget(
   const resolved = resolveDestination(routes, current, to, options.depth);
   if (!resolved) return;
 
-  const search = carriedSearch(current, resolved);
+  const search = carriedSearch(routes, current, resolved);
   const start = locationOf(resolved.route, search);
   const updated = updateSearchState(start, options.search);
   const owned = filterRouteSearch(routes, updated.route, updated.search);

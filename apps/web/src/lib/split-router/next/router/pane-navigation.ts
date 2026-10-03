@@ -1,3 +1,4 @@
+import { untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import {
   currentEntry,
@@ -153,8 +154,39 @@ export function createPaneNavigation(options: {
   url: Url;
   runner: Runner;
   claims: Claims;
+  /** Shows `location` as the only pane, for a destination the other panes can't share the URL with. */
+  showAlone(
+    location: SplitLocation,
+    navigateOptions: SplitNavigateOptions
+  ): MaybePromise<NavigationResult>;
 }) {
   const { routes, panes, url, runner, claims } = options;
+
+  /** Panes share one top-level route; `location` under another can't join the panes besides `pane`. */
+  const leavesSharedRoute = (
+    pane: PaneId | undefined,
+    location: SplitLocation
+  ): boolean => {
+    const root = location.route.matches[0].id;
+
+    return untrack(panes.ids).some((other) => {
+      if (other === pane) return false;
+
+      const entry = untrack(() => panes.current(other));
+      if (!entry) return false;
+
+      return entry.location.route.matches[0].id !== root;
+    });
+  };
+
+  /** Back and Forward skip entries shown elsewhere and entries under another top-level route. */
+  const visitableIn =
+    (pane: PaneId, allowDuplicate?: boolean) => (entry: Entry) => {
+      const shownElsewhere = !claims.canVisit(pane, allowDuplicate)(entry);
+      if (shownElsewhere) return false;
+
+      return !leavesSharedRoute(pane, entry.location);
+    };
 
   const applyVisit = (
     pane: PaneId,
@@ -264,6 +296,10 @@ export function createPaneNavigation(options: {
     const location = resolve(from, to, navigateOptions);
     if (!location) return CANCELLED_RESULT;
 
+    if (leavesSharedRoute(pane, location)) {
+      return options.showAlone(location, navigateOptions);
+    }
+
     return visitLocation(pane, from, location, navigateOptions);
   }
 
@@ -274,7 +310,7 @@ export function createPaneNavigation(options: {
     navigateOptions: SplitNavigateOptions
   ): MaybePromise<NavigationResult> {
     const { allowDuplicate } = navigateOptions;
-    const visitable = claims.canVisit(pane, allowDuplicate);
+    const visitable = visitableIn(pane, allowDuplicate);
 
     const snapshot = panes.read(pane);
     if (!snapshot) return CANCELLED_RESULT;
@@ -298,7 +334,7 @@ export function createPaneNavigation(options: {
     const snapshot = panes.read(pane);
     if (!snapshot) return;
 
-    return findBack(snapshot, predicate, claims.canVisit(pane));
+    return findBack(snapshot, predicate, visitableIn(pane));
   };
 
   /** False when the jump is turned down. */
@@ -443,7 +479,7 @@ export function createPaneNavigation(options: {
       const snapshot = panes.read(pane);
       if (!snapshot) return false;
 
-      return findStep(snapshot, delta, claims.canVisit(pane)) !== undefined;
+      return findStep(snapshot, delta, visitableIn(pane)) !== undefined;
     },
 
     /** Carries the search `destination` asked for to `pane`, which already shows it. */
@@ -465,5 +501,7 @@ export function createPaneNavigation(options: {
     visitLocation,
     backStep,
     jumpBack,
+    leavesSharedRoute,
+    showAlone: options.showAlone,
   };
 }

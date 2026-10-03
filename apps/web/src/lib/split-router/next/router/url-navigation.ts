@@ -7,9 +7,14 @@ import type {
 import { type ChangedPane, changedPanes } from '../panes/diff';
 import { decodePanes, sameExternalLocation } from '../routes/codec';
 import type { SplitRoutesManifest } from '../routes/manifest';
-import type { Entry, ExternalLocation, WriteMode } from '../routes/types';
+import type {
+  Entry,
+  ExternalLocation,
+  SplitLocation,
+  WriteMode,
+} from '../routes/types';
 import { type MaybePromise, UNCANCELLABLE } from '../utils';
-import { sameVisit } from './entries';
+import { createEntry, sameVisit } from './entries';
 import {
   checksFor,
   type LeaveGuards,
@@ -23,6 +28,7 @@ import type {
   NavigationResult,
   PaneTarget,
   RouterPanes,
+  SplitNavigateOptions,
 } from './types';
 import type { Url } from './url';
 
@@ -61,7 +67,7 @@ export function createUrlNavigation(options: {
 }) {
   const { routes, history, panes, url, runner, guards } = options;
 
-  /** Makes every pane show `location`. */
+  /** Makes every pane show `location`; a URL nothing handles is written back as the default route. */
   const navigationTo = (
     location: ExternalLocation,
     { cause, mode, revert }: UrlNavigationOptions
@@ -87,6 +93,34 @@ export function createUrlNavigation(options: {
       revert,
       apply,
     };
+  };
+
+  /**
+   * Shows `location` as the only pane: a pane navigating under a different
+   * top-level route can't share the URL with the others.
+   */
+  const showAlone = (
+    location: SplitLocation,
+    navigateOptions: SplitNavigateOptions
+  ): MaybePromise<NavigationResult> => {
+    const entry = createEntry(routes, location, undefined, navigateOptions);
+    const diff = panes.diff([{ entry }], { same: sameVisit, adopt });
+
+    const navigation: Navigation = {
+      cause: 'navigate',
+      targets: changedPanes(diff).map(toTarget),
+      removed: diff.removed,
+      apply: (entries) => {
+        panes.applyDiff(diff, entries);
+        url.write('push');
+
+        const [first] = diff.panes;
+
+        return { status: 'committed', pane: first!.pane };
+      },
+    };
+
+    return runner.startUrl(navigation, false);
   };
 
   /** The first load; pane actions wait for it. */
@@ -162,6 +196,8 @@ export function createUrlNavigation(options: {
   };
 
   return {
+    showAlone,
+
     /** Loads the URL and follows the history adapter until the returned stop is called. */
     connect(): () => void {
       const unsubscribe = history.subscribe(follow);

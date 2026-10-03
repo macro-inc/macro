@@ -11,13 +11,13 @@ import type {
 } from './types';
 
 /** Params of the first `depth` matches, with descendants overriding ancestors. */
-export function mergedParams(
-  route: SplitRouteState,
-  depth = route.matches.length
-): SplitRouteParams {
-  const params = route.matches.slice(0, depth).map((match) => match.params);
+export function routeParams<
+  TParams extends SplitRouteParams = SplitRouteParams,
+>(route: SplitRouteState | undefined, depth = route?.matches.length): TParams {
+  const matches = route?.matches.slice(0, depth) ?? [];
+  const params = matches.map((match) => match.params);
 
-  return Object.assign({}, ...params);
+  return Object.assign({}, ...params) as TParams;
 }
 
 function claimKey(claim: SplitRouteClaim): string {
@@ -38,7 +38,7 @@ export function claimOf(
   route: SplitRouteState
 ): string | undefined {
   const branch = resolveBranch(routes, route);
-  const params = mergedParams(route);
+  const params = routeParams(route);
 
   for (let index = branch.length - 1; index >= 0; index -= 1) {
     const claim = branch[index]!.definition.claim?.(params);
@@ -133,8 +133,21 @@ function definitionExternalKeys(
 ): readonly string[] {
   const externalSearch = definition.externalSearch;
   if (typeof externalSearch === 'function') return externalSearch(entry);
+  if (externalSearch === '*') return [];
 
   return externalSearch ?? [];
+}
+
+/** Whether a shown route keeps every unprefixed query key, as `externalSearch: '*'` asks. */
+export function keepsAllExternalSearch(
+  routes: SplitRoutesManifest,
+  entries: readonly Entry[]
+): boolean {
+  return entries.some((entry) => {
+    const definitions = leafNode(routes, entry.location.route).externalSearch;
+
+    return definitions.some(({ externalSearch }) => externalSearch === '*');
+  });
 }
 
 function appendMissing(keys: string[], additions: readonly string[]): void {

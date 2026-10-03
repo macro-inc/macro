@@ -292,9 +292,10 @@ describe('middleware', () => {
   });
 
   it('follows redirects and keeps the entry identity', () => {
-    const middleware: SplitRouterMiddleware = ({ to, redirect }) =>
-      to.location.route.matches[0].id === 'block'
-        ? redirect('/mail/t1')
+    const middleware: SplitRouterMiddleware = (context) =>
+      context.to.location.route.matches.at(-1)?.id === 'block' &&
+      context.routes.byId.has('mail-thread')
+        ? context.redirect('/mail/t1')
         : undefined;
     const result = runMiddleware(
       routes,
@@ -303,7 +304,11 @@ describe('middleware', () => {
     );
     expect(result).toMatchObject({
       id: 'e1',
-      location: { route: { matches: [{ id: 'mail' }, { id: 'mail-thread' }] } },
+      location: {
+        route: {
+          matches: [{ id: 'app' }, { id: 'mail' }, { id: 'mail-thread' }],
+        },
+      },
     });
   });
 
@@ -326,7 +331,7 @@ describe('middleware', () => {
       navigatingTo(entry('e1', '/home'))
     );
     await expect(result).resolves.toMatchObject({
-      location: { route: { matches: [{ id: 'drive' }] } },
+      location: { route: { matches: [{ id: 'app' }, { id: 'drive' }] } },
     });
   });
 

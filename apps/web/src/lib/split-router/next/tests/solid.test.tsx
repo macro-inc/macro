@@ -6,8 +6,13 @@ import { createMemoryHistory, type MemoryHistory } from '../history/memory';
 import { createMemoryPaneStore } from '../panes/memory-store';
 import { createSplitRouter, type SplitRouter } from '../router/create-router';
 import { defineRoute } from '../routes/define';
-import type { PaneId, SplitRoutes } from '../routes/types';
-import { SplitRouterProvider } from '../solid/context';
+import type {
+  Entry,
+  PaneId,
+  SplitRouteState,
+  SplitRoutes,
+} from '../routes/types';
+import { SplitRouterProvider, useSplitRouter } from '../solid/context';
 import { createSearchParams } from '../solid/create-search-params';
 import {
   useCanGo,
@@ -19,6 +24,8 @@ import {
 } from '../solid/hooks';
 import { Outlet } from '../solid/outlet';
 import { PaneScope } from '../solid/pane-scope';
+import { Route } from '../solid/route';
+import { Router } from '../solid/router';
 import { useBeforeLeave } from '../solid/use-before-leave';
 import { createTestPolicy } from './fixtures';
 
@@ -128,30 +135,40 @@ function ProbeView() {
   );
 }
 
+const paneRoutes = [
+  defineRoute({
+    id: 'drive',
+    path: 'drive',
+    component: DriveView,
+    children: [documentRoute],
+  }),
+  defineRoute({
+    id: 'probe',
+    path: 'probe',
+    search: ['probe', 'other'],
+    component: ProbeView,
+  }),
+  defineRoute({ id: 'home', path: 'home', component: () => <p>home</p> }),
+  defineRoute({ id: 'guarded', path: 'guarded', component: GuardedView }),
+  defineRoute({
+    id: 'list',
+    path: 'list',
+    search: ['list'],
+    component: ListView,
+  }),
+];
+
 const routes: SplitRoutes = {
   definitions: [
-    defineRoute({
-      id: 'drive',
-      path: 'drive',
-      component: DriveView,
-      children: [documentRoute],
-    }),
-    defineRoute({
-      id: 'probe',
-      path: 'probe',
-      search: ['probe', 'other'],
-      component: ProbeView,
-    }),
-    defineRoute({ id: 'home', path: 'home', component: () => <p>home</p> }),
-    defineRoute({ id: 'guarded', path: 'guarded', component: GuardedView }),
-    defineRoute({
-      id: 'list',
-      path: 'list',
-      search: ['list'],
-      component: ListView,
-    }),
+    defineRoute({ id: 'login', path: 'login', component: () => <p>login</p> }),
+    defineRoute({ id: 'app', children: paneRoutes }),
   ],
-  defaultRoute: () => ({ matches: [{ id: 'home', params: {} }] }),
+  defaultRoute: () => ({
+    matches: [
+      { id: 'app', params: {} },
+      { id: 'home', params: {} },
+    ],
+  }),
 };
 
 function PanelHeader() {
@@ -181,15 +198,16 @@ function Panel(props: { pane: PaneId }) {
   );
 }
 
-function renderPanes(
+function renderRouter(
   url: string,
-  renderPane: (pane: PaneId) => JSX.Element = (pane) => <Outlet pane={pane} />
+  view: (router: SplitRouter) => JSX.Element,
+  routeTable: SplitRoutes = routes
 ) {
   const history: MemoryHistory = createMemoryHistory(url);
   let router: SplitRouter | undefined;
   render(() => {
     const created = createSplitRouter({
-      routes,
+      routes: routeTable,
       history,
       paneStore: createMemoryPaneStore(),
       policy: createTestPolicy().policy,
@@ -198,11 +216,20 @@ function renderPanes(
     onCleanup(() => created.dispose());
     return (
       <SplitRouterProvider router={created}>
-        <For each={created.panes()}>{renderPane}</For>
+        {view(created)}
       </SplitRouterProvider>
     );
   });
   return { history, router: router! };
+}
+
+function renderPanes(
+  url: string,
+  renderPane: (pane: PaneId) => JSX.Element = (pane) => <Outlet pane={pane} />
+) {
+  return renderRouter(url, (router) => (
+    <For each={router.panes()}>{renderPane}</For>
+  ));
 }
 
 beforeEach(() => {
@@ -242,12 +269,12 @@ describe('split router Solid bindings', () => {
     ));
     const pane = router.panes()[0]!;
     expect(screen.getByTestId('header').textContent).toBe(
-      'drive/document back:false'
+      'app/drive/document back:false'
     );
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
     router.navigate(pane, '/home');
-    expect(screen.getByTestId('header').textContent).toBe('home back:true');
+    expect(screen.getByTestId('header').textContent).toBe('app/home back:true');
     expect(screen.getByText('home')).toBeTruthy();
   });
 
@@ -269,6 +296,53 @@ describe('split router Solid bindings', () => {
     allowLeave = true;
     expect(await router.close(second)).toBe(true);
     expect(router.panes()).toHaveLength(1);
+  });
+
+  it('renders the first pane’s top-level route at the root, and a layout route renders each pane below it', async () => {
+    function PaneLayout() {
+      const router = useSplitRouter();
+      return (
+        <For each={router.panes()}>
+          {(pane) => (
+            <section data-testid="pane">
+              <PaneScope pane={pane}>
+                <GuardedChrome />
+                <Outlet />
+              </PaneScope>
+            </section>
+          )}
+        </For>
+      );
+    }
+    const layoutRoutes: SplitRoutes = {
+      ...routes,
+      definitions: [
+        routes.definitions[0]!,
+        defineRoute({ id: 'app', component: PaneLayout, children: paneRoutes }),
+      ],
+    };
+    const { router, history } = renderRouter(
+      '/home/~/drive',
+      () => <Outlet />,
+      layoutRoutes
+    );
+    expect(screen.getAllByTestId('pane')).toHaveLength(2);
+    expect(screen.getByText('home')).toBeTruthy();
+    expect(counts.drive).toBe(1);
+
+    allowLeave = false;
+    const second = router.panes()[1]!;
+    expect(router.navigate(second, '/home')).toMatchObject({
+      status: 'committed',
+    });
+    expect(screen.getAllByText('home')).toHaveLength(2);
+    expect(await router.close(second)).toBe(false);
+
+    allowLeave = true;
+    await router.navigate(router.panes()[0]!, '/login');
+    expect(screen.getByText('login')).toBeTruthy();
+    expect(screen.queryAllByTestId('pane')).toHaveLength(0);
+    expect(history.read().path).toBe('/login');
   });
 
   it('re-runs only the readers of the search field that changed', () => {
@@ -315,5 +389,135 @@ describe('split router Solid bindings', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByRole('button').textContent).toBe('sort:date');
     expect(history.read().search).toBe('?s0.list.sort=date');
+  });
+});
+
+describe('<SplitRouter.Router>', () => {
+  const login = defineRoute({ id: 'login', path: 'login' });
+  const app = defineRoute({ id: 'app' });
+  const home = defineRoute({ id: 'home', path: 'home' });
+  const inbox = defineRoute({ id: 'inbox', path: 'inbox' });
+  const defaultRoute = (): SplitRouteState => ({
+    matches: [
+      { id: 'app', params: {} },
+      { id: 'home', params: {} },
+    ],
+  });
+
+  function AppLayout() {
+    const router = useSplitRouter();
+    return (
+      <For each={router.panes()}>
+        {(pane) => (
+          <section data-testid="pane">
+            <Outlet pane={pane} />
+          </section>
+        )}
+      </For>
+    );
+  }
+
+  it('builds the route tree from its children and renders the first pane’s top-level route', async () => {
+    let router: SplitRouter | undefined;
+    function Layout() {
+      router = useSplitRouter();
+      return <AppLayout />;
+    }
+    const history = createMemoryHistory('/home/~/inbox');
+    render(() => (
+      <Router
+        history={history}
+        paneStore={createMemoryPaneStore()}
+        policy={createTestPolicy().policy}
+        defaultRoute={defaultRoute}
+      >
+        <Route definition={login} component={() => <p>login</p>} />
+        <Route definition={app} component={Layout}>
+          <Route definition={home} component={() => <p>home</p>} />
+          <Route definition={inbox} component={() => <p>inbox</p>} />
+        </Route>
+      </Router>
+    ));
+
+    expect(screen.getAllByTestId('pane')).toHaveLength(2);
+    expect(screen.getByText('inbox')).toBeTruthy();
+    expect(home).not.toHaveProperty('component');
+
+    await router!.navigate(router!.panes()[0]!, '/login');
+    expect(screen.getByText('login')).toBeTruthy();
+    expect(screen.queryAllByTestId('pane')).toHaveLength(0);
+    expect(history.read().path).toBe('/login');
+  });
+
+  it('reads routes from arrays and drops false children', () => {
+    const extra = [inbox].map((definition) => (
+      <Route definition={definition} component={() => <p>inbox</p>} />
+    ));
+    render(() => (
+      <Router
+        history={createMemoryHistory('/inbox')}
+        paneStore={createMemoryPaneStore()}
+        policy={createTestPolicy().policy}
+        defaultRoute={defaultRoute}
+      >
+        {false}
+        <Route definition={app} component={AppLayout}>
+          <Route definition={home} component={() => <p>home</p>} />
+          {extra}
+        </Route>
+      </Router>
+    ));
+    expect(screen.getByText('inbox')).toBeTruthy();
+  });
+
+  it('passes the compiled routes to a history factory', () => {
+    const seen: string[] = [];
+    render(() => (
+      <Router
+        history={(routes) => {
+          seen.push(...routes.byId.keys());
+          return createMemoryHistory('/home');
+        }}
+        paneStore={createMemoryPaneStore()}
+        policy={createTestPolicy().policy}
+        defaultRoute={defaultRoute}
+      >
+        <Route definition={app} component={AppLayout}>
+          <Route definition={home} component={() => <p>home</p>} />
+        </Route>
+      </Router>
+    ));
+    expect(seen).toEqual(['app', 'home']);
+  });
+
+  it('rejects definitions that already set children or a component', () => {
+    const withComponent = defineRoute({
+      id: 'bound',
+      path: 'bound',
+      component: () => null,
+    });
+    const options = {
+      history: createMemoryHistory('/bound'),
+      paneStore: createMemoryPaneStore<Entry>(),
+      policy: createTestPolicy().policy,
+      defaultRoute: (): SplitRouteState => ({
+        matches: [{ id: 'bound', params: {} }],
+      }),
+    };
+    expect(() =>
+      render(() => (
+        <Router {...options}>
+          {/* @ts-expect-error definitions passed to Route carry no component */}
+          <Route definition={withComponent} />
+        </Router>
+      ))
+    ).toThrow(/must not set children or component/);
+    expect(() =>
+      render(() => (
+        <Router {...options}>
+          <p>not a route</p>
+        </Router>
+      ))
+    ).toThrow(/must be <SplitRouter.Route> elements/);
   });
 });

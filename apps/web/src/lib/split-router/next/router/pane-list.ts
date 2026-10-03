@@ -219,6 +219,11 @@ export function createPaneList(options: {
         const location = navigation.resolve(base, to, navigateOptions);
         if (!location) return CANCELLED_RESULT;
 
+        const intoPane = 'pane' in target ? target.pane : undefined;
+        if (navigation.leavesSharedRoute(intoPane, location)) {
+          return navigation.showAlone(location, navigateOptions);
+        }
+
         const { placement, holder } = placementFor(
           location,
           target,
@@ -246,6 +251,16 @@ export function createPaneList(options: {
         if (!from) return false;
 
         return runCloseAction(pane, from, panes.closeAction(pane));
+      });
+    },
+
+    /** Remove a pane without asking the policy; its leave guards still apply. */
+    remove(pane: PaneId): MaybePromise<boolean> {
+      return runner.act(false, () => {
+        const exists = panes.current(pane) !== undefined;
+        if (!exists) return false;
+
+        return removePane(pane);
       });
     },
 

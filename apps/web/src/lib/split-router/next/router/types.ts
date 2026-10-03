@@ -1,6 +1,7 @@
 import type { HistoryAdapter } from '../history/types';
 import type { Panes } from '../panes/panes';
 import type { CloseAction, PanePolicy, PaneStore } from '../panes/types';
+import type { SplitRoutesManifest } from '../routes/manifest';
 import type {
   Entry,
   PaneId,
@@ -105,7 +106,8 @@ export type RouteMatchInfo = {
 
 export type SplitRouterOptions = {
   routes: SplitRoutes;
-  history: HistoryAdapter;
+  /** A function receives the compiled routes, for adapters whose path transforms read them. */
+  history: HistoryAdapter | ((routes: SplitRoutesManifest) => HistoryAdapter);
   paneStore: PaneStore<Entry>;
   policy: SplitPanePolicy;
   middleware?: readonly SplitRouterMiddleware[];
