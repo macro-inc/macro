@@ -21,8 +21,12 @@ function DescriptionSession(props: {
         canComment={() => false}
         label="Project description"
         namespace="project-description"
-        class="min-h-24 text-sm"
-        placeholder={props.canEdit ? 'Add a description…' : 'No description'}
+        class="min-h-24 mt-1.5 text-base"
+        placeholder={
+          props.canEdit
+            ? "Add a description. Press '/' for commands, '@' to mention…"
+            : 'No description'
+        }
       />
       <Show when={session.connectionError()}>
         <Button size="sm" onClick={props.onRetry}>

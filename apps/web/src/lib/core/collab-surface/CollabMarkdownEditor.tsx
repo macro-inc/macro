@@ -1,8 +1,4 @@
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
-import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
-import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
-import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
-import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import {
   getErrorDescription,
   type MarkdownEditorErrors,
@@ -11,31 +7,20 @@ import {
   createLexicalWrapper,
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { useEditorEntityDrop } from '@core/component/LexicalMarkdown/editing/entityDrop';
+import { MarkdownEditingOverlays } from '@core/component/LexicalMarkdown/editing/MarkdownEditingOverlays';
 import {
-  awaitPlugin,
-  DefaultShortcuts,
-  documentMetadataPlugin,
-  keyboardShortcutsPlugin,
-  markdownPastePlugin,
-  mentionsPlugin,
-  textPastePlugin,
-} from '@core/component/LexicalMarkdown/plugins';
-import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
-import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+  type MarkdownEditingSource,
+  registerMarkdownEditing,
+} from '@core/component/LexicalMarkdown/editing/registerMarkdownEditing';
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
-import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
   editorIsEmpty,
   initializeEditorEmpty,
 } from '@core/component/LexicalMarkdown/utils';
-import {
-  AwaitNode,
-  CommentNode,
-  createPeerIdValidator,
-  InlineSearchNode,
-  peerIdPlugin,
-} from '@macro-inc/lexical-core';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { createPeerIdValidator } from '@macro-inc/lexical-core';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -71,6 +56,10 @@ export type CollabMarkdownControls = {
 export type CollabMarkdownEditorProps = {
   /** Stable identity of the document or collaborative surface. */
   sourceId: string;
+  /** The block hosting the surface, for actions such as the slash task. */
+  sourceBlockName?: string;
+  /** Keep inline menus inside the hosting block. Defaults to true. */
+  useBlockBoundary?: boolean;
   session: CollabMarkdownSession;
   /**
    * Whether the caller may edit. UI-only: the server enforces the real
@@ -100,7 +89,12 @@ export type CollabMarkdownEditorProps = {
   statusChrome?: JSX.Element;
 };
 
-/** Existing collaborative Markdown editor with explicit session ownership. */
+false && fileFolderDrop;
+
+/**
+ * Collaborative markdown editor with the document editor's editing features,
+ * over an explicitly owned session.
+ */
 export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
   const canEdit = props.canEdit ?? (() => true);
   const canComment = props.canComment ?? (() => false);
@@ -130,15 +124,18 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
   // Markdown-serialized view of the editor state, for `controls.getMarkdown`.
   const [markdownState, setMarkdownState] = createSignal('');
 
-  const mentionsMenuOperations = createMenuOperations();
-  const emojiMenuOperations = createMenuOperations();
-  const snippetsMenuOperations = createMenuOperations();
-
   // Collab is the point of this component, so the validator is always live:
   // it keeps this peer from committing another peer's in-flight inline nodes
   // (mentions, emoji searches, snippets).
   const peerId = () => session.loroManager.peerIdStr;
   const peerIdValidator = createPeerIdValidator(peerId, true);
+
+  // A surface is not a document, so its mentions are not tracked references.
+  const editingSource: MarkdownEditingSource = {
+    id: props.sourceId,
+    blockName: props.sourceBlockName,
+    trackMentions: false,
+  };
 
   plugins
     .richText()
@@ -146,47 +143,23 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
     .markdownShortcuts()
     .delete()
     .state<string>(setMarkdownState, 'markdown')
-    .history(400, session.loroManager)
-    .use(
-      emojisPlugin({
-        menu: emojiMenuOperations,
-        peerIdValidator,
-      })
-    )
-    .use(
-      mentionsPlugin({
-        menu: mentionsMenuOperations,
-        peerIdValidator,
-        sourceDocumentId: props.sourceId,
-        disableMentionTracking: true,
-      })
-    )
-    .use(
-      snippetsPlugin({
-        menu: snippetsMenuOperations,
-        peerIdValidator,
-        sourceDocumentId: props.sourceId,
-      })
-    )
-    .use(textPastePlugin(props.resolveAppLink))
-    .use(markdownPastePlugin())
-    .use(awaitPlugin())
-    .use(
-      keyboardShortcutsPlugin({
-        shortcuts: DefaultShortcuts,
-      })
-    )
-    .use(
-      documentMetadataPlugin({
-        onVersionError: (error) => setEditorError(error),
-      })
-    )
-    .use(
-      peerIdPlugin({
-        peerId,
-        nodes: [InlineSearchNode, CommentNode, AwaitNode],
-      })
-    );
+    .history(400, session.loroManager);
+  const editing = registerMarkdownEditing({
+    lexicalWrapper,
+    isContentEditable,
+    peerIdValidator,
+    source: editingSource,
+    resolveAppLink: props.resolveAppLink,
+    onVersionError: (error) => setEditorError(error),
+    peerId,
+  });
+  const droppable = useEditorEntityDrop({
+    editor,
+    canEdit,
+    dragInsert: editing.dragInsert,
+    source: editingSource,
+  });
+  false && droppable;
 
   createEffect(() => {
     editor.setEditable(isContentEditable());
@@ -197,10 +170,7 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
     clear: () => initializeEditorEmpty(editor, peerId),
     focus: () => editor.focus(),
     getLexical: () => editor,
-    isInlineMenuOpen: () =>
-      mentionsMenuOperations.isOpen() ||
-      emojiMenuOperations.isOpen() ||
-      snippetsMenuOperations.isOpen(),
+    isInlineMenuOpen: editing.isInlineMenuOpen,
   });
 
   createEffect(() => {
@@ -234,11 +204,23 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
             Could not connect to the content.
           </div>
         </Show>
-        <div class="relative" ref={editorContainerRef}>
+        <div
+          class="relative"
+          ref={editorContainerRef}
+          use:fileFolderDrop={{
+            disabled: !isContentEditable(),
+            onDrop: (fileEntries, folderEntries, e) => {
+              if (!e) return;
+              editing.dropFiles(fileEntries, folderEntries, e);
+            },
+          }}
+          use:droppable
+        >
           <div
             ref={(el) => {
               onElementConnect(el, () => {
                 editor.setRootElement(el);
+                editing.connectContainer(editorContainerRef);
               });
             }}
             contentEditable={isContentEditable()}
@@ -246,7 +228,7 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
             aria-label={props.label ?? 'Document content'}
             aria-multiline="true"
             aria-readonly={!canEdit()}
-            class="w-full max-w-full outline-none"
+            class="ph-no-capture w-full max-w-full outline-none"
             classList={{
               'select-auto': !canEdit(),
               'md-no-comments': true,
@@ -288,24 +270,12 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
             />
           </Show>
 
-          <DecoratorRenderer editor={editor} />
-
-          <EmojiMenu
+          <MarkdownEditingOverlays
             editor={editor}
-            menu={emojiMenuOperations}
-            useBlockBoundary={false}
-          />
-          <MentionsMenu
-            editor={editor}
-            menu={mentionsMenuOperations}
-            useBlockBoundary={false}
-            disableMentionTracking={true}
-          />
-          <SnippetsMenu
-            editor={editor}
-            menu={snippetsMenuOperations}
-            useBlockBoundary={false}
-            sourceDocumentId={props.sourceId}
+            editing={editing}
+            source={editingSource}
+            canEdit={canEdit}
+            useBlockBoundary={props.useBlockBoundary ?? true}
           />
         </div>
       </div>
