@@ -116,6 +116,15 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.mail,
   },
   {
+    id: 'email-marketing',
+    label: 'Email Marketing',
+    href: '/email-marketing',
+    icon: getIconConfig('email').icon,
+    hotkey: 'k',
+    hotkeyToken: TOKENS.sidebar.goTo.emailMarketing,
+  },
+
+  {
     id: 'documents',
     get label() {
       return t('nav.files');

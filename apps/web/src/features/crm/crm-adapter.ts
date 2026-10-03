@@ -109,6 +109,10 @@ import { crmTaskComposerContext } from './task-composer';
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
+const MarketingEnrollments = lazy(async () => ({
+  default: (await import('../email-marketing/contact-card'))
+    .MarketingContactCard,
+}));
 
 const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
@@ -321,6 +325,7 @@ export function createAppCrmContext(): CrmContext {
         useRecordReferencesQuery(useSoupAstItemsQuery, scope)
       ),
     RecordTasks: CrmRecordTasks,
+    MarketingEnrollments,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({
