@@ -1,22 +1,32 @@
-//! Glue adapter giving collab surfaces their view of the document id
-//! namespace, which they share in sync-service.
+//! The document id namespace, which surfaces share in sync-service, read
+//! through macro_db_client's helper for the documents table.
 
-use collab_surface::domain::ports::DocumentIds;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-/// [`DocumentIds`] over the documents table's owning helper.
-#[derive(Debug, Clone)]
-pub struct DssCollabSurfaceDocumentIds(pub PgPool);
+use crate::domain::ports::DocumentIds;
 
-impl DocumentIds for DssCollabSurfaceDocumentIds {
+/// [`DocumentIds`] over macro_db_client's `does_document_exist`.
+#[derive(Debug, Clone)]
+pub struct PgDocumentIds {
+    pool: PgPool,
+}
+
+impl PgDocumentIds {
+    /// Read document ids from the shared Postgres pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl DocumentIds for PgDocumentIds {
     #[tracing::instrument(err, skip(self))]
     async fn is_document_id(&self, id: Uuid) -> Result<bool, rootcause::Report> {
         // Document ids are canonical lowercase text, and the sync-service
         // session key is that exact spelling. Soft-deleted documents keep their
         // session, so the helper deliberately counts them.
         macro_db_client::dcs::does_document_exist::does_document_exist(
-            self.0.clone(),
+            self.pool.clone(),
             &id.to_string(),
         )
         .await

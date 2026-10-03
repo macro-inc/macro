@@ -1341,7 +1341,6 @@ async fn run() -> anyhow::Result<()> {
         db.clone(),
         lexical_client.as_ref().clone(),
         sync_service_client.as_ref().clone(),
-        service::collab_surface_document_ids::DssCollabSurfaceDocumentIds(db.clone()),
         config.document_permission_jwt.as_ref().to_string(),
     ));
 
