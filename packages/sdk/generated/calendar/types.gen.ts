@@ -324,6 +324,10 @@ export type CreateCalendarEventRequest = {
      */
     emailLinkId?: string | null;
     /**
+     * Stable retry identity, scoped to the authenticated organizer.
+     */
+    idempotencyKey?: string | null;
+    /**
      * Optional location label.
      */
     location?: string | null;
