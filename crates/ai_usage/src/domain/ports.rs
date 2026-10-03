@@ -73,6 +73,8 @@ pub enum AiFeature {
     AgentRepositoryChoice,
     /// User-confirmed audio transcription.
     Dictation,
+    /// Image generation and editing.
+    ImageGeneration,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id

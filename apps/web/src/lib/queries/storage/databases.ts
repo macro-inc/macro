@@ -17,7 +17,7 @@ import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { UndoOutcome } from '@service-storage/generated/schemas/undoOutcome';
 import { useQueries, useQuery } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, on } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { queryClient } from '../client';
 import { databasesKeys } from './keys';
@@ -37,6 +37,22 @@ export function useDatabasesQuery() {
     ...databaseListQueryOptions,
     enabled: flag().enabled,
   }));
+}
+
+/** Re-read discovery when its surface opens, including databases created by AI or other clients. */
+export function useDatabaseDiscoverySync(isActive: Accessor<boolean>) {
+  const flag = useFeatureFlag(enableDatabases);
+  createEffect(
+    on(
+      () => isActive() && flag().enabled,
+      (active) => {
+        if (!active) return;
+        void queryClient.invalidateQueries({
+          queryKey: databasesKeys.list.queryKey,
+        });
+      }
+    )
+  );
 }
 
 /** One database's schema; spread it and override what a read needs differently. */
@@ -165,7 +181,7 @@ export function applyDatabaseOps(
         id: databaseId,
         request: baseVersions ? { ops, baseVersions } : { ops },
       })
-      .map((response) => {
+      .map(async (response) => {
         const tableVersions = committedTableVersions(
           response.results,
           response.changes
@@ -177,10 +193,49 @@ export function applyDatabaseOps(
             changes: response.changes,
             tableVersions,
           });
+        applyDatabaseTableVersions(databaseId, tableVersions);
+        // Schema-only creation waits for data callers need to focus or patch views.
+        // A row edit that mints options keeps the write queue moving.
+        const createsColumnData = ops.some(
+          (op) =>
+            op.kind === 'column' &&
+            (op.change.kind === 'create' ||
+              (op.change.kind === 'add_options' &&
+                !ops.some((item) => item.kind === 'rows')))
+        );
+        if (
+          ops.some(
+            (op) =>
+              op.kind === 'column' ||
+              (op.kind === 'table' && op.change.kind !== 'reorder_views') ||
+              op.kind === 'reorder_tables'
+          )
+        ) {
+          const global = ops.some(
+            (op) =>
+              op.kind === 'table' &&
+              ['rename', 'delete'].includes(op.change.kind)
+          );
+          const refresh = queryClient.invalidateQueries(
+            {
+              queryKey: global
+                ? databasesKeys.detail._def
+                : databasesKeys.detail(databaseId).queryKey,
+              refetchType: createsColumnData ? 'all' : 'active',
+            },
+            // A failed read must not report an already committed write as failed.
+            { throwOnError: false }
+          );
+          if (createsColumnData) await refresh;
+          else void refresh;
+        }
         return response.results;
       })
       // A refused batch is one error: the first op the service could not apply.
-      .mapErr(([refusal]) => refusal)
+      .mapErr(([refusal]) => {
+        void invalidateDatabase(databaseId);
+        return refusal;
+      })
   );
 }
 

@@ -130,22 +130,7 @@ fn query_database_alter_column_is_a_schema_change() {
 
 #[test]
 fn every_mutating_database_tool_is_a_schema_change() {
-    for name in [
-        "CreateDatabase",
-        "CreateTable",
-        "AddColumn",
-        "AddColumnOptions",
-        "SaveDatabaseView",
-        "DeleteDatabaseView",
-        "RenameDatabase",
-        "RenameTable",
-        "DeleteTable",
-        "RenameColumn",
-        "ChangeColumnType",
-        "DeleteColumn",
-        "ReorderColumns",
-        "ReorderTables",
-    ] {
+    for name in ["SaveDatabaseView", "DeleteDatabaseView"] {
         let activity = tool_activity(&[AssistantMessagePart::ToolCallResponseJson {
             name: name.into(),
             json: json!({}),
@@ -191,4 +176,25 @@ fn discovery_saved_questions_and_other_tools_change_no_database() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn sql_schema_receipts_are_decoded_and_report_schema_activity() {
+    let response = QueryDatabaseResponse {
+        results: vec![],
+        changes_applied: 0,
+        inserted_row_ids: vec![],
+        new_versions: HashMap::new(),
+        read_versions: vec![],
+        truncated_tables: vec![],
+        statement: SqlStatement::Schema {
+            database_id: databases::domain::models::DatabaseId::new(),
+            summary: "Created database".into(),
+        },
+        summary: "Created database".into(),
+    };
+    let json = serde_json::to_value(response).unwrap();
+    let receipt = QueryDatabaseReceipt::deserialize(&json).unwrap();
+    assert!(matches!(receipt.statement, ReceiptStatement::Schema));
+    assert_eq!(query_database_change(&json), DatabaseChange::Schema);
 }

@@ -57,6 +57,7 @@ pub const fn is_billable_feature(feature: AiFeature) -> bool {
         | AiFeature::AiEditing
         | AiFeature::Import
         | AiFeature::AgentSession
-        | AiFeature::AgentRepositoryChoice => true,
+        | AiFeature::AgentRepositoryChoice
+        | AiFeature::ImageGeneration => true,
     }
 }

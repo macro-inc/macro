@@ -6,6 +6,7 @@ import type {
   Schema,
   Step,
 } from '@core/database-sql/generated/types';
+import * as sqlTrace from '@core/database-sql/trace';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   CacheRevision,
@@ -380,6 +381,7 @@ describe('createDatabaseSqlQuery', () => {
   });
 
   it('refreshes from the network, and a failed refresh fails as a fetch and keeps the answer', async () => {
+    const traced = vi.spyOn(sqlTrace, 'traceDatabaseSqlRun');
     const policies: string[] = [];
     let failing = false;
     const exchange: Exchange = () => (incoming) =>
@@ -426,9 +428,9 @@ describe('createDatabaseSqlQuery', () => {
       expect(query.outcome()?.rows).toEqual([[{ type: 'text', value: 'Acme' }]])
     );
 
-    expect(await query.refresh()).toEqual(ok({ landed: true }));
+    expect(await query.refresh('after-write')).toEqual(ok({ landed: true }));
     failing = true;
-    expect((await query.refresh())._unsafeUnwrapErr()).toEqual({
+    expect((await query.refresh('after-write'))._unsafeUnwrapErr()).toEqual({
       kind: 'fetch',
       message: '[Network] offline',
     });
@@ -443,6 +445,11 @@ describe('createDatabaseSqlQuery', () => {
       message: '[Network] offline',
     });
     expect(query.outcome()?.rows).toEqual([[{ type: 'text', value: 'Acme' }]]);
+    expect(traced.mock.calls.map((call) => call[3]?.reason)).toEqual([
+      'initial',
+      'after-write',
+      'after-write',
+    ]);
   });
 
   it('keeps a refresh from the network when the cache changes while it is in flight', async () => {

@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 ai_toolset = { path = "../ai_toolset" }
+ai_usage = { path = "../ai_usage" }
 anyhow.workspace = true
 async-trait.workspace = true
 attachment = { path = "../attachment" }

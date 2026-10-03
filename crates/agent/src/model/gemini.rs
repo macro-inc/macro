@@ -1,4 +1,8 @@
 use crate::model::types::Model;
+use rig_core::completion::{
+    CompletionError, CompletionModel, CompletionRequest, CompletionResponse,
+};
+use rig_core::streaming::StreamingCompletionResponse;
 use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::gemini};
 use std::sync::Arc;
 
@@ -26,8 +30,8 @@ impl<'a, H: HttpClientExt + Clone + 'static> GeminiModel<'a, H> {
 
     /// The rig completion model for this id. The id is passed verbatim to the
     /// Gemini API.
-    pub fn completion(&self) -> gemini::completion::CompletionModel<H> {
-        self.client.completion_model(self.model.name().to_string())
+    pub fn completion(&self) -> GeminiCompletionModel<H> {
+        GeminiCompletionModel(self.client.completion_model(self.model.name().to_string()))
     }
 
     /// Ask Gemini to include thought summaries so reasoning deltas reach the
@@ -50,6 +54,77 @@ impl<'a, H: HttpClientExt + Clone + 'static> GeminiModel<'a, H> {
             }
         }))
     }
+}
+
+/// Sends tool schemas through Gemini's native JSON Schema field. Rig's legacy
+/// `parameters` conversion recursively inlines references, which overflows the
+/// process stack for recursive schemas such as database view filters. It also
+/// loses nested nullable unions, producing an invalid empty Gemini `type`.
+#[derive(Clone)]
+pub struct GeminiCompletionModel<H>(gemini::completion::CompletionModel<H>);
+
+impl<H: HttpClientExt + Clone + 'static> CompletionModel for GeminiCompletionModel<H> {
+    type Response = <gemini::completion::CompletionModel<H> as CompletionModel>::Response;
+    type StreamingResponse =
+        <gemini::completion::CompletionModel<H> as CompletionModel>::StreamingResponse;
+    type Client = gemini::Client<H>;
+
+    fn make(client: &Self::Client, model: impl Into<String>) -> Self {
+        Self(gemini::completion::CompletionModel::make(client, model))
+    }
+
+    async fn completion(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
+        self.0.completion(native_tool_schemas(request)?).await
+    }
+
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
+        self.0.stream(native_tool_schemas(request)?).await
+    }
+}
+
+fn native_tool_schemas(
+    mut request: CompletionRequest,
+) -> Result<CompletionRequest, CompletionError> {
+    if request.tools.is_empty() {
+        return Ok(request);
+    }
+    let declarations: Vec<_> = request
+        .tools
+        .drain(..)
+        .map(|tool| {
+            let mut declaration = serde_json::json!({
+                "name": tool.name,
+                "description": tool.description,
+            });
+            if !tool.parameters.is_null() {
+                declaration["parametersJsonSchema"] = tool.parameters;
+            }
+            declaration
+        })
+        .collect();
+    let params = request
+        .additional_params
+        .get_or_insert_with(|| serde_json::json!({}));
+    let object = params.as_object_mut().ok_or_else(|| {
+        CompletionError::RequestError("Gemini additional parameters must be an object".into())
+    })?;
+    let tools = object
+        .entry("tools")
+        .or_insert_with(|| serde_json::json!([]));
+    let tools = tools.as_array_mut().ok_or_else(|| {
+        CompletionError::RequestError("Gemini additional tools must be an array".into())
+    })?;
+    tools.insert(
+        0,
+        serde_json::json!({ "functionDeclarations": declarations }),
+    );
+    Ok(request)
 }
 
 #[cfg(test)]

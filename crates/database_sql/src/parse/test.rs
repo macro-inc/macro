@@ -1079,9 +1079,7 @@ fn a_bad_alter_says_what_would_have_been_accepted() {
         (
             "ALTER TABLE deals ALTER COLUMN owner TYPE entity(DATABASE_ROW)",
             49..61,
-            "a relation to another table's rows is made with the ChangeColumnType tool's \
-             linkToTableId, not ALTER COLUMN"
-                .into(),
+            "use relation([database.]table) to reference another table's rows".into(),
         ),
         (
             "ALTER TABLE deals ADD COLUMN notes text",
@@ -1114,4 +1112,44 @@ fn a_parse_error_reads_with_the_byte_it_points_at() {
         }
     );
     assert_eq!(error.to_string(), "expected FROM, found \"crm\" at byte 17");
+}
+
+#[test]
+fn schema_commands_share_quoted_names_types_and_single_statement_boundary() {
+    for sql in [
+        "CREATE DATABASE \"Sales CRM\"",
+        "ALTER DATABASE \"Sales CRM\" RENAME TO Sales",
+        "ALTER DATABASE Sales REORDER TABLES (Deals, Companies)",
+        "CREATE TABLE \"Sales CRM\".Deals (Name text, Value number, Stage select OPTIONS ('Lead', 'Won'), Owner entity(USER), Company relation(Companies))",
+        "ALTER TABLE Deals ADD COLUMN Tags select[] OPTIONS ('Urgent', 'Later')",
+        "ALTER TABLE Deals RENAME TO Opportunities",
+        "ALTER TABLE Deals RENAME COLUMN Value TO Amount",
+        "ALTER TABLE Deals DROP COLUMN Amount",
+        "ALTER TABLE Deals ALTER COLUMN Stage ADD OPTIONS ('Review', 'Wolf''s pick')",
+        "ALTER TABLE Deals ALTER COLUMN Company TYPE relation(Companies)",
+        "ALTER TABLE Deals REORDER COLUMNS (Name, Value, Stage)",
+        "DROP TABLE Deals;",
+    ] {
+        assert!(
+            parse_schema(sql)
+                .unwrap_or_else(|error| panic!("{sql}: {error}"))
+                .is_some(),
+            "{sql}"
+        );
+    }
+    for sql in [
+        "SELECT * FROM Deals",
+        "ALTER TABLE Deals ALTER COLUMN Value TYPE number",
+    ] {
+        assert!(parse_schema(sql).unwrap().is_none());
+    }
+    for sql in [
+        "CREATE TABLE Deals ()",
+        "DROP TABLE Deals; DELETE FROM Companies WHERE row_id = 'x'",
+        "ALTER TABLE Deals DROP COLUMN",
+        "ALTER TABLE Deals ADD COLUMN Value impossible",
+        "CREATE TABLE Deals (Stage select OPTIONS ('Lead', 12))",
+    ] {
+        assert!(parse_schema(sql).is_err(), "{sql}");
+    }
 }

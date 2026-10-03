@@ -410,6 +410,9 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         db.clone(),
     );
 
+    let recorder =
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -425,6 +428,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         image_generation_tool_context: ai_tools::build_image_generation_tool_context(
             &document_tool_context,
             ai_tools::build_image_generator_from_env(),
+            recorder.clone(),
         )?,
         document_tool_context,
         properties_tool_context,
@@ -464,10 +468,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             db.clone(),
             config.enable_ai_usage_enforcement,
         ),
-        recorder: ai_usage::pg_recorder_with_enforcement(
-            db.clone(),
-            config.enable_ai_usage_enforcement,
-        ),
+        recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
 

@@ -35,7 +35,7 @@ use rig_core::streaming::StreamedAssistantContent;
 use tracing::Instrument as _;
 
 use super::anthropic::AnthropicModel;
-use super::gemini::GeminiModel;
+use super::gemini::{GeminiCompletionModel, GeminiModel};
 use super::metering::{MeteringContext, WireProtocol};
 use super::metering_http::MeteredHttpClient;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
@@ -183,7 +183,7 @@ pub(crate) enum ProviderAgent<
     /// An agent over Anthropic's native completion model.
     Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel<H>>>),
     /// An agent over Gemini's native GenerateContent model.
-    Gemini(Agent<TracedModel<gemini::completion::CompletionModel<H>>>),
+    Gemini(Agent<TracedModel<GeminiCompletionModel<H>>>),
     /// An agent over the OpenAI Chat Completions model.
     OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel<H>>>),
     /// An agent over the OpenAI Responses model.

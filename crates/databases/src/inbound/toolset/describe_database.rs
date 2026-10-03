@@ -17,21 +17,15 @@ use crate::domain::ports::DatabasesService;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "DescribeDatabase",
-    description = "\
-Read one database's schema: its tables with their quoted `sqlName`, version and saved views, \
-and each table's columns with their SQL names, types (with the kind of an entity column, \
-`USER` for a person column), whether they hold several values, the labels a select column \
-accepts, the target table of a relation, and the types the column can change to.\n\
-\n\
-**Call this before writing SQL for a database you have not already described in this \
-conversation.** Guessing table or column names is the single most common way a query fails, \
-and the schema is small. Get the `databaseId` from ListDatabases. QueryDatabase describes the \
-SQL dialect."
+    description = "Read a database's tables, versions and columns before writing SQL: IDs, exact SQL names, types, select labels, and relation targets. Pass includeEditingMetadata only when editing views or changing column types to include saved views and conversion targets. Get databaseId from ListDatabases."
 )]
 pub struct DescribeDatabase {
     /// The database to describe.
     #[schemars(description = "Id of the database to describe, as returned by ListDatabases.")]
     pub database_id: DatabaseId,
+    /// Include saved views and per-column type conversion targets. Omit for queries.
+    #[serde(default)]
+    pub include_editing_metadata: bool,
 }
 
 impl ToolAnnotated for DescribeDatabase {
@@ -67,6 +61,16 @@ where
             .await
             .map_err(database_error)?;
 
-        Ok(detail.into())
+        let mut schema = ToolDatabaseSchema::from(detail);
+        if !self.include_editing_metadata {
+            for table in &mut schema.tables {
+                table.views.clear();
+                for column in &mut table.columns {
+                    column.safe_types.clear();
+                    column.checked_types.clear();
+                }
+            }
+        }
+        Ok(schema)
     }
 }

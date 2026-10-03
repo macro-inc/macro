@@ -972,3 +972,298 @@ async fn a_table_that_moves_during_the_write_is_a_version_conflict() {
         "{error:?}"
     );
 }
+
+#[tokio::test]
+async fn schema_sql_uses_atomic_ops_and_preserves_actor() {
+    let world = world();
+    world.lock().unwrap().op_answers.push_back(Ok(Vec::new()));
+    let result = sql(&world).execute(agent_for(OWNER), SqlRequest {sql: "CREATE TABLE Offsite.Tasks (Name text, Done boolean, Stage select OPTIONS ('Todo', 'Done'))".into(), scope: Some(OFFSITE), base_versions: HashMap::new()}).await.unwrap();
+    assert!(matches!(
+        result.statement,
+        SqlStatement::Schema {
+            database_id: OFFSITE,
+            ..
+        }
+    ));
+    let world = world.lock().unwrap();
+    let batch = world.applied.last().unwrap();
+    assert_eq!(batch.database, OFFSITE);
+    assert_eq!(batch.ops.len(), 4);
+    assert!(matches!(
+        batch.ops[0],
+        DatabaseOp::Table {
+            change: models_databases::TableChange::Create { .. },
+            ..
+        }
+    ));
+    assert_eq!(batch.acting_bot, agent_for(OWNER).acting_bot);
+}
+
+#[tokio::test]
+async fn schema_sql_refuses_viewers_and_read_only_hosts_before_writing() {
+    let world = world();
+    for statement in [
+        "CREATE TABLE Offsite.Tasks (Name text)",
+        "DROP TABLE Offsite.Guests",
+        "ALTER TABLE Offsite.Guests ADD COLUMN Budget number",
+    ] {
+        let request = SqlRequest {
+            sql: statement.into(),
+            scope: Some(OFFSITE),
+            base_versions: HashMap::new(),
+        };
+        assert!(
+            sql(&world)
+                .execute(agent_for(VIEWER), request.clone())
+                .await
+                .is_err()
+        );
+        assert!(
+            sql(&world)
+                .view_only()
+                .execute(agent_for(OWNER), request)
+                .await
+                .is_err()
+        );
+    }
+    assert!(
+        sql(&world)
+            .view_only()
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: "CREATE DATABASE Nope".into(),
+                    scope: None,
+                    base_versions: HashMap::new()
+                }
+            )
+            .await
+            .is_err()
+    );
+    assert!(world.lock().unwrap().applied.is_empty());
+}
+
+#[tokio::test]
+async fn schema_sql_resolves_column_placements_and_never_writes_hidden_tables() {
+    let world = world();
+    world.lock().unwrap().op_answers.push_back(Ok(Vec::new()));
+    sql(&world)
+        .execute(
+            agent_for(OWNER),
+            SqlRequest {
+                sql: "ALTER TABLE Offsite.Guests RENAME COLUMN status TO RSVP".into(),
+                scope: Some(OFFSITE),
+                base_versions: HashMap::new(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(&world.lock().unwrap().applied[0].ops[0], DatabaseOp::Column {column: STATUS_COLUMN, change: models_databases::ColumnChange::Rename {previous_name: Some(name), ..}, ..} if name == "Status")
+    );
+    let denied = sql(&world)
+        .execute(
+            agent_for(OWNER),
+            SqlRequest {
+                sql: "DROP TABLE Secret.Plans".into(),
+                scope: None,
+                base_versions: HashMap::new(),
+            },
+        )
+        .await;
+    assert!(denied.is_err());
+    assert_eq!(world.lock().unwrap().applied.len(), 1);
+}
+
+#[tokio::test]
+async fn schema_database_resolution_prefers_scope_and_reorder_reports_versions() {
+    let world = world();
+    world.lock().unwrap().databases[1].database.name = "Offsite".into();
+    world
+        .lock()
+        .unwrap()
+        .op_answers
+        .push_back(Ok(vec![OpResult::ReorderTables {
+            tables: vec![models_databases::VersionedTable {
+                table: GUESTS,
+                version: TableVersion(2),
+            }],
+        }]));
+    let result = sql(&world)
+        .execute(
+            agent_for(OWNER),
+            SqlRequest {
+                sql: "ALTER DATABASE Offsite REORDER TABLES (Guests)".into(),
+                scope: Some(OFFSITE),
+                base_versions: HashMap::from([(GUESTS, TableVersion(1)), (HALLS, TableVersion(9))]),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.new_versions,
+        HashMap::from([(GUESTS, TableVersion(2))])
+    );
+    assert_eq!(
+        world.lock().unwrap().guarded[0],
+        HashMap::from([(GUESTS, TableVersion(1))])
+    );
+    sql(&world)
+        .execute(
+            agent_for(OWNER),
+            SqlRequest {
+                sql: "ALTER DATABASE Offsite RENAME TO Planning".into(),
+                scope: Some(OFFSITE),
+                base_versions: HashMap::new(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(world.lock().unwrap().databases[0].database.name, "Planning");
+    assert_eq!(world.lock().unwrap().databases[1].database.name, "Offsite");
+}
+
+#[tokio::test]
+async fn sql_database_creation_acknowledges_id_and_actor_without_a_followup_read() {
+    let world = world();
+    let result = sql(&world)
+        .execute(
+            agent_for(OWNER),
+            SqlRequest {
+                sql: "CREATE DATABASE Planning".into(),
+                scope: None,
+                base_versions: HashMap::new(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(result.statement, SqlStatement::Schema { .. }));
+    let world = world.lock().unwrap();
+    assert_eq!(world.created[0].name, "Planning");
+    assert_eq!(world.created[0].acting_bot, agent_for(OWNER).acting_bot);
+}
+
+#[tokio::test]
+async fn schema_reorder_resolves_tables_only_in_the_selected_database() {
+    for (database, other_database, name, other_name, sql_name, scope) in [
+        ("Offsite", "offsite", "Guests", "guests", "GUESTS", None),
+        (
+            "macro",
+            "other",
+            "people",
+            "People",
+            "people",
+            Some(OFFSITE),
+        ),
+    ] {
+        let world = world();
+        {
+            let mut held = world.lock().unwrap();
+            held.databases[0].database.name = database.into();
+            held.databases[0].tables[0].table.name = name.into();
+            held.databases[1].database.name = other_database.into();
+            held.databases[1].tables[0].table.name = other_name.into();
+            held.op_answers.push_back(Ok(Vec::new()));
+        }
+        sql(&world)
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: format!("ALTER DATABASE {database} REORDER TABLES ({sql_name})"),
+                    scope,
+                    base_versions: HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
+        let held = world.lock().unwrap();
+        assert_eq!(held.applied[0].database, OFFSITE);
+        assert!(
+            matches!(&held.applied[0].ops[0], DatabaseOp::ReorderTables { order } if order == &[GUESTS])
+        );
+    }
+}
+
+#[tokio::test]
+async fn create_table_resolves_relations_against_its_destination_schema() {
+    for target in ["Tasks", "Offsite.Tasks", "Venues.Tasks"] {
+        let world = world();
+        {
+            let mut held = world.lock().unwrap();
+            held.databases[1].tables[0].table.name = "Tasks".into();
+            held.op_answers.push_back(Ok(Vec::new()));
+        }
+        sql(&world)
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: format!("CREATE TABLE Offsite.Tasks (Parent relation({target}))"),
+                    scope: None,
+                    base_versions: HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
+        let held = world.lock().unwrap();
+        let batch = &held.applied[0];
+        let created = batch.ops[0].table().unwrap();
+        let (expected_database, expected_table) = if target == "Venues.Tasks" {
+            (
+                held.databases[1].database.id,
+                held.databases[1].tables[0].table.id,
+            )
+        } else {
+            (OFFSITE, created)
+        };
+        assert!(matches!(
+            &batch.ops[1],
+            DatabaseOp::Column {
+                change: models_databases::ColumnChange::Create {
+                    definition: models_databases::NewColumn::New {
+                        kind: models_databases::ColumnKind::Relation { database, table },
+                        ..
+                    },
+                    ..
+                },
+                ..
+            } if *database == expected_database && *table == expected_table
+        ));
+    }
+}
+
+#[tokio::test]
+async fn schema_version_conflicts_keep_the_retry_signal() {
+    for statement in [
+        "ALTER TABLE Offsite.Guests RENAME COLUMN Name TO FullName",
+        "ALTER DATABASE Offsite REORDER TABLES (Guests)",
+    ] {
+        let world = world();
+        world
+            .lock()
+            .unwrap()
+            .op_answers
+            .push_back(Err(DatabaseError::VersionConflict));
+        let error = sql(&world)
+            .execute(
+                agent_for(OWNER),
+                SqlRequest {
+                    sql: statement.into(),
+                    scope: None,
+                    base_versions: HashMap::from([(GUESTS, TableVersion(1))]),
+                },
+            )
+            .await
+            .unwrap_err();
+        if statement.starts_with("ALTER DATABASE") {
+            assert!(
+                matches!(error, SqlError::SchemaVersionConflict { database_id } if database_id == OFFSITE),
+                "{error:?}"
+            );
+        } else {
+            assert!(
+                matches!(error, SqlError::VersionConflict { table_id } if table_id == GUESTS),
+                "{error:?}"
+            );
+        }
+    }
+}

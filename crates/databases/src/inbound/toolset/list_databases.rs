@@ -79,7 +79,7 @@ where
 /// reports as a failure rather than as "you have no databases yet".
 pub(super) fn summarize(databases: &[ToolDatabase]) -> String {
     match databases.len() {
-        0 => "No accessible databases were found. CreateDatabase can create one when requested."
+        0 => "No accessible databases were found. Use QueryDatabase with CREATE DATABASE when requested."
             .to_string(),
         1 => "Found 1 database.".to_string(),
         n => format!("Found {n} databases."),

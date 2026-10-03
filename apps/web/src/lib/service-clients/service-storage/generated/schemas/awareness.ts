@@ -22,6 +22,9 @@ export interface Awareness {
   endRowId?: string;
   /** Whether the viewer left the database; other viewers drop their state. */
   left?: boolean;
+  /** This mounted client's random peer id, distinct from its authenticated user.
+Older clients omit it and remain visible as one peer per user. */
+  peerId?: string;
   /** The row of the focused cell, if any. */
   rowId?: string;
   /** The table the viewer is looking at. */

@@ -10,6 +10,8 @@ export type DriveListItem = SoupEntityRow<EntityData>;
 /** Query results consumed by Drive's list controller and renderer. */
 export type DriveListSource = ListDataSource<DriveListItem> & {
   hasData: Accessor<boolean>;
+  /** Independent catalog failures must not block file pagination. */
+  databaseError: Accessor<unknown>;
   featuredIds: Accessor<readonly string[]>;
   deferInteractions: Accessor<boolean>;
 };

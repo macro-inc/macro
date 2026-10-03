@@ -6,6 +6,7 @@ use super::*;
 async fn awareness_is_relayed_for_the_viewer() {
     let seeded = seeded().await;
     let state = Awareness {
+        peer_id: Some(uuid::Uuid::from_u128(7)),
         table_id: seeded.table_id,
         row_id: Some(seeded.row_id),
         column_id: Some(seeded.name_column.id),
@@ -39,6 +40,7 @@ async fn a_refused_relay_is_an_error() {
             receipt::<ViewAccessLevel>(seeded.database_id, VIEWER, AccessLevel::View),
             viewer(VIEWER),
             Awareness {
+                peer_id: Some(uuid::Uuid::from_u128(7)),
                 table_id: seeded.table_id,
                 row_id: None,
                 column_id: None,

@@ -5,7 +5,7 @@ use agent_fold::domain::model_selection::model_selection;
 fn routed_options_use_house_names() {
     let options = model_config_options(
         "fireworks/kimi-k3",
-        &["fireworks/kimi-k3", "anthropic/claude-sonnet-5"],
+        &["fireworks/kimi-k3", "anthropic/claude-sonnet-5-5"],
     );
     let selection = model_selection(&options).expect("a model select");
     assert_eq!(selection.current, "fireworks/kimi-k3");
@@ -17,7 +17,7 @@ fn routed_options_use_house_names() {
             .collect::<Vec<_>>(),
         vec![
             ("fireworks/kimi-k3", "Kimi K3"),
-            ("anthropic/claude-sonnet-5", "anthropic/claude-sonnet-5"),
+            ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
         ]
     );
 }

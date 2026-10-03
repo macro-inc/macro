@@ -40,7 +40,7 @@ pub(super) fn alter(input: Tokens<'_>) -> ParseResult<'_, AlterColumnType> {
 }
 
 /// `name` or `entity(KIND)`, either with `[]` for several values.
-fn column_type(input: Tokens<'_>) -> ParseResult<'_, OpColumnKind> {
+pub(super) fn column_type(input: Tokens<'_>) -> ParseResult<'_, OpColumnKind> {
     alt((preceded(word("entity", ""), cut(entity_type)), plain_type)).parse(input)
 }
 
@@ -99,7 +99,7 @@ fn plain_type(input: Tokens<'_>) -> ParseResult<'_, OpColumnKind> {
         }
         ColumnTypeName::Tag => OpColumnKind::Tag,
         // `entity` is only a type with its kind, and a relation is made
-        // with the ChangeColumnType tool, not by name.
+        // through the server schema grammar.
         ColumnTypeName::Entity | ColumnTypeName::Relation => return Err(unknown()),
     };
     Ok((end, to))
@@ -124,8 +124,7 @@ fn entity_type(input: Tokens<'_>) -> ParseResult<'_, OpColumnKind> {
         Ok(kind) => OpEntityKind::try_from(kind).map_err(|_| {
             nom::Err::Failure(message_at(
                 input,
-                "a relation to another table's rows is made with the ChangeColumnType tool's \
-                 linkToTableId, not ALTER COLUMN",
+                "use relation([database.]table) to reference another table's rows",
             ))
         })?,
         Err(_) => {

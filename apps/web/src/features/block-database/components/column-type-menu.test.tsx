@@ -93,7 +93,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderHeader() {
+function renderHeader(shownColumn = column, shownCasts = casts) {
   const changeType = vi.fn<
     (columnId: string, change: DatabaseColumnTypeChange) => DatabaseSchemaChange
   >(() => okAsync(undefined));
@@ -106,7 +106,7 @@ function renderHeader() {
   const opened: string[] = [];
   render(() => (
     <DatabaseColumnHeader
-      column={column}
+      column={shownColumn}
       canRename
       onRename={vi.fn(() => okAsync(undefined))}
       onSort={vi.fn()}
@@ -114,7 +114,7 @@ function renderHeader() {
       onConvert={convert}
       columnCasts={(columnId, open) => () => {
         if (open()) opened.push(columnId);
-        return casts;
+        return shownCasts;
       }}
     />
   ));
@@ -141,6 +141,65 @@ it('lists only the types the column can become', async () => {
   expect(await screen.findByRole('menuitem', { name: /^Number/ })).toBeTruthy();
   expect(screen.queryByRole('menuitem', { name: /^People/ })).toBeNull();
   expect(opened).toContain('price');
+});
+
+it.each([
+  ['SELECT_STRING', false, 'Select'],
+  ['SELECT_NUMBER', false, 'Select'],
+  ['SELECT_NUMBER', true, 'Multi-select'],
+  ['TAG', true, 'Multi-select'],
+] as const)(
+  'marks %s, multi=%s as current without rewriting it',
+  async (dataType, isMultiSelect, label) => {
+    const { changeType, convert } = renderHeader({
+      ...column,
+      dataType,
+      isMultiSelect,
+    });
+    await openTypeMenu();
+    const current = await screen.findByRole('menuitem', {
+      name: label,
+      current: true,
+    });
+    expect(current.querySelector('svg:last-child')).toBeTruthy();
+    choose(current);
+    expect(changeType).not.toHaveBeenCalled();
+    expect(convert).not.toHaveBeenCalled();
+  }
+);
+
+it.each(['USER', 'DOCUMENT', 'TASK'] as const)(
+  'marks a multi-valued %s reference as current without rewriting it',
+  async (specificEntityType) => {
+    const { changeType, convert } = renderHeader({
+      ...column,
+      dataType: 'ENTITY',
+      specificEntityType,
+      isMultiSelect: true,
+    });
+    await openTypeMenu();
+    const current = await screen.findByRole('menuitem', { current: true });
+    choose(current);
+    expect(changeType).not.toHaveBeenCalled();
+    expect(convert).not.toHaveBeenCalled();
+  }
+);
+
+it('keeps the current type visible when conversion is blocked', async () => {
+  renderHeader(column, {
+    status: 'ready',
+    version: 4,
+    casts: [
+      {
+        target: { dataType: 'STRING', isMultiSelect: false, relation: false },
+        cast: { verdict: 'never', reason: 'A board groups by this column.' },
+      },
+    ],
+  });
+  await openTypeMenu();
+  expect(
+    await screen.findByRole('menuitem', { name: 'Text', current: true })
+  ).toBeTruthy();
 });
 
 it('offers a checked type with failures as a new column, never as a type change', async () => {
