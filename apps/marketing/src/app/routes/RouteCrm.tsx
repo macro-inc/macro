@@ -1,13 +1,12 @@
-import MacroLogo from '@icon/macro-logo.svg';
 import { lazy } from 'solid-js';
 import { CrmCaptureDemo } from '../../features/marketing/components/crm/CrmCaptureDemo';
 import { CrmComparison } from '../../features/marketing/components/crm/CrmComparison';
-import { CrmConnectedWorkDemo } from '../../features/marketing/components/crm/CrmConnectedWorkDemo';
 import { CrmEnrichmentDemo } from '../../features/marketing/components/crm/CrmEnrichmentDemo';
 import {
   AgentIllustration,
   CaptureIllustration,
   ContextIllustration,
+  EnrichmentIllustration,
 } from '../../features/marketing/components/crm/CrmFeatureIllustrations';
 import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import {
@@ -15,13 +14,16 @@ import {
   DemoPlaceholder,
 } from '../../features/marketing/components/DeferredDemo';
 import {
-  FeaturePage,
-  FeaturePageCta,
   FeaturePageFaq,
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
 import { HomepageConversation } from '../../features/marketing/components/HomepageConversation';
+import {
+  ProductHero,
+  ProductPage,
+  ProductProse,
+} from '../../features/marketing/components/product/ProductPage';
 import { WorkspaceDesktopDemo } from '../../features/marketing/components/WorkspaceDesktopDemo';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/crm/crm-page.css';
@@ -33,224 +35,203 @@ const PipelineDemo = lazy(loadPipeline);
 const faqItems = [
   {
     q: 'How are companies and contacts created?',
-    a: 'Macro creates contacts from external email conversations and groups them into companies by email domain. Contacts from the same company stay together, with their first and latest interactions.',
+    a: 'From your email. When someone on your team emails a person at a new domain, Macro creates the contact and the company, and groups everyone from that domain under it. Personal addresses like Gmail don’t become companies. You can also add companies by hand or import a CSV.',
   },
   {
     q: 'What is automatic enrichment?',
-    a: 'Macro adds public company information such as its website, description, industry, location, and size. Your team can add the details specific to your relationship.',
+    a: 'When Macro creates a company, it looks up the domain and adds a short description from public sources, so you know who they are without opening another tab. Stage, owner, revenue, and everything else you know about the deal are yours to fill in.',
   },
   {
     q: 'Can I update records myself?',
-    a: 'Yes. Change properties such as the deal stage and owner, and add notes directly to the company record.',
+    a: 'Yes. Drag a company to a new stage on the board, or open it and change Stage, Owner, Revenue, or any custom property you’ve added. Agents edit the same properties, so their changes and yours end up in the same place.',
   },
   {
     q: 'Where does the team discuss a customer?',
-    a: 'Every company and contact has its own discussion thread. Add notes, reply to teammates, and link relevant documents and tasks so the conversation stays with the record.',
+    a: 'On the company. Every company has a Discussion that works like a thread in a channel: reply, react, and @mention people, docs, or tasks. The pricing conversation stays with the customer instead of scrolling away in #sales.',
   },
   {
     q: 'Can I mention a company in a document or channel?',
-    a: 'Yes. Mention a company or contact to create a link to its record. Sharing follows the record’s access rules and your permission to share it.',
+    a: 'Yes. Type @ and pick it from Companies. The mention links to the company’s record, and opening it follows the record’s normal access rules.',
   },
   {
     q: 'What can agents do with the CRM?',
-    a: 'Agents can use the customer record and available emails, calls, documents, and tasks to answer questions and update properties. Give the agent a specific request, such as updating the pipeline from your latest sales sync.',
+    a: 'Agents can list companies, read a record with its contacts and properties, and set Stage, Owner, Revenue, or your custom properties. @mention Claude in a company’s Discussion, or ask in a channel after your sales sync. The same tools are on our MCP server, so Claude, ChatGPT, and Cursor can use them too.',
   },
   {
     q: 'Is CRM available for my account?',
-    a: 'CRM is rolling out. If the Companies view is not visible in your workspace, it may not have reached your account yet. Macro is open source under AGPLv3; the application code being public does not make your customer records public.',
+    a: 'We’re rolling it out. If you don’t see Customers in your sidebar yet, it hasn’t reached your account. And being open source doesn’t make your data public: Macro’s code is AGPLv3, but your companies, contacts, and emails stay private to your team.',
   },
 ];
 
 export function RouteCrm() {
   setPageSeo({
-    title: 'Macro CRM — The Self-Building CRM',
+    title: 'Macro CRM — The CRM That Updates Itself',
     description:
-      'Build your CRM from email, enrich company records, and keep customer conversations connected to your team’s work. Let agents help update the pipeline.',
+      'Companies and contacts built from your email, enriched automatically, and kept current by agents. Right in your workspace, so there’s no separate tool to check.',
     path: '/crm',
   });
   return (
-    <FeaturePage>
-      <div class="crm-feature-page">
-        <header class="crm-page-hero">
-          <p class="crm-page-label">
-            <MacroLogo aria-hidden="true" />
-            <span>Macro CRM</span>
+    <ProductPage>
+      <ProductHero
+        product="CRM"
+        title={['The CRM that', 'updates itself.']}
+        description={[
+          'Built from your email and calls, kept current by agents.',
+          'Right in your workspace, so there’s no separate tool to check.',
+        ]}
+        cta="crm_hero_get_started"
+      />
+      <WorkspaceDesktopDemo
+        view="crm"
+        label="Explore Macro CRM"
+        caption="A sample pipeline. Drag a company to a new stage or open its record."
+      />
+      <nav
+        class="feature-page-jump-links crm-feature-links"
+        aria-label="On this page"
+      >
+        <a href="#crm-from-email">
+          <span class="crm-feature-illustration">
+            <CaptureIllustration />
+          </span>
+          <span>Updated by agents</span>
+        </a>
+        <a href="#crm-enrichment">
+          <span class="crm-feature-illustration">
+            <EnrichmentIllustration />
+          </span>
+          <span>Auto-enriched</span>
+        </a>
+        <a href="#crm-context">
+          <span class="crm-feature-illustration">
+            <ContextIllustration />
+          </span>
+          <span>The whole relationship</span>
+        </a>
+        <a href="#crm-agents">
+          <span class="crm-feature-illustration">
+            <AgentIllustration />
+          </span>
+          <span>Agents and MCP</span>
+        </a>
+      </nav>
+      <FeaturePageSection
+        id="crm-from-email"
+        title="Nobody has to update the CRM."
+        description={
+          'Tell @Claude what happened on the call and it updates the stage, owner, and notes.\nOr let it read the email thread and work it out.'
+        }
+      >
+        <div class="feature-page-visual">
+          <CrmCaptureDemo />
+        </div>
+        <ProductProse>
+          <p>
+            Every CRM is useful when it’s up to date, and every keystroke it
+            takes to get there is a chore. That’s why most of them go stale.
+            Auto-updating CRMs like Attio and Lightfield help, but they’re still
+            another tool someone has to check. Macro’s CRM lives in the same
+            workspace as your email, calls, and chat, and agents keep it current
+            from those conversations.
           </p>
-          <h1>
-            <span>CRM that makes money</span>
-            <span>and updates itself.</span>
-          </h1>
-          <p class="crm-page-description">
-            <span>Companies and contacts created from your email.</span>{' '}
-            <span>Enriched automatically. Updated by agents.</span>
+        </ProductProse>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="crm-enrichment"
+        title="Every company, already researched."
+        description={
+          'New companies show up from your email with a description from public sources.\nYour team adds what only you know.'
+        }
+      >
+        <div class="feature-page-visual">
+          <CrmEnrichmentDemo />
+        </div>
+        <ProductProse>
+          <p>
+            When you email someone new, Macro creates the contact and the
+            company from their domain and fills in what’s publicly known about
+            them. You don’t start from a blank record, and you don’t need a
+            separate enrichment tool to do it.
           </p>
-          <FeaturePageCta name="crm_hero_get_started" />
-        </header>
-        <WorkspaceDesktopDemo
-          view="crm"
-          label="Try Macro CRM"
-          caption="Explore the pipeline. Open a company, update its stage, or add a note."
-        />
-        <nav class="crm-feature-links" aria-label="On this page">
-          <a href="#crm-from-email">
-            <span class="crm-feature-illustration">
-              <CaptureIllustration />
-            </span>
-            <span>Updates from conversation</span>
-          </a>
-          <a href="#crm-context">
-            <span class="crm-feature-illustration">
-              <ContextIllustration />
-            </span>
-            <span>Emails and customer records</span>
-          </a>
-          <a href="#crm-agents">
-            <span class="crm-feature-illustration">
-              <AgentIllustration />
-            </span>
-            <span>Agents keep it current</span>
-          </a>
-        </nav>
-        <FeaturePageSection
-          id="crm-from-email"
-          title="Agents update your customer records."
-          description={
-            'Tell an agent what changed in a customer conversation.\nIt can update the owner, deal stage, and notes directly.'
-          }
-        >
-          <div class="feature-page-visual crm-scene">
-            <CrmCaptureDemo />
+        </ProductProse>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="crm-context"
+        title="The whole relationship in one record."
+        description={
+          'Emails, calls, files, and tasks for every company, one tab away.\nComments are threaded like chat, so notes don’t get lost in Slack.'
+        }
+      >
+        <div class="feature-page-visual">
+          <CrmRecordDemo />
+        </div>
+        <ProductProse>
+          <p>
+            Open a company and it’s all there: the people you talk to, every
+            email thread, every call, the files you’ve sent, and the tasks in
+            flight. The discussion on each record works like a channel thread,
+            so the note about pricing lives on the customer instead of somewhere
+            in #sales. Mention the company in a doc or channel and it links
+            straight back here.
+          </p>
+        </ProductProse>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="crm-agents"
+        title="Your agents get the same CRM."
+        description={
+          'Agents can read companies and their contacts and update company properties with the same tools you see in the app.\nUse them for outbound, research, or keeping the pipeline current.'
+        }
+      >
+        <div class="feature-page-visual crm-agent-scene">
+          <HomepageConversation
+            messages={[
+              {
+                person: 'valentina',
+                text: (
+                  <>
+                    <span class="homepage-person-mention">@Claude</span>, update
+                    the pipeline from our sales sync. Northwind asked for a
+                    proposal, and Lumen signed.
+                  </>
+                ),
+              },
+            ]}
+          />
+          <div class="crm-pipeline-frame glass-input">
+            <DeferredDemo
+              preload={loadPipeline}
+              fallback={
+                <DemoPlaceholder label="Agent updates the customer pipeline" />
+              }
+            >
+              <PipelineDemo playbackControls={false} />
+            </DeferredDemo>
           </div>
-          <div class="crm-feature-prose">
-            <p>
-              CRM tools let agents read company records and update their
-              properties. Ask Claude to assign an owner, save rollout notes, or
-              move a deal to the next stage. The changes appear in the customer
-              record and pipeline board. Open the record to review the values or
-              edit them yourself.
-            </p>
-          </div>
-        </FeaturePageSection>
-        <FeaturePageSection
-          id="crm-enrichment"
-          title="Company enrichment, automatically."
-          description={
-            'Email domains become company records.\nMacro adds available company information from public sources.'
-          }
-        >
-          <div class="feature-page-visual crm-scene">
-            <CrmEnrichmentDemo />
-          </div>
-          <div class="crm-feature-prose">
-            <p>
-              Macro creates contacts and companies from your email. The sender’s
-              domain identifies the company, and enrichment adds available
-              details such as its website, industry, location, and size. Your
-              team can add its own properties, including deal stage, owner, and
-              revenue. Those fields are available in the customer view and to
-              agents through CRM tools.
-            </p>
-          </div>
-        </FeaturePageSection>
-        <FeaturePageSection
-          id="crm-context"
-          title="Customer emails in the customer record."
-          description={
-            'Open the company to see its contacts, emails, and team discussion.\nRead the original conversation before replying or joining a call.'
-          }
-        >
-          <div class="feature-page-visual crm-scene">
-            <CrmRecordDemo />
-          </div>
-          <div class="crm-feature-prose">
-            <p>
-              Customer records link the company’s contacts and email
-              conversations. Each record has a discussion where your team can
-              leave notes and @mention related work. An agent can read the
-              record and available conversations before answering a question or
-              updating a property. People can follow the same links to check its
-              sources.
-            </p>
-          </div>
-        </FeaturePageSection>
-        <FeaturePageSection
-          id="crm-connected-work"
-          title="@mention customers in docs and chat."
-          description={
-            'A customer’s name becomes a link to its record.\nReference the company in a proposal, task, or channel message.'
-          }
-        >
-          <div class="feature-page-visual crm-scene">
-            <CrmConnectedWorkDemo />
-          </div>
-          <div class="crm-feature-prose">
-            <p>
-              Companies and contacts are workspace items you can @mention. Link
-              the customer record in a rollout plan, a support request, or a
-              team conversation. Opening the reference shows the customer’s
-              details and related work. Your team can navigate from the request
-              to the relationship it concerns.
-            </p>
-          </div>
-        </FeaturePageSection>
-        <FeaturePageSection
-          id="crm-agents"
-          title="Update the pipeline with a message."
-          description={
-            'Ask an agent to change deal stages from your latest sales conversation.\nThe updates appear directly in the pipeline board.'
-          }
-        >
-          <div class="feature-page-visual crm-scene crm-agent-scene">
-            <HomepageConversation
-              messages={[
-                {
-                  person: 'valentina',
-                  text: (
-                    <>
-                      <span class="homepage-person-mention">@Claude</span>,
-                      update the pipeline from our sales sync. Northwind asked
-                      for a proposal, and Lumen signed.
-                    </>
-                  ),
-                },
-              ]}
-            />
-            <div class="crm-pipeline-frame glass-input">
-              <DeferredDemo
-                preload={loadPipeline}
-                fallback={
-                  <DemoPlaceholder label="Agent updates the customer pipeline" />
-                }
-              >
-                <PipelineDemo playbackControls={false} />
-              </DeferredDemo>
-            </div>
-          </div>
-          <div class="crm-feature-prose">
-            <p>
-              Tell the agent which customer asked for a proposal and which
-              signed. Its CRM tools can read the records and set their stage
-              properties. Macro’s MCP tools also expose company records and
-              property updates to external agents. The pipeline and customer
-              views read those same values.
-            </p>
-          </div>
-        </FeaturePageSection>
-        <FeaturePageFaq
-          id="crm-faq-title"
-          eyebrow="Email, enrichment, and agent tools"
-          title="How Macro CRM works."
-          introduction={
-            <p>
-              Company records built from email, enriched from public
-              information, and editable by your team and agents.
-            </p>
-          }
-          items={faqItems}
-        />
-        <CrmComparison />
-        <HomepageClosing />
-      </div>
-    </FeaturePage>
+        </div>
+        <ProductProse>
+          <p>
+            We treat Macro’s MCP server as seriously as the interface. Agents
+            can list companies, read a record, and update its properties,
+            whether they’re running in Macro or in Claude, ChatGPT, or Cursor.
+            Tell one which deals moved after your sales sync and the pipeline
+            updates while you get on with your day.
+          </p>
+        </ProductProse>
+      </FeaturePageSection>
+      <FeaturePageFaq
+        id="crm-faq-title"
+        title="Questions about Macro CRM"
+        introduction={
+          <p>
+            If you’re coming from HubSpot, Attio, or a spreadsheet, here’s
+            what’s different.
+          </p>
+        }
+        items={faqItems}
+      />
+      <CrmComparison />
+      <HomepageClosing />
+    </ProductPage>
   );
 }
