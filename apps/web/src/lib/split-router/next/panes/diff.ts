@@ -57,6 +57,15 @@ export function diffPanes<E extends PaneEntry>(
     return options.same(currentEntry(snapshot), entry);
   };
 
+  // Incoming panes without a live id claim a pane already showing their entry before any slot.
+  const showing = incoming.map(({ paneId, entry }) => {
+    if (paneId && isLive(paneId)) return;
+
+    return live.panes.find((pane) => showsSame(pane, entry));
+  });
+  const reservedElsewhere = (pane: PaneId, position: number) =>
+    showing.some((match, index) => match === pane && index !== position);
+
   const matchPane = (
     { paneId, entry }: IncomingPane<E>,
     position: number
@@ -64,8 +73,14 @@ export function diffPanes<E extends PaneEntry>(
     const liveAndFree = paneId && isLive(paneId) && !isUsed(paneId);
     if (liveAndFree) return paneId;
 
+    const shown = showing[position];
+    if (shown && !isUsed(shown)) return shown;
+
     const positional = live.panes[position];
-    const slotTaken = positional === undefined || isUsed(positional);
+    const slotTaken =
+      positional === undefined ||
+      isUsed(positional) ||
+      reservedElsewhere(positional, position);
     if (slotTaken) return;
     if (!paneId) return positional;
     if (isLive(paneId)) return;

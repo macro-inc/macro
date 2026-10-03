@@ -76,7 +76,7 @@ export function createSplitRouter(options: SplitRouterOptions) {
     url,
     runner,
     claims,
-    showAlone: urlNavigation.showAlone,
+    navigateToLocation: urlNavigation.navigateToLocation,
   });
 
   const paneList = createPaneList({
@@ -126,7 +126,8 @@ export function createSplitRouter(options: SplitRouterOptions) {
     claims: claims.registry,
     ready,
     panes: panes.ids,
-    navigate: paneNavigation.navigate,
+    navigate: urlNavigation.navigate,
+    navigatePane: paneNavigation.navigate,
     updateSearch: paneNavigation.updateSearch,
     goBackTo: paneNavigation.goBackTo,
     removeEntries: paneNavigation.removeEntries,

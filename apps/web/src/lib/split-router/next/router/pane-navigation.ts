@@ -155,7 +155,7 @@ export function createPaneNavigation(options: {
   runner: Runner;
   claims: Claims;
   /** Shows `location` as the only pane, for a destination the other panes can't share the URL with. */
-  showAlone(
+  navigateToLocation(
     location: SplitLocation,
     navigateOptions: SplitNavigateOptions
   ): MaybePromise<NavigationResult>;
@@ -297,7 +297,7 @@ export function createPaneNavigation(options: {
     if (!location) return CANCELLED_RESULT;
 
     if (leavesSharedRoute(pane, location)) {
-      return options.showAlone(location, navigateOptions);
+      return options.navigateToLocation(location, navigateOptions);
     }
 
     return visitLocation(pane, from, location, navigateOptions);
@@ -502,6 +502,6 @@ export function createPaneNavigation(options: {
     backStep,
     jumpBack,
     leavesSharedRoute,
-    showAlone: options.showAlone,
+    navigateToLocation: options.navigateToLocation,
   };
 }

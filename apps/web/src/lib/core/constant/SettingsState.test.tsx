@@ -131,14 +131,14 @@ describe('settings entry points', () => {
       router.entry(pane)?.location.route.matches[0]?.params.tab;
     const navigateTab = (tab: string) => {
       expect(mocks.updateCurrentEntry).not.toHaveBeenCalled();
-      router.navigate(pane, `/settings/${tab.toLowerCase()}`);
+      router.navigatePane(pane, `/settings/${tab.toLowerCase()}`);
     };
     state.selectTab('Appearance', navigateTab);
     state.selectTab('Account', navigateTab);
     expect(router.history(pane)?.entries).toHaveLength(3);
-    router.navigate(pane, -1);
+    router.navigatePane(pane, -1);
     expect(currentTab()).toBe('appearance');
-    router.navigate(pane, -1);
+    router.navigatePane(pane, -1);
     expect(currentTab()).toBe('account');
     router.dispose();
   });

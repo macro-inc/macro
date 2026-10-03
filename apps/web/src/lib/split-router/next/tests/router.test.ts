@@ -163,7 +163,7 @@ describe('split router', () => {
     const { router, history, pane } = track(setup('/home/~/drive'));
     const drive = router.entry(pane(1));
 
-    const result = router.navigate(pane(0), '/mail/t1');
+    const result = router.navigatePane(pane(0), '/mail/t1');
     expect(result).toEqual({ status: 'committed', pane: pane(0) });
     expect(router.entry(pane(1))).toBe(drive);
     expect(router.arrival(pane(1))).toBe('fresh');
@@ -183,7 +183,7 @@ describe('split router', () => {
 
   it('turns a pane navigation outside the shared top-level route into a whole-window one, and Back rebuilds the panes', () => {
     const { router, history, pane } = track(setup('/home/~/mail'));
-    router.navigate(pane(1), '/login');
+    router.navigatePane(pane(1), '/login');
     expect(
       router.panes().map((id) => router.entry(id)?.location.route.matches)
     ).toEqual([[{ id: 'login', params: {} }]]);
@@ -201,21 +201,21 @@ describe('split router', () => {
 
   it('skips entries under another top-level route on pane Back while other panes share the app route', () => {
     const { router, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/login');
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/login');
+    router.navigatePane(pane(0), '/mail');
     router.open('/drive', { newPane: true, source: pane(0) });
     expect(router.panes()).toHaveLength(2);
 
     expect(router.canGo(pane(0), -1)).toBe(true);
-    router.navigate(pane(0), -1);
+    router.navigatePane(pane(0), -1);
     expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
     expect(router.canGo(pane(0), -1)).toBe(false);
   });
 
   it('pane back replaces the browser entry and records how the pane arrived', () => {
     const { router, history, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
-    router.navigate(pane(0), -1);
+    router.navigatePane(pane(0), '/mail');
+    router.navigatePane(pane(0), -1);
     expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
     expect(router.arrival(pane(0))).toBe('back');
     expect(router.canGo(pane(0), 1)).toBe(true);
@@ -227,7 +227,7 @@ describe('split router', () => {
 
   it('browser back brings a pane back through its own history', () => {
     const { router, history, paneStore, pane } = track(setup('/home/~/drive'));
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     const drive = router.entry(pane(1));
     history.back();
     expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
@@ -239,7 +239,7 @@ describe('split router', () => {
 
   it('a leave guard can refuse browser back, and the URL is put back', () => {
     const { router, history, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, () => false);
     history.back();
     expect(routeIds(router.entry(pane(0)))).toEqual(['mail']);
@@ -252,7 +252,7 @@ describe('split router', () => {
     const { router, solid } = track(setupSolid('/app/home'));
     vi.runAllTimers();
     const pane = router.panes()[0]!;
-    router.navigate(pane, '/mail');
+    router.navigatePane(pane, '/mail');
     vi.runAllTimers();
     const mail = router.entry(pane);
     router.registerGuard(pane, PANE_ROUTE_LEVEL, () => false);
@@ -276,7 +276,7 @@ describe('split router', () => {
           allow = resolve;
         })
     );
-    const result = router.navigate(pane(0), '/mail');
+    const result = router.navigatePane(pane(0), '/mail');
     expect(isPromise(result)).toBe(true);
     expect(routeIds(router.pending(pane(0))?.to)).toEqual(['mail']);
     expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
@@ -300,8 +300,8 @@ describe('split router', () => {
     expect(router.ready()).toBe(false);
     await router.settled();
     expect(router.ready()).toBe(true);
-    const first = router.navigate(pane(0), '/mail');
-    const second = router.navigate(pane(0), '/drive');
+    const first = router.navigatePane(pane(0), '/mail');
+    const second = router.navigatePane(pane(0), '/drive');
     await expect(first).resolves.toEqual({ status: 'cancelled' });
     await expect(second).resolves.toMatchObject({ status: 'committed' });
     expect(routeIds(router.entry(pane(0)))).toEqual(['drive']);
@@ -310,9 +310,9 @@ describe('split router', () => {
   it('a superseded navigation settles even when its guard never does', async () => {
     const { router, pane } = track(setup('/home'));
     const unregister = router.registerGuard(pane(0), PANE_ROUTE_LEVEL, never);
-    const first = router.navigate(pane(0), '/mail');
+    const first = router.navigatePane(pane(0), '/mail');
     unregister();
-    const second = router.navigate(pane(0), '/drive');
+    const second = router.navigatePane(pane(0), '/drive');
     await expect(first).resolves.toEqual({ status: 'cancelled' });
     expect(second).toMatchObject({ status: 'committed' });
   });
@@ -325,8 +325,8 @@ describe('split router', () => {
       PANE_ROUTE_LEVEL,
       () => new Promise<boolean>((resolve) => answers.push(resolve))
     );
-    const first = router.navigate(pane(0), '/mail');
-    const second = router.navigate(pane(0), '/drive');
+    const first = router.navigatePane(pane(0), '/mail');
+    const second = router.navigatePane(pane(0), '/drive');
     answers[0]!(true);
     answers[1]!(false);
     await expect(first).resolves.toEqual({ status: 'cancelled' });
@@ -336,7 +336,7 @@ describe('split router', () => {
 
   it('browser back cancels a pane navigation still in flight', async () => {
     const { router, history, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     let allow: (allowed: boolean) => void = () => {};
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) =>
       cause === 'external'
@@ -345,7 +345,7 @@ describe('split router', () => {
             allow = resolve;
           })
     );
-    const drive = router.navigate(pane(0), '/drive');
+    const drive = router.navigatePane(pane(0), '/drive');
     history.back();
     allow(true);
     await expect(drive).resolves.toEqual({ status: 'cancelled' });
@@ -388,7 +388,7 @@ describe('split router', () => {
     const { router, solid } = track(setupSolid('/app/home'));
     vi.runAllTimers();
     const pane = router.panes()[0]!;
-    router.navigate(pane, '/mail');
+    router.navigatePane(pane, '/mail');
     vi.runAllTimers();
     router.registerGuard(pane, PANE_ROUTE_LEVEL, never);
     solid.traverse(-1);
@@ -403,7 +403,7 @@ describe('split router', () => {
 
   it('a pane command cancels a pending browser back and reverts it first', () => {
     const { router, history, pane } = track(setup('/home/~/drive'));
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     let guardSignal: AbortSignal | undefined;
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ signal }) => {
       guardSignal = signal;
@@ -412,7 +412,7 @@ describe('split router', () => {
     history.back();
     expect(routeIds(router.pending(pane(0))?.to)).toEqual(['home']);
 
-    expect(router.navigate(pane(1), '/drive/folder/f1')).toMatchObject({
+    expect(router.navigatePane(pane(1), '/drive/folder/f1')).toMatchObject({
       status: 'committed',
     });
     expect(guardSignal?.aborted).toBe(true);
@@ -431,7 +431,7 @@ describe('split router', () => {
     const { router, solid } = track(setupSolid('/app/home'));
     vi.runAllTimers();
     const pane = router.panes()[0]!;
-    router.navigate(pane, '/mail');
+    router.navigatePane(pane, '/mail');
     vi.runAllTimers();
     router.registerGuard(pane, PANE_ROUTE_LEVEL, ({ cause }) =>
       cause === 'external' ? never() : true
@@ -439,7 +439,7 @@ describe('split router', () => {
     solid.traverse(-1);
     expect(routeIds(router.pending(pane)?.to)).toEqual(['home']);
 
-    const result = router.navigate(pane, '/drive');
+    const result = router.navigatePane(pane, '/drive');
     expect(isPromise(result)).toBe(true);
     await expect(result).resolves.toMatchObject({ status: 'committed' });
     vi.runAllTimers();
@@ -468,7 +468,7 @@ describe('split router', () => {
         ],
       })
     );
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     slow = true;
     history.back();
     expect(routeIds(router.pending(pane(0))?.to)).toEqual(['home']);
@@ -479,12 +479,12 @@ describe('split router', () => {
 
   it('opening something another pane shows activates that pane instead', () => {
     const { router, activated, pane } = track(setup('/drive/md/d1/~/home'));
-    const result = router.navigate(pane(1), '/md/d1');
+    const result = router.navigatePane(pane(1), '/md/d1');
     expect(result).toEqual({ status: 'activated', owner: pane(0) });
     expect(activated).toEqual([pane(0)]);
     expect(routeIds(router.entry(pane(1)))).toEqual(['home']);
     expect(
-      router.navigate(pane(1), '/md/d1', { allowDuplicate: true })
+      router.navigatePane(pane(1), '/md/d1', { allowDuplicate: true })
     ).toMatchObject({ status: 'committed' });
   });
 
@@ -527,7 +527,7 @@ describe('split router', () => {
     );
 
     const opened = router.open('/md/d1', { newPane: true, source: pane(1) });
-    router.navigate(pane(0), '/md/d1');
+    router.navigatePane(pane(0), '/md/d1');
     release();
 
     await expect(opened).resolves.toEqual({
@@ -539,15 +539,15 @@ describe('split router', () => {
 
   it('skips entries another pane shows on Back and Forward, unless duplicates are allowed', () => {
     const { router, pane } = track(setup('/home/~/home'));
-    router.navigate(pane(0), '/md/d1');
-    router.navigate(pane(0), '/drive');
-    router.navigate(pane(1), '/md/d1');
+    router.navigatePane(pane(0), '/md/d1');
+    router.navigatePane(pane(0), '/drive');
+    router.navigatePane(pane(1), '/md/d1');
 
-    router.navigate(pane(0), -1);
+    router.navigatePane(pane(0), -1);
     expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
     expect(router.canGo(pane(0), 1)).toBe(true);
 
-    router.navigate(pane(0), 1, { allowDuplicate: true });
+    router.navigatePane(pane(0), 1, { allowDuplicate: true });
     expect(routeIds(router.entry(pane(0)))).toEqual(['block']);
   });
 
@@ -568,8 +568,8 @@ describe('split router', () => {
 
   it('browser back brings back a duplicate', () => {
     const { router, history, activated, pane } = track(setup('/home/~/md/d1'));
-    router.navigate(pane(0), '/md/d1', { allowDuplicate: true });
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/md/d1', { allowDuplicate: true });
+    router.navigatePane(pane(0), '/drive');
     history.back();
     expect(routeIds(router.entry(pane(0)))).toEqual(['block']);
     expect(activated).toEqual([]);
@@ -596,7 +596,7 @@ describe('split router', () => {
     expect(history.read().path).toBe('/home');
 
     expect(router.close('pane-1' as PaneId)).toBe(false);
-    router.navigate('pane-1' as PaneId, '/mail');
+    router.navigatePane('pane-1' as PaneId, '/mail');
     expect(router.close('pane-1' as PaneId)).toBe(true);
     expect(router.panes()).toEqual(['pane-1']);
     expect(history.read().path).toBe('/home');
@@ -664,6 +664,44 @@ describe('split router', () => {
     expect(guard).not.toHaveBeenCalled();
   });
 
+  it('navigates from the base, keeping the pane that already shows the destination', () => {
+    const { router, history } = track(setup('/home/~/mail/~/drive'));
+    const [home, mail, drive] = router.panes();
+    const mailEntry = router.entry(mail!);
+    let allowDrive = false;
+    router.registerGuard(drive!, PANE_LEVEL, () => allowDrive);
+
+    expect(router.navigate('/mail')).toMatchObject({ status: 'cancelled' });
+    expect(router.panes()).toEqual([home, mail, drive]);
+
+    allowDrive = true;
+    expect(router.navigate('/mail')).toMatchObject({ status: 'committed' });
+    expect(router.panes()).toEqual([mail]);
+    expect(router.entry(mail!)).toBe(mailEntry);
+    expect(history.entries().map((entry) => entry.path)).toEqual([
+      '/home/~/mail/~/drive',
+      '/mail',
+    ]);
+  });
+
+  it('keeps panes that already show their entry when a base navigation reorders them', () => {
+    const { router, history } = track(setup('/home/~/mail'));
+    const [home] = router.panes();
+
+    router.navigate('/drive/~/home');
+    expect(router.panes().map((id) => routeIds(router.entry(id)))).toEqual([
+      ['drive'],
+      ['home'],
+    ]);
+    expect(router.panes()[1]).toBe(home);
+    expect(history.read().path).toBe('/drive/~/home');
+
+    router.navigate({ location: location('mail') });
+    expect(router.panes().map((id) => routeIds(router.entry(id)))).toEqual([
+      ['mail'],
+    ]);
+  });
+
   it('closing the last pane can go back to an earlier entry', () => {
     const closeLast: SplitCloseAction = {
       type: 'back-to',
@@ -673,7 +711,7 @@ describe('split router', () => {
     const { router, pane } = track(
       setup('/mail', {}, createTestPolicy({ closeLast }))
     );
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/drive');
     expect(router.close(pane(0))).toBe(true);
     expect(routeIds(router.entry(pane(0)))).toEqual(['mail']);
     expect(router.canGo(pane(0), 1)).toBe(true);
@@ -747,9 +785,9 @@ describe('split router', () => {
     const { router, pane } = track(
       setup('/home', { routes, preloadBudgetMs: 5 })
     );
-    expect(isPromise(router.navigate(pane(0), '/mail'))).toBe(false);
+    expect(isPromise(router.navigatePane(pane(0), '/mail'))).toBe(false);
 
-    const result = router.navigate(pane(0), '/slow');
+    const result = router.navigatePane(pane(0), '/slow');
     expect(isPromise(result)).toBe(true);
     expect(preload).toHaveBeenCalledWith(
       expect.objectContaining({ intent: 'navigate', params: {} })
@@ -770,7 +808,7 @@ describe('split router', () => {
       })
     );
     const { router, pane } = track(setup('/home', { routes }));
-    expect(router.navigate(pane(0), '/broken')).toEqual({
+    expect(router.navigatePane(pane(0), '/broken')).toEqual({
       status: 'committed',
       pane: pane(0),
     });
@@ -800,8 +838,8 @@ describe('split router', () => {
 
   it('jumps back to the nearest matching entry', () => {
     const { router, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/mail');
+    router.navigatePane(pane(0), '/drive');
     expect(
       router.goBackTo(pane(0), (entry) => routeIds(entry)?.[0] === 'home')
     ).toBe(true);
@@ -811,10 +849,10 @@ describe('split router', () => {
 
   it('removing entries cancels a pending traversal in that pane', async () => {
     const { router, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/mail');
+    router.navigatePane(pane(0), '/drive');
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, never);
-    const back = router.navigate(pane(0), -1);
+    const back = router.navigatePane(pane(0), -1);
     expect(routeIds(router.pending(pane(0))?.to)).toEqual(['mail']);
 
     const isMail = (entry: Entry) => routeIds(entry)?.[0] === 'mail';
@@ -849,7 +887,7 @@ describe('split router while other work is in flight', () => {
         const showsDrive = routeIds(router.entry(pane(0)))?.[0] === 'drive';
         if (!showsDrive) return;
 
-        untrack(() => router.navigate(pane(0), '/mail', { replace: true }));
+        untrack(() => router.navigatePane(pane(0), '/mail', { replace: true }));
       });
 
       return dispose;
@@ -905,8 +943,8 @@ describe('split router while other work is in flight', () => {
 
   it('puts the URL back past every Back that a refused Back replaced', async () => {
     const { router, history, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/mail');
+    router.navigatePane(pane(0), '/drive');
     const answers: ((allowed: boolean) => void)[] = [];
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) => {
       if (cause !== 'external') return true;
@@ -936,8 +974,8 @@ describe('split router while other work is in flight', () => {
         })
     );
 
-    const departure = router.navigate(pane(0), '/drive');
-    expect(router.navigate(pane(1), '/md/d1')).toEqual({
+    const departure = router.navigatePane(pane(0), '/drive');
+    expect(router.navigatePane(pane(1), '/md/d1')).toEqual({
       status: 'activated',
       owner: pane(0),
     });
@@ -952,7 +990,7 @@ describe('split router while other work is in flight', () => {
     const { router, activated, pane } = track(setup('/drive/md/d1/~/home'));
 
     expect(
-      router.navigate(pane(1), '/drive/md/d1', {
+      router.navigatePane(pane(1), '/drive/md/d1', {
         search: { drive: { sort: ['name'] } },
       })
     ).toEqual({ status: 'activated', owner: pane(0) });
@@ -983,7 +1021,7 @@ describe('split router while other work is in flight', () => {
     await router.settled();
 
     const sorting = router.updateSearch(pane(0), 'drive', { sort: ['date'] });
-    router.navigate(pane(1), '/drive/md/d1');
+    router.navigatePane(pane(1), '/drive/md/d1');
     release();
 
     await expect(sorting).resolves.toMatchObject({ status: 'committed' });
@@ -1029,7 +1067,7 @@ describe('split router while other work is in flight', () => {
     expect(routeIds(router.entry(pane(0)))).toEqual(['drive']);
     expect(router.entry(pane(0))?.location.search).toBeUndefined();
 
-    expect(router.navigate(pane(0), '/mail')).toMatchObject({
+    expect(router.navigatePane(pane(0), '/mail')).toMatchObject({
       status: 'committed',
     });
     expect(history.read().path).toBe('/mail');
@@ -1061,7 +1099,7 @@ describe('split router while other work is in flight', () => {
     const { router, pane } = track(
       setup('/home', {}, createTestPolicy({ closeLast }))
     );
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/drive');
     router.registerGuard(
       pane(0),
       PANE_ROUTE_LEVEL,
@@ -1100,13 +1138,13 @@ describe('split router while other work is in flight', () => {
         const showsDrive = routeIds(router.entry(pane(0)))?.[0] === 'drive';
         if (!showsDrive) return;
 
-        untrack(() => router.navigate(pane(1), '/mail', { replace: true }));
+        untrack(() => router.navigatePane(pane(1), '/mail', { replace: true }));
       });
 
       return dispose;
     });
 
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/drive');
     await router.settled();
     stopRedirecting();
 
@@ -1118,7 +1156,7 @@ describe('split router while other work is in flight', () => {
 
   it('keeps a Back whose view redirects in place as it mounts', async () => {
     const { router, history, pane } = track(setup('/drive'));
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     let armed = false;
     const stopRedirecting = createRoot((dispose) => {
       createEffect(() => {
@@ -1126,7 +1164,7 @@ describe('split router while other work is in flight', () => {
         const redirects = armed && showsDrive;
         if (!redirects) return;
 
-        untrack(() => router.navigate(pane(0), '/home', { replace: true }));
+        untrack(() => router.navigatePane(pane(0), '/home', { replace: true }));
       });
 
       return dispose;
@@ -1163,8 +1201,10 @@ describe('split router while other work is in flight', () => {
     const { router, pane } = track(setup('/home', { history: flaky }));
 
     failNext = true;
-    expect(router.navigate(pane(0), '/mail')).toEqual({ status: 'cancelled' });
-    expect(router.navigate(pane(0), '/drive')).toMatchObject({
+    expect(router.navigatePane(pane(0), '/mail')).toEqual({
+      status: 'cancelled',
+    });
+    expect(router.navigatePane(pane(0), '/drive')).toMatchObject({
       status: 'committed',
     });
     expect(history.read().path).toBe('/drive');
@@ -1177,14 +1217,14 @@ describe('split router while other work is in flight', () => {
   it('settles a URL navigation that arrives while an earlier one is being put back', async () => {
     const { history, adapter, landAll } = slowRevertHistory('/home');
     const { router, pane } = track(setup('/home', { history: adapter }));
-    router.navigate(pane(0), '/mail');
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/mail');
+    router.navigatePane(pane(0), '/drive');
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) =>
       cause === 'external' ? never() : true
     );
 
     history.back();
-    const navigated = router.navigate(pane(0), '/drive/folder/f1');
+    const navigated = router.navigatePane(pane(0), '/drive/folder/f1');
     history.back();
     await landAll();
 
@@ -1197,9 +1237,9 @@ describe('split router while other work is in flight', () => {
   it('puts back a Back that arrives while others are put back before them', async () => {
     const { history, adapter, landAll } = slowRevertHistory('/home');
     const { router, pane } = track(setup('/home', { history: adapter }));
-    router.navigate(pane(0), '/mail');
-    router.navigate(pane(0), '/drive');
-    router.navigate(pane(0), '/md/d1');
+    router.navigatePane(pane(0), '/mail');
+    router.navigatePane(pane(0), '/drive');
+    router.navigatePane(pane(0), '/md/d1');
     let refuse: () => void = () => {};
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) => {
       if (cause !== 'external') return true;
@@ -1234,7 +1274,7 @@ describe('split router while other work is in flight', () => {
 
   it('checks again before running a waiting action that a new Back overtook', async () => {
     const { router, history, pane, paneStore } = track(setup('/home'));
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     let allow: (allowed: boolean) => void = () => {};
     router.registerGuard(pane(0), PANE_ROUTE_LEVEL, ({ cause }) => {
       if (cause !== 'external') return true;
@@ -1252,14 +1292,14 @@ describe('split router while other work is in flight', () => {
 
         redirected = true;
         untrack(() =>
-          router.navigate(pane(0), '/drive/folder/f1', { replace: true })
+          router.navigatePane(pane(0), '/drive/folder/f1', { replace: true })
         );
       });
 
       return dispose;
     });
 
-    router.navigate(pane(0), '/drive');
+    router.navigatePane(pane(0), '/drive');
     history.back();
     await Promise.resolve();
     await Promise.resolve();
@@ -1291,7 +1331,7 @@ describe('split router while other work is in flight', () => {
     const { router, pane } = track(setup('/home', { history: flaky }));
 
     failNext = true;
-    router.navigate(pane(0), '/mail');
+    router.navigatePane(pane(0), '/mail');
     router.rewriteCurrent(pane(0), '/mail');
 
     expect(history.read().path).toBe('/mail');
@@ -1313,7 +1353,7 @@ describe('split router while other work is in flight', () => {
     const { router, solid, dispose } = setupSolid('/app/home');
     vi.runAllTimers();
 
-    router.navigate(router.panes()[0]!, '/mail');
+    router.navigatePane(router.panes()[0]!, '/mail');
     dispose();
     vi.runAllTimers();
 
@@ -1341,7 +1381,7 @@ describe('split router while other work is in flight', () => {
     const { router, solid } = track(setupSolid('/app/home'));
     vi.runAllTimers();
 
-    router.navigate(router.panes()[0]!, '/mail');
+    router.navigatePane(router.panes()[0]!, '/mail');
     expect(solid.leave('/settings').defaultPrevented).toBe(false);
     vi.runAllTimers();
 
@@ -1350,7 +1390,7 @@ describe('split router while other work is in flight', () => {
 
   it('moves the cursor on Back to an entry that looks like the current one', () => {
     const { router, history, paneStore, pane } = track(setup('/home'));
-    router.navigate(pane(0), '/home', { props: { note: 1 } });
+    router.navigatePane(pane(0), '/home', { props: { note: 1 } });
     expect(paneStore.read(pane(0))?.entries).toHaveLength(2);
 
     history.back();

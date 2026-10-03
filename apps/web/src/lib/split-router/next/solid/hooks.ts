@@ -2,10 +2,11 @@ import deepEqual from 'fast-deep-equal';
 import { type Accessor, createMemo, untrack, useContext } from 'solid-js';
 import type { PaneSnapshot } from '../panes/types';
 import type { PendingNavigation } from '../router/runner';
-import type {
-  NavigationResult,
-  RouteMatchInfo,
-  SplitNavigateOptions,
+import {
+  CANCELLED_RESULT,
+  type NavigationResult,
+  type RouteMatchInfo,
+  type SplitNavigateOptions,
 } from '../router/types';
 import {
   getRouteEntryState,
@@ -132,15 +133,23 @@ export function useEntryProps<T = unknown>(): T | undefined {
 }
 
 /** Navigates this pane. Relative paths resolve against the calling route. */
+/** Navigates the enclosing pane; outside any pane, it navigates from the base. */
 export function useNavigate(): SplitNavigate {
   const router = useSplitRouter();
-  const scope = usePaneContext();
+  const scope = useContext(PaneContext);
 
   const navigate = (
     to: SplitNavigationTarget | number,
     options: SplitNavigateOptions & NewPaneOption = {}
   ) => {
     const { newPane, ...rest } = options;
+
+    if (!scope) {
+      if (typeof to === 'number') return CANCELLED_RESULT;
+
+      return router.navigate(to, rest);
+    }
+
     const navigateOptions = { ...rest, depth: scope.depth() };
 
     if (newPane && typeof to !== 'number') {
@@ -149,7 +158,7 @@ export function useNavigate(): SplitNavigate {
       return router.open(to, target, navigateOptions);
     }
 
-    return router.navigate(scope.pane(), to, navigateOptions);
+    return router.navigatePane(scope.pane(), to, navigateOptions);
   };
 
   return navigate as SplitNavigate;

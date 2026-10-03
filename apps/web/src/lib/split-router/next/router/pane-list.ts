@@ -221,7 +221,7 @@ export function createPaneList(options: {
 
         const intoPane = 'pane' in target ? target.pane : undefined;
         if (navigation.leavesSharedRoute(intoPane, location)) {
-          return navigation.showAlone(location, navigateOptions);
+          return navigation.navigateToLocation(location, navigateOptions);
         }
 
         const { placement, holder } = placementFor(

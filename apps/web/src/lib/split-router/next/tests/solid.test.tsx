@@ -254,12 +254,12 @@ describe('split router Solid bindings', () => {
     const pane = router.panes()[0]!;
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
-    router.navigate(pane, '/drive/md/d2');
+    router.navigatePane(pane, '/drive/md/d2');
     expect(screen.getByTestId('document').textContent).toBe('md:d2');
     expect(counts).toEqual({ drive: 1, document: 1 });
     expect(documentTypeReads).toHaveBeenCalledTimes(1);
 
-    router.navigate(pane, '/drive/pdf/d2');
+    router.navigatePane(pane, '/drive/pdf/d2');
     expect(counts).toEqual({ drive: 1, document: 2 });
   });
 
@@ -273,7 +273,7 @@ describe('split router Solid bindings', () => {
     );
     expect(screen.getByTestId('document').textContent).toBe('md:d1');
 
-    router.navigate(pane, '/home');
+    router.navigatePane(pane, '/home');
     expect(screen.getByTestId('header').textContent).toBe('app/home back:true');
     expect(screen.getByText('home')).toBeTruthy();
   });
@@ -288,7 +288,7 @@ describe('split router Solid bindings', () => {
     const second = router.panes()[1]!;
     allowLeave = false;
 
-    expect(router.navigate(second, '/home')).toMatchObject({
+    expect(router.navigatePane(second, '/home')).toMatchObject({
       status: 'committed',
     });
     expect(await router.close(second)).toBe(false);
@@ -332,14 +332,14 @@ describe('split router Solid bindings', () => {
 
     allowLeave = false;
     const second = router.panes()[1]!;
-    expect(router.navigate(second, '/home')).toMatchObject({
+    expect(router.navigatePane(second, '/home')).toMatchObject({
       status: 'committed',
     });
     expect(screen.getAllByText('home')).toHaveLength(2);
     expect(await router.close(second)).toBe(false);
 
     allowLeave = true;
-    await router.navigate(router.panes()[0]!, '/login');
+    await router.navigatePane(router.panes()[0]!, '/login');
     expect(screen.getByText('login')).toBeTruthy();
     expect(screen.queryAllByTestId('pane')).toHaveLength(0);
     expect(history.read().path).toBe('/login');
@@ -373,12 +373,12 @@ describe('split router Solid bindings', () => {
     const { router, history } = renderPanes('/guarded');
     const pane = router.panes()[0]!;
     allowLeave = false;
-    router.navigate(pane, '/home');
+    router.navigatePane(pane, '/home');
     expect(screen.getByTestId('guarded')).toBeTruthy();
     router.updateSearch(pane, 'anything', { x: ['1'] });
     expect(history.read().search).toBe('?s0.anything.x=1');
     allowLeave = true;
-    router.navigate(pane, '/home');
+    router.navigatePane(pane, '/home');
     expect(screen.queryByTestId('guarded')).toBeNull();
   });
 
@@ -443,7 +443,7 @@ describe('<SplitRouter.Router>', () => {
     expect(screen.getByText('inbox')).toBeTruthy();
     expect(home).not.toHaveProperty('component');
 
-    await router!.navigate(router!.panes()[0]!, '/login');
+    await router!.navigatePane(router!.panes()[0]!, '/login');
     expect(screen.getByText('login')).toBeTruthy();
     expect(screen.queryAllByTestId('pane')).toHaveLength(0);
     expect(history.read().path).toBe('/login');

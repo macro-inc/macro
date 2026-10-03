@@ -5,12 +5,18 @@ import type {
   InterceptHandler,
 } from '../history/types';
 import { type ChangedPane, changedPanes } from '../panes/diff';
-import { decodePanes, sameExternalLocation } from '../routes/codec';
+import {
+  decodePanes,
+  parseLocation,
+  sameExternalLocation,
+} from '../routes/codec';
 import type { SplitRoutesManifest } from '../routes/manifest';
+import { resolveTarget } from '../routes/targets';
 import type {
   Entry,
   ExternalLocation,
   SplitLocation,
+  SplitNavigationTarget,
   WriteMode,
 } from '../routes/types';
 import { type MaybePromise, UNCANCELLABLE } from '../utils';
@@ -22,13 +28,14 @@ import {
   runChecks,
 } from './leave-guards';
 import type { Runner } from './runner';
-import type {
-  Navigation,
-  NavigationCause,
-  NavigationResult,
-  PaneTarget,
-  RouterPanes,
-  SplitNavigateOptions,
+import {
+  CANCELLED_RESULT,
+  type Navigation,
+  type NavigationCause,
+  type NavigationResult,
+  type PaneTarget,
+  type RouterPanes,
+  type SplitNavigateOptions,
 } from './types';
 import type { Url } from './url';
 
@@ -95,11 +102,8 @@ export function createUrlNavigation(options: {
     };
   };
 
-  /**
-   * Shows `location` as the only pane: a pane navigating under a different
-   * top-level route can't share the URL with the others.
-   */
-  const showAlone = (
+  /** A navigation from the base to one location, which becomes the only pane. */
+  const navigateToLocation = (
     location: SplitLocation,
     navigateOptions: SplitNavigateOptions
   ): MaybePromise<NavigationResult> => {
@@ -112,7 +116,7 @@ export function createUrlNavigation(options: {
       removed: diff.removed,
       apply: (entries) => {
         panes.applyDiff(diff, entries);
-        url.write('push');
+        url.write(navigateOptions.replace ? 'replace' : 'push');
 
         const [first] = diff.panes;
 
@@ -121,6 +125,31 @@ export function createUrlNavigation(options: {
     };
 
     return runner.startUrl(navigation, false);
+  };
+
+  /**
+   * A navigation from the base, as any router's: a path's panes replace the
+   * open ones, and a route or location target becomes the only pane. Panes
+   * already showing their entry stay mounted.
+   */
+  const navigate = (
+    to: SplitNavigationTarget,
+    navigateOptions: SplitNavigateOptions = {}
+  ): MaybePromise<NavigationResult> => {
+    if (typeof to === 'string') {
+      const mode = navigateOptions.replace ? 'replace' : 'push';
+      const navigation = navigationTo(parseLocation(to), {
+        cause: 'navigate',
+        mode,
+      });
+
+      return runner.startUrl(navigation, false);
+    }
+
+    const location = resolveTarget(routes, undefined, to, navigateOptions);
+    if (!location) return CANCELLED_RESULT;
+
+    return navigateToLocation(location, navigateOptions);
   };
 
   /** The first load; pane actions wait for it. */
@@ -196,7 +225,8 @@ export function createUrlNavigation(options: {
   };
 
   return {
-    showAlone,
+    navigate,
+    navigateToLocation,
 
     /** Loads the URL and follows the history adapter until the returned stop is called. */
     connect(): () => void {

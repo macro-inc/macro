@@ -902,14 +902,14 @@ export function createSplitLayout(
     const { replace, referredFrom } = navigateOptions;
     const target = { location: toLocation(content) };
 
-    return router.navigate(paneOf(id), target, {
+    return router.navigatePane(paneOf(id), target, {
       ...entryOptionsOf(content, { referredFrom }),
       replace,
     });
   }
 
   function back(id: SplitId) {
-    void router.navigate(paneOf(id), -1);
+    void router.navigatePane(paneOf(id), -1);
   }
 
   /**
@@ -931,7 +931,7 @@ export function createSplitLayout(
   }
 
   function forward(id: SplitId) {
-    void router.navigate(paneOf(id), 1);
+    void router.navigatePane(paneOf(id), 1);
   }
 
   function removeFromHistory(
@@ -1567,7 +1567,7 @@ export function createSplitLayout(
             },
             navigateOptions
           )
-        : router.navigate(paneOf(source.id), target, navigateOptions);
+        : router.navigatePane(paneOf(source.id), target, navigateOptions);
 
     afterNavigation(result, (outcome) => {
       const applied = outcome.status !== 'cancelled';

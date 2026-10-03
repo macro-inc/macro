@@ -75,7 +75,7 @@ function setup(location: SearchLocation) {
     setDocument,
     router,
     replay: () =>
-      router.navigate(
+      router.navigatePane(
         router.panes()[0]!,
         { route },
         {
