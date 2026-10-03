@@ -284,6 +284,17 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/github_pull_requests",
+            github_pull_requests::inbound::axum_router::github_pull_requests_router(
+                state.github_pull_request_state.clone(),
+            )
+            .merge(
+                github_pull_requests::inbound::changes_router::github_pull_request_changes_router(
+                    state.github_pull_request_changes_state.clone(),
+                ),
+            ),
+        )
+        .nest(
             "/call",
             call::inbound::axum_router::call_router(state.call_state.clone()),
         )
@@ -308,6 +319,12 @@ fn api_router(state: ApiContext) -> Router {
             "/internal",
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
+                .nest(
+                    "/github",
+                    github::inbound::pull_request_index_router::pull_request_index_router(
+                        state.github_pull_request_index_state.clone(),
+                    ),
+                )
                 .nest(
                     "/search",
                     search_service::search_router()

@@ -170,6 +170,7 @@ where
             }
         };
         let draft = CalendarEventDraft {
+            idempotency_key: None,
             title: self.title.clone(),
             description: self.description.clone(),
             location: self.location.clone(),

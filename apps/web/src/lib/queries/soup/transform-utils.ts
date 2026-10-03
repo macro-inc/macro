@@ -32,7 +32,7 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
-import { toSubType } from '@entity/types/entity';
+import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
@@ -908,11 +908,12 @@ export const mapApiSoupItemToEntity = (
       return out;
     })
     .with({ tag: 'foreignEntity' }, (item) => {
-      // `authorLogin`/`authorId` are enrichment-only fields the backend now
-      // returns but that aren't on the base generated schema yet.
+      // `authorLogin`/`authorId`/`labels` are enrichment-only fields the
+      // backend now returns but that aren't on the base generated schema yet.
       const metadata = item.data.metadata as unknown as GithubPullRequest & {
         authorLogin?: string | null;
         authorId?: number | null;
+        labels?: GithubPullRequestLabel[] | null;
       };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
@@ -945,6 +946,7 @@ export const mapApiSoupItemToEntity = (
           deletions: metadata.deletions ?? 0,
           comments: metadata.comments ?? [],
           checks: metadata.checks?.filter(Boolean) ?? [],
+          labels: metadata.labels ?? [],
           authorLogin: metadata.authorLogin ?? undefined,
           authorId: metadata.authorId ?? undefined,
         },

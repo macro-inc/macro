@@ -596,6 +596,13 @@ export function isCalendarSearchUiEnabled(): boolean {
   );
 }
 
+// Scheduling settings, calendar shortcuts, and public booking/receipt pages.
+// Off until PostHog enables it, including in dev.
+export const enableCalendarScheduling = defineFlag({
+  key: 'enable-calendar-scheduling',
+  env: 'ENABLE_CALENDAR_SCHEDULING',
+});
+
 // The "Enable calendar" prompt on phones. Off by default everywhere,
 // including dev: the mobile toast layout drops the body and the close button,
 // so the prompt lands as an undismissable one-line bar over the composer.

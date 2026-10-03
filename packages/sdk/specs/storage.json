@@ -10678,6 +10678,268 @@
         }
       }
     },
+    "/github_pull_requests/facets": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "List the repositories and authors among the GitHub pull requests visible to the caller.",
+        "operationId": "get_github_pull_request_facets",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestFacets"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github_pull_requests/{id}": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "Get the pull request behind a foreign entity record the caller can view.",
+        "operationId": "get_github_pull_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The caller's foreign entity record for the pull request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredGithubPullRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github_pull_requests/{id}/changes": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "Get the changes of the pull request behind a foreign entity record the caller can view.",
+        "operationId": "get_github_pull_request_changes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The caller's foreign entity record for the pull request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestChangesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github_pull_requests/{id}/changes/patch": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "Get the patch of changes of the pull request behind a foreign entity record the caller can\nview.",
+        "operationId": "get_github_pull_request_changes_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The caller's foreign entity record for the pull request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "changeset",
+            "in": "query",
+            "description": "The changeset whose patch to read",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestChangesPatchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harness-pairings": {
       "post": {
         "tags": ["harnesses"],
@@ -17343,6 +17605,9 @@
           "fef": {
             "description": "the filters that should be applied to foreign entity records"
           },
+          "ghprf": {
+            "description": "the filters that should be applied to GitHub pull request records, on top of `fef`"
+          },
           "pf": {
             "description": "the filters that should be applied to the project entity"
           },
@@ -19277,6 +19542,130 @@
             "description": "The value, or [`CellValue::Clear`] to empty the cell."
           }
         }
+      },
+      "ChangedFileDto": {
+        "type": "object",
+        "description": "One changed file.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "path",
+          "kind",
+          "additions",
+          "deletions",
+          "binary",
+          "patchOmitted"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines added.",
+            "minimum": 0
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "The diff carries no text for this file."
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines removed.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileChangeKindDto",
+            "description": "What happened to the file."
+          },
+          "patchOmitted": {
+            "type": "boolean",
+            "description": "The file's hunks were left out of the patch to fit the size budget."
+          },
+          "path": {
+            "type": "string",
+            "description": "The file's path after the change, or before it for a deletion."
+          },
+          "previousPath": {
+            "type": ["string", "null"],
+            "description": "Where a renamed file came from."
+          }
+        }
+      },
+      "ChangesetDto": {
+        "type": "object",
+        "description": "One changeset: the files a patch touches and what happened to each.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "id",
+          "source",
+          "base",
+          "head",
+          "files",
+          "additions",
+          "deletions",
+          "patchBytes",
+          "truncated",
+          "capturedAt"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines added across all files.",
+            "minimum": 0
+          },
+          "base": {
+            "$ref": "#/components/schemas/GitRefDto",
+            "description": "The side the work started from."
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the diff was taken."
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines removed across all files.",
+            "minimum": 0
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangedFileDto"
+            },
+            "description": "Every changed file, in patch order."
+          },
+          "head": {
+            "$ref": "#/components/schemas/GitRefDto",
+            "description": "The side carrying the work."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The changeset's id; a different id means different changes."
+          },
+          "patchBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the patch the matching patch route serves; zero when nothing\nchanged.",
+            "minimum": 0
+          },
+          "repository": {
+            "type": ["string", "null"],
+            "description": "`https://github.com/owner/name`, when known."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ChangesetSourceDto",
+            "description": "Where the diff was read from."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Some files' hunks were left out of the patch."
+          }
+        }
+      },
+      "ChangesetSourceDto": {
+        "type": "string",
+        "description": "The source of a changeset's diff, on the wire.",
+        "enum": ["github_pull_request"]
       },
       "Channel": {
         "type": "object",
@@ -25102,6 +25491,11 @@
           }
         }
       },
+      "FileChangeKindDto": {
+        "type": "string",
+        "description": "What happened to a file, on the wire.",
+        "enum": ["added", "modified", "deleted", "renamed"]
+      },
       "FileSystemNodeWithIds": {
         "oneOf": [
           {
@@ -26471,6 +26865,40 @@
           }
         }
       },
+      "GitRefDto": {
+        "type": "object",
+        "description": "One end of the compared range.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The branch name, when known."
+          },
+          "sha": {
+            "type": ["string", "null"],
+            "description": "The commit, when known."
+          }
+        }
+      },
+      "GithubLabelFacet": {
+        "type": "object",
+        "description": "A label among the visible GitHub pull requests. Labels with the same name in different\nrepositories count together.",
+        "required": ["name", "count"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "The label's most recently synced color, as six hex digits without `#`."
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of visible pull requests with the label."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label's name."
+          }
+        }
+      },
       "GithubPullRequest": {
         "type": "object",
         "description": "Display-ready data for a GitHub pull request associated with a task.",
@@ -26550,6 +26978,38 @@
           }
         }
       },
+      "GithubPullRequestChangesPatchResponse": {
+        "type": "object",
+        "description": "Response body for `GET /github_pull_requests/{id}/changes/patch`.\n\nClients deserialize this, so both derives are used.",
+        "required": ["patch"],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "The git-style unified diff of the changeset."
+          }
+        }
+      },
+      "GithubPullRequestChangesResponse": {
+        "type": "object",
+        "description": "Response body for `GET /github_pull_requests/{id}/changes`.\n\nClients deserialize this, so both derives are used.",
+        "properties": {
+          "changeset": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChangesetDto",
+                "description": "The changes at the pull request's current base and head; absent when GitHub could not\nprovide them."
+              }
+            ]
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Why there are no changes, in a sentence the user can act on."
+          }
+        }
+      },
       "GithubPullRequestCheckRun": {
         "type": "object",
         "description": "A check run associated with a GitHub pull request.",
@@ -26597,6 +27057,12 @@
           "authorAssociation": {
             "type": ["string", "null"],
             "description": "GitHub's relationship label for the author, when available."
+          },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the comment author, when available.",
+            "minimum": 0
           },
           "authorLogin": {
             "type": ["string", "null"],
@@ -26660,6 +27126,105 @@
           }
         }
       },
+      "GithubPullRequestFacets": {
+        "type": "object",
+        "description": "Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,\neach with the number of pull requests it covers.",
+        "required": ["repositories", "authors", "assignees", "labels"],
+        "properties": {
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubUserFacet"
+            },
+            "description": "Assignees, most pull requests first."
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubUserFacet"
+            },
+            "description": "Authors, most pull requests first."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubLabelFacet"
+            },
+            "description": "Labels, most pull requests first."
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubRepositoryFacet"
+            },
+            "description": "Repositories, most pull requests first."
+          }
+        }
+      },
+      "GithubPullRequestLabel": {
+        "type": "object",
+        "description": "A label on a GitHub pull request.",
+        "required": ["name"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "The label color as six hex digits without a leading `#`, when known."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label name, unique within its repository regardless of case."
+          }
+        }
+      },
+      "GithubPullRequestReview": {
+        "type": "object",
+        "description": "A reviewer's latest submitted review on a pull request.",
+        "required": ["reviewerGithubUserId", "state"],
+        "properties": {
+          "reviewerGithubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id of the reviewer, as a string."
+          },
+          "reviewerLogin": {
+            "type": ["string", "null"],
+            "description": "The reviewer's GitHub login, when known."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GithubPullRequestReviewState",
+            "description": "What the review said."
+          },
+          "submittedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the review was submitted, when known."
+          }
+        }
+      },
+      "GithubPullRequestReviewDecision": {
+        "type": "string",
+        "description": "Where a pull request's review stands, from its reviewers' latest reviews.",
+        "enum": ["approved", "changes_requested", "review_required"]
+      },
+      "GithubPullRequestReviewState": {
+        "type": "string",
+        "description": "What a reviewer's latest review on a pull request said.",
+        "enum": ["approved", "changes_requested", "commented", "dismissed"]
+      },
+      "GithubPullRequestUser": {
+        "type": "object",
+        "description": "A GitHub user named on a pull request, such as an assignee.",
+        "required": ["githubUserId"],
+        "properties": {
+          "githubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id, as a string."
+          },
+          "login": {
+            "type": ["string", "null"],
+            "description": "The user's GitHub login, when known."
+          }
+        }
+      },
       "GithubPullRequestsResponse": {
         "type": "object",
         "description": "Response containing all GitHub pull requests associated with a task.",
@@ -26671,6 +27236,46 @@
               "$ref": "#/components/schemas/GithubPullRequest"
             },
             "description": "Parsed pull requests, in repository query order."
+          }
+        }
+      },
+      "GithubRepositoryFacet": {
+        "type": "object",
+        "description": "A repository among the visible GitHub pull requests.",
+        "required": ["repositoryId", "repository", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of visible pull requests in the repository."
+          },
+          "repository": {
+            "type": "string",
+            "description": "The repository's most recently synced name, as `owner/repo`."
+          },
+          "repositoryId": {
+            "type": "string",
+            "description": "The numeric GitHub repository id, which survives renames and transfers."
+          }
+        }
+      },
+      "GithubUserFacet": {
+        "type": "object",
+        "description": "A GitHub user among the visible pull requests, as an author or an assignee.",
+        "required": ["githubUserId", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of visible pull requests the user opened, or is assigned to."
+          },
+          "githubUserId": {
+            "type": "string",
+            "description": "The user's numeric GitHub user id."
+          },
+          "login": {
+            "type": ["string", "null"],
+            "description": "The user's most recently synced GitHub login, when known."
           }
         }
       },
@@ -34705,6 +35310,178 @@
           "how_to_guide_id": {
             "type": "string",
             "description": "Id of the user's \"Macro how to guide\"."
+          }
+        }
+      },
+      "StoredGithubPullRequest": {
+        "type": "object",
+        "description": "A GitHub pull request as Macro stores it, read through one of the caller's records.",
+        "required": [
+          "id",
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "draft",
+          "assignees",
+          "labels",
+          "requestedReviewerGithubUserIds",
+          "reviews",
+          "comments",
+          "checks"
+        ],
+        "properties": {
+          "additions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Lines added across the pull request's changes.",
+            "minimum": 0
+          },
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestUser"
+            },
+            "description": "The users assigned to the pull request."
+          },
+          "authorGithubUserId": {
+            "type": ["string", "null"],
+            "description": "Stable numeric GitHub user id of the author."
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The author's GitHub login when the pull request was last synced."
+          },
+          "base": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitRefDto",
+                "description": "The branch and commit the pull request merges into, when known."
+              }
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestCheckRun"
+            },
+            "description": "The latest check runs on the pull request's head commit."
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestComment"
+            },
+            "description": "Comments from the pull request's conversation, reviews, and review threads.\nComment `authorId` intentionally retains the shared numeric GitHub comment contract;\nconvert it to a decimal string before comparing it with `authorGithubUserId`."
+          },
+          "deletions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Lines deleted across the pull request's changes.",
+            "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "The pull request body, as GitHub markdown."
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Whether the pull request is a draft."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The pull request's `owner/repo/pull/number` key."
+          },
+          "githubUpdatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When GitHub last updated the pull request."
+          },
+          "head": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitRefDto",
+                "description": "The branch and commit carrying the pull request's changes, when known."
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The caller's record for the pull request."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestLabel"
+            },
+            "description": "The pull request's labels."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The pull request number within its repository."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The repository owner the pull request was last synced under."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The repository name the pull request was last synced under."
+          },
+          "requestedReviewerGithubUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable numeric GitHub user ids of the users asked to review."
+          },
+          "reviewDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestReviewDecision",
+                "description": "Where the review stands, derived from `reviews` and the outstanding review requests."
+              }
+            ]
+          },
+          "reviews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReview"
+            },
+            "description": "Each reviewer's latest submitted review."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The normalized lifecycle status for a GitHub pull request.",
+                "enum": ["open", "closed", "merged"]
+              }
+            ],
+            "description": "The normalized pull request status."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The pull request title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The pull request's page on GitHub."
           }
         }
       },

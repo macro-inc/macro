@@ -1,3 +1,4 @@
+mod lookup;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
@@ -7,6 +8,11 @@ use foreign_entity::domain::{
         CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
+};
+use github_pull_requests::domain::{
+    models::{GithubPullRequestRow, GithubPullRequestWrite},
+    ports::GithubPullRequestRepository,
+    service::GithubPullRequestServiceImpl,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -209,6 +215,7 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
     GithubPullRequestDetails {
         title: "Add token validation".to_string(),
         state: "open".to_string(),
+        repository_id: None,
         merged_at: None,
         additions: 12,
         deletions: 3,
@@ -218,6 +225,14 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
         comments: None,
         checks: None,
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
+        base: None,
+        head: None,
     }
 }
 
@@ -592,11 +607,43 @@ fn foreign_entity(
     }
 }
 
-fn service(
-    repo: StubGithubRepo,
-    oauth: StubGithubOauth,
-    auth: StubAuth,
-) -> GithubLinkServiceImpl<StubGithubRepo, StubGithubOauth, StubAuth, StubForeignEntityService> {
+type TestGithubLinkService = GithubLinkServiceImpl<
+    StubGithubRepo,
+    StubGithubOauth,
+    StubAuth,
+    GithubPullRequestServiceImpl<StubForeignEntityService, NoPullRequestRows>,
+>;
+
+struct NoPullRequestRows;
+
+impl GithubPullRequestRepository for NoPullRequestRows {
+    type Err = std::convert::Infallible;
+
+    async fn github_key_for(
+        &self,
+        _repository_id: i64,
+        _number: i64,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn upsert_row(&self, _row: &GithubPullRequestWrite) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn rename_row(&self, _from: &str, _to: &str) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn pull_request_row(
+        &self,
+        _github_key: &str,
+    ) -> Result<Option<GithubPullRequestRow>, Self::Err> {
+        Ok(None)
+    }
+}
+
+fn service(repo: StubGithubRepo, oauth: StubGithubOauth, auth: StubAuth) -> TestGithubLinkService {
     service_with_foreign_entities(repo, oauth, auth, StubForeignEntityService::default())
 }
 
@@ -605,12 +652,12 @@ fn service_with_foreign_entities(
     oauth: StubGithubOauth,
     auth: StubAuth,
     foreign_entity_service: StubForeignEntityService,
-) -> GithubLinkServiceImpl<StubGithubRepo, StubGithubOauth, StubAuth, StubForeignEntityService> {
+) -> TestGithubLinkService {
     GithubLinkServiceImpl::new(
         repo,
         oauth,
         auth,
-        foreign_entity_service,
+        GithubPullRequestServiceImpl::new(foreign_entity_service, NoPullRequestRows),
         GithubLinkConfig {
             client_id: "client-id".to_string(),
             client_secret: "client-secret".to_string(),

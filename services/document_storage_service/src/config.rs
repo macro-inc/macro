@@ -16,6 +16,8 @@ env_vars! {
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
+    /// S3 bucket holding pull request patches, shared with agent-harness-service.
+    pub struct GithubPullRequestPatchBucket;
     /// Shared CloudFront distribution URL for document content and call recording GET URLs.
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     /// Shared CloudFront signer public key ID for document content and call recordings.
@@ -92,6 +94,7 @@ pub struct Config {
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
+    pub github_pull_request_patch_bucket: GithubPullRequestPatchBucket,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:

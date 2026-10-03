@@ -28,7 +28,7 @@ import {
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
-import { replaceSplitSearchParams } from '@app/lib/split-router/search';
+import { replacePaneSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
@@ -330,8 +330,8 @@ export const openEntityInNewTab = ({
         getEntitySplitContent(entity).id,
         target
       );
-      replaceSplitSearchParams(entityUrl.searchParams, [
-        { location: { search: { [namespace]: params } } },
+      replacePaneSearchParams(entityUrl.searchParams, [
+        { [namespace]: params },
       ]);
     }
   }

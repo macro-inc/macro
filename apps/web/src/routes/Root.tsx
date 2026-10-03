@@ -1,26 +1,14 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { ROUTER_BASE } from '@app/constants/routerBase';
-import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
-import { Login } from '@app/features/auth/Login';
-import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
-import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
+import { ROUTER_BASE, ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { setCookie } from '@app/features/auth/Shared';
-import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
-import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
-import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
-import { MeetingRouter } from '@app/features/meetings/meeting-router';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
-import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
-import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { SearchProvider } from '@app/features/soup/search/context';
-import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -39,10 +27,7 @@ import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
-import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
-import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { enableOnboardingV4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
@@ -98,7 +83,6 @@ import { ws as connectionGatewayWebsocket } from '@service-connection/websocket'
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
-  Navigate,
   type RouteDefinition,
   type RoutePreloadFunc,
   Router,
@@ -112,7 +96,6 @@ import {
   resolveActiveThemeId,
   systemThemeEffect,
 } from '@theme/utils/themeUtils';
-import { Button } from '@ui';
 import { detect } from 'detect-browser';
 import {
   createEffect,
@@ -125,8 +108,7 @@ import {
   Show,
 } from 'solid-js';
 import { useReminderAlerts } from '../features/reminders/reminder-alerts';
-import { BasePathComponent } from './BasePath';
-import { TaskRoute } from './TaskRoute';
+import { AppRouterView } from './app-router-view';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -182,164 +164,9 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   }
 };
 
-function NotFound() {
-  if (isNativeMobilePlatform()) return <Navigate href={DEFAULT_ROUTE} />;
-  window.location.href = window.location.origin;
-  return '';
-}
-
-const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
-  makeEmailAuthComponents({
-    callbackPath: '/email-signup-callback',
-    linkCallbackPath: '/inbox-link-callback',
-    successPath: '/',
-  });
-
-/** The retired /setup path forwards to the onboarding flow, query intact. */
-function SetupRedirect() {
-  const location = useLocation();
-  return <Navigate href={`/onboarding${location.search}`} />;
-}
-
-/**
- * The old split-screen /setup surface is retired; the onboarding flow lives at
- * /onboarding now. Flag off, /setup must go home — forwarding would land
- * flag-off web users on /login and native users on MobileOnboarding.
- */
-function SetupRoute() {
-  const onboardingV4 = useOnboardingV4Flag();
-
-  return (
-    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
-      <Show when={onboardingV4().enabled} fallback={<Navigate href="/" />}>
-        <SetupRedirect />
-      </Show>
-    </Show>
-  );
-}
-
-/**
- * Web/desktop gate for /onboarding. Waits for PostHog to report flags before
- * bouncing: with the flag on but not yet loaded, a direct visit (or a reload
- * mid-flow) would otherwise get kicked to /login and lose its ?next.
- */
-function OnboardingRoute() {
-  const onboardingV4 = useOnboardingV4Flag();
-
-  return (
-    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
-      <Show when={onboardingV4().enabled} fallback={<Navigate href="/login" />}>
-        <OnboardingFlow />
-      </Show>
-    </Show>
-  );
-}
-
+/** The split router handles every path; its route tree is in `app-router-view.tsx`. */
 const ROUTES: RouteDefinition[] = [
-  { path: '/meet/*path', component: MeetingRouter },
-  {
-    path: '/task-slug/:taskSlug',
-    component: TaskRoute,
-  },
-  LAYOUT_ROUTE,
-  {
-    path: '/',
-    component: BasePathComponent,
-  },
-  {
-    path: '/signup',
-    component: () => <Login signupMode />,
-  },
-  {
-    path: CALLBACK_PATH,
-    component: EmailCallback,
-  },
-  {
-    path: LINK_CALLBACK_PATH,
-    component: EmailLinkCallback,
-  },
-  {
-    path: '/login/popup/success',
-    component: () => {
-      onMount(() => {
-        publishLoginSuccess();
-        window.close();
-      });
-
-      onCleanup(() => {
-        window.close();
-      });
-
-      return (
-        <div class="h-full overflow-y-hidden">
-          <div class="relative flex flex-row items-center pt-4 h-full">
-            <Button
-              variant="outline"
-              onClick={() => {
-                publishLoginSuccess();
-                window.close();
-              }}
-            >
-              Close
-            </Button>
-          </div>
-        </div>
-      );
-    },
-  },
-  {
-    path: '/login',
-    component: () => <Login />,
-  },
-  {
-    path: '/welcome',
-    component: () =>
-      isNativeMobilePlatform() ? <MobileAuthWelcome /> : <Login />,
-  },
-  {
-    // Mobile-web visitors can't sign up on a phone, so instead of pushing them
-    // through Google SSO + onboarding we capture their email and email them a
-    // link to open on desktop. The marketing site redirects mobile browsers
-    // here.
-    path: '/mobile-email-signup',
-    component: MobileWebSignup,
-  },
-  {
-    path: '/onboarding',
-    // Flag-gated at the route, not just the redirect: with the flag off a
-    // direct visit must not touch the onboarding backend (reading it
-    // creates the flow's row and starts gathers).
-    component: () =>
-      isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingRoute />,
-  },
-  {
-    // Preserve the query (?next deep links) when forwarding to /onboarding.
-    path: '/setup',
-    component: SetupRoute,
-  },
-  {
-    // A personal GTM invite link (`?token=`): welcome page, then signup.
-    path: '/invite',
-    component: InviteWelcome,
-  },
-  {
-    // Macro staff only: create and track GTM invite links.
-    path: '/internal/invite-links',
-    component: InviteLinksPortal,
-  },
-  {
-    path: '/team-invite',
-    component: TeamInviteAcceptance,
-  },
-  {
-    path: '/channel-invite',
-    component: ChannelInviteAcceptance,
-  },
-  {
-    // This splat route must be last to catch all unmatched routes
-    path: '*404',
-    component: NotFound,
-  },
+  { path: '/*path', component: AppRouterView },
 ];
 
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
@@ -530,16 +357,33 @@ function InitialInteractiveOnboardingModal() {
   );
 }
 
-/** Meeting links have a focused shell and never enter app onboarding. */
+/** Meeting and booking links have a focused shell and skip app onboarding. */
 function AppRouteLayout(props: RouteSectionProps) {
   const location = useLocation();
   return (
-    <IncomingMeetingInvitationsProvider>
-      <Show when={!isMeetingPath(location.pathname)} fallback={props.children}>
-        <Layout {...props} />
-        <InitialInteractiveOnboardingModal />
-      </Show>
-    </IncomingMeetingInvitationsProvider>
+    <Show
+      when={
+        !(
+          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
+          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`)
+        )
+      }
+      fallback={
+        <div class="h-dvh overflow-y-auto bg-page text-ink">
+          {props.children}
+        </div>
+      }
+    >
+      <IncomingMeetingInvitationsProvider>
+        <Show
+          when={!isMeetingPath(location.pathname)}
+          fallback={props.children}
+        >
+          <Layout {...props} />
+          <InitialInteractiveOnboardingModal />
+        </Show>
+      </IncomingMeetingInvitationsProvider>
+    </Show>
   );
 }
 

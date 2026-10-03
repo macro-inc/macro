@@ -1,8 +1,9 @@
 //! Capturing, storing, and serving a session's changes.
 //!
-//! One capture is one round trip through the extractor: read the patch, read
-//! the facts out of it, store the patch, replace the summary, tell the
-//! viewers. Captures run after every turn - the moment a session has
+//! One capture is one round trip through the extractor: read the changes,
+//! store a raw patch under the session or point at the pull request changeset
+//! every reader of the same base and head shares, replace the summary, tell
+//! the viewers. Captures run after every turn - the moment a session has
 //! something new to show - and on demand from the pane. A session never has
 //! two captures running at once: a request that lands mid-capture is folded
 //! into a rerun, so the stored changeset always reflects a state at least as
@@ -23,9 +24,14 @@ use macro_uuid::Uuid;
 use tracing::Instrument as _;
 
 use super::error::{ChangesError, ExtractError, Result};
-use super::model::{AgentSessionId, AttemptOutcome, Changeset, ChangesetId, SessionChanges};
+use super::model::{
+    AgentSessionId, AttemptOutcome, Changeset, ChangesetId, ChangesetSource, ExtractedChangeset,
+    SessionChanges,
+};
 use super::patch::{self, MAX_FILE_PATCH_BYTES, MAX_PATCH_BYTES};
-use super::ports::{ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey};
+use super::ports::{
+    ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey, PatchLocation,
+};
 
 #[cfg(test)]
 mod test;
@@ -141,17 +147,24 @@ where
     /// The stored patch for the session the receipt names.
     async fn read_patch(&self, access: &EntityAccessReceipt<ViewAccessLevel>) -> Result<String> {
         let session = session_of(access)?;
-        let key = self
+        let location = self
             .inner
             .repo
-            .patch_key(session)
+            .patch_location(session)
             .await
             .map_err(ChangesError::Storage)?
             .ok_or(ChangesError::NoChangeset)?;
-        self.inner
-            .blobs
-            .get_patch(&key)
-            .await
+        let patch = match location {
+            PatchLocation::Blob(key) => self.inner.blobs.get_patch(&key).await,
+            PatchLocation::PullRequest(changeset) => {
+                let row = self.inner.sessions.get(session).await?;
+                self.inner
+                    .extractor
+                    .pull_request_patch(&row, changeset)
+                    .await
+            }
+        };
+        patch
             .map_err(ChangesError::Storage)?
             .ok_or(ChangesError::PatchMissing)
     }
@@ -278,42 +291,68 @@ where
     async fn store(
         &self,
         row: &AgentSession,
-        extracted: super::model::ExtractedChangeset,
+        extracted: ExtractedChangeset,
     ) -> Result<CaptureOutcome> {
         let session = row.id;
-        let parsed = patch::parse_git_patch(&extracted.patch);
-        let budgeted = patch::budget_patch(parsed, MAX_PATCH_BYTES, MAX_FILE_PATCH_BYTES);
-        let (additions, deletions) = patch::totals(&budgeted.files);
-        let id = ChangesetId::new();
-        let key = (!budgeted.patch.is_empty()).then(|| PatchBlobKey::for_changeset(session, id));
-        if let Some(key) = &key
-            && let Err(error) = self.inner.blobs.put_patch(key, &budgeted.patch).await
-        {
-            let _ = self
-                .fail(
+        let (changeset, location) = match extracted {
+            ExtractedChangeset::Patch {
+                source,
+                range,
+                patch,
+                truncated,
+            } => {
+                let parsed = patch::parse_git_patch(&patch);
+                let budgeted = patch::budget_patch(parsed, MAX_PATCH_BYTES, MAX_FILE_PATCH_BYTES);
+                let (additions, deletions) = patch::totals(&budgeted.files);
+                let id = ChangesetId::new();
+                let key =
+                    (!budgeted.patch.is_empty()).then(|| PatchBlobKey::for_changeset(session, id));
+                if let Some(key) = &key
+                    && let Err(error) = self.inner.blobs.put_patch(key, &budgeted.patch).await
+                {
+                    let _ = self
+                        .fail(
+                            session,
+                            AttemptOutcome::Failed,
+                            "Storing the changes failed.".to_owned(),
+                        )
+                        .await;
+                    return Err(ChangesError::Storage(error));
+                }
+                let changeset = Changeset {
+                    id,
                     session,
-                    AttemptOutcome::Failed,
-                    "Storing the changes failed.".to_owned(),
-                )
-                .await;
-            return Err(ChangesError::Storage(error));
-        }
-        let changeset = Changeset {
-            id,
-            session,
-            source: extracted.source,
-            range: extracted.range,
-            patch_bytes: budgeted.patch.len() as u64,
-            files: budgeted.files,
-            additions,
-            deletions,
-            truncated: budgeted.truncated || extracted.truncated,
-            captured_at: Utc::now(),
+                    source,
+                    range,
+                    patch_bytes: budgeted.patch.len() as u64,
+                    files: budgeted.files,
+                    additions,
+                    deletions,
+                    truncated: budgeted.truncated || truncated,
+                    captured_at: Utc::now(),
+                };
+                (changeset, key.map(PatchLocation::Blob))
+            }
+            ExtractedChangeset::PullRequest(shared) => {
+                let changeset = Changeset {
+                    id: ChangesetId::from_uuid(shared.id),
+                    session,
+                    source: ChangesetSource::GithubPullRequest,
+                    range: shared.range,
+                    files: shared.files,
+                    additions: shared.additions,
+                    deletions: shared.deletions,
+                    patch_bytes: shared.patch_bytes,
+                    truncated: shared.truncated,
+                    captured_at: Utc::now(),
+                };
+                (changeset, Some(PatchLocation::PullRequest(shared.id)))
+            }
         };
         let superseded = match self
             .inner
             .repo
-            .record_changeset(&changeset, key.as_ref(), Utc::now())
+            .record_changeset(&changeset, location.as_ref(), Utc::now())
             .await
         {
             Ok(superseded) => superseded,
@@ -331,7 +370,7 @@ where
         // The old patch is unreachable now that the row points elsewhere;
         // deleting it is tidiness, not correctness, so a failure only logs.
         if let Some(old) = superseded
-            && key.as_ref() != Some(&old)
+            && !matches!(&location, Some(PatchLocation::Blob(key)) if *key == old)
             && let Err(error) = self.inner.blobs.delete_patch(&old).await
         {
             tracing::warn!(error = ?error, %session, key = %old, "could not delete a superseded patch");
@@ -339,8 +378,8 @@ where
         tracing::info!(
             %session,
             files = changeset.files.len(),
-            additions,
-            deletions,
+            additions = changeset.additions,
+            deletions = changeset.deletions,
             truncated = changeset.truncated,
             source = %changeset.source,
             "captured session changes"

@@ -18,6 +18,17 @@ use crate::config::Config;
 pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 /// Calendar grant/watch service backing the push webhook.
 pub type CalendarGrantService = CalendarService<PgCalendarRepository>;
+/// Booking policy backed by calendar services and the team directory.
+pub type SchedulingService = calendar_scheduling::domain::service::Service<
+    calendar_scheduling::outbound::postgres::PostgresRepository,
+    calendar_scheduling::outbound::macro_services::MacroCalendars<
+        CalendarGrantService,
+        CalendarMutationSvc,
+    >,
+    calendar_scheduling::outbound::macro_services::MacroDirectory<
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+>;
 /// User-initiated calendar mutation service.
 pub type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
@@ -38,4 +49,6 @@ pub struct ApiContext {
     pub calendar_service: Arc<CalendarGrantService>,
     /// User-initiated calendar mutation service.
     pub calendar_mutation_service: Arc<CalendarMutationSvc>,
+    /// Personal and team scheduling service.
+    pub scheduling_service: Arc<SchedulingService>,
 }

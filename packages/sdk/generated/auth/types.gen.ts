@@ -396,6 +396,10 @@ export type EnrichedGithubPullRequest = {
      */
     additions?: number | null;
     /**
+     * The users assigned to the pull request, when known.
+     */
+    assignees?: Array<GithubPullRequestUser> | null;
+    /**
      * The stable numeric GitHub user id for the pull request author, when available.
      */
     authorId?: number | null;
@@ -428,6 +432,10 @@ export type EnrichedGithubPullRequest = {
      */
     githubKey: string;
     /**
+     * The pull request's labels, when known.
+     */
+    labels?: Array<GithubPullRequestLabel> | null;
+    /**
      * The GitHub pull request title, when enrichment succeeds.
      */
     name?: string | null;
@@ -449,6 +457,11 @@ export type EnrichedGithubPullRequest = {
      * The GitHub repository name.
      */
     repo: string;
+    /**
+     * Each reviewer's latest submitted review, when known. Stored metadata merges this per
+     * reviewer, so a write that knows one review keeps the others.
+     */
+    reviews?: Array<GithubPullRequestReview> | null;
     status?: null | GithubPullRequestStatus;
     /**
      * The public GitHub URL for the pull request.
@@ -554,6 +567,14 @@ export type GetUserInfo = {
 };
 
 export type GithubLinkStatusResponse = {
+    /**
+     * Stable ID of the authenticated user's linked GitHub account.
+     */
+    github_user_id: string;
+    /**
+     * Login of the authenticated user's linked GitHub account.
+     */
+    github_username: string;
     /**
      * Whether the user must reauthenticate their GitHub link.
      */
@@ -662,6 +683,20 @@ export type GithubPullRequestComment = {
 };
 
 /**
+ * A label on a GitHub pull request.
+ */
+export type GithubPullRequestLabel = {
+    /**
+     * The label color as six hex digits without a leading `#`, when known.
+     */
+    color?: string | null;
+    /**
+     * The label name, unique within its repository regardless of case.
+     */
+    name: string;
+};
+
+/**
  * A pull request reference that can be enriched with live GitHub data.
  */
 export type GithubPullRequestRef = {
@@ -692,9 +727,50 @@ export type GithubPullRequestRef = {
 };
 
 /**
+ * A reviewer's latest submitted review on a pull request.
+ */
+export type GithubPullRequestReview = {
+    /**
+     * The stable numeric GitHub user id of the reviewer, as a string.
+     */
+    reviewerGithubUserId: string;
+    /**
+     * The reviewer's GitHub login, when known.
+     */
+    reviewerLogin?: string | null;
+    /**
+     * What the review said.
+     */
+    state: GithubPullRequestReviewState;
+    /**
+     * When the review was submitted, when known.
+     */
+    submittedAt?: string | null;
+};
+
+/**
+ * What a reviewer's latest review on a pull request said.
+ */
+export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
  * The normalized lifecycle status for a GitHub pull request.
  */
 export type GithubPullRequestStatus = 'open' | 'closed' | 'merged';
+
+/**
+ * A GitHub user named on a pull request, such as an assignee.
+ */
+export type GithubPullRequestUser = {
+    /**
+     * The stable numeric GitHub user id, as a string.
+     */
+    githubUserId: string;
+    /**
+     * The user's GitHub login, when known.
+     */
+    login?: string | null;
+};
 
 export type GmailLinkStatusResponse = {
     /**

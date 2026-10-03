@@ -1,4 +1,7 @@
-import { useParams, useNavigate as useSplitNavigate } from '@app/split-router';
+import {
+  useParams,
+  useNavigate as useSplitNavigate,
+} from '@app/lib/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
