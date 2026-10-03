@@ -647,7 +647,7 @@ pub(crate) type DssInitiativeState =
 pub(crate) type CollabSurfaceServiceType = CollabSurfaceServiceImpl<
     PgCollabSurfaceRepo,
     LexicalSyncSurfaceInitializer,
-    crate::service::collab_surface_document_ids::DssCollabSurfaceDocumentIds,
+    collab_surface::outbound::document_ids::PgDocumentIds,
 >;
 
 /// Type alias for the collab-surface router state.

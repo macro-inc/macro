@@ -44,8 +44,9 @@ pub trait CollabSurfaceRepo: Send + Sync + 'static {
 }
 
 /// Outbound port onto the document id namespace, which surfaces share in
-/// sync-service. The composition root implements it over macro_db_client's
-/// `does_document_exist` helper, which owns reads of the documents table.
+/// sync-service. `outbound::document_ids::PgDocumentIds` implements it over
+/// macro_db_client's `does_document_exist` helper, which owns reads of the
+/// documents table.
 pub trait DocumentIds: Send + Sync + 'static {
     /// Whether `id` names a document, live or soft-deleted.
     fn is_document_id(

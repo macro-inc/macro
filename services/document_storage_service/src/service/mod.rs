@@ -1,5 +1,4 @@
 pub mod activity;
-pub mod collab_surface_document_ids;
 pub mod conn_gateway;
 #[cfg(feature = "delete_document_worker")]
 pub mod delete_document_worker;

@@ -611,8 +611,16 @@ impl<
 
     /// A new document starts its own collaborative session, so a caller-chosen
     /// id must not already have one: the document would take it over instead.
+    /// Only random (v4/v7) ids can name a collab surface's session, the kind a
+    /// document must never adopt. Other ids, such as the deterministic v5 ids
+    /// of starter documents, can retry after a partial create left a session.
     async fn refuse_existing_session(&self, id: Option<uuid::Uuid>) -> Result<(), DocumentError> {
-        let Some(id) = id else {
+        let Some(id) = id.filter(|id| {
+            matches!(
+                id.get_version(),
+                Some(uuid::Version::Random | uuid::Version::SortRand)
+            )
+        }) else {
             return Ok(());
         };
         if self
@@ -1376,7 +1384,13 @@ impl<
             });
         }
 
-        self.refuse_existing_session(args.document.id).await?;
+        // Imports reuse documents by attachment and content, so their ids are
+        // always server-chosen and never meet an existing session.
+        if args.document.id.is_some() {
+            return Err(DocumentError::BadRequest(
+                "email attachment imports cannot choose a document id".to_string(),
+            ));
+        }
 
         let file_type = args.document.file_type;
         let project_id = args.document.project_id;
