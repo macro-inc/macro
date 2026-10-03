@@ -269,6 +269,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized soup service");
 
     let s3_client = macro_aws_config::s3_client().await;
+    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+        db.clone(),
+        s3_client.clone(),
+        config.document_storage_bucket.to_string(),
+    );
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
         config.document_storage_bucket.to_string(),
@@ -357,7 +362,8 @@ async fn main() -> anyhow::Result<()> {
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_presentation_files(Arc::new(presentation_files));
 
     tracing::info!("initialized document tool context");
 

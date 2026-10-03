@@ -18,7 +18,9 @@ ai_tools = [
   "dep:async-trait",
   "dep:macro_tower_layers",
   "dep:messages",
+  "dep:macro_db_client",
   "dep:model_file_type",
+  "dep:pptx_engine",
   "dep:schemars",
   "dep:sha2",
   "document_create_adapters",
@@ -172,6 +174,7 @@ lexical_client = { path = "../lexical_client", optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 messages = { path = "../messages", optional = true, features = ["ports"] }
 model_file_type = { path = "../model_file_type", optional = true }
+pptx_engine = { path = "../pptx_engine", optional = true, features = ["embedded-fonts", "schema"] }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }

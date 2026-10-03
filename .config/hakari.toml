@@ -98,6 +98,10 @@ workspace-members = [
     # models_databases: the typed write ops the SQL engine will emit, so it
     # joins database_sql in the browser and must stay wasm-safe too.
     "models_databases",
+    # pptx_engine: the presentation engine runs in the browser (a wasm32
+    # module in the editor's worker) as well as in the AI tools, so it must
+    # stay wasm-safe.
+    "pptx_engine",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.
