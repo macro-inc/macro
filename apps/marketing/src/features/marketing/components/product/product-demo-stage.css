@@ -1,7 +1,7 @@
 /* Email's quiet dot field and cool glow, only around the focused subgraphics.
    The extra tail fades the window into the page without dimming its controls. */
 .product-page .feature-page-visual .product-demo-stage {
-  --product-demo-height: 580px;
+  --product-demo-height: var(--demo-h, 580px);
   --product-demo-fade-tail: 84px;
   padding-top: 28px;
 }
@@ -47,7 +47,7 @@
 
 @media (max-width: 699px) {
   .product-page .feature-page-visual .product-demo-stage {
-    --product-demo-height: 620px;
+    --product-demo-height: var(--demo-h-mobile, 620px);
     --product-demo-fade-tail: 64px;
     padding-top: 12px;
   }

@@ -1,7 +1,6 @@
 import Envelope from '@phosphor/envelope.svg';
 import File from '@phosphor/file.svg';
 import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
 import Phone from '@phosphor/phone.svg';
 import Plus from '@phosphor/plus.svg';
 import Sparkle from '@phosphor/sparkle.svg';
@@ -15,8 +14,15 @@ import { ViewShell } from '../DemoWorkspaceChrome';
 import { ChannelComposer } from '../email/frozen/ChannelComposer';
 import { Segments } from './frozen/DetailPanel';
 import { MessageRow } from './frozen/MessageRow';
+import { TaskMention } from './frozen/TaskMention';
 
-export function WorkspaceChannel(props: { workspace: DummyWorkspace }) {
+export function WorkspaceChannel(props: {
+  workspace: DummyWorkspace;
+  /** A walkthrough can show one message's hover toolbar. */
+  hoveredMessage?: string;
+  /** Replaces the default Task action, e.g. to open the task composer. */
+  onTaskMessage?: (message: WorkspaceComment) => void;
+}) {
   const w = props.workspace;
   const channel = () => w.data.channels.find((c) => c.id === w.channel());
   const name = () =>
@@ -76,26 +82,30 @@ export function WorkspaceChannel(props: { workspace: DummyWorkspace }) {
   const row = (message: WorkspaceComment, rootId = message.id) => (
     <MessageRow
       message={message}
+      hovered={props.hoveredMessage === message.id}
       onReact={() => react(message.id)}
       onReply={() => startReply(rootId)}
+      onChat={() => w.openItem('agents')}
       onTask={
-        !message.taskId
-          ? () => {
-              const id = w.createTask(
-                plainDemoMentions(message.body).slice(0, 90),
-                message.body,
-                w.channel()
-              );
-              w.setData(
-                'channels',
-                (c) => c.id === w.channel(),
-                'messages',
-                (m) => m.id === message.id,
-                'taskId',
-                id
-              );
-            }
-          : undefined
+        props.onTaskMessage
+          ? () => props.onTaskMessage?.(message)
+          : !message.taskId
+            ? () => {
+                const id = w.createTask(
+                  plainDemoMentions(message.body).slice(0, 90),
+                  message.body,
+                  w.channel()
+                );
+                w.setData(
+                  'channels',
+                  (c) => c.id === w.channel(),
+                  'messages',
+                  (m) => m.id === message.id,
+                  'taskId',
+                  id
+                );
+              }
+            : undefined
       }
     >
       <Show when={message.emailId}>
@@ -122,18 +132,25 @@ export function WorkspaceChannel(props: { workspace: DummyWorkspace }) {
           </button>
         )}
       </Show>
-      <Show when={message.taskId}>
+      <For
+        each={[
+          ...(message.taskId ? [message.taskId] : []),
+          ...(message.taskIds ?? []),
+        ]}
+      >
         {(id) => (
-          <button
-            type="button"
-            class="dummy-entity-link"
-            onClick={() => w.openItem('tasks', id())}
-          >
-            <ListChecks class="size-4 text-task" />
-            {w.data.tasks.find((t) => t.id === id())?.title}
-          </button>
+          <Show when={w.data.tasks.find((t) => t.id === id)}>
+            {(task) => (
+              <div>
+                <TaskMention
+                  task={task()}
+                  onOpen={() => w.openItem('tasks', id)}
+                />
+              </div>
+            )}
+          </Show>
         )}
-      </Show>
+      </For>
     </MessageRow>
   );
   return (

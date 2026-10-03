@@ -76,9 +76,7 @@
 /* Reuse the app-shaped company page; only the surrounding presentation is styled here. */
 .crm-capture-demo .homepage-conversation { width: 100%; margin: 0 0 36px; }
 .crm-capture-record { position: relative; }
-.crm-capture-pointer { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; display: flex; align-items: flex-start; gap: 4px; color: #d4c5b4; transition: transform 650ms cubic-bezier(.2,.8,.2,1); }
-.crm-capture-pointer svg { width: 22px; height: 22px; fill: currentColor; filter: drop-shadow(0 1px 2px #0008); }
-.crm-capture-pointer span { margin-top: 16px; background: #b6a18b; color: #141211; padding: 2px 7px; border-radius: 5px; font: 500 10px/1.5 'Inter Variable', sans-serif; }
+.crm-capture-pointer { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; transition: transform 650ms cubic-bezier(.2,.8,.2,1); }
 .crm-capture-record[data-step="2"] [aria-label="Deal stage"],
 .crm-capture-record[data-step="3"] [aria-label="Company owner"],
 .crm-capture-record:is([data-step="4"], [data-step="5"], [data-step="6"]) [aria-label="Company description"] { background: #b6a18b10; box-shadow: 0 0 0 2px #b6a18b35; transition: box-shadow 300ms; }

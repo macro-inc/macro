@@ -186,7 +186,7 @@ it('uses the real menu category drilldown and return behavior', () => {
   fireEvent.click(screen.getByRole('button', { name: '← Back to everything' }));
   expect(screen.getByText('People')).toBeTruthy();
   fireEvent.keyDown(editor, { key: 'ArrowRight' });
-  expect(screen.getAllByRole('option')).toHaveLength(5);
+  expect(screen.getAllByRole('option')).toHaveLength(6);
   fireEvent.keyDown(editor, { key: 'ArrowLeft' });
   expect(screen.getByText('Channels')).toBeTruthy();
 });

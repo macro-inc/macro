@@ -1,9 +1,9 @@
 import ArrowLeft from '@phosphor/arrow-left.svg';
-import Cursor from '@phosphor/cursor.svg';
 import { Button } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough';
+import { DemoCursor } from '../DemoCursor';
 import { HomepageConversation } from '../HomepageConversation';
 import { WorkspaceEmail } from '../workspace/WorkspaceEmail';
 import '../email/email-demos.css';
@@ -172,8 +172,7 @@ export function CrmCaptureDemo() {
                 transform: `translate(${position().x}px, ${position().y}px)`,
               }}
             >
-              <Cursor />
-              <span>Claude</span>
+              <DemoCursor />
             </div>
           )}
         </Show>

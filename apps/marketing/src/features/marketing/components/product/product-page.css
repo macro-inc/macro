@@ -14,10 +14,9 @@
 .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: min(872px, calc(100% - 48px)); margin-inline: auto; }
 .product-demo-stage { position: relative; isolation: isolate; }
 .product-demo-stage::before { content: ''; position: absolute; pointer-events: none; z-index: -1; inset: -24px -32px; background: radial-gradient(#ffffff18 .6px, transparent .6px) 0 0 / 12px 12px; mask-image: radial-gradient(ellipse, #0008, transparent 70%); }
-.product-page .product-demo { height: 580px; border-radius: 16px; overflow: hidden; background-color: var(--color-panel); box-shadow: var(--glass-shadow); }
+.product-page .product-demo { height: var(--demo-h, 580px); border-radius: 16px; overflow: hidden; background-color: var(--color-panel); box-shadow: var(--glass-shadow); }
 .product-demo > .dummy-main { height: 100%; }
 .product-demo .sample-chat-log { padding: 32px; }
-.product-demo .sample-message-actions { opacity: 1; }
 .product-demo .sample-message-row { margin-bottom: 22px; }
 .product-demo .sample-details { display: none; }
 .product-demo .sample-detail-layout[data-panel-open=true] .sample-details { display: block; }
@@ -38,7 +37,7 @@
  .product-page .email-feature-graphic { width: 130px; height: 94px; }
  .product-page .email-desktop-demo { --desktop-stage-width: calc(100vw - 24px); }
  .product-prose { font-size: 14px; }
- .product-page .product-demo { height: 620px; border-radius: 12px; }
+ .product-page .product-demo { height: var(--demo-h-mobile, 620px); border-radius: 12px; }
  .product-demo .sample-chat-log { padding: 20px 12px; }
  .product-demo .sample-details { position: absolute; inset: 48px 0 0; width: 100%; max-width: none; background: var(--color-panel); z-index: 3; }
  .product-demo .dummy-task-row { grid-template-columns: 6px minmax(0, 1fr) 100px; }
@@ -47,7 +46,7 @@
  .product-demo .sample-tabs-inset { max-width: 100%; }
 }
 
-.product-demo[data-action="assignee"] [aria-label="Change assignee"], .product-demo[data-action="priority"] [aria-label="Change priority"], .product-demo[data-action="status"] [aria-label="Change status"], .product-demo[data-action="create"] [aria-label="Create task from message"] { background: #ffffff25; box-shadow: 0 0 0 3px #ffffff0d; }
+.product-demo[data-action="assignee"] [aria-label="Change assignee"], .product-demo[data-action="priority"] [aria-label="Change priority"], .product-demo[data-action="status"] [aria-label="Change status"] { background: #ffffff25; box-shadow: 0 0 0 3px #ffffff0d; }
 
 .product-page .product-sidebared-scene { display:flex; height:100%; min-height:0; }
 .product-sidebared-scene > [data-view-sidebar] { flex:0 0 224px; width:224px; }
