@@ -4,6 +4,10 @@ ENV SQLX_OFFLINE=true
 ENV CARGO_PROFILE_DEV_DEBUG=0
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang llvm cmake ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 FROM chef AS builder
 ARG CARGO_BUILD_JOBS=0
 COPY . .
