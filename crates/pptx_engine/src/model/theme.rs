@@ -2,6 +2,7 @@
 
 use super::color::{ColorContext, ColorMap};
 use super::color::{ColorScheme, SCHEME_SLOTS, find_color};
+use crate::opc::Relationships;
 use crate::xml::{NodeId, Ns, XmlDoc};
 use std::sync::Arc;
 
@@ -39,6 +40,8 @@ pub struct Theme {
     pub effect_styles: Vec<NodeId>,
     /// `bgFillStyleLst` entries.
     pub bg_fill_styles: Vec<NodeId>,
+    /// The theme part's relationships (pictures used by its fill styles).
+    pub rels: Arc<Relationships>,
 }
 
 impl Default for Theme {
@@ -59,6 +62,7 @@ impl Default for Theme {
             line_styles: Vec::new(),
             effect_styles: Vec::new(),
             bg_fill_styles: Vec::new(),
+            rels: Arc::new(Relationships::empty("")),
         }
     }
 }
@@ -148,6 +152,11 @@ impl Theme {
             1 => &collection.ea,
             _ => &collection.cs,
         }
+    }
+
+    /// Resolves relationship ids of the theme part (picture fills) to part names.
+    pub fn target_part(&self, id: &str) -> Option<String> {
+        self.rels.target_part(id)
     }
 
     /// The fill-style entry for a `fillRef`/`bgRef` index (1-3 fills, 1001+ backgrounds).

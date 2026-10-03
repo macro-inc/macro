@@ -501,7 +501,9 @@ pub fn resolve_shape(w: &WalkCtx<'_>, part: &PartRef, node: NodeId) -> Option<Sh
                 let theme = &ctx.theme;
                 let node = theme.fill_style(idx)?;
                 let tctx = colors.with_ph(color);
-                Some(super::fill::parse_fill(&theme.doc, node, &tctx, &|_| None))
+                Some(super::fill::parse_fill(&theme.doc, node, &tctx, &|id| {
+                    theme.target_part(id)
+                }))
             })
             .unwrap_or(Fill::None)
     });
@@ -686,7 +688,7 @@ pub fn background_fill(ctx: &SlideContext) -> Fill {
                     &ctx.theme.doc,
                     node,
                     &colors.with_ph(color),
-                    &|_| None,
+                    &|id| ctx.theme.target_part(id),
                 );
             }
             if let Some(c) = color {

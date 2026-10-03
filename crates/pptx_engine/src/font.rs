@@ -73,8 +73,9 @@ pub struct FontDb {
     missing: Mutex<Vec<String>>,
 }
 
-/// Families with metric-compatible (or closest available) replacements.
-const SUBSTITUTES: &[(&str, &[&str])] = &[
+/// Families with metric-compatible (or closest available) replacements,
+/// keyed by lowercase family name, best first.
+pub const SUBSTITUTES: &[(&str, &[&str])] = &[
     ("calibri", &["Carlito"]),
     ("calibri light", &["Carlito"]),
     ("cambria", &["Caladea"]),
@@ -94,7 +95,8 @@ const SUBSTITUTES: &[(&str, &[&str])] = &[
     ("consolas", &["Liberation Mono"]),
     ("lucida console", &["Liberation Mono"]),
     ("verdana", &["DejaVu Sans"]),
-    ("tahoma", &["DejaVu Sans", "Liberation Sans"]),
+    // Tahoma is a narrow Verdana: about Arial's width.
+    ("tahoma", &["Liberation Sans"]),
     ("segoe ui", &["Liberation Sans"]),
     ("segoe ui light", &["Liberation Sans"]),
     ("segoe ui semibold", &["Liberation Sans"]),
@@ -107,18 +109,27 @@ const SUBSTITUTES: &[(&str, &[&str])] = &[
     ("century", &["Liberation Serif"]),
     ("century schoolbook", &["Liberation Serif"]),
     ("trebuchet ms", &["Liberation Sans"]),
+    // Wider than Arial but narrower than DejaVu Sans: PowerPoint-fitted
+    // titles still fit in Liberation Sans and wrap in DejaVu Sans.
     ("century gothic", &["Liberation Sans"]),
     ("gill sans mt", &["Liberation Sans"]),
     ("franklin gothic book", &["Liberation Sans"]),
     ("franklin gothic medium", &["Liberation Sans"]),
+    // The ClearType-collection families share Calibri's and Cambria's compact widths.
+    ("corbel", &["Carlito"]),
+    ("candara", &["Carlito"]),
+    ("constantia", &["Caladea"]),
     ("lucida sans", &["DejaVu Sans"]),
     ("lucida sans unicode", &["DejaVu Sans"]),
     ("dejavu sans", &["DejaVu Sans"]),
 ];
 
-const SANS_FALLBACK: &str = "Liberation Sans";
-const SERIF_FALLBACK: &str = "Liberation Serif";
-const MONO_FALLBACK: &str = "Liberation Mono";
+/// Replacement for unknown sans-serif families.
+pub const SANS_FALLBACK: &str = "Liberation Sans";
+/// Replacement for unknown serif families.
+pub const SERIF_FALLBACK: &str = "Liberation Serif";
+/// Replacement for unknown monospaced families.
+pub const MONO_FALLBACK: &str = "Liberation Mono";
 /// Faces tried, in order, for characters the chosen face lacks.
 const GLYPH_FALLBACKS: &[&str] = &[
     "DejaVu Sans",

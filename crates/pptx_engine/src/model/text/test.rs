@@ -100,3 +100,58 @@ fn list_style_levels_and_tabs() {
         "+mn-lt via otherStyle"
     );
 }
+
+/// Old decks put a bullet in the presentation-wide default style and none in
+/// the master title style; titles still show no bullet.
+#[test]
+fn titles_take_no_bullet_from_the_default_text_style() {
+    use crate::opc::Package;
+    let title = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title 1"/><p:cNvSpPr/><p:nvPr><p:ph type="title" idx="4294967295"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="304800" y="152400"/><a:ext cx="8839200" cy="914400"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Build-A-Table</a:t></a:r></a:p></p:txBody></p:sp>"#;
+    let note = text_box(
+        3,
+        0,
+        2540000,
+        2540000,
+        1270000,
+        r#"<a:p><a:r><a:rPr lang="en-US"/><a:t>Note</a:t></a:r></a:p>"#,
+    );
+    let mut pkg = Package::open(deck(&[&format!("{title}{note}")])).unwrap();
+    let edit = |pkg: &mut Package, part: &str, from: &str, to: &str| {
+        let xml = String::from_utf8(pkg.read(part).unwrap().into_owned()).unwrap();
+        assert!(xml.contains(from), "{part}");
+        pkg.write(part, xml.replacen(from, to, 1).into_bytes(), None);
+    };
+    edit(
+        &mut pkg,
+        "/ppt/presentation.xml",
+        r#"<a:lvl1pPr marL="0" algn="l" defTabSz="914400">"#,
+        r#"<a:lvl1pPr marL="0" algn="l" defTabSz="914400"><a:buChar char="•"/>"#,
+    );
+    edit(
+        &mut pkg,
+        "/ppt/slideMasters/slideMaster1.xml",
+        "<a:buNone/>",
+        "",
+    );
+    let mut p = Presentation::open(pkg.save().unwrap()).unwrap();
+    let ctx = p.slide_context(0).unwrap();
+    let tree = sp_tree(&ctx.slide.doc).unwrap();
+    let w = WalkCtx {
+        ctx: &ctx,
+        inherit: Inherit::Slide,
+    };
+    let shapes = resolve_tree(&w, &ctx.slide, tree);
+    let bullet = |i: usize| {
+        shapes[i].text.as_ref().unwrap().paragraphs[0]
+            .props
+            .bullet
+            .kind
+            .clone()
+    };
+    assert_eq!(bullet(0), BulletKind::None, "title");
+    assert_eq!(
+        bullet(1),
+        BulletKind::Char("•".into()),
+        "other text keeps the default"
+    );
+}

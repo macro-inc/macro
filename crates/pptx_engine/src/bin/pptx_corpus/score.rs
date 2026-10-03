@@ -5,7 +5,7 @@
 //! accepted explicitly, and render fingerprints catch any visual change even
 //! where no reference renders are available (CI).
 
-use super::corpus::{self, Baseline, Deck, FINGERPRINT_WIDTH, SlideBaseline};
+use super::corpus::{self, Baseline, Deck, FINGERPRINT_WIDTH, SlideBaseline, fingerprint_changed};
 use super::report::{self, SlideRow};
 use pptx_engine::Presentation;
 use pptx_engine::fidelity::{self, Score};
@@ -122,12 +122,6 @@ fn process(deck: &Deck, refs: Option<&Path>, out: Option<&Path>, width: u32) -> 
         slides,
         error: None,
     }
-}
-
-/// Fingerprints may differ by rounding noise across platforms, nothing more.
-fn fingerprint_changed(old: &str, new: &str) -> bool {
-    let (mean, max) = fidelity::fingerprint_distance(old, new);
-    mean > 0.05 || max > 2
 }
 
 /// Runs the command; returns whether everything passed.
@@ -283,7 +277,13 @@ fn reference_version(refs: &Path) -> Option<String> {
         if let Ok(bytes) = std::fs::read(&meta) {
             let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
             if let Some(s) = v.get("libreoffice_version").and_then(|s| s.as_str()) {
-                return Some(format!("LibreOffice {s}"));
+                // `pptx_corpus fontconfig` gives LibreOffice the engine's fonts.
+                let fonts = if v.get("fontconfig_sha256").is_some_and(|f| !f.is_null()) {
+                    ", engine fonts"
+                } else {
+                    ""
+                };
+                return Some(format!("{s}{fonts}"));
             }
         }
     }

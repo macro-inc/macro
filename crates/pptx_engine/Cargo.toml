@@ -10,9 +10,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-# Compile the bundled font set into the binary. Native callers (AI tools,
-# tests, the corpus CLI) enable it; the wasm build fetches fonts lazily
-# instead so the module stays small.
+# Compile the bundled font set into native builds (AI tools, the corpus CLI).
+# The wasm build always includes it: the browser worker has no font directory.
 embedded-fonts = []
 # The `pptx_corpus` developer CLI (rendering reports, fidelity scoring).
 cli = ["dep:clap", "embedded-fonts"]

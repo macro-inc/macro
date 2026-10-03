@@ -226,7 +226,13 @@ impl Presentation {
             return Arc::clone(t);
         }
         let theme = match self.xml(&theme_part) {
-            Ok(doc) => Arc::new(Theme::parse(doc)),
+            Ok(doc) => {
+                let mut theme = Theme::parse(doc);
+                if let Ok(rels) = self.part_rels(&theme_part) {
+                    theme.rels = rels;
+                }
+                Arc::new(theme)
+            }
             Err(_) => Arc::new(Theme::default()),
         };
         self.themes.insert(theme_part, Arc::clone(&theme));

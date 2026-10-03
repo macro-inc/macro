@@ -3,6 +3,7 @@
 //! edits round-trip losslessly.
 
 mod corpus;
+mod fontconfig;
 mod report;
 mod roundtrip;
 mod score;
@@ -39,6 +40,8 @@ enum Command {
     Score(score::Args),
     /// Check lossless saving, edits, undo, and package integrity on every corpus deck.
     Roundtrip(roundtrip::Args),
+    /// Write a fontconfig file that gives LibreOffice the engine's fonts and substitutions.
+    Fontconfig(fontconfig::Args),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -67,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Score(args) => score::run(&args)?,
         Command::Roundtrip(args) => roundtrip::run(&args)?,
+        Command::Fontconfig(args) => fontconfig::run(&args)?,
     };
     if !ok {
         std::process::exit(1);

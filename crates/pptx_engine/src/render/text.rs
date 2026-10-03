@@ -629,6 +629,11 @@ fn break_lines(
             if it.kind == ItemKind::Tab {
                 let (stop, align) = next_tab(x_start + x, pp);
                 let target = (stop - x_start).max(x);
+                // A tab whose stop is past the edge starts the next line,
+                // where it still advances to a stop.
+                if wrap && target > limit + 0.01 && end > pos {
+                    break;
+                }
                 xs.push(x);
                 pending_tab = Some((end, target, align));
                 x = target;

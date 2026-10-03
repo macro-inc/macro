@@ -284,12 +284,12 @@ impl Builder<'_> {
         out: &mut Vec<Node>,
     ) {
         let Some(line) = s.line.resolve() else { return };
-        let scale = world.mean_scale() as f32;
         let bbox = Rect::from_xywh(0.0, 0.0, s.xfrm.w, s.xfrm.h);
         let Some(paint) = fill_paint(&line.fill, bbox, world, self.loader) else {
             return;
         };
-        let stroke = line_stroke(&line, scale);
+        // Line weights are points: scaling a group does not change them.
+        let stroke = line_stroke(&line, 1.0);
         for gp in geom.paths.iter().filter(|p| p.stroke) {
             let path = gp.path.transform(world);
             let closed = matches!(gp.path.els.last(), Some(PathEl::Close));
@@ -322,26 +322,16 @@ impl Builder<'_> {
         if text.is_empty() {
             return;
         }
-        let rect = geom.text_rect;
+        let frame = text_frame(s, geom, text, parent);
         let lay = layout(
             text,
-            rect.w,
-            rect.h,
+            frame.w,
+            frame.h,
             self.fonts,
             LayoutParams::from_body(text),
         );
-        let mut t = parent
-            .pre_concat(&s.xfrm.text_to_parent())
-            .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)));
-        if text.body.rot != 0.0 {
-            let c = (f64::from(rect.w / 2.0), f64::from(rect.h / 2.0));
-            t = t
-                .pre_concat(&Affine::translate(c.0, c.1))
-                .pre_concat(&Affine::rotate(f64::from(text.body.rot)))
-                .pre_concat(&Affine::translate(-c.0, -c.1));
-        }
-        let t = t.pre_concat(&lay.transform);
-        let bbox = Rect::from_xywh(0.0, 0.0, rect.w, rect.h);
+        let t = frame.transform.pre_concat(&lay.transform);
+        let bbox = Rect::from_xywh(0.0, 0.0, frame.w, frame.h);
         if text.body.clip_overflow {
             let mut clipped = Vec::new();
             text_layout_nodes(self.fonts, &lay, &t, bbox, self.loader, &mut clipped);
@@ -575,6 +565,44 @@ pub fn text_layout_nodes(
     }
 }
 
+/// Where a shape's text is laid out: its text rectangle at the size the
+/// shape is drawn (scaling a group resizes its shapes, not their text), and
+/// the transform from that layout space to the scene.
+#[derive(Clone, Copy, Debug)]
+pub struct TextFrame {
+    /// Layout width (points).
+    pub w: f32,
+    /// Layout height (points).
+    pub h: f32,
+    /// Layout space to scene.
+    pub transform: Affine,
+}
+
+/// The text frame of `s` drawn through `parent` (the transform of its group).
+pub fn text_frame(s: &Shape, geom: &ShapeGeometry, text: &TextBody, parent: &Affine) -> TextFrame {
+    let rect = geom.text_rect;
+    let base = parent.pre_concat(&s.xfrm.text_to_parent());
+    let axis = |x: f64, y: f64| {
+        let len = x.hypot(y);
+        if len > 1e-9 { len } else { 1.0 }
+    };
+    // Group child coordinates may use other units than the slide; undo that
+    // scale so text keeps its point size in the stretched box.
+    let (sx, sy) = (axis(base.a, base.b), axis(base.c, base.d));
+    let (w, h) = (rect.w * sx as f32, rect.h * sy as f32);
+    let mut t = base
+        .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)))
+        .pre_concat(&Affine::scale(1.0 / sx, 1.0 / sy));
+    if text.body.rot != 0.0 {
+        let c = (f64::from(w / 2.0), f64::from(h / 2.0));
+        t = t
+            .pre_concat(&Affine::translate(c.0, c.1))
+            .pre_concat(&Affine::rotate(f64::from(text.body.rot)))
+            .pre_concat(&Affine::translate(-c.0, -c.1));
+    }
+    TextFrame { w, h, transform: t }
+}
+
 /// The evaluated geometry (paths and text rectangle) of a resolved shape.
 pub fn shape_geometry(s: &Shape) -> ShapeGeometry {
     let (w, h) = (
@@ -601,19 +629,19 @@ pub fn wrap_effects(
         out.extend(nodes);
         return;
     }
-    let scale = parent.mean_scale() as f32;
+    // Effect sizes are points: scaling a group does not change them.
     let mut effects = Vec::new();
     if let Some(g) = &fx.glow {
         effects.push(Effect::Glow {
             color: g.color,
-            radius: g.radius * scale,
+            radius: g.radius,
         });
     }
     if let Some(sh) = &fx.outer_shadow {
         let rad = f64::from(sh.dir).to_radians();
         let offset = Point::new(
-            (f64::from(sh.dist) * rad.cos()) as f32 * scale,
-            (f64::from(sh.dist) * rad.sin()) as f32 * scale,
+            (f64::from(sh.dist) * rad.cos()) as f32,
+            (f64::from(sh.dist) * rad.sin()) as f32,
         );
         // Scale/skew about the alignment anchor of the shape box (scene coordinates).
         let bounds = Path::rect(rect).transform(parent).bounds().unwrap_or(rect);
@@ -631,7 +659,7 @@ pub fn wrap_effects(
             .pre_concat(&Affine::translate(-f64::from(ax), -f64::from(ay)));
         effects.push(Effect::OuterShadow {
             color: sh.color,
-            blur: sh.blur * scale,
+            blur: sh.blur,
             offset,
             transform,
         });
@@ -639,28 +667,28 @@ pub fn wrap_effects(
     if let Some(sh) = &fx.inner_shadow {
         let rad = f64::from(sh.dir).to_radians();
         let offset = Point::new(
-            (f64::from(sh.dist) * rad.cos()) as f32 * scale,
-            (f64::from(sh.dist) * rad.sin()) as f32 * scale,
+            (f64::from(sh.dist) * rad.cos()) as f32,
+            (f64::from(sh.dist) * rad.sin()) as f32,
         );
         effects.push(Effect::InnerShadow {
             color: sh.color,
-            blur: sh.blur * scale,
+            blur: sh.blur,
             offset,
         });
     }
     if let Some(r) = fx.soft_edge {
-        effects.push(Effect::SoftEdge { radius: r * scale });
+        effects.push(Effect::SoftEdge { radius: r });
     }
     if let Some(r) = &fx.reflection {
         let bounds = Path::rect(rect).transform(parent).bounds().unwrap_or(rect);
         effects.push(Effect::Reflection {
             axis: bounds.bottom(),
-            dist: r.dist * scale,
+            dist: r.dist,
             start_alpha: r.start_alpha,
             end_alpha: r.end_alpha,
             end_pos: r.end_pos,
             height: bounds.h,
-            blur: r.blur * scale,
+            blur: r.blur,
         });
     }
     out.push(

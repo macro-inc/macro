@@ -1,4 +1,6 @@
 use super::*;
+use crate::path::Rect;
+use crate::render::scene::{Node, Paint};
 use crate::test_support::{deck, fonts};
 
 fn rect_shape(id: u32, x: i64, color: &str) -> String {
@@ -33,4 +35,43 @@ fn layers_split_a_shape_from_its_backdrop() {
         .unwrap();
     assert_eq!(px(&without, 150, 150), [255, 255, 255, 255]);
     assert_eq!(px(&without, 350, 150), [0, 0, 255, 255]);
+}
+
+/// Child coordinates in "master units" (576 per inch): the group maps them
+/// to EMU, a scale of 1587.5. Text and outline weights must not scale with it.
+#[test]
+fn group_unit_scaling_stretches_boxes_not_text_or_lines() {
+    let group = r#"<p:grpSp><p:nvGrpSpPr><p:cNvPr id="4" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="1270000" y="1270000"/><a:ext cx="2540000" cy="508000"/><a:chOff x="0" y="0"/><a:chExt cx="1600" cy="320"/></a:xfrm></p:grpSpPr><p:sp><p:nvSpPr><p:cNvPr id="5" name="Label"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1600" cy="320"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="99CCFF"/></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="2000"/><a:t>Select category</a:t></a:r></a:p></p:txBody></p:sp></p:grpSp>"#;
+    let mut pres = Presentation::open(deck(&[group])).unwrap();
+    let nodes = pres.slide_display_list(0, fonts()).unwrap();
+    // The box is 200 × 40 pt at (100, 100).
+    let frame = Rect::from_xywh(100.0, 100.0, 200.0, 40.0);
+    let mut strokes = 0;
+    let mut glyphs = 0;
+    for node in &nodes {
+        match node {
+            Node::Stroke { stroke, .. } => {
+                strokes += 1;
+                assert!((stroke.width - 0.75).abs() < 1e-3, "{}", stroke.width);
+            }
+            Node::Fill {
+                path,
+                paint: Paint::Solid(c),
+                ..
+            } if c.r == 0.0 => {
+                glyphs += 1;
+                let b = path.bounds().unwrap();
+                assert!(
+                    b.x >= frame.x && b.right() <= frame.right() && b.h < 30.0,
+                    "text escapes its box: {b:?}"
+                );
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(strokes, 1);
+    assert_eq!(glyphs, 1, "one line of text");
+    let layout = pres.text_layout(0, 5, None, fonts()).unwrap().unwrap();
+    assert!((layout.size[0] - 200.0).abs() < 0.5, "{:?}", layout.size);
+    assert_eq!(layout.lines.len(), 1);
 }

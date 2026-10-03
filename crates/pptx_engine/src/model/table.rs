@@ -186,9 +186,11 @@ fn style_part(
         if let Some(r) = doc.child(st, Ns::A, "fillRef") {
             let idx = doc.attr_i64(r, "idx").unwrap_or(0).max(0) as u32;
             let color = find_color(doc, r, ctx);
-            p.fill = theme
-                .fill_style(idx)
-                .map(|n| parse_fill(&theme.doc, n, &ctx.with_ph(color), &|_| None));
+            p.fill = theme.fill_style(idx).map(|n| {
+                parse_fill(&theme.doc, n, &ctx.with_ph(color), &|id| {
+                    theme.target_part(id)
+                })
+            });
         }
     }
     p

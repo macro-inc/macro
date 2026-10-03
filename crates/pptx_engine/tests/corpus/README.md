@@ -128,9 +128,19 @@ python3 crates/pptx_engine/scripts/update_manifest.py --add wild/<name>.pptx \
 ## Reference renders
 
 ```sh
+cargo run --release -p pptx_engine --features cli --bin pptx_corpus -- \
+  fontconfig --out /tmp/pptx-fonts.conf
 python3 crates/pptx_engine/scripts/render_references.py /tmp/pptx-refs \
-  crates/pptx_engine/tests/corpus/*/*.pptx --jobs 6 [--width 960]
+  crates/pptx_engine/tests/corpus/*/*.pptx --jobs 6 --fontconfig /tmp/pptx-fonts.conf
 ```
+
+`--fontconfig` makes LibreOffice use the engine's bundled fonts and its font
+substitutions (generated from `font::SUBSTITUTES`), so references differ from
+the engine in *rendering*, not in which fallback font each picked. Without it,
+LibreOffice substitutes DejaVu Sans for any family it does not know (Tahoma,
+Corbel, Century Gothic…), which is much wider than those fonts and wraps text
+that PowerPoint fit; the baseline records which reference set it was scored
+against (`reference`).
 
 This writes `/tmp/pptx-refs/<stem>/slide-NNN.png` and `meta.json` (`slides`, `width`,
 `height`, `libreoffice_version`, `source_sha256`, `pdf_pages`, `expected_slides`). Hidden slides
@@ -145,5 +155,35 @@ pattern/gradient outlines, gradient/pattern/outline-only text fills, text glow,
 borders, EMF `EMR_GRADIENTFILL`, EMF polygon fill mode and hatched brushes, some SmartArt layouts
 (wild `census-fesac-2010-hogue-blumerman` slide 11). Live date fields render as the current date.
 Fonts are substituted: Calibri → Carlito, Cambria → Caladea, Arial/Times New Roman/Courier New →
-Liberation. Fonts with no metric-compatible substitute (Candara, Corbel, Garamond, Franklin
-Gothic, Century Gothic, Segoe UI…) will differ in wild-deck references.
+Liberation. With `--fontconfig` LibreOffice and the engine use the same substitutes; families
+with no metric-compatible substitute (Candara, Corbel, Garamond, Franklin Gothic, Century Gothic,
+Segoe UI…) still differ from what PowerPoint shows.
+
+## Fidelity baseline and regression test
+
+`baseline.json` records, for every slide of every deck, a render fingerprint
+(a 32-column grid of 4-bit luminance cells at 320 px) and, when references
+were available, the SSIM and mismatched-pixel fraction against them.
+
+- `cargo test -p pptx_engine --test corpus` (part of the normal test run, about
+  30 s in a debug build) opens every deck, renders every slide, compares the
+  fingerprints with the baseline (cross-platform rounding is tolerated), and
+  checks that saving without edits keeps every part's bytes. It needs no
+  LibreOffice; decks still stored as Git LFS pointers are skipped.
+- `pptx_corpus score --refs /tmp/pptx-refs [--out /tmp/pptx-report]` renders
+  the corpus, scores it against the references, and fails on any SSIM drop
+  beyond `--tolerance` (0.005) or changed fingerprint. `--out` writes our
+  renders, the references, red-on-gray diffs, and `report.html`.
+- After a deliberate rendering change, record it with `--update`. The baseline
+  is a ratchet: `--update` refuses to lower a slide's SSIM unless you pass
+  `--accept-regressions`. Review the report first.
+- A slide's `note` explains a legitimate difference from LibreOffice (kept
+  across updates); `unstable: true` skips its fingerprint check (live fields).
+- `pptx_corpus roundtrip [--out DIR --libreoffice]` applies text, shape, table,
+  and slide edits to every deck and checks that untouched slides render the
+  same, the package stays consistent, undo restores the original bytes, and
+  (with `--libreoffice`) LibreOffice opens every edited deck.
+
+Adding a deck: put it under `generated/` or `wild/` (see above), render
+references for it, and run `pptx_corpus score --refs … --update` so the test
+knows its fingerprints.

@@ -141,7 +141,8 @@ pub fn table_nodes(
             out,
         );
     }
-    let scale = world.mean_scale() as f32;
+    // Border weights are points: scaling a group does not change them.
+    let scale = 1.0;
     for cell in visible() {
         let rect = cell_rect(cell.row, cell.col, cell.row_span, cell.grid_span);
         let edges = [

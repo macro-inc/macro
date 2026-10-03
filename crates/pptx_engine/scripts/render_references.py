@@ -3,7 +3,12 @@
 
 Usage:
     python3 crates/pptx_engine/scripts/render_references.py OUT_DIR deck.pptx [...] \
-        [--width 960] [--jobs N] [--force] [--keep-pdf] [--timeout 300]
+        [--width 960] [--jobs N] [--force] [--keep-pdf] [--timeout 300] \
+        [--fontconfig FONTS_CONF]
+
+With --fontconfig (from `pptx_corpus fontconfig --out FONTS_CONF`), LibreOffice
+uses the engine's bundled fonts and font substitutions, so the references
+differ from the engine in rendering rather than in fallback-font choice.
 
 For every input deck this:
   1. converts it to PDF with headless LibreOffice, *including hidden slides* and
@@ -29,6 +34,7 @@ import argparse
 import concurrent.futures as cf
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -138,6 +144,8 @@ def render_one(src: Path, out_root: Path, args, soffice: str, lo_version: str) -
             if (
                 old.get("source_sha256") == digest
                 and old.get("requested_width") == args.width
+                and old.get("fontconfig_sha256")
+                == (sha256_file(Path(args.fontconfig)) if args.fontconfig else None)
                 and old.get("ok")
             ):
                 return {"file": str(src), "status": "cached", "meta": old}
@@ -164,9 +172,12 @@ def render_one(src: Path, out_root: Path, args, soffice: str, lo_version: str) -
             str(tmp_path),
             str(work_src),
         ]
+        env = dict(os.environ)
+        if args.fontconfig:
+            env["FONTCONFIG_FILE"] = str(Path(args.fontconfig).resolve())
         try:
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=args.timeout
+                cmd, capture_output=True, text=True, timeout=args.timeout, env=env
             )
             lo_log = (proc.stdout + proc.stderr).strip()
         except subprocess.TimeoutExpired:
@@ -226,6 +237,7 @@ def render_one(src: Path, out_root: Path, args, soffice: str, lo_version: str) -
         "height": height,
         "libreoffice_version": lo_version,
         "pdf_filter": PDF_FILTER,
+        "fontconfig_sha256": sha256_file(Path(args.fontconfig)) if args.fontconfig else None,
         "ok": bool(pngs),
     }
     meta_path.write_text(json.dumps(meta, indent=2) + "\n")
@@ -247,6 +259,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--force", action="store_true", help="ignore the meta.json cache")
     ap.add_argument("--keep-pdf", action="store_true", help="also keep <stem>.pdf next to the PNGs")
     ap.add_argument("--timeout", type=int, default=300, help="per-step timeout in seconds")
+    ap.add_argument(
+        "--fontconfig",
+        help="FONTCONFIG_FILE for LibreOffice (see `pptx_corpus fontconfig`)",
+    )
     args = ap.parse_args(argv)
 
     files = [Path(f) for f in args.files]

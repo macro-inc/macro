@@ -426,6 +426,9 @@ fn resolve_inner(
     if let Some(pd) = pres_default {
         lists.push(pd);
     }
+    // Titles take no bullet from the presentation-wide default style (as in
+    // PowerPoint and LibreOffice); their own chain may still set one.
+    let unbulleted_default = (family == "title" && pres_default.is_some()).then(|| lists.len() - 1);
     let own_list_count = usize::from(
         tx_body(&own_part.doc, *own_node)
             .and_then(|tb| own_part.doc.child(tb, Ns::A, "lstStyle"))
@@ -448,7 +451,11 @@ fn resolve_inner(
             {
                 inherited.def_rpr.inherit(fr);
             }
-            inherited.inherit(&parse.list_level(lp, *ln, level));
+            let mut props = parse.list_level(lp, *ln, level);
+            if Some(i) == unbulleted_default {
+                props.bu_kind = None;
+            }
+            inherited.inherit(&props);
         }
         if lists.len() <= own_list_count
             && let Some(fr) = &font_ref_run

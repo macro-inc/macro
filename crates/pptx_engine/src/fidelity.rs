@@ -220,5 +220,7 @@ pub fn fingerprint_distance(a: &str, b: &str) -> (f32, u32) {
     (sum as f32 / a.len() as f32, max)
 }
 
+pub mod corpus;
+
 #[cfg(test)]
 mod test;

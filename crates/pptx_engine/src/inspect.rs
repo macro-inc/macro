@@ -12,7 +12,7 @@ use crate::model::shape::{
 };
 use crate::model::text::{Align, BulletKind, Paragraph, RunKind, RunProps, Strike, Underline};
 use crate::path::{Affine, Point, Rect};
-use crate::render::build::shape_geometry;
+use crate::render::build::{shape_geometry, text_frame};
 use crate::render::text::{LayoutParams, LineBox, layout};
 use crate::units::emu_to_pt;
 use crate::xml::{NodeId, Ns, XmlDoc};
@@ -496,19 +496,15 @@ impl Presentation {
             return Ok(None);
         }
         let geom = shape_geometry(s);
-        let rect = geom.text_rect;
-        let lay = layout(&body, rect.w, rect.h, fonts, LayoutParams::from_body(&body));
-        let mut t = parent
-            .pre_concat(&s.xfrm.text_to_parent())
-            .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)));
-        if body.body.rot != 0.0 {
-            let c = (f64::from(rect.w / 2.0), f64::from(rect.h / 2.0));
-            t = t
-                .pre_concat(&Affine::translate(c.0, c.1))
-                .pre_concat(&Affine::rotate(f64::from(body.body.rot)))
-                .pre_concat(&Affine::translate(-c.0, -c.1));
-        }
-        let t = t.pre_concat(&lay.transform);
+        let frame = text_frame(s, &geom, &body, &parent);
+        let lay = layout(
+            &body,
+            frame.w,
+            frame.h,
+            fonts,
+            LayoutParams::from_body(&body),
+        );
+        let t = frame.transform.pre_concat(&lay.transform);
         let styles = body
             .paragraphs
             .iter()
@@ -516,7 +512,7 @@ impl Presentation {
             .collect();
         Ok(Some(TextLayoutInfo {
             transform: [t.a, t.b, t.c, t.d, t.e, t.f],
-            size: [rect.w, rect.h],
+            size: [frame.w, frame.h],
             paragraphs: body
                 .paragraphs
                 .iter()

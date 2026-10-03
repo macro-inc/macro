@@ -89,3 +89,23 @@ fn autonumber_formats() {
     assert_eq!(autonum_text("arabicParenBoth", 1), "(1)");
     assert_eq!(autonum_text("circleNumDbPlain", 2), "\u{2461}");
 }
+
+/// A tab whose stop lies past the right edge moves to the next line, where
+/// it still advances to the first stop (PowerPoint and LibreOffice agree).
+#[test]
+fn tabs_that_do_not_fit_start_the_next_line() {
+    // 140 pt of text width: the second tab's stop (144 pt) is past the edge.
+    let l = lay(
+        "<a:p><a:r><a:rPr lang=\"en-US\" sz=\"1200\"/><a:t>\tAlpha beta \tend</a:t></a:r></a:p>",
+        1_960_880,
+    );
+    assert_eq!(l.lines.len(), 2);
+    let second = &l.lines[1];
+    assert_eq!(
+        second.stops.first().unwrap().index,
+        12,
+        "the tab opens line 2"
+    );
+    let end = second.stops.iter().find(|s| s.index == 13).unwrap();
+    assert!((end.x - (7.2 + 72.0)).abs() < 0.5, "{}", end.x);
+}
