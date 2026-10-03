@@ -146,6 +146,7 @@ fn api_messages_snapshot() {
         .flat_map(|line| native.entry(line))
     {
         let (method, params) = match event {
+            LogEvent::ModelChanged(_) => continue,
             LogEvent::Update(update) => {
                 ("session/update", json!({"sessionId":"s", "update":update}))
             }
@@ -160,4 +161,14 @@ fn api_messages_snapshot() {
     let messages = agent_fold::domain::fold::fold(agent_fold::testing::parse_log(&wire));
     assert!(messages.len() >= 3, "native turns must reach API messages");
     insta::assert_json_snapshot!(messages);
+}
+
+#[test]
+fn model_changes_snapshot() {
+    let mut fold = ClaudeLog::default();
+    let events: Vec<_> = include_str!("../fixtures/models.jsonl")
+        .lines()
+        .flat_map(|line| fold.entry(line))
+        .collect();
+    insta::assert_json_snapshot!(events);
 }

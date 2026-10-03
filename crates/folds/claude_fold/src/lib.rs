@@ -88,6 +88,13 @@ fn assistant(message: &Value) -> Vec<LogEvent> {
         })
         .map(LogEvent::Update)
         .collect();
+    if let Some(model) = message
+        .get("model")
+        .and_then(Value::as_str)
+        .filter(|model| !model.is_empty() && !model.starts_with('<'))
+    {
+        events.insert(0, LogEvent::ModelChanged(model.to_owned()));
+    }
     let stop = match message.get("stop_reason").and_then(Value::as_str) {
         Some("end_turn" | "stop_sequence") => Some("end_turn"),
         Some("max_tokens") => Some("max_tokens"),

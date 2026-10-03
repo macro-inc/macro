@@ -36,6 +36,10 @@ use agent_fold::domain::transcript::{Fold, LogEvent};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
+mod commands;
+mod effort;
+mod models;
+
 /// The subcommand macrod's harness config names to run this adapter.
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
 
@@ -242,8 +246,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
                         );
                         return;
                     }
-                    let result = adapter.request(&method, params).await;
-                    adapter.respond(id, result);
+                    adapter.respond_to_request(id, &method, params).await;
                     if let Some(session) = prompt_session {
                         session.prompt_pending.store(false, Ordering::SeqCst);
                     }
@@ -284,6 +287,7 @@ struct Session {
     cwd: PathBuf,
     mcp_servers: Vec<Value>,
     model: Mutex<String>,
+    effort: Mutex<Option<String>>,
     native_id: Mutex<Option<String>>,
     prompt_pending: AtomicBool,
     live: tokio::sync::Mutex<Option<Live>>,
@@ -423,30 +427,14 @@ impl Adapter {
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
                 let session = self.session(&params)?;
-                let config = params.get("configId").and_then(Value::as_str);
-                let value = params.get("value").and_then(Value::as_str);
-                match (config, value) {
-                    (Some(MODEL_CONFIG_ID), Some(model))
-                        if self
-                            .options
-                            .kind
-                            .models()
-                            .iter()
-                            .any(|(id, _)| *id == model)
-                            || self.options.model.as_deref() == Some(model) =>
-                    {
-                        let live = session
-                            .live
-                            .try_lock()
-                            .map_err(|_| RpcError::invalid("cannot change model during a turn"))?;
-                        if live.is_some() && model != *lock(&session.model) {
-                            return Err(RpcError::invalid(
-                                "change the model in the native Herdr session, or select it when starting a new session",
-                            ));
-                        }
-                        model.clone_into(&mut lock(&session.model));
-                        self.save(&session, live.as_ref())?;
-                        Ok(json!({"configOptions": config_options(self.options.kind, model)}))
+                let value = params
+                    .get("value")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| RpcError::invalid("missing configuration value"))?;
+                match params.get("configId").and_then(Value::as_str) {
+                    Some(MODEL_CONFIG_ID) => self.set_model(&session, value).await,
+                    Some(effort::CONFIG_ID) if self.options.kind == TuiAgent::Codex => {
+                        self.set_effort(&session, value).await
                     }
                     _ => Err(RpcError::invalid("unsupported configuration option")),
                 }
@@ -487,6 +475,7 @@ impl Adapter {
                     .unwrap_or_else(|| DEFAULT_MODEL.to_owned()),
             ),
             native_id: Mutex::new(None),
+            effort: Mutex::new(None),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
             cancel: Mutex::new(None),
@@ -494,9 +483,7 @@ impl Adapter {
         self.save(&session, None)?;
         lock(&self.sessions).insert(id.clone(), session.clone());
         self.observe(&session);
-        Ok(
-            json!({"sessionId": id, "configOptions": config_options(self.options.kind, &lock(&session.model))}),
-        )
+        Ok(json!({"sessionId": id, "configOptions": self.session_options(&session)}))
     }
 
     fn save(&self, session: &Session, live: Option<&Live>) -> Result<(), RpcError> {
@@ -569,6 +556,7 @@ impl Adapter {
                 .cloned()
                 .unwrap_or_default(),
             model: Mutex::new(record.model.clone()),
+            effort: Mutex::new(None),
             native_id: Mutex::new(record.native_id),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
@@ -582,10 +570,11 @@ impl Adapter {
                 break;
             }
         }
+        self.sync_model(&session, &live).await;
         *session.live.lock().await = Some(live);
         lock(&self.sessions).insert(id.to_owned(), session.clone());
         self.observe(&session);
-        Ok(json!({"configOptions": config_options(self.options.kind, &record.model)}))
+        Ok(json!({"configOptions": self.session_options(&session)}))
     }
 
     fn observe(self: &Arc<Self>, session: &Arc<Session>) {
@@ -593,6 +582,7 @@ impl Adapter {
         let session = Arc::downgrade(session);
         let shutdown = self.shutdown.clone();
         tokio::spawn(async move {
+            let mut ticks = 0u32;
             loop {
                 tokio::select! {
                     () = shutdown.cancelled() => break,
@@ -611,10 +601,14 @@ impl Adapter {
                 let Some(live) = guard.as_mut() else {
                     continue;
                 };
+                ticks = ticks.wrapping_add(1);
                 if let Err(error) = adapter.forward(&session, live, &mut None) {
                     tracing::warn!(session = %session.id, error = %error.message, "native transcript observation stopped");
                     adapter.turn_complete(&session.id, "failed");
                     break;
+                }
+                if ticks.is_multiple_of(STATUS_EVERY) {
+                    adapter.sync_model(&session, live).await;
                 }
             }
         });
@@ -688,12 +682,51 @@ impl Adapter {
         if live.pending.is_empty() {
             live.pending = self.drain(live)?.into();
         }
+        while let Some(LogEvent::ModelChanged(_)) = live.pending.front() {
+            let Some(LogEvent::ModelChanged(model)) = live.pending.pop_front() else {
+                unreachable!()
+            };
+            self.report_model(session, live, &model)?;
+        }
         if !live.pending.is_empty() {
             return Err(RpcError::invalid(
                 "the native transcript has new activity; retry once it has synchronized",
             ));
         }
+        // The observer cannot acquire this session until the turn ends. Publish
+        // native settings now, while the freshly started composer is visible.
+        self.sync_model(session, live).await;
+        if self.options.kind == TuiAgent::Codex
+            && let Some(requested) = effort::command(text)
+        {
+            let requested = requested?;
+            let message = tokio::select! {
+                () = cancel.cancelled() => return Ok("cancelled"),
+                result = tokio::time::timeout(Duration::from_secs(20), self.codex_effort(session, live, requested)) => {
+                    result.map_err(|_| RpcError::internal("effort change was not confirmed; check the native session in Herdr"))??
+                }
+            };
+            self.notify_update(
+                &session.id,
+                json!({
+                    "sessionUpdate":"agent_message_chunk", "content":{"type":"text","text":message},
+                }),
+            );
+            return Ok("end_turn");
+        }
         herdr.prompt_agent(&live.name, text).await?;
+        if let Some(command) = commands::native_control(self.options.kind, text) {
+            // Herdr acknowledges PTY delivery, not the resulting setting. These
+            // commands need not write a transcript entry or start a model turn.
+            self.notify_update(&session.id, json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": format!(
+                    "Sent `{command}` to {} in Herdr. Check its response and complete any confirmation there.",
+                    self.options.kind.herdr_kind(),
+                )},
+            }));
+            return Ok("end_turn");
+        }
         let outcome = self.follow(herdr, session, live, &cancel).await;
         *lock(&session.cancel) = None;
         self.save(session, guard.as_ref())?;
@@ -858,6 +891,12 @@ impl Adapter {
             if !ticks.is_multiple_of(STATUS_EVERY) {
                 continue;
             }
+            // A startup screen may have hidden the footer before submission.
+            // Retry without waiting for a model response to release the observer.
+            let needs_settings = lock(&session.effort).is_none();
+            if needs_settings {
+                self.sync_model(session, live).await;
+            }
             let info = match herdr.agent_info(&live.name).await {
                 Ok(info) => {
                     missing = 0;
@@ -936,6 +975,9 @@ impl Adapter {
         }
         while let Some(event) = live.pending.pop_front() {
             match event {
+                LogEvent::ModelChanged(model) => {
+                    self.report_model(session, live, &model)?;
+                }
                 LogEvent::Update(update) => {
                     moved = true;
                     // Codex logs a command only once it has run, so its log
