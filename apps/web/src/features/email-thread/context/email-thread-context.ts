@@ -80,4 +80,17 @@ export interface EmailThreadHost {
   targetMessageId?: Accessor<string | undefined>;
   targetRequest?: Accessor<string | undefined>;
   focusContainer?: () => void;
+  /** Superhuman-style actions passed from the entity layer. */
+  entityActions?: {
+    /** Toggle star/favorite on the thread. */
+    toggleStar?: () => boolean;
+    /** Check if the thread is starred/favorited. */
+    isStarred?: Accessor<boolean>;
+    /** Trash the thread. */
+    trash?: () => boolean;
+    /** Toggle mute on the thread. */
+    toggleMute?: () => boolean;
+    /** Check if the thread is muted. */
+    isMuted?: Accessor<boolean>;
+  };
 }

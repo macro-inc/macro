@@ -599,6 +599,53 @@ export function createThreadNavigation(
     host.listNavigation.markDone(context.archiveThread);
     return true;
   };
+
+  /** Expand the focused message if collapsed, or collapse if expanded. */
+  const expandFocusedMessage = () => {
+    const focusedId = context.messages.focusedId();
+    if (!focusedId) return false;
+
+    const messages = context.messages.list();
+    const chronologicalIndex = messages.findIndex(
+      (message) => message.db_id === focusedId
+    );
+    if (chronologicalIndex < 0) return false;
+
+    const message = messages[chronologicalIndex];
+    const currentExpansion = context.messages.expandedBodyIds[focusedId];
+    const isExpanded = threadMessageIsExpanded({
+      chronologicalIndex,
+      listLength: messages.length,
+      expansionOverride: currentExpansion,
+      isUnread: isUnreadMessage(message),
+      hasDraft:
+        !isTouchDevice() && !!context.drafts.getDraftForMessage(focusedId),
+    });
+
+    context.messages.setExpandedBodyId(focusedId, !isExpanded);
+    if (!isExpanded) {
+      revealMessageAfterLayout(
+        focusedId,
+        untrack(context.messages.list),
+        untrack(context.messagesListRef)
+      );
+    }
+    return true;
+  };
+
+  /** Expand all messages in the thread. */
+  const expandAllMessages = () => {
+    const messages = context.messages.list();
+    if (messages.length === 0) return false;
+
+    for (const message of messages) {
+      if (message.db_id) {
+        context.messages.setExpandedBodyId(message.db_id, true);
+      }
+    }
+    return true;
+  };
+
   onMount(() =>
     host.registerKeyboard?.({
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
@@ -618,6 +665,15 @@ export function createThreadNavigation(
       navigateToNextMessage,
       activate,
       cancel,
+      // Superhuman-style expand/collapse
+      expandFocusedMessage,
+      expandAllMessages,
+      // Entity actions passed from host
+      toggleStar: host.entityActions?.toggleStar,
+      isThreadStarred: host.entityActions?.isStarred,
+      trashThread: host.entityActions?.trash,
+      muteThread: host.entityActions?.toggleMute,
+      isThreadMuted: host.entityActions?.isMuted,
     })
   );
 
