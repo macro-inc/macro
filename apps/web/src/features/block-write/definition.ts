@@ -1,5 +1,5 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
+import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 
@@ -21,11 +21,12 @@ export const definition = defineBlock({
   async load(source, intent) {
     if (source.type !== 'sync-service') return LoadErrors.INVALID;
     if (intent === 'preload') return ok({ type: 'preload', origin: source });
-    // The same open context as the other sync-service blocks: a token plus a
-    // session-bound authorization that re-checks access on reconnect.
-    const context = await fetchSyncDocumentOpenContext(source.id);
-    if (context.isErr()) return err(context.error);
-    return ok(context.value);
+    // Not the Markdown open context: an uploaded DOCX stays a stored file until
+    // an editor seeds it into the sync service, so its location is never
+    // sync-service content. The socket fetches a fresh token on reconnect.
+    const bundle = await fetchDocumentLoadBundle(source.id);
+    if (bundle.isErr()) return err(bundle.error);
+    return ok(bundle.value);
   },
 });
 

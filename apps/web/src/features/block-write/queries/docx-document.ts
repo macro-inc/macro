@@ -2,7 +2,6 @@ import { queryClient } from '@queries/client';
 import { downloadExportedDocument } from '@service-storage/util/downloadExportedDocument';
 import { syncServiceClient } from '@service-sync/client';
 import { createSyncServiceSource } from '@service-sync/source';
-import type { DocumentSyncAuthorization } from '@service-sync/source/authorization';
 import { buildSeedSnapshot } from '../core/docx-seed';
 import type { DocxConnection } from './docx-session';
 import { loadDocxodus } from './docxodus-runtime';
@@ -46,8 +45,7 @@ export async function buildDocxSeed(original: Uint8Array): Promise<Uint8Array> {
 
 export function connectDocxSync(
   documentId: string,
-  token: string | undefined,
-  authorization?: DocumentSyncAuthorization
+  token: string | undefined
 ): DocxConnection {
-  return createSyncServiceSource(documentId, token, authorization);
+  return createSyncServiceSource(documentId, token);
 }
