@@ -1,0 +1,133 @@
+/* Docs page demos. Body spacing follows the LexicalMarkdown theme:
+   paragraphs my-4, h2 at 1.125em with mb-2, lists my-4 with 0.25em items. */
+.doc-story { position: relative; }
+.doc-story-scroll { scrollbar-width: none; }
+.doc-story-page { max-width: 768px; margin: 0 auto; padding: 44px 0 64px; text-align: left; }
+.doc-story-title { margin-bottom: 14px; outline: none; font: 600 24px/32px 'Inter Variable', Inter, sans-serif; }
+.doc-story-tags { margin: 0 0 22px -6px; }
+.doc-story-body { outline: none; color: var(--color-ink); font-size: 15px; line-height: 1.6; overflow-wrap: break-word; }
+.doc-story-body > * { margin: 0; }
+.doc-story-body > p { margin: 12px 0; }
+.doc-story-body > h2 { margin: 22px 0 6px; font-size: 1.125em; font-weight: 600; line-height: 1.5; }
+.doc-story-body > :first-child { margin-top: 0; }
+.doc-story-body > .md-list { margin: 8px 0 8px 1.5em; }
+.doc-story-body > .md-list > li { margin: 0.25em 0; }
+
+/* A doc runs past the window: let it fade out under the stage's tail
+   instead of clipping a line of text at the window's edge. */
+.product-page .doc-story-page-fade .product-demo > .dummy-main { flex: none; height: calc(100% + var(--product-demo-fade-tail, 0px)); }
+
+/* MarkdownSidePanelSections beside the doc once the window is wide enough. */
+@container sample-main (min-width: 700px) {
+  .doc-story-split .sample-detail-layout[data-panel-open='true'] .sample-details { position: relative; inset: auto; z-index: auto; display: block; width: 300px; min-width: 0; max-width: none; padding: 8px 8px 8px 0; background: transparent; }
+}
+
+/* Everything that moves sits in one layer over the window. */
+.doc-story-overlay { position: absolute; inset: 0; z-index: 7; overflow: hidden; pointer-events: none; }
+.doc-story-cursor { transition: transform 160ms linear; }
+.doc-story-cursor.doc-story-glide { transition-duration: 650ms; transition-timing-function: cubic-bezier(.2, .8, .2, 1); }
+
+/* An insertion point: zero width, so it never shifts the text it marks. */
+.doc-caret { position: relative; display: inline-block; width: 0; height: 1.25em; vertical-align: text-bottom; pointer-events: none; }
+.doc-caret::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; border-radius: 1px; background: var(--doc-caret, var(--color-ink)); }
+.doc-caret[data-caret='claude'] { --doc-caret: #d97757; }
+.doc-caret[data-caret='julia'] { --doc-caret: var(--color-violet); }
+.doc-story[data-live='false'] .doc-caret { display: none; }
+.doc-story-selected { border-radius: 2px; background: color-mix(in srgb, #d97757 30%, transparent); }
+
+/* An edit that arrived from someone else while this copy was offline. */
+.doc-story-merged { border-radius: 3px; animation: doc-story-merged 2.4s ease-out both; }
+@keyframes doc-story-merged {
+  0%, 35% { background: color-mix(in srgb, var(--color-violet) 32%, transparent); }
+  100% { background: transparent; }
+}
+
+/* CollaborationStatusIndicator: offline and reconnecting islands. */
+.doc-sync { position: relative; display: inline-flex; }
+.doc-sync-status { display: inline-flex; width: 24px; height: 24px; flex-shrink: 0; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; }
+.doc-sync-status > svg { width: 16px; height: 16px; }
+.doc-sync-status[data-status='offline'] { border-color: color-mix(in oklch, var(--color-alert) 20%, transparent); background: var(--color-alert-bg); color: var(--color-alert-ink); }
+.doc-sync-status[data-status='connecting'] { color: var(--color-ink-extra-muted); }
+.doc-sync-status[data-status='connecting'] > svg { animation: doc-story-pulse 2s cubic-bezier(.4, 0, .6, 1) infinite; }
+@keyframes doc-story-pulse { 50% { opacity: 0.5; } }
+.doc-tooltip { position: absolute; top: calc(100% + 4px); right: 0; z-index: 6; width: max-content; max-width: 240px; padding: 8px; border-radius: 8px; background: var(--color-tooltip); box-shadow: 0 8px 24px rgb(0 0 0 / 0.45); color: var(--color-ink-muted); font-size: 12px; line-height: 16px; white-space: normal; }
+
+/* MentionsMenu, positioned inside the window instead of a portal. */
+.workspace-demo .doc-story-overlay .demo-mention-menu { position: absolute; width: min(384px, calc(100% - 16px)); max-height: none; background: var(--color-menu); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); pointer-events: none; }
+.workspace-demo .doc-story-overlay .demo-mention-groups { max-height: 256px; overflow: hidden; }
+.doc-mention-query { color: var(--color-ink); }
+.doc-story-body .demo-inline-mention:not(.mention-person) > .demo-mention-name { color: var(--color-ink); }
+.demo-mention-icon.mention-company, .demo-mention-icon.mention-email, .demo-mention-icon.mention-channel { color: var(--color-ink-muted); }
+.demo-mention-icon.mention-document { color: var(--color-note); }
+
+/* References: avatar, sender, "in", source chip, relative time, quoted body. */
+.doc-ref-row { display: flex; min-width: 0; flex-direction: column; padding: 4px 0; border-radius: 8px; }
+.doc-ref-row + .doc-ref-row { margin-top: 6px; }
+.doc-ref-head { display: flex; min-width: 0; min-height: 24px; align-items: center; gap: 6px; font-size: 12px; line-height: 20px; }
+.doc-ref-head > img { width: 16px; height: 16px; flex: none; border-radius: 50%; object-fit: cover; }
+.doc-ref-head > b { flex: none; font-weight: 500; color: var(--color-ink); }
+.doc-ref-head > .doc-ref-in { flex: none; color: color-mix(in srgb, var(--color-ink-muted) 70%, transparent); }
+.doc-ref-source { display: inline-flex; min-width: 0; align-items: center; gap: 4px; color: var(--color-ink-muted); }
+.doc-ref-source > svg { width: 12px; height: 12px; flex: none; }
+.doc-ref-source > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 20%, transparent); text-underline-offset: 2px; }
+.doc-ref-time { flex: none; color: var(--color-ink-extra-muted); font-variant-numeric: tabular-nums; }
+.doc-ref-body { margin: 6px 0 0 4px; padding-left: 10px; border-left: 2px solid color-mix(in srgb, var(--color-ink-muted) 12%, transparent); color: color-mix(in srgb, var(--color-ink-muted) 80%, transparent); font-size: 12px; line-height: 18px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.doc-panel-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.doc-panel-meta { padding: 4px 12px 8px; color: var(--color-ink-extra-muted); font-size: 12px; line-height: 18px; }
+
+/* Share modal: three Panel cards (form, people with access, link sharing). */
+.doc-share-scrim { position: absolute; inset: 0 0 calc(-1 * var(--product-demo-fade-tail, 0px)); z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 36px 16px 16px; overflow: hidden; background: rgb(8 9 11 / 0.55); }
+.doc-share-card { width: min(640px, 100%); flex: none; overflow: hidden; border: 1px solid var(--color-edge-muted); border-radius: 12px; background: var(--color-dialog); box-shadow: 0 18px 48px rgb(0 0 0 / 0.45); text-align: left; animation: doc-share-in 220ms ease-out both; }
+.doc-share-card > header { display: flex; min-width: 0; align-items: center; gap: 6px; padding: 12px 16px; font-size: 14px; font-weight: 500; }
+.doc-share-card > header > svg { width: 16px; height: 16px; flex: none; }
+.doc-share-card > header > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-share-to { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 12px 0 16px; background: var(--color-surface); }
+.doc-share-to input { min-width: 0; flex: 1; background: transparent; color: var(--color-ink); font-size: 14px; outline: none; }
+.doc-share-to input::placeholder, .doc-share-message::placeholder { color: var(--color-ink-placeholder); }
+.doc-share-can { color: var(--color-ink-extra-muted); font-size: 14px; }
+.doc-share-message { display: block; width: 100%; min-height: 64px; padding: 8px 16px; border-top: 1px solid var(--color-edge-muted); background: transparent; color: var(--color-ink); font-size: 14px; resize: none; outline: none; }
+.doc-share-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; }
+.doc-share-actions kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; opacity: 0.6; }
+.doc-share-people { display: grid; gap: 12px; padding: 4px 16px 16px; font-size: 14px; }
+.doc-share-person { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; border-radius: 6px; }
+.doc-share-person > span:first-child { display: flex; min-width: 0; align-items: center; gap: 8px; font-weight: 500; }
+.doc-share-person > span:first-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-share-person img { width: 16px; height: 16px; flex: none; border-radius: 50%; object-fit: cover; }
+.doc-share-person > span:first-child > svg { width: 16px; height: 16px; flex: none; }
+.doc-share-owner { color: var(--color-ink-muted); font-size: 12px; font-weight: 500; }
+.doc-share-person[data-new='true'] { animation: doc-share-row 1.8s ease-out both; }
+@keyframes doc-share-row { 0%, 40% { background: color-mix(in srgb, var(--color-accent) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 16%, transparent); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.doc-share-level { position: relative; display: inline-flex; min-width: 67px; height: 28px; flex: none; align-items: center; gap: 4px; padding: 0 4px 0 8px; border: 1px solid var(--color-edge-muted); border-radius: 6px; color: var(--color-ink); font-size: 13px; }
+.doc-share-level[data-borderless='true'] { border-color: transparent; }
+.doc-share-level > svg { width: 16px; height: 16px; flex: none; }
+.doc-share-level > svg:last-of-type { color: var(--color-ink-extra-muted); }
+.doc-share-level > select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.doc-share-link { display: flex; flex-direction: column; gap: 12px; padding: 16px; font-size: 14px; }
+.doc-share-link > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.doc-share-link > div > span { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.doc-share-status { padding: 2px 8px; border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-accent); font-size: 12px; font-weight: 500; }
+.doc-share-scope { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--color-surface); font-size: 12px; }
+.doc-share-scope > button { padding: 3px 10px; border-radius: 6px; color: var(--color-ink-muted); }
+.doc-share-scope > button[aria-pressed='true'] { background: var(--color-surface-3, var(--color-active)); color: var(--color-ink); }
+.doc-share-link > p { color: var(--color-ink-muted); }
+@keyframes doc-share-in { from { opacity: 0; transform: translateY(6px); } }
+
+@media (max-width: 699px) {
+  .doc-story-page { padding: 28px 0 48px; }
+  .doc-story-scroll { padding-inline: 18px; }
+  .doc-story-title { font-size: 22px; line-height: 30px; }
+  .doc-story-body { font-size: 14px; }
+  .doc-tooltip { max-width: 210px; }
+  .doc-share-scrim { padding: 16px 10px 10px; }
+  .doc-share-card > header { padding: 10px 12px; }
+  .doc-share-to { padding-left: 12px; }
+  .doc-share-message { min-height: 44px; padding-inline: 12px; }
+  .doc-share-actions { padding: 8px 12px 12px; }
+  .doc-share-actions kbd { display: none; }
+  .doc-share-people { padding-inline: 12px; }
+  .doc-share-link { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .doc-story-merged, .doc-share-card, .doc-share-person[data-new='true'] { animation: none; }
+  .doc-sync-status[data-status='connecting'] > svg { animation: none; }
+}

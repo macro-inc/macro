@@ -1,9 +1,8 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import {
   DocumentAgentDemo,
-  DocumentDiscussionDemo,
-  DocumentEditingDemo,
-  DocumentLinkedTaskDemo,
+  DocumentMentionsDemo,
+  DocumentOfflineDemo,
   DocumentSharingDemo,
 } from '../components/documents/DocumentStories';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
@@ -21,21 +20,59 @@ import {
 } from '../components/product/ProductPage';
 import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 
+const documentsFaq = [
+  {
+    q: 'How is this different from Notion?',
+    a: 'Notion is a blank canvas: everything is a page or a database, and you build your own CRM or task tracker out of them. We took the opposite approach. Macro has dedicated tools for email, tasks, chat, and CRM, and docs are just docs. They’re also fast, work offline, merge edits without conflicts, and agents can edit them live.',
+  },
+  {
+    q: 'Can an agent edit my doc directly?',
+    a: (
+      <>
+        Yes. Agents edit native Macro docs in place, with their own cursor, even
+        when the doc is closed. PDFs and other uploads can be read, but not
+        edited. See <a href="/agents">agents in Macro</a>.
+      </>
+    ),
+  },
+  {
+    q: 'Can I edit offline?',
+    a: 'Yes. Edits save on your device and sync when you reconnect. If someone else changed the doc in the meantime, both sets of edits merge.',
+  },
+  {
+    q: 'What can I @mention?',
+    a: 'People, docs, tasks, channels, emails, customers, and dates. Mentions of docs, tasks, and emails link both ways, so the other item lists the doc in its References.',
+  },
+  {
+    q: 'Who can see my doc?',
+    a: 'Anyone you share it with, plus everyone in a channel where it’s been mentioned. You can set edit, comment, or view access per person.',
+  },
+  {
+    q: 'Does open source make my documents public?',
+    a: (
+      <>
+        No. Our code is public. Your docs aren’t. See the{' '}
+        <a href="/privacy">Privacy Policy</a>.
+      </>
+    ),
+  },
+];
+
 export function RouteDocuments() {
   setPageSeo({
-    title: 'Macro Docs — Markdown Documents, Wired Into Everything',
+    title: 'Macro Docs — Fast Docs Your Agents Can Edit Live',
     description:
-      'Markdown documents built on CRDTs, with offline editing, automatic sync, live agent edits, and bidirectional links to tasks, email, and chat.',
+      'Markdown docs with live agent edits, offline editing that merges cleanly, and @mentions that link to everything in your company.',
     path: '/documents',
   });
   return (
     <ProductPage>
       <ProductHero
         product="Docs"
-        title={['Markdown docs with', 'live agent edits.']}
+        title={['Docs your agents', 'can actually edit.']}
         description={[
-          'Local-first. Built on CRDTs.',
-          'Write offline. Sync when you’re back.',
+          'Agents type into the live doc with you, cursor and all.',
+          'It’s fast, works offline, and @mentions reach everything in your company.',
         ]}
         cta="documents_hero_get_started"
       />
@@ -43,52 +80,31 @@ export function RouteDocuments() {
         view="documents"
         initialDocument="plan"
         label="Explore Macro Docs"
-        caption="Edit the launch plan, leave a comment, or share it in the sample workspace."
+        caption="A sample workspace. Edit the launch plan, leave a comment, or share it."
       />
       <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#document-editor">
-          <EditingGraphic />
-          <span>CRDT editing</span>
-        </a>
         <a href="#document-agents">
-          <ContextGraphic />
-          <span>Ask for an edit</span>
+          <EditingGraphic />
+          <span>Live agent edits</span>
         </a>
-        <a href="#document-discussion">
-          <ThreadGraphic />
-          <span>Comments</span>
+        <a href="#document-offline">
+          <ContextGraphic />
+          <span>Offline editing</span>
         </a>
         <a href="#document-links">
           <LinkedWorkGraphic />
-          <span>Bidirectional links</span>
+          <span>@mention anything</span>
+        </a>
+        <a href="#document-sharing">
+          <ThreadGraphic />
+          <span>Share by mention</span>
         </a>
       </nav>
       <FeaturePageSection
-        id="document-editor"
-        title="Built on CRDTs. Ready offline."
-        description={
-          'Edits apply locally as you type.\nConcurrent changes merge automatically when you reconnect.'
-        }
-      >
-        <div class="feature-page-visual">
-          <DocumentEditingDemo />
-        </div>
-        <ProductProse>
-          <p>
-            Macro documents use CRDTs: data structures that merge concurrent
-            edits. Your changes are saved locally, and the sync service combines
-            them with changes from other editors when you reconnect. The editor
-            supports Markdown, headings, lists, and rich @mentions. Local
-            snapshots and an edit log let you keep writing through a dropped
-            connection.
-          </p>
-        </ProductProse>
-      </FeaturePageSection>
-      <FeaturePageSection
         id="document-agents"
-        title="Agents edit the live document."
+        title="Agents with a live cursor."
         description={
-          'Ask for a rewrite, a checklist, or a structural change.\nWatch the edit appear in the document you’re already writing.'
+          'Ask for a rewrite and watch Claude make it, right in the doc you have open.\nKeep typing. Your edits and the agent’s merge as you go.'
         }
       >
         <div class="feature-page-visual">
@@ -96,58 +112,63 @@ export function RouteDocuments() {
         </div>
         <ProductProse>
           <p>
-            Agents use the document’s collaboration system to apply edits
-            directly. You can write alongside them and continue editing the
-            result. Ask Claude to shorten a section, turn meeting notes into a
-            brief, or restructure a draft. The agent reads the document and
-            changes its text and formatting in place.
+            Most AI editors hand you a diff or a new version of the file. That’s
+            fine for code and annoying for a doc three people are working in. In
+            Macro, agents join the document like a teammate, with their own
+            cursor. You can watch the edit happen, keep writing somewhere else
+            in the doc, and change anything you don’t like. It works when the
+            doc is closed, too: ask from a channel, and the edit is there when
+            you open it.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="document-discussion"
-        title="Comments belong to the document."
+        id="document-offline"
+        title="Offline? Keep writing."
         description={
-          'Ask a question, mention a teammate, and reply in the document’s discussion.\nThe conversation is available to the next editor and to your agents.'
+          'Every doc is one CRDT, so edits from different people merge instead of overwriting.\nLose your connection and keep typing. It syncs when you’re back.'
         }
       >
         <div class="feature-page-visual">
-          <DocumentDiscussionDemo />
+          <DocumentOfflineDemo />
         </div>
         <ProductProse>
           <p>
-            Each document has its own discussion. Teammates can leave feedback,
-            reply, and @mention the people responsible for a decision. Agents
-            can read the discussion as well as the draft. Ask for an edit based
-            on the feedback your team has already given.
+            Notion syncs block by block, so when two people edit the same
+            paragraph, the last save wins. Macro stores the whole document as a
+            CRDT, a data structure built for merging edits from many people at
+            once. Changes save on your device first, then sync to your team.
+            Write the whole draft on a plane and it merges cleanly when you
+            land.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
         id="document-links"
-        title="@mentions link in both directions."
+        title="@mention anything in your company."
         description={
-          'Mention a task, email, call, or channel inside a document.\nOpen the reference, or follow its backlink to the document.'
+          'People, docs, tasks, channels, emails, and customers.\nMentions link both ways, so the doc knows where it’s referenced too.'
         }
       >
         <div class="feature-page-visual">
-          <DocumentLinkedTaskDemo />
+          <DocumentMentionsDemo />
         </div>
         <ProductProse>
           <p>
-            A Macro @mention is a reference to a real workspace item. It shows
-            up in the document and in the referenced item’s backlinks, so you
-            can navigate in either direction. Link a task to its specification,
-            a customer to a proposal, or a call to its meeting notes. People and
-            agents can follow those references to read the source.
+            Notion lets you mention other Notion pages. Macro lets you mention
+            the stuff your company actually runs on: the customer email, the
+            task, the #support thread, the customer record. Mentions of docs,
+            tasks, and emails show up in their References, so from a task you
+            can see every doc that cites it. Agents follow the same links, which
+            is a big part of why they know what you’re talking about.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
         id="document-sharing"
-        title="Share through your channels."
+        title="Share it by mentioning it."
         description={
-          'Mention a document in a channel to share it with that team.\nOr choose individual edit, comment, and view access.'
+          '@mention a doc in a channel and everyone in the channel can open it.\nNo access requests, no link settings to get wrong.'
         }
       >
         <div class="feature-page-visual">
@@ -155,69 +176,23 @@ export function RouteDocuments() {
         </div>
         <ProductProse>
           <p>
-            When you have permission to share a document, mentioning it in a
-            channel grants access to that channel. Membership determines who can
-            open the shared work. Use Share for individual recipients and access
-            levels. The document stays live: edits sync to everyone who has
-            access.
+            When you mention a doc in a channel, the channel gets access,
+            including people who join later. You can still share with
+            individuals and pick edit, comment, or view access. Most of the time
+            you won’t need to.
           </p>
         </ProductProse>
       </FeaturePageSection>
       <FeaturePageFaq
         id="documents-faq-title"
-        eyebrow="Under the hood"
-        title="Markdown, CRDTs, and agents."
+        title="Questions about Macro Docs"
         introduction={
           <p>
-            A local-first editor with concurrent editing, rich references, and
-            direct agent edits.
+            If you’re coming from Notion or Google Docs, the editor will feel
+            familiar. Here’s what’s different.
           </p>
         }
-        items={[
-          {
-            q: 'What kind of documents can I edit?',
-            a: 'Native Macro documents use Markdown and a collaborative editor. They support familiar headings, lists, links, and rich references to workspace items.',
-          },
-          {
-            q: 'Can an agent edit the document directly?',
-            a: (
-              <>
-                Yes. Agents can apply specific edits to native Markdown
-                documents. Uploaded files such as PDFs are readable context, but
-                are not the same editable document type. See{' '}
-                <a href="/agents">agents in Macro</a>.
-              </>
-            ),
-          },
-          {
-            q: 'Can I link tasks and conversations?',
-            a: (
-              <>
-                Yes. Mention workspace items in a document so people can open
-                the related <a href="/tasks">task</a> or{' '}
-                <a href="/channels">conversation</a>.
-              </>
-            ),
-          },
-          {
-            q: 'Can I choose who can edit?',
-            a: 'Yes. The Share form lets you choose recipients and access levels. When you have permission to share, a channel @mention can grant access to that channel.',
-          },
-          {
-            q: 'Can I edit offline?',
-            a: 'Yes. Native documents save edits locally. CRDT sync merges those edits with concurrent changes from other editors when you reconnect.',
-          },
-          {
-            q: 'Does open source make my documents public?',
-            a: (
-              <>
-                No. The application code is open source; document access follows
-                its sharing permissions. See the{' '}
-                <a href="/privacy">Privacy Policy</a>.
-              </>
-            ),
-          },
-        ]}
+        items={documentsFaq}
       />
       <HomepageClosing />
     </ProductPage>
