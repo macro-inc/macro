@@ -190,8 +190,6 @@ export type CreateNewSplitOptions = {
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
   insertIndex?: number;
-  /** Not supported: a new pane starts with only `content`. Kept for the mobile swipe layout. */
-  initialHistory?: SplitContent[];
 };
 
 export type OpenWithSplitOptions = {
@@ -228,12 +226,6 @@ export type OpenSplitResult = {
   | { status: 'unavailable'; split?: undefined }
   | { status: 'navigating'; split?: undefined }
 );
-
-/** Return an outcome to consume navigation, or undefined to use normal split navigation. */
-export type SplitNavigationInterceptor = (
-  content: SplitContent,
-  options: OpenWithSplitOptions
-) => OpenSplitResult | undefined;
 
 export enum SplitEvent {
   Insert,
@@ -303,6 +295,12 @@ export type SplitLayoutOptions = {
   /** The content a router location shows. */
   toContent: (location: SplitLocation) => SplitContent;
   defaultSplitContent?: SplitContent;
+  /**
+   * Panes stack and only the front one shows, as on native mobile. Opens
+   * add a pane in front unless they merge history, and activating a pane
+   * behind moves it to the front.
+   */
+  stacked?: () => boolean;
 };
 
 export type SplitManager = {
@@ -393,28 +391,11 @@ export type SplitManager = {
   /** Close all popover splits */
   closeAllPopovers: () => void;
 
-  /** Splits not excluded by the current exclusion filter, in order. */
+  /** Splits on screen, in order; stacked panes show only the front one. */
   getVisibleSplits: () => SplitState[];
 
-  /** Count of splits not excluded by the current exclusion filter. */
+  /** Count of splits on screen. */
   getVisibleSplitCount: () => number;
-
-  /**
-   * Register a predicate that marks certain splits as excluded — excluded splits
-   * are hidden from external serialization, duplicate detection, and content lookup.
-   * Used for mobile swipe back behavior, where we want to ignore the bg split.
-   */
-  setExclusionFilter: (
-    fn: ((split: SplitState) => boolean) | undefined
-  ) => void;
-
-  /**
-   * Register an interceptor for new content and existing standalone splits.
-   * If it returns `{ handled: true }` the normal split logic is skipped.
-   */
-  setSplitNavigationInterceptor: (
-    fn: SplitNavigationInterceptor | undefined
-  ) => void;
 
   /** Get reactive accessor to popovers map */
   popovers: () => Map<
@@ -586,6 +567,7 @@ export function createSplitLayout(
   options: SplitLayoutOptions
 ): SplitManager {
   const { router, toLocation, toContent, defaultSplitContent } = options;
+  const stacked = () => options.stacked?.() ?? false;
   const [state, setState] = createStore<{
     splits: SplitState[];
     activeSplitId: SplitId | undefined;
@@ -656,9 +638,8 @@ export function createSplitLayout(
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
-  let exclusionFilter: ((split: SplitState) => boolean) | undefined;
-  let splitNavigationInterceptor: SplitNavigationInterceptor | undefined;
-  const isExcluded = (split: SplitState) => exclusionFilter?.(split) ?? false;
+  const isFront = (id: SplitId) => state.splits.at(-1)?.id === id;
+  const onScreen = (split: SplitState) => !stacked() || isFront(split.id);
 
   const canAppendSplit = createMemo(
     () => resizeContext()?.canFit({ minSize: DEFAULT_SPLIT_MIN_WIDTH }) ?? true
@@ -1109,6 +1090,10 @@ export function createSplitLayout(
         })
       );
       setState('splits', (splits) => splits.filter((s) => s.id !== id));
+      const front = state.splits.at(-1);
+      if (stacked() && state.activeSplitId === id && front) {
+        setState('activeSplitId', front.id);
+      }
       dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: index });
     });
   }
@@ -1126,23 +1111,25 @@ export function createSplitLayout(
   }
 
   function activateSplit(id: SplitId) {
-    // Invariant: an excluded split (the mobile background split) can never
-    // become the active split. Promote it out of exclusion first.
-    const split = findSplitById(id);
-    if (split && isExcluded(split)) {
-      if (import.meta.env.DEV) {
-        console.warn(
-          `activateSplit: refusing to activate excluded split ${id}`
-        );
-      }
+    if (stacked() && !isFront(id)) {
+      bringToFront(id);
       return;
     }
+
     const current = state.activeSplitId;
     setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
       setState('spotlightId', undefined);
     }
     setState('activeSplitId', id);
+  }
+
+  /** Stacked panes bring a pane behind the front forward; the panes that were in front of it stay, behind it. */
+  function bringToFront(id: SplitId) {
+    if (splitIndexById(id) < 0) return;
+
+    router.move(paneOf(id), state.splits.length - 1);
+    activateSplit(id);
   }
 
   function spotlightSplit(id: SplitId) {
@@ -1396,9 +1383,8 @@ export function createSplitLayout(
     );
     const match = state.splits.find(
       (s) =>
-        (s.id === instance?.owner ||
-          (s.content.type === type && s.content.id === id)) &&
-        !isExcluded(s)
+        s.id === instance?.owner ||
+        (s.content.type === type && s.content.id === id)
     );
     if (!match) return;
     return getSplit(match.id);
@@ -1554,7 +1540,9 @@ export function createSplitLayout(
       search: options.search,
       allowDuplicate: options.allowDuplicate,
     };
-    const wantsNewPane = options.preferNewSplit === true && canAppendSplit();
+    const wantsNewPane = stacked()
+      ? !options.mergeHistory
+      : options.preferNewSplit === true && canAppendSplit();
 
     const result =
       !source || wantsNewPane
@@ -1587,20 +1575,13 @@ export function createSplitLayout(
     const existing = findOpenView(content);
 
     if (options.reopen === 'latest') {
-      // Fire-and-forget so it covers every open path (fresh mount, duplicate
-      // activation, interceptor-consumed navigation). The block-handle proxy
-      // waits for the block and method to register before invoking.
+      // Fire-and-forget so it covers every open path (fresh mount or
+      // duplicate activation). The block-handle proxy waits for the block
+      // and method to register before invoking.
       void orchestrator
         .getBlockHandle(content.id)
         .then((handle) => handle?.goToLatest())
         .catch((e) => console.error('openWithSplit: goToLatest failed', e));
-    }
-
-    // Mobile navigation handles new content and promotes existing top-level
-    // splits.
-    if (splitNavigationInterceptor && (!existing || existing.topLevelSplit)) {
-      const result = splitNavigationInterceptor(content, options);
-      if (result) return { ...result, sourceOwner };
     }
 
     // Entity views are always reused; only shell components may be duplicated.
@@ -1651,7 +1632,9 @@ export function createSplitLayout(
     const shouldReplaceWhenFull =
       options.replaceWhenFull !== false && !canAppendSplit();
 
-    const shouldReplace = !options.preferNewSplit || shouldReplaceWhenFull;
+    const shouldReplace = stacked()
+      ? options.mergeHistory === true
+      : !options.preferNewSplit || shouldReplaceWhenFull;
 
     if (splitHandle && shouldReplace) {
       splitHandle.replace({
@@ -1679,6 +1662,7 @@ export function createSplitLayout(
     }
   }
 
+  /** Shows `content` as the only split, in one navigation; a split already showing it stays. */
   function replaceAllSplits(
     content: SplitContent,
     options: { referredFrom?: ReferredFrom } = {}
@@ -1689,52 +1673,30 @@ export function createSplitLayout(
       openWithSplit(content);
       return;
     }
-    const visibleSplits = state.splits.filter((split) => !isExcluded(split));
-    const splitToKeep =
-      visibleSplits.find(
-        (split) =>
-          keyOfSplitContent(split.content) === keyOfSplitContent(content)
-      ) ?? visibleSplits[0];
 
-    if (!splitToKeep) {
-      return createNewSplit({
-        content,
-        activate: true,
+    const result = router.navigate(
+      { location: toLocation(content) },
+      entryOptionsOf(content, {
         referredFrom: options.referredFrom ?? null,
-      });
-    }
+        activate: true,
+      })
+    );
+    const showAlone = (outcome: NavigationResult) => {
+      if (outcome.status !== 'committed') return;
 
-    // Atomic for the same reason as SplitHandle.close: no flush between
-    // removals, so observers only see the final layout.
-    batch(() => {
-      for (const split of visibleSplits) {
-        if (split.id !== splitToKeep.id) {
-          removeSplit(split.id, false);
-        }
-      }
-    });
-
-    const handle = getSplit(splitToKeep.id);
-    if (handle) {
-      if (
-        keyOfSplitContent(splitToKeep.content) !== keyOfSplitContent(content)
-      ) {
-        handle.replace({
-          next: content,
-          mergeHistory: false,
-          referredFrom: options.referredFrom,
-        });
-      }
-      handle.activate();
+      activateSplit(splitOf(outcome.pane));
       unSpotlightSplit();
-      return handle;
+    };
+
+    if (result instanceof Promise) {
+      void settleNavigation(result, showAlone);
+      return;
     }
 
-    return createNewSplit({
-      content,
-      activate: true,
-      referredFrom: options.referredFrom ?? null,
-    });
+    showAlone(result);
+    if (result.status !== 'committed') return;
+
+    return getSplit(splitOf(result.pane));
   }
 
   const activeSplit = () => {
@@ -1742,7 +1704,7 @@ export function createSplitLayout(
     return id ? getSplit(id) : undefined;
   };
 
-  const getVisibleSplits = () => state.splits.filter((s) => !isExcluded(s));
+  const getVisibleSplits = () => state.splits.filter(onScreen);
 
   return {
     splits: () => state.splits,
@@ -1779,11 +1741,5 @@ export function createSplitLayout(
     getVisibleSplitCount: () => getVisibleSplits().length,
     contentNavigationReady: router.ready,
     contentNavigationVersion: () => (router.ready() ? 1 : 0),
-    setExclusionFilter: (fn) => {
-      exclusionFilter = fn;
-    },
-    setSplitNavigationInterceptor: (fn) => {
-      splitNavigationInterceptor = fn;
-    },
   };
 }

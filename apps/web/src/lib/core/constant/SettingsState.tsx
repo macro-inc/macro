@@ -64,9 +64,8 @@ export const currentSettingsReturnTo = settingsReturnTo;
  * Whether settings is the only visible split — the "clobbered" mode that
  * looks and behaves like the old fullscreen route (app sidebar hidden,
  * settings owns its own back/move-to-split affordances). Mobile is excluded:
- * its swipe layout always reports a visible count of 1 for the active split
- * (the backgrounded split is excluded from that count), which would
- * otherwise misidentify every mobile settings-open as "solo".
+ * its stacked panes always show exactly one, which would otherwise
+ * misidentify every mobile settings-open as "solo".
  */
 export const isSoloSettings = () => {
   if (isMobile()) return false;
@@ -76,8 +75,7 @@ export const isSoloSettings = () => {
   if (!splitManager) return false;
 
   // Derive the sole split from the visible set (not `splits()[0]`) so the
-  // count check and the identity check agree even if an exclusion filter ever
-  // hides a split ahead of settings.
+  // count check and the identity check agree.
   const visible = splitManager.getVisibleSplits();
 
   if (visible.length !== 1) return false;

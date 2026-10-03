@@ -2,6 +2,7 @@ import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import { useSplitRouter } from '@app/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import {
@@ -17,6 +18,8 @@ import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
 import { createSplitLayout, type SplitId } from './layoutManager';
+import { createMobilePaneStack } from './mobile/createMobilePaneStack';
+import { MobileSplitContainer } from './mobile/MobileSplitContainer';
 import {
   resolveContentLocation,
   splitContentFromLocation,
@@ -33,7 +36,11 @@ export function SplitLayout() {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,
+    stacked: isNativeMobilePlatform,
   });
+  const paneStack = isNativeMobilePlatform()
+    ? createMobilePaneStack(splitManager)
+    : undefined;
   const [, setTabTitle] = tabTitleSignal;
 
   // Store a ref to each panel by id
@@ -67,38 +74,57 @@ export function SplitLayout() {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div class="size-full" classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}>
-        <Resize.Zone
-          direction="horizontal"
-          gutter={useBentoLayout() ? 6 : 1}
-          showDividers={!useBentoLayout()}
-          captureResizeCtx={splitManager.setResizeContext}
-        >
-          <For each={ids()}>
-            {(id, index) => (
-              <Show when={splitManager.getSplit(id)}>
-                {(handle) => (
-                  <Suspense>
-                    <Resize.Panel
-                      id={id}
-                      minSize={DEFAULT_SPLIT_MIN_WIDTH}
-                      index={index()}
-                    >
-                      <SplitPanel
-                        split={splits()[index()]!}
-                        handle={handle()}
-                        active={activeSplitSelector(id)}
-                        setPanelRef={(panelRef) => panelRefs.set(id, panelRef)}
-                        index={index()}
-                      />
-                    </Resize.Panel>
-                  </Suspense>
+      <Show
+        when={paneStack}
+        fallback={
+          <div
+            class="size-full"
+            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
+          >
+            <Resize.Zone
+              direction="horizontal"
+              gutter={useBentoLayout() ? 6 : 1}
+              showDividers={!useBentoLayout()}
+              captureResizeCtx={splitManager.setResizeContext}
+            >
+              <For each={ids()}>
+                {(id, index) => (
+                  <Show when={splitManager.getSplit(id)}>
+                    {(handle) => (
+                      <Suspense>
+                        <Resize.Panel
+                          id={id}
+                          minSize={DEFAULT_SPLIT_MIN_WIDTH}
+                          index={index()}
+                        >
+                          <SplitPanel
+                            split={splits()[index()]!}
+                            handle={handle()}
+                            active={activeSplitSelector(id)}
+                            setPanelRef={(panelRef) =>
+                              panelRefs.set(id, panelRef)
+                            }
+                            index={index()}
+                          />
+                        </Resize.Panel>
+                      </Suspense>
+                    )}
+                  </Show>
                 )}
-              </Show>
-            )}
-          </For>
-        </Resize.Zone>
-      </div>
+              </For>
+            </Resize.Zone>
+          </div>
+        }
+      >
+        {(stack) => (
+          <MobileSplitContainer
+            splitManager={splitManager}
+            stack={stack()}
+            splits={splits}
+            panelRefs={panelRefs}
+          />
+        )}
+      </Show>
       <PopoverSplitRenderer
         popovers={splitManager.popovers}
         onClosePopover={(id) => {

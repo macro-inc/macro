@@ -184,7 +184,7 @@ export function AppRouterView() {
         defaultLocation: () => ({
           route: paneRoute({ id: 'view-home', params: {} }),
         }),
-        singlePane: isNativeMobilePlatform,
+        stacked: isNativeMobilePlatform,
       })}
       middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
       globalSearch={['referral_code']}

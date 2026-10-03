@@ -59,7 +59,7 @@ export function createRoutedSplitLayout(
       manager: () => manager,
       toContent: splitContentFromLocation,
       defaultLocation: () => homeLocation,
-      singlePane: () => false,
+      stacked: () => false,
     }),
   });
   manager = createSplitLayout(orchestrator, {
