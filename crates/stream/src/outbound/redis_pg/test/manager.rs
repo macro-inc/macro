@@ -476,6 +476,45 @@ async fn test_stream_ends_close() {
     assert_eq!(count, 3, "should receive all 3 items");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+#[ignore = "Redis doesn't exist in CI"]
+async fn test_subscribe_after_close_replays_recently_closed_stream() {
+    // A client that reconnects right after a stream ended must still be sent
+    // the whole stream, otherwise it never learns the stream finished.
+    let entity_id = "manager_late_subscriber";
+    let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
+
+    for seq in 1..=3 {
+        service
+            .append(&stream_id, serde_json::json!({"seq": seq}))
+            .await
+            .expect("append should succeed");
+    }
+    service
+        .close(&stream_id)
+        .await
+        .expect("close should succeed");
+
+    let manager = RedisPostgresStreamManager::new(service.clone());
+    let mut stream = manager
+        .subscribe("late_sender".into(), entity_id.into())
+        .await
+        .expect("subscribe should succeed");
+
+    let mut received = Vec::new();
+    while let Ok(Some(item)) = tokio::time::timeout(Duration::from_millis(500), stream.next()).await
+    {
+        received.push(item.payload);
+    }
+
+    let expected: Vec<serde_json::Value> = (1..=3).map(|i| serde_json::json!({"seq": i})).collect();
+    assert_eq!(
+        received, expected,
+        "late subscriber should get the full stream"
+    );
+}
+
 async fn util_test_stream_exhausted(
     stream_id: StreamId,
     service: Arc<dyn crate::domain::StreamRepo>,

@@ -38,11 +38,14 @@ impl StreamManager for RedisPostgresStreamManager {
     async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream> {
         let repo = self.repo.clone();
 
-        let active = repo.active_streams(&entity_id).await?;
+        // Recently closed streams are replayed too: a subscriber that reconnects
+        // after a drop has no other way to receive the tail of a stream that
+        // finished while it was away.
+        let replayable = repo.replayable_streams(&entity_id).await?;
         let mut notify_rx = repo.notify().await;
 
         let mut merged = SelectAll::new();
-        for id in active {
+        for id in replayable {
             let s = repo.stream_from_beginning(&id).await?;
             merged.push(s);
         }

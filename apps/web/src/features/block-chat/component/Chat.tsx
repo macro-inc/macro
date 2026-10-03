@@ -246,10 +246,17 @@ function ChatInner(props: {
     if (!chat.isGenerating()) return;
     const streamId = chat.stream()?.id()?.stream_id;
     if (!streamId) return;
-    await cognitionApiServiceClient.stopChatStream({
+    const result = await cognitionApiServiceClient.stopChatStream({
       chat_id: chat.chatId(),
       stream_id: streamId,
     });
+    // Nothing left to stop: the stream already finished (or its worker is
+    // gone) and this client missed the end. Take the persisted response if
+    // there is one, otherwise settle for what was received.
+    if (result.isOk() && !result.value.stopped) {
+      const finished = await chat.reconcile();
+      if (!finished) chat.abandonStream();
+    }
   };
 
   const saveChatState = (state: StoredStuff) => {

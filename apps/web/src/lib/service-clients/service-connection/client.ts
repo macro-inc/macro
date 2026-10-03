@@ -17,7 +17,7 @@ import {
   reportReopenOnReconnect,
   reportTrack,
 } from './presence-telemetry';
-import { clearStream } from './stream';
+import { clearStream, markStreamsAwaitingReplay } from './stream';
 import { ws } from './websocket';
 
 // ref counting on connection_gateway open/close events is needed to avoid breaking
@@ -146,10 +146,13 @@ export function useEntitySubscription(
  * Re-sends `open` for every tracked entity when the socket reconnects. A reconnect gets a new
  * connection_id, but `open` is only sent once on mount (and is ref-count guarded), so without
  * this the new connection has no presence row or stream subscription for still-open entities.
+ * The new subscription replays each entity's streams from the start, so open streams are
+ * marked to take the replay as a fresh copy rather than appending it.
  */
 export function useReopenTrackedEntitiesOnReconnect(): void {
   createReconnectEffect(ws, () => {
     reportReopenOnReconnect(trackedEntities.size);
+    markStreamsAwaitingReplay();
     for (const [entity_id, tracked] of trackedEntities) {
       const entity = { entity_id, entity_type: tracked.entityType };
       ws.send({

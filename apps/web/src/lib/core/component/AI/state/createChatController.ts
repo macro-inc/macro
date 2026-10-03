@@ -6,8 +6,11 @@ import {
 } from '@core/component/AI/util/stream';
 import { tailContext } from '@core/component/LexicalMarkdown/tailContext';
 import { toast } from '@core/component/Toast/Toast';
+import { isTabFocused } from '@core/signal/tabFocus';
+import { fetchAndCacheChat } from '@queries/cognition/chat-data';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
+import { createConnectionReconnectEffect } from '@service-connection/websocket';
 import type { EditorState } from 'lexical';
 import type { Accessor, Owner, Setter } from 'solid-js';
 import {
@@ -46,6 +49,21 @@ export type ChatController = {
   isWaiting: Accessor<boolean>;
 
   dispatch: (event: ControllerEvent) => void;
+  /**
+   * Check with the server whether the stream being waited on has already been
+   * persisted as a message, and finish the turn with that message if so.
+   * Resolves to whether the chat left `streaming`.
+   *
+   * A stream's end is only ever delivered over the socket. A client that
+   * drops right before the end and reconnects after the gateway stops
+   * replaying the stream would otherwise stay in `streaming` forever.
+   */
+  reconcile: () => Promise<boolean>;
+  /**
+   * Finish the turn with what has been received so far. For when the server
+   * reports there is no stream left to stop, so no end will ever arrive.
+   */
+  abandonStream: () => void;
   /** Escape hatch for debug components that set stream directly */
   setStream: Setter<ChatMessageStream | undefined>;
   /**
@@ -79,7 +97,25 @@ export type ChatControllerOptions = {
    * to assuming an alternate exists when not provided.
    */
   hasAlternateModel?: () => boolean;
+  /**
+   * Load the chat's persisted messages, for `reconcile`. Defaults to fetching
+   * the chat from the cognition service.
+   */
+  loadMessages?: (
+    chatId: string
+  ) => Promise<ChatMessageWithAttachments[] | undefined>;
 };
+
+async function loadPersistedMessages(
+  chatId: string
+): Promise<ChatMessageWithAttachments[] | undefined> {
+  const result = await fetchAndCacheChat(chatId);
+  if (result.isErr()) {
+    console.warn('chat reconcile: failed to load messages', result.error);
+    return undefined;
+  }
+  return result.value.chat.messages;
+}
 
 export function createChatController(
   chatId: string,
@@ -90,6 +126,12 @@ export function createChatController(
   const [messages, setMessages] =
     createSignal<ChatMessageWithAttachments[]>(initialMessages);
   const [stream, setStream] = createSignal<ChatMessageStream>();
+  /*
+   The unsmoothed stream behind `stream`. The buffered copy drips text out
+   over time, so it lags the items actually received; finishing a turn early
+   must use everything that arrived.
+  */
+  let sourceStream: ChatMessageStream | undefined;
 
   /*
    The renderer's parsed editor state for the streaming message's tail text
@@ -195,6 +237,7 @@ export function createChatController(
       } else {
         newStream = makeStream();
       }
+      sourceStream = event.stream;
       setStream(newStream);
 
       const result = transition(untrack(phase), { type: 'stream_connected' });
@@ -217,9 +260,67 @@ export function createChatController(
     // Clear stream on transition to idle
     if (result.phase.type === 'idle' && untrack(stream)) {
       setStream(undefined);
+      sourceStream = undefined;
     }
     executeEffects(result.effects);
   }
+
+  const loadMessages = options?.loadMessages ?? loadPersistedMessages;
+  // Overlapping triggers (reconnect + refocus, or Stop during a reconcile)
+  // share one request so a caller that awaits reconcile does not see a
+  // premature "not finished" while the same stream is already being checked.
+  let reconciling: { streamId: string; promise: Promise<boolean> } | undefined;
+
+  /** The stream being waited on, if the chat is in `streaming`. */
+  function awaitedStreamId(): string | undefined {
+    if (untrack(phase).type !== 'streaming') return undefined;
+    return untrack(stream)?.id()?.stream_id;
+  }
+
+  async function reconcile(): Promise<boolean> {
+    const streamId = awaitedStreamId();
+    if (!streamId) return false;
+    if (reconciling?.streamId === streamId) return reconciling.promise;
+
+    const promise = (async () => {
+      try {
+        const persisted = await loadMessages(chatId);
+        // The stream may have finished on its own while the request was out.
+        if (awaitedStreamId() !== streamId) return false;
+        const message = persisted?.find(
+          (m) => m.id === streamId && m.role === 'assistant'
+        );
+        if (!message) return false;
+        dispatch({ type: 'stream_done', message });
+        return true;
+      } finally {
+        if (reconciling?.streamId === streamId) reconciling = undefined;
+      }
+    })();
+    reconciling = { streamId, promise };
+    return promise;
+  }
+
+  function abandonStream() {
+    const source = sourceStream;
+    if (!awaitedStreamId() || !source) return;
+    dispatch({ type: 'stream_done', message: asChatMessage(source.data()) });
+  }
+
+  // A reconnect replays the stream if it is still within the gateway's replay
+  // window; the reconcile covers a stream that ended too long ago for that.
+  createConnectionReconnectEffect(() => void reconcile());
+  // A tab kept in the background may have had its socket throttled or
+  // dropped without a reconnect event that this chat could act on.
+  createEffect(
+    on(
+      isTabFocused,
+      (focused) => {
+        if (focused) void reconcile();
+      },
+      { defer: true }
+    )
+  );
 
   // Reconnect active streams on page refresh / chat switch
   createEffect(() => {
@@ -258,6 +359,8 @@ export function createChatController(
     isWaiting: () => phase().type === 'sending',
 
     dispatch,
+    reconcile,
+    abandonStream,
     setStream,
     setStreamTailState: (state, key) => {
       if (!state) {

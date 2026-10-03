@@ -226,6 +226,32 @@ async fn test_active_streams() {
 #[tokio::test]
 #[serial]
 #[ignore = "Redis doesn't exist in CI"]
+async fn test_closed_stream_leaves_active_but_stays_replayable() {
+    let entity_id = "closed_stream_replayable_entity";
+    let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
+
+    service
+        .append(&stream_id, serde_json::json!({"test": "data"}))
+        .await
+        .expect("Failed to append");
+    service.close(&stream_id).await.expect("Failed to close");
+
+    let active = service
+        .active_streams(entity_id)
+        .await
+        .expect("Failed to get active streams");
+    assert!(active.is_empty(), "closed stream must not count as active");
+
+    let replayable = service
+        .replayable_streams(entity_id)
+        .await
+        .expect("Failed to get replayable streams");
+    assert_eq!(replayable, vec![stream_id]);
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_active_streams_empty() {
     let (service, _, _guard) = StreamGuard::new("active_streams_empty").await;
 

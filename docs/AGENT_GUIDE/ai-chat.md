@@ -619,6 +619,13 @@ list, create, and update projects (initiatives in the API) and move tasks in or 
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
+A websocket drop mid-answer is recovered without a reload: the reconnected socket
+receives the answer again from its first item (also for an answer that finished up to
+45 s before the reconnect), and on reconnect or refocus a chat still showing `Stop
+generating` checks the server and completes with the persisted answer if the stream
+already ended. Pressing `Stop generating` when the server has nothing left to stop also
+completes the turn instead of leaving the composer stuck.
+
 When explicitly asked, the agent uses `CommentOnDocument` to reply with `threadId`,
 start an inline markdown comment with `quote`, or start a Discussion comment with
 neither. `threadId` and `quote` cannot be combined; `occurrence` only applies with

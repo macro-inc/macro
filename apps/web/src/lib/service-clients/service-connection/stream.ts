@@ -63,6 +63,13 @@ export function createStreamController<K extends keyof StreamType>(
 type StreamWithType = {
   stream: StreamController<keyof StreamType>;
   type: keyof StreamType;
+  /**
+   * Set when the socket reconnected while this stream was still open. The
+   * gateway replays an entity's streams from the beginning to a new
+   * connection, so the next item that arrives starts a fresh copy of the
+   * stream instead of being appended to the items received before the drop.
+   */
+  awaitingReplay?: boolean;
 };
 
 // internal record of all streams
@@ -102,6 +109,19 @@ function addStream(
   );
 }
 
+function startStream(item: StreamItem<keyof StreamType>) {
+  const newStream = createStreamController(item.id);
+  if (streamIsDone(item.id.entity_type, item.payload)) {
+    newStream.setDone();
+  } else {
+    newStream.setData([item.payload]);
+  }
+  addStream(item.id.entity_id, item.id.stream_id, {
+    stream: newStream,
+    type: item.id.entity_type,
+  });
+}
+
 // new message!
 createConnectionWebsocketEffect((message) => {
   // not a stream
@@ -114,34 +134,38 @@ createConnectionWebsocketEffect((message) => {
     console.error('unparsable stream payload', message);
     return;
   }
-  // if this is not the 1st item proces new item / add to stream
-  if (
-    streams[item.id.entity_id] &&
-    streams[item.id.entity_id][item.id.stream_id]
-  ) {
-    const stream = streams[item.id.entity_id][item.id.stream_id];
-    if (streamIsDone(item.id.entity_type, item.payload)) {
-      stream.stream.setDone();
-    } else {
-      stream.stream.setData((p) => [...p, item.payload]);
-    }
+  const existing = streams[item.id.entity_id]?.[item.id.stream_id];
+  // is 1st item, or the first item of a replay after a reconnect
+  if (!existing || existing.awaitingReplay) {
+    startStream(item);
+    return;
   }
-  // is 1st item
-  else {
-    // new stream
-    const newStream = createStreamController(item.id);
-    // process item
-    if (streamIsDone(item.id.entity_type, item.payload)) {
-      newStream.setDone();
-    } else {
-      newStream.setData([item.payload]);
-    }
-    addStream(item.id.entity_id, item.id.stream_id, {
-      stream: newStream,
-      type: item.id.entity_type,
-    });
+  // A finished stream can be replayed to a reconnected socket; the copy
+  // that already completed must not grow past its end marker.
+  if (existing.stream.stream.isDone()) return;
+  if (streamIsDone(item.id.entity_type, item.payload)) {
+    existing.stream.setDone();
+  } else {
+    existing.stream.setData((p) => [...p, item.payload]);
   }
 });
+
+/**
+ * Call before re-opening tracked entities on a new connection: the gateway
+ * answers each `open` with the entity's streams from their first item, so
+ * every stream still open here is about to be received again in full.
+ */
+export function markStreamsAwaitingReplay() {
+  setStreams(
+    produce((s) => {
+      for (const entityStreams of Object.values(s)) {
+        for (const entry of Object.values(entityStreams)) {
+          if (!entry.stream.stream.isDone()) entry.awaitingReplay = true;
+        }
+      }
+    })
+  );
+}
 
 // create a new stream or retreive existing stream
 // if a new stream is created it represents the expectation that items will arive to that stream
