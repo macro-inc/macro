@@ -130,6 +130,12 @@ github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "sync",
 ] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "inbound",
+  "outbound",
+  "s3",
+  "service",
+] }
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }

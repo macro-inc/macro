@@ -33,29 +33,6 @@ impl TryFrom<&str> for GithubInstallationSetupAction {
     }
 }
 
-/// Github key used for tracking tasks
-#[derive(Debug, Clone)]
-pub struct GithubKey(String);
-
-impl GithubKey {
-    /// Create a new github key
-    pub fn new(org: &str, repo: &str, pr: u64) -> Self {
-        Self(format!("{org}/{repo}/pull/{pr}"))
-    }
-}
-
-impl fmt::Display for GithubKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl AsRef<str> for GithubKey {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
 /// OAuth access token returned after exchanging a GitHub App setup code.
 #[derive(Clone, Deserialize)]
 pub struct GithubSetupAccessToken {

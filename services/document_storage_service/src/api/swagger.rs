@@ -114,6 +114,14 @@ use favorites::inbound::axum_router::{
     AddFavoriteRequest, FavoriteEntityRef, ReorderFavoritesRequest,
 };
 use foreign_entity::domain::models::ForeignEntity;
+use github_pull_requests::domain::models::{
+    GithubLabelFacet, GithubPullRequestFacets, GithubRepositoryFacet, GithubUserFacet,
+    StoredGithubPullRequest,
+};
+use github_pull_requests::inbound::changes_router::{
+    ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
+    GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
+};
 use initiative::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
@@ -475,6 +483,12 @@ use utoipa::OpenApi;
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
         foreign_entity::inbound::axum_router::get_foreign_entity_by_source_handler,
 
+        // github_pull_requests
+        github_pull_requests::inbound::axum_router::get_github_pull_request_facets_handler,
+        github_pull_requests::inbound::axum_router::get_github_pull_request_handler,
+        github_pull_requests::inbound::changes_router::get_github_pull_request_changes_handler,
+        github_pull_requests::inbound::changes_router::get_github_pull_request_changes_patch_handler,
+
         // threads
         threads::edit_thread::edit_thread_handler,
 
@@ -605,6 +619,18 @@ use utoipa::OpenApi;
             SoupPropertiesField,
             SoupForeignEntity,
             ForeignEntity,
+            GithubPullRequestFacets,
+            GithubRepositoryFacet,
+            GithubUserFacet,
+            GithubLabelFacet,
+            StoredGithubPullRequest,
+            GithubPullRequestChangesResponse,
+            GithubPullRequestChangesPatchResponse,
+            ChangesetDto,
+            ChangesetSourceDto,
+            ChangedFileDto,
+            FileChangeKindDto,
+            GitRefDto,
             Favorite,
             FavoritesList,
             CreatedUserApiKey,

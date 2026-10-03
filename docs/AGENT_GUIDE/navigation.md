@@ -98,6 +98,15 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
+Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
+pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
+`/app/task-slug/...`) render without the split layout and take one part only.
+`/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
+replaced with `/app`, which goes to Home or to login. An unknown split among app
+splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
+navigates to a page outside the app replaces every split; Back restores them.
+
 Search-result locations use pane-local namespaces: `channels` (message/thread),
 `email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
 context), `agent-detail` (turn/author), and `call-detail` (transcript segment).

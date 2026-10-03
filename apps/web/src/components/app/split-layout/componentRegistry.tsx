@@ -1,23 +1,23 @@
-import { ActivityRouteView } from '@app/features/activity/route';
+import { ActivityRouteView } from '@app/features/activity/route-views';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { AgentsRouteView } from '@app/features/agents-view/route';
+import { AgentsRouteView } from '@app/features/agents-view/route-views';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { CalendarRouteView } from '@app/features/calendar-view/route';
-import { ChannelsRouteView } from '@app/features/channels-view/route';
-import { CompaniesRouteView } from '@app/features/crm/route';
-import { DriveRouteView } from '@app/features/drive-view/route';
+import { CalendarRouteView } from '@app/features/calendar-view/route-views';
+import { ChannelsRouteView } from '@app/features/channels-view/route-views';
+import { CompaniesRouteView } from '@app/features/crm/route-views';
+import { DriveRouteView } from '@app/features/drive-view/route-views';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
-import { MailRouteView } from '@app/features/email-view/route';
-import { GettingStartedRouteView } from '@app/features/getting-started/route';
-import { HomeRouteView } from '@app/features/home/route';
+import { MailRouteView } from '@app/features/email-view/route-views';
+import { GettingStartedRouteView } from '@app/features/getting-started/route-views';
+import { HomeRouteView } from '@app/features/home/route-views';
 import {
   CallsRouteView,
   FoldersRouteView,
   RecentRouteView,
   SearchRouteView,
-} from '@app/features/next-soup/route';
+} from '@app/features/next-soup/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import {
   CreateProjectView,
@@ -26,15 +26,17 @@ import {
 } from '@app/features/projects/project-view';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
-import { RemindersRouteView } from '@app/features/reminders/route';
-import { ReviewsRouteView } from '@app/features/reviews-view/route';
-import { SettingsRouteView } from '@app/features/settings/route';
-import { TasksRouteView } from '@app/features/tasks-view/route';
+import { RemindersRouteView } from '@app/features/reminders/route-views';
+import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
+import { SettingsRouteView } from '@app/features/settings/route-views';
+import { TasksRouteView } from '@app/features/tasks-view/route-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import NotFound from '@core/component/AccessErrorViews/NotFound';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
@@ -220,6 +222,7 @@ registerComponent(
   () => composableLayout(true)
 );
 registerComponent('getting-started', () => <GettingStartedRouteView />);
+registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);

@@ -2374,6 +2374,10 @@ input GraphqlEntityFilterAst {
 	"""
 	foreignEntityFilter: GraphqlForeignEntityExpr
 	"""
+	The GitHub pull request filter to apply, on top of the foreign entity filter.
+	"""
+	githubPullRequestFilter: GraphqlGithubPullRequestExpr
+	"""
 	The reminder filter to apply.
 	"""
 	reminderFilter: GraphqlReminderExpr
@@ -3215,6 +3219,128 @@ type GraphqlGithubPrStatusChangedMetadata {
 	Merge timestamp in RFC 3339 format.
 	"""
 	mergedAt: String
+}
+
+"""
+The two operands of a recursive `GithubPullRequestFilterExpr` binary expression.
+"""
+input GraphqlGithubPullRequestBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlGithubPullRequestExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlGithubPullRequestExpr!
+}
+
+"""
+A recursive `GithubPullRequestFilterExpr` filter expression.
+"""
+input GraphqlGithubPullRequestExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlGithubPullRequestBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlGithubPullRequestBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlGithubPullRequestExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlGithubPullRequestLiteral
+}
+
+"""
+GraphQL input representing a GitHub pull request literal.
+"""
+input GraphqlGithubPullRequestLiteral @oneOf {
+	"""
+	The numeric GitHub repository id option.
+	"""
+	repositoryId: String
+	"""
+	The author's numeric GitHub user id option.
+	"""
+	author: String
+	"""
+	The pull request state option.
+	"""
+	status: GraphqlGithubPullRequestState
+	"""
+	The numeric GitHub user id of someone involved in the pull request.
+	"""
+	involves: String
+	"""
+	The numeric GitHub user id of a requested reviewer.
+	"""
+	reviewRequested: String
+	"""
+	The draft option.
+	"""
+	draft: Boolean
+	"""
+	The numeric GitHub user id of an assignee.
+	"""
+	assignee: String
+	"""
+	The label name option.
+	"""
+	label: String
+	"""
+	The review status option.
+	"""
+	reviewStatus: GraphqlGithubPullRequestReviewStatus
+	"""
+	The numeric GitHub user id of someone who submitted a review.
+	"""
+	reviewedBy: String
+}
+
+"""
+GraphQL input representing a GitHub pull request review status.
+"""
+enum GraphqlGithubPullRequestReviewStatus {
+	"""
+	The no reviews option.
+	"""
+	NONE
+	"""
+	The review required option.
+	"""
+	REQUIRED
+	"""
+	The approved option.
+	"""
+	APPROVED
+	"""
+	The changes requested option.
+	"""
+	CHANGES_REQUESTED
+}
+
+"""
+GraphQL input representing a GitHub pull request state.
+"""
+enum GraphqlGithubPullRequestState {
+	"""
+	The open option.
+	"""
+	OPEN
+	"""
+	The closed option.
+	"""
+	CLOSED
+	"""
+	The merged option.
+	"""
+	MERGED
 }
 
 """

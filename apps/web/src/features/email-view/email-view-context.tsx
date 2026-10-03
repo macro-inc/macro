@@ -16,6 +16,7 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,
@@ -57,7 +58,6 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
-import { emailSplitRoute, emailThreadRoute } from './route';
 import type {
   EmailTab,
   EmailThreadTarget,

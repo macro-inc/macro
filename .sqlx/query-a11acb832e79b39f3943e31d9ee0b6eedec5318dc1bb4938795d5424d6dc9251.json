@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_pull_request (agent_session_id, github_key, source, linked_by)\n            VALUES ($1, $2, 'user', $3)\n            ON CONFLICT (agent_session_id, github_key) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a11acb832e79b39f3943e31d9ee0b6eedec5318dc1bb4938795d5424d6dc9251"
+}

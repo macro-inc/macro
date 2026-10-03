@@ -6,12 +6,15 @@ use std::sync::{Arc, Mutex};
 
 use agent_session::domain::model::AgentSession;
 use chrono::{DateTime, Utc};
+use macro_uuid::Uuid;
 
 use crate::domain::error::ExtractError;
 use crate::domain::model::{
     AgentSessionId, AttemptOutcome, CaptureAttempt, Changeset, ExtractedChangeset, SessionChanges,
 };
-use crate::domain::ports::{ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey};
+use crate::domain::ports::{
+    ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey, PatchLocation,
+};
 
 /// An extractor that answers with whatever it was last told to, and counts
 /// how often it was asked.
@@ -24,6 +27,7 @@ pub struct ScriptedExtractor {
 struct ScriptedState {
     answer: Option<Result<ExtractedChangeset, String>>,
     not_ready: Option<String>,
+    pull_request_patches: HashMap<Uuid, String>,
     calls: usize,
 }
 
@@ -57,6 +61,15 @@ impl ScriptedExtractor {
         self.state.lock().expect("scripted state").answer = Some(Ok(changeset));
     }
 
+    /// Serve `patch` as the patch of the pull request changeset `changeset`.
+    pub fn set_pull_request_patch(&self, changeset: Uuid, patch: &str) {
+        self.state
+            .lock()
+            .expect("scripted state")
+            .pull_request_patches
+            .insert(changeset, patch.to_owned());
+    }
+
     /// How many extractions were asked for.
     #[must_use]
     pub fn calls(&self) -> usize {
@@ -79,12 +92,21 @@ impl ChangesetExtractor for ScriptedExtractor {
             ))),
         }
     }
+
+    async fn pull_request_patch(
+        &self,
+        _session: &AgentSession,
+        changeset: Uuid,
+    ) -> Result<Option<String>, rootcause::Report> {
+        let state = self.state.lock().expect("scripted state");
+        Ok(state.pull_request_patches.get(&changeset).cloned())
+    }
 }
 
 #[derive(Default)]
 struct MemoryRow {
     changeset: Option<Changeset>,
-    patch_key: Option<PatchBlobKey>,
+    patch: Option<PatchLocation>,
     attempt: Option<CaptureAttempt>,
 }
 
@@ -121,14 +143,17 @@ impl ChangesetRepo for MemoryChangesetRepo {
     async fn record_changeset(
         &self,
         changeset: &Changeset,
-        patch_key: Option<&PatchBlobKey>,
+        patch: Option<&PatchLocation>,
         finished_at: DateTime<Utc>,
     ) -> Result<Option<PatchBlobKey>, rootcause::Report> {
         let mut rows = self.rows.lock().expect("rows");
         let row = rows.entry(changeset.session).or_default();
-        let superseded = row.patch_key.take();
+        let superseded = match row.patch.take() {
+            Some(PatchLocation::Blob(key)) => Some(key),
+            Some(PatchLocation::PullRequest(_)) | None => None,
+        };
         row.changeset = Some(changeset.clone());
-        row.patch_key = patch_key.cloned();
+        row.patch = patch.cloned();
         if let Some(attempt) = row.attempt.as_mut() {
             attempt.finished_at = Some(finished_at);
             attempt.outcome = Some(AttemptOutcome::Captured);
@@ -165,12 +190,12 @@ impl ChangesetRepo for MemoryChangesetRepo {
             .unwrap_or_default())
     }
 
-    async fn patch_key(
+    async fn patch_location(
         &self,
         session: AgentSessionId,
-    ) -> Result<Option<PatchBlobKey>, rootcause::Report> {
+    ) -> Result<Option<PatchLocation>, rootcause::Report> {
         let rows = self.rows.lock().expect("rows");
-        Ok(rows.get(&session).and_then(|row| row.patch_key.clone()))
+        Ok(rows.get(&session).and_then(|row| row.patch.clone()))
     }
 }
 

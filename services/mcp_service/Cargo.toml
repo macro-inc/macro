@@ -53,6 +53,7 @@ frecency = { path = "../../crates/frecency", features = [
 ] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+github_pull_requests = { path = "../../crates/github_pull_requests" }
 http = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }
