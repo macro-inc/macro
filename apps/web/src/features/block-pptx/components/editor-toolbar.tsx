@@ -109,7 +109,7 @@ function SwatchGrid(props: {
   );
 }
 
-export const INSERTABLE_SHAPES = [
+const INSERTABLE_SHAPES = [
   { preset: 'rect', label: 'Rectangle', icon: SquareIcon },
   { preset: 'roundRect', label: 'Rounded rectangle', icon: SquareIcon },
   { preset: 'ellipse', label: 'Oval', icon: CircleIcon },

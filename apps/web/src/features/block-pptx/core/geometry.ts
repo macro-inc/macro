@@ -39,12 +39,12 @@ export function invertAffine(t: Affine): Affine | null {
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
-export function center(b: Box): Point {
+function center(b: Box): Point {
   return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
 }
 
 /** Rotates `p` about `c` by `deg` clockwise (y grows downward). */
-export function rotateAbout(p: Point, c: Point, deg: number): Point {
+function rotateAbout(p: Point, c: Point, deg: number): Point {
   const r = rad(deg);
   const cos = Math.cos(r);
   const sin = Math.sin(r);
@@ -54,7 +54,7 @@ export function rotateAbout(p: Point, c: Point, deg: number): Point {
 }
 
 /** `p` in the box's unrotated frame. */
-export function toLocal(b: Box, p: Point): Point {
+function toLocal(b: Box, p: Point): Point {
   return rotateAbout(p, center(b), -b.rotation);
 }
 
@@ -108,7 +108,7 @@ export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 /** Unit position of a handle within the box (0..1 on each axis). */
-export function handleUnit(h: Handle): Point {
+function handleUnit(h: Handle): Point {
   const x = h.includes('w') ? 0 : h.includes('e') ? 1 : 0.5;
   const y = h.includes('n') ? 0 : h.includes('s') ? 1 : 0.5;
   return { x, y };
