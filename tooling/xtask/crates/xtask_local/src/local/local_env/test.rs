@@ -295,6 +295,17 @@ fn auth_service_internal_key_matches_dss_auth_key() {
     );
 }
 
+/// Account deletion presents the same key to the scheduled-action and agent
+/// harness services, which validate against `INTERNAL_API_KEY`.
+#[test]
+fn auth_service_internal_key_matches_internal_api_key() {
+    let env = local_env();
+    assert_eq!(
+        env.get("SERVICE_INTERNAL_AUTH_KEY"),
+        env.get("INTERNAL_API_KEY"),
+    );
+}
+
 #[test]
 fn aws_creds_are_dummy() {
     let env = local_env();
@@ -322,8 +333,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
         .to_env();
 
     assert_ne!(
-        a.get("SERVICE_INTERNAL_AUTH_KEY"),
-        b.get("SERVICE_INTERNAL_AUTH_KEY"),
+        a.get("INTERNAL_CALL_SECRET"),
+        b.get("INTERNAL_CALL_SECRET"),
         "per-instance secrets should differ between instances"
     );
     assert_eq!(
