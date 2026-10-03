@@ -16,6 +16,7 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
+import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
@@ -26,6 +27,9 @@ import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { EmailInboxList } from './EmailInboxSelector';
+
+// Email is personal, so the sidebar lists only the user's own tags.
+const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: SignalIcon,
@@ -144,6 +148,7 @@ export function EmailSidebar() {
             onActiveIdsChange={showTags}
             open={isSidebarSectionOpen('tags')}
             onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+            scopes={SIDEBAR_TAG_SCOPES}
           />
         </div>
       </ViewSidebar.Content>
