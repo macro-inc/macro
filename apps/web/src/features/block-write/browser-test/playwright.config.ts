@@ -20,7 +20,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      'bunx vite --config src/features/block-docx/browser-test/vite.config.ts',
+      'bunx vite --config src/features/block-write/browser-test/vite.config.ts',
     cwd: webDirectory,
     url: 'http://127.0.0.1:3018',
     reuseExistingServer: true,

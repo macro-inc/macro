@@ -30,7 +30,7 @@ files:
   - apps/web/src/features/email-thread/components/**
   - apps/web/src/features/email-compose/components/**
   - apps/web/src/features/agent-changes/components/**
-  - apps/web/src/features/block-docx/components/**
+  - apps/web/src/features/block-write/components/**
 rule:
   any:
     - kind: string

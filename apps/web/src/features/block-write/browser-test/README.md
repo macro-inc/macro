@@ -19,7 +19,7 @@ backend or Docker.
 ```sh
 (\cd services/sync-service && just worker-build)   # once, builds build/worker/shim.mjs
 \cd apps/web
-bunx playwright test -c src/features/block-docx/browser-test/playwright.config.ts
+bunx playwright test -c src/features/block-write/browser-test/playwright.config.ts
 ```
 
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when Playwright's bundled Chromium

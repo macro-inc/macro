@@ -51,16 +51,6 @@ import type { ObjectLike, ResultError } from './util/result';
 
 export { BlockAliasRegistry, BlockRegistry } from '../constants/block-registry';
 
-/**
- * Block names that may resolve through another concrete block implementation.
- * `write` (DOCX) has its own editor behind a flag and falls back to `pdf`.
- */
-export const VirtualBlockRegistry = ['write'] as const;
-const virtualBlockNames = new Set<string>(VirtualBlockRegistry);
-export const ConcreteBlockRegistry = BlockRegistry.filter(
-  (name) => !virtualBlockNames.has(name)
-);
-
 type BlockNameKeys = keyof typeof BlockRegistry & number;
 
 /**

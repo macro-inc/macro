@@ -3,7 +3,6 @@ import {
   type BlockAlias,
   type BlockName,
   BlockRegistry,
-  ConcreteBlockRegistry,
   type FileTypeString,
   type MimeType,
 } from '@core/block';
@@ -37,9 +36,9 @@ if (duplicateDefinitionNames.length > 0) {
   );
 }
 
-// `write` is the DOCX block: the collaborative DOCX editor when it is enabled,
-// otherwise it resolves to `pdf`. Every other concrete block needs a module.
-const missingBlockDefinitions = ConcreteBlockRegistry.filter(
+// Every block needs a module. `write` (DOCX) is the collaborative DOCX editor
+// when it is enabled; otherwise `verifyBlockName` resolves it to `pdf`.
+const missingBlockDefinitions = BlockRegistry.filter(
   (name) => !definitionNames.includes(name)
 );
 if (missingBlockDefinitions.length > 0) {
