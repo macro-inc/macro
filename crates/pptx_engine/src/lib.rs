@@ -7,6 +7,7 @@
 
 #![deny(missing_docs)]
 
+pub mod collab;
 pub mod edit;
 mod error;
 pub mod fidelity;

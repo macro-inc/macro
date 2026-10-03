@@ -23,10 +23,12 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { watchPresentationChanges } from '@core/pptx-engine/changes';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
+import { getDisplayName, tryMacroId } from '@core/user';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -35,6 +37,7 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import { Button } from '@ui/components/Button';
+import { LoroDoc } from 'loro-crdt';
 import {
   createSignal,
   type JSX,
@@ -47,15 +50,26 @@ import {
 import {
   type PptxEditorContext,
   PptxEditorProvider,
+  type PresentationCollaboration,
   type PresentationEngine,
 } from './context/pptx-editor-context';
 import type { PptxData } from './definition';
-import { openWorkerPresentation } from './queries/presentation-engine';
+import { createPresentationCollabSession } from './queries/presentation-collab';
+import {
+  buildPresentationSeed,
+  openCollaborativePresentation,
+  openWorkerPresentation,
+} from './queries/presentation-engine';
 import {
   fetchPresentationFile,
   PPTX_MIME,
   savePresentationFile,
 } from './queries/presentation-file';
+import {
+  connectPresentationSync,
+  initializePresentationSync,
+  presentationSyncExists,
+} from './queries/presentation-sync';
 import { PptxEditor } from './views/pptx-editor';
 
 /** Every save stores the whole file as a new version, so big decks save less often. */
@@ -70,20 +84,23 @@ function download(bytes: Uint8Array | Blob, name: string) {
   void downloadFile(blob, name);
 }
 
-/** Opens the bytes in the worker and mounts the editor once ready. */
+/** Opens a presentation engine and mounts the editor once ready. */
 function PresentationHost(props: {
   documentId: string;
   bytes: ArrayBuffer;
   canEdit: () => boolean;
   fileName: () => string;
   onEngine: (engine: PresentationEngine | undefined) => void;
+  /** Opens the engine; the stored file by default. */
+  open?: () => Promise<PresentationEngine>;
+  collaboration?: PresentationCollaboration;
 }) {
   const [engine, setEngine] = createSignal<PresentationEngine>();
   const [failure, setFailure] = createSignal<string>();
   onMount(() => {
     let disposed = false;
     // A copy is transferred, so a remount can open the original again.
-    openWorkerPresentation(props.bytes.slice(0))
+    (props.open?.() ?? openWorkerPresentation(props.bytes.slice(0)))
       .then((e) => {
         if (disposed) {
           e.close();
@@ -117,6 +134,7 @@ function PresentationHost(props: {
       props.bytes.byteLength > LARGE_DECK_BYTES
         ? LARGE_DECK_AUTOSAVE_MS
         : undefined,
+    collaboration: props.collaboration,
   });
 
   return (
@@ -139,6 +157,73 @@ function PresentationHost(props: {
           <PptxEditorProvider context={context(e())}>
             <PptxEditor />
           </PptxEditorProvider>
+        )}
+      </Match>
+    </Switch>
+  );
+}
+
+const displayName = (userId: string | undefined) =>
+  getDisplayName(tryMacroId(userId ?? ''), { emailFallback: 'local-part' }) ||
+  'Someone';
+
+/**
+ * The presentation as everyone with access edits it live: shared maps on the
+ * sync service, seeded from the stored file the first time an editor opens
+ * it. Viewers before that, and sessions that can't reach the sync service,
+ * get the stored file (read-only when live editing is unavailable).
+ */
+function CollaborativePresentationHost(props: {
+  documentId: string;
+  bytes: ArrayBuffer;
+  canEdit: () => boolean;
+  fileName: () => string;
+  onEngine: (engine: PresentationEngine | undefined) => void;
+}) {
+  const userId = useUserId();
+  const session = createPresentationCollabSession({
+    documentId: props.documentId,
+    userId: userId(),
+    canEdit: props.canEdit,
+    displayName,
+    exists: () => presentationSyncExists(props.documentId),
+    buildSeed: () =>
+      buildPresentationSeed(props.bytes.slice(0), () => new LoroDoc()),
+    initialize: (snapshot) =>
+      initializePresentationSync(props.documentId, snapshot),
+    connect: () => connectPresentationSync(props.documentId),
+  });
+  return (
+    <Switch
+      fallback={
+        <div class="flex size-full items-center justify-center text-ink-muted text-sm">
+          Opening presentation…
+        </div>
+      }
+    >
+      <Match when={session.state().t === 'unshared'}>
+        <PresentationHost {...props} canEdit={() => false} />
+      </Match>
+      <Match when={session.state().t === 'error'}>
+        <PresentationHost {...props} canEdit={() => false} />
+      </Match>
+      <Match
+        when={(() => {
+          const state = session.state();
+          return state.t === 'ready' ? state.doc : undefined;
+        })()}
+        keyed
+      >
+        {(doc) => (
+          <PresentationHost
+            {...props}
+            open={() =>
+              openCollaborativePresentation(doc, {
+                storedFile: props.bytes.slice(0),
+              })
+            }
+            collaboration={session.collaboration}
+          />
         )}
       </Match>
     </Switch>
@@ -247,7 +332,7 @@ export default function PptxBlock(props: { share?: string }) {
                 }
               >
                 {(bytes) => (
-                  <PresentationHost
+                  <CollaborativePresentationHost
                     documentId={documentId}
                     bytes={bytes()}
                     canEdit={canEdit}

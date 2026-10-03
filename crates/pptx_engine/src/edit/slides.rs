@@ -275,6 +275,7 @@ pub fn add_slide(
 fn register_slide(pres: &mut Presentation, part: &str, after: Option<u32>) -> Result<u32> {
     let main = pres.main_part.clone();
     let rid = pres.rels_mut(&main)?.add_internal(rel_type::SLIDE, part);
+    let random = pres.pkg.ids().cloned();
     let doc = pres.xml_mut(&main)?;
     let root = doc.root();
     let list = doc.ensure_child(root, Ns::P, "sldIdLst", PRESENTATION_ORDER);
@@ -282,7 +283,15 @@ fn register_slide(pres: &mut Presentation, part: &str, after: Option<u32>) -> Re
         .children_named(list, Ns::P, "sldId")
         .filter_map(|s| doc.attr_i64(s, "id"))
         .collect();
-    let id = ids.iter().copied().max().unwrap_or(255).max(255) + 1;
+    let id = match random {
+        Some(random) => loop {
+            let id = random.next_in(256..2_147_483_648) as i64;
+            if !ids.contains(&id) {
+                break id;
+            }
+        },
+        None => ids.iter().copied().max().unwrap_or(255).max(255) + 1,
+    };
     let id = if id < 2_147_483_648 {
         id
     } else {

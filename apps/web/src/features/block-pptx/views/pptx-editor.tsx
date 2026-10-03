@@ -15,6 +15,7 @@ import {
 } from 'solid-js';
 import { EditorToolbar } from '../components/editor-toolbar';
 import { NotesPanel } from '../components/notes-panel';
+import { Collaborators, PeerSelections } from '../components/peer-presence';
 import { SelectionOverlay } from '../components/selection-overlay';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
@@ -143,6 +144,37 @@ export function PptxEditor() {
     renderWidth,
     pointsPerPixel: () => 1 / Math.max(scale(), 0.01),
   });
+
+  // ---- presence (collaborative presentations) -----------------------------
+
+  const collaboration = context.collaboration;
+  /** Where this person is, as a stable key (keystrokes do not change it). */
+  const whereabouts = createMemo(() => {
+    const slide = session.currentSlide();
+    const shape = editor.selectedShape();
+    return slide
+      ? `${slide.id}:${shape?.id ?? ''}:${editor.editing() ? 1 : 0}`
+      : '';
+  });
+  // Sharing it with the presence channel syncs an external system.
+  createEffect(
+    on(whereabouts, (key) => {
+      if (!collaboration) return;
+      const [slide, shape, editing] = key.split(':');
+      collaboration.setSelection(
+        key
+          ? {
+              slide: Number(slide),
+              shapes: shape ? [Number(shape)] : [],
+              editing: editing === '1',
+            }
+          : undefined
+      );
+    })
+  );
+  onCleanup(() => collaboration?.setSelection(undefined));
+  const peersOn = (slideId: number) =>
+    collaboration?.peers().filter((p) => p.selection.slide === slideId) ?? [];
 
   const thumbnails = createThumbnails({
     engine,
@@ -664,6 +696,7 @@ export function PptxEditor() {
               onDuplicate={(id) => void duplicateSlide(id)}
               onDelete={(id) => void deleteSlide(id)}
               onToggleHidden={toggleHidden}
+              peersOn={collaboration ? peersOn : undefined}
             />
           )}
         </Show>
@@ -672,6 +705,11 @@ export function PptxEditor() {
             ref={stageHost}
             class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-inset"
           >
+            <Show when={collaboration}>
+              {(c) => (
+                <Collaborators peers={c().peers()} status={c().status()} />
+              )}
+            </Show>
             <Show
               when={session.outline() && scale() > 0}
               fallback={
@@ -702,6 +740,17 @@ export function PptxEditor() {
                   onDblClick={onDoubleClick}
                   onKeyDown={onStageKeyDown}
                 >
+                  <Show when={collaboration && session.currentSlide()}>
+                    {(slide) => (
+                      <PeerSelections
+                        peers={collaboration?.peers() ?? []}
+                        slide={slide()}
+                        width={slideW()}
+                        height={slideH()}
+                        unit={1 / Math.max(scale(), 0.01)}
+                      />
+                    )}
+                  </Show>
                   <SelectionOverlay
                     width={slideW()}
                     height={slideH()}

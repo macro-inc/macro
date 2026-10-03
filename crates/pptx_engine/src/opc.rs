@@ -85,8 +85,8 @@ pub mod content_type {
 enum PartData {
     /// Still the bytes from the source archive.
     Original(Entry),
-    /// Replaced or newly created.
-    Modified(std::sync::Arc<Vec<u8>>),
+    /// Replaced or newly created, with the package generation of the write.
+    Modified(std::sync::Arc<Vec<u8>>, u64),
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +98,35 @@ struct Part {
     data: PartData,
 }
 
+/// Pseudo-random numbers for naming new parts and ids.
+///
+/// Peers editing one presentation concurrently must not mint the same part
+/// name, relationship id, slide id, or shape id, or their merged edits would
+/// collide. Sequential allocation ("the next free number") collides almost
+/// surely; random allocation from a wide range practically never does.
+#[derive(Debug)]
+pub struct IdSource(std::sync::atomic::AtomicU64);
+
+impl IdSource {
+    /// A source seeded with `seed` (use a value unique to the editing peer).
+    pub fn new(seed: u64) -> Self {
+        Self(std::sync::atomic::AtomicU64::new(seed))
+    }
+
+    /// The next number in `range` (splitmix64).
+    pub fn next_in(&self, range: std::ops::Range<u64>) -> u64 {
+        let state = self
+            .0
+            .fetch_add(0x9E37_79B9_7F4A_7C15, std::sync::atomic::Ordering::Relaxed)
+            .wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        range.start + z % (range.end - range.start).max(1)
+    }
+}
+
 /// An OPC package (a `.pptx` file).
 #[derive(Clone)]
 pub struct Package {
@@ -106,6 +135,10 @@ pub struct Package {
     /// Lower-cased part name → index into `parts`.
     index: HashMap<String, usize>,
     content_types: ContentTypes,
+    /// Bumped on every write, so part identities never repeat.
+    generation: u64,
+    /// Random naming for new parts and ids (collaborative editing).
+    ids: Option<std::sync::Arc<IdSource>>,
 }
 
 /// Normalizes a part name: leading slash, `/` separators, no `.`/`..` segments.
@@ -210,6 +243,8 @@ impl Package {
             parts,
             index,
             content_types: ContentTypes::default(),
+            generation: 0,
+            ids: None,
         };
         let ct_bytes = pkg
             .read(CONTENT_TYPES_PART)
@@ -252,7 +287,7 @@ impl Package {
                     [entry.data_start..entry.data_start + entry.compressed_size as usize];
                 Ok(Cow::Owned(zip::inflate_entry(entry, raw)?))
             }
-            PartData::Modified(bytes) => Ok(Cow::Borrowed(bytes.as_slice())),
+            PartData::Modified(bytes, _) => Ok(Cow::Borrowed(bytes.as_slice())),
         }
     }
 
@@ -260,7 +295,7 @@ impl Package {
     pub fn part_size(&self, name: &str) -> Option<u64> {
         self.part(name).map(|p| match &p.data {
             PartData::Original(e) => e.uncompressed_size,
-            PartData::Modified(b) => b.len() as u64,
+            PartData::Modified(b, _) => b.len() as u64,
         })
     }
 
@@ -269,14 +304,14 @@ impl Package {
     pub fn part_identity(&self, name: &str) -> Option<(bool, usize)> {
         self.part(name).map(|p| match &p.data {
             PartData::Original(e) => (false, e.data_start),
-            PartData::Modified(b) => (true, std::sync::Arc::as_ptr(b) as usize),
+            PartData::Modified(_, generation) => (true, *generation as usize),
         })
     }
 
     /// Whether a part was replaced or created since opening.
     pub fn is_modified(&self, name: &str) -> bool {
         self.part(name)
-            .is_some_and(|p| matches!(p.data, PartData::Modified(_)))
+            .is_some_and(|p| matches!(p.data, PartData::Modified(..)))
     }
 
     /// Replaces (or creates) a part. New parts need a content type, either an
@@ -284,7 +319,8 @@ impl Package {
     pub fn write(&mut self, name: &str, bytes: Vec<u8>, content_type: Option<&str>) {
         let name = normalize_part_name(name);
         let key = name.to_ascii_lowercase();
-        let data = PartData::Modified(std::sync::Arc::new(bytes));
+        self.generation += 1;
+        let data = PartData::Modified(std::sync::Arc::new(bytes), self.generation);
         match self.index.get(&key) {
             Some(&i) => self.parts[i].data = data,
             None => {
@@ -320,6 +356,12 @@ impl Package {
         &self.content_types
     }
 
+    /// Replaces the content types (written out on the next save).
+    pub fn set_content_types(&mut self, mut content_types: ContentTypes) {
+        content_types.mark_dirty();
+        self.content_types = content_types;
+    }
+
     /// Mutable access to content types.
     pub fn content_types_mut(&mut self) -> &mut ContentTypes {
         &mut self.content_types
@@ -337,10 +379,12 @@ impl Package {
         } else {
             rels_part_name(source_part)
         };
-        if !self.has_part(&rels_name) {
-            return Ok(Relationships::empty(source_part));
-        }
-        Relationships::parse(source_part, &self.read(&rels_name)?)
+        let rels = if self.has_part(&rels_name) {
+            Relationships::parse(source_part, &self.read(&rels_name)?)?
+        } else {
+            Relationships::empty(source_part)
+        };
+        Ok(rels.with_ids(self.ids.clone()))
     }
 
     /// Writes the relationships of a part back to the package.
@@ -355,12 +399,32 @@ impl Package {
             .ensure_default("rels", content_type::RELATIONSHIPS);
     }
 
-    /// Picks an unused part name `"{prefix}{n}{suffix}"` (n ≥ 1).
+    /// Picks an unused part name `"{prefix}{n}{suffix}"`: the smallest n ≥ 1,
+    /// or a random one when [`Package::use_random_ids`] is on.
     pub fn unique_part_name(&self, prefix: &str, suffix: &str) -> String {
+        if let Some(ids) = &self.ids {
+            loop {
+                let name = format!("{prefix}{}{suffix}", ids.next_in(1_000_000..1_000_000_000));
+                if !self.has_part(&name) {
+                    return name;
+                }
+            }
+        }
         (1..)
             .map(|n| format!("{prefix}{n}{suffix}"))
             .find(|n| !self.has_part(n))
             .expect("unbounded search")
+    }
+
+    /// Names new parts and relationships, and new slides and shapes number
+    /// their ids, from `ids` instead of the next free number.
+    pub fn use_random_ids(&mut self, ids: std::sync::Arc<IdSource>) {
+        self.ids = Some(ids);
+    }
+
+    /// The random id source, when [`Package::use_random_ids`] is on.
+    pub fn ids(&self) -> Option<&std::sync::Arc<IdSource>> {
+        self.ids.as_ref()
     }
 
     /// The main presentation part (target of the package's officeDocument relationship).
@@ -413,7 +477,7 @@ impl Package {
                         [entry.data_start..entry.data_start + entry.compressed_size as usize];
                     writer.add(&part.zip_name, WriteData::Raw { entry, raw })?;
                 }
-                PartData::Modified(bytes) => {
+                PartData::Modified(bytes, _) => {
                     writer.add(
                         &part.zip_name,
                         WriteData::Fresh {

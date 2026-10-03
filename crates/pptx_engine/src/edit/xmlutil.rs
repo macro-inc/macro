@@ -146,6 +146,27 @@ pub fn max_shape_id(doc: &XmlDoc) -> u32 {
         .clamp(1, i64::from(u32::MAX - 1)) as u32
 }
 
+/// An id for a new shape: one past the largest, or a random unused one when
+/// the package names ids randomly (see `Package::use_random_ids`).
+pub fn fresh_shape_id(doc: &XmlDoc, ids: Option<&crate::opc::IdSource>) -> u32 {
+    let Some(ids) = ids else {
+        return max_shape_id(doc) + 1;
+    };
+    let used: std::collections::HashSet<i64> = doc
+        .descendants(doc.root())
+        .into_iter()
+        .filter(|&n| doc.local(n) == "cNvPr")
+        .filter_map(|n| doc.attr_i64(n, "id"))
+        .collect();
+    loop {
+        // Room above for the sequential ids a duplicated group takes.
+        let id = ids.next_in(1 << 20..1 << 30) as u32;
+        if !used.contains(&i64::from(id)) {
+            return id;
+        }
+    }
+}
+
 /// The shape's properties element (`spPr` / `grpSpPr`), created if missing.
 pub fn ensure_sp_pr(doc: &mut XmlDoc, shape: NodeId) -> NodeId {
     if let Some(s) = doc

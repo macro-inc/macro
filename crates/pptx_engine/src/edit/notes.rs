@@ -58,13 +58,14 @@ pub fn set_notes(pres: &mut Presentation, slide: u32, value: &str) -> Result<()>
         Some(n) => n,
         None => create_notes_slide(pres, &part)?,
     };
+    let ids = pres.pkg.ids().cloned();
     let doc = pres.xml_mut(&notes)?;
     let shape = match notes_body(doc) {
         Some(s) => s,
         None => {
             let tree = sp_tree(doc)
                 .ok_or_else(|| Error::InvalidEdit("notes slide has no shape tree".into()))?;
-            let id = super::xmlutil::max_shape_id(doc) + 1;
+            let id = super::xmlutil::fresh_shape_id(doc, ids.as_deref());
             let sp = super::xmlutil::import_fragment(doc, &notes_placeholder_xml(id))?;
             doc.append_child(tree, sp);
             sp

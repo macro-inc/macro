@@ -6,6 +6,7 @@
 //! changed. Elements and attributes carry resolved [`Ns`] identifiers, so
 //! lookups never depend on the prefixes a producer chose.
 
+mod fragment;
 mod ns;
 mod parse;
 mod write;

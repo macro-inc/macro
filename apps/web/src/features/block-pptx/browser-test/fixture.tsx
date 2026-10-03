@@ -8,16 +8,22 @@
 
 import '@fontsource-variable/inter';
 import '../../../index.css';
-import type { EditOp, EditResult } from '@core/pptx-engine/types';
+import type {
+  CollabEntries,
+  EditOp,
+  EditResult,
+} from '@core/pptx-engine/types';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
   type PptxEditorContext,
   PptxEditorProvider,
   type PresentationEngine,
+  type PresentationPeer,
 } from '../context/pptx-editor-context';
 import { openWorkerPresentation } from '../queries/presentation-engine';
 import { PptxEditor } from '../views/pptx-editor';
+import { CollabFixture } from './collab-fixture';
 
 declare const __PPTX_CORPUS_URL__: string;
 const CORPUS = __PPTX_CORPUS_URL__;
@@ -45,6 +51,13 @@ declare global {
       notices: () => string[];
       /** Applies `ops` to the stored copy as another client would, then announces it. */
       externalEdit: (ops: EditOp[]) => Promise<EditResult>;
+      /** Collaboration mode: the shared document and presence. */
+      collab?: {
+        status: () => string;
+        peers: () => PresentationPeer[];
+        ready: () => boolean;
+        entries: () => CollabEntries;
+      };
     };
   }
 }
@@ -204,4 +217,18 @@ function Fixture() {
   );
 }
 
-render(() => <Fixture />, document.getElementById('root')!);
+const params = new URLSearchParams(location.search);
+render(
+  () =>
+    params.has('socket') ? (
+      <CollabFixture
+        params={params}
+        deckUrl={
+          CORPUS + (params.get('deck') ?? DECKS['Kitchen sink (financial)'])
+        }
+      />
+    ) : (
+      <Fixture />
+    ),
+  document.getElementById('root')!
+);

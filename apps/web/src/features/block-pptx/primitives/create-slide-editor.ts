@@ -228,6 +228,19 @@ export function createSlideEditor(options: SlideEditorOptions) {
     }
   }
 
+  // Other people's edits to this slide while typing: the backdrop is redrawn
+  // around the edited shape, and its caret layout re-read if they touched it.
+  const unsubscribeRemote = engine.onRemoteChange?.((result) => {
+    const s = untrack(slide);
+    const edit = untrack(editing);
+    if (!s || !edit) return;
+    if (!result.structureChanged && !result.changedSlides.includes(s.id))
+      return;
+    void renderLayers(edit.shape, true).catch(() => {});
+    void refreshEditing();
+  });
+  onCleanup(() => unsubscribeRemote?.());
+
   // A reloaded presentation invalidates selection and text editing.
   session.onReplaced(() => {
     batch(() => {

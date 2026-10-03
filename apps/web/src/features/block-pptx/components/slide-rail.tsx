@@ -11,7 +11,9 @@ import PlusIcon from '@phosphor/plus.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, Show } from 'solid-js';
+import type { PresentationPeer } from '../context/pptx-editor-context';
 import { BitmapCanvas } from './bitmap-canvas';
+import { SlidePeers } from './peer-presence';
 
 export interface SlideRailProps {
   slides: SlideOutline[];
@@ -27,6 +29,8 @@ export interface SlideRailProps {
   onDuplicate: (slideId: number) => void;
   onDelete: (slideId: number) => void;
   onToggleHidden: (slide: SlideOutline) => void;
+  /** Other people on a slide (collaborative presentations). */
+  peersOn?: (slideId: number) => PresentationPeer[];
 }
 
 export function SlideRail(props: SlideRailProps) {
@@ -120,6 +124,7 @@ export function SlideRail(props: SlideRailProps) {
                   width={props.thumbnailPixels}
                   height={props.thumbnailPixels * props.aspect}
                 />
+                <SlidePeers peers={props.peersOn?.(slide.id) ?? []} />
               </button>
               <Show when={!props.readonly}>
                 <div class="absolute top-1 right-1 hidden flex-col gap-0.5 rounded-md bg-surface/90 p-0.5 shadow group-hover:flex group-focus-within:flex">

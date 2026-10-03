@@ -9,6 +9,7 @@
 import type {
   DeckOutline,
   EditResult,
+  EntryChange,
   SlideOutline,
   TextLayoutInfo,
 } from './types';
@@ -20,6 +21,12 @@ interface Base {
 
 export type PptxRequest =
   | (Base & { kind: 'open'; bytes: ArrayBuffer })
+  /** Opens shared collaborative entries (`CollabEntries` JSON). */
+  | (Base & { kind: 'openEntries'; entries: string; seed: number })
+  /** Starts collaborative editing of an opened file; answers every entry. */
+  | (Base & { kind: 'enableCollab'; seed: number })
+  /** Applies shared-map changes (`EntryChange[]` JSON) made elsewhere. */
+  | (Base & { kind: 'applyCollab'; changes: string })
   | (Base & { kind: 'close' })
   | (Base & { kind: 'outline' })
   | (Base & { kind: 'slideOutline'; index: number })
@@ -69,6 +76,9 @@ export type PptxResponse =
       kind: 'edit';
       result: EditResult | null;
       history: HistoryState;
+      /** For a collaborative presentation, the shared-map changes owed. */
+      changes?: EntryChange[];
     }
+  | { id: number; ok: true; kind: 'collab'; changes: EntryChange[] }
   | { id: number; ok: true; kind: 'save'; bytes: ArrayBuffer }
   | { id: number; ok: false; error: string };

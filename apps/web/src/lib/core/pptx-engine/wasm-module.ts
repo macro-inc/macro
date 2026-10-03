@@ -42,12 +42,22 @@ export interface WasmPptxDocument {
   save: () => Uint8Array;
   /** JSON array of requested font families that are not available. */
   missingFonts: () => string;
+  /** Starts collaborative editing of a file opened from bytes. */
+  enableCollab: (seed: number) => void;
+  /** `EntryChange[]` JSON owed to the shared maps since the last call. */
+  collabChanges: () => string;
+  /** Applies `EntryChange[]` JSON from the shared maps; returns `EditResult` JSON. */
+  applyCollab: (changes: string) => string;
   free: () => void;
 }
 
 interface PptxEngineWasmModule {
   default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
-  PptxDocument: new (bytes: Uint8Array) => WasmPptxDocument;
+  PptxDocument: {
+    new (bytes: Uint8Array): WasmPptxDocument;
+    /** Opens the presentation shared `CollabEntries` JSON describe. */
+    fromEntries: (entries: string, seed: number) => WasmPptxDocument;
+  };
   registerFont: (bytes: Uint8Array) => number;
 }
 

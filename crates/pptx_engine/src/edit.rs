@@ -14,7 +14,7 @@ mod notes;
 mod ops;
 mod parts;
 mod shapes;
-mod slides;
+pub(crate) mod slides;
 mod table;
 mod text;
 mod xmlutil;
@@ -427,7 +427,7 @@ impl Presentation {
 }
 
 /// Which slides differ between two states of the same presentation.
-fn diff(before: &Presentation, after: &Presentation) -> EditResult {
+pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
     let ids = |p: &Presentation| p.slides.iter().map(|s| s.id).collect::<Vec<_>>();
     let structure_changed = ids(before) != ids(after) || before.size != after.size;
     let same = |name: &str| before.pkg.part_identity(name) == after.pkg.part_identity(name);

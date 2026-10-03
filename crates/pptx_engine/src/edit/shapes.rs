@@ -4,8 +4,8 @@
 use super::ops::{FillSpec, LinePatch, NewShape, ZOrder};
 use super::parts;
 use super::xmlutil::{
-    LN_ORDER, SP_PR_ORDER, color_element, ensure_sp_pr, esc, find_shape, import_fragment,
-    max_shape_id, replace_fill, set_off_ext, solid_fill,
+    LN_ORDER, SP_PR_ORDER, color_element, ensure_sp_pr, esc, find_shape, fresh_shape_id,
+    import_fragment, replace_fill, set_off_ext, solid_fill,
 };
 use crate::error::{Error, Result};
 use crate::model::presentation::Presentation;
@@ -425,8 +425,20 @@ pub fn add_shape(
             "width and height must not be negative".into(),
         ));
     }
-    let id = max_shape_id(&*pres.xml(part)?) + 1;
-    let n = id - 1;
+    let (id, n) = {
+        let doc = pres.xml(part)?;
+        let id = fresh_shape_id(&doc, pres.pkg.ids().map(|i| &**i));
+        // Random ids would make names like "TextBox 734821"; count instead.
+        let n = if pres.pkg.ids().is_some() {
+            doc.descendants(doc.root())
+                .into_iter()
+                .filter(|&c| doc.local(c) == "cNvPr")
+                .count() as u32
+        } else {
+            id - 1
+        };
+        (id, n)
+    };
     let fragment = match new {
         NewShape::TextBox { text } => {
             let xfrm = xfrm_xml(x, y, w, h);
@@ -599,11 +611,12 @@ pub fn duplicate_shape(
 ) -> Result<u32> {
     check_finite(&[Some(dx), Some(dy)])?;
     let current = effective_xfrm(pres, part, shape)?;
+    let ids = pres.pkg.ids().cloned();
     let doc = pres.xml_mut(part)?;
     let node = find(doc, shape)?;
     let item = tree_item(doc, node);
     let copy = doc.deep_clone(item);
-    let mut next = max_shape_id(doc) + 1;
+    let mut next = fresh_shape_id(doc, ids.as_deref());
     let map = renumber(doc, copy, &mut next);
     let new_id = *map
         .get(&i64::from(shape))

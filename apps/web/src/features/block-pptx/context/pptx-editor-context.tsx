@@ -50,10 +50,47 @@ export interface PresentationEngine {
   /**
    * Replaces the open presentation with `bytes` (transferred), dropping its
    * undo history. Rejects, keeping the current one, when they can't be read.
+   * A collaborative engine instead merges the file's changes into the
+   * shared presentation, keeping everyone's other edits.
    */
   reopen: (bytes: ArrayBuffer) => Promise<void>;
   /** Releases the engine's memory. */
   close: () => void;
+  /** Whether other people edit the same presentation live. */
+  collaborative?: boolean;
+  /**
+   * Collaborative engines: calls `listener` after changes made elsewhere
+   * (other people) reached the engine; returns an unsubscribe.
+   */
+  onRemoteChange?: (
+    listener: (result: EditResult, history: HistoryState) => void
+  ) => () => void;
+  /** Told about each version this editor stored. */
+  onSaved?: (bytes: Uint8Array) => void;
+}
+
+/** Where a collaborator is: a slide and the shapes they selected. */
+export type PresentationSelection = {
+  slide: number;
+  shapes: number[];
+  /** Whether they are typing in the shape. */
+  editing: boolean;
+};
+
+export interface PresentationPeer {
+  peerId: string;
+  userId?: string;
+  name: string;
+  color: string;
+  selection: PresentationSelection;
+}
+
+/** Live presence of the other people in a collaborative presentation. */
+export interface PresentationCollaboration {
+  peers: Accessor<PresentationPeer[]>;
+  /** Shares where this person is (`undefined` when nowhere). */
+  setSelection: (selection: PresentationSelection | undefined) => void;
+  status: Accessor<'connected' | 'connecting' | 'offline'>;
 }
 
 export interface PptxEditorContext {
@@ -79,6 +116,8 @@ export interface PptxEditorContext {
   fetchLatest?: () => Promise<ArrayBuffer>;
   /** Quiet period before an automatic save (ms); `0` saves only on demand. */
   autosaveDelay?: number;
+  /** Presence of other people, for collaborative presentations. */
+  collaboration?: PresentationCollaboration;
 }
 
 const Context = createContext<PptxEditorContext>();

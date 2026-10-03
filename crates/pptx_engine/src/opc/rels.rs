@@ -30,6 +30,8 @@ pub struct Relationship {
 pub struct Relationships {
     source: String,
     rels: Vec<Relationship>,
+    /// Random ids for new relationships (collaborative editing).
+    ids: Option<std::sync::Arc<super::IdSource>>,
 }
 
 impl Relationships {
@@ -38,6 +40,7 @@ impl Relationships {
         Self {
             source: source.to_owned(),
             rels: Vec::new(),
+            ids: None,
         }
     }
 
@@ -66,7 +69,14 @@ impl Relationships {
         Ok(Self {
             source: source.to_owned(),
             rels,
+            ids: None,
         })
+    }
+
+    /// New relationships take random ids from `ids` (see `Package::use_random_ids`).
+    pub fn with_ids(mut self, ids: Option<std::sync::Arc<super::IdSource>>) -> Self {
+        self.ids = ids;
+        self
     }
 
     /// The source part these relationships belong to.
@@ -109,10 +119,18 @@ impl Relationships {
 
     /// Adds a relationship and returns its new id.
     pub fn add(&mut self, rel_type: &str, target: &str, mode: TargetMode) -> String {
-        let id = (1..)
-            .map(|n| format!("rId{n}"))
-            .find(|id| self.get(id).is_none())
-            .expect("unbounded search");
+        let id = match &self.ids {
+            Some(ids) => loop {
+                let id = format!("rId{}", ids.next_in(1_000_000..1_000_000_000));
+                if self.get(&id).is_none() {
+                    break id;
+                }
+            },
+            None => (1..)
+                .map(|n| format!("rId{n}"))
+                .find(|id| self.get(id).is_none())
+                .expect("unbounded search"),
+        };
         self.rels.push(Relationship {
             id: id.clone(),
             rel_type: rel_type.to_owned(),

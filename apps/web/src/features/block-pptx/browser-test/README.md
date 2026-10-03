@@ -36,3 +36,20 @@ and deleting slides, reloading after an outside edit with and without unsaved
 local changes, and read-only viewing. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
 when the bundled browser is not installed. Failure traces and screenshots stay
 in the ignored `test-results/` folder.
+
+## Collaboration
+
+`collaboration.browser.e2e.ts` opens several people (each on its own
+`<name>.localhost` origin) on one deck over the real sync service: the
+compiled Rust sync Worker in Miniflare (`sync-server.ts`). Build the Worker
+once before running it:
+
+```sh
+(\cd services/sync-service && just worker-build)
+```
+
+It covers live edits and selections, concurrent edits to one slide, slides
+added at the same time, undo of only your own change, and a late joiner. With
+`document`, `user`, `worker`, `socket`, and `token` query parameters the
+fixture is one collaborator (`collab-fixture.tsx`); `window.pptxFixture.collab`
+exposes the connection status, peers, and shared entries.

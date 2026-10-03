@@ -29,6 +29,7 @@ render              display lists (scene), text layout, pictures, tables, charts
 font                font database, family substitution, metrics, kerning, outlines
 inspect             outlines and caret layouts for editors and AI tools
 edit                EditOp batches, undo/redo, autofit, slide/notes/table structure
+collab              the presentation as CRDT maps for live collaboration
 fidelity            image comparison, fingerprints, the corpus baseline format
 wasm                the wasm-bindgen API used by the browser worker
 ```
@@ -51,6 +52,21 @@ After text edits, shapes with `normAutofit` are re-fitted (PowerPoint's font
 scale ladder) and `spAutoFit` shapes grow to their text, so saved files open
 in PowerPoint without a reflow. Relationships no longer referenced are pruned
 and orphaned parts are removed.
+
+### Collaboration
+
+`collab` describes a presentation as flat string maps (Loro containers in the
+web app and on the sync service): every part, with slides split into a frame
+plus one entry per top-level shape, relationships one per entry, content
+types, and slide and shape positions as fractional keys. Peers editing
+different shapes, slides, or relationships merge without conflict.
+`Presentation::enable_collab` seeds the maps from a file,
+`Presentation::from_entries` opens them, `collab_changes` reports the entries
+local edits changed, and `apply_collab_changes` applies other peers' changes.
+In collaborative mode new part names and slide, shape, and relationship ids are
+random (`opc::IdSource`), so concurrent additions never collide. The corpus
+test checks that every deck renders identically after a round trip through
+the maps.
 
 ### Fonts
 

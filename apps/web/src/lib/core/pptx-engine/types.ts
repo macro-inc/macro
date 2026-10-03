@@ -290,3 +290,16 @@ export interface EditResult {
   /** Slides were added, removed, or reordered. */
   structureChanged: boolean;
 }
+
+/**
+ * A collaborative presentation's shared maps: container → key → value
+ * (`pptx_engine::collab::Entries`).
+ */
+export type CollabEntries = Record<string, Record<string, string>>;
+
+/** One shared-map entry written, or deleted when `value` is absent or null. */
+export interface EntryChange {
+  container: string;
+  key: string;
+  value?: string | null;
+}

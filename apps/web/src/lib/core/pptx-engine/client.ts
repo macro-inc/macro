@@ -8,9 +8,11 @@
 
 import type { HistoryState, PptxRequest, PptxResponse } from './protocol';
 import type {
+  CollabEntries,
   DeckOutline,
   EditOp,
   EditResult,
+  EntryChange,
   SlideOutline,
   TextLayoutInfo,
 } from './types';
@@ -95,6 +97,46 @@ export async function openPresentation(
   return { slideCount: r.slideCount, size: r.size };
 }
 
+/**
+ * Opens the presentation that shared collaborative entries describe. `seed`
+ * (unique per peer) keeps the names and ids of new parts from colliding.
+ */
+export async function openPresentationEntries(
+  docKey: string,
+  entries: CollabEntries,
+  seed: number
+): Promise<{ slideCount: number; size: [number, number] }> {
+  const r = await request(
+    { kind: 'openEntries', docKey, entries: JSON.stringify(entries), seed },
+    'open'
+  );
+  return { slideCount: r.slideCount, size: r.size };
+}
+
+/**
+ * Starts collaborative editing of an opened file; resolves with every entry
+ * of the shared maps (the seed of a new shared presentation).
+ */
+export async function enableCollab(
+  docKey: string,
+  seed: number
+): Promise<EntryChange[]> {
+  return (await request({ kind: 'enableCollab', docKey, seed }, 'collab'))
+    .changes;
+}
+
+/** Applies shared-map changes made elsewhere (other peers, undo, redo). */
+export async function applyCollabChanges(
+  docKey: string,
+  changes: EntryChange[]
+): Promise<EditResult | null> {
+  const r = await request(
+    { kind: 'applyCollab', docKey, changes: JSON.stringify(changes) },
+    'edit'
+  );
+  return r.result;
+}
+
 /** Releases a presentation's worker memory. */
 export function closePresentation(docKey: string): void {
   void request({ kind: 'close', docKey }, 'close').catch((error: unknown) => {
@@ -170,6 +212,8 @@ export interface EditOutcome {
   /** `null` when nothing was undone or redone. */
   result: EditResult | null;
   history: HistoryState;
+  /** For a collaborative presentation, the shared-map changes owed. */
+  changes?: EntryChange[];
 }
 
 /**
@@ -185,7 +229,7 @@ export async function applyEdits(
     { kind: 'apply', docKey, ops: JSON.stringify(ops), group },
     'edit'
   );
-  return { result: r.result, history: r.history };
+  return { result: r.result, history: r.history, changes: r.changes };
 }
 
 /** Ends the current typing group. */

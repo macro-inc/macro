@@ -397,6 +397,19 @@ changes**, **Saving…**, or **Save failed**. Each save stores the whole file as
 new document version through `PUT /documents/{id}/simple_save` (limit
 100 MB). Viewers without edit access get the same view with editing disabled.
 
+Everyone with the deck open edits it live. The deck is shared through the sync
+service as Loro maps (one entry per shape, slide position, relationship, and
+part; see `pptx_engine::collab`), seeded from the stored file the first time
+someone who can edit opens it. Others' edits appear within a second; edits to
+different shapes merge, and edits to the same shape resolve to the latest.
+Undo takes back only your own changes. Presence shows in the stage's top-right
+corner (`pptx-collaborators`, one `pptx-collaborator` avatar per person), as
+outlines with name tags around the shapes others selected
+(`pptx-peer-selection`, `data-peer="<name>"`, "… is typing" while they type),
+and as colored dots on the thumbnails of slides they are on. A viewer who opens
+a deck nobody has shared yet, or anyone when the sync service is unreachable,
+gets the stored file read-only.
+
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 and every shape with its id, kind, placeholder role, position in points, text,
 and table cells; `ReadContent` returns the same description) and changes them
@@ -418,11 +431,15 @@ It mounts the real editor and worker over corpus decks (`?readonly` for a
 viewer, `?autosave=0` to save only on demand). `window.pptxFixture` exposes
 `saved()`, `saves()`, `engine()`, `errors()`, `notices()`, and
 `externalEdit(ops)`, which applies operations to the stored copy with a second
-engine instance and announces the change the way an AI edit does. Its
-Playwright suite runs with
+engine instance and announces the change the way an AI edit does. With `document`, `user`, `worker`, `socket`, and `token` parameters the
+fixture is one collaborator on the real sync service
+(`browser-test/sync-server.ts` boots the compiled sync Worker in Miniflare;
+build it once with `\cd services/sync-service && just worker-build`), and
+`window.pptxFixture.collab` exposes the connection status, peers, and shared
+entries. Its Playwright suites run with
 `bunx playwright test --config src/features/block-pptx/browser-test/playwright.config.ts`
 (set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
-installed). The editor sections above were verified on this fixture; the
+installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
 `/app/pptx` route itself needs a backend with an uploaded deck.
 
 ## Create and type

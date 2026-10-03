@@ -77,6 +77,8 @@ pub struct Presentation {
     pub(crate) dirty_xml: BTreeSet<String>,
     /// Parts whose cached relationships were edited.
     pub(crate) dirty_rels: BTreeSet<String>,
+    /// The shared maps of a collaborative presentation.
+    pub(crate) collab: Option<Arc<crate::collab::Mirror>>,
 }
 
 /// Default slide size (16:9, 13.333 × 7.5 in).
@@ -99,6 +101,7 @@ impl Presentation {
             metafiles: HashMap::new(),
             dirty_xml: BTreeSet::new(),
             dirty_rels: BTreeSet::new(),
+            collab: None,
         };
         p.reload_structure()?;
         Ok(p)
@@ -343,6 +346,7 @@ impl Presentation {
 
     /// Installs relationships for a (possibly new) part, marking them for write-back.
     pub(crate) fn put_rels(&mut self, rels: Relationships) {
+        let rels = rels.with_ids(self.pkg.ids().cloned());
         let name = rels.source().to_owned();
         self.dirty_rels.insert(name.clone());
         self.rels.insert(name, Arc::new(rels));

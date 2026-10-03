@@ -4,6 +4,7 @@
 //! JavaScript side) and pixels as straight-alpha RGBA bytes ready for
 //! `ImageData`.
 
+use crate::collab::{Entries, EntryChange};
 use crate::edit::{EditOp, Editor};
 use crate::font::FontDb;
 use crate::model::presentation::Presentation;
@@ -54,6 +55,42 @@ impl PptxDocument {
         Ok(Self {
             editor: Editor::new(pres),
         })
+    }
+
+    /// Opens the presentation that shared collaborative entries describe
+    /// (`Entries` JSON). `seed` makes this peer's new names and ids unique.
+    #[wasm_bindgen(js_name = fromEntries)]
+    pub fn from_entries(entries: &str, seed: f64) -> Result<PptxDocument, JsError> {
+        console_error_panic_hook::set_once();
+        let entries: Entries = serde_json::from_str(entries).map_err(js_err)?;
+        let pres = Presentation::from_entries(entries, seed as u64).map_err(js_err)?;
+        Ok(Self {
+            editor: Editor::new(pres),
+        })
+    }
+
+    /// Starts collaborative editing of a file opened with the constructor;
+    /// the next `collabChanges` describes the whole presentation.
+    #[wasm_bindgen(js_name = enableCollab)]
+    pub fn enable_collab(&mut self, seed: f64) {
+        self.pres().enable_collab(seed as u64);
+    }
+
+    /// Entry changes the shared maps need after local edits since the last
+    /// call (JSON `EntryChange[]`).
+    #[wasm_bindgen(js_name = collabChanges)]
+    pub fn collab_changes(&mut self) -> Result<String, JsError> {
+        let changes = self.pres().collab_changes().map_err(js_err)?;
+        to_json(&changes)
+    }
+
+    /// Applies entry changes from the shared maps (other peers, undo, redo);
+    /// returns the `EditResult` as JSON.
+    #[wasm_bindgen(js_name = applyCollab)]
+    pub fn apply_collab(&mut self, changes: &str) -> Result<String, JsError> {
+        let changes: Vec<EntryChange> = serde_json::from_str(changes).map_err(js_err)?;
+        let result = self.pres().apply_collab_changes(&changes).map_err(js_err)?;
+        to_json(&result)
     }
 
     fn pres(&mut self) -> &mut Presentation {
@@ -131,9 +168,13 @@ impl PptxDocument {
     /// Batches with the same `group` merge into one undo step (typing).
     pub fn apply(&mut self, ops: &str, group: Option<String>) -> Result<String, JsError> {
         let ops: Vec<EditOp> = serde_json::from_str(ops).map_err(js_err)?;
-        let result = FONTS
-            .with(|f| self.editor.apply(&ops, group.as_deref(), &f.borrow()))
-            .map_err(js_err)?;
+        // Collaborative undo runs on the shared maps, not on local snapshots.
+        let result = if self.editor.presentation().is_collaborative() {
+            FONTS.with(|f| self.pres().apply(&ops, &f.borrow()))
+        } else {
+            FONTS.with(|f| self.editor.apply(&ops, group.as_deref(), &f.borrow()))
+        }
+        .map_err(js_err)?;
         to_json(&result)
     }
 

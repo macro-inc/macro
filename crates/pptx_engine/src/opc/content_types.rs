@@ -54,6 +54,25 @@ impl ContentTypes {
         })
     }
 
+    /// Default content types as `(lower-cased extension, content type)`.
+    pub fn defaults(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.defaults
+            .iter()
+            .map(|(e, ct)| (e.as_str(), ct.as_str()))
+    }
+
+    /// Override content types as `(part name, content type)`.
+    pub fn overrides(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.overrides
+            .iter()
+            .map(|(p, ct)| (p.as_str(), ct.as_str()))
+    }
+
+    /// Marks the part for rewriting on the next save.
+    pub(crate) fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     /// Whether the content types changed since parsing.
     pub fn is_dirty(&self) -> bool {
         self.dirty

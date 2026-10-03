@@ -7,6 +7,7 @@
 //! corpus README. Decks still stored as Git LFS pointers are skipped.
 
 use pptx_engine::Presentation;
+use pptx_engine::collab::Entries;
 use pptx_engine::fidelity::corpus::{
     Baseline, Deck, FINGERPRINT_WIDTH, default_corpus, discover, fingerprint_changed,
     is_lfs_pointer,
@@ -143,5 +144,88 @@ fn corpus_matches_baseline() {
     assert!(
         skipped.len() < decks.len(),
         "every deck was skipped; fetch the corpus with `git lfs pull`"
+    );
+}
+
+/// Problems after a deck goes through the collaborative entries: a peer that
+/// opens the entries must render every slide as the original does, owe no
+/// changes back, and save a valid package.
+fn check_collab(deck: &Deck, fonts: &FontDb) -> Result<Vec<String>, String> {
+    let bytes = std::fs::read(&deck.path).map_err(|e| e.to_string())?;
+    if is_lfs_pointer(&bytes) {
+        return Err("Git LFS pointer (run `git lfs pull`)".into());
+    }
+    let mut original = Presentation::open(bytes).map_err(|e| e.to_string())?;
+    original.enable_collab(1);
+    let changes = original.collab_changes().map_err(|e| e.to_string())?;
+    let mut peer = Presentation::from_entries(Entries::from_changes(&changes), 2)
+        .map_err(|e| format!("opening the entries: {e}"))?;
+    let mut problems = Vec::new();
+    let owed = peer.collab_changes().map_err(|e| e.to_string())?;
+    if !owed.is_empty() {
+        problems.push(format!(
+            "{} changes owed after opening the entries",
+            owed.len()
+        ));
+    }
+    let count = original.slides().len();
+    if peer.slides().len() != count {
+        problems.push(format!(
+            "{} slides, original has {count}",
+            peer.slides().len()
+        ));
+    }
+    for index in 0..count.min(peer.slides().len()) {
+        let expected = original.render_slide(index, FINGERPRINT_WIDTH, fonts);
+        let actual = peer.render_slide(index, FINGERPRINT_WIDTH, fonts);
+        match (expected, actual) {
+            (Ok(e), Ok(a)) if fingerprint_changed(&fingerprint(&e), &fingerprint(&a)) => {
+                problems.push(format!("slide {} renders differently", index + 1));
+            }
+            (Ok(_), Err(e)) => problems.push(format!("slide {} failed to render: {e}", index + 1)),
+            _ => {}
+        }
+    }
+    let saved = peer.save().map_err(|e| e.to_string())?;
+    let mut reopened = Presentation::open(saved).map_err(|e| e.to_string())?;
+    let integrity = reopened.integrity_problems().map_err(|e| e.to_string())?;
+    problems.extend(integrity.into_iter().map(|p| format!("saved package: {p}")));
+    Ok(problems)
+}
+
+#[test]
+fn corpus_round_trips_through_collaborative_entries() {
+    let root = default_corpus();
+    let decks = discover(&root, &[]).expect("the corpus directory");
+    let fonts = fonts();
+    let next = AtomicUsize::new(0);
+    let failures = Mutex::new(Vec::new());
+    let workers = std::thread::available_parallelism().map_or(4, |n| n.get());
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                while let Some(deck) = decks.get(next.fetch_add(1, Ordering::Relaxed)) {
+                    match check_collab(deck, &fonts) {
+                        Ok(problems) => failures
+                            .lock()
+                            .unwrap()
+                            .extend(problems.into_iter().map(|p| format!("{}: {p}", deck.key))),
+                        Err(reason) if reason.contains("LFS") => {}
+                        Err(reason) => failures
+                            .lock()
+                            .unwrap()
+                            .push(format!("{}: {reason}", deck.key)),
+                    }
+                }
+            });
+        }
+    });
+    let mut failures = failures.into_inner().unwrap();
+    failures.sort();
+    assert!(
+        failures.is_empty(),
+        "{} problems:\n{}",
+        failures.len(),
+        failures.join("\n")
     );
 }

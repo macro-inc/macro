@@ -6,7 +6,8 @@
  * step with the engine and bump the render version of each slide whose
  * pixels changed. Saving is automatic after a short pause and on demand.
  * When the stored file changes elsewhere (an AI edit), the session loads it,
- * unless it holds unsaved edits of its own.
+ * unless it holds unsaved edits of its own. A collaborative engine merges
+ * such changes instead, and reports other people's edits as they arrive.
  */
 
 import type {
@@ -189,6 +190,7 @@ export function createPresentationSession(
       try {
         const bytes = await engine.save();
         await options.persist(bytes);
+        engine.onSaved?.(bytes);
         savedCount = target;
         if (!disposed)
           setSaveState(changeCount === savedCount ? 'saved' : 'dirty');
@@ -211,6 +213,11 @@ export function createPresentationSession(
   async function reload(): Promise<boolean> {
     const fetchLatest = options.fetchLatest;
     if (!fetchLatest || disposed) return false;
+    if (engine.collaborative) {
+      // Merged into the shared presentation; nobody's edits are replaced.
+      await engine.reopen(await fetchLatest());
+      return true;
+    }
     if (saving || changeCount !== savedCount) return false;
     const bytes = await fetchLatest();
     // Edits made while downloading win: the next save keeps them.
@@ -245,6 +252,14 @@ export function createPresentationSession(
     }
   }
   const unwatch = options.watchStoredFile?.(() => void onStoredFileChanged());
+  // Other people's edits: re-render, but leave saving them to their editor.
+  const unsubscribeRemote = engine.onRemoteChange?.((result, state) => {
+    if (disposed) return;
+    setHistory(state);
+    void absorb(result).catch((error: unknown) => {
+      console.error('[pptx] could not show a change made elsewhere', error);
+    });
+  });
 
   // Unsaved work is flushed when the tab is hidden and when the editor closes.
   const onHide = () => {
@@ -255,6 +270,7 @@ export function createPresentationSession(
   document.addEventListener('visibilitychange', onHide);
   onCleanup(() => {
     unwatch?.();
+    unsubscribeRemote?.();
     replacedListeners.clear();
     document.removeEventListener('visibilitychange', onHide);
     clearTimeout(timer);
