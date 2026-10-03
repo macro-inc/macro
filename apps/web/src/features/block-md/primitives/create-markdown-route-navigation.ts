@@ -1,4 +1,4 @@
-import { createSearchParams } from '@app/lib/split-router';
+import { createSearchParams } from '@app/split-router';
 import { type Accessor, createEffect, on } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { markdownDetailSearch } from '../markdown-route';

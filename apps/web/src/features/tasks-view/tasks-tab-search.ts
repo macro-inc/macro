@@ -1,4 +1,4 @@
-import { createSearchParamsCodec } from '@app/lib/split-router';
+import { createSearchParamsCodec } from '@app/split-router';
 import { z } from 'zod';
 import type { TasksTab } from './types';
 

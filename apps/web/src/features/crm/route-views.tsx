@@ -1,4 +1,3 @@
-import { defineRoute } from '@app/lib/split-router';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -25,13 +24,4 @@ export const CompaniesRouteView = withAuth(() => {
   return (
     <Crm initialView={crmView ? decodeCrmViewParam(crmView) : undefined} />
   );
-});
-
-export const companiesRoute = defineRoute({
-  id: 'view-companies',
-  path: 'companies',
-  component: CompaniesRouteView,
-  search: '*' as const,
-  externalSearch: ['crmView'],
-  claim: () => ({ namespace: 'component', id: 'companies' }),
 });

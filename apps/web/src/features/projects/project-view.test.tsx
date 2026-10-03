@@ -30,7 +30,7 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: fixtures.toast },
 }));
-vi.mock('@app/features/tasks-view/route', () => ({
+vi.mock('@app/routes/routes', () => ({
   projectDetailRoute: {},
   tasksProjectsRoute: {},
 }));

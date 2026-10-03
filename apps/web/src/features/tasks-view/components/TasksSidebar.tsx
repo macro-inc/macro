@@ -6,9 +6,9 @@ import {
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
-import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useNavigate } from '@app/lib/split-router';
+import { reviewsSplitRoute } from '@app/routes/routes';
+import { useNavigate } from '@app/split-router';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,

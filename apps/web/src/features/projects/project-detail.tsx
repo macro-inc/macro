@@ -4,8 +4,8 @@ import {
   projectDetailRoute,
   projectTaskRoute,
   tasksSplitRoute,
-} from '@app/features/tasks-view/route';
-import { useNavigate } from '@app/lib/split-router';
+} from '@app/routes/routes';
+import { useNavigate } from '@app/split-router';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {

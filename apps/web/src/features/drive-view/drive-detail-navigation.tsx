@@ -4,6 +4,7 @@ import type {
   EntityDetailNavigationOptions,
   EntityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
+import { driveSplitRoute } from '@app/routes/routes';
 import { useNavigate, useParams, useRouteState } from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -30,7 +31,6 @@ import {
   driveDocumentFromParams,
   driveDocumentRoute,
 } from './primitives/drive-route';
-import { driveSplitRoute } from './route';
 
 type DriveDetailRootOptions = EntityDetailNavigationOptions & {
   location?: DriveLocation;

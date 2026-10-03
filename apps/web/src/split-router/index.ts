@@ -1,1 +1,1 @@
-export * from '@app/lib/split-router';
+export * from '@app/lib/split-router/next';

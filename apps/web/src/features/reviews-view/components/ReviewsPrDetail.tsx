@@ -1,6 +1,7 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useRouteParams } from '@app/lib/split-router';
+import { reviewsPrRoute } from '@app/routes/routes';
+import { useRouteParams } from '@app/split-router';
 import { PrChangesProvider } from '@block-pr/component/PrChanges';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
 import { prDisplayName, prHtmlUrl } from '@block-pr/util/prKey';
@@ -14,7 +15,6 @@ import { SplitFileMenu } from '@components/app/split-layout/components/SplitFile
 import { SplitPanel } from '@components/app/split-panel';
 import { Permissions } from '@core/component/SharePermissions';
 import { onMount } from 'solid-js';
-import { reviewsPrRoute } from '../route';
 
 function ReviewsPrBreadcrumb(props: {
   foreignEntityId: string;

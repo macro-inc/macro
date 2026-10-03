@@ -1,7 +1,7 @@
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { AgentsRouteView } from './route';
+import { AgentsRouteView } from './route-views';
 
 const state = vi.hoisted(() => ({
   flag: (): { enabled: boolean; loading: boolean } => ({

@@ -1,21 +1,16 @@
-import { changesSearch } from '@app/features/agent-changes/changes-search';
-import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { defineRoute } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { createRenderEffect, lazy, Show } from 'solid-js';
-import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { parseAgentsRoute } from './core/route';
 
@@ -121,47 +116,4 @@ export const AgentsRouteView = withAuth(() => {
       </Show>
     </Show>
   );
-});
-
-export const agentsRoute = defineRoute({
-  id: 'agents',
-  path: 'agents/:id',
-  params: z.object({ id: z.string() }),
-  component: AgentsRouteView,
-  remountKey: ({ id }) => id,
-  claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
-  toReference: ({ id }) => uuidRouteReference(id, 'agent'),
-});
-
-export const codersRoute = defineRoute({
-  id: 'coders',
-  path: 'coders/:id',
-  params: z.object({ id: z.string() }),
-  component: AgentsRouteView,
-  remountKey: ({ id }) => id,
-  claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
-  toReference: ({ id }) => uuidRouteReference(id, 'agent'),
-});
-
-export const agentChatsRoute = defineRoute({
-  id: 'agent-chats',
-  path: 'agents/chat/:id',
-  aliases: ['agent-chats/:id'],
-  params: z.object({ id: z.string() }),
-  component: AgentsRouteView,
-  remountKey: ({ id }) => id,
-  claim: ({ id }) => ({ namespace: 'chat', id }),
-  search: [changesSearch.namespace],
-  toReference: ({ id }) => uuidRouteReference(id, 'chat'),
-});
-
-export const agentsViewRoute = defineRoute({
-  id: 'view-agents',
-  path: 'agents',
-  component: AgentsRouteView,
-  search: '*' as const,
-  externalSearch: ['createAgent'],
-  claim: () => ({ namespace: 'component', id: 'agents' }),
 });

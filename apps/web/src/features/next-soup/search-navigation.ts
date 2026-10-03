@@ -25,7 +25,7 @@ import {
 import type {
   SerializedSearchParams,
   SplitSearchUpdate,
-} from '@app/lib/split-router';
+} from '@app/split-router';
 import type { SearchLocation } from '@entity';
 import { match } from 'ts-pattern';
 

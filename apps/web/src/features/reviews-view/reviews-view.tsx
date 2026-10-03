@@ -3,12 +3,13 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
+import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import {
   createSearchParams,
   SplitRouter,
   useNavigate,
   useParams,
-} from '@app/lib/split-router';
+} from '@app/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -48,7 +49,6 @@ import {
   type ReviewsSortId,
   scopeMatchesViewerGithubId,
 } from './reviews-types';
-import { reviewsPrRoute, reviewsSplitRoute } from './route';
 
 const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
   all: 'Pull requests',

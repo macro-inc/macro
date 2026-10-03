@@ -48,7 +48,7 @@ export function DriveLocationMenu(
       triggerClass="block h-auto"
       onOpenCurrentSplit={() => state.navigate(props.location)}
       onOpenNewSplit={() =>
-        navigate(driveDestination(props.location), { target: 'new-split' })
+        navigate(driveDestination(props.location), { newPane: true })
       }
       onOpenFullscreen={openFullscreen}
       additionalActions={

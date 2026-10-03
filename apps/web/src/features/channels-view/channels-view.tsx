@@ -5,7 +5,7 @@ import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/util
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
-import { SplitRouter } from '@app/lib/split-router';
+import { SplitRouter } from '@app/split-router';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';

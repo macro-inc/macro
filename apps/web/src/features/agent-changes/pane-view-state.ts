@@ -1,7 +1,4 @@
-import {
-  createSearchParams,
-  useOwnsSearchNamespace,
-} from '@app/lib/split-router';
+import { createSearchParams, useOwnsSearchNamespace } from '@app/split-router';
 import { createSignal } from 'solid-js';
 import { changesSearch } from './changes-search';
 import type { PaneViewState } from './context/agent-changes-context';

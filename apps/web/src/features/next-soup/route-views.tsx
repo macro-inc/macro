@@ -1,6 +1,5 @@
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { usePosthog } from '@app/lib/analytics/posthog';
-import { defineRoute } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
@@ -108,36 +107,4 @@ export const SearchRouteView = withAuth(() => {
       initialSearchText={params().initialQuery}
     />
   );
-});
-
-export const recentRoute = defineRoute({
-  id: 'view-recent',
-  path: 'recent',
-  component: RecentRouteView,
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'recent' }),
-});
-
-export const callsRoute = defineRoute({
-  id: 'view-calls',
-  path: 'calls',
-  component: CallsRouteView,
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'calls' }),
-});
-
-export const foldersRoute = defineRoute({
-  id: 'view-folders',
-  path: 'folders',
-  component: FoldersRouteView,
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'folders' }),
-});
-
-export const searchRoute = defineRoute({
-  id: 'view-search',
-  path: 'search',
-  component: SearchRouteView,
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'search' }),
 });

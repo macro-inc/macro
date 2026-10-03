@@ -4,12 +4,13 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import type { CalendarPreviewSelection } from '@app/features/next-soup/utils';
+import { homeCalendarRoute } from '@app/routes/routes';
 import {
   createSearchParams,
   type SerializedSearchParams,
   useNavigate,
   useRouteParams,
-} from '@app/lib/split-router';
+} from '@app/split-router';
 import { previewCalendarTarget } from '@components/app/previewTarget';
 import {
   enableCalendarUi,
@@ -18,7 +19,6 @@ import {
 import deepEqual from 'fast-deep-equal';
 import { createSignal } from 'solid-js';
 import { homeCalendarNavigation } from './home-preview-navigation';
-import { homeCalendarRoute } from './route';
 
 type WithTab = (
   search: Record<string, SerializedSearchParams | undefined>

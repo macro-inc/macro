@@ -4,11 +4,7 @@ import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
-import {
-  createSearchParams,
-  useNavigate,
-  useParams,
-} from '@app/lib/split-router';
+import { createSearchParams, useNavigate, useParams } from '@app/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';

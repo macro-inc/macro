@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableCalendarScheduling } from '@core/constant/featureFlags';
-import { useLocation, useNavigate, useParams } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import {
   createBookingReceiptSource,
@@ -10,8 +10,9 @@ import {
 import { BookingReceiptView } from './views/booking-receipt-view';
 import { PublicBookingView } from './views/public-booking-view';
 
-function BookingPageContent() {
-  const params = useParams<{ profile: string; slug?: string }>();
+type BookingPageParams = { profile: string; slug?: string };
+
+function BookingPageContent(params: BookingPageParams) {
   const navigate = useNavigate();
   const profile = usePublicProfileQuery(() => params.profile);
   const source = createPublicBookingSource();
@@ -49,7 +50,7 @@ function BookingPageContent() {
     </Show>
   );
 }
-export function PublicBookingPage() {
+export function PublicBookingPage(props: BookingPageParams) {
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   return (
     <Show
@@ -63,14 +64,13 @@ export function PublicBookingPage() {
       }
     >
       <Suspense fallback={<p class="p-12">Loading…</p>}>
-        <BookingPageContent />
+        <BookingPageContent profile={props.profile} slug={props.slug} />
       </Suspense>
     </Show>
   );
 }
 
-function ReceiptContent() {
-  const params = useParams<{ id: string }>();
+function ReceiptContent(params: { id: string }) {
   const location = useLocation();
   const token = () => location.hash.slice(1);
   const source = createBookingReceiptSource(() => params.id, token);
@@ -85,7 +85,7 @@ function ReceiptContent() {
   );
 }
 
-export function BookingReceiptPage() {
+export function BookingReceiptPage(props: { id: string }) {
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   return (
     <Show
@@ -99,7 +99,7 @@ export function BookingReceiptPage() {
       }
     >
       <Suspense fallback={<p class="p-12">Loading…</p>}>
-        <ReceiptContent />
+        <ReceiptContent id={props.id} />
       </Suspense>
     </Show>
   );

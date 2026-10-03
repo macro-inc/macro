@@ -1,5 +1,5 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import { createSearchParams } from '@app/lib/split-router';
+import { createSearchParams } from '@app/split-router';
 import {
   ChannelDetail,
   ChannelDetailTopBar,

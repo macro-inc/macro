@@ -1,5 +1,4 @@
 import { usePosthog } from '@app/lib/analytics/posthog';
-import { defineRoute } from '@app/lib/split-router';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -33,12 +32,4 @@ export const ActivityRouteView = withAuth(() => {
       <TrackedActivityView />
     </Show>
   );
-});
-
-export const activityRoute = defineRoute({
-  id: 'view-activity',
-  path: 'activity',
-  component: ActivityRouteView,
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'activity' }),
 });

@@ -5,11 +5,18 @@ import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
+  homeChannelRoute,
+  homeDocumentRoute,
+  homePreviewRoute,
+  homeReminderRoute,
+  homeSplitRoute,
+} from '@app/routes/routes';
+import {
   createSearchParams,
   type SerializedSearchParams,
   useNavigate,
   useParams,
-} from '@app/lib/split-router';
+} from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   type PreviewBlockTarget,
@@ -47,13 +54,6 @@ import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
 import { isHomeDocumentType } from './home-route-schema';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
-import {
-  homeChannelRoute,
-  homeDocumentRoute,
-  homePreviewRoute,
-  homeReminderRoute,
-  homeSplitRoute,
-} from './route';
 import type {
   HomeGroupBy,
   HomeTab,

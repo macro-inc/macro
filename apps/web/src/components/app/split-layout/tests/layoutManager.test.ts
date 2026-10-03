@@ -2,31 +2,29 @@ import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { CALENDAR_PREFERENCES_KEY } from '@app/features/calendar/calendar-preferences';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
-import { driveSplitRoute } from '@app/features/drive-view/route';
-import {
-  emailSplitRoute,
-  emailThreadRoute,
-} from '@app/features/email-view/route';
 import { searchLocationUpdates } from '@app/features/next-soup/search-navigation';
 import {
   reminderDetailContent,
   reminderIdFromDetailContent,
 } from '@app/features/reminders/reminder-navigation';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
-import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
-import {
-  taskDetailRoute,
-  tasksSplitRoute,
-} from '@app/features/tasks-view/route';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
 import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
+import {
+  driveSplitRoute,
+  emailSplitRoute,
+  emailThreadRoute,
+  reviewsSplitRoute,
+  taskDetailRoute,
+  tasksSplitRoute,
+} from '@app/routes/routes';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';

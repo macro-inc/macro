@@ -8,8 +8,8 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
-import { createSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { createSearchParams } from '@app/split-router';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';

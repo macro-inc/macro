@@ -1,4 +1,3 @@
-import { defineRoute } from '@app/lib/split-router';
 import {
   usePageViewTracking,
   withAuth,
@@ -12,12 +11,4 @@ const GettingStarted = lazy(async () => ({
 export const GettingStartedRouteView = withAuth(() => {
   usePageViewTracking('getting-started');
   return <GettingStarted />;
-});
-
-export const gettingStartedRoute = defineRoute({
-  id: 'view-getting-started',
-  path: 'getting-started',
-  component: GettingStartedRouteView,
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'getting-started' }),
 });

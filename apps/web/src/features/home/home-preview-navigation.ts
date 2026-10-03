@@ -19,7 +19,7 @@ import {
   driveSearchCodec,
 } from '@app/features/drive-view/primitives/drive-search';
 import { emailDetailSearch } from '@app/features/email-view/email-route';
-import type { SerializedSearchParams } from '@app/lib/split-router';
+import type { SerializedSearchParams } from '@app/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';

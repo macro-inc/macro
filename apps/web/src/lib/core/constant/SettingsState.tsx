@@ -1,12 +1,9 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { toBaseRelative } from '@app/constants/routerBase';
 import { useMobileSettings } from '@app/features/settings/context/mobile-settings';
-import {
-  rootRouteMatch,
-  routeParams,
-  type SplitLocation,
-} from '@app/lib/split-router';
+import { paneRootMatch, paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { routeParams, type SplitLocation } from '@app/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -122,14 +119,10 @@ export const useSettingsState = () => {
     type: 'component' as const,
     id: 'settings' as const,
     entryMetadata: {
-      route: {
-        matches: [
-          {
-            id: 'settings',
-            params: { tab: settingsTabToSlug(tab) },
-          },
-        ],
-      },
+      route: paneRoute({
+        id: 'settings',
+        params: { tab: settingsTabToSlug(tab) },
+      }),
     },
   });
 
@@ -141,12 +134,11 @@ export const useSettingsState = () => {
     const slug = settingsTabToSlug(tab);
     const location = split.content.entryMetadata as SplitLocation | undefined;
 
-    if (
-      rootRouteMatch(location?.route)?.id === 'settings' &&
-      routeParams(location?.route).tab === slug
-    ) {
-      return;
-    }
+    const showsSettings =
+      location !== undefined &&
+      paneRootMatch(location.route)?.id === 'settings';
+    const showsTab = routeParams(location?.route).tab === slug;
+    if (showsSettings && showsTab) return;
 
     globalSplitManager()
       ?.getSplit(split.id)

@@ -1,8 +1,5 @@
-import {
-  projectDetailRoute,
-  tasksProjectsRoute,
-} from '@app/features/tasks-view/route';
-import { useNavigate, useSplitHistory } from '@app/lib/split-router';
+import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
+import { useNavigate, usePaneHistory } from '@app/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -22,7 +19,7 @@ import { CreateProject } from './views/create-project';
 
 /** A split opened moments ago joins the router after it mounts; earlier navigation is dropped. */
 function useRedirectOnceRouted(redirect: () => void) {
-  const routed = useSplitHistory();
+  const routed = usePaneHistory();
   let redirected = false;
   createEffect(() => {
     if (redirected || !routed()) return;

@@ -12,7 +12,6 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   REMINDER_DETAIL_COMPONENT_ID,
   REMINDER_DETAIL_ROUTE_ID,
@@ -20,21 +19,23 @@ import {
   reminderIdFromDetailContent,
 } from '@app/features/reminders/reminder-navigation';
 import {
-  defineRoute,
+  NOT_FOUND_ROUTE_ID,
+  paneRootMatch,
+  paneRoute,
+} from '@app/routes/app-route';
+import {
+  canonicalRoute,
+  decodePane,
+  decodeSegment,
+  filterRouteSearch,
+  formatPanePath,
+  isRecord,
   routeParams,
   type SplitLocation,
-  type SplitRouterEntry,
-  type UnmatchedSplitPathHandler,
-} from '@app/lib/split-router';
-import {
-  assertRouteState,
-  decodeRoute,
-  encodeRoute,
-  filterRouteSearch,
   type SplitRoutesManifest,
-} from '@app/lib/split-router/routes';
-import { parseSearchState } from '@app/lib/split-router/search';
-import { isRecord } from '@app/lib/split-router/utils';
+  type SplitSearchState,
+  splitPanePaths,
+} from '@app/split-router';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -44,9 +45,12 @@ import {
   isBlockAlias,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
-import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
-import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
+
+type LegacySplitPathContext = {
+  segments: string[];
+  matchedRouteId?: string;
+};
 
 export function decodeLegacyPair(
   type: string,
@@ -95,60 +99,36 @@ export function decodeLegacyPair(
   return { type: resolvedType, id };
 }
 
-function legacyEntry(type: string, id: string): SplitRouterEntry | undefined {
+function legacyLocation(type: string, id: string): SplitLocation | undefined {
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) {
-    return {
-      location: {
-        route: { matches: [{ id: type, params: { id } }] },
-      },
-    };
+    return { route: paneRoute({ id: type, params: { id } }) };
   }
 
   if (type === 'settings') {
-    return {
-      location: {
-        route: { matches: [{ id: 'settings', params: { tab: id } }] },
-      },
-    };
+    return { route: paneRoute({ id: 'settings', params: { tab: id } }) };
   }
 
   if (type === 'component' && id === 'settings') {
-    return {
-      location: {
-        route: { matches: [{ id: 'settings', params: { tab: 'account' } }] },
-      },
-    };
+    return { route: paneRoute({ id: 'settings', params: { tab: 'account' } }) };
   }
 
   if (type === 'component' && id === 'documents') {
-    return {
-      location: { route: { matches: [{ id: 'drive', params: {} }] } },
-    };
+    return { route: paneRoute({ id: 'drive', params: {} }) };
   }
 
   if (!decodeLegacyPair(type, id)) return;
 
-  return {
-    location: {
-      route: {
-        matches: [{ id: 'legacy-content', params: { type, id } }],
-      },
-    },
-  };
+  return { route: paneRoute({ id: 'legacy-content', params: { type, id } }) };
 }
 
-export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
+export function handleLegacySplitPath(
+  context: LegacySplitPathContext
+): SplitLocation[] | undefined {
   const { segments } = context;
 
   if (segments.length === 1 && ['documents', 'files'].includes(segments[0]!)) {
-    return [
-      {
-        location: {
-          route: { matches: [{ id: 'drive', params: {} }] },
-        },
-      },
-    ];
+    return [{ route: paneRoute({ id: 'drive', params: {} }) }];
   }
 
   if (
@@ -161,7 +141,7 @@ export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
   }
   if (segments.length < 2 || segments.length % 2 !== 0) return;
 
-  const entries = [];
+  const locations = [];
 
   for (let index = 0; index < segments.length; index += 2) {
     if (
@@ -170,15 +150,50 @@ export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
         segments[index + 1] === 'non-member-channel')
     )
       continue;
-    const entry = legacyEntry(segments[index]!, segments[index + 1]!);
+    const location = legacyLocation(segments[index]!, segments[index + 1]!);
 
-    if (!entry) return;
+    if (!location) return;
 
-    entries.push(entry);
+    locations.push(location);
   }
 
-  return entries;
-};
+  return locations;
+}
+
+/** One pane of an incoming path, as pane paths; old pair paths can expand into several panes. */
+function upgradeLegacyPane(
+  routes: SplitRoutesManifest,
+  raw: readonly string[]
+): string[] {
+  const unchanged = [raw.join('/')];
+  const segments = raw.map(decodeSegment);
+  const route = decodePane(routes, segments);
+  const matched =
+    route !== undefined && route.matches.at(-1)?.id !== NOT_FOUND_ROUTE_ID;
+  if (matched) return unchanged;
+
+  const upgraded = handleLegacySplitPath({ segments });
+  if (!upgraded?.length) return unchanged;
+
+  return upgraded.map((location) =>
+    formatPanePath(routes, location.route).slice(1)
+  );
+}
+
+/** Rewrites panes of an incoming path that no route matches, as the old URL format wrote them. */
+export function upgradeLegacyPath(
+  routes: SplitRoutesManifest,
+  path: string
+): string {
+  const panes = splitPanePaths(path);
+  const upgraded = panes.map((raw) => upgradeLegacyPane(routes, raw));
+  const changed = upgraded.some(
+    (paths, index) => paths.length !== 1 || paths[0] !== panes[index]!.join('/')
+  );
+  if (!changed) return path;
+
+  return `/${upgraded.flat().join('/~/')}`;
+}
 
 export function encodeLegacyContent(content: SplitContent): string[] {
   return [
@@ -199,9 +214,10 @@ export function splitLocationFromContent(
       : undefined;
   if (reminderId) {
     return {
-      route: {
-        matches: [{ id: REMINDER_DETAIL_ROUTE_ID, params: { reminderId } }],
-      },
+      route: paneRoute({
+        id: REMINDER_DETAIL_ROUTE_ID,
+        params: { reminderId },
+      }),
     };
   }
 
@@ -226,64 +242,51 @@ export function splitLocationFromContent(
       })
     );
     return {
-      route: {
-        matches: [
-          {
-            id: CALENDAR_ROUTE_ID,
-            params: { period: getPreferredCalendarPeriodView() },
-          },
-        ],
-      },
+      route: paneRoute({
+        id: CALENDAR_ROUTE_ID,
+        params: { period: getPreferredCalendarPeriodView() },
+      }),
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
     };
   }
 
   if (content.type === 'pr') {
     return {
-      route: {
-        matches: [{ id: 'pr-detail', params: { foreignEntityId: content.id } }],
-      },
+      route: paneRoute({
+        id: 'pr-detail',
+        params: { foreignEntityId: content.id },
+      }),
     };
   }
 
   if (content.type === 'call') {
     return {
-      route: {
-        matches: [{ id: 'call-detail', params: { callId: content.id } }],
-      },
+      route: paneRoute({ id: 'call-detail', params: { callId: content.id } }),
     };
   }
 
   if (content.type === 'component' && content.id === 'documents') {
-    return { route: { matches: [{ id: 'drive', params: {} }] } };
+    return { route: paneRoute({ id: 'drive', params: {} }) };
   }
 
   if (content.type === 'component' && content.id === 'settings') {
-    return {
-      route: {
-        matches: [{ id: 'settings', params: { tab: 'account' } }],
-      },
-    };
+    return { route: paneRoute({ id: 'settings', params: { tab: 'account' } }) };
   }
 
   if (content.type === 'component') {
     const viewId = `view-${content.id}`;
     if (routes.byId.has(viewId)) {
-      return { route: { matches: [{ id: viewId, params: {} }] } };
+      return { route: paneRoute({ id: viewId, params: {} }) };
     }
     const segments = agentsRouteSegments(content.id);
     const [section, id] = segments ?? [];
     if (section && id) {
-      return { route: { matches: [{ id: section, params: { id } }] } };
+      return { route: paneRoute({ id: section, params: { id } }) };
     }
   }
 
   const [type, id] = encodeLegacyContent(content);
-  return {
-    route: {
-      matches: [{ id: 'legacy-content', params: { type, id } }],
-    },
-  };
+  return { route: paneRoute({ id: 'legacy-content', params: { type, id } }) };
 }
 
 /** Resolve legacy/persisted metadata before it reaches router state. */
@@ -296,34 +299,26 @@ export function resolveContentLocation(
 
   let metadataLocation = metadata;
   if (isRecord(metadata?.location)) metadataLocation = metadata.location;
-  const resolve = (route: unknown) => {
-    assertRouteState(routes, route);
-    // Go through the URL representation, not schema validation of schema outputs.
-    const decoded = decodeRoute(
-      routes,
-      encodeRoute(routes, { location: { route } })
-    );
-    if (
-      !decoded ||
-      decoded.location.route.matches.length !== route.matches.length ||
-      decoded.location.route.matches.some(
-        (match, index) => match.id !== route.matches[index]!.id
-      )
-    ) {
+  // Go through the URL representation, not schema validation of schema outputs.
+  const resolve = (route: SplitLocation['route']) => {
+    const canonical = canonicalRoute(routes, route);
+    if (!canonical)
       throw new Error('Split content did not resolve to its route');
-    }
-    return decoded.location.route;
+
+    return canonical;
   };
   let route: SplitLocation['route'] | undefined;
-  if (metadataLocation?.route !== undefined) {
+  if (isRecord(metadataLocation?.route)) {
     try {
-      route = resolve(metadataLocation.route);
+      route = resolve(metadataLocation.route as SplitLocation['route']);
     } catch {
       // Old or malformed metadata falls back to the content's compatibility route.
     }
   }
   route ??= resolve(splitLocationFromContent(routes, content).route);
-  const savedSearch = parseSearchState(metadataLocation?.search);
+  const savedSearch = isRecord(metadataLocation?.search)
+    ? (metadataLocation.search as SplitSearchState)
+    : undefined;
   // In-app message opens carry block params, not external URL query keys.
   // Preserve the target before middleware upgrades the block to Chat, where
   // the legacy block (and its imperative navigation handle) is replaced.
@@ -356,7 +351,11 @@ export function resolveContentLocation(
 export function splitContentFromLocation(
   location: SplitLocation
 ): SplitContent {
-  const root = location.route.matches[0];
+  const root = paneRootMatch(location.route);
+
+  if (!root || root.id === NOT_FOUND_ROUTE_ID) {
+    return { type: 'component', id: NOT_FOUND_ROUTE_ID };
+  }
 
   if (root.id === REMINDER_DETAIL_ROUTE_ID) {
     const { reminderId } = routeParams(location.route);
@@ -406,41 +405,3 @@ export function splitContentFromLocation(
 
   throw new Error(`No split content matched route "${root.id}"`);
 }
-
-export const legacySplitRoute = defineRoute({
-  id: 'legacy-content',
-  path: ':type/:id',
-  search: '*',
-  params: z
-    .object({ type: z.string().min(1), id: z.string().min(1) })
-    .refine(({ type, id }) => decodeLegacyPair(type, id) !== undefined),
-  externalSearch: (entry) => {
-    const { type } = routeParams(entry.location.route);
-    if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
-    if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
-    if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
-    return [];
-  },
-  claim: ({ type, id }) => {
-    const content = decodeLegacyPair(type, id);
-    if (!content) return;
-
-    if (content.type === 'agent') return { namespace: 'agent', id };
-
-    if (content.type === 'component') {
-      const [section, conversationId] = agentsRouteSegments(content.id) ?? [];
-      if (section && conversationId) {
-        return {
-          namespace: section === 'agent-chats' ? 'chat' : 'agent',
-          id: conversationId,
-        };
-      }
-      return { namespace: 'component', id: content.id };
-    }
-
-    return {
-      namespace: 'block',
-      id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
-    };
-  },
-});
