@@ -285,6 +285,7 @@ async fn external_preparation_uses_requested_identity_and_model() {
         assert_eq!(
             requests.as_slice(),
             &[RequestedExternalSession {
+                repo_url: None,
                 session_id: fx.session.id,
                 bot_id: fx.session.bot_id,
                 owner: fx.session.owner_user().unwrap().clone(),

@@ -22,6 +22,7 @@ mod harness;
 #[cfg(unix)]
 mod herdr;
 mod outbound;
+mod repository;
 mod runtime;
 mod trigger;
 mod tui;
@@ -60,6 +61,9 @@ enum Command {
     /// its own herdr window. Set as the harness of a macrod run inside herdr.
     #[cfg(unix)]
     HerdrAcp {
+        /// Private storage for this paired macrod instance.
+        #[arg(long)]
+        state_dir: Option<std::path::PathBuf>,
         /// Which agent TUI each session runs.
         #[arg(long, value_enum, default_value_t)]
         kind: herdr::acp_agent::TuiAgent,
@@ -106,6 +110,7 @@ async fn main() -> ExitCode {
             };
         }
         Some(Command::HerdrAcp {
+            state_dir,
             kind,
             permission_mode,
             no_focus,
@@ -116,6 +121,7 @@ async fn main() -> ExitCode {
                 .with_writer(std::io::stderr)
                 .init();
             return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
+                state_dir,
                 kind,
                 permission_mode,
                 no_focus,

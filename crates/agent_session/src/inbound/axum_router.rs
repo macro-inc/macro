@@ -1989,13 +1989,10 @@ pub async fn create_agent_session_handler<
                 // caller delivers its first prompt through the control
                 // endpoint once this answers, as it does for a managed one.
                 SelectedPersona::External { bot_id } => {
-                    if request.repo_url.is_some() || request.repo_branch.is_some() {
-                        return Err(CreateSessionApiError::Domain(
-                            AgentSessionError::InvalidRepositorySelection(
-                                "repository selection is supported for Cursor coding agents",
-                            ),
-                        ));
-                    }
+                    let repo_url = crate::domain::ports::external_repository(
+                        request.repo_url,
+                        request.repo_branch.as_deref(),
+                    )?;
                     // Refused rather than dropped: nothing delivers it, and a
                     // caller that sent one would otherwise never learn it was
                     // ignored. A model is different - it is applied when the
@@ -2018,6 +2015,7 @@ pub async fn create_agent_session_handler<
                                 .map(AgentSessionId::new_from_uuid)
                                 .unwrap_or_else(AgentSessionId::new),
                             bot_id,
+                            repo_url,
                             owner,
                             model: request.model.filter(|model| !model.trim().is_empty()),
                         })
