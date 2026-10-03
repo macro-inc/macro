@@ -1,10 +1,8 @@
 //! Writing typed rows for pull requests stored before rows existed.
 //!
-//! A pull request row is identified by its repository's numeric id, which older records do not
-//! carry. This pages through every installation, asks GitHub which repositories it covers, and
-//! has the pull request store write a row for each record synced under one of those
-//! repositories' names. Rows are rewritten from the record each time, so a page can be re-run
-//! safely.
+//! Pages through installations and initializes missing typed rows from stored, identity-verified
+//! source records. Installation repository IDs never supply absent source identity. Existing
+//! rows remain untouched on retries; malformed records, conflicts, and failures are reported.
 
 use github_pull_requests::domain::{
     models::GithubRepositoryIdentity, ports::GithubPullRequestIndexer,
@@ -86,11 +84,8 @@ where
             None
         };
         let mut page = PullRequestIndexPage {
-            installations: 0,
-            repositories: 0,
-            indexed_pull_requests: 0,
-            failed_installation_ids: Vec::new(),
             next_after,
+            ..Default::default()
         };
         if installation_ids.is_empty() {
             return Ok(page);
@@ -100,19 +95,29 @@ where
         for installation_id in installation_ids {
             page.installations += 1;
             let Some(repositories) = self.list_repositories(&jwt, &installation_id).await else {
+                page.failures += 1;
                 page.failed_installation_ids.push(installation_id);
                 continue;
             };
             page.repositories += u32::try_from(repositories.len()).unwrap_or(u32::MAX);
-            page.indexed_pull_requests += self
-                .pull_requests
-                .index_repositories(&repositories)
-                .await
-                .map_err(|error| {
-                    GithubError::Internal(anyhow::anyhow!(
-                        "could not index pull requests for installation {installation_id}: {error}"
-                    ))
-                })?;
+            match self.pull_requests.index_repositories(&repositories).await {
+                Ok(summary) => {
+                    page.indexed_pull_requests += summary.inserted;
+                    page.already_indexed_pull_requests += summary.already_present;
+                    page.unverified_records += summary.unverified_records;
+                    page.invalid_records += summary.invalid_records;
+                    page.identity_conflicts += summary.identity_conflicts;
+                    page.failures += summary.failures;
+                    if summary.has_failures() {
+                        page.failed_installation_ids.push(installation_id);
+                    }
+                }
+                Err(error) => {
+                    page.failures += 1;
+                    tracing::error!(error=?error, installation_id, "failed to index installation pull requests");
+                    page.failed_installation_ids.push(installation_id);
+                }
+            }
         }
 
         Ok(page)

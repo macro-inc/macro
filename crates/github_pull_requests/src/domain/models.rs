@@ -5,6 +5,7 @@ mod test;
 
 mod changes;
 mod diff;
+mod index;
 mod key;
 mod pull_request;
 
@@ -20,6 +21,7 @@ pub use diff::{
     ChangesetRange, GitRef, GithubPullRequestDiff, GithubPullRequestDiffError, PullRequestRef,
     RepositorySlug,
 };
+pub use index::{PullRequestIndexOutcome, PullRequestIndexRecord, PullRequestIndexSummary};
 pub use key::GithubKey;
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT github_key, repository_id, number, owner, repo, title, status,\n                      draft, author_github_user_id, author_login,\n                      requested_reviewer_github_user_ids, participant_github_user_ids,\n                      github_updated_at, assignees, labels, reviews,\n                      base_ref, base_sha, head_ref, head_sha\n               FROM github_pull_request WHERE github_key = $1 FOR UPDATE",
+  "query": "SELECT github_key, repository_id, number, owner, repo, title, status,\n                      draft, author_github_user_id, author_login,\n                      requested_reviewer_github_user_ids, participant_github_user_ids,\n                      github_updated_at, assignees, labels, reviews,\n                      base_ref, base_sha, head_ref, head_sha\n               FROM github_pull_request\n               WHERE github_key = $1\n                  OR (lower(github_key) = lower($1) AND repository_id = $2 AND number = $3)\n               ORDER BY github_key\n               FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -106,7 +106,9 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Text",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -132,5 +134,5 @@
       true
     ]
   },
-  "hash": "3850e97e55874949d78f9b242819dc9bc1479de6b1d8a3488801dc494eedebe2"
+  "hash": "a74cb158102fb166fe5c32127188fac0f39c57cacf43c677e513996f06be6f85"
 }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO foreign_entity (id, foreign_entity_id, foreign_entity_source, metadata,\n            stored_for_id, stored_for_auth_entity)\n           VALUES ($1, $2, $3, $4, 'macro|test@example.com', 'user')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce05940abd256a8c92e81ada0b2a4935e9353b7ed741fc398e4d36043df86d8e"
+}

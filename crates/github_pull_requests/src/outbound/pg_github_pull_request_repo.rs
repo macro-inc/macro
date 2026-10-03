@@ -54,7 +54,7 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
         let mut tx = self.pool.begin().await?;
         // Lock the key before reading, including when no row exists yet.
         sqlx::query!(
-            "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+            "SELECT pg_advisory_xact_lock(hashtextextended(lower($1), 0))",
             update.github_key
         )
         .execute(&mut *tx)
@@ -65,11 +65,39 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                       requested_reviewer_github_user_ids, participant_github_user_ids,
                       github_updated_at, assignees, labels, reviews,
                       base_ref, base_sha, head_ref, head_sha
-               FROM github_pull_request WHERE github_key = $1 FOR UPDATE"#,
+               FROM github_pull_request
+               WHERE github_key = $1
+                  OR (lower(github_key) = lower($1) AND repository_id = $2 AND number = $3)
+               ORDER BY github_key
+               FOR UPDATE"#,
             update.github_key,
+            update.repository_id,
+            update.number,
         )
-        .fetch_optional(&mut *tx)
+        .fetch_all(&mut *tx)
         .await?;
+        // Index initialization can win after follow_rename observed no row. A case-only
+        // fallback retains the stored key; a real rename still belongs to follow_rename.
+        if stored.len() > 1
+            || stored.iter().any(|row| {
+                row.number != update.number
+                    || matches!(
+                        (row.repository_id, update.repository_id),
+                        (Some(stored_id), Some(incoming_id)) if stored_id != incoming_id
+                    )
+            })
+        {
+            return Err(sqlx::Error::Protocol(
+                "pull request typed identity conflict".into(),
+            ));
+        }
+        if stored.is_empty() && sqlx::query_scalar!(
+            "SELECT github_key FROM github_pull_request WHERE lower(github_key) = lower($1) LIMIT 1 FOR UPDATE",
+            update.github_key,
+        ).fetch_optional(&mut *tx).await?.is_some() {
+            return Err(sqlx::Error::Protocol("pull request case-variant identity conflict".into()));
+        }
+        let stored = stored.into_iter().next();
         let decode = |value: serde_json::Value| {
             serde_json::from_value(value).map_err(|error| sqlx::Error::Decode(error.into()))
         };
