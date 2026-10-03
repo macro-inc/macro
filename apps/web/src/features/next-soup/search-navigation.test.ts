@@ -4,10 +4,8 @@ import { markdownDetailSearchCodec } from '@app/features/block-md/markdown-route
 import { pdfDetailSearchCodec } from '@app/features/block-pdf/pdf-route';
 import { channelsSearchCodec } from '@app/features/channels-view/channels-route';
 import { emailDetailSearchCodec } from '@app/features/email-view/email-route';
-import {
-  parseSplitSearch,
-  replaceSplitSearchParams,
-} from '@app/lib/split-router/search';
+import { parsePaneSearch } from '@app/lib/split-router/next/routes/search';
+import { replacePaneSearchParams } from '@app/split-router';
 import type { SearchLocation } from '@entity';
 import { describe, expect, it } from 'vitest';
 import {
@@ -36,12 +34,8 @@ describe('search target URLs', () => {
     (location) => {
       const target = searchLocationTarget('entity', location, 'request');
       const query = new URLSearchParams();
-      replaceSplitSearchParams(query, [
-        { location: { search: { [target.namespace]: target.params } } },
-      ]);
-      const restored = parseSplitSearch(query.toString()).get(0)?.[
-        target.namespace
-      ];
+      replacePaneSearchParams(query, [{ [target.namespace]: target.params }]);
+      const restored = parsePaneSearch(query.toString())[0]?.[target.namespace];
       const codecs = {
         channel: channelsSearchCodec,
         email: emailDetailSearchCodec,

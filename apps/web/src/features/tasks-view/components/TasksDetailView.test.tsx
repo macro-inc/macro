@@ -27,7 +27,20 @@ vi.mock('@app/components/view-shell', () => ({
 vi.mock('@app/components/entity-detail/EntityDetailBreadcrumbSkeleton', () => ({
   EntityDetailBreadcrumbSkeleton: () => null,
 }));
-vi.mock('@app/lib/split-router', () => ({ useRouteParams: () => ({}) }));
+vi.mock('@app/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/split-router')>()),
+  useRouteParams: () => ({}),
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 vi.mock('../route', () => ({ taskDetailRoute: {} }));
 vi.mock('@block-md/component/MarkdownDetailBreadcrumbItem', () => ({
   MarkdownDetailBreadcrumbItem: () => null,

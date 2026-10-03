@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   routeSearch: vi.fn((): { seek?: string } => ({})),
 }));
-vi.mock('@app/lib/split-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+vi.mock('@app/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/split-router')>()),
   createSearchParams: () => [mocks.routeSearch()],
 }));
 vi.mock('@app/features/next-soup/actions', () => ({

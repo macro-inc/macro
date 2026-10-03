@@ -27,9 +27,9 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionBlockWebsocketEffect: vi.fn(),
   createConnectionWebsocketEffect: vi.fn(),
 }));
-vi.mock('@app/lib/split-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
-  useSplitRouter: () => ({ location: () => undefined }),
+vi.mock('@app/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/split-router')>()),
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),

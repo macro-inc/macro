@@ -10,8 +10,8 @@ const state = vi.hoisted(() => ({
   navigate: (_params: Record<string, unknown>) => {},
   host: undefined as EmailThreadHost | undefined,
 }));
-vi.mock('@app/lib/split-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+vi.mock('@app/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/split-router')>()),
   createSearchParams: () => [state.search],
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));

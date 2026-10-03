@@ -33,7 +33,8 @@ vi.mock('@app/features/soup/collection/list-navigation-source', () => ({
 vi.mock('@app/lib/persistence', () => ({
   makePersistedState: <T,>(store: T) => store,
 }));
-vi.mock('@app/lib/split-router', () => ({
+vi.mock('@app/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/split-router')>()),
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
   createSearchParams: () => [
@@ -43,6 +44,16 @@ vi.mock('@app/lib/split-router', () => ({
       },
     },
   ],
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
   createPreviewSelectionGuard: () =>

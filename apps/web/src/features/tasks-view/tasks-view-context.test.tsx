@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   dockOpen: (): boolean => false,
   dockText: (): string => '',
 }));
-vi.mock('@app/lib/split-router', () => ({
+vi.mock('@app/split-router', () => ({
   useNavigate: () => vi.fn(),
   useParams: () => ({}),
   createSearchParams: () => [
