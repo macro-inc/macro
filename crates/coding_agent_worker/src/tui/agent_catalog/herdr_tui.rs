@@ -39,14 +39,11 @@ impl AgentPreset for HerdrTui {
                 missing: vec!["macrod"],
             };
         };
-        let mut args = vec![
+        let args = vec![
             crate::herdr::acp_agent::SUBCOMMAND.to_owned(),
             "--kind".to_owned(),
             self.0.herdr_kind().to_owned(),
         ];
-        if self.0 == TuiAgent::Claude {
-            args.extend(["--permission-mode".to_owned(), "acceptEdits".to_owned()]);
-        }
         Availability::Available(DetectedAgent {
             kind: self.kind(),
             name: self.name(),

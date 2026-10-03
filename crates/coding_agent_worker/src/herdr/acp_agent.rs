@@ -7,8 +7,7 @@
 //! `codex` in its own herdr tab, rooted at the session's working directory:
 //!
 //! - the first `session/prompt` opens the tab and starts the agent there
-//!   with the session's model (and, for Claude Code, its id and Macro MCP
-//!   servers);
+//!   with the session's model and Macro MCP servers;
 //! - prompts are typed into the TUI with `herdr agent prompt`;
 //! - the agent's own session transcript is tailed and streamed back as
 //!   `session/update`s, and its end-of-turn record ends the turn;
@@ -126,6 +125,10 @@ impl Transcript {
 pub(crate) struct AdapterOptions {
     /// Private storage shared with the dispatcher's repository preparation.
     pub state_dir: Option<PathBuf>,
+    /// Native model ID for new sessions.
+    pub model: Option<String>,
+    /// Sessions use dispatcher-managed worktrees.
+    pub managed_worktrees: bool,
     /// The agent TUI sessions run.
     pub kind: TuiAgent,
     /// Passed to Claude Code as `--permission-mode`.
@@ -213,6 +216,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
     let mut requests = tokio::task::JoinSet::new();
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     while let Some(line) = lines.next_line().await? {
+        while requests.try_join_next().is_some() {}
         let Ok(message) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
@@ -428,7 +432,8 @@ impl Adapter {
                             .kind
                             .models()
                             .iter()
-                            .any(|(id, _)| *id == model) =>
+                            .any(|(id, _)| *id == model)
+                            || self.options.model.as_deref() == Some(model) =>
                     {
                         let live = session
                             .live
@@ -475,7 +480,12 @@ impl Adapter {
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default(),
-            model: Mutex::new(DEFAULT_MODEL.to_owned()),
+            model: Mutex::new(
+                self.options
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_MODEL.to_owned()),
+            ),
             native_id: Mutex::new(None),
             prompt_pending: AtomicBool::new(false),
             live: tokio::sync::Mutex::new(None),
@@ -485,7 +495,7 @@ impl Adapter {
         lock(&self.sessions).insert(id.clone(), session.clone());
         self.observe(&session);
         Ok(
-            json!({"sessionId": id, "configOptions": config_options(self.options.kind, DEFAULT_MODEL)}),
+            json!({"sessionId": id, "configOptions": config_options(self.options.kind, &lock(&session.model))}),
         )
     }
 
@@ -699,12 +709,7 @@ impl Adapter {
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let window = if self
-            .options
-            .state_dir
-            .as_ref()
-            .is_some_and(|root| session.cwd.starts_with(root.join("worktrees")))
-        {
+        let window = if self.options.managed_worktrees {
             let source = crate::outbound::git::primary_worktree(&session.cwd)
                 .await
                 .map_err(|error| RpcError::internal(error.to_string()))?;
@@ -1137,17 +1142,21 @@ pub(crate) fn agent_name(session: &str) -> String {
 }
 
 fn config_options(kind: TuiAgent, current: &str) -> Value {
+    let mut options = kind
+        .models()
+        .iter()
+        .map(|(value, name)| json!({"value": value, "name": name}))
+        .collect::<Vec<_>>();
+    if !kind.models().iter().any(|(value, _)| *value == current) {
+        options.push(json!({"value": current, "name": current}));
+    }
     json!([{
         "id": MODEL_CONFIG_ID,
         "name": "Model",
         "category": "model",
         "type": "select",
         "currentValue": current,
-        "options": kind
-            .models()
-            .iter()
-            .map(|(value, name)| json!({"value": value, "name": name}))
-            .collect::<Vec<_>>(),
+        "options": options,
     }])
 }
 

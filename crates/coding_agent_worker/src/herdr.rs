@@ -108,3 +108,34 @@ impl HerdrSession {
         Some(Self { bin, workspace_id })
     }
 }
+
+/// Apply the instance defaults without mixing adapter flags with native arguments.
+pub(crate) fn configure_launch(
+    harness: &mut crate::config::Harness,
+    settings: &crate::config::HerdrSettings,
+    state_dir: &std::path::Path,
+) {
+    let index = harness
+        .args
+        .iter()
+        .position(|arg| arg == "--")
+        .unwrap_or(harness.args.len());
+    let mut flags = vec![
+        "--state-dir".to_owned(),
+        state_dir.to_string_lossy().into_owned(),
+        "--managed-worktrees".to_owned(),
+    ];
+    if let Some(model) = &settings.model {
+        flags.push(format!("--model={model}"));
+    }
+    if !settings.focus {
+        flags.push("--no-focus".to_owned());
+    }
+    harness.args.splice(index..index, flags);
+    if !settings.arguments.is_empty() {
+        if !harness.args.iter().any(|arg| arg == "--") {
+            harness.args.push("--".to_owned());
+        }
+        harness.args.extend(settings.arguments.iter().cloned());
+    }
+}
