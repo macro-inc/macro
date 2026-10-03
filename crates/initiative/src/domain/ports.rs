@@ -10,7 +10,6 @@ use entity_access::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
-use std::collections::HashMap;
 
 use crate::domain::models::{
     CreateInitiativeRepoArgs, CreateInitiativeRequest, InitiativeBasic, InitiativeDetail,
@@ -51,13 +50,6 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<InitiativeError> + Send + std::fmt::Debug;
 
-    /// Read each task's project, from its Project property, in one batch. Callers authorize
-    /// both ends before displaying it.
-    fn task_memberships(
-        &self,
-        task_ids: Vec<String>,
-    ) -> impl Future<Output = Result<HashMap<String, InitiativeId>, Self::Err>> + Send;
-
     /// Persist a new initiative, its members, and initial share state in one transaction.
     fn create(
         &self,
@@ -72,7 +64,8 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         id: InitiativeId,
     ) -> impl Future<Output = Result<Option<InitiativeBasic>, Self::Err>> + Send;
 
-    /// Load the full initiative, including members, tasks, and share state.
+    /// Load the full initiative, including members and share state. `task_ids` is left empty:
+    /// tasks belong through their Project property, which the service reads.
     fn get_detail(
         &self,
         id: InitiativeId,
@@ -112,8 +105,7 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         user_ids: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete the initiative and clean up its own rows in one transaction, including tasks'
-    /// Project references to it.
+    /// Delete the initiative and clean up its own rows in one transaction.
     fn delete(&self, id: InitiativeId) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 

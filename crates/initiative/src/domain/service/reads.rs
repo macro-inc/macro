@@ -343,16 +343,8 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         let mut tasks_by_project = HashMap::new();
         let mut task_receipts = Vec::new();
         for row in &rows {
-            let Some(detail) = self
-                .repo
-                .get_detail(row.initiative.id)
-                .await
-                .map_err(Into::into)?
-            else {
-                continue;
-            };
             let mut ids = Vec::new();
-            for id in detail.task_ids {
+            for id in self.resources.project_tasks(row.initiative.id).await? {
                 if let Some(receipt) = self
                     .resources
                     .view(

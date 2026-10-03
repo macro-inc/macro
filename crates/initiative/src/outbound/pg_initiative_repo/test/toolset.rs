@@ -42,6 +42,9 @@ impl InitiativeResources for UnusedProperties {
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("unexpected property deletion")
     }
+    fn project_tasks(&self, _: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
     fn view(
         &self,
         _: EntityAccessAuth,

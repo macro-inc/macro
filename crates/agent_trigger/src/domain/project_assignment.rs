@@ -10,12 +10,11 @@ use entity_access::domain::{
 use initiative::domain::{
     events::InitiativeEventActor,
     models::{InitiativeError, InitiativeId},
-    ports::InitiativeRepo,
 };
 use models_properties::{EntityType as PropertyEntityType, service::property_value::PropertyValue};
 use properties::domain::events::EntityPropertyUpdatedMetadata;
 use properties::{EditReceipt, PropertiesErr, PropertiesService, ViewReceipt};
-use system_properties::SystemPropertyKey;
+use system_properties::{SystemPropertiesService, SystemPropertyKey};
 
 #[cfg(test)]
 mod test;
@@ -96,12 +95,18 @@ pub trait ProjectMemberships: Send + Sync {
     ) -> impl Future<Output = Result<HashMap<String, InitiativeId>, InitiativeError>> + Send;
 }
 
-impl<R: InitiativeRepo> ProjectMemberships for R {
+impl<S: SystemPropertiesService> ProjectMemberships for S {
     async fn memberships(
         &self,
         tasks: Vec<String>,
     ) -> Result<HashMap<String, InitiativeId>, InitiativeError> {
-        self.task_memberships(tasks).await.map_err(Into::into)
+        Ok(self
+            .task_projects(tasks)
+            .await
+            .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?
+            .into_iter()
+            .map(|(task, project)| (task, InitiativeId::from_uuid(project)))
+            .collect())
     }
 }
 

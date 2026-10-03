@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM entity_properties\n            WHERE property_definition_id = $1\n              AND values @> jsonb_build_object(\n                  'value', jsonb_build_array(jsonb_build_object(\n                      'entity_id', $2::text, 'entity_type', 'INITIATIVE'\n                  ))\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "011526a66689e58cd3afc9128e9b934cd4862bf34dd192bcae75445f8d49ecac"
+}

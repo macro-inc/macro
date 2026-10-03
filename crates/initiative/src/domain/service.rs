@@ -297,7 +297,9 @@ where
             .map_err(Into::into)?
             .ok_or(InitiativeError::NotFound)?;
         detail.user_access_level = receipt_access_level(&receipt)?;
-        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
+        detail.task_ids = self
+            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
+            .await?;
         Ok(detail)
     }
 
@@ -392,7 +394,9 @@ where
         )
         .await;
         detail.user_access_level = receipt_access_level(&receipt)?;
-        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
+        detail.task_ids = self
+            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
+            .await?;
         Ok(detail)
     }
 

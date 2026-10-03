@@ -116,8 +116,25 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
     }
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async move {
+            let id: InitiativeId = receipt
+                .entity()
+                .entity_id
+                .parse()
+                .map_err(|_| InitiativeError::BadRequest("invalid initiative id".into()))?;
             self.properties
                 .delete_entity_properties(&receipt)
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
+            self.system_properties
+                .clear_project(id.as_uuid())
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
+        })
+    }
+    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+        Box::pin(async move {
+            self.system_properties
+                .project_task_ids(id.as_uuid())
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
         })

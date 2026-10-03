@@ -448,3 +448,110 @@ async fn test_copy_task_properties_idempotent(pool: Pool<Postgres>) -> anyhow::R
 
     Ok(())
 }
+
+// ============================================================================
+// Project membership (the Project property) tests
+// ============================================================================
+
+/// Set a task property to one entity reference, the way property writes store it.
+async fn set_task_reference(
+    pool: &Pool<Postgres>,
+    task_id: &str,
+    property_definition_id: Uuid,
+    entity_id: &str,
+    entity_type: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            gen_random_uuid(), $1, 'TASK', $2,
+            jsonb_build_object(
+                'type', 'EntityReference',
+                'value', jsonb_build_array(jsonb_build_object(
+                    'entity_id', $3::text, 'entity_type', $4::text
+                ))
+            )
+        )
+        ON CONFLICT (entity_id, entity_type, property_definition_id)
+        DO UPDATE SET values = EXCLUDED.values
+        "#,
+        task_id,
+        property_definition_id,
+        entity_id,
+        entity_type,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn project_membership_reads_and_clears_the_project_property(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let project = SystemPropertyKey::PROJECT_UUID;
+    set_task_reference(&pool, "task-b", project, &first.to_string(), "INITIATIVE").await?;
+    set_task_reference(&pool, "task-a", project, &first.to_string(), "INITIATIVE").await?;
+    set_task_reference(&pool, "moved", project, &first.to_string(), "INITIATIVE").await?;
+    set_task_reference(&pool, "moved", project, &second.to_string(), "INITIATIVE").await?;
+    set_task_reference(
+        &pool,
+        "elsewhere",
+        project,
+        &second.to_string(),
+        "INITIATIVE",
+    )
+    .await?;
+    // Another property referencing the project, and a non-project reference, are not
+    // membership.
+    set_task_reference(
+        &pool,
+        "companies",
+        SystemPropertyKey::COMPANIES_UUID,
+        &first.to_string(),
+        "INITIATIVE",
+    )
+    .await?;
+    set_task_reference(
+        &pool,
+        "not-a-project",
+        project,
+        &first.to_string(),
+        "DOCUMENT",
+    )
+    .await?;
+
+    assert_eq!(repo.project_task_ids(first).await?, ["task-a", "task-b"]);
+    let mut projects = repo
+        .task_projects(&[
+            "task-a".to_string(),
+            "moved".to_string(),
+            "companies".to_string(),
+            "not-a-project".to_string(),
+            "unassigned".to_string(),
+        ])
+        .await?;
+    projects.sort();
+    assert_eq!(
+        projects,
+        [
+            ("moved".to_string(), second.to_string()),
+            ("task-a".to_string(), first.to_string()),
+        ]
+    );
+
+    repo.clear_project(first).await?;
+    assert!(repo.project_task_ids(first).await?.is_empty());
+    assert_eq!(repo.project_task_ids(second).await?, ["elsewhere", "moved"]);
+    let companies = get_task_property_values(&pool, "companies").await;
+    assert_eq!(
+        companies.len(),
+        1,
+        "other properties naming the project stay"
+    );
+    Ok(())
+}

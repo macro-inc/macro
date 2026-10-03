@@ -282,6 +282,72 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
 
         Ok(())
     }
+
+    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+        // Whole-value containment uses the `values` GIN index.
+        let rows = sqlx::query_scalar!(
+            r#"
+            SELECT entity_id
+            FROM entity_properties
+            WHERE property_definition_id = $1
+              AND entity_type = 'TASK'
+              AND values @> jsonb_build_object(
+                  'value', jsonb_build_array(jsonb_build_object(
+                      'entity_id', $2::text, 'entity_type', 'INITIATIVE'
+                  ))
+              )
+            ORDER BY entity_id
+            "#,
+            SystemPropertyKey::PROJECT_UUID,
+            project_id.to_string(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn task_projects(
+        &self,
+        task_ids: &[String],
+    ) -> Result<Vec<(String, String)>, SystemPropertyError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT entity_id, values->'value'->0->>'entity_id' AS "project_id!"
+            FROM entity_properties
+            WHERE property_definition_id = $1
+              AND entity_type = 'TASK'
+              AND entity_id = ANY($2)
+              AND values->'value'->0->>'entity_type' = 'INITIATIVE'
+            "#,
+            SystemPropertyKey::PROJECT_UUID,
+            task_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.entity_id, row.project_id))
+            .collect())
+    }
+
+    async fn clear_project(&self, project_id: Uuid) -> Result<(), SystemPropertyError> {
+        sqlx::query!(
+            r#"
+            DELETE FROM entity_properties
+            WHERE property_definition_id = $1
+              AND values @> jsonb_build_object(
+                  'value', jsonb_build_array(jsonb_build_object(
+                      'entity_id', $2::text, 'entity_type', 'INITIATIVE'
+                  ))
+              )
+            "#,
+            SystemPropertyKey::PROJECT_UUID,
+            project_id.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
 
 // The domain error stays sqlx-free; this adapter owns the mapping so `?`

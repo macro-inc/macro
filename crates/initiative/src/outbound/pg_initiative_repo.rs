@@ -84,32 +84,6 @@ impl InitiativeRepo for PgInitiativeRepo {
         list::list_accessible(&self.pool, user_id).await
     }
 
-    async fn task_memberships(
-        &self,
-        task_ids: Vec<String>,
-    ) -> Result<std::collections::HashMap<String, InitiativeId>, Self::Err> {
-        // The literal is SystemPropertyKey::PROJECT_UUID.
-        let rows = sqlx::query!(
-            r#"
-            SELECT project.entity_id AS task_id, initiative.id AS initiative_id
-            FROM entity_properties project
-            JOIN initiative
-              ON initiative.id::text = project.values->'value'->0->>'entity_id'
-            WHERE project.property_definition_id = '00000001-0000-0000-0000-000000000014'
-              AND project.entity_type = 'TASK'
-              AND project.entity_id = ANY($1)
-            "#,
-            &task_ids
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(classify_sqlx)?;
-        Ok(rows
-            .into_iter()
-            .map(|row| (row.task_id, InitiativeId::from_uuid(row.initiative_id)))
-            .collect())
-    }
-
     #[tracing::instrument(err, skip(self, args))]
     async fn update(&self, args: UpdateInitiativeRepoArgs) -> Result<InitiativeDetail, Self::Err> {
         create::update(&self.pool, args).await
@@ -177,7 +151,6 @@ struct InitiativeRecord {
     updated_at: chrono::DateTime<chrono::Utc>,
     share_permission_id: String,
     member_ids: Vec<String>,
-    task_ids: Vec<String>,
     link_share: Option<String>,
     link_share_access_level: Option<AccessLevel>,
     team_share_access_level: Option<AccessLevel>,
@@ -201,7 +174,7 @@ impl InitiativeRecord {
             name: self.name,
             owner_id,
             member_ids: parse_members(self.member_ids)?,
-            task_ids: self.task_ids,
+            task_ids: Vec::new(),
             share_permission,
             user_access_level: DETAIL_ACCESS_WITHOUT_ACTOR,
             created_at: self.created_at,
@@ -327,20 +300,6 @@ async fn load_record(
                 array_agg(DISTINCT m.user_id) FILTER (WHERE m.user_id IS NOT NULL),
                 '{}'::text[]
             ) AS "member_ids!",
-            COALESCE(
-                (
-                    -- Tasks whose Project property (SystemPropertyKey::PROJECT_UUID)
-                    -- references this initiative.
-                    SELECT array_agg(project.entity_id ORDER BY project.entity_id)
-                    FROM entity_properties project
-                    JOIN "Document" task ON task.id = project.entity_id
-                    WHERE project.property_definition_id = '00000001-0000-0000-0000-000000000014'
-                      AND project.entity_type = 'TASK'
-                      AND project.values->'value'
-                          @> jsonb_build_array(jsonb_build_object('entity_id', i.id::text))
-                ),
-                '{}'::text[]
-            ) AS "task_ids!",
             sp."linkShare" AS "link_share?",
             sp."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
             sp.team_share_access_level AS "team_share_access_level?: AccessLevel",
@@ -383,7 +342,6 @@ async fn load_record(
         updated_at: row.updated_at,
         share_permission_id: row.share_permission_id,
         member_ids: row.member_ids,
-        task_ids: row.task_ids,
         link_share: row.link_share,
         link_share_access_level: row.link_share_access_level,
         team_share_access_level: row.team_share_access_level,
