@@ -42,7 +42,7 @@ vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false, isLoading: false }),
   validateSearchServiceText: (text: string) => text.length >= 3,
 }));
-vi.mock('@app/split-router', () => ({
+vi.mock('@app/lib/split-router', () => ({
   SplitRouter: {
     Outlet: (props: { fallback: () => JSX.Element }) => (
       <Show when={mocks.selectedId()} fallback={props.fallback()}>

@@ -27,8 +27,8 @@ vi.mock('@app/components/view-shell', () => ({
 vi.mock('@app/components/entity-detail/EntityDetailBreadcrumbSkeleton', () => ({
   EntityDetailBreadcrumbSkeleton: () => null,
 }));
-vi.mock('@app/split-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/split-router')>()),
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useRouteParams: () => ({}),
 }));
 vi.mock('@service-storage/websocket', () => ({

@@ -1,4 +1,4 @@
-import type { SplitRouteMatch, SplitRouteState } from '@app/split-router';
+import type { SplitRouteMatch, SplitRouteState } from '@app/lib/split-router';
 
 /** The route without a path whose children are the pane routes. */
 export const APP_ROUTE_ID = 'app';

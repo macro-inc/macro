@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@app/split-router', () => ({
+vi.mock('@app/lib/split-router', () => ({
   createSearchParams: () => [{}, mocks.setSearch],
 }));
 vi.mock('../call-route', () => ({

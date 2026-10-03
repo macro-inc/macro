@@ -3,13 +3,13 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
-import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import {
   createSearchParams,
   SplitRouter,
   useNavigate,
   useParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';

@@ -2,12 +2,12 @@ import {
   MobileSettingsProvider,
   useMobileSettings,
 } from '@app/features/settings/context/mobile-settings';
-import { paneRoute } from '@app/routes/app-route';
 import {
   createMemoryHistory,
   createMemoryPaneStore,
   createSplitRouter,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
 import {
   setActiveTabId as setSplitActiveTabId,
   activeTabId as splitActiveTabId,

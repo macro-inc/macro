@@ -11,7 +11,7 @@ import {
   type SplitRoutesManifest,
   splitPanePaths,
   useOptionalSplitRouter,
-} from '@app/split-router';
+} from '@app/lib/split-router';
 import type { BlockAlias, BlockName } from '@core/block';
 import { parseInternalAppLink } from '@core/util/macroAppUrl';
 import { z } from 'zod';

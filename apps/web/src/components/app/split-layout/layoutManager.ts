@@ -9,7 +9,7 @@ import type {
   SplitNavigateOptions,
   SplitRouter,
   SplitSearchUpdate,
-} from '@app/split-router';
+} from '@app/lib/split-router';
 import type {
   BlockAlias,
   BlockAliasContext,

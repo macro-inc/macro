@@ -4,13 +4,13 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import type { CalendarPreviewSelection } from '@app/features/next-soup/utils';
-import { homeCalendarRoute } from '@app/routes/routes';
 import {
   createSearchParams,
   type SerializedSearchParams,
   useNavigate,
   useRouteParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { homeCalendarRoute } from '@app/routes/routes';
 import { previewCalendarTarget } from '@components/app/previewTarget';
 import {
   enableCalendarUi,

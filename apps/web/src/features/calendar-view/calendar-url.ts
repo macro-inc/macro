@@ -1,5 +1,5 @@
 import type { CalendarPeriodView } from '@app/features/calendar/types';
-import { createSearchParamsCodec } from '@app/split-router';
+import { createSearchParamsCodec } from '@app/lib/split-router';
 import { z } from 'zod';
 import { createCalendarRange } from './calendar-range';
 import type { CalendarViewTarget } from './types';

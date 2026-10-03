@@ -50,9 +50,9 @@
     },
     {
       "includes": [
-        "src/lib/split-router/next/routes/**",
-        "src/lib/split-router/next/router/run.ts",
-        "src/lib/split-router/next/router/url-gate.ts"
+        "src/lib/split-router/routes/**",
+        "src/lib/split-router/router/run.ts",
+        "src/lib/split-router/router/url-gate.ts"
       ],
       "linter": {
         "rules": {

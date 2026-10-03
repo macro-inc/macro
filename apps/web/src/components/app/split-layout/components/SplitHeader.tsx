@@ -7,7 +7,7 @@ import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { projectRouteId } from '@app/features/projects/core/route';
-import { type PaneId, useSplitRouter } from '@app/split-router';
+import { type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {

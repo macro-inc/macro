@@ -34,7 +34,7 @@ vi.mock('@app/routes/routes', () => ({
   projectDetailRoute: {},
   tasksProjectsRoute: {},
 }));
-vi.mock('@app/split-router', () => ({
+vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => fixtures.navigate,
   usePaneHistory: () => () =>
     fixtures.routed() ? { entries: [], index: 0 } : undefined,

@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useNavigate } from '@app/lib/split-router';
 import { reviewsSplitRoute } from '@app/routes/routes';
-import { useNavigate } from '@app/split-router';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { enableTasksReviews } from '@core/constant/featureFlags';
 import { type JSX, Show } from 'solid-js';

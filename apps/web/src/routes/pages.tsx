@@ -8,7 +8,7 @@ import {
 } from '@app/features/scheduling/public-booking';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { useRouteParams } from '@app/split-router';
+import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';

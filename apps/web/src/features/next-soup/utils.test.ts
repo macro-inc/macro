@@ -151,9 +151,9 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   };
 });
 
+import type { SerializedSearchParams } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
-import type { SerializedSearchParams } from '@app/split-router';
 import type {
   OpenWithSplitOptions,
   SplitManager,

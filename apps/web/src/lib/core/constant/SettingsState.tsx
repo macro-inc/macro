@@ -1,9 +1,9 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { toBaseRelative } from '@app/constants/routerBase';
 import { useMobileSettings } from '@app/features/settings/context/mobile-settings';
+import { routeParams, type SplitLocation } from '@app/lib/split-router';
 import { paneRootMatch, paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { routeParams, type SplitLocation } from '@app/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';

@@ -5,8 +5,8 @@ import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { emailThreadRoute } from '@app/routes/routes';
-import { createSearchParams, useRouteParams } from '@app/split-router';
 import { EmailThreadControls } from '@block-email/component/EmailThreadControls';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import {

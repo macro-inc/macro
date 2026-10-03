@@ -49,12 +49,12 @@ import {
   TasksRouteView,
 } from '@app/features/tasks-view/route-views';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   createMemoryPaneStore,
   SplitRouter,
   useSolidRouterHistory,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { SplitLayout } from '@components/app/split-layout/SplitLayout';
 import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';

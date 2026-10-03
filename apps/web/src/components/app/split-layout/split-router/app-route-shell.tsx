@@ -1,5 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { isRecord, type PaneId, useSplitRouter } from '@app/split-router';
+import { isRecord, type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';

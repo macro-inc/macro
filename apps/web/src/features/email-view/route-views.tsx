@@ -1,4 +1,4 @@
-import { createSearchParams, useParams } from '@app/split-router';
+import { createSearchParams, useParams } from '@app/lib/split-router';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import {
   AppView,

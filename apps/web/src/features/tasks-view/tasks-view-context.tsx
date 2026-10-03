@@ -12,11 +12,15 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableProjects } from '@app/lib/core/constant/featureFlags';
 import { makePersistedState } from '@app/lib/persistence';
 import {
+  createSearchParams,
+  useNavigate,
+  useParams,
+} from '@app/lib/split-router';
+import {
   taskDetailRoute,
   tasksProjectsRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
-import { createSearchParams, useNavigate, useParams } from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,

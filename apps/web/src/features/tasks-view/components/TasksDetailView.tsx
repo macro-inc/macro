@@ -3,8 +3,8 @@ import type { EntityDetailTarget } from '@app/components/entity-detail/entity-de
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { useListDetailNavigation } from '@app/components/list';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { useRouteParams } from '@app/lib/split-router';
 import { taskDetailRoute } from '@app/routes/routes';
-import { useRouteParams } from '@app/split-router';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';

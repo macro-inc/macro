@@ -1,4 +1,4 @@
-import { createSearchParams } from '@app/split-router';
+import { createSearchParams } from '@app/lib/split-router';
 import { type Accessor, createMemo } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { pdfDetailSearch } from '../pdf-route';

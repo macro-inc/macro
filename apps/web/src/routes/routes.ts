@@ -25,7 +25,7 @@ import {
   REMINDER_DETAIL_ROUTE_ID,
 } from '@app/features/reminders/reminder-navigation';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
-import { defineRoute, type Entry, routeParams } from '@app/split-router';
+import { defineRoute, type Entry, routeParams } from '@app/lib/split-router';
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';

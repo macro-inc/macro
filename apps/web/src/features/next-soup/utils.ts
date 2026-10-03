@@ -28,8 +28,8 @@ import {
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
+import { replacePaneSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { replacePaneSearchParams } from '@app/split-router';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
   goToChannelLatest,

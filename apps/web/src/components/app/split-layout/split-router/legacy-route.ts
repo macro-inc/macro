@@ -19,11 +19,6 @@ import {
   reminderIdFromDetailContent,
 } from '@app/features/reminders/reminder-navigation';
 import {
-  NOT_FOUND_ROUTE_ID,
-  paneRootMatch,
-  paneRoute,
-} from '@app/routes/app-route';
-import {
   canonicalRoute,
   decodePane,
   decodeSegment,
@@ -35,7 +30,12 @@ import {
   type SplitRoutesManifest,
   type SplitSearchState,
   splitPanePaths,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import {
+  NOT_FOUND_ROUTE_ID,
+  paneRootMatch,
+  paneRoute,
+} from '@app/routes/app-route';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';

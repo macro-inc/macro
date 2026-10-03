@@ -1,3 +1,11 @@
+import {
+  createMemoryHistory,
+  createMemoryPaneStore,
+  createSplitRouter,
+  type Entry,
+  type SplitLocation,
+  type SplitRoutes,
+} from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
@@ -7,14 +15,6 @@ import {
   legacyContentRoute,
   notFoundRoute,
 } from '@app/routes/routes';
-import {
-  createMemoryHistory,
-  createMemoryPaneStore,
-  createSplitRouter,
-  type Entry,
-  type SplitLocation,
-  type SplitRoutes,
-} from '@app/split-router';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createSplitLayout, type SplitManager } from '../layoutManager';
 import { createAppPanePolicy } from '../split-router/app-pane-policy';

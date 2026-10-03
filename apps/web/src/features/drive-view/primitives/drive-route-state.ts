@@ -7,7 +7,7 @@ import {
   type SplitNavigateOptions,
   useNavigate,
   useParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import deepEqual from 'fast-deep-equal';
 import {

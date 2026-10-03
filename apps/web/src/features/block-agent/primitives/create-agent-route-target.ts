@@ -1,4 +1,4 @@
-import { createSearchParams } from '@app/split-router';
+import { createSearchParams } from '@app/lib/split-router';
 import { createMemo } from 'solid-js';
 import { agentDetailSearch } from '../agent-route';
 import type { AgentMessageTarget } from '../core/search-location';

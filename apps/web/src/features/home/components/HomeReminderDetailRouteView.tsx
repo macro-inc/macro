@@ -1,6 +1,6 @@
 import { ReminderDetails } from '@app/features/reminders/ReminderEditorSplit';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useParams } from '@app/split-router';
+import { useParams } from '@app/lib/split-router';
 import { PreviewFrame } from '@components/app/PreviewPanel';
 import {
   useSplitDisplayName,

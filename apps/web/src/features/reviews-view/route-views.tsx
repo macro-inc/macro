@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useNavigate, useParams } from '@app/lib/split-router';
 import { tasksSplitRoute } from '@app/routes/routes';
-import { useNavigate, useParams } from '@app/split-router';
 import {
   usePageViewTracking,
   withAuth,

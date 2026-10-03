@@ -6,17 +6,17 @@ import { Projects } from '@app/features/projects/projects';
 import { ProjectTasksProvider } from '@app/features/projects/views/project-tasks-list';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
-  projectDetailRoute,
-  projectTaskRoute,
-  tasksSplitRoute,
-} from '@app/routes/routes';
-import {
   createSearchParams,
   SplitRouter,
   useNavigate,
   useParams,
   useRouteParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import {
+  projectDetailRoute,
+  projectTaskRoute,
+  tasksSplitRoute,
+} from '@app/routes/routes';
 import { SidePanel } from '@components/app/side-panel';
 import {
   AppView,

@@ -1,5 +1,5 @@
+import { useSplitRouter } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
-import { useSplitRouter } from '@app/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';

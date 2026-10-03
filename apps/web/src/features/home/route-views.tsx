@@ -2,7 +2,7 @@ import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
-import { createSearchParams, useParams } from '@app/split-router';
+import { createSearchParams, useParams } from '@app/lib/split-router';
 import {
   AppView,
   RedirectSplit,

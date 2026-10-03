@@ -14,7 +14,6 @@ import { driveDocumentBlockType } from '@app/features/drive-view/primitives/driv
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
-import { paneRootMatch } from '@app/routes/app-route';
 import {
   replacePaneSearchParams,
   routeParams,
@@ -22,7 +21,8 @@ import {
   type SplitRouterMiddleware,
   type SplitRouterMiddlewareContext,
   type SplitRouterMiddlewareResult,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { paneRootMatch } from '@app/routes/app-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';

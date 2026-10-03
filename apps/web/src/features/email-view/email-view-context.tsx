@@ -11,12 +11,12 @@ import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
-import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import {
   createSearchParams,
   useNavigate,
   useRouteParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   useSplitPanelOrThrow,

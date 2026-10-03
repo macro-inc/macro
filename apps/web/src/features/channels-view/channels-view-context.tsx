@@ -5,12 +5,12 @@ import {
 } from '@app/features/next-soup/utils';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
-import { channelDetailRoute, channelsSplitRoute } from '@app/routes/routes';
 import {
   createSearchParams,
   useNavigate,
   useRouteParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import { channelDetailRoute, channelsSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableChannelThreadsPreview } from '@core/constant/featureFlags';

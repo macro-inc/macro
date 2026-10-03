@@ -1,18 +1,18 @@
 import {
-  projectDetailRoute,
-  projectTaskRoute,
-  taskDetailRoute,
-  tasksProjectsRoute,
-  tasksSplitRoute,
-} from '@app/routes/routes';
-import {
   claimOf,
   createRoutesManifest,
   createSearchParamsCodec,
   decodePane,
   formatPanePath,
   routeParams,
-} from '@app/split-router';
+} from '@app/lib/split-router';
+import {
+  projectDetailRoute,
+  projectTaskRoute,
+  taskDetailRoute,
+  tasksProjectsRoute,
+  tasksSplitRoute,
+} from '@app/routes/routes';
 import { describe, expect, it, vi } from 'vitest';
 import { projectDetailSearch } from './project-detail-search';
 

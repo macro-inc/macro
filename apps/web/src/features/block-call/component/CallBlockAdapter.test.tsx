@@ -9,8 +9,8 @@ const state = vi.hoisted(() => ({
   setSearch: vi.fn(),
   navigate: (_params: CallBlockProps) => {},
 }));
-vi.mock('@app/split-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/split-router')>()),
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   createSearchParams: () => [state.search, state.setSearch],
 }));
 vi.mock('@app/signal/splitLayout', () => ({

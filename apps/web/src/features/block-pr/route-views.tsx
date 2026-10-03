@@ -1,5 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useParams } from '@app/split-router';
+import { useParams } from '@app/lib/split-router';
 import { withAuth } from '@components/app/split-layout/split-router/app-route-shell';
 import { lazy, onMount } from 'solid-js';
 

@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useRouteParams } from '@app/lib/split-router';
 import { reminderDetailRoute } from '@app/routes/routes';
-import { useRouteParams } from '@app/split-router';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,

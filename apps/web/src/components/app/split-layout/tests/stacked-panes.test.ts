@@ -1,3 +1,10 @@
+import {
+  createMemoryHistory,
+  createMemoryPaneStore,
+  createSplitRouter,
+  type Entry,
+  type SplitRoutes,
+} from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
@@ -6,13 +13,6 @@ import {
   notFoundRoute,
   settingsRoute,
 } from '@app/routes/routes';
-import {
-  createMemoryHistory,
-  createMemoryPaneStore,
-  createSplitRouter,
-  type Entry,
-  type SplitRoutes,
-} from '@app/split-router';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';

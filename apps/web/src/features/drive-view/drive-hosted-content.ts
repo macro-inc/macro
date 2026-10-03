@@ -1,5 +1,5 @@
+import type { SplitLocation, SplitRouteMatch } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
-import type { SplitLocation, SplitRouteMatch } from '@app/split-router';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { DriveLocation } from './core/types';
 import {

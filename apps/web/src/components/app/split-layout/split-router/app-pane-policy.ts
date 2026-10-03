@@ -1,6 +1,10 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import type {
+  PaneId,
+  SplitLocation,
+  SplitPanePolicy,
+} from '@app/lib/split-router';
 import { paneRootMatch } from '@app/routes/app-route';
-import type { PaneId, SplitLocation, SplitPanePolicy } from '@app/split-router';
 import type { SplitContent, SplitId, SplitManager } from '../layoutManager';
 
 type AppPanePolicyOptions = {

@@ -1,5 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
-import { createSearchParams } from '@app/split-router';
+import { createSearchParams } from '@app/lib/split-router';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';

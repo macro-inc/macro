@@ -4,7 +4,7 @@ import type {
 } from '@app/features/email-thread/context/email-thread-context';
 import { URL_PARAMS } from '@app/features/email-thread/core/location';
 import { emailDetailSearch } from '@app/features/email-view/email-route';
-import { createSearchParams } from '@app/split-router';
+import { createSearchParams } from '@app/lib/split-router';
 import {
   useCanAutofocusSplitContent,
   useSplitPanel,

@@ -9,7 +9,7 @@ import {
   replacePaneSearchParams,
   type SplitPanePolicy,
   SplitRouter,
-} from '@app/split-router';
+} from '@app/lib/split-router';
 import type { SearchLocation } from '@entity';
 import { cleanup, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';

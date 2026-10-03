@@ -1,5 +1,5 @@
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
-import { SplitRouter } from '@app/split-router';
+import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@phosphor/spinner.svg';

@@ -4,8 +4,8 @@ import { markdownDetailSearchCodec } from '@app/features/block-md/markdown-route
 import { pdfDetailSearchCodec } from '@app/features/block-pdf/pdf-route';
 import { channelsSearchCodec } from '@app/features/channels-view/channels-route';
 import { emailDetailSearchCodec } from '@app/features/email-view/email-route';
-import { parsePaneSearch } from '@app/lib/split-router/next/routes/search';
-import { replacePaneSearchParams } from '@app/split-router';
+import { replacePaneSearchParams } from '@app/lib/split-router';
+import { parsePaneSearch } from '@app/lib/split-router/routes/search';
 import type { SearchLocation } from '@entity';
 import { describe, expect, it } from 'vitest';
 import {

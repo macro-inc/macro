@@ -1,4 +1,4 @@
-import { createSearchParams, useParams } from '@app/split-router';
+import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import {

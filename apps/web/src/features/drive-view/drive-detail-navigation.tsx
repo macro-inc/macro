@@ -4,8 +4,8 @@ import type {
   EntityDetailNavigationOptions,
   EntityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
+import { useNavigate, useParams, useRouteState } from '@app/lib/split-router';
 import { driveSplitRoute } from '@app/routes/routes';
-import { useNavigate, useParams, useRouteState } from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {

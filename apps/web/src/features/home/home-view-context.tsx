@@ -5,18 +5,18 @@ import { reminderSourceContent } from '@app/features/reminders/reminder-source';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
+  createSearchParams,
+  type SerializedSearchParams,
+  useNavigate,
+  useParams,
+} from '@app/lib/split-router';
+import {
   homeChannelRoute,
   homeDocumentRoute,
   homePreviewRoute,
   homeReminderRoute,
   homeSplitRoute,
 } from '@app/routes/routes';
-import {
-  createSearchParams,
-  type SerializedSearchParams,
-  useNavigate,
-  useParams,
-} from '@app/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   type PreviewBlockTarget,

@@ -1,5 +1,5 @@
+import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { driveCallRoute } from '@app/routes/routes';
-import { createSearchParams, useRouteParams } from '@app/split-router';
 import { callDetailSearch } from '@block-call/call-route';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {

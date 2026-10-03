@@ -1,5 +1,5 @@
+import { useNavigate, usePaneHistory } from '@app/lib/split-router';
 import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
-import { useNavigate, usePaneHistory } from '@app/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';

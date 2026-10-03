@@ -1,5 +1,5 @@
+import { createSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { createSearchParams } from '@app/split-router';
 import {
   type CallBlockProps,
   type CallTranscriptTarget,
