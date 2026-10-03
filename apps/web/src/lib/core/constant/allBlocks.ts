@@ -11,7 +11,11 @@ import type { SubType } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
-import { ENABLE_DOCX_TO_PDF } from './featureFlags';
+import {
+  ENABLE_DOCX_TO_PDF,
+  enableDocxEditor,
+  isFeatureEnabled,
+} from './featureFlags';
 import { DefaultFilename } from './filename';
 
 const discoveredBlockDefinitions = Object.values<AnyBlockDefinition>(
@@ -33,8 +37,8 @@ if (duplicateDefinitionNames.length > 0) {
   );
 }
 
-// `write` is a legacy virtual block name that resolves to `pdf` when the
-// DOCX-to-PDF feature is enabled; every other concrete block needs a module.
+// `write` is the DOCX block: the collaborative DOCX editor when it is enabled,
+// otherwise it resolves to `pdf`. Every other concrete block needs a module.
 const missingBlockDefinitions = ConcreteBlockRegistry.filter(
   (name) => !definitionNames.includes(name)
 );
@@ -189,10 +193,9 @@ export function fileTypeToBlockName(
   if (blockOrFiletype === 'crm_company') return 'company';
   if (blockOrFiletype === 'crm_contact') return 'contact';
 
-  if (ENABLE_DOCX_TO_PDF) {
-    if (blockOrFiletype === 'docx' || blockOrFiletype === 'write') {
-      return icon ? 'write' : 'pdf';
-    }
+  if (blockOrFiletype === 'docx' || blockOrFiletype === 'write') {
+    if (isFeatureEnabled(enableDocxEditor)) return 'write';
+    if (ENABLE_DOCX_TO_PDF) return icon ? 'write' : 'pdf';
   }
 
   if (isBlockAlias(blockOrFiletype)) {
@@ -329,8 +332,9 @@ export function verifyBlockName(
   name: string | undefined
 ): BlockName | BlockAlias {
   if (!name) return 'unknown';
-  if (ENABLE_DOCX_TO_PDF && name === 'write') {
-    return 'pdf';
+  if (name === 'write') {
+    if (isFeatureEnabled(enableDocxEditor)) return 'write';
+    if (ENABLE_DOCX_TO_PDF) return 'pdf';
   }
   if (isBlockAlias(name)) return name;
   if (name && name in blocks) return name as BlockName;
