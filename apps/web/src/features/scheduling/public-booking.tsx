@@ -1,4 +1,4 @@
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useLocation, useNavigate, useParams } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
@@ -50,19 +50,22 @@ function BookingPageContent() {
   );
 }
 export function PublicBookingPage() {
+  const scheduling = useFeatureFlag(enableCalendarScheduling);
   return (
-    <ShowFeatureFlag
-      flag={enableCalendarScheduling}
+    <Show
+      when={scheduling().enabled}
       fallback={
         <p class="p-12 text-center text-ink-muted">
-          This booking page is unavailable.
+          {scheduling().loading
+            ? 'Loading…'
+            : 'This booking page is unavailable.'}
         </p>
       }
     >
       <Suspense fallback={<p class="p-12">Loading…</p>}>
         <BookingPageContent />
       </Suspense>
-    </ShowFeatureFlag>
+    </Show>
   );
 }
 
@@ -83,18 +86,21 @@ function ReceiptContent() {
 }
 
 export function BookingReceiptPage() {
+  const scheduling = useFeatureFlag(enableCalendarScheduling);
   return (
-    <ShowFeatureFlag
-      flag={enableCalendarScheduling}
+    <Show
+      when={scheduling().enabled}
       fallback={
         <p class="p-12 text-center text-ink-muted">
-          This booking page is unavailable.
+          {scheduling().loading
+            ? 'Loading…'
+            : 'This booking page is unavailable.'}
         </p>
       }
     >
       <Suspense fallback={<p class="p-12">Loading…</p>}>
         <ReceiptContent />
       </Suspense>
-    </ShowFeatureFlag>
+    </Show>
   );
 }
