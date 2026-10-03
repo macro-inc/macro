@@ -149,6 +149,15 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
             .contains_key("CreateCalendarEvent")
     );
     assert!(session.toolset.user_tools.contains_key("SendEmail"));
+    // The confirmed twins execute in the loop, beside the deferring tools,
+    // for the prompts a session reads out of a thread.
+    assert!(session.toolset.tools.contains_key("SendConfirmedEmail"));
+    assert!(
+        session
+            .toolset
+            .tools
+            .contains_key("CreateConfirmedCalendarEvent")
+    );
     let prompt = session.prompt.to_string();
     assert!(prompt.contains("review card"));
     assert!(!prompt.contains("PendingUserExecution"));
@@ -190,6 +199,14 @@ fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
             !tools.iter().any(|tool| tool["name"] == "SendEmail"),
             "{host:?} toolset must not expose SendEmail"
         );
+        // The confirmed twins are for the in-process agent's thread turns;
+        // these hosts already create directly and keep their own policy.
+        for name in ["SendConfirmedEmail", "CreateConfirmedCalendarEvent"] {
+            assert!(
+                !tools.iter().any(|tool| tool["name"] == name),
+                "{host:?} toolset must not expose {name}"
+            );
+        }
     }
 }
 
