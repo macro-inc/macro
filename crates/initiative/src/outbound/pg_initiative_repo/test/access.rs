@@ -10,7 +10,7 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
     let repo = repo(pool.clone());
     let created = repo
         .create(
-            create_args(&pool, OWNER, "Launch", &[TEAMMATE]).await?,
+            create_args(OWNER, "Launch", &[TEAMMATE]),
             share_off(),
             TeamShareCreation::Unshared,
         )
@@ -25,12 +25,12 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
     assert!(detail.member_ids.contains(&user(MEMBER)));
     assert!(detail.member_ids.contains(&user(TEAMMATE)));
     assert_eq!(
-        mirrored_access(&pool, created.id, created.description_document_id, MEMBER).await?,
-        (Some("edit".into()), Some("edit".into()))
+        initiative_access(&pool, created.id, MEMBER).await?,
+        Some("edit".into())
     );
     assert_eq!(
-        mirrored_access(&pool, created.id, created.description_document_id, OWNER).await?,
-        (Some("owner".into()), Some("owner".into()))
+        initiative_access(&pool, created.id, OWNER).await?,
+        Some("owner".into())
     );
 
     // Clearing the assignee property sends an empty grant set and keeps the share.
@@ -56,10 +56,7 @@ async fn assignee_sharing_adds_manageable_collaborators_without_owner_downgrade(
             .member_ids,
         vec![user(TEAMMATE)]
     );
-    assert_eq!(
-        mirrored_access(&pool, created.id, created.description_document_id, MEMBER).await?,
-        (None, None)
-    );
+    assert_eq!(initiative_access(&pool, created.id, MEMBER).await?, None);
     Ok(())
 }
 
@@ -71,7 +68,7 @@ async fn task_side_clear_is_idempotent_and_preserves_the_task(pool: PgPool) -> a
     let repo = repo(pool.clone());
     let created = repo
         .create(
-            create_args(&pool, OWNER, "Launch", &[]).await?,
+            create_args(OWNER, "Launch", &[]),
             share_off(),
             TeamShareCreation::Unshared,
         )

@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use lexical_client::LexicalClient;
+use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
 use sync_service_client::SyncServiceClient;
 use tokio_retry::{Retry, strategy::FixedInterval};
 
@@ -98,6 +98,18 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
                 CollabSurfaceError::Internal(
                     rootcause::report!("failed to check sync-service session: {e:?}")
                         .into_dynamic(),
+                )
+            })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn markdown(&self, surface_id: &str) -> Result<String, CollabSurfaceError> {
+        self.lexical_client
+            .get_markdown(surface_id, MarkdownTarget::External)
+            .await
+            .map_err(|e| {
+                CollabSurfaceError::Internal(
+                    rootcause::report!("failed to render surface markdown: {e:?}").into_dynamic(),
                 )
             })
     }

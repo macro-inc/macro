@@ -240,13 +240,16 @@ For verification, create a task from the project's Tasks tab, then move another
 task into the project through `Add to project…`; both should start the assigned
 agent's normal task session and show its message in the task's Discussion.
 
-Overview's Description uses the shared collaborative Markdown editor and saves
-automatically to the existing backing document. Edit/owner access allows typing;
-view/comment access is read-only. The description is part of the native project
-view and does not open a separate document block. Discussion appears below the
-description, using the same discussion component as tasks.
-Backing descriptions remain available through direct reads, but are omitted from
-ordinary document search, history, and Soup lists.
+Overview's Description uses the shared collaborative Markdown editor on the
+project's collab surface and saves automatically; its access follows project
+access. Edit/owner access allows typing; view/comment access is read-only. Two
+tabs on the same project see each other's edits live. The description is part
+of the native project view and does not open a separate document block.
+Discussion appears below the description, using the same discussion component
+as tasks. The surface has the project's id and is created on first open, or at
+creation when one is given (agents can pass a description). Projects no longer
+have description documents; older ones are ignored and stay hidden from document
+search, history, and Soup lists.
 An unavailable connection shows `Retry description` without clearing saved content.
 
 The project's Tasks tab starts with the task search, controls, and unified list;

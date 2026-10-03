@@ -47,7 +47,6 @@ afterEach(() => {
 const detail: ProjectDetail = {
   id: 'launch',
   name: 'Launch',
-  descriptionDocumentId: 'description',
   updatedAt: '',
   ownerId: 'owner',
   memberIds: ['owner', 'collaborator'],

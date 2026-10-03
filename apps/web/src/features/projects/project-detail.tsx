@@ -200,7 +200,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                 onCreateTask={createTask}
                 description={
                   <ProjectDescription
-                    documentId={project().descriptionDocumentId}
+                    projectId={project().id}
                     canEdit={canEditProject(project())}
                   />
                 }

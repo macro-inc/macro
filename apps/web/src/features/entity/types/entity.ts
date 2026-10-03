@@ -489,7 +489,6 @@ export type CalendarEventEntity = EntityBase & {
 /** A native project, distinct from folder entities. */
 export type InitiativeEntity = EntityBase & {
   type: 'initiative';
-  descriptionDocumentId: string;
   properties?: SoupProperty[];
 };
 

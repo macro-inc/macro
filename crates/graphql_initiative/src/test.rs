@@ -193,7 +193,6 @@ fn detail() -> InitiativeDetail {
     InitiativeDetail {
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
-        description_document_id: DescriptionDocumentId::from_uuid(Uuid::from_u128(2)),
         owner_id: user(),
         member_ids: vec![],
         task_ids: vec![],
@@ -210,7 +209,6 @@ fn row() -> InitiativePageRow {
         initiative: InitiativeSummary {
             id: detail.id,
             name: detail.name,
-            description_document_id: detail.description_document_id,
             updated_at: detail.updated_at,
         },
         user_access_level: AccessLevel::Edit,
@@ -268,6 +266,16 @@ impl InitiativeApi for RecordingApi {
             let mut detail = self.current_detail();
             detail.id = InitiativeId::from_uuid(id);
             Ok(detail)
+        })
+    }
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        _id: Uuid,
+    ) -> ApiFuture<'_, ()> {
+        Box::pin(async move {
+            self.record(&user, "ensure_description_surface")?;
+            Ok(())
         })
     }
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
@@ -420,11 +428,34 @@ async fn anonymous_queries_and_mutations_never_call_domain() {
     for query in [
         "{ user { id initiative(initiativeId: \"00000000-0000-4000-8000-000000000001\") { id } } }",
         "mutation { createInitiative(input: { name: \"Launch\" }) { id } }",
+        "mutation { ensureInitiativeDescriptionSurface(initiativeId: \"00000000-0000-4000-8000-000000000001\") }",
     ] {
         let response = schema.execute(query).await;
         assert_eq!(response.errors[0].message, "authentication required");
     }
     assert!(api.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn ensure_description_surface_returns_the_project_id_as_the_surface_id() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["ensureInitiativeDescriptionSurface"],
+        PROJECT_ID
+    );
+    assert_eq!(
+        *api.calls.lock().unwrap(),
+        vec!["ensure_description_surface".to_string()]
+    );
 }
 
 #[tokio::test]

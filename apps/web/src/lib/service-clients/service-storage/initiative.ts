@@ -11,6 +11,7 @@ import {
   CreateInitiativeDocument,
   type CreateInitiativeInput,
   DeleteInitiativeDocument,
+  EnsureInitiativeDescriptionSurfaceDocument,
   type GraphqlEntityAccessLevel,
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
@@ -77,7 +78,6 @@ export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
-    descriptionDocumentId: project.descriptionDocumentId ?? '',
     updatedAt: project.metadata.updatedAt ?? '',
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
@@ -225,6 +225,16 @@ export function createInitiativeClient(client: () => Client) {
             })
           ).updateInitiative
         )
+      ),
+    /** Ensure the description surface, which has the project's id, before connecting. */
+    ensureDescriptionSurface: (id: string) =>
+      catchToResult(
+        async () =>
+          (
+            await mutation(EnsureInitiativeDescriptionSurfaceDocument, {
+              initiativeId: id,
+            })
+          ).ensureInitiativeDescriptionSurface
       ),
     delete: (id: string) =>
       catchToResult(

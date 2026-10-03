@@ -27,7 +27,7 @@ async fn project_history_filters_task_events_until_task_access_is_granted(
     let repo = repo(pool.clone());
     let created = repo
         .create(
-            create_args(&pool, OWNER, "Shared project", &[MEMBER]).await?,
+            create_args(OWNER, "Shared project", &[MEMBER]),
             share_off(),
             TeamShareCreation::Unshared,
         )

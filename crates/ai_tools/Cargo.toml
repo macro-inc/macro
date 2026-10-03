@@ -9,8 +9,9 @@ test-support = []
 
 [dependencies]
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
+collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
-initiative_documents = { path = "../initiative_documents" }
+initiative_description = { path = "../initiative_description" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }

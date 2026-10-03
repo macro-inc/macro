@@ -27,7 +27,6 @@ const initiative = (id: string) => ({
   id,
   displayName: id,
   entityType: 'INITIATIVE' as const,
-  descriptionDocumentId: 'description',
   metadata: {
     ownerId: 'owner',
     updatedAt: '2026-09-27',
@@ -122,7 +121,6 @@ describe('project Soup source', () => {
         project: {
           id: 'launch',
           name: 'launch',
-          descriptionDocumentId: 'description',
           updatedAt: '2026-09-27',
           access: 'edit',
         },

@@ -51,7 +51,6 @@ const project: ProjectDetail = {
   id: 'project',
   name: 'Launch',
   taskIds: ['linked'],
-  descriptionDocumentId: 'description',
   ownerId: 'owner',
   memberIds: [],
   access: 'owner',

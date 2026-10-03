@@ -174,7 +174,6 @@ function project(
     project: {
       id,
       name,
-      descriptionDocumentId: `${id}-description`,
       updatedAt: '',
       access,
     },

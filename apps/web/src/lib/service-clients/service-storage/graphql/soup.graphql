@@ -136,7 +136,6 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupInitiative {
-		descriptionDocumentId
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename

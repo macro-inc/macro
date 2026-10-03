@@ -22,7 +22,6 @@ const project = {
   __typename: 'GraphqlSoupInitiative',
   id: 'project-1',
   displayName: 'Launch',
-  descriptionDocumentId: 'description-1',
   metadata: {
     ownerId: 'macro|owner@example.com',
     updatedAt: '2026-09-22T12:00:00Z',
@@ -85,7 +84,6 @@ describe('initiative GraphQL transport', () => {
       ownerId: 'macro|owner@example.com',
       updatedAt: '2026-09-22T12:00:00Z',
       createdAt: '2026-09-20T12:00:00Z',
-      descriptionDocumentId: 'description-1',
       userAccessLevel: 'comment',
       taskIds: ['task-1'],
       sharePermission: {

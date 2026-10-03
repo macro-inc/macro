@@ -31,9 +31,8 @@ use super::*;
 use crate::domain::{
     models::{
         AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRequest,
-        DescriptionDocumentId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-        InitiativeList, InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment,
-        UpdateInitiativeRequest,
+        InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
+        InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment, UpdateInitiativeRequest,
     },
     ports::InitiativeService,
 };
@@ -50,10 +49,6 @@ fn existing_id() -> InitiativeId {
 
 fn unknown_id() -> InitiativeId {
     InitiativeId::from_uuid(Uuid::from_u128(99))
-}
-
-fn description_document_id() -> DescriptionDocumentId {
-    DescriptionDocumentId::from_uuid(Uuid::from_u128(2))
 }
 
 fn now() -> DateTime<Utc> {
@@ -93,7 +88,6 @@ fn sample_detail() -> InitiativeDetail {
     InitiativeDetail {
         id: existing_id(),
         name: "Launch".to_string(),
-        description_document_id: description_document_id(),
         owner_id: user(),
         member_ids: Vec::new(),
         task_ids: Vec::new(),
@@ -109,7 +103,6 @@ fn sample_list() -> InitiativeList {
         initiatives: vec![InitiativeSummary {
             id: existing_id(),
             name: "Launch".to_string(),
-            description_document_id: description_document_id(),
             updated_at: now(),
         }],
     }
@@ -407,6 +400,20 @@ impl InitiativeService for FakeInitiativeService {
         Ok(sample_list())
     }
 
+    async fn ensure_description_surface(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<(), InitiativeError> {
+        Ok(())
+    }
+
+    async fn read_description(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, InitiativeError> {
+        Ok(String::new())
+    }
+
     async fn update(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -627,7 +634,7 @@ async fn create_returns_200() {
 }
 
 #[tokio::test]
-async fn create_response_points_at_the_description_document_instead_of_inlining_text() {
+async fn create_response_never_inlines_the_description() {
     let response = send(
         build_router(
             FakeInitiativeService::default(),
@@ -645,11 +652,10 @@ async fn create_response_points_at_the_description_document_instead_of_inlining_
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = read_json(response).await;
-    assert_eq!(
-        body["descriptionDocumentId"],
-        serde_json::json!(description_document_id().to_string())
-    );
+    // The description lives on the project's collab surface, which has the project's id.
     assert!(body.get("description").is_none());
+    assert!(body.get("descriptionDocumentId").is_none());
+    assert!(body.get("descriptionSurfaceId").is_none());
 }
 
 #[tokio::test]

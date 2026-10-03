@@ -871,6 +871,7 @@ dependencies = [
  "channels",
  "chat",
  "chrono",
+ "collab_surface",
  "connection",
  "connection_gateway_client",
  "contacts",
@@ -893,7 +894,7 @@ dependencies = [
  "image_generation",
  "import",
  "initiative",
- "initiative_documents",
+ "initiative_description",
  "item_filters",
  "lazy_static",
  "lexical_client",
@@ -6108,7 +6109,7 @@ dependencies = [
  "http-body-util",
  "import",
  "initiative",
- "initiative_documents",
+ "initiative_description",
  "jsonwebtoken 10.3.0",
  "last_online_tracker",
  "lazy_static",
@@ -9904,14 +9905,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "initiative_documents"
+name = "initiative_description"
 version = "0.1.0"
 dependencies = [
- "documents",
+ "chrono",
+ "collab_surface",
  "initiative",
- "model_owner",
+ "model-entity",
  "rootcause",
+ "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

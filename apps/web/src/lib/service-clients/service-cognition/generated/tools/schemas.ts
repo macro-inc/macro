@@ -2000,7 +2000,6 @@ export const CreateInitiative = z.object({
 export const ProjectDetails = z.object({
   initiativeId: z.string().uuid(),
   name: z.string(),
-  descriptionDocumentId: z.string().uuid(),
   ownerId: z.string(),
   memberIds: z.array(z.string()),
   taskIds: z.array(z.string()),
@@ -3907,7 +3906,6 @@ export const ProjectListResult = z.object({
     z.object({
       initiativeId: z.string().uuid(),
       name: z.string(),
-      descriptionDocumentId: z.string().uuid(),
       access: z.string(),
       properties: z.object({
         status: z.union([z.string().uuid(), z.null()]).optional(),
@@ -5730,7 +5728,6 @@ export const ProjectReadResult = z.object({
   project: z.object({
     initiativeId: z.string().uuid(),
     name: z.string(),
-    descriptionDocumentId: z.string().uuid(),
     ownerId: z.string(),
     memberIds: z.array(z.string()),
     taskIds: z.array(z.string()),
@@ -5753,6 +5750,7 @@ export const ProjectReadResult = z.object({
       .optional(),
     completed: z.boolean(),
   }),
+  description: z.string(),
   nextTaskCursor: z.union([z.string(), z.null()]).optional(),
 });
 

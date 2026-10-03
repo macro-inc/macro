@@ -32,7 +32,6 @@ it('uses complete current membership and disables the shared source immediately 
       const [project, setProject] = createSignal<ProjectDetail | undefined>({
         id: 'project',
         name: 'Launch',
-        descriptionDocumentId: 'description',
         ownerId: 'owner',
         memberIds: [],
         taskIds: ids,

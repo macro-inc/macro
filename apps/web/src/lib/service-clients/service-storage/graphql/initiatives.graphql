@@ -2,7 +2,6 @@ fragment InitiativeDetailFields on GraphqlSoupInitiative {
   __typename
   id
   displayName
-  descriptionDocumentId
   metadata {
     ownerId
     createdAt
@@ -69,6 +68,10 @@ mutation UpdateInitiative($initiativeId: ID!, $input: UpdateInitiativeInput!) {
   updateInitiative(initiativeId: $initiativeId, input: $input) {
     ...InitiativeDetailFields
   }
+}
+
+mutation EnsureInitiativeDescriptionSurface($initiativeId: ID!) {
+  ensureInitiativeDescriptionSurface(initiativeId: $initiativeId)
 }
 
 mutation DeleteInitiative($initiativeId: ID!) {

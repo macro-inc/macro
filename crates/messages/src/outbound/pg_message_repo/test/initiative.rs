@@ -6,7 +6,7 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
 };
 
-async fn create_project(pool: &PgPool, id: Uuid, document: &str) {
+async fn create_project(pool: &PgPool, id: Uuid) {
     sqlx::query!(
         r#"INSERT INTO "SharePermission" (id, "createdAt", "updatedAt") VALUES ($1, NOW(), NOW())"#,
         id.to_string()
@@ -14,8 +14,16 @@ async fn create_project(pool: &PgPool, id: Uuid, document: &str) {
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query!(r#"INSERT INTO initiative (id, name, owner_user_id, share_permission_id, description_document_id)
-        VALUES ($1, 'Project discussion', $2, $3, $4)"#, id, USER, id.to_string(), document).execute(pool).await.unwrap();
+    sqlx::query!(
+        r#"INSERT INTO initiative (id, name, owner_user_id, share_permission_id)
+        VALUES ($1, 'Project discussion', $2, $3)"#,
+        id,
+        USER,
+        id.to_string(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 fn receipt<P: RequiredPermission>(id: Uuid) -> EntityAccessReceipt<P> {
@@ -40,7 +48,7 @@ fn input(content: &str, root: Option<Uuid>) -> PostMessage {
 async fn project_discussions_use_shared_parent_lifecycle_checks(pool: PgPool) {
     setup(&pool).await;
     let id = macro_uuid::generate_uuid_v7();
-    create_project(&pool, id, "message-doc-a").await;
+    create_project(&pool, id).await;
     let repo = PgMessageRepository::new(pool.clone())
         .with_initiatives(InitiativeLookup::new(PgInitiativeRepo::new(pool.clone())));
     let service = MessageService::new(repo.clone(), NoMessageEventPublisher);
@@ -169,8 +177,8 @@ async fn initiative_threads_reject_cross_parent_replies_and_thread_deletion_hide
     setup(&pool).await;
     let first = macro_uuid::generate_uuid_v7();
     let second = macro_uuid::generate_uuid_v7();
-    create_project(&pool, first, "message-doc-a").await;
-    create_project(&pool, second, "message-doc-b").await;
+    create_project(&pool, first).await;
+    create_project(&pool, second).await;
     let repo = PgMessageRepository::new(pool.clone())
         .with_initiatives(InitiativeLookup::new(PgInitiativeRepo::new(pool)));
     let service = MessageService::new(repo, NoMessageEventPublisher);

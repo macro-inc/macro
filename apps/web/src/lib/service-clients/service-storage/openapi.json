@@ -22113,7 +22113,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor."
+            "description": "Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor."
           },
           "memberIds": {
             "type": ["array", "null"],
@@ -23332,11 +23332,6 @@
             }
           }
         ]
-      },
-      "DescriptionDocumentId": {
-        "type": "string",
-        "format": "uuid",
-        "description": "Id of the markdown document that holds an initiative's description."
       },
       "DocumentBasic": {
         "type": "object",
@@ -28068,7 +28063,6 @@
         "required": [
           "id",
           "name",
-          "descriptionDocumentId",
           "ownerId",
           "memberIds",
           "taskIds",
@@ -28082,10 +28076,6 @@
             "type": "string",
             "format": "date-time",
             "description": "When the initiative was created."
-          },
-          "descriptionDocumentId": {
-            "$ref": "#/components/schemas/DescriptionDocumentId",
-            "description": "The markdown document holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -28188,12 +28178,8 @@
       "InitiativeSummary": {
         "type": "object",
         "description": "List-row view of an initiative.",
-        "required": ["id", "name", "descriptionDocumentId", "updatedAt"],
+        "required": ["id", "name", "updatedAt"],
         "properties": {
-          "descriptionDocumentId": {
-            "$ref": "#/components/schemas/DescriptionDocumentId",
-            "description": "The markdown document holding the description; open it in the editor."
-          },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
             "description": "Opaque identifier."
@@ -34447,11 +34433,6 @@
                 "format": "date-time",
                 "description": "Creation timestamp."
               },
-              "descriptionDocumentId": {
-                "type": ["string", "null"],
-                "format": "uuid",
-                "description": "Document holding the initiative description."
-              },
               "id": {
                 "type": "string",
                 "format": "uuid",
@@ -36701,7 +36682,7 @@
       },
       "UpdateInitiativeRequest": {
         "type": "object",
-        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.",
+        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its collab surface, not here.",
         "properties": {
           "memberIds": {
             "type": ["array", "null"],

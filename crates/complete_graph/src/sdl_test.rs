@@ -74,7 +74,6 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupProject implements GraphqlSoupEntity {",
         "type GraphqlSoupInitiative implements GraphqlSoupEntity {",
         "initiativeFilter: GraphqlInitiativeExpr",
-        "descriptionDocumentId: ID",
         "parent: GraphqlEntity",
         "type GraphqlCacheDeletion {",
         "graphqlTypeName: String!",
@@ -437,6 +436,10 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
     assert_sdl_line(
         &sdl,
         "createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!",
+    );
+    assert_sdl_line(
+        &sdl,
+        "ensureInitiativeDescriptionSurface(initiativeId: ID!): ID!",
     );
     assert_sdl_line(
         &sdl,

@@ -14487,11 +14487,6 @@ export const listInitiativesResponse = zod
       .array(
         zod
           .object({
-            descriptionDocumentId: zod
-              .uuid()
-              .describe(
-                "Id of the markdown document that holds an initiative's description."
-              ),
             id: zod
               .uuid()
               .describe(
@@ -14517,7 +14512,7 @@ export const createInitiativeBody = zod
       .string()
       .nullish()
       .describe(
-        'Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor.'
+        'Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor.'
       ),
     memberIds: zod
       .array(zod.string())
@@ -14692,11 +14687,6 @@ export const createInitiativeResponse = zod
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
-    descriptionDocumentId: zod
-      .uuid()
-      .describe(
-        "Id of the markdown document that holds an initiative's description."
-      ),
     id: zod
       .uuid()
       .describe(
@@ -14774,11 +14764,6 @@ export const getInitiativeResponse = zod
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
-    descriptionDocumentId: zod
-      .uuid()
-      .describe(
-        "Id of the markdown document that holds an initiative's description."
-      ),
     id: zod
       .uuid()
       .describe(
@@ -14927,7 +14912,7 @@ export const updateInitiativeBody = zod
       .optional(),
   })
   .describe(
-    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.'
+    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its collab surface, not here.'
   );
 
 export const updateInitiativeResponse = zod
@@ -14935,11 +14920,6 @@ export const updateInitiativeResponse = zod
     createdAt: zod.iso
       .datetime({})
       .describe('When the initiative was created.'),
-    descriptionDocumentId: zod
-      .uuid()
-      .describe(
-        "Id of the markdown document that holds an initiative's description."
-      ),
     id: zod
       .uuid()
       .describe(
@@ -16266,10 +16246,6 @@ export const getItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
-                    descriptionDocumentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('Document holding the initiative description.'),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -21027,10 +21003,6 @@ export const postItemsSoupResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
-                    descriptionDocumentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('Document holding the initiative description.'),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -25200,10 +25172,6 @@ export const postItemsSoupAstResponse = zod
                     createdAt: zod.iso
                       .datetime({})
                       .describe('Creation timestamp.'),
-                    descriptionDocumentId: zod
-                      .uuid()
-                      .nullish()
-                      .describe('Document holding the initiative description.'),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -29655,12 +29623,6 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          descriptionDocumentId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'Document holding the initiative description.'
-                            ),
                           id: zod.uuid().describe('Initiative identifier.'),
                           name: zod
                             .string()
@@ -33828,12 +33790,6 @@ export const postItemsSoupAstGroupedResponse = zod
                           createdAt: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          descriptionDocumentId: zod
-                            .uuid()
-                            .nullish()
-                            .describe(
-                              'Document holding the initiative description.'
-                            ),
                           id: zod.uuid().describe('Initiative identifier.'),
                           name: zod
                             .string()

@@ -3870,8 +3870,8 @@ export type CreateImport = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Initial markdown for the description document. Not stored on the initiative; later
-     * edits happen in the document editor.
+     * Initial markdown for the description surface. Not stored on the initiative; later
+     * edits happen in the collaborative description editor.
      */
     description?: string | null;
     /**
@@ -4764,11 +4764,6 @@ export type DeleteUnthreadedPdfAnchorRequest = {
     anchorType: 'highlight';
     uuid: string;
 };
-
-/**
- * Id of the markdown document that holds an initiative's description.
- */
-export type DescriptionDocumentId = string;
 
 /**
  * Returns basic information of a document used for some db queries
@@ -7543,10 +7538,6 @@ export type InitiativeDetail = {
      */
     createdAt: string;
     /**
-     * The markdown document holding the description; open it in the editor.
-     */
-    descriptionDocumentId: DescriptionDocumentId;
-    /**
      * Opaque identifier.
      */
     id: InitiativeId;
@@ -7633,10 +7624,6 @@ export type InitiativeList = {
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
-    /**
-     * The markdown document holding the description; open it in the editor.
-     */
-    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -11508,10 +11495,6 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     createdAt: string;
     /**
-     * Document holding the initiative description.
-     */
-    descriptionDocumentId?: string | null;
-    /**
      * Initiative identifier.
      */
     id: string;
@@ -12931,7 +12914,7 @@ export type UpdateCrmTeamSettingsRequest = {
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace. The description is edited in its document, not here.
+ * present is a full replace. The description is edited in its collab surface, not here.
  */
 export type UpdateInitiativeRequest = {
     /**

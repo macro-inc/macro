@@ -76,6 +76,23 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
         .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
     }
 
+    /// Idempotently ensure the collaborative description surface of an initiative the viewer
+    /// can see, returning its id, which is the initiative's id. Call before connecting.
+    async fn ensure_initiative_description_surface(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<ID> {
+        let user = require_authenticated_user(ctx)?;
+        let id = parse_id(initiative_id, "initiativeId")?;
+        ctx.data::<InitiativeGraphqlContext>()?
+            .0
+            .ensure_description_surface(user, id)
+            .await
+            .map_err(graphql_error)?;
+        Ok(ID(id.to_string()))
+    }
+
     /// Delete an initiative after its owner capability has been verified.
     async fn delete_initiative(
         &self,

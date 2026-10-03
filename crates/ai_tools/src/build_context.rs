@@ -450,7 +450,6 @@ pub async fn build_tool_service_context_from_env(
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
     );
 

@@ -21,16 +21,12 @@ async fn attributed_creation_preserves_the_bot_and_delegating_owner() {
         .return_once(|_| Box::pin(async { Ok(None) }));
     repo.expect_create()
         .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents
-        .expect_create()
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     let events = Arc::new(Events::default());
     let attribution = activity::Attribution::delegated(
         activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         user(OWNER),
     );
-    service_with_documents(repo, documents)
+    service(repo)
         .with_event_publisher(events.clone())
         .create_attributed(
             &user(OWNER),
@@ -137,9 +133,9 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
     let mut repo = MockInitiativeRepo::new();
     repo.expect_delete()
         .times(1)
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents.expect_purge().times(1).return_once(|_| {
+        .return_once(|_| Box::pin(async { Ok(()) }));
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces.expect_delete().times(1).return_once(|_| {
         Box::pin(async {
             Err(InitiativeError::Internal(rootcause::report!(
                 "storage unavailable"
@@ -147,7 +143,7 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
         })
     });
     let events = Arc::new(Events::default());
-    let result = service_with_documents(repo, documents)
+    let result = service_with(repo, surfaces)
         .with_event_publisher(events.clone())
         .delete(owner_receipt())
         .await;

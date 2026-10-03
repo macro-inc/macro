@@ -3,7 +3,7 @@ mod reads;
 use crate::domain::{
     events::{InitiativeEventPublisher, InitiativeMacroEvent, InitiativeTopicEvent},
     history::InitiativeHistory,
-    ports::MockInitiativeDescriptionDocuments,
+    ports::MockInitiativeDescriptionSurfaces,
     reads::InitiativePropertySnapshot,
     resources::{InitiativeResources, ResourceFuture},
     service::InitiativeServiceImpl,
@@ -71,7 +71,7 @@ impl InitiativeEventPublisher for Events {
 }
 
 type Context = InitiativeToolContext<
-    InitiativeServiceImpl<PgInitiativeRepo, MockInitiativeDescriptionDocuments>,
+    InitiativeServiceImpl<PgInitiativeRepo, MockInitiativeDescriptionSurfaces>,
     EntityAccessServiceImpl<PgAccessRepository>,
     PgActivityRepo,
 >;
@@ -88,14 +88,15 @@ fn context_with_resources(
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));
+    // ReadInitiative reads the description; these projects have none.
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces
+        .expect_read()
+        .returning(|_| Box::pin(async { Ok(String::new()) }));
     Context {
         service: Arc::new(
-            InitiativeServiceImpl::new(
-                repo(pool.clone()),
-                MockInitiativeDescriptionDocuments::new(),
-                resources.clone(),
-            )
-            .with_event_publisher(events),
+            InitiativeServiceImpl::new(repo(pool.clone()), surfaces, resources.clone())
+                .with_event_publisher(events),
         ),
         history: Arc::new(InitiativeHistory::new(
             PgActivityRepo::new(pool),
@@ -127,14 +128,14 @@ async fn tool_moves_from_inaccessible_source_and_clears_after_project_access_is_
     let repo = repo(pool.clone());
     let source = repo
         .create(
-            create_args(&pool, OTHER_OWNER, "Hidden source", &[]).await?,
+            create_args(OTHER_OWNER, "Hidden source", &[]),
             share_off(),
             TeamShareCreation::Unshared,
         )
         .await?;
     let destination = repo
         .create(
-            create_args(&pool, OWNER, "Destination", &[MEMBER]).await?,
+            create_args(OWNER, "Destination", &[MEMBER]),
             share_off(),
             TeamShareCreation::Unshared,
         )
@@ -267,7 +268,7 @@ async fn sharing_tool_checks_actual_ownership_under_delegated_bot_receipt(
     let repo = repo(pool.clone());
     let project = repo
         .create(
-            create_args(&pool, OWNER, "Launch", &[MEMBER]).await?,
+            create_args(OWNER, "Launch", &[MEMBER]),
             share_off(),
             TeamShareCreation::Unshared,
         )
@@ -335,7 +336,7 @@ async fn clear_tool_reports_non_tasks_and_keeps_clearing_the_remaining_tasks(
     let repo = repo(pool.clone());
     let initiative = repo
         .create(
-            create_args(&pool, OWNER, "Launch", &[]).await?,
+            create_args(OWNER, "Launch", &[]),
             share_off(),
             TeamShareCreation::Unshared,
         )

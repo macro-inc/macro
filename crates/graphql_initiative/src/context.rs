@@ -34,6 +34,11 @@ pub(crate) type ApiFuture<'a, T> =
 pub(crate) trait InitiativeApi: Send + Sync {
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow>;
     fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail>;
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> ApiFuture<'_, ()>;
     fn tasks(
         &self,
         user: MacroUserIdStr<'static>,
@@ -135,6 +140,20 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
                 .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
                 .await?;
             self.service.get(receipt).await
+        })
+    }
+
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> ApiFuture<'_, ()> {
+        Box::pin(async move {
+            let receipt = self
+                .access
+                .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
+                .await?;
+            self.service.ensure_description_surface(receipt).await
         })
     }
 
