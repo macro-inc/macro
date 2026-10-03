@@ -245,6 +245,15 @@ project's collab surface and saves automatically; its access follows project
 access. Edit/owner access allows typing; view/comment access is read-only. Two
 tabs on the same project see each other's edits live. The description is part
 of the native project view and does not open a separate document block.
+It edits like a markdown document body: `/` opens the commands menu (headings,
+lists, checklists, quotes, code blocks, tables, equations, links, images,
+video, dividers, and creating a task), `@` mentions, `:` emoji, `;` snippets,
+and markdown shortcuts work. Tables have the document's insert, resize, move,
+and delete controls; blocks have drag handles; files and images can be pasted
+or dropped in, and items dragged from lists insert mentions. Mentions in a
+description are not tracked as document references, so mentioned users are not
+notified. Document-only tools (comments, tags, AI writing, find and replace) are
+not available in descriptions.
 Discussion appears below the description, using the same discussion component
 as tasks. The surface has the project's id and is created on first open, or at
 creation when one is given (agents can pass a description). Projects no longer
