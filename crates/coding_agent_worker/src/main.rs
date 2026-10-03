@@ -19,6 +19,8 @@ mod config;
 mod daemon;
 mod dispatch;
 mod harness;
+#[cfg(unix)]
+mod herdr;
 mod outbound;
 mod runtime;
 mod trigger;
@@ -36,6 +38,43 @@ struct Args {
     /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
     #[arg(long, hide = true)]
     open_url: Option<String>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Show one agent session live inside a herdr window. macrod opens these
+    /// itself when it runs inside herdr.
+    #[cfg(unix)]
+    #[command(hide = true)]
+    HerdrPane {
+        /// The running macrod's window socket.
+        #[arg(long)]
+        socket: std::path::PathBuf,
+        /// The ACP session to follow.
+        #[arg(long)]
+        session: String,
+    },
+    /// Serve ACP on stdio with each session as a live coding-agent TUI in
+    /// its own herdr window. Set as the harness of a macrod run inside herdr.
+    #[cfg(unix)]
+    HerdrAcp {
+        /// Which agent TUI each session runs.
+        #[arg(long, value_enum, default_value_t)]
+        kind: herdr::acp_agent::TuiAgent,
+        /// Claude Code's `--permission-mode` for every session, e.g.
+        /// `acceptEdits` or `bypassPermissions`.
+        #[arg(long)]
+        permission_mode: Option<String>,
+        /// Open each session's tab in the background rather than switching
+        /// herdr to it.
+        #[arg(long)]
+        no_focus: bool,
+        /// Extra arguments for every agent launch, e.g. `-- -s workspace-write`.
+        #[arg(last = true)]
+        agent_args: Vec<String>,
+    },
 }
 
 #[tokio::main]
@@ -54,6 +93,44 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         };
+    }
+    #[cfg(unix)]
+    match args.command {
+        Some(Command::HerdrPane { socket, session }) => {
+            return match tui::run_herdr_pane(&socket, &session).await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod herdr-pane: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Some(Command::HerdrAcp {
+            kind,
+            permission_mode,
+            no_focus,
+            agent_args,
+        }) => {
+            // stdout is the protocol: logs go to stderr, which macrod drains.
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
+            return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
+                kind,
+                permission_mode,
+                no_focus,
+                agent_args,
+            })
+            .await
+            {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod herdr-acp: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        None => {}
     }
     let config_path = std::path::Path::new("macrod.toml");
 

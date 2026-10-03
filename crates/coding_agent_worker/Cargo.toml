@@ -42,7 +42,7 @@ serde_json = { workspace = true }
 shell-words = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "time"] }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["compat", "rt"] }
 tokio-tungstenite = { workspace = true }
