@@ -86,7 +86,9 @@ export default function DocxBlock(props: { share?: string }) {
     const value = blockDataSignal.get() as
       | (DocxBlockData & { __block?: string })
       | undefined;
-    return value?.__block === 'write' && 'token' in value ? value : undefined;
+    return value?.__block === 'write' && 'documentMetadata' in value
+      ? value
+      : undefined;
   };
   const fileName = () => {
     const base = name() || 'Document';
@@ -155,7 +157,8 @@ export default function DocxBlock(props: { share?: string }) {
               buildSeed: buildDocxSeed,
               initialize: (snapshot) =>
                 initializeDocxSync(documentId, snapshot),
-              connect: () => connectDocxSync(documentId, loaded.token),
+              connect: () =>
+                connectDocxSync(documentId, loaded.token, loaded.authorization),
             });
             const state = session.state;
             // Remount the editor only when the collaborative document is replaced.
