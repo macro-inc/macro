@@ -8,6 +8,8 @@
 //! names what it expected.
 
 mod condition;
+mod ddl;
+pub(super) use ddl::parse as schema_statement;
 mod schema;
 mod select;
 mod write;

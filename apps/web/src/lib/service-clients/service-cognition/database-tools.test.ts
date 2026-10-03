@@ -61,23 +61,19 @@ describe('database tool output contracts', () => {
       },
     },
     {
-      name: 'CreateDatabase',
-      json: { id: databaseId, name: 'Support', database },
-    },
-    { name: 'CreateTable', json: { databaseId, tableId, database } },
-    { name: 'AddColumn', json: { databaseId, tableId, columnId, database } },
-    {
-      name: 'AddColumnOptions',
-      json: { databaseId, tableId, columnId, options: [], database },
-    },
-    {
       name: 'SaveDatabaseView',
       json: {
-        viewId: columnId,
-        databaseId,
-        tableId,
-        name: 'All tickets',
-        config: {},
+        view: {
+          id: columnId,
+          databaseId,
+          tableId,
+          name: 'All tickets',
+          position: '80',
+          query: { filter: null, sort: [] },
+          layout: { kind: 'table', columns: [] },
+          createdAt: '2026-10-02T00:00:00Z',
+          updatedAt: '2026-10-02T00:00:00Z',
+        },
         created: true,
       },
     },
@@ -94,28 +90,6 @@ describe('database tool output contracts', () => {
   it.each(examples)(
     'parses $name with omitted empty optional metadata',
     ({ name, json }) => {
-      expect(
-        deserializeToolResponse({ id: 'tool-call', name, json }).isOk()
-      ).toBe(true);
-    }
-  );
-  it.each([
-    'CreateDatabase',
-    'CreateTable',
-    'AddColumn',
-    'AddColumnOptions',
-  ] as const)(
-    'keeps a committed %s result valid when its follow-up schema is unavailable',
-    (name) => {
-      const json = {
-        id: databaseId,
-        name: 'Support',
-        databaseId,
-        tableId,
-        columnId,
-        options: [],
-        warning: 'Saved; refresh the database to continue.',
-      };
       expect(
         deserializeToolResponse({ id: 'tool-call', name, json }).isOk()
       ).toBe(true);

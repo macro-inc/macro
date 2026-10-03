@@ -169,6 +169,7 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
         when={props.displayMode !== 'scalar'}
         fallback={
           <span
+            data-lexical-interactive
             data-database-query-selected={isSelectedAsNode() || undefined}
             class={cn(
               'rounded-lg',
@@ -182,7 +183,12 @@ export function DatabaseQuery(props: DatabaseQueryDecoratorProps) {
         {/* The block's spacing is padding, not the card's margin, so a press
             beside the card still lands on the block instead of the text
             around it. */}
-        <div class="py-1" onMouseDown={selectOnPress} onClick={selectOnClick}>
+        <div
+          data-lexical-interactive
+          class="py-1"
+          onMouseDown={selectOnPress}
+          onClick={selectOnClick}
+        >
           <div
             data-database-query-selected={isSelectedAsNode() || undefined}
             class={cn(

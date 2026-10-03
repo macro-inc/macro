@@ -9,48 +9,6 @@
  */
 
 /**
- * The value type of a column, as the model names it.
- *
- * A deliberate mirror of [`DataType`] rather than a re-export: the property
- * system's names are internal, and the tool vocabulary has to stay stable
- * independently of them.
- */
-export type ColumnType =
-  | 'text'
-  | 'number'
-  | 'boolean'
-  | 'date'
-  | 'link'
-  | 'select'
-  | 'select_number'
-  | 'tag'
-  | 'entity';
-/**
- * The kind of Macro entity an entity column references, as the model names
- * it. A mirror of the property system's entity types, minus database rows:
- * a relation to another table is made with `linkToTableId`.
- */
-export type ToolEntityType =
-  | 'USER'
-  | 'DOCUMENT'
-  | 'TASK'
-  | 'COMPANY'
-  | 'CALL_RECORD'
-  | 'CHANNEL'
-  | 'CHAT'
-  | 'PROJECT'
-  | 'THREAD'
-  | 'CALENDAR_EVENT'
-  | 'INITIATIVE';
-/**
- * What the user may do with a database, as the model sees it.
- */
-export type ToolGrant = 'view' | 'comment' | 'edit' | 'owner';
-/**
- * A column type as SQL spells it: text, number, boolean, date, link, select, select_number, tag, entity(KIND) or relation, with [] when a select or reference column holds several values (select[], entity(USER)).
- */
-export type SpelledColumnType = string;
-/**
  * Tool-facing status of a task assignment.
  */
 export type TaskAssignmentStatus =
@@ -467,6 +425,31 @@ export type TagColor =
  * How much of a recurring series a deletion removes.
  */
 export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
+/**
+ * What the user may do with a database, as the model sees it.
+ */
+export type ToolGrant = 'view' | 'comment' | 'edit' | 'owner';
+/**
+ * The value type of a column, as the model names it.
+ *
+ * A deliberate mirror of [`DataType`] rather than a re-export: the property
+ * system's names are internal, and the tool vocabulary has to stay stable
+ * independently of them.
+ */
+export type ColumnType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'link'
+  | 'select'
+  | 'select_number'
+  | 'tag'
+  | 'entity';
+/**
+ * A column type as SQL spells it: text, number, boolean, date, link, select, select_number, tag, entity(KIND) or relation, with [] when a select or reference column holds several values (select[], entity(USER)).
+ */
+export type SpelledColumnType = string;
 /**
  * One operation in an atomic workbook edit. All operations validate before any write.
  */
@@ -957,6 +940,17 @@ export type Cell =
  * column) it wrote.
  */
 export type SqlStatement =
+  | {
+      /**
+       * Owning database.
+       */
+      databaseId: string;
+      /**
+       * What changed and how to read the resulting schema.
+       */
+      summary: string;
+      kind: 'schema';
+    }
   | {
       kind: 'select';
     }
@@ -1503,7 +1497,7 @@ export type UserToolResponseForSendEmailResponse =
   | {
       UserAction: SendEmailResponse;
     };
-export type ToolEntityType2ToolEntityType =
+export type ToolEntityType =
   | 'document'
   | 'task'
   | 'initiative'
@@ -1631,262 +1625,6 @@ export type ReadThreadReadContent =
       type: 'itemPreviews';
     };
 
-/**
- * Add a column to a table in one of the user's databases. Type it by what its values are, not by how they were typed at you:
- *
- * - a person (host, owner, assignee, attendee, author): a person column, `entity` then `USER` as below;
- * - a Macro document, task, company, call, channel or project: `entity` with that kind;
- * - a row of another table in this database: a relation, `entity` with `linkToTableId`;
- * - a status, stage or category ("Going / Maybe / Declined"): `select`, with `isMultiSelect` or `tag` for several;
- * - money, counts and scores ("$1,200"): `number`; dates ("Aug 13"): `date`; yes/no: `boolean`; URLs: `link`;
- * - free text only: `text`. Never text for people or Macro items.
- *
- * `AddColumn` takes `specificEntityType` for an entity column (`USER` for a person column). A relation holds row ids of the target table and is written as a list of them. Select and tag columns accept only the labels in `options`, so list every value the data has; add more later with AddColumnOptions.
- *
- * Requires edit access. The response is the database's schema after the change, with the new column's exact `sqlName`. If `database` is null, the column was still created: call DescribeDatabase with databaseId before continuing, and do not repeat AddColumn.
- */
-export interface AddColumn {
-  /**
-   * Id of the database the table belongs to, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table to add the column to, from DescribeDatabase or CreateTable. It must belong to databaseId.
-   */
-  tableId: string;
-  /**
-   * Display name of the column, as the user would head it — e.g. "Dietary Needs". SQL refers to it by this name, quoted.
-   */
-  name: string;
-  dataType: ColumnType;
-  /**
-   * True if a cell can hold several values at once. Defaults to false. Multi-valued cells are written as lists in SQL; test membership with `col HAS 'x'`.
-   */
-  isMultiSelect?: boolean;
-  /**
-   * For a select, select_number, or tag column, the allowed labels — e.g. ["Going", "Maybe", "Declined"]. SQL writes and reads these labels verbatim, and anything else is rejected by the statement, so list every value the data actually has. A select_number column's labels must be numbers. Omit for other column types; add more later with AddColumnOptions.
-   */
-  options?: string[] | null;
-  /**
-   * Required for dataType entity without linkToTableId, and refused otherwise: what the ids reference, e.g. USER for a person column or DOCUMENT.
-   */
-  specificEntityType?: ToolEntityType | null;
-  /**
-   * Id of another table of this database, making this a relation whose cells hold that table's row ids. Omit for any other column.
-   */
-  linkToTableId?: string | null;
-}
-/**
- * Response from the AddColumn tool.
- */
-export interface AddColumnResponse {
-  /**
-   * Database containing the committed column.
-   */
-  databaseId: string;
-  /**
-   * Table containing the committed column.
-   */
-  tableId: string;
-  /**
-   * The new column placement's id.
-   */
-  columnId: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * Follow-up guidance if schema refresh failed after the column was saved.
-   */
-  warning?: string | null;
-}
-/**
- * Everything a model needs to write SQL against one database.
- */
-export interface ToolDatabaseSchema {
-  /**
-   * The database's id.
-   */
-  id: string;
-  /**
-   * Display name.
-   */
-  name: string;
-  grant: ToolGrant;
-  /**
-   * Tables in tab order.
-   */
-  tables: ToolTable[];
-}
-/**
- * One table of a database, as the model sees it.
- */
-export interface ToolTable {
-  /**
-   * The table's id. Pass this to AddColumn.
-   */
-  id: string;
-  /**
-   * The name to use in SQL, quoted (`FROM "Guests"`).
-   */
-  sqlName: string;
-  /**
-   * Version at which this schema was described. A new SELECT supplies the
-   * read version for conditional row edits.
-   */
-  version: number;
-  /**
-   * The name the user sees.
-   */
-  name: string;
-  /**
-   * Whether SQL may write to this table at all.
-   */
-  writable: boolean;
-  /**
-   * Columns in display order. `row_id` is implicit and is not listed.
-   */
-  columns: ToolColumn[];
-  /**
-   * The table's saved views, in their order. SaveDatabaseView under one
-   * of these names replaces that view.
-   */
-  views: unknown[];
-}
-/**
- * One column of a table, as the model sees it.
- */
-export interface ToolColumn {
-  /**
-   * The column placement's id.
-   */
-  id: string;
-  /**
-   * The name to use in SQL.
-   */
-  sqlName: string;
-  /**
-   * The name the user sees.
-   */
-  name: string;
-  dataType: ColumnType;
-  /**
-   * Required entity kind for an entity column, such as `USER` or `DOCUMENT`.
-   * Never invent an id.
-   */
-  specificEntityType?: string | null;
-  /**
-   * Whether the column holds several values. Multi-valued cells are written
-   * as lists (`['a', 'b']`) and tested with `HAS`.
-   */
-  isMultiSelect: boolean;
-  /**
-   * For a select or tag column, its options: the labels SQL accepts
-   * (writing anything else is rejected by the statement), and the ids a
-   * view names them by.
-   */
-  options?: ToolOption[];
-  /**
-   * Whether SQL may write to this column.
-   */
-  writable: boolean;
-  /**
-   * A database-row relationship; distinct from a Macro entity reference.
-   */
-  relation?: ToolRelation | null;
-  /**
-   * Types ChangeColumnType converts every value to, spelled as SQL types
-   * (`select[]` is a multi-valued select, `entity(USER)` a person).
-   */
-  safeTypes: SpelledColumnType[];
-  /**
-   * Types whose conversion checks each value first and refuses if any does
-   * not fit. Any type in neither list is refused while the column holds
-   * values.
-   */
-  checkedTypes: SpelledColumnType[];
-}
-/**
- * One option of a select or tag column.
- */
-export interface ToolOption {
-  /**
-   * The id views name it by.
-   */
-  id: string;
-  /**
-   * The label SQL reads and writes.
-   */
-  label: string;
-}
-/**
- * The target of a database-row relationship.
- */
-export interface ToolRelation {
-  /**
-   * Database containing the target rows.
-   */
-  databaseId: string;
-  /**
-   * Table whose row ids this relation stores.
-   */
-  tableId: string;
-}
-/**
- * Add allowed labels to a select, select_number, or tag column. A select column's options are explicit schema: SQL accepts exactly the labels the column carries and rejects everything else, so a value that does not exist yet has to be added here before it can be written.
- *
- * Use this when the user names a new status, stage, or category, or when a write they asked for was refused for an unknown option. Labels the column already has are ignored, so it is safe to send the whole set. A select_number column's labels must be numbers.
- *
- * This is add-only — options are never renamed or removed here, because both would change what rows already holding them mean. Requires edit access. The response is the column after the change, with the labels SQL now accepts, plus the database's refreshed schema. If `database` is null, the option change was still saved; heed warning and DescribeDatabase before continuing. Do not treat a failed follow-up read as a rejected mutation.
- */
-export interface AddColumnOptions {
-  /**
-   * Id of the database the column belongs to, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table the column belongs to, from DescribeDatabase. It must belong to databaseId.
-   */
-  tableId: string;
-  /**
-   * Id of the column to add options to, from DescribeDatabase. It must be a select, select_number, or tag column.
-   */
-  columnId: string;
-  /**
-   * The labels to add, as SQL will write them — e.g. ["Waitlisted"]. Labels the column already has are ignored.
-   */
-  labels: string[];
-}
-/**
- * Response from the AddColumnOptions tool.
- */
-export interface AddColumnOptionsResponse {
-  /**
-   * Database containing the committed option change.
-   */
-  databaseId: string;
-  /**
-   * Table containing the committed option change.
-   */
-  tableId: string;
-  /**
-   * The column's id.
-   */
-  columnId: string;
-  /**
-   * Every label the column now accepts, in display order.
-   */
-  options: string[];
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * Follow-up guidance if schema refresh failed after options were saved.
-   */
-  warning?: string | null;
-}
 /**
  * Move tasks into an initiative. A task already in another initiative is moved; duplicates are ignored; at most 100 unique task ids per call. Requires edit access to the initiative and to each task. Returns one status per task id: assigned, moved, not_a_task, not_found, or skipped_no_permission.
  */
@@ -2370,73 +2108,6 @@ export interface SpreadsheetChange {
    * Affected range, when applicable.
    */
   range?: string | null;
-}
-/**
- * Change a column's type, converting every existing value. The column keeps its id and name.
- *
- * DescribeDatabase lists each column's `safeTypes` (every value converts) and `checkedTypes` (each value is checked first). Any other type is refused while the column holds values; an empty column takes any type. If a value does not fit ("soon" as a number), or a multi-valued cell would lose values to a single-valued type, nothing changes and the error counts the misfits and quotes a few: fix them with UPDATE and retry, or add a new column. Clear values only when the user asked for that.
- *
- * - `entity` needs `specificEntityType`: `USER` makes a person column; `DOCUMENT`, `TASK` and the rest reference other Macro items.
- * - `linkToTableId` (with `dataType: entity`) makes a relation to rows of another table of this database. Relations are always multi-valued, and the column must be empty.
- * - Converting to `select` or `tag` turns the distinct existing values into options; `options` adds labels no row has yet. `tag` columns are always multi-valued.
- *
- * Requires edit access. The response is the schema after the change.
- */
-export interface ChangeColumnType {
-  /**
-   * Id of the database containing the column, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table containing the column, from DescribeDatabase.
-   */
-  tableId: string;
-  /**
-   * Id of the column to change, from DescribeDatabase.
-   */
-  columnId: string;
-  dataType: ColumnType;
-  /**
-   * True if a cell can hold several values (select, select_number, entity, link). Defaults to false.
-   */
-  isMultiSelect?: boolean;
-  /**
-   * For select, select_number, or tag: labels to accept beyond the values the rows already have. Omit for other types.
-   */
-  options?: string[] | null;
-  /**
-   * Required for dataType entity without linkToTableId: what the ids reference, e.g. USER or DOCUMENT.
-   */
-  specificEntityType?: ToolEntityType | null;
-  /**
-   * Id of a table of this database to relate to; makes the column a relation holding row ids. Requires dataType entity.
-   */
-  linkToTableId?: string | null;
-}
-/**
- * Response from the ChangeColumnType tool.
- */
-export interface ChangeColumnTypeResponse {
-  /**
-   * Database containing the column.
-   */
-  databaseId: string;
-  /**
-   * Table containing the column.
-   */
-  tableId: string;
-  /**
-   * The changed column's id, unchanged by the conversion.
-   */
-  columnId: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * Follow-up guidance if part of the change or the schema refresh failed.
-   */
-  warning?: string | null;
 }
 /**
  * Comment on a document on behalf of the user. Pass threadId to reply in an existing inline or Discussion thread; pass quote to start a new inline comment on a passage of a Macro markdown document; omit both to start a new Discussion comment on the document as a whole. Replies and Discussion comments support any document type. Only use this when explicitly asked to reply to or comment on a document. Thread ids come from the comments ReadContent returns. For an inline comment, quote the passage exactly as the document reads, as plain text without markdown syntax, within a single paragraph, heading, list item or table cell. If the passage appears more than once the tool refuses and lists each occurrence so you can choose one with occurrence, counting from 1; if the text is not found, read the document again rather than guessing. Do not combine threadId with quote. occurrence only applies with quote.
@@ -3705,40 +3376,6 @@ export interface CreateChannelResponse {
   summary: string;
 }
 /**
- * Create a new Macro database owned by the current user — the thing they see as a table. It starts with one table, "Table 1", with no rows and one text column, "Name", which is each row's title, beside the implicit `row_id`.
- *
- * Use this when the user asks for a new tracker, list, or table ("make me a table of applicants"). Check ListDatabases first if there is any chance one already exists under that name — a second database with the same name is confusing and there is no merge.
- *
- * The response acknowledges the new database `id` and `name`, with its full schema in `database` including the starter table's id. If `database` is null, creation still succeeded: heed the warning and call DescribeDatabase with the returned id; never repeat CreateDatabase just because schema refresh failed. The usual shape of the work is: CreateDatabase, RenameTable on the starter table when the user named their table, one AddColumn per further column the user described, typed by what it holds (use Name for each row's title rather than adding another), then QueryDatabase with INSERTs for the rows. For more tables, CreateTable only after the starter table is used.
- */
-export interface CreateDatabase {
-  /**
-   * Display name, as the user would title it — e.g. "Offsite Guests". The SQL name is derived from this, so prefer what the user actually called it over a SQL-looking identifier.
-   */
-  name: string;
-}
-/**
- * A committed database creation, independent of its subsequent schema read.
- */
-export interface CreateDatabaseResponse {
-  /**
-   * Id of the database that was created, even if schema refresh failed.
-   */
-  id: string;
-  /**
-   * Its persisted display name.
-   */
-  name: string;
-  /**
-   * Refreshed schema and starter table, when available.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * Follow-up instructions if the change committed but schema refresh failed.
-   */
-  warning?: string | null;
-}
-/**
  * Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor.
  */
 export interface CreateDocument {
@@ -4058,44 +3695,6 @@ export interface ToolReminder {
   enabled: boolean;
 }
 /**
- * Add a table — what the user sees as a tab — to an existing database. The new table starts empty, with no columns beyond the implicit `row_id`; the first column you add is each row's title.
- *
- * Use this for a genuinely separate list that belongs with the others ("add a Sessions tab to the offsite tracker"), not for more columns on an existing one — that is AddColumn. Tables of one database can be joined in one query, and a relation (AddColumn with `linkToTableId`) is how rows of one point at rows of the other.
- *
- * Requires edit access to the database. The response is the database's refreshed schema, so the new table's `id` and its exact `sqlName` are there without a second call — SQL names are derived from display names and disambiguated against the ones already taken, so read the `sqlName` rather than deriving it yourself. If `database` is null, creation still succeeded; call DescribeDatabase using databaseId before continuing. Do not repeat the create.
- */
-export interface CreateTable {
-  /**
-   * Id of the database to add the table to, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Display name of the table, as the user would title the tab — e.g. "Sessions". The SQL name is derived from it.
-   */
-  name: string;
-}
-/**
- * Response from the CreateTable tool.
- */
-export interface CreateTableResponse {
-  /**
-   * Database containing the committed table.
-   */
-  databaseId: string;
-  /**
-   * The new table's id. Pass this to AddColumn.
-   */
-  tableId: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed table.
-   */
-  warning?: string | null;
-}
-/**
  * Create a new tag — a colored label the user can apply to documents, emails, tasks, AI chats, and projects — in the user's personal set or their team's shared set. The set is provisioned automatically the first time a tag is created. Tags are matched by label, so call ListTags first and avoid creating one whose label duplicates an existing tag in the same set. Returns the new tag's id and its set's propertyDefinitionId, which you can pass straight to SetEntityProperty (add_option_ids) to apply the tag to an item. Use this only to create a brand-new tag; to apply an existing tag to an item, use ListTags then SetEntityProperty instead.
  */
 export interface CreateTag {
@@ -4190,50 +3789,6 @@ export interface DeleteCalendarEventResponse {
    * A human-readable confirmation of what was removed.
    */
   summary: string;
-}
-/**
- * Delete a column and every value in it. This cannot be undone, so only do it when the user asked for that column to go. Deleting a relation column also removes the relationships it held.
- *
- * Requires edit access. The response is the schema after the change.
- */
-export interface DeleteColumn {
-  /**
-   * Id of the database containing the column, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table containing the column, from DescribeDatabase.
-   */
-  tableId: string;
-  /**
-   * Id of the column to delete, from DescribeDatabase.
-   */
-  columnId: string;
-}
-/**
- * Response from the DeleteColumn tool.
- */
-export interface DeleteColumnResponse {
-  /**
-   * Database the column was deleted from.
-   */
-  databaseId: string;
-  /**
-   * Table the column was deleted from.
-   */
-  tableId: string;
-  /**
-   * The deleted column's id.
-   */
-  columnId: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed delete.
-   */
-  warning?: string | null;
 }
 /**
  * Delete a saved table or board view of a Macro database by its id, from DescribeDatabase. Views are shared with everyone who can open the database, so deleting one needs edit access and removes it for everyone. The table and its records stay; a board's hand-arranged card order goes with it. Only do it when the user asked for that view to go.
@@ -4334,44 +3889,6 @@ export interface DeleteReminderResponse {
   summary: string;
 }
 /**
- * Delete a table — a tab of a database — with every row and column in it. This cannot be undone, so only do it when the user asked for that table to go.
- *
- * A database keeps at least one table, so its last table cannot be deleted. A table that a relation column of another table points at cannot be deleted until that column is.
- *
- * Requires edit access. The response is the schema after the change.
- */
-export interface DeleteTable {
-  /**
-   * Id of the database containing the table, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table to delete, from DescribeDatabase.
-   */
-  tableId: string;
-}
-/**
- * Response from the DeleteTable tool.
- */
-export interface DeleteTableResponse {
-  /**
-   * Database the table was deleted from.
-   */
-  databaseId: string;
-  /**
-   * The deleted table's id.
-   */
-  tableId: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed delete.
-   */
-  warning?: string | null;
-}
-/**
  * Permanently delete a tag from the user's personal set or their team's shared set. This removes the tag from every item it is currently applied to, so it is destructive and cannot be undone — confirm with the user first. Both ids come from a ListTags result: `id` is the tag's option id, and `property_definition_id` is the propertyDefinitionId of the set that contains it. To simply remove a tag from a single item without deleting the tag itself, use SetEntityProperty with remove_option_ids instead.
  */
 export interface DeleteTag {
@@ -4398,15 +3915,149 @@ export interface DeleteTagResponse {
   message: string;
 }
 /**
- * Read one database's schema: its tables with their quoted `sqlName`, version and saved views, and each table's columns with their SQL names, types (with the kind of an entity column, `USER` for a person column), whether they hold several values, the labels a select column accepts, the target table of a relation, and the types the column can change to.
- *
- * **Call this before writing SQL for a database you have not already described in this conversation.** Guessing table or column names is the single most common way a query fails, and the schema is small. Get the `databaseId` from ListDatabases. QueryDatabase describes the SQL dialect.
+ * Read a database's tables, versions and columns before writing SQL: IDs, exact SQL names, types, select labels, and relation targets. Pass includeEditingMetadata only when editing views or changing column types to include saved views and conversion targets. Get databaseId from ListDatabases.
  */
 export interface DescribeDatabase {
   /**
    * Id of the database to describe, as returned by ListDatabases.
    */
   databaseId: string;
+  /**
+   * Include saved views and per-column type conversion targets. Omit for queries.
+   */
+  includeEditingMetadata?: boolean;
+}
+/**
+ * Everything a model needs to write SQL against one database.
+ */
+export interface ToolDatabaseSchema {
+  /**
+   * The database's id.
+   */
+  id: string;
+  /**
+   * Display name.
+   */
+  name: string;
+  grant: ToolGrant;
+  /**
+   * Tables in tab order.
+   */
+  tables: ToolTable[];
+}
+/**
+ * One table of a database, as the model sees it.
+ */
+export interface ToolTable {
+  /**
+   * The table's id, used by saved views and version guards.
+   */
+  id: string;
+  /**
+   * The name to use in SQL, quoted (`FROM "Guests"`).
+   */
+  sqlName: string;
+  /**
+   * Version at which this schema was described. A new SELECT supplies the
+   * read version for conditional row edits.
+   */
+  version: number;
+  /**
+   * The name the user sees.
+   */
+  name: string;
+  /**
+   * Whether SQL may write to this table at all.
+   */
+  writable: boolean;
+  /**
+   * Columns in display order. `row_id` is implicit and is not listed.
+   */
+  columns: ToolColumn[];
+  /**
+   * The table's saved views, in their order. SaveDatabaseView under one
+   * of these names replaces that view.
+   */
+  views?: unknown[];
+}
+/**
+ * One column of a table, as the model sees it.
+ */
+export interface ToolColumn {
+  /**
+   * The column placement's id.
+   */
+  id: string;
+  /**
+   * The name to use in SQL.
+   */
+  sqlName: string;
+  /**
+   * The name the user sees.
+   */
+  name: string;
+  dataType: ColumnType;
+  /**
+   * Required entity kind for an entity column, such as `USER` or `DOCUMENT`.
+   * Never invent an id.
+   */
+  specificEntityType?: string | null;
+  /**
+   * Whether the column holds several values. Multi-valued cells are written
+   * as lists (`['a', 'b']`) and tested with `HAS`.
+   */
+  isMultiSelect: boolean;
+  /**
+   * For a select or tag column, its options: the labels SQL accepts
+   * (writing anything else is rejected by the statement), and the ids a
+   * view names them by.
+   */
+  options?: ToolOption[];
+  /**
+   * Whether SQL may write to this column.
+   */
+  writable: boolean;
+  /**
+   * A database-row relationship; distinct from a Macro entity reference.
+   */
+  relation?: ToolRelation | null;
+  /**
+   * Types ALTER COLUMN TYPE converts every value to, spelled as SQL types
+   * (`select[]` is a multi-valued select, `entity(USER)` a person).
+   */
+  safeTypes?: SpelledColumnType[];
+  /**
+   * Types whose conversion checks each value first and refuses if any does
+   * not fit. Any type in neither list is refused while the column holds
+   * values.
+   */
+  checkedTypes?: SpelledColumnType[];
+}
+/**
+ * One option of a select or tag column.
+ */
+export interface ToolOption {
+  /**
+   * The id views name it by.
+   */
+  id: string;
+  /**
+   * The label SQL reads and writes.
+   */
+  label: string;
+}
+/**
+ * The target of a database-row relationship.
+ */
+export interface ToolRelation {
+  /**
+   * Database containing the target rows.
+   */
+  databaseId: string;
+  /**
+   * Table whose row ids this relation stores.
+   */
+  tableId: string;
 }
 /**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
@@ -5346,8 +4997,7 @@ export interface ListDatabasesResponse {
  */
 export interface ToolDatabase {
   /**
-   * The database's id. Pass this to DescribeDatabase, CreateTable, or
-   * AddColumn.
+   * The database's id. Pass this to DescribeDatabase or QueryDatabase.
    */
   id: string;
   /**
@@ -6154,7 +5804,7 @@ export interface NameSearch {
   tagsMatch?: TagMatch;
 }
 /**
- * Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data. One statement per call.
+ * Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data, CREATE/ALTER/DROP to edit schema. One statement per call.
  *
  * **Every table the user can see is already in scope, across all of their databases.** The statement runs as the user against exactly what they are allowed to read: a table they cannot see simply does not exist, and a table they only have view access to is read-only. Always pass `databaseId` for the database the statement is about, so its tables win name ties.
  *
@@ -6162,7 +5812,7 @@ export interface NameSearch {
  *
  * ## Dialect
  *
- * A small SQL subset, compiled by Macro rather than run by a SQL engine. What is listed here is everything there is:
+ * A small SQL subset, compiled by Macro. Row queries run through the shared SQL engine; schema commands run on the server through the same database service and atomic ops as the UI.
  *
  * - **Reads:** `SELECT [DISTINCT] items FROM [database.]table [alias] {[LEFT] JOIN [database.]table [alias] ON a.col = b.col [AND ...]} [WHERE cond] [GROUP BY col] [ORDER BY col|alias|position [ASC|DESC], ...] [LIMIT n [OFFSET m]]`. Items are `*`, columns, or `COUNT(*)`, `COUNT(col)`, `SUM(col)`, `AVG(col)`, `MIN(col)`, `MAX(col)`, each optionally named with `AS name`; the alias names the result column and can be ordered by. GROUP BY takes one column, and a grouped SELECT lists only that column beside its aggregates. No other expressions or functions, no HAVING, and WHERE compares a column only with a literal.
  * - **Joins** are how tables combine:
@@ -6176,12 +5826,21 @@ export interface NameSearch {
  * - **Writes:** `INSERT INTO table (col, ...) VALUES (...), (...)` or `INSERT INTO table DEFAULT VALUES`; `UPDATE table SET col = value, ... WHERE cond`; `DELETE FROM table WHERE cond`. The WHERE is required and takes any condition; `WHERE row_id = '<id>'` or `row_id IN ('<id>', ...)` names rows, and every id named must exist: read the ids first. `SET col = other_col` copies each row's own value of a column of the same kind. A multi-valued cell is written as a list, `['Urgent', 'Backend']`; `NULL` clears a cell.
  * - **`row_id`** is every row's id. A row-shaped SELECT returns each result row's in `rowIds`, and an INSERT the new rows' in `insertedRowIds`; never invent one. A row's title is its first column, and a row the app shows as "Unnamed" has a NULL title: find it with `WHERE "Name" IS NULL`.
  * - **Names are display names.** Double-quote a table or column name with spaces or punctuation (`FROM "Guest List" WHERE "Due Date" < '2026-09-01'`); names match case-insensitively, and a miss suggests the closest name. A table may be qualified by its database's name (`FROM "Offsite"."Guests"`).
- * - **Select and tag columns take option labels** (`"Status" = 'Going'`), never option ids. Only labels the column carries are accepted; add new ones with AddColumnOptions.
+ * - **Select and tag columns take option labels** (`"Status" = 'Going'`), never option ids. Only labels the column carries are accepted; add new ones with `ALTER TABLE table ALTER COLUMN col ADD OPTIONS ('New label')`.
  * - **Relations hold the row ids of another table.** Write a list of row ids (`"Guests" = ['<row id>']`), test with `HAS '<row id>'`, and join with `ON i."Guest" = g.row_id`: `SELECT p."Name" AS party, COUNT(*) AS invites FROM "Invites" i JOIN "Parties" p ON i."Party" = p.row_id GROUP BY p."Name"`. Never compare a relation to a name.
  * - **Person and other entity columns hold Macro ids,** never names: `'macro|sam@example.com'` for a person, a list for a multi-valued column. Respect each column's `specificEntityType`.
  * - **People:** `macro.people` is everyone the user knows (contacts and teammates) with `id`, `name` and `email`, the viewer included: “me” is the row whose email is the signed-in user's. It is read-only. Find people there, then write their ids: `SELECT id, name, email FROM macro.people WHERE name LIKE '%julia%' OR email LIKE '%julia%'`, then `UPDATE "Parties" SET "Host" = 'macro|julia@example.com' WHERE row_id = '<id>'`. Join to read names or emails: `JOIN macro.people p ON t."Owner" = p.id`. Never invent a person or an id; when a name matches several people or none, ask.
- * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`, the same change as ChangeColumnType, where type is text, number, boolean, date, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Pick from the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
- * - **Other schema changes use tools, not SQL:** CreateDatabase, RenameDatabase, CreateTable, RenameTable, ReorderTables, DeleteTable, AddColumn, AddColumnOptions, RenameColumn, ChangeColumnType, DeleteColumn, ReorderColumns, SaveDatabaseView and DeleteDatabaseView. A board view groups by a single-select or single-person column.
+ * - **Changing a column's type:** `ALTER TABLE table ALTER COLUMN col TYPE type`,  where type is text, number, boolean, date, link, select, select_number, tag, or entity(USER), entity(DOCUMENT), entity(TASK)…, with `[]` for several values (`select[]`). Call DescribeDatabase with `includeEditingMetadata: true` for the column's `safeTypes` and `checkedTypes`. A value that does not fit, or a multi-valued cell a single-valued type would truncate, refuses the statement with counts and examples: fix those values with UPDATE, or add a new column.
+ * - **Schema commands** (one statement per call; edit access required):
+ *   - `CREATE DATABASE "Sales CRM"` creates its starter table with a Name column. Call DescribeDatabase using the returned database ID before editing it; reuse that starter table.
+ *   - `ALTER DATABASE "Sales CRM" RENAME TO "Sales"` and `ALTER DATABASE "Sales" REORDER TABLES (Deals, Companies)`.
+ *   - `CREATE TABLE "Sales".Deals (Name text, Value number, Stage select OPTIONS ('Lead', 'Won'), Owner entity(USER), Company relation(Companies))`. Qualify the database or pass databaseId. Requires at least one column; the first is the row title. All columns and options are created atomically.
+ *   - `ALTER TABLE Deals RENAME TO Opportunities`; `DROP TABLE Deals` deletes its rows, columns and views, subject to the domain's last-table and dependency protections.
+ *   - `ALTER TABLE Deals ADD COLUMN "Close Date" date`; `ALTER TABLE Deals RENAME COLUMN Value TO Amount`; `ALTER TABLE Deals DROP COLUMN Amount` (deletes its values).
+ *   - `ALTER TABLE Deals ALTER COLUMN Stage ADD OPTIONS ('Review', 'Lost')`; `ALTER TABLE Deals REORDER COLUMNS (Name, Value, Stage)` (name every column).
+ *   - `relation([database.]table)` is a multi-valued reference to that table's rows, accepted when adding or changing a column type.
+ *   - Schema writes return a committed summary and database ID. Read DescribeDatabase for new IDs and names. Never repeat a CREATE just because a later schema read failed. No DROP DATABASE, IF EXISTS, constraints, or multi-statement batches.
+ * - **Saved views:** SaveDatabaseView and DeleteDatabaseView manage table/kanban presentation. A board groups by a single-select or single-person column; SaveDatabaseQuery saves live SQL results and charts.
  * - Tables you only hold view access on are read-only.
  *
  * To change records, first SELECT the rows you mean (their ids are in `rowIds`), then UPDATE or DELETE exactly those with `WHERE row_id IN (...)`. After changing rows, SELECT the affected records to verify the actual result. On a connection failure, inspect before retrying an INSERT.
@@ -7416,94 +7075,6 @@ export interface RenameChannelResponse {
   summary: string;
 }
 /**
- * Rename a column, keeping its id, type, and values. SQL refers to the column by its new name afterwards, so use the refreshed schema in the response for later statements.
- *
- * Requires edit access to the database. If `database` is null, the rename still succeeded; call DescribeDatabase using databaseId before continuing.
- */
-export interface RenameColumn {
-  /**
-   * Id of the database containing the column, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table containing the column, from DescribeDatabase.
-   */
-  tableId: string;
-  /**
-   * Id of the column to rename, from DescribeDatabase.
-   */
-  columnId: string;
-  /**
-   * New display name of the column, e.g. "Dietary Needs".
-   */
-  name: string;
-}
-/**
- * Response from the RenameColumn tool.
- */
-export interface RenameColumnResponse {
-  /**
-   * Database containing the column.
-   */
-  databaseId: string;
-  /**
-   * Table containing the column.
-   */
-  tableId: string;
-  /**
-   * The renamed column's id, unchanged by the rename.
-   */
-  columnId: string;
-  /**
-   * The column's display name after the rename.
-   */
-  name: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed rename.
-   */
-  warning?: string | null;
-}
-/**
- * Rename a database, keeping its id, tables, and rows. Its tables' qualified SQL names (`"Database"."Table"`) change with it, so use the refreshed schema in the response for later statements.
- *
- * Requires edit access.
- */
-export interface RenameDatabase {
-  /**
-   * Id of the database to rename, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * New display name, as the user would title it.
-   */
-  name: string;
-}
-/**
- * Response from the RenameDatabase tool.
- */
-export interface RenameDatabaseResponse {
-  /**
-   * The renamed database's id.
-   */
-  databaseId: string;
-  /**
-   * Its display name after the rename.
-   */
-  name: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed rename.
-   */
-  warning?: string | null;
-}
-/**
  * Rename a document. Requires edit access to the document.
  */
 export interface RenameDocument {
@@ -7532,130 +7103,6 @@ export interface RenameDocumentResponse {
    * A human-readable result message.
    */
   message: string;
-}
-/**
- * Rename a table — what the user sees as a tab — keeping its id, records, and columns.
- *
- * Use it to give a new database's starter table ("Table 1") the name the user asked for instead of creating an extra tab next to it, or when the user asks to rename a tab.
- *
- * Requires edit access to the database. The table's `sqlName` is its display name, so use the refreshed schema in the response for later statements. If `database` is null, the rename still succeeded; call DescribeDatabase using databaseId before continuing.
- */
-export interface RenameTable {
-  /**
-   * Id of the database containing the table, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table to rename, from DescribeDatabase.
-   */
-  tableId: string;
-  /**
-   * New display name of the table, as the user would title the tab — e.g. "Parties".
-   */
-  name: string;
-}
-/**
- * Response from the RenameTable tool.
- */
-export interface RenameTableResponse {
-  /**
-   * Database containing the renamed table.
-   */
-  databaseId: string;
-  /**
-   * The renamed table's id, unchanged by the rename.
-   */
-  tableId: string;
-  /**
-   * The table's display name after the rename.
-   */
-  name: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed rename.
-   */
-  warning?: string | null;
-}
-/**
- * Set the order columns appear in, left to right. Pass every column id of the table exactly once, in the new order; values and names are untouched.
- *
- * Requires edit access. The response is the schema after the change.
- */
-export interface ReorderColumns {
-  /**
-   * Id of the database containing the table, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Id of the table, from DescribeDatabase.
-   */
-  tableId: string;
-  /**
-   * Every column id of the table, exactly once, in the new left-to-right order.
-   */
-  columnIds: string[];
-}
-/**
- * Response from the ReorderColumns tool.
- */
-export interface ReorderColumnsResponse {
-  /**
-   * Database containing the table.
-   */
-  databaseId: string;
-  /**
-   * The reordered table.
-   */
-  tableId: string;
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed order.
-   */
-  warning?: string | null;
-}
-/**
- * Set the order a database's tables — what the user sees as tabs — appear in, left to right. Records, columns and names are untouched.
- *
- * Use it when the user asks to move a tab, put tables in a particular order, or when tables you created should read in a sensible sequence (e.g. "Projects" before "Tasks"). Pass every table id of the database exactly once, in the new order; call DescribeDatabase first for the current ids, since a list that misses or adds a table is refused.
- *
- * Requires edit access to the database. The response is the schema after the change. If `database` is null, the reorder still succeeded; call DescribeDatabase using databaseId before continuing.
- */
-export interface ReorderTables {
-  /**
-   * Id of the database, from ListDatabases.
-   */
-  databaseId: string;
-  /**
-   * Every table id of the database, exactly once, in the new left-to-right order, from DescribeDatabase.
-   */
-  tableIds: string[];
-}
-/**
- * Response from the ReorderTables tool.
- */
-export interface ReorderTablesResponse {
-  /**
-   * Database whose tables were reordered.
-   */
-  databaseId: string;
-  /**
-   * The table ids in their new order.
-   */
-  tableIds: string[];
-  /**
-   * The database's schema after the change.
-   */
-  database?: ToolDatabaseSchema | null;
-  /**
-   * A failed follow-up read does not undo the committed order.
-   */
-  warning?: string | null;
 }
 /**
  * Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.
@@ -8121,13 +7568,8 @@ export interface SetEntityProperty {
   link_urls?: string[] | null;
 }
 export interface ToolEntityRef {
-  entityType: ToolEntityType2ToolEntityType;
+  entityType: ToolEntityType;
   entityId: string;
-}
-export interface MessageWithAttachments {
-  content: string;
-  date: string;
-  attachmentIds: string[];
 }
 /**
  * Response from the SetEntityProperty tool.
@@ -8678,4 +8120,9 @@ export interface ConversationRecord {
   chat_id: string;
   title: string;
   messages: MessageWithAttachments[];
+}
+export interface MessageWithAttachments {
+  content: string;
+  date: string;
+  attachmentIds: string[];
 }

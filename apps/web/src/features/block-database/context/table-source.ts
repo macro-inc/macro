@@ -36,7 +36,9 @@ export type DatabaseRowsSource = {
   loading: Accessor<boolean>;
   refreshing: Accessor<boolean>;
   error: Accessor<DatabaseReadFailure | undefined>;
-  refresh(): ResultAsync<void, DatabaseReadFailure>;
+  refresh(
+    reason?: 'after-write' | 'refresh'
+  ): ResultAsync<void, DatabaseReadFailure>;
   /**
    * `inferenceBaseVersion` is the table version a new column's type is
    * settled against from its first value; ops themselves carry no version.

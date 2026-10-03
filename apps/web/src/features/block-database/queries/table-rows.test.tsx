@@ -10,6 +10,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import { queryClient } from '@queries/client';
 import type { DatabaseSqlQueryCapabilities } from '@queries/database-sql/create-database-sql-query';
 import {
+  applyDatabaseOps,
   applyDatabaseTableVersions,
   onDatabaseBatchCommitted,
   onDatabaseTableAdvanced,
@@ -34,7 +35,28 @@ import { allRecordsView } from '../core/views';
 import { createDraftRows } from '../primitives/draft-rows';
 import { createTableController } from '../primitives/table-controller';
 import { createDatabaseColumn } from './columns';
-import { renameDatabaseColumn } from './rename-column';
+
+function renameDatabaseColumn(params: {
+  databaseId: string;
+  tableId: string;
+  columnId: string;
+  name: string;
+  previousName: string;
+}) {
+  return applyDatabaseOps(params.databaseId, [
+    {
+      kind: 'column',
+      table: params.tableId,
+      column: params.columnId,
+      change: {
+        kind: 'rename',
+        name: params.name,
+        previousName: params.previousName,
+      },
+    },
+  ]).map(() => undefined);
+}
+
 import { createDatabaseRowsSource } from './table-rows';
 
 const transport = vi.hoisted(() => ({

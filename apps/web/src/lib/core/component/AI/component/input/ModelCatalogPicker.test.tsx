@@ -103,8 +103,8 @@ vi.mock('@ui', () => {
 const OPTIONS: CatalogModelOption[] = [
   { id: 'auto', label: 'Auto', group: 'Auto' },
   { id: 'grok', label: 'Cursor Grok 4.6 High Fast' },
-  { id: 'opus', label: 'Opus 5 High' },
-  { id: 'sonnet', label: 'Sonnet 5 High' },
+  { id: 'opus', label: 'Opus 5.5 High' },
+  { id: 'sonnet', label: 'Sonnet 5.5 High' },
   { id: 'sol', label: 'GPT-5.6 Sol High' },
   { id: 'gemini', label: 'Gemini 3.8 Flash High' },
 ];
@@ -268,10 +268,10 @@ describe('ModelCatalogPicker more models at phone width', () => {
 
     fireEvent.click(screen.getByText('More models'));
     expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
-    expect(screen.queryByText('Opus 5 High')).toBeNull();
+    expect(screen.queryByText('Opus 5.5 High')).toBeNull();
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Recommended' }));
-    expect(screen.getByText('Opus 5 High')).toBeTruthy();
+    expect(screen.getByText('Opus 5.5 High')).toBeTruthy();
     expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
   });
 

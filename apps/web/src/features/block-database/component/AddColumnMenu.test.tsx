@@ -67,7 +67,7 @@ describe('immediate column creation', () => {
     const [[, [op]]] = storage.applyDatabaseOps.mock.calls;
     assert(op.kind === 'column');
     expect(created).toHaveBeenCalledExactlyOnceWith(op.column);
-    expect(storage.invalidateDatabase).toHaveBeenCalledExactlyOnceWith('db');
+    expect(storage.invalidateDatabase).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
   it('prevents repeated clicks during creation and preserves errors', async () => {

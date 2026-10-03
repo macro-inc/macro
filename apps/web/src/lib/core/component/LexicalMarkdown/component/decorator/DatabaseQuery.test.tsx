@@ -34,6 +34,7 @@ const control = vi.hoisted(() => ({
   enabled: (): boolean => false,
   mounts: 0,
   cleanups: 0,
+  clicks: 0,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableDatabases: { key: 'enable-databases' },
@@ -57,7 +58,9 @@ vi.mock('@app/features/database-query/database-query', () => ({
       <div contentEditable={false}>
         <div data-testid="header">
           <span>RSVP Counts</span>
-          <button type="button">Details</button>
+          <button type="button" onClick={() => control.clicks++}>
+            Details
+          </button>
         </div>
         <details>
           <summary>View data</summary>
@@ -217,6 +220,46 @@ describe('database answer while databases are off', () => {
       button: 0,
     });
     expect(test.editor.getEditorState().toJSON()).toEqual(saved);
+    rendered.unmount();
+    test.root.remove();
+  });
+});
+
+describe('database controls in a composer shell', () => {
+  it('lets delegated clicks reach embedded controls without stealing focus', async () => {
+    const test = createTestEditor();
+    control.enabled = () => true;
+    control.clicks = 0;
+    const focus = vi.fn();
+    const rendered = render(() => (
+      <div
+        on:click={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest('[data-lexical-interactive]')
+          )
+            return;
+          event.stopPropagation();
+          focus();
+        }}
+      >
+        <LexicalWrapperContext.Provider value={test.wrapper}>
+          <DatabaseQuery
+            key={test.blockKey}
+            theme={{}}
+            queryId="query"
+            prompt="Count"
+            displayMode="table"
+          />
+        </LexicalWrapperContext.Provider>
+      </div>
+    ));
+    const details = await rendered.findByRole('button', { name: 'Details' });
+    details.focus();
+    fireEvent.click(details);
+    expect(control.clicks).toBe(1);
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(details);
     rendered.unmount();
     test.root.remove();
   });

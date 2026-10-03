@@ -5419,6 +5419,12 @@ export const shareDatabaseAwarenessBody = zod
       .describe(
         'Whether the viewer left the database; other viewers drop their state.'
       ),
+    peerId: zod
+      .uuid()
+      .optional()
+      .describe(
+        "This mounted client's random peer id, distinct from its authenticated user.\nOlder clients omit it and remain visible as one peer per user."
+      ),
     rowId: zod
       .uuid()
       .optional()

@@ -9,6 +9,7 @@
 mod error;
 mod filter;
 mod names;
+pub use names::{column as named_column, table as named_table};
 mod select;
 #[cfg(test)]
 mod test;

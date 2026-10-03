@@ -151,6 +151,11 @@ fn sql_error(error: SqlError) -> ToolCallError {
         SqlError::VersionConflict { table_id } => {
             format!("Table {table_id} changed underneath this statement. Re-read it and retry.")
         }
+        SqlError::SchemaVersionConflict { database_id } => {
+            format!(
+                "Database {database_id} changed underneath this statement. Re-read its schema and retry."
+            )
+        }
         SqlError::TooLong => "The statement is too long. Narrow it.".to_string(),
         SqlError::NotFound => "That database does not exist, or the user cannot see it. Call \
                                ListDatabases for the user's databases."

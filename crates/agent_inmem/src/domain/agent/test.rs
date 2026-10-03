@@ -74,7 +74,7 @@ async fn with_admission<Engine: TurnEngine, Out>(
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -409,7 +409,7 @@ async fn new_session_advertises_the_engine_supported_models() {
 
     let selection = agent_fold::domain::model_selection::model_selection(&config_options)
         .expect("session/new should advertise a model select");
-    assert_eq!(selection.current, "anthropic/claude-sonnet-5");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
     assert_eq!(
         selection
             .options
@@ -417,7 +417,7 @@ async fn new_session_advertises_the_engine_supported_models() {
             .map(|model| (model.id.as_str(), model.name.as_str()))
             .collect::<Vec<_>>(),
         vec![
-            ("anthropic/claude-sonnet-5", "anthropic/claude-sonnet-5"),
+            ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
             ("other-model", "other-model")
         ]
     );
@@ -638,7 +638,7 @@ async fn turns_accumulate_history_and_send_the_model() {
 
     let requests = engine.requests();
     assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0].model, "anthropic/claude-sonnet-5");
+    assert_eq!(requests[0].model, "anthropic/claude-sonnet-5-5");
     assert_eq!(requests[0].messages, vec!["first".to_owned()]);
     // The second turn carries the first turn's prompt and reply.
     assert_eq!(
@@ -867,7 +867,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -961,7 +961,7 @@ where
     let session_id = AgentSessionId::new();
     store.insert(
         session_id,
-        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5".into()),
+        crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
         session_id,
@@ -1544,7 +1544,7 @@ async fn effort_is_validated_and_model_changes_return_complete_options() {
             .send_request(SetSessionConfigOptionRequest::new(
                 session,
                 MODEL_CONFIG_ID,
-                "anthropic/claude-sonnet-5",
+                "anthropic/claude-sonnet-5-5",
             ))
             .block_task()
             .await

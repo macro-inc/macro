@@ -98,7 +98,7 @@ const MACRO_AGENT: AgentSummary = {
   tag: 'macro',
   instructions: '',
   harness: MACRO_HARNESS_NAME,
-  defaultModel: MODEL_PRETTYNAME[Model.sonnet5],
+  defaultModel: MODEL_PRETTYNAME[Model.sonnet55],
   channelSummary: 'All channels',
   share: 'Team',
 };

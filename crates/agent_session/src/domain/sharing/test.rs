@@ -238,3 +238,19 @@ async fn effective_owner_access_does_not_substitute_for_the_session_owner() {
     }
     assert!(repo.writes.lock().unwrap().is_empty());
 }
+
+#[test]
+fn a_private_agents_channel_may_watch_but_not_steer() {
+    assert_eq!(
+        originating_channel_access(SessionBotOwnership::User),
+        AccessLevel::View
+    );
+}
+
+#[test]
+fn a_shared_agents_channel_may_steer() {
+    assert_eq!(
+        originating_channel_access(SessionBotOwnership::Shared),
+        AccessLevel::Edit
+    );
+}

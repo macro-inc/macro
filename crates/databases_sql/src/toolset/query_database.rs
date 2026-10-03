@@ -174,6 +174,7 @@ impl From<SqlOutcome> for QueryDatabaseResponse {
     fn from(outcome: SqlOutcome) -> Self {
         let results: Vec<ResultSet> = outcome.result.into_iter().collect();
         let summary = match &outcome.statement {
+            SqlStatement::Schema { summary, .. } => summary.clone(),
             SqlStatement::AlterColumnType {
                 column_name, to, ..
             } => format!("Changed \"{column_name}\" to {to}."),
