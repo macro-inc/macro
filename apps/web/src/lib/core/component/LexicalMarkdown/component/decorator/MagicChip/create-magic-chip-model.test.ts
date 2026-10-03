@@ -75,6 +75,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import { createMagicChipModel } from './create-magic-chip-model';
+import { clearResolvedMagicChipMemory } from './resolved-cache';
 
 /** Fold events, as the session would deliver them. */
 const emit = (events: FoldedStreamEvent[]) => {
@@ -160,6 +161,7 @@ const settle = async () => {
 
 describe('createMagicChipModel', () => {
   beforeEach(() => {
+    clearResolvedMagicChipMemory();
     queryClient.clear();
     vi.clearAllMocks();
     live.listeners.clear();
@@ -670,5 +672,99 @@ describe('createMagicChipModel', () => {
     expect(presentation().kind).toBe('answering');
 
     dispose();
+  });
+
+  it('renders a resolved turn from memory and does not fold it again', async () => {
+    const dispose = createRoot((rootDispose) => {
+      createModel(props);
+      return rootDispose;
+    });
+    await settle();
+    expect(live.acquire).toHaveBeenCalledOnce();
+    dispose();
+
+    live.acquire.mockClear();
+    live.load.mockClear();
+    live.release.mockClear();
+
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const cached = createRoot((rootDispose) => {
+      model = createModel(props);
+      return rootDispose;
+    });
+    expect(model.loading()).toBe(false);
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    expect(live.acquire).not.toHaveBeenCalled();
+    expect(live.load).not.toHaveBeenCalled();
+    cached();
+    expect(live.release).not.toHaveBeenCalled();
+  });
+
+  it('folds a turn that is still in progress again the next time it mounts', async () => {
+    live.snapshot = {
+      messages: [prompt, openResponse],
+      metadata: metadata(null),
+    };
+    const dispose = createRoot((rootDispose) => {
+      createModel(props);
+      return rootDispose;
+    });
+    await settle();
+    dispose();
+
+    live.acquire.mockClear();
+    const again = createRoot((rootDispose) => {
+      createModel(props);
+      return rootDispose;
+    });
+    expect(live.acquire).toHaveBeenCalledOnce();
+    again();
+  });
+
+  it('folds a different turn than the one it already resolved', async () => {
+    const dispose = createRoot((rootDispose) => {
+      createModel(props);
+      return rootDispose;
+    });
+    await settle();
+    dispose();
+
+    live.acquire.mockClear();
+    const other = createRoot((rootDispose) => {
+      createModel({
+        ...props,
+        promptedMessage: { turn: 4, author: 'user' },
+      });
+      return rootDispose;
+    });
+    expect(live.acquire).toHaveBeenCalledOnce();
+    other();
+  });
+
+  it('keeps an unanchored chip live after its latest turn was remembered', async () => {
+    const dispose = createRoot((rootDispose) => {
+      createModel(props);
+      return rootDispose;
+    });
+    await settle();
+    dispose();
+
+    live.acquire.mockClear();
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const following = createRoot((rootDispose) => {
+      model = createModel({ ...props, promptedMessage: null });
+      return rootDispose;
+    });
+    expect(live.acquire).toHaveBeenCalledOnce();
+    await settle();
+    onChange([
+      {
+        ...openResponse,
+        turn: 2,
+        parts: [{ kind: 'text', text: 'Next turn' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({ markdown: 'Next turn' });
+    following();
   });
 });
