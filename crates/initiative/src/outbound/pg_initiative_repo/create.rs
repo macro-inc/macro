@@ -191,6 +191,21 @@ pub(super) async fn delete(pool: &PgPool, id: InitiativeId) -> Result<(), Initia
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?;
 
+    // Its tasks leave the project with it. The literal is
+    // SystemPropertyKey::PROJECT_UUID, matching the partial index.
+    sqlx::query!(
+        r#"
+        DELETE FROM entity_properties
+        WHERE property_definition_id = '00000001-0000-0000-0000-000000000014'
+          AND values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1::text))
+        "#,
+        uuid.to_string(),
+    )
+    .execute(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+
     tx.commit()
         .await
         .map_err(AdapterError::Sqlx)

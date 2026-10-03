@@ -913,45 +913,6 @@ export type ApprovePairingRequest = {
 };
 
 /**
- * Status written onto one assign result.
- */
-export type AssignTaskStatus = 'assigned' | 'moved' | 'notATask' | 'notFound' | 'skippedNoPermission';
-
-/**
- * Assign-tasks HTTP body.
- */
-export type AssignTasksRequest = {
-    /**
-     * Task ids to assign, in request order.
-     */
-    taskIds: Array<string>;
-};
-
-/**
- * Assign-tasks HTTP response.
- */
-export type AssignTasksResponse = {
-    /**
-     * Outcomes in request order after dedupe.
-     */
-    results: Array<AssignTasksResult>;
-};
-
-/**
- * Per-task outcome of an assign call.
- */
-export type AssignTasksResult = {
-    /**
-     * What happened to the task.
-     */
-    status: AssignTaskStatus;
-    /**
-     * Task id this outcome describes.
-     */
-    taskId: string;
-};
-
-/**
  * Attachment changes interpreted by the common command boundary.
  */
 export type AttachmentChange = {
@@ -18011,70 +17972,6 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
-
-export type AssignInitiativeTasksData = {
-    body: AssignTasksRequest;
-    path: {
-        /**
-         * Initiative identifier.
-         */
-        initiative_id: string;
-    };
-    query?: never;
-    url: '/initiatives/{initiative_id}/tasks';
-};
-
-export type AssignInitiativeTasksErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type AssignInitiativeTasksError = AssignInitiativeTasksErrors[keyof AssignInitiativeTasksErrors];
-
-export type AssignInitiativeTasksResponses = {
-    200: AssignTasksResponse;
-};
-
-export type AssignInitiativeTasksResponse = AssignInitiativeTasksResponses[keyof AssignInitiativeTasksResponses];
-
-export type UnassignInitiativeTaskData = {
-    body?: never;
-    path: {
-        /**
-         * Initiative identifier.
-         */
-        initiative_id: string;
-        /**
-         * Task identifier.
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/initiatives/{initiative_id}/tasks/{task_id}';
-};
-
-export type UnassignInitiativeTaskErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UnassignInitiativeTaskError = UnassignInitiativeTaskErrors[keyof UnassignInitiativeTaskErrors];
-
-export type UnassignInitiativeTaskResponses = {
-    200: GenericSuccessResponse;
-};
-
-export type UnassignInitiativeTaskResponse = UnassignInitiativeTaskResponses[keyof UnassignInitiativeTaskResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;

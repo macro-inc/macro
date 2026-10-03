@@ -2,19 +2,75 @@
 
 use std::collections::HashMap;
 
+use channel_sender::ChannelSender;
 use entity_access::domain::{
     models::{AccessError, BotAccessScope, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
 use initiative::domain::{
-    events::{InitiativeEventActor, InitiativeTasksChanged},
+    events::InitiativeEventActor,
     models::{InitiativeError, InitiativeId},
     ports::InitiativeRepo,
 };
+use models_properties::{EntityType as PropertyEntityType, service::property_value::PropertyValue};
+use properties::domain::events::EntityPropertyUpdatedMetadata;
 use properties::{EditReceipt, PropertiesErr, PropertiesService, ViewReceipt};
+use system_properties::SystemPropertyKey;
 
 #[cfg(test)]
 mod test;
+
+/// A task that joined a project: its Project property now names a different project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTaskAdded {
+    /// Task that joined the project.
+    pub task_id: String,
+    /// Project the task joined.
+    pub project_id: InitiativeId,
+    /// Who set the property.
+    pub actor: InitiativeEventActor,
+}
+
+impl ProjectTaskAdded {
+    /// Ignore other properties, removals, unchanged saves, and unattributed writes.
+    pub fn from_update(updated: &EntityPropertyUpdatedMetadata) -> Option<Self> {
+        if updated.entity_type != PropertyEntityType::Task
+            || updated.property_definition_id != SystemPropertyKey::PROJECT_UUID
+        {
+            return None;
+        }
+        let project_id = project_of(updated.value.as_ref())?;
+        if project_of(updated.previous_value.as_ref()) == Some(project_id) {
+            return None;
+        }
+        let actor = match (&updated.actor, &updated.actor_user_id) {
+            (Some(actor), _) => InitiativeEventActor {
+                actor: actor.clone(),
+                on_behalf_of: updated.on_behalf_of.clone(),
+            },
+            (None, Some(user)) => InitiativeEventActor {
+                actor: ChannelSender::new_from_user(user.clone()),
+                on_behalf_of: None,
+            },
+            (None, None) => return None,
+        };
+        Some(Self {
+            task_id: updated.entity_id.clone(),
+            project_id,
+            actor,
+        })
+    }
+}
+
+fn project_of(value: Option<&PropertyValue>) -> Option<InitiativeId> {
+    let Some(PropertyValue::EntityRef(references)) = value else {
+        return None;
+    };
+    references
+        .iter()
+        .find(|reference| reference.entity_type == PropertyEntityType::Initiative)
+        .and_then(|reference| reference.entity_id.parse().ok())
+}
 
 /// Failure to read or apply a project assignment; the consumer retries the event.
 #[derive(Debug, thiserror::Error)]
@@ -164,81 +220,58 @@ impl<P: ProjectAgentInheritance, I: ProjectMemberships, A: ProjectAssignmentAcce
         }
     }
 
-    /// Recheck queued membership changes before inheriting the destination's agents.
+    /// Recheck a queued addition before inheriting the destination's agents.
     #[tracing::instrument(err, skip_all)]
-    pub async fn process(
-        &self,
-        event: &InitiativeTasksChanged,
-    ) -> Result<(), ProjectAssignmentError> {
-        let Some(attribution) = &event.attribution else {
-            return Ok(());
-        };
-        let Some(_) = attribution
+    pub async fn process(&self, added: &ProjectTaskAdded) -> Result<(), ProjectAssignmentError> {
+        let Some(_) = added
+            .actor
             .actor
             .as_user()
-            .or(attribution.on_behalf_of.as_ref())
+            .or(added.actor.on_behalf_of.as_ref())
         else {
             return Ok(());
         };
-        let additions: Vec<_> = event
-            .changes
-            .iter()
-            .filter(|change| change.to.is_some() && change.to != change.from)
-            .collect();
-        if additions.is_empty() {
-            return Ok(());
-        }
         let memberships = self
             .initiatives
-            .memberships(
-                additions
-                    .iter()
-                    .map(|change| change.task_id.clone())
-                    .collect(),
-            )
+            .memberships(vec![added.task_id.clone()])
             .await?;
-        for change in additions {
-            let Some(project_id) = change
-                .to
-                .filter(|id| memberships.get(&change.task_id) == Some(id))
-            else {
-                continue;
-            };
-            let Some((project, task)) = self
-                .access
-                .receipts(attribution, project_id, &change.task_id)
-                .await?
-            else {
-                continue;
-            };
-            match self.properties.inherit(&project, &task).await {
-                Ok(()) => {}
-                Err(
-                    error
-                    @ (PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured),
-                ) => {
-                    return Err(error.into());
-                }
-                Err(
-                    error @ (PropertiesErr::Validation(_)
-                    | PropertiesErr::PermissionDenied
-                    | PropertiesErr::NotFound
-                    | PropertiesErr::OptionNotFound
-                    | PropertiesErr::EntityPropertyNotFound
-                    | PropertiesErr::RequiredProperty
-                    | PropertiesErr::DuplicateOptionValue
-                    | PropertiesErr::ConflictingTeamLabel(_)
-                    | PropertiesErr::SystemPropertyNotModifiable
-                    | PropertiesErr::TeamMembershipRequired
-                    | PropertiesErr::ManagedDefinition),
-                ) => {
-                    tracing::warn!(
-                        error = ?error,
-                        task_id = %change.task_id,
-                        project_id = %project_id,
-                        "skipping invalid project agent assignment"
-                    );
-                }
+        // A later move or removal supersedes this addition.
+        if memberships.get(&added.task_id) != Some(&added.project_id) {
+            return Ok(());
+        }
+        let Some((project, task)) = self
+            .access
+            .receipts(&added.actor, added.project_id, &added.task_id)
+            .await?
+        else {
+            return Ok(());
+        };
+        match self.properties.inherit(&project, &task).await {
+            Ok(()) => {}
+            Err(
+                error @ (PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured),
+            ) => {
+                return Err(error.into());
+            }
+            Err(
+                error @ (PropertiesErr::Validation(_)
+                | PropertiesErr::PermissionDenied
+                | PropertiesErr::NotFound
+                | PropertiesErr::OptionNotFound
+                | PropertiesErr::EntityPropertyNotFound
+                | PropertiesErr::RequiredProperty
+                | PropertiesErr::DuplicateOptionValue
+                | PropertiesErr::ConflictingTeamLabel(_)
+                | PropertiesErr::SystemPropertyNotModifiable
+                | PropertiesErr::TeamMembershipRequired
+                | PropertiesErr::ManagedDefinition),
+            ) => {
+                tracing::warn!(
+                    error = ?error,
+                    task_id = %added.task_id,
+                    project_id = %added.project_id,
+                    "skipping invalid project agent assignment"
+                );
             }
         }
         Ok(())

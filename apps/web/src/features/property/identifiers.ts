@@ -19,6 +19,8 @@ export const SYSTEM_PROPERTY_IDS = {
   COMPANY_OWNER: '00000001-0000-0000-0000-000000000011',
   REVENUE: '00000001-0000-0000-0000-000000000012',
   CONTACTS: '00000001-0000-0000-0000-000000000013',
+  /** The one project (initiative) a task belongs to. */
+  PROJECT: '00000001-0000-0000-0000-000000000014',
 } as const;
 
 /** Stable option IDs, kept independent of UI/block registries for tooling. */

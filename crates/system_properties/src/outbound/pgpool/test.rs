@@ -367,6 +367,44 @@ async fn test_copy_task_properties_copies_custom_properties(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("system_properties"))
 )]
+async fn test_copy_task_properties_does_not_join_the_project(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let from_task_id = "source-task-with-props";
+    let to_task_id = "dest-task-project";
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (gen_random_uuid(), $1, 'TASK', $2, $3)
+        "#,
+        from_task_id,
+        SystemPropertyKey::PROJECT_UUID,
+        serde_json::json!({
+            "type": "EntityReference",
+            "value": [{"entity_id": "00000000-0000-0000-0000-0000000000aa", "entity_type": "INITIATIVE"}]
+        }),
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.copy_task_properties(from_task_id, to_task_id).await?;
+
+    let properties = get_task_property_values(&pool, to_task_id).await;
+    assert!(!properties.is_empty(), "other properties are copied");
+    assert!(
+        properties
+            .iter()
+            .all(|(id, _)| *id != SystemPropertyKey::PROJECT_UUID),
+        "the copy must not join the source's project"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("system_properties"))
+)]
 async fn test_copy_task_properties_overwrites_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgSystemPropertiesRepository::new(pool.clone());
 

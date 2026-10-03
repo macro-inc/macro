@@ -76,7 +76,9 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
         insert_document(&pool, &id, OWNER, true).await?;
         task_ids.push(id);
     }
-    repo.assign_tasks(projects[0].id, task_ids.clone()).await?;
+    for task_id in &task_ids {
+        set_project(&pool, task_id, projects[0].id).await?;
+    }
     let hidden_task = task_ids.remove(100);
     let task_reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let context = context_with_resources(

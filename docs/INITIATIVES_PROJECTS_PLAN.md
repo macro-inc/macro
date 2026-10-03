@@ -120,6 +120,8 @@ The user request takes precedence over Linear differences: Macro Projects live u
 
 ### Properties, permissions and membership
 
+> **Update:** task membership is now the task's `Project` system property, not the `task_initiative` table and its assign/unassign APIs. Setting it needs edit access to the task and the project; clearing it needs edit access to the task. The membership findings and endpoints below describe the original plan.
+
 1. Reuse Status, Priority, Assignees and Due Date system properties with initiative storage support. Keep one source of truth for values; list/detail projections may include a typed snapshot, not duplicate writable columns. Create applies the same defaults as tasks.
 2. Assignees represent responsibility. `memberIds` continues to represent existing collaborators with edit grants; assigning someone is not implemented by rewriting that collection. Any assignee-triggered sharing follows the existing task property's policy through its owning service.
 3. Proposed task association policy: editing the task and destination initiative permits assignment/movement. Source-project edit is not additionally required, so a task editor can move their task out of a project they can no longer edit. Removal requires task edit; the initiative-scoped removal endpoint also requires initiative edit. Expose task-side clear through the same domain use case. This is a proposed policy to implement and document, not a claim about today's behavior.

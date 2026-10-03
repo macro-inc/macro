@@ -32,9 +32,8 @@ use graphql_favorite::{
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
 use graphql_initiative::{
-    GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference, InitiativeMutationRoot,
-    InitiativeTasksInput, resolve_initiative, resolve_initiative_tasks,
-    resolve_task_initiative_references,
+    GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
+    resolve_initiative_tasks,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -656,17 +655,6 @@ where
             input.unwrap_or_default(),
         )
         .await
-    }
-
-    /// Initiative chips for tasks, without inaccessible project metadata.
-    async fn task_initiative_references(
-        &self,
-        ctx: &Context<'_>,
-        task_ids: Vec<ID>,
-    ) -> async_graphql::Result<
-        Vec<GraphqlTaskInitiativeReference<SoupEdges<NR, PR, ER, FR, AR, AcR>>>,
-    > {
-        resolve_task_initiative_references(ctx, self.user_id.clone(), task_ids).await
     }
 
     /// AI routines the authenticated user can access.

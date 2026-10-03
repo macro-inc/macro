@@ -306,8 +306,8 @@ async fn consume<Events: TriggerEvents>(
                     if let Some(assignment) = &decoded.assignment {
                         process_task_assignment(trigger, publisher, messages, task_context, assignment).await?;
                     }
-                    if let Some(changes) = &decoded.project_tasks {
-                        project_assignments.process(changes).await?;
+                    if let Some(added) = &decoded.project_task {
+                        project_assignments.process(added).await?;
                     }
                     commit_message(&consumer, kafka_message)?;
                     Ok(())

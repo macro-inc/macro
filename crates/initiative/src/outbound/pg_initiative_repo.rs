@@ -4,7 +4,6 @@ mod create;
 mod list;
 mod members;
 mod share;
-mod tasks;
 
 #[cfg(test)]
 mod test;
@@ -23,7 +22,6 @@ use share_permission_db_utils::team_share::TeamShareError;
 use sqlx::postgres::PgDatabaseError;
 use sqlx::{Executor, PgPool, Postgres};
 
-use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
     CreateInitiativeRepoArgs, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
     InitiativeList, UpdateInitiativeRepoArgs,
@@ -90,8 +88,17 @@ impl InitiativeRepo for PgInitiativeRepo {
         &self,
         task_ids: Vec<String>,
     ) -> Result<std::collections::HashMap<String, InitiativeId>, Self::Err> {
+        // The literal is SystemPropertyKey::PROJECT_UUID.
         let rows = sqlx::query!(
-            "SELECT task_id, initiative_id FROM task_initiative WHERE task_id = ANY($1)",
+            r#"
+            SELECT project.entity_id AS task_id, initiative.id AS initiative_id
+            FROM entity_properties project
+            JOIN initiative
+              ON initiative.id::text = project.values->'value'->0->>'entity_id'
+            WHERE project.property_definition_id = '00000001-0000-0000-0000-000000000014'
+              AND project.entity_type = 'TASK'
+              AND project.entity_id = ANY($1)
+            "#,
             &task_ids
         )
         .fetch_all(&self.pool)
@@ -119,29 +126,6 @@ impl InitiativeRepo for PgInitiativeRepo {
         user_id: &MacroUserIdStr<'static>,
     ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
         share::get_team_default_link_share(&self.pool, user_id).await
-    }
-
-    #[tracing::instrument(err, skip(self, task_ids))]
-    async fn assign_tasks(
-        &self,
-        id: InitiativeId,
-        task_ids: Vec<String>,
-    ) -> Result<AssignedTasks, Self::Err> {
-        tasks::assign_tasks(&self.pool, id, task_ids).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn unassign_task(
-        &self,
-        id: InitiativeId,
-        task_id: &str,
-    ) -> Result<Option<TaskMembershipChange>, Self::Err> {
-        tasks::unassign_task(&self.pool, id, task_id).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn clear_task(&self, task_id: &str) -> Result<Option<TaskMembershipChange>, Self::Err> {
-        tasks::clear_task(&self.pool, task_id).await
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -344,7 +328,17 @@ async fn load_record(
                 '{}'::text[]
             ) AS "member_ids!",
             COALESCE(
-                array_agg(DISTINCT t.task_id) FILTER (WHERE t.task_id IS NOT NULL),
+                (
+                    -- Tasks whose Project property (SystemPropertyKey::PROJECT_UUID)
+                    -- references this initiative.
+                    SELECT array_agg(project.entity_id ORDER BY project.entity_id)
+                    FROM entity_properties project
+                    JOIN "Document" task ON task.id = project.entity_id
+                    WHERE project.property_definition_id = '00000001-0000-0000-0000-000000000014'
+                      AND project.entity_type = 'TASK'
+                      AND project.values->'value'
+                          @> jsonb_build_array(jsonb_build_object('entity_id', i.id::text))
+                ),
                 '{}'::text[]
             ) AS "task_ids!",
             sp."linkShare" AS "link_share?",
@@ -364,7 +358,6 @@ async fn load_record(
         FROM initiative i
         JOIN "SharePermission" sp ON sp.id = i.share_permission_id
         LEFT JOIN initiative_member m ON m.initiative_id = i.id
-        LEFT JOIN task_initiative t ON t.initiative_id = i.id
         WHERE i.id = $1
         GROUP BY
             i.id,

@@ -158,15 +158,18 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             SystemPropertyKey::RelevantDocuments.uuid(),
         ];
 
-        // Step 1: Fetch all properties from source task
+        // Step 1: Fetch all properties from source task. A copy doesn't join
+        // the source's project: that needs edit access to the project.
         let source_properties = sqlx::query!(
             r#"
             SELECT property_definition_id, values
             FROM entity_properties
             WHERE entity_id = $1
               AND entity_type = 'TASK'
+              AND property_definition_id <> $2
             "#,
-            from_task_id
+            from_task_id,
+            SystemPropertyKey::PROJECT_UUID
         )
         .fetch_all(&self.pool)
         .await?;

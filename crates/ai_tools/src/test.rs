@@ -98,8 +98,6 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "UpdateInitiative",
         "DeleteInitiative",
         "UpdateInitiativeSharing",
-        "SetTaskInitiative",
-        "ReadTaskInitiatives",
         "ReadInitiativeActivity",
         "SetEntityProperty",
         "CommentOnDocument",

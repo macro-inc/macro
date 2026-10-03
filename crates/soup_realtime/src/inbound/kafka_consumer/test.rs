@@ -1020,33 +1020,35 @@ fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
 }
 
 #[test]
-fn moving_tasks_refreshes_both_initiatives_once_and_each_task() {
-    use initiative::domain::{
-        events::{InitiativeTasksChanged, TaskMembershipChange},
-        models::InitiativeId,
-    };
+fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
+    use models_properties::{service::property_value::PropertyValue, shared::EntityReference};
+    use system_properties::SystemPropertyKey;
 
-    let from = InitiativeId::from_uuid(Uuid::from_u128(42));
-    let to = InitiativeId::from_uuid(Uuid::from_u128(43));
-    let event = InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
-        attribution: None,
-        occurred_at: Utc::now(),
-        changes: ["task-1", "task-2"]
-            .into_iter()
-            .map(|task_id| TaskMembershipChange {
-                task_id: task_id.to_owned(),
-                from: Some(from),
-                to: Some(to),
-            })
-            .collect(),
+    let project = |id: &str| {
+        Some(PropertyValue::EntityRef(vec![EntityReference {
+            entity_id: id.to_owned(),
+            entity_type: PropertyEntityType::Initiative,
+            specific_message_id: None,
+        }]))
+    };
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        entity_property_id: Uuid::now_v7(),
+        entity_id: DOCUMENT_ID.to_string(),
+        entity_type: PropertyEntityType::Task,
+        property_definition_id: SystemPropertyKey::PROJECT_UUID,
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        value: project("project-to"),
+        previous_value: project("project-from"),
+        updated_at: Utc::now(),
     });
     assert_eq!(
-        patches_from_initiative_event(&event),
+        patches_from_property_event(&event),
         vec![
-            update(EntityType::Document, "task-1"),
-            update(EntityType::Initiative, from),
-            update(EntityType::Initiative, to),
-            update(EntityType::Document, "task-2"),
+            update(EntityType::Document, DOCUMENT_ID),
+            update(EntityType::Initiative, "project-from"),
+            update(EntityType::Initiative, "project-to"),
         ]
     );
 }

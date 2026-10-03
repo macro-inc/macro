@@ -1,4 +1,5 @@
 import type { UseTasksDataSourceOptions } from '@app/features/tasks-view/queries/use-tasks-query';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { createRoot, createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import type { ProjectDetail } from '../core/project';
@@ -25,22 +26,22 @@ vi.mock('@app/features/tasks-view/queries/use-tasks-query', () => ({
   },
 }));
 
-it('uses complete current membership and disables the shared source immediately on access loss', async () => {
+it('scopes tasks to the Project property and disables the shared source immediately on access loss', async () => {
   await new Promise<void>((resolve, reject) =>
     createRoot((dispose) => {
-      const ids = Array.from({ length: 150 }, (_, index) => `task-${index}`);
       const [project, setProject] = createSignal<ProjectDetail | undefined>({
         id: 'project',
         name: 'Launch',
         ownerId: 'owner',
         memberIds: [],
-        taskIds: ids,
+        taskIds: [],
         access: 'view',
         createdAt: '',
         updatedAt: '',
       });
       const refresh = vi.fn(async () => {});
       const source = createProjectTasksDataSource(
+        'project',
         {
           project,
           properties: () => [],
@@ -62,10 +63,12 @@ it('uses complete current membership and disables the shared source immediately 
           isGroupExpanded: () => true,
         }
       );
-      expect(mock.options?.taskIds?.()).toEqual(ids);
+      expect(mock.options?.reference?.()).toEqual({
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+        entityId: 'project',
+      });
       expect(mock.options?.enabled?.()).toBe(true);
       setProject(undefined);
-      expect(mock.options?.taskIds?.()).toEqual([]);
       expect(mock.options?.enabled?.()).toBe(false);
       source
         .refresh()

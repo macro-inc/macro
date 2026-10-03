@@ -24,8 +24,7 @@ use uuid::Uuid;
 
 use super::PgInitiativeRepo;
 use crate::domain::models::{
-    AssignTaskStatus, CreateInitiativeRepoArgs, InitiativeError, InitiativeId,
-    UpdateInitiativeRepoArgs,
+    CreateInitiativeRepoArgs, InitiativeError, InitiativeId, UpdateInitiativeRepoArgs,
 };
 use crate::domain::ports::InitiativeRepo;
 
@@ -214,6 +213,63 @@ async fn insert_document(pool: &PgPool, id: &str, owner: &str, task: bool) -> an
     Ok(())
 }
 
+/// Put a task in a project the way the properties domain does: through its Project
+/// system property (`SystemPropertyKey::PROJECT_UUID`).
+async fn set_project(pool: &PgPool, task_id: &str, project: InitiativeId) -> anyhow::Result<()> {
+    set_task_reference(pool, task_id, PROJECT_PROPERTY, &project.to_string()).await
+}
+
+const PROJECT_PROPERTY: Uuid = Uuid::from_u128(0x00000001_0000_0000_0000_000000000014);
+
+async fn set_task_reference(
+    pool: &PgPool,
+    task_id: &str,
+    property_definition_id: Uuid,
+    initiative_id: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            gen_random_uuid(),
+            $1,
+            'TASK',
+            $2,
+            jsonb_build_object(
+                'type', 'EntityReference',
+                'value', jsonb_build_array(jsonb_build_object(
+                    'entity_id', $3::text,
+                    'entity_type', 'INITIATIVE'
+                ))
+            )
+        )
+        ON CONFLICT (entity_id, entity_type, property_definition_id)
+        DO UPDATE SET values = EXCLUDED.values
+        "#,
+        task_id,
+        property_definition_id,
+        initiative_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn project_rows_referencing(pool: &PgPool, project: InitiativeId) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "count!"
+        FROM entity_properties
+        WHERE property_definition_id = $1
+          AND values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $2::text))
+        "#,
+        PROJECT_PROPERTY,
+        project.to_string(),
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
 async fn access_level(
     pool: &PgPool,
     entity_id: Uuid,
@@ -371,8 +427,8 @@ async fn get_detail_reports_each_channel_grant_once(pool: PgPool) -> anyhow::Res
         ..update_args(created.id)
     })
     .await?;
-    repo.assign_tasks(created.id, vec![task_a.clone(), task_b.clone()])
-        .await?;
+    set_project(&pool, &task_a, created.id).await?;
+    set_project(&pool, &task_b, created.id).await?;
 
     let detail = repo.get_detail(created.id).await?.expect("busy");
     assert_eq!(
@@ -712,16 +768,8 @@ async fn team_share_facts_report_a_missing_initiative(pool: PgPool) -> anyhow::R
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Result<()> {
+async fn task_memberships_read_each_tasks_project_property(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
-    let task_a = Uuid::now_v7().to_string();
-    let task_b = Uuid::now_v7().to_string();
-    let not_a_task = Uuid::now_v7().to_string();
-    let missing = Uuid::now_v7().to_string();
-    insert_document(&pool, &task_a, OWNER, true).await?;
-    insert_document(&pool, &task_b, OWNER, true).await?;
-    insert_document(&pool, &not_a_task, OWNER, false).await?;
-
     let repo = repo(pool.clone());
     let first = repo
         .create(
@@ -737,91 +785,125 @@ async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Resul
             TeamShareCreation::Unshared,
         )
         .await?;
+    let [
+        in_first,
+        in_second,
+        moved,
+        unassigned,
+        other_property,
+        dangling,
+        not_requested,
+    ] = std::array::from_fn(|_| Uuid::now_v7().to_string());
+    for task in [
+        &in_first,
+        &in_second,
+        &moved,
+        &unassigned,
+        &other_property,
+        &dangling,
+        &not_requested,
+    ] {
+        insert_document(&pool, task, OWNER, true).await?;
+    }
+    set_project(&pool, &in_first, first.id).await?;
+    set_project(&pool, &in_second, second.id).await?;
+    set_project(&pool, &moved, first.id).await?;
+    set_project(&pool, &moved, second.id).await?;
+    set_project(&pool, &not_requested, first.id).await?;
+    // Another entity property referencing a project is not membership.
+    set_task_reference(
+        &pool,
+        &other_property,
+        Uuid::from_u128(0x00000001_0000_0000_0000_00000000000c),
+        &first.id.to_string(),
+    )
+    .await?;
+    set_task_reference(
+        &pool,
+        &dangling,
+        PROJECT_PROPERTY,
+        &Uuid::now_v7().to_string(),
+    )
+    .await?;
 
-    let first_results = repo
-        .assign_tasks(first.id, vec![task_a.clone(), task_b.clone()])
+    let memberships = repo
+        .task_memberships(vec![
+            in_first.clone(),
+            in_second.clone(),
+            moved.clone(),
+            unassigned,
+            other_property,
+            dangling,
+        ])
         .await?;
     assert_eq!(
-        first_results
-            .results
-            .iter()
-            .map(|result| result.status)
-            .collect::<Vec<_>>(),
-        vec![AssignTaskStatus::Assigned, AssignTaskStatus::Assigned]
+        memberships,
+        std::collections::HashMap::from([
+            (in_first, first.id),
+            (in_second, second.id),
+            (moved, second.id),
+        ])
     );
-
-    let second_results = repo
-        .assign_tasks(
-            second.id,
-            vec![task_a.clone(), not_a_task.clone(), missing.clone()],
-        )
-        .await?;
-    assert_eq!(second_results.results[0].status, AssignTaskStatus::Moved);
-    assert_eq!(second_results.results[1].status, AssignTaskStatus::NotATask);
-    assert_eq!(second_results.results[2].status, AssignTaskStatus::NotATask);
-    assert_eq!(
-        second_results.changes,
-        vec![crate::domain::events::TaskMembershipChange {
-            task_id: task_a.clone(),
-            from: Some(first.id),
-            to: Some(second.id)
-        }]
-    );
-    assert!(
-        repo.assign_tasks(second.id, vec![task_a.clone()])
-            .await?
-            .changes
-            .is_empty()
-    );
-
-    let first_detail = repo.get_detail(first.id).await?.expect("first");
-    let second_detail = repo.get_detail(second.id).await?.expect("second");
-    assert_eq!(first_detail.task_ids, vec![task_b.clone()]);
-    assert_eq!(second_detail.task_ids, vec![task_a.clone()]);
-    assert!(second_detail.updated_at > second.updated_at);
-    assert!(matches!(
-        repo.assign_tasks(InitiativeId::generate(), vec![task_a])
-            .await,
-        Err(InitiativeError::NotFound)
-    ));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn unassign_task_ignores_links_owned_by_other_initiatives(
+async fn detail_lists_existing_tasks_whose_project_property_names_it(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
-    let task_id = Uuid::now_v7().to_string();
-    insert_document(&pool, &task_id, OWNER, true).await?;
-
     let repo = repo(pool.clone());
-    let first = repo
+    let project = repo
         .create(
-            create_args(OWNER, "Keeper", &[]),
+            create_args(OWNER, "Project", &[]),
             share_off(),
             TeamShareCreation::Unshared,
         )
         .await?;
-    let second = repo
+    let other = repo
         .create(
             create_args(OWNER, "Other", &[]),
             share_off(),
             TeamShareCreation::Unshared,
         )
         .await?;
-    repo.assign_tasks(first.id, vec![task_id.clone()]).await?;
+    assert!(
+        repo.get_detail(project.id)
+            .await?
+            .expect("project")
+            .task_ids
+            .is_empty()
+    );
+    let [task_a, task_b, elsewhere, deleted] = std::array::from_fn(|_| Uuid::now_v7().to_string());
+    for task in [&task_a, &task_b, &elsewhere] {
+        insert_document(&pool, task, OWNER, true).await?;
+    }
+    set_project(&pool, &task_b, project.id).await?;
+    set_project(&pool, &task_a, project.id).await?;
+    set_project(&pool, &elsewhere, other.id).await?;
+    // A property row whose task document no longer exists is not a member.
+    set_project(&pool, &deleted, project.id).await?;
 
-    let error = repo
-        .unassign_task(second.id, &task_id)
-        .await
-        .expect_err("other initiative cannot steal the link");
-    assert!(matches!(error, InitiativeError::NotFound));
+    let detail = repo.get_detail(project.id).await?.expect("project");
+    assert_eq!(detail.task_ids, vec![task_a.clone(), task_b.clone()]);
+    assert_eq!(
+        repo.get_detail(other.id).await?.expect("other").task_ids,
+        vec![elsewhere.clone()]
+    );
 
-    repo.unassign_task(first.id, &task_id).await?;
-    let detail = repo.get_detail(first.id).await?.expect("keeper");
-    assert!(detail.task_ids.is_empty());
-    assert!(detail.updated_at > first.updated_at);
+    // Moving a task is one property write: it leaves the old project.
+    set_project(&pool, &task_a, other.id).await?;
+    assert_eq!(
+        repo.get_detail(project.id)
+            .await?
+            .expect("project")
+            .task_ids,
+        vec![task_b]
+    );
+    assert_eq!(
+        repo.get_detail(other.id).await?.expect("other").task_ids,
+        vec![task_a, elsewhere]
+    );
     Ok(())
 }
 
@@ -847,7 +929,17 @@ async fn delete_leaves_no_initiative_rows(pool: PgPool) -> anyhow::Result<()> {
         ..update_args(created.id)
     })
     .await?;
-    repo.assign_tasks(created.id, vec![task_id.clone()]).await?;
+    set_project(&pool, &task_id, created.id).await?;
+    let survivor = repo
+        .create(
+            create_args(OWNER, "Survivor", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let surviving_task = Uuid::now_v7().to_string();
+    insert_document(&pool, &surviving_task, OWNER, true).await?;
+    set_project(&pool, &surviving_task, survivor.id).await?;
     let share_id = created.share_permission.id.clone();
     let initiative_id = created.id.as_uuid();
 
@@ -886,18 +978,23 @@ async fn delete_leaves_no_initiative_rows(pool: PgPool) -> anyhow::Result<()> {
     )
     .fetch_one(&pool)
     .await?;
-    let leftover_task = sqlx::query_scalar!(
-        r#"SELECT EXISTS(SELECT 1 FROM task_initiative WHERE initiative_id = $1) AS "exists!""#,
-        initiative_id,
-    )
-    .fetch_one(&pool)
-    .await?;
+    let leftover_task = project_rows_referencing(&pool, created.id).await? > 0;
 
     assert!(!leftover_share);
     assert!(!leftover_channel);
     assert!(!leftover_access);
     assert!(!leftover_member);
     assert!(!leftover_task);
+    // Its tasks leave the project with it; other projects keep theirs.
+    assert!(repo.task_memberships(vec![task_id]).await?.is_empty());
+    assert_eq!(project_rows_referencing(&pool, survivor.id).await?, 1);
+    assert_eq!(
+        repo.get_detail(survivor.id)
+            .await?
+            .expect("survivor")
+            .task_ids,
+        vec![surviving_task]
+    );
     assert!(repo.get_detail(created.id).await?.is_none());
     assert!(matches!(
         repo.delete(created.id).await,

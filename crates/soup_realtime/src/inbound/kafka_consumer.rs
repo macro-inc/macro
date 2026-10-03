@@ -32,11 +32,13 @@ use messages::domain::models::MessageParent;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
+use models_properties::service::property_value::PropertyValue;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use system_properties::SystemPropertyKey;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::Instrument as _;
 
@@ -161,16 +163,6 @@ fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealti
         }
         InitiativeTopicEvent::Purged { initiative_id } => {
             vec![delete(EntityType::Initiative, initiative_id)]
-        }
-        InitiativeTopicEvent::TasksChanged(change) => {
-            let mut patches = Vec::new();
-            for membership in &change.changes {
-                push_unique_update(&mut patches, EntityType::Document, &membership.task_id);
-                for id in [membership.from, membership.to].into_iter().flatten() {
-                    push_unique_update(&mut patches, EntityType::Initiative, &id.to_string());
-                }
-            }
-            patches
         }
     }
 }
@@ -497,7 +489,28 @@ fn property_update(entity_type: PropertyEntityType, entity_id: &str) -> Vec<Soup
 fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
         PropertyTopicEvent::EntityPropertyUpdated(metadata) => {
-            property_update(metadata.entity_type, &metadata.entity_id)
+            let mut patches = property_update(metadata.entity_type, &metadata.entity_id);
+            if metadata.entity_type == PropertyEntityType::Task
+                && metadata.property_definition_id == SystemPropertyKey::PROJECT_UUID
+            {
+                // The projects the task left and joined change their task lists.
+                for value in [&metadata.previous_value, &metadata.value]
+                    .into_iter()
+                    .flatten()
+                {
+                    let PropertyValue::EntityRef(references) = value else {
+                        continue;
+                    };
+                    for reference in references {
+                        push_unique_update(
+                            &mut patches,
+                            EntityType::Initiative,
+                            &reference.entity_id,
+                        );
+                    }
+                }
+            }
+            patches
         }
         PropertyTopicEvent::EntityPropertyDeleted(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)

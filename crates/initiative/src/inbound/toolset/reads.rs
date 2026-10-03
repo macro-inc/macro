@@ -3,10 +3,7 @@
 use super::*;
 use crate::domain::{
     history::{InitiativeActivityCursor, InitiativeActivityRecord},
-    reads::{
-        InitiativePageRequest, InitiativeTasksRequest, TaskInitiativeReference,
-        TaskInitiativeReferencesRequest,
-    },
+    reads::{InitiativePageRequest, InitiativeTasksRequest},
 };
 use ai_toolset::{AsyncTool, ServiceContext, ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
@@ -213,104 +210,6 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
             properties: properties.into(),
             description,
             next_task_cursor: tasks.next_cursor,
-        })
-    }
-}
-
-/// Resolve projects for a batch of tasks without exposing inaccessible projects.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-#[schemars(
-    title = "ReadTaskInitiatives",
-    description = "Find the project associated with each requested task. Returns project id/name only when both task and project are visible. Distinguishes no project from unavailable. Accepts up to 100 unique task ids."
-)]
-pub struct ReadTaskInitiatives {
-    /// Task ids to look up, deduplicated in input order.
-    #[schemars(description = "Task ids to look up, deduplicated in input order.")]
-    pub task_ids: Vec<String>,
-}
-
-/// Privacy-preserving task project reference.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(
-    tag = "state",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum TaskProjectReference {
-    /// Visible task with no project association.
-    None {
-        /// Requested task id.
-        task_id: String,
-    },
-    /// Task or project is inaccessible.
-    Unavailable {
-        /// Requested task id.
-        task_id: String,
-    },
-    /// Task and project are visible.
-    Visible {
-        /// Requested task id.
-        task_id: String,
-        /// Associated project id.
-        initiative_id: Uuid,
-        /// Associated project name.
-        name: String,
-    },
-}
-
-/// Visibility-aware project references for the requested tasks.
-#[derive(Debug, Serialize, JsonSchema)]
-pub struct TaskProjectReferences {
-    /// References in deduplicated request order.
-    pub references: Vec<TaskProjectReference>,
-}
-
-impl ToolAnnotated for ReadTaskInitiatives {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read task projects");
-}
-
-#[async_trait]
-impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
-    AsyncTool<InitiativeToolContext<S, A, R>> for ReadTaskInitiatives
-{
-    type Output = TaskProjectReferences;
-    async fn call(
-        &self,
-        context: ServiceContext<InitiativeToolContext<S, A, R>>,
-        request: RequestContext,
-    ) -> ToolResult<Self::Output> {
-        let result = context
-            .service
-            .task_references(
-                &request.user_id,
-                TaskInitiativeReferencesRequest {
-                    task_ids: self.task_ids.clone(),
-                },
-            )
-            .await
-            .map_err(failure)?;
-        Ok(TaskProjectReferences {
-            references: result
-                .references
-                .into_iter()
-                .map(|reference| match reference {
-                    TaskInitiativeReference::None { task_id } => {
-                        TaskProjectReference::None { task_id }
-                    }
-                    TaskInitiativeReference::Unavailable { task_id } => {
-                        TaskProjectReference::Unavailable { task_id }
-                    }
-                    TaskInitiativeReference::Visible {
-                        task_id,
-                        initiative,
-                    } => TaskProjectReference::Visible {
-                        task_id,
-                        initiative_id: initiative.id.as_uuid(),
-                        name: initiative.name,
-                    },
-                })
-                .collect(),
         })
     }
 }

@@ -20,10 +20,9 @@ use models_permissions::share_permission::{
 
 use super::InitiativeServiceImpl;
 use crate::domain::models::{
-    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, InitiativeSummary,
-    MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN,
-    TaskAssignment, UpdateInitiativeRequest,
+    CreateInitiativeRequest, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+    InitiativeList, InitiativeSummary, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
+    MAX_INITIATIVE_NAME_GRAPHEMES, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{
     InitiativeService, MockInitiativeDescriptionSurfaces, MockInitiativeRepo,
@@ -81,26 +80,6 @@ fn receipt<T: entity_access::domain::models::RequiredPermission>(
         EntityPermission::AccessLevel { access_level },
     )
     .expect("permission satisfies the receipt")
-}
-
-fn task_receipt(user_id: &str, task_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
-    EntityAccessReceipt::try_new_authenticated_user(
-        user(user_id),
-        Entity {
-            entity_id: task_id.to_string(),
-            entity_type: EntityType::Document,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Edit,
-        },
-    )
-    .expect("task edit capability")
-}
-
-fn assignment(task_id: &str) -> TaskAssignment {
-    TaskAssignment::Authorized {
-        receipt: task_receipt(OWNER, task_id),
-    }
 }
 
 fn edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
@@ -554,90 +533,7 @@ async fn team_share_patch_is_refused_when_the_actor_does_not_own_the_initiative(
 }
 
 #[tokio::test]
-async fn assign_rejects_non_initiative_receipts() {
-    let repo = MockInitiativeRepo::new();
-    let document_receipt: EntityAccessReceipt<EditAccessLevel> =
-        receipt(OWNER, EntityType::Document, AccessLevel::Edit);
-    let result = service(repo)
-        .assign_tasks(document_receipt, vec![assignment("task-1")])
-        .await;
-    assert!(matches!(result, Err(InitiativeError::BadRequest(_))));
-}
-
-#[tokio::test]
-async fn assign_dedupes_enforces_cap_and_preserves_order() {
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_assign_tasks()
-        .withf(|_, task_ids| task_ids == &["t1".to_string(), "t2".to_string()])
-        .return_once(|_, _| {
-            Box::pin(async {
-                Ok(crate::domain::events::AssignedTasks {
-                    results: vec![
-                        AssignTasksResult {
-                            task_id: "t1".into(),
-                            status: AssignTaskStatus::Assigned,
-                        },
-                        AssignTasksResult {
-                            task_id: "t2".into(),
-                            status: AssignTaskStatus::Moved,
-                        },
-                    ],
-                    changes: Vec::new(),
-                })
-            })
-        });
-
-    let response = service(repo)
-        .assign_tasks(
-            edit_receipt(),
-            vec![
-                assignment("t1"),
-                TaskAssignment::SkippedNoPermission {
-                    task_id: "skip".into(),
-                },
-                assignment("t1"),
-                TaskAssignment::NotFound {
-                    task_id: "missing".into(),
-                },
-                assignment("t2"),
-            ],
-        )
-        .await
-        .expect("assigned");
-
-    assert_eq!(
-        response.results,
-        vec![
-            AssignTasksResult {
-                task_id: "t1".into(),
-                status: AssignTaskStatus::Assigned,
-            },
-            AssignTasksResult {
-                task_id: "skip".into(),
-                status: AssignTaskStatus::SkippedNoPermission,
-            },
-            AssignTasksResult {
-                task_id: "missing".into(),
-                status: AssignTaskStatus::NotFound,
-            },
-            AssignTasksResult {
-                task_id: "t2".into(),
-                status: AssignTaskStatus::Moved,
-            },
-        ]
-    );
-
-    let over_cap: Vec<TaskAssignment> = (0..=MAX_TASKS_PER_ASSIGN)
-        .map(|i| assignment(&format!("task-{i}")))
-        .collect();
-    let capped = service(MockInitiativeRepo::new())
-        .assign_tasks(edit_receipt(), over_cap)
-        .await;
-    assert!(matches!(capped, Err(InitiativeError::BadRequest(_))));
-}
-
-#[tokio::test]
-async fn get_list_and_unassign_call_the_repo() {
+async fn get_and_list_call_the_repo() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_basic().return_once(|_| {
         Box::pin(async {
@@ -661,8 +557,6 @@ async fn get_list_and_unassign_call_the_repo() {
             })
         })
     });
-    repo.expect_unassign_task()
-        .return_once(|_, _| Box::pin(async { Ok(None) }));
 
     let svc = service(repo);
     svc.internal_get_basic(initiative_id())
@@ -670,9 +564,6 @@ async fn get_list_and_unassign_call_the_repo() {
         .expect("basic");
     svc.get(view_receipt()).await.expect("detail");
     svc.list(&user(OWNER)).await.expect("list");
-    svc.unassign_task(edit_receipt(), task_receipt(OWNER, "task-1"))
-        .await
-        .expect("unassign");
 }
 
 #[tokio::test]

@@ -51,15 +51,6 @@ export type ToolGrant = 'view' | 'comment' | 'edit' | 'owner';
  */
 export type SpelledColumnType = string;
 /**
- * Tool-facing status of a task assignment.
- */
-export type TaskAssignmentStatus =
-  | 'assigned'
-  | 'moved'
-  | 'not_a_task'
-  | 'not_found'
-  | 'skipped_no_permission';
-/**
  * Content of a bash code execution response - either a result or an error
  */
 export type BashCodeExecutionContent =
@@ -1280,39 +1271,6 @@ export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
  */
 export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
- * Privacy-preserving task project reference.
- */
-export type TaskProjectReference =
-  | {
-      /**
-       * Requested task id.
-       */
-      taskId: string;
-      state: 'none';
-    }
-  | {
-      /**
-       * Requested task id.
-       */
-      taskId: string;
-      state: 'unavailable';
-    }
-  | {
-      /**
-       * Requested task id.
-       */
-      taskId: string;
-      /**
-       * Associated project id.
-       */
-      initiativeId: string;
-      /**
-       * Associated project name.
-       */
-      name: string;
-      state: 'visible';
-    };
-/**
  * How a group's conditions combine.
  */
 export type Conjunction = 'and' | 'or';
@@ -1535,10 +1493,6 @@ export type TextEditorCodeExecutionContent =
   | (TextEditorCodeExecutionToolError & {
       type: 'text_editor_code_execution_tool_result_error';
     });
-/**
- * Tool-facing status of a task unassignment.
- */
-export type TaskUnassignmentStatus = 'unassigned' | 'not_assigned';
 /**
  * How much of a recurring series an update applies to.
  */
@@ -1886,42 +1840,6 @@ export interface AddColumnOptionsResponse {
    * Follow-up guidance if schema refresh failed after options were saved.
    */
   warning?: string | null;
-}
-/**
- * Move tasks into an initiative. A task already in another initiative is moved; duplicates are ignored; at most 100 unique task ids per call. Requires edit access to the initiative and to each task. Returns one status per task id: assigned, moved, not_a_task, not_found, or skipped_no_permission.
- */
-export interface AssignTasksToInitiative {
-  /**
-   * The id of the initiative to assign tasks to. Requires edit access.
-   */
-  initiativeId: string;
-  /**
-   * Task document ids to assign, at least one and at most 100 unique ids per call. Duplicates are ignored. Requires edit access to each task.
-   */
-  taskIds: string[];
-}
-/**
- * Response from [`AssignTasksToInitiative`].
- */
-export interface AssignTasksToInitiativeResponse {
-  /**
-   * The id of the initiative receiving the tasks.
-   */
-  initiativeId: string;
-  /**
-   * Outcomes in request order after removing duplicates.
-   */
-  results: TaskAssignmentOutcome[];
-}
-/**
- * The result of assigning one task to an initiative.
- */
-export interface TaskAssignmentOutcome {
-  /**
-   * The task id this outcome describes.
-   */
-  taskId: string;
-  status: TaskAssignmentStatus;
 }
 /**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
@@ -7360,24 +7278,6 @@ export interface ReadSpreadsheet {
   includeStyles?: boolean | null;
 }
 /**
- * Find the project associated with each requested task. Returns project id/name only when both task and project are visible. Distinguishes no project from unavailable. Accepts up to 100 unique task ids.
- */
-export interface ReadTaskInitiatives {
-  /**
-   * Task ids to look up, deduplicated in input order.
-   */
-  taskIds: string[];
-}
-/**
- * Visibility-aware project references for the requested tasks.
- */
-export interface TaskProjectReferences {
-  /**
-   * References in deduplicated request order.
-   */
-  references: TaskProjectReference[];
-}
-/**
  * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
  */
 export interface RenameChannel {
@@ -8045,6 +7945,9 @@ export interface SendEmail {
  * - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
  * - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
  *
+ * A task can belong to one project:
+ * - Project (00000001-0000-0000-0000-000000000014): entity, single. Use entity_ref with entity_type='initiative' and the project UUID; send no value field to remove the task from its project. Setting it requires edit access to the task and the project, and the project's agents are assigned to the task.
+ *
  * CRM companies (entity_type='company', entity_id=the company UUID) always have these system properties:
  * - Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
  * - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
@@ -8179,41 +8082,6 @@ export interface SetSenderPolicyResponse {
   summary: string;
 }
 /**
- * Set the project associated with tasks, moving them from their previous project if needed. Requires edit access to each task and the destination project; access to the previous project is unnecessary. Omit initiativeId to clear the association using task edit access alone. Reports each task's outcome independently; at most 100 unique tasks.
- */
-export interface SetTaskInitiative {
-  /**
-   * Task ids to assign or clear, deduplicated in request order.
-   */
-  taskIds: string[];
-  /**
-   * Destination project; omit to clear each task's current project.
-   */
-  initiativeId?: string | null;
-}
-/**
- * Results in deduplicated input order.
- */
-export interface TaskProjectOutcomes {
-  /**
-   * Outcome for every submitted task.
-   */
-  results: TaskProjectOutcome[];
-}
-/**
- * One task mutation outcome.
- */
-export interface TaskProjectOutcome {
-  /**
-   * Requested task identifier.
-   */
-  taskId: string;
-  /**
-   * assigned, moved, cleared, notATask, notFound, skippedNoPermission, or failed.
-   */
-  status: string;
-}
-/**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
  */
 export interface Subagent {
@@ -8296,42 +8164,6 @@ export interface TextEditorCodeExecutionResult {
  */
 export interface TextEditorCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
-}
-/**
- * Move tasks out of a specific initiative (project). Requires edit access to the initiative and each task; at most 100 unique tasks. Returns one status per task id: unassigned, or not_assigned when the task was not in this initiative. Tasks in other initiatives are left unchanged. An access or service failure stops the batch; earlier removals may have succeeded.
- */
-export interface UnassignTasksFromInitiative {
-  /**
-   * The id of the initiative to remove tasks from. Requires edit access.
-   */
-  initiativeId: string;
-  /**
-   * Task document ids to remove. Provide at least one and at most 100 unique ids; duplicates are ignored. Requires edit access to each task.
-   */
-  taskIds: string[];
-}
-/**
- * Response from [`UnassignTasksFromInitiative`].
- */
-export interface UnassignTasksFromInitiativeResponse {
-  /**
-   * The id of the initiative the tasks were removed from.
-   */
-  initiativeId: string;
-  /**
-   * Outcomes in request order after removing duplicates.
-   */
-  results: TaskUnassignmentOutcome[];
-}
-/**
- * The result of removing one task from an initiative.
- */
-export interface TaskUnassignmentOutcome {
-  /**
-   * The task id this outcome describes.
-   */
-  taskId: string;
-  status: TaskUnassignmentStatus;
 }
 /**
  * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.

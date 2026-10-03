@@ -2,7 +2,7 @@
 
 use super::reads::{
     InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeTasksPage,
-    InitiativeTasksRequest, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
+    InitiativeTasksRequest,
 };
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -12,11 +12,10 @@ use models_permissions::share_permission::team_share::{TeamShareCreation, TeamSh
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use std::collections::HashMap;
 
-use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    AssignTasksResponse, CreateInitiativeRepoArgs, CreateInitiativeRequest, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, TaskAssignment,
-    UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    CreateInitiativeRepoArgs, CreateInitiativeRequest, InitiativeBasic, InitiativeDetail,
+    InitiativeError, InitiativeId, InitiativeList, UpdateInitiativeRepoArgs,
+    UpdateInitiativeRequest,
 };
 
 /// Outbound port for the collab surface holding an initiative's description. The surface
@@ -52,7 +51,8 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<InitiativeError> + Send + std::fmt::Debug;
 
-    /// Read task membership in one batch. Callers authorize both ends before displaying it.
+    /// Read each task's project, from its Project property, in one batch. Callers authorize
+    /// both ends before displaying it.
     fn task_memberships(
         &self,
         task_ids: Vec<String>,
@@ -103,26 +103,6 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
-    /// Assign the accepted task ids. Returns one outcome per submitted id.
-    fn assign_tasks(
-        &self,
-        id: InitiativeId,
-        task_ids: Vec<String>,
-    ) -> impl Future<Output = Result<AssignedTasks, Self::Err>> + Send;
-
-    /// Remove one task from the initiative.
-    fn unassign_task(
-        &self,
-        id: InitiativeId,
-        task_id: &str,
-    ) -> impl Future<Output = Result<Option<TaskMembershipChange>, Self::Err>> + Send;
-
-    /// Clear any initiative association for a task. Already unassigned tasks succeed.
-    fn clear_task(
-        &self,
-        task_id: &str,
-    ) -> impl Future<Output = Result<Option<TaskMembershipChange>, Self::Err>> + Send;
-
     /// Grant assignees edit access to the initiative in one transaction,
     /// recording non-owner recipients as collaborators without removing anyone or
     /// downgrading existing grants. Clearing the property does not undo this share.
@@ -132,7 +112,8 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         user_ids: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete the initiative and clean up its own rows in one transaction.
+    /// Delete the initiative and clean up its own rows in one transaction, including tasks'
+    /// Project references to it.
     fn delete(&self, id: InitiativeId) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -158,12 +139,6 @@ pub trait InitiativeService: Send + Sync + 'static {
         request: InitiativeTasksRequest,
     ) -> impl Future<Output = Result<InitiativeTasksPage, InitiativeError>> + Send;
 
-    /// Resolve task chips without revealing inaccessible initiative metadata.
-    fn task_references(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        request: TaskInitiativeReferencesRequest,
-    ) -> impl Future<Output = Result<TaskInitiativeReferences, InitiativeError>> + Send;
     /// Create an initiative owned by `user_id`.
     fn create(
         &self,
@@ -218,28 +193,6 @@ pub trait InitiativeService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: UpdateInitiativeRequest,
     ) -> impl Future<Output = Result<InitiativeDetail, InitiativeError>> + Send;
-
-    /// Assign or move tasks using destination and task edit capabilities for the same actor.
-    /// Source initiative edit access is deliberately not required.
-    fn assign_tasks(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-        assignments: Vec<TaskAssignment>,
-    ) -> impl Future<Output = Result<AssignTasksResponse, InitiativeError>> + Send;
-
-    /// Unassign one task using both initiative and task edit capabilities for the same actor.
-    fn unassign_task(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
-
-    /// Clear a task's initiative using task edit access alone, including after project access
-    /// is revoked. Already unassigned tasks succeed.
-    fn clear_task(
-        &self,
-        task_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
     /// Share both project entities with assignees, adding non-owner collaborators.
     /// Clearing an assignee does not revoke access or membership, matching task sharing.

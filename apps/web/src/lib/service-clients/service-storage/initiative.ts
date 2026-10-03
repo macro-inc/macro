@@ -6,8 +6,6 @@ import type {
   OperationResult,
 } from '@urql/core';
 import {
-  AssignInitiativeTasksDocument,
-  ClearTaskInitiativeDocument,
   CreateInitiativeDocument,
   type CreateInitiativeInput,
   DeleteInitiativeDocument,
@@ -16,7 +14,6 @@ import {
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
   type InitiativeLinkShare,
-  TaskInitiativeReferencesDocument,
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
 } from './graphql/generated/graphql';
@@ -54,22 +51,10 @@ const ACCESS_TO_GRAPHQL = {
   edit: 'EDIT',
   owner: 'OWNER',
 } as const;
-const ASSIGNMENT_FROM_GRAPHQL = {
-  ASSIGNED: 'assigned',
-  MOVED: 'moved',
-  NOT_A_TASK: 'notATask',
-  NOT_FOUND: 'notFound',
-  SKIPPED_NO_PERMISSION: 'skippedNoPermission',
-} as const;
 const OPERATION_TO_GRAPHQL = {
   add: 'ADD',
   remove: 'REMOVE',
   replace: 'REPLACE',
-} as const;
-const REFERENCE_FROM_GRAPHQL = {
-  NONE: 'none',
-  UNAVAILABLE: 'unavailable',
-  VISIBLE: 'visible',
 } as const;
 
 export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
@@ -194,21 +179,6 @@ export function createInitiativeClient(client: () => Client) {
             .initiative
         )
       ),
-    taskReferences: (taskIds: string[], signal?: AbortSignal) =>
-      catchToResult(async () => ({
-        references: (
-          await query(TaskInitiativeReferencesDocument, { taskIds }, signal)
-        ).user.taskInitiativeReferences.map((reference) => ({
-          taskId: reference.taskId,
-          state: REFERENCE_FROM_GRAPHQL[reference.state],
-          initiative: reference.initiative
-            ? {
-                id: reference.initiative.id,
-                name: reference.initiative.displayName ?? 'Untitled project',
-              }
-            : null,
-        })),
-      })),
     create: (input: CreateInitiativeInput) =>
       catchToResult(async () =>
         mapInitiativeDetail(
@@ -241,24 +211,6 @@ export function createInitiativeClient(client: () => Client) {
         async () =>
           (await mutation(DeleteInitiativeDocument, { initiativeId: id }))
             .deleteInitiative
-      ),
-    assignTasks: (id: string, input: { taskIds: string[] }) =>
-      catchToResult(async () => ({
-        results: (
-          await mutation(AssignInitiativeTasksDocument, {
-            initiativeId: id,
-            taskIds: input.taskIds,
-          })
-        ).assignInitiativeTasks.map((result) => ({
-          taskId: result.taskId,
-          status: ASSIGNMENT_FROM_GRAPHQL[result.status],
-        })),
-      })),
-    removeTask: (taskId: string) =>
-      catchToResult(
-        async () =>
-          (await mutation(ClearTaskInitiativeDocument, { taskId }))
-            .clearTaskInitiative
       ),
   };
 }

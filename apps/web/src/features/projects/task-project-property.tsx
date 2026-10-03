@@ -1,3 +1,4 @@
+import { useUserId } from '@core/context/user';
 import { Projects } from './projects';
 import { TaskProjectProperty as TaskProjectPropertyContent } from './views/task-project-property';
 
@@ -7,7 +8,7 @@ export function TaskProjectProperty(props: {
 }) {
   return (
     <Projects>
-      <TaskProjectPropertyContent {...props} />
+      <TaskProjectPropertyContent {...props} userId={useUserId()} />
     </Projects>
   );
 }
