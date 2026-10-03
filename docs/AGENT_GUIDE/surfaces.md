@@ -1120,7 +1120,14 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-Calendar scheduling lives in **Settings → Calendar** (`/app/settings/calendar`).
+Calendar scheduling requires the PostHog flag `enable-calendar-scheduling`, which
+is off unless enabled remotely (including in dev). For local browser checks,
+`VITE_ENABLE_CALENDAR_SCHEDULING=true` overrides it. While off, the Calendar settings
+tab and calendar booking shortcuts are hidden; public booking and receipt links
+show an unavailable page without fetching scheduling data. When enabling a hosted
+rollout, include anonymous visitors so invitees can open those links.
+
+When enabled, calendar scheduling lives in **Settings → Calendar** (`/app/settings/calendar`).
 The scheduling sidebar opens Event types, Bookings, Availability, Teams, Insights,
 and Booking page. Event editors have a grouped settings sidebar; booking status
 filters use the same segmented control as the CRM sidebar.

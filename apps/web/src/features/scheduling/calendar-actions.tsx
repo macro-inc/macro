@@ -1,4 +1,6 @@
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
@@ -56,8 +58,10 @@ function Actions() {
 }
 export function CalendarSchedulingActions() {
   return (
-    <Suspense>
-      <Actions />
-    </Suspense>
+    <ShowFeatureFlag flag={enableCalendarScheduling}>
+      <Suspense>
+        <Actions />
+      </Suspense>
+    </ShowFeatureFlag>
   );
 }
