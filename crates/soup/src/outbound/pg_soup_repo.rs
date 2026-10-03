@@ -27,6 +27,7 @@ mod expanded;
 pub mod grouping;
 mod initiative;
 mod notified;
+mod source_ids;
 mod touched;
 mod unexpanded;
 

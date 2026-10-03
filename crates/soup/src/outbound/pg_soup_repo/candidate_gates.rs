@@ -43,6 +43,13 @@ fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) ->
     }
 }
 
+/// Ends each `entity_access`-checked gate's subquery. Postgres can answer an
+/// `EXISTS` by hashing every row its subquery returns, and it prices that
+/// against every candidate the outer scan could produce rather than the
+/// page's `LIMIT`. For these gates that hash is the user's whole accessible
+/// set. An `OFFSET` keeps the subquery in its per-candidate form.
+const PER_CANDIDATE: &str = "OFFSET 0";
+
 /// Renders the implied conjuncts of `tree` that `fold` knows how to express
 /// as ` AND ...` clauses, in tree order.
 pub(super) fn implied_conjuncts_sql<T>(
@@ -65,7 +72,11 @@ pub(super) fn implied_conjuncts_sql<T>(
 
 /// The per-type `EXISTS` gate for documents: exists, not deleted, accessible,
 /// and matching the request's document + properties filters.
-pub(super) fn document_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
+pub(super) fn document_gate(
+    id_sql: &str,
+    source_ids_sql: &str,
+    filter: Option<&EntityFilterAst>,
+) -> String {
     let doc_filter = filter.and_then(|f| f.document_filter.as_deref());
     let props_filter = filter.and_then(|f| f.properties_filter.as_deref());
     // Importance / IncludeCbmAtmNc literals predicate on the dt/ep_assignees/
@@ -100,14 +111,19 @@ pub(super) fn document_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> S
                 AND {access}
                 {doc_fold}
                 {props_fold}
+                {PER_CANDIDATE}
             )"#,
-        access = access_semi_join("d.id", "document"),
+        access = access_semi_join("d.id", "document", source_ids_sql),
         doc_fold = build_document_filter(doc_filter),
         props_fold = build_properties_filter(props_filter, "d.id"),
     )
 }
 
-pub(super) fn chat_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
+pub(super) fn chat_gate(
+    id_sql: &str,
+    source_ids_sql: &str,
+    filter: Option<&EntityFilterAst>,
+) -> String {
     let chat_filter = filter.and_then(|f| f.chat_filter.as_deref());
     let props_filter = filter.and_then(|f| f.properties_filter.as_deref());
     format!(
@@ -118,14 +134,19 @@ pub(super) fn chat_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> Strin
                 AND {access}
                 {chat_fold}
                 {props_fold}
+                {PER_CANDIDATE}
             )"#,
-        access = access_semi_join("c.id", "chat"),
+        access = access_semi_join("c.id", "chat", source_ids_sql),
         chat_fold = build_chat_filter(chat_filter),
         props_fold = build_properties_filter(props_filter, "c.id"),
     )
 }
 
-pub(super) fn project_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
+pub(super) fn project_gate(
+    id_sql: &str,
+    source_ids_sql: &str,
+    filter: Option<&EntityFilterAst>,
+) -> String {
     let project_filter = filter.and_then(|f| f.project_filter.as_deref());
     let props_filter = filter.and_then(|f| f.properties_filter.as_deref());
     format!(
@@ -136,8 +157,9 @@ pub(super) fn project_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
                 AND {access}
                 {project_fold}
                 {props_fold}
+                {PER_CANDIDATE}
             )"#,
-        access = access_semi_join("p.id", "project"),
+        access = access_semi_join("p.id", "project", source_ids_sql),
         project_fold = build_project_filter(project_filter),
         props_fold = build_properties_filter(props_filter, "p.id"),
     )
@@ -329,11 +351,15 @@ pub(super) fn includes_email_threads(filter: Option<&EntityFilterAst>, link_ids:
 }
 
 /// Initiative candidates use the same listing policy and filters as normal Soup pages.
-pub(super) fn initiative_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
+pub(super) fn initiative_gate(
+    id_sql: &str,
+    source_ids_sql: &str,
+    filter: Option<&EntityFilterAst>,
+) -> String {
     use super::expanded::dynamic::{build_initiative_filter, initiative_access_clause};
     format!(
-        "EXISTS (SELECT 1 FROM initiative i WHERE i.id::text = {id_sql} AND {} {} {})",
-        initiative_access_clause(),
+        "EXISTS (SELECT 1 FROM initiative i WHERE i.id::text = {id_sql} AND {} {} {} {PER_CANDIDATE})",
+        initiative_access_clause(source_ids_sql),
         build_initiative_filter(filter.and_then(|f| f.initiative_filter.as_deref())),
         build_properties_filter(
             filter.and_then(|f| f.properties_filter.as_deref()),

@@ -17,10 +17,13 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
     includes_documents, includes_email_threads, includes_initiatives, includes_projects,
     initiative_gate, project_gate,
 };
+use crate::outbound::pg_soup_repo::source_ids::user_source_ids;
 use crate::outbound::pg_soup_repo::type_err;
 
 /// The candidate row's entity id, as the gates see it.
 const ID_SQL: &str = "ae.entity_id";
+
+const SOURCE_IDS_SQL: &str = "$7";
 
 /// Renders [`VIEW_ACTION_TAGS`] as a SQL `IN`-list body, e.g. `'opened'`.
 /// The tags are compile-time constants of this workspace, never user input.
@@ -81,15 +84,6 @@ pub(super) async fn touched_soup_page(
     let view_tags = view_tags_sql();
     let sql = format!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            UNION ALL
-            SELECT t.team_id::text FROM team_user t
-                WHERE t.user_id = $1
-            UNION ALL
-            SELECT $1
-        )
         SELECT ae.entity_type, ae.entity_id, ae.occurred_at
         FROM activity_events ae
         WHERE ae.subject_id = $1
@@ -116,16 +110,17 @@ pub(super) async fn touched_soup_page(
         ORDER BY ae.occurred_at DESC, ae.entity_id DESC
         LIMIT $6
         "#,
-        document_gate = document_gate(ID_SQL, req.filter),
-        chat_gate = chat_gate(ID_SQL, req.filter),
-        project_gate = project_gate(ID_SQL, req.filter),
-        initiative_gate = initiative_gate(ID_SQL, req.filter),
+        document_gate = document_gate(ID_SQL, SOURCE_IDS_SQL, req.filter),
+        chat_gate = chat_gate(ID_SQL, SOURCE_IDS_SQL, req.filter),
+        project_gate = project_gate(ID_SQL, SOURCE_IDS_SQL, req.filter),
+        initiative_gate = initiative_gate(ID_SQL, SOURCE_IDS_SQL, req.filter),
         channel_gate = channel_gate(ID_SQL, req.filter),
         email_gate = email_gate(ID_SQL, req.filter),
     );
 
     let after_ts = req.after.as_ref().map(|a| a.occurred_at);
     let after_id = req.after.map(|a| a.entity_id);
+    let source_ids = user_source_ids(db, req.user_id.as_ref()).await?;
 
     sqlx::QueryBuilder::<sqlx::Postgres>::new(sql)
         .build()
@@ -135,6 +130,7 @@ pub(super) async fn touched_soup_page(
         .bind(after_id)
         .bind(req.link_ids)
         .bind(req.limit as i64)
+        .bind(source_ids)
         // Unnamed statement, same reasoning as the expanded dynamic query:
         // the SQL text varies per filter shape, so a cached prepared
         // statement is rarely reused but would flip to a generic plan.

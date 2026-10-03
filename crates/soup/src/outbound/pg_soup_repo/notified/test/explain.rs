@@ -9,7 +9,7 @@ const PAGE_SIZE: i64 = 100;
 
 // Both alternatives use the production query's bindings and access scopes.
 // The SQL is generated from AST gates, so this cannot use a static SQLx macro.
-fn bind_query(sql: &str) -> Query<'_, Postgres, PgArguments> {
+fn bind_query<'q>(sql: &'q str, access_sources: &[String]) -> Query<'q, Postgres, PgArguments> {
     let links = vec![Uuid::parse_str(LINK_1).unwrap()];
     let sources = sources();
     let types = included_types(&req(None, &links, &sources, EVERYTHING));
@@ -22,6 +22,7 @@ fn bind_query(sql: &str) -> Query<'_, Postgres, PgArguments> {
         .bind(PAGE_SIZE)
         .bind(vec![USER_1, TEAM_T])
         .bind(vec!["user", "team"])
+        .bind(access_sources.to_vec())
 }
 
 fn keys_with_timestamps(rows: &[sqlx::postgres::PgRow]) -> Vec<(String, String, NaiveDateTime)> {
@@ -105,6 +106,7 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
     .execute(&pool)
     .await?;
     sqlx::query!("ANALYZE").execute(&pool).await?;
+    let access_sources = user_source_ids(&pool, USER_1).await?;
     let mut connection = pool.acquire().await?;
     sqlx::query!("SET work_mem = '16MB'")
         .execute(&mut *connection)
@@ -137,9 +139,16 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
             )
             .replace("GROUP BY entity_type, entity_id", "")
             .replace("WHERE ($3::timestamp", "WHERE rn = 1 AND ($3::timestamp");
-        let expected =
-            keys_with_timestamps(&bind_query(&window).fetch_all(&mut *connection).await?);
-        let actual = keys_with_timestamps(&bind_query(&grouped).fetch_all(&mut *connection).await?);
+        let expected = keys_with_timestamps(
+            &bind_query(&window, &access_sources)
+                .fetch_all(&mut *connection)
+                .await?,
+        );
+        let actual = keys_with_timestamps(
+            &bind_query(&grouped, &access_sources)
+                .fetch_all(&mut *connection)
+                .await?,
+        );
         assert_eq!(actual, expected);
         assert_eq!(actual.len(), PAGE_SIZE as usize);
 
@@ -151,7 +160,9 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
             };
             for (variant, sql) in variants {
                 let explain = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}");
-                let row = bind_query(&explain).fetch_one(&mut *connection).await?;
+                let row = bind_query(&explain, &access_sources)
+                    .fetch_one(&mut *connection)
+                    .await?;
                 let plan: Value = row.try_get(0)?;
                 let mut nodes = Vec::new();
                 plan_nodes(&plan[0]["Plan"], &mut nodes);

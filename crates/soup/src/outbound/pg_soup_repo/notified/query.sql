@@ -1,13 +1,4 @@
-WITH user_source_ids AS (
-    SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
-        WHERE cp.user_id = $1 AND cp.left_at IS NULL
-    UNION ALL
-    SELECT t.team_id::text FROM team_user t
-        WHERE t.user_id = $1
-    UNION ALL
-    SELECT $1
-),
-notified AS NOT MATERIALIZED (
+WITH notified AS NOT MATERIALIZED (
     SELECT
         un.created_at,
         CASE WHEN n.event_item_type = 'channel'

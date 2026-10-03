@@ -6,19 +6,19 @@ use item_filters::ast::initiative::InitiativeLiteral;
 use models_pagination::SimpleSortMethod;
 use system_properties::SystemPropertyKey;
 
-use super::{access_semi_join, sql_string_literal, top_needs_user_history};
+use super::{SOURCE_IDS_SQL, access_semi_join, sql_string_literal, top_needs_user_history};
 
 /// The initiative listing policy: explicit grants and the owner's team link.
 /// Public links do not enumerate otherwise undiscovered initiatives.
-pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause() -> String {
+pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause(source_ids_sql: &str) -> String {
     format!(
         r#"({} OR EXISTS (
         SELECT 1 FROM "SharePermission" sp
         JOIN team_user owner_team ON owner_team.user_id = i.owner_user_id
         WHERE sp.id = i.share_permission_id AND sp."linkShare" = 'TEAM'
-        AND owner_team.team_id::text IN (SELECT source_id FROM user_source_ids)
+        AND owner_team.team_id::text = ANY({source_ids_sql})
     ))"#,
-        access_semi_join("i.id::text", "initiative")
+        access_semi_join("i.id::text", "initiative", source_ids_sql)
     )
 }
 
@@ -83,6 +83,6 @@ pub(super) fn initiative_top_clause(sort: SimpleSortMethod, grouped: bool) -> St
         FROM initiative i
         {history_join}
         WHERE {}"#,
-        initiative_access_clause()
+        initiative_access_clause(SOURCE_IDS_SQL)
     )
 }

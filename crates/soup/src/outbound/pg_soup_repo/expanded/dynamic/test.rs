@@ -15,9 +15,9 @@ fn grouped_access_shape() {
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
     assert!(!candidates.contains("AccessibleItems"));
     for (id, entity_type) in [("d.id", "document"), ("c.id", "chat"), ("p.id", "project")] {
-        assert!(candidates.contains(&access_semi_join(id, entity_type)));
+        assert!(candidates.contains(&access_semi_join(id, entity_type, SOURCE_IDS_SQL)));
     }
-    assert!(candidates.contains("cp.left_at IS NULL"));
+    assert!(!candidates.contains("user_source_ids"));
     assert!(candidates.contains("event.owner_id = $1"));
     assert!(candidates.contains("link.link_id = event.source_link_id"));
     assert!(candidates.contains("link.primary_macro_id = $1"));
@@ -64,7 +64,7 @@ fn grouped_candidate_sort_shape() {
             assert_eq!(rest.matches("LEFT JOIN \"UserHistory\"").count(), 3);
             assert!(rest.contains("COUNT(*) OVER (PARTITION BY"));
             assert!(rest.contains("ORDER BY t.sort_ts DESC, t.id DESC"));
-            assert!(rest.contains("AND ep.entity_type = $10"));
+            assert!(rest.contains("AND ep.entity_type = $11"));
             assert!(rest.contains("\"group_key\", \"sort_ts\" DESC, \"id\" DESC"));
             assert_eq!(sql.ends_with("LIMIT $3"), grouping.group_key.is_some());
             assert_eq!(
@@ -114,6 +114,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
     let version = sqlx::query_scalar!("SELECT version()")
         .fetch_one(&pool)
         .await?;
+    let source_ids = user_source_ids(&pool, "macro|user-1@test.com").await?;
     println!(
         "database={version:?}; synthetic_documents=12000; tasks=120; grants=24000; repetitions=3"
     );
@@ -183,12 +184,241 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                     .bind(StatusOption::COMPLETED_UUID.to_string())
                     .bind(SystemPropertyKey::STATUS_UUID)
                     .bind(SystemPropertyKey::ASSIGNEES_UUID)
+                    .bind(source_ids.clone())
                     .bind(grouping.group_key.clone());
                 if let Some(ref entity_type) = entity_type {
                     query = query.bind(entity_type);
                 }
                 let plan = query.persistent(false).fetch_one(&pool).await?;
                 println!("EXPLAIN {label} {sort} repetition={repetition}: {plan}");
+            }
+        }
+    }
+    Ok(())
+}
+
+const ORDERED_SORTS: [SimpleSortMethod; 3] = [
+    SimpleSortMethod::UpdatedAt,
+    SimpleSortMethod::ViewedUpdated,
+    SimpleSortMethod::ViewedAt,
+];
+
+#[test]
+fn ordered_documents_only_for_unfiltered_ordered_sorts() {
+    let empty = EntityFilterAst::mock_empty();
+    for sort in ORDERED_SORTS {
+        let sql = build_query(&empty, false, sort).into_sql();
+        let (candidates, _) = sql.split_once("Combined AS").unwrap();
+        assert!(candidates.contains("doc_ordered_ok AS MATERIALIZED"));
+        assert!(candidates.contains("NOT (SELECT ok FROM doc_ordered_ok)"));
+        assert!(
+            candidates.find("doc_strategy AS").unwrap() < candidates.find("TopItems AS").unwrap()
+        );
+    }
+
+    let chat_notifications = EntityFilterAst {
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::NotificationState(
+            item_filters::NotificationState::Unseen,
+        )))),
+        ..EntityFilterAst::mock_empty()
+    };
+    let sql = build_query(&chat_notifications, false, SimpleSortMethod::UpdatedAt).into_sql();
+    assert!(sql.find("NotificationItems AS").unwrap() < sql.find("doc_strategy AS").unwrap());
+
+    let document_filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::ProjectId(Uuid::nil())))),
+        ..EntityFilterAst::mock_empty()
+    };
+    let properties_filter = EntityFilterAst {
+        properties_filter: Some(Arc::new(Expr::val(PropertiesLiteral {
+            property_definition_id: SystemPropertyKey::STATUS_UUID,
+            entity_type: Some(PropertyEntityType::Document),
+            value: PropertyMatchValue::SelectOption(Uuid::nil()),
+        }))),
+        ..EntityFilterAst::mock_empty()
+    };
+    for (filter, exclude_frecency, sort) in [
+        (&empty, false, SimpleSortMethod::CreatedAt),
+        (&empty, true, SimpleSortMethod::UpdatedAt),
+        (&document_filter, false, SimpleSortMethod::ViewedUpdated),
+        (&properties_filter, false, SimpleSortMethod::ViewedAt),
+    ] {
+        let sql = build_query(filter, exclude_frecency, sort).into_sql();
+        assert!(
+            !sql.contains("doc_strategy"),
+            "{sort} frecency={exclude_frecency}"
+        );
+        assert_eq!(
+            sql,
+            build_query_with(filter, exclude_frecency, sort, false).into_sql()
+        );
+    }
+}
+
+const DENSE_USER: &str = "macro|user-1@test.com";
+const OLD_GRANTS_USER: &str = "macro|user-2@test.com";
+const SPARSE_USER: &str = "macro|user-3@test.com";
+
+fn ordered_documents_seed() -> String {
+    format!(
+        r#"
+INSERT INTO "Document" (id, name, owner, "createdAt", "updatedAt", "deletedAt")
+SELECT lpad(to_hex(i), 32, '0')::uuid::text, 'ordered walk', '{DENSE_USER}', '2025-01-01',
+    '2025-01-01'::timestamp + ((i * 7919 % 4000) / 2) * interval '1 minute',
+    CASE WHEN i % 37 = 0 THEN '2025-06-01'::timestamp END
+FROM generate_series(0, 3999) i;
+
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+SELECT lpad(to_hex(i), 32, '0')::uuid, 'document', '{DENSE_USER}', 'user', 'view'
+FROM generate_series(0, 3999) i WHERE i % 10 <> 0;
+
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+SELECT lpad(to_hex(i), 32, '0')::uuid, 'document', '{DENSE_USER}', 'user', 'view', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff'
+FROM generate_series(0, 3999) i WHERE i % 10 = 1;
+
+INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "updatedAt")
+SELECT '{DENSE_USER}', lpad(to_hex(i), 32, '0')::uuid::text, 'document',
+    '2025-01-01'::timestamp + (1000 + ((i / 13) % 50) * 20) * interval '1 minute'
+FROM generate_series(0, 3999) i WHERE i % 13 = 0;
+
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+SELECT lpad(to_hex(i), 32, '0')::uuid, 'document', '{OLD_GRANTS_USER}', 'user', 'view'
+FROM generate_series(0, 3999) i WHERE i < 2000 AND i * 7919 % 4000 < 2000;
+
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+SELECT lpad(to_hex(i), 32, '0')::uuid, 'document', '{SPARSE_USER}', 'user', 'view'
+FROM generate_series(0, 3999) i WHERE i % 200 = 1;
+
+ANALYZE;
+"#
+    )
+}
+
+type SoupCursor = Option<(DateTime<Utc>, String)>;
+
+async fn soup_page(
+    pool: &PgPool,
+    mut builder: QueryBuilder<'_, Postgres>,
+    user: &str,
+    sort: SimpleSortMethod,
+    limit: i64,
+    cursor: &SoupCursor,
+) -> anyhow::Result<Vec<(String, String, DateTime<Utc>)>> {
+    let (cursor_ts, cursor_id) = cursor.clone().unzip();
+    let source_ids = user_source_ids(pool, user).await?;
+    let rows = builder
+        .build()
+        .bind(user)
+        .bind(sort.to_string())
+        .bind(limit)
+        .bind(cursor_ts)
+        .bind(cursor_id)
+        .bind(StatusOption::COMPLETED_UUID.to_string())
+        .bind(SystemPropertyKey::STATUS_UUID)
+        .bind(SystemPropertyKey::ASSIGNEES_UUID)
+        .bind(source_ids)
+        .persistent(false)
+        .fetch_all(pool)
+        .await?;
+    rows.iter()
+        .map(|row| {
+            Ok((
+                row.try_get("item_type")?,
+                row.try_get("id")?,
+                row.try_get("sort_ts")?,
+            ))
+        })
+        .collect()
+}
+
+async fn doc_ordered_ok(
+    pool: &PgPool,
+    user: &str,
+    sort: SimpleSortMethod,
+    limit: i64,
+    cursor: &SoupCursor,
+) -> anyhow::Result<bool> {
+    let strategy = ordered_document_strategy(&EntityFilterAst::mock_empty(), false, sort).unwrap();
+    let mut builder = QueryBuilder::<Postgres>::new(format!(
+        "{PREFIX}{} SELECT ok FROM doc_ordered_ok",
+        strategy.ctes.trim_end().trim_end_matches(',')
+    ));
+    let (cursor_ts, cursor_id) = cursor.clone().unzip();
+    let source_ids = user_source_ids(pool, user).await?;
+    let row = builder
+        .build()
+        .bind(user)
+        .bind(sort.to_string())
+        .bind(limit)
+        .bind(cursor_ts)
+        .bind(cursor_id)
+        .bind(StatusOption::COMPLETED_UUID.to_string())
+        .bind(SystemPropertyKey::STATUS_UUID)
+        .bind(SystemPropertyKey::ASSIGNEES_UUID)
+        .bind(source_ids)
+        .persistent(false)
+        .fetch_one(pool)
+        .await?;
+    Ok(row.try_get("ok")?)
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn ordered_documents_paginate_like_probe_all(pool: PgPool) -> anyhow::Result<()> {
+    sqlx::raw_sql(&ordered_documents_seed())
+        .execute(&pool)
+        .await?;
+    let filter = EntityFilterAst::mock_empty();
+    for (user, first_page_ordered, any_page_fallback) in [
+        (DENSE_USER, true, false),
+        (OLD_GRANTS_USER, false, true),
+        (SPARSE_USER, false, true),
+    ] {
+        for sort in ORDERED_SORTS {
+            for (limit, pages) in [(7_i64, 6), (50, 8)] {
+                let mut cursor: SoupCursor = None;
+                let mut ordered_by_page = Vec::new();
+                for _ in 0..pages {
+                    let ordered = soup_page(
+                        &pool,
+                        build_query(&filter, false, sort),
+                        user,
+                        sort,
+                        limit,
+                        &cursor,
+                    )
+                    .await?;
+                    let probe_all = soup_page(
+                        &pool,
+                        build_query_with(&filter, false, sort, false),
+                        user,
+                        sort,
+                        limit,
+                        &cursor,
+                    )
+                    .await?;
+                    assert_eq!(
+                        ordered, probe_all,
+                        "{user} {sort} limit={limit} cursor={cursor:?}"
+                    );
+                    ordered_by_page.push(doc_ordered_ok(&pool, user, sort, limit, &cursor).await?);
+                    let Some((_, id, sort_ts)) = ordered.last() else {
+                        break;
+                    };
+                    cursor = Some((*sort_ts, id.clone()));
+                }
+                let context = format!("{user} {sort} limit={limit} pages={ordered_by_page:?}");
+                assert_eq!(ordered_by_page[0], first_page_ordered, "{context}");
+                assert_eq!(
+                    ordered_by_page.contains(&false),
+                    any_page_fallback,
+                    "{context}"
+                );
             }
         }
     }

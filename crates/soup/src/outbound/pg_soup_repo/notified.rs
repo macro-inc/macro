@@ -39,11 +39,14 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
     build_notification_state_clause, build_properties_filter, calendar_event_filter_is_impossible,
     properties_filter_can_apply_to,
 };
+use crate::outbound::pg_soup_repo::source_ids::user_source_ids;
 use crate::outbound::pg_soup_repo::type_err;
 
 /// The candidate row's entity id, as the gates see it: the `notified` CTE's
 /// derived key (thread root for thread-scoped channel notifications).
 const ID_SQL: &str = "nc.entity_id";
+
+const SOURCE_IDS_SQL: &str = "$9";
 
 /// Folds a calendar filter into SQL over the `event` alias. Only the literals
 /// [`calendar_filter_supported_by_notified`] admits have a fold; anything
@@ -144,9 +147,6 @@ fn reminder_gate() -> String {
     )
 }
 
-/// Agent sessions are authorized through `entity_access`, whose sources are
-/// the same user / channel / team ids the query's `user_source_ids` CTE
-/// already collects - the predicate the agent-session leg's own queries use.
 fn agent_session_gate() -> String {
     uuid_guarded(
         ID_SQL,
@@ -155,7 +155,7 @@ fn agent_session_gate() -> String {
                 SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = {ID_SQL}::uuid
                 AND ea.entity_type = 'agent_session'
-                AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                AND ea.source_id = ANY({SOURCE_IDS_SQL})
             )"#
         ),
     )
@@ -247,10 +247,10 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
 fn build_query(filter: Option<&EntityFilterAst>) -> String {
     format!(
         include_str!("notified/query.sql"),
-        document_gate = document_gate(ID_SQL, filter),
-        chat_gate = chat_gate(ID_SQL, filter),
-        project_gate = project_gate(ID_SQL, filter),
-        initiative_gate = initiative_gate(ID_SQL, filter),
+        document_gate = document_gate(ID_SQL, SOURCE_IDS_SQL, filter),
+        chat_gate = chat_gate(ID_SQL, SOURCE_IDS_SQL, filter),
+        project_gate = project_gate(ID_SQL, SOURCE_IDS_SQL, filter),
+        initiative_gate = initiative_gate(ID_SQL, SOURCE_IDS_SQL, filter),
         channel_gate = channel_gate(ID_SQL, filter),
         channel_thread_gate = channel_thread_gate(ID_SQL, filter),
         email_gate = email_gate(ID_SQL, filter),
@@ -301,6 +301,7 @@ pub(super) async fn notified_soup_page(
         .iter()
         .map(|source| source.auth_entity.as_str())
         .collect();
+    let access_source_ids = user_source_ids(db, req.user_id.as_ref()).await?;
 
     sqlx::QueryBuilder::<sqlx::Postgres>::new(sql)
         .build()
@@ -312,6 +313,7 @@ pub(super) async fn notified_soup_page(
         .bind(req.limit as i64)
         .bind(&source_ids)
         .bind(&source_auth_entities)
+        .bind(access_source_ids)
         // Unnamed statement, same reasoning as the expanded dynamic query:
         // the SQL text varies per filter shape, so a cached prepared
         // statement is rarely reused but would flip to a generic plan.
