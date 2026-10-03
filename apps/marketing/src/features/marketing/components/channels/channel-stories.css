@@ -1,0 +1,33 @@
+.channel-demo-frame { position: relative; }
+.channel-demo-cursor { z-index: 9; transition: transform 600ms cubic-bezier(.2,.8,.2,1); }
+
+/* features/home: the list is a ViewSidebar with Signal/Noise tabs and date groups. */
+.chat-inbox-scene { outline: none; }
+.chat-inbox-list { display: flex; flex-direction: column; flex: 0 0 300px; width: 300px; min-width: 0; padding: 12px var(--sidebar-gutter); border-right: 1px solid var(--color-edge-muted); background: var(--color-panel); overflow: hidden; }
+.chat-inbox-header { display: flex; align-items: center; height: 32px; margin-bottom: 8px; padding: 0 4px; }
+.chat-inbox-group { padding: 6px 16px 6px 8px; font-size: 12px; font-weight: 600; letter-spacing: -0.01em; color: color-mix(in srgb, var(--color-ink-extra-muted) 80%, transparent); }
+.chat-inbox-group:not(:first-of-type) { padding-top: 20px; }
+.chat-inbox-row { animation: chat-inbox-in 240ms ease both; }
+.chat-inbox-time { display: none; flex-shrink: 0; font-size: 12px; color: var(--color-ink-extra-muted); }
+.chat-inbox-row:hover .chat-inbox-time { display: block; }
+.chat-inbox-preview { flex: 1; min-width: 0; }
+.chat-inbox-empty { margin: auto; color: var(--color-ink-muted); font-size: 13px; }
+@keyframes chat-inbox-in { from { opacity: 0; } }
+
+/* The email page's shortcut legend, reused for Home. */
+.chat-shortcut-dock { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px; padding: 8px 0 0; color: #a3a3a3; }
+.chat-shortcut-dock > button { display: flex; align-items: center; gap: 8px; padding: 6px; font: 400 12px/1.5 'Inter Variable', Inter, sans-serif; color: #a3a3a3; transition: color 160ms ease; }
+.chat-shortcut-dock > button:hover, .chat-shortcut-dock > button[data-active='true'] { color: #f0f0f0; }
+.chat-shortcut-dock kbd { display: grid; place-items: center; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 8px; background: linear-gradient(#242528, #191a1c); box-shadow: inset 0 1px #ffffff24, inset 0 0 0 1px #ffffff09, 0 3px 0 #080809; color: #b9bbc0; font: 400 12px Inter, sans-serif; transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.chat-shortcut-dock > button[data-active='true'] kbd { background: #d8e0da; color: #151916; box-shadow: inset 0 1px #ffffff66, 0 1px 0 #080809; }
+
+@media (max-width: 699px) {
+  .chat-inbox-list { flex-basis: 100%; width: 100%; border-right: 0; }
+  .chat-inbox-preview { display: none; }
+  .chat-shortcut-dock { gap: 4px; }
+  .chat-shortcut-dock > button { flex-direction: column; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-inbox-row { animation: none; }
+  .channel-demo-cursor, .chat-shortcut-dock > button, .chat-shortcut-dock kbd { transition: none; }
+}

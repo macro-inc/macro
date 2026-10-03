@@ -136,7 +136,11 @@
 .sample-thread-replies {margin-left:40px;position:relative}
 .sample-chat-log .sample-thread-replies .sample-message-row {margin-left:0;border:0;border-radius:6px;padding-left:8px;margin-top:8px}
 .sample-thread-replies .sample-message-row:before {content:'';position:absolute;left:-16px;top:0;width:16px;height:26px;border-left:1px solid var(--color-edge);border-bottom:1px solid var(--color-edge);border-bottom-left-radius:14px;z-index:-1}
-.sample-thread-expand {display:flex;align-items:center;gap:8px;margin:12px 0 0 48px;padding:4px 12px;border:1px solid var(--color-edge);border-radius:999px;color:var(--color-accent);font-size:12px}
+.sample-thread-expand {position:relative;display:inline-flex;align-items:center;gap:8px;margin:10px 0 0 8px;padding:4px 10px 4px 6px;border:1px solid var(--color-edge);border-radius:999px;font-size:12px;background:var(--color-surface-0)}
+.sample-thread-expand:before {content:'';position:absolute;left:-17px;top:-10px;width:16px;height:24px;border-left:1px solid var(--color-edge);border-bottom:1px solid var(--color-edge);border-bottom-left-radius:14px;z-index:-1}
+.sample-thread-avatars {display:flex}
+.sample-thread-avatars img {width:18px;height:18px;border-radius:50%;border:1.5px solid var(--color-surface-0);object-fit:cover}
+.sample-thread-avatars img + img {margin-left:-6px}
 .sample-thread-reply-button {display:flex;align-items:center;justify-content:center;margin:16px 0 0 8px;width:32px;height:32px;border:1px solid var(--color-edge);border-radius:50%;color:var(--color-ink-muted)}
 .sample-thread-editor {padding:12px 8px 0}
 .sample-email-thread .mail-thread-body {max-width:968px;padding:48px 24px}
