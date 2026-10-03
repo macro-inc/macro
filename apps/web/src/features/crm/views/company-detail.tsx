@@ -123,6 +123,17 @@ export function Company(props: {
               </Show>
             </Suspense>
           </Match>
+          <Match when={section() === 'support'}>
+            <Suspense>
+              <Show when={scope()}>
+                {(current) => (
+                  <Show when={context.RecordSupport} keyed>
+                    {(Support) => <Support scope={current()} />}
+                  </Show>
+                )}
+              </Show>
+            </Suspense>
+          </Match>
           <Match when={section() === 'calls'}>
             <RecordCallsSection scope={scope()} />
           </Match>

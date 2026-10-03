@@ -42,6 +42,7 @@ import {
   ReviewsRouteView,
 } from '@app/features/reviews-view/route-views';
 import { SettingsRouteView } from '@app/features/settings/route-views';
+import { SupportRouteView } from '@app/features/support/route-views';
 import { TasksDetailRouteView } from '@app/features/tasks-view/components/TasksDetailView';
 import {
   ProjectDetailRouteView,
@@ -141,6 +142,7 @@ import {
   settingsRoute,
   setupRoute,
   signupRoute,
+  supportRoute,
   taskDetailRoute,
   taskSlugRoute,
   tasksProjectsRoute,
@@ -324,6 +326,7 @@ export function AppRouterView() {
         <Route definition={callsRoute} component={CallsRouteView} />
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView} />
+        <Route definition={supportRoute} component={SupportRouteView} />
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />
         <Route definition={prDetailRoute} component={PrDetailRouteView} />

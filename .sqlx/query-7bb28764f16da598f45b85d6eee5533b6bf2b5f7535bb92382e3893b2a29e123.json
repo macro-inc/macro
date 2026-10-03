@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO support_rate_limits(bucket,window_at,requests) VALUES($1,now(),1) ON CONFLICT(bucket) DO UPDATE SET requests=CASE WHEN support_rate_limits.window_at < now()-interval '1 minute' THEN 1 ELSE support_rate_limits.requests+1 END,window_at=CASE WHEN support_rate_limits.window_at < now()-interval '1 minute' THEN now() ELSE support_rate_limits.window_at END RETURNING requests",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "requests",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7bb28764f16da598f45b85d6eee5533b6bf2b5f7535bb92382e3893b2a29e123"
+}

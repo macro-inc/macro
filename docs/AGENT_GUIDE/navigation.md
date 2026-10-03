@@ -715,3 +715,7 @@ with success or failure reported by toast.
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+
+## Support workspace
+
+Support is available at `/support`, from both sidebar implementations, and with `g u`. It opens as a composable split with its own navigation panel and main inbox. Share a ticket with `/support?ticket=<id>`; `companyId` and `contactId` scope the inbox to CRM records. See [Support](support.md) for ticket creation, linked Tasks, agent configuration, widget/email setup, and the fixture-based browser workflow.

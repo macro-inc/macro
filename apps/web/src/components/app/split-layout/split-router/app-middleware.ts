@@ -14,6 +14,7 @@ import { driveDocumentBlockType } from '@app/features/drive-view/primitives/driv
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
+import { supportSearch } from '@app/features/support/navigation';
 import {
   replacePaneSearchParams,
   routeParams,
@@ -177,6 +178,14 @@ function migrateLegacySearch({
     .with(CALENDAR_ROUTE_ID, () => ({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,
+    }))
+    .with('view-support', () => ({
+      namespace: supportSearch.namespace,
+      fields: [
+        ['ticket', 'ticket'],
+        ['companyId', 'companyId'],
+        ['contactId', 'contactId'],
+      ] as const,
     }))
     .with('call-detail', 'drive-call', () => ({
       namespace: 'call-detail',

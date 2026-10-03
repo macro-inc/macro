@@ -1,3 +1,5 @@
+export { supportRoute } from '@app/features/support/navigation';
+
 import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';

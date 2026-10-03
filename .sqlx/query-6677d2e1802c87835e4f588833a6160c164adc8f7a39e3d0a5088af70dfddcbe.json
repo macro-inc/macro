@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.team_id,t.id FROM support_visitor_sessions s JOIN support_tickets t ON t.id=s.ticket_id WHERE s.token_hash=$1 AND s.origin=$2 AND s.expires_at>now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6677d2e1802c87835e4f588833a6160c164adc8f7a39e3d0a5088af70dfddcbe"
+}

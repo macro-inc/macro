@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record FROM support_tickets WHERE id=$1 AND team_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "168ff099401186df1827270386cd0f383c8fcf937412e9e197651a4804b576ea"
+}

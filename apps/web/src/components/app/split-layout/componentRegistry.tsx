@@ -29,6 +29,7 @@ import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-n
 import { RemindersRouteView } from '@app/features/reminders/route-views';
 import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
 import { SettingsRouteView } from '@app/features/settings/route-views';
+import { SupportRouteView } from '@app/features/support/route-views';
 import { TasksRouteView } from '@app/features/tasks-view/route-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
@@ -270,6 +271,25 @@ registerComponent(
     ownsCollectionState: true,
     ...(isTouchDevice() ? {} : { splitPanelLayout: 'composable' as const }),
   })
+);
+registerComponent(
+  'support',
+  (params) => (
+    <SupportRouteView
+      initialTicket={
+        typeof params.initialTicket === 'string'
+          ? params.initialTicket
+          : undefined
+      }
+      companyId={
+        typeof params.companyId === 'string' ? params.companyId : undefined
+      }
+      contactId={
+        typeof params.contactId === 'string' ? params.contactId : undefined
+      }
+    />
+  ),
+  () => composableLayout()
 );
 registerComponent('folders', () => <FoldersRouteView />);
 registerComponent('search', () => <SearchRouteView />);

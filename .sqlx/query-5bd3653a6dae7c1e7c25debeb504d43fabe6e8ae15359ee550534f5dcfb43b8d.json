@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO support_agent_jobs(ticket_id,trigger_id,due_at) VALUES($1,$2,$3) ON CONFLICT(ticket_id) DO UPDATE SET trigger_id=EXCLUDED.trigger_id,due_at=EXCLUDED.due_at,lease_until=NULL,attempts=0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bd3653a6dae7c1e7c25debeb504d43fabe6e8ae15359ee550534f5dcfb43b8d"
+}

@@ -61,6 +61,21 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                 .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
                 .layer(CompressionLayer::new().gzip(true)),
         )
+        .merge({
+            let public =
+                support::inbound::router::public_router(state.support_state.service.clone()).layer(
+                    tower_http::cors::CorsLayer::new()
+                        .allow_origin(tower_http::cors::Any)
+                        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                        .allow_headers([
+                            axum::http::header::CONTENT_TYPE,
+                            axum::http::header::AUTHORIZATION,
+                        ]),
+                );
+            Router::new()
+                .nest("/support", public.clone())
+                .nest("/dss/support", public)
+        })
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(
@@ -305,6 +320,10 @@ fn api_router(state: ApiContext) -> Router {
                     state.sse_stream_state.clone(),
                 ),
             ),
+        )
+        .nest(
+            "/support",
+            support::inbound::router::router(state.support_state.clone()),
         )
         .nest(
             "/crm",

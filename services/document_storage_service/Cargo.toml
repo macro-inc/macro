@@ -27,6 +27,10 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+mention_utils = { path = "../../crates/mention_utils" }
+support = { path = "../../crates/support" }
+agent = { path = "../../crates/agent" }
+async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }

@@ -14,6 +14,7 @@ verified live against a local stack (`just run_local`).
 | [../CLAUDE_CLOUD_DEMO.md](../CLAUDE_CLOUD_DEMO.md) | Claude in Harness settings, encrypted saved connection, Open in Claude, and cloud-side transcript polling |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |
 | [tasks.md](tasks.md) | Task list and creation dialog |
+| [support.md](support.md) | Team Support inbox, independent tickets linked to Tasks, CRM history, agent controls, website widget, and email intake (fixture browser verification) |
 | [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
 | [reminders.md](reminders.md) | Creating and editing reminders, scheduling controls, and safe failure verification |
 | [surfaces.md](surfaces.md) | Every other surface: inbox, email, search, files, calendar, calls, customers, activity, settings |

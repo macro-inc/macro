@@ -758,6 +758,8 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub support_state:
+        support::inbound::router::SupportState<EntityAccessService, AuthorizationService>,
     pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record FROM support_settings WHERE widget_key=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "278d9fc12b51dc0557aeed2a0c93c0571451545d2e34805dda755b9d83820831"
+}

@@ -103,6 +103,7 @@ members = [
   "crates/soup_realtime",
   "crates/system_skills",
   "crates/task_dedup",
+  "crates/support",
   "crates/unfurl",
   "crates/user_api_key",
   "crates/webhook_signature",

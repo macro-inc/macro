@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.record FROM support_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE t.id=$1 AND t.team_id=$2 AND m.id=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cc6f518b24fbbb24032c27454b53e514ef1dc4d302a84f1d1a1dec0c583e6b92"
+}

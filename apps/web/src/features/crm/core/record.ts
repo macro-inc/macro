@@ -28,6 +28,7 @@ export const COMPANY_SECTIONS = [
   'emails',
   'files',
   'tasks',
+  'support',
   'calls',
 ] as const;
 export const CONTACT_SECTIONS = [
@@ -35,6 +36,7 @@ export const CONTACT_SECTIONS = [
   'emails',
   'files',
   'tasks',
+  'support',
   'calls',
 ] as const;
 
@@ -48,5 +50,6 @@ export const CRM_RECORD_SECTION_LABELS: Record<CrmRecordSection, string> = {
   emails: 'Emails',
   files: 'Files',
   tasks: 'Tasks',
+  support: 'Support',
   calls: 'Calls',
 };

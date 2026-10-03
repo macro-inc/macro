@@ -2,6 +2,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FilesIcon from '@phosphor/files.svg';
+import HeadsetIcon from '@phosphor/headset.svg';
 import PhoneIcon from '@phosphor/phone.svg';
 import SquaresFourIcon from '@phosphor/squares-four.svg';
 import UsersIcon from '@phosphor/users.svg';
@@ -20,6 +21,7 @@ const SECTION_ICONS: Record<
   emails: EnvelopeIcon,
   files: FilesIcon,
   tasks: CheckSquareIcon,
+  support: HeadsetIcon,
   calls: PhoneIcon,
 };
 
