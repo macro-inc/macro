@@ -122,6 +122,8 @@ pub(crate) struct App {
     pub(crate) logs: LogBuffer,
     pub(crate) daemon: Option<Daemon>,
     pub(crate) pending_browser: Option<BrowserTarget>,
+    /// The runner hands the terminal to native MCP setup before applying this agent.
+    pub(crate) pending_agent_setup: Option<DetectedAgent>,
     last_refresh: Option<Instant>,
     pub(crate) quit: bool,
 }
@@ -152,6 +154,7 @@ impl App {
             logs,
             daemon: None,
             pending_browser: None,
+            pending_agent_setup: None,
             last_refresh: None,
             quit: false,
         })
@@ -410,12 +413,13 @@ impl App {
         }
     }
 
-    /// Persist `agent` as the harness once its adapter is installed. A missing
-    /// adapter installs in the background so the panel keeps drawing, and
-    /// [`Self::poll_install`] applies the agent when that ends.
+    /// Install a missing adapter in the background, then ask the runner to
+    /// complete native MCP setup before persisting the selected harness.
     async fn select_agent(&mut self, agent: DetectedAgent) {
         let Some(install) = agent.pending_install().cloned() else {
-            return self.apply_agent(&agent).await;
+            self.mode = Mode::Normal;
+            self.pending_agent_setup = Some(agent);
+            return;
         };
         self.ok(format!("installing {}", install.package));
         self.mode = Mode::InstallingAgent {
@@ -424,7 +428,7 @@ impl App {
         };
     }
 
-    async fn apply_agent(&mut self, agent: &DetectedAgent) {
+    pub(super) async fn apply_agent(&mut self, agent: &DetectedAgent) {
         self.form.apply_agent(agent);
         self.save_config(ApplyConfig::Now).await;
     }
@@ -442,7 +446,7 @@ impl App {
             return;
         };
         match install.await {
-            Ok(Ok(())) => self.apply_agent(&agent).await,
+            Ok(Ok(())) => self.pending_agent_setup = Some(agent),
             Ok(Err(error)) => self.fail(error),
             Err(error) => self.fail(format!(
                 "installing {} was interrupted: {error}",
@@ -530,7 +534,7 @@ impl App {
             KeyCode::Enter => match agent_catalog::custom(buffer.value()) {
                 Ok(agent) => {
                     self.mode = Mode::Normal;
-                    self.apply_agent(&agent).await;
+                    self.select_agent(agent).await;
                 }
                 Err(error) => self.fail(error),
             },

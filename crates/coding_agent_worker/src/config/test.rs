@@ -137,3 +137,27 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
         "https://macro.com/app/settings/harness?pair=KX7M-4QHD",
     );
 }
+
+#[test]
+fn mcp_setup_uses_the_configured_deployment() {
+    let mut config: Config = toml::from_str(EXAMPLE).unwrap();
+    for (api, mcp) in [
+        (
+            "http://localhost:50009/agent-harness",
+            "http://localhost:50009/mcp",
+        ),
+        (
+            "https://gateway.macro.com/agent-harness/",
+            "https://gateway.macro.com/mcp",
+        ),
+        (
+            "https://dev-gateway.macro.com/agent-harness",
+            "https://dev-gateway.macro.com/mcp",
+        ),
+    ] {
+        config.macro_api.api_url = api.to_owned();
+        assert_eq!(config.macro_api.mcp_url().unwrap(), mcp);
+    }
+    config.macro_api.api_url = "https://custom.example/api".to_owned();
+    assert!(config.macro_api.mcp_url().is_err());
+}

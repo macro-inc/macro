@@ -3,6 +3,7 @@
 mod claude_code;
 mod codex;
 mod hermes;
+mod mcp;
 mod npm_adapter;
 mod open_claw;
 mod open_code;

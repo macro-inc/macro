@@ -300,7 +300,13 @@ the shimmer.
   list does not repeat the pairing action from **Bring your own agent**.
   **New runtime** shows three steps: install macrod from the linked release,
   run `./macrod` and configure your agent in Quickstart, then enter your pairing
-  code and click **Look up**. Review the request and click **Approve** to connect.
+  code and click **Look up**. Quickstart's **Set up and pair** installs any required
+  ACP adapter, configures Macro MCP for the selected harness, and runs its OAuth
+  sign-in before generating the pairing code. Complete terminal/browser prompts;
+  failed setup stays in Quickstart for retry. Custom ACP commands show manual MCP
+  setup instructions and require `ready` before continuing. Changing agents in
+  the terminal's **Config** tab also runs MCP setup before switching.
+  Review the pairing request and click **Approve** to connect.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,

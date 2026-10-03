@@ -88,6 +88,15 @@ pub struct MacroApi {
 }
 
 impl MacroApi {
+    /// MCP endpoint on the same gateway as the configured harness service.
+    pub fn mcp_url(&self) -> rootcause::Result<String> {
+        let base = self.api_url.trim_end_matches('/');
+        let Some(gateway) = base.strip_suffix("/agent-harness") else {
+            rootcause::bail!("Macro API URL must end in /agent-harness to locate the MCP endpoint");
+        };
+        Ok(format!("{gateway}/mcp"))
+    }
+
     /// The dial-in URL for this deployment's runtime gateway:
     /// the API base with a websocket scheme.
     pub fn gateway_url(&self) -> String {

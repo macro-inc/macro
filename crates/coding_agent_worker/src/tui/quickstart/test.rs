@@ -206,7 +206,7 @@ fn quickstart_renders_permission_consent_and_warning() {
             "[ ] Off (always prompt)"
         }));
         assert_eq!(screen.contains("without approval"), allowed);
-        assert!(screen.contains("Create and pair"));
+        assert!(screen.contains("Set up and pair"));
         let rows = terminal
             .backend()
             .buffer()

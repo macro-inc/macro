@@ -27,7 +27,7 @@ pub mod models;
 #[cfg(feature = "ports")]
 /// Port traits for channel messages.
 pub mod ports;
-#[cfg(feature = "ports")]
+#[cfg(all(feature = "ports", any(feature = "outbound", test)))]
 /// Authorization and grants for entities referenced by channel messages.
 pub mod reference_sharing;
 #[cfg(feature = "ports")]

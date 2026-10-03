@@ -4,6 +4,17 @@ mod test;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tui_input::{Input, InputRequest};
 
+/// Read without a persistent stdin reader, so setup commands can temporarily
+/// own the terminal. This future is safe to cancel between dashboard ticks.
+pub(crate) async fn read_event() -> std::io::Result<crossterm::event::Event> {
+    loop {
+        if crossterm::event::poll(std::time::Duration::ZERO)? {
+            return crossterm::event::read();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+}
+
 pub(crate) fn handle_text_input(input: &mut Input, key: KeyEvent) {
     let request = match (key.code, key.modifiers) {
         (KeyCode::Backspace, KeyModifiers::NONE) => Some(InputRequest::DeletePrevChar),

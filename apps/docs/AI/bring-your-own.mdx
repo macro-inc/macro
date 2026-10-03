@@ -54,10 +54,12 @@ You need a macOS or Linux computer that can stay online and an installed, authen
       ![The macrod Quickstart configuration screen showing discovered agents, workspace, access, Full Access off, and the Create and pair button](/images/macrod-quickstart-example.png)
     </Frame>
 
-    Select **Create and pair** to generate your device code.
+    Select **Set up and pair**. `macrod` installs any required ACP adapter, configures the Macro MCP server for your selected agent, and starts its browser sign-in flow. Complete the prompts in your terminal and browser. Your agent stores the MCP credentials; `macrod` generates the pairing code after setup succeeds.
+
+    If setup fails, check the terminal output, update your agent's CLI if needed, and retry. Selecting a different agent in the **Config** tab also runs MCP setup before switching. For **Custom command**, configure and authenticate Macro MCP in your agent using the endpoint printed in the terminal, then type `ready` to continue.
 
     <Note>
-      Claude Code and Codex use ACP adapters. Their presets require the agent's command, `npm`, and `npx` to be available in the shell where you start `macrod`.
+      Claude Code and Codex use ACP adapters. Their presets require the agent's command and `npm` to be available in the shell where you start `macrod`. Automatic MCP setup requires a current version of the selected agent's CLI, including `hermes` when using `hermes-acp`.
     </Note>
   </Step>
 

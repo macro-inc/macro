@@ -6,6 +6,7 @@ use rootcause::prelude::ResultExt as _;
 
 use super::app::{App, Mode};
 use super::config_form::ConfigForm;
+use super::input::read_event;
 use super::logging::LogBuffer;
 use super::platform::open_pending_browser;
 use super::quickstart::{Quickstart, QuickstartAction};
@@ -20,17 +21,6 @@ const TICK: Duration = Duration::from_millis(120);
 
 /// Run the control panel - and the daemon inside it - until the user quits.
 pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
-    let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel();
-    // A dedicated thread owns the blocking crossterm read; the loop below
-    // stays async and free to poll the network.
-    std::thread::spawn(move || {
-        while let Ok(event) = crossterm::event::read() {
-            if input_tx.send(event).is_err() {
-                return;
-            }
-        }
-    });
-
     let mut terminal = ratatui::init();
     let existing_config = match Config::load(config_path) {
         Ok(config) => Some(config),
@@ -50,14 +40,7 @@ pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
     let quickstarted = if !needs_quickstart {
         false
     } else {
-        match run_quickstart(
-            &mut terminal,
-            config_path,
-            existing_config.as_ref(),
-            &mut input_rx,
-        )
-        .await
-        {
+        match run_quickstart(&mut terminal, config_path, existing_config.as_ref()).await {
             Ok(created) => created,
             Err(error) => {
                 ratatui::restore();
@@ -80,7 +63,7 @@ pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
             return Err(error);
         }
     };
-    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx, quickstarted).await;
+    let outcome = run_loop(&mut terminal, &mut app, quickstarted).await;
     ratatui::restore();
     outcome
 }
@@ -89,7 +72,6 @@ async fn run_quickstart(
     terminal: &mut ratatui::DefaultTerminal,
     config_path: &Path,
     existing_config: Option<&Config>,
-    input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
 ) -> rootcause::Result<bool> {
     let mut quickstart = match existing_config {
         Some(config) => Quickstart::from_config(config),
@@ -99,9 +81,9 @@ async fn run_quickstart(
         terminal
             .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
             .context("failed to draw Quickstart")?;
-        let Some(event) = input.recv().await else {
-            return Ok(false);
-        };
+        let event = read_event()
+            .await
+            .context("failed to read terminal input")?;
         let TermEvent::Key(key) = event else {
             continue;
         };
@@ -157,7 +139,11 @@ async fn run_quickstart(
                 };
                 match saved {
                     Ok(()) => {
-                        return Ok(true);
+                        let config = Config::load(config_path)?;
+                        match setup_mcp(terminal, &agent, &config).await {
+                            Ok(()) => return Ok(true),
+                            Err(error) => quickstart.status = Some((format!("{error}"), true)),
+                        }
                     }
                     Err(error) => quickstart.status = Some((format!("{error}"), true)),
                 }
@@ -176,7 +162,6 @@ fn config_is_working(config: &Config) -> bool {
 async fn run_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
-    input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
 ) -> rootcause::Result<()> {
     let mut tick = tokio::time::interval(TICK);
@@ -196,11 +181,9 @@ async fn run_loop(
             .context("failed to draw the terminal UI")?;
 
         tokio::select! {
-            event = input.recv() => {
-                match event {
-                    Some(TermEvent::Key(key)) => app.on_key(key).await,
-                    Some(_) => {}
-                    None => return Ok(()),
+            event = read_event() => {
+                if let TermEvent::Key(key) = event.context("failed to read terminal input")? {
+                    app.on_key(key).await;
                 }
                 apply_pending_browser(app);
             }
@@ -218,7 +201,54 @@ async fn run_loop(
             app.stop_daemon().await;
             return Ok(());
         }
+        if let Some(agent) = app.pending_agent_setup.take() {
+            match setup_mcp(terminal, &agent, &app.config).await {
+                Ok(()) => app.apply_agent(&agent).await,
+                Err(error) => app.fail(format!("{error}")),
+            }
+        }
     }
+}
+
+async fn setup_mcp(
+    terminal: &mut ratatui::DefaultTerminal,
+    agent: &super::agent_catalog::DetectedAgent,
+    config: &Config,
+) -> rootcause::Result<()> {
+    let url = config.macro_api.mcp_url()?;
+    let plan = agent.mcp_setup(&url);
+    ratatui::restore();
+    eprintln!(
+        "\nSet up Macro MCP for {}. Complete the browser sign-in when prompted.",
+        agent.name
+    );
+    let result = match plan {
+        Some(plan) => {
+            plan.run(&crate::outbound::harness_setup::NativeSetup {
+                cwd: &config.workspace.path,
+            })
+            .await
+        }
+        None => {
+            eprintln!(
+                "Custom ACP commands have no standard MCP installer. Configure a remote HTTP server named macro at {url} in your harness and authenticate it."
+            );
+            eprintln!("Type ready once that is complete, or press Enter to return to setup:");
+            let mut answer = String::new();
+            match std::io::stdin().read_line(&mut answer) {
+                Ok(_) if answer.trim() == "ready" => Ok(()),
+                Ok(_) => Err(rootcause::report!("Custom harness MCP setup is incomplete")),
+                Err(error) => Err(error.into()),
+            }
+        }
+    };
+    if let Err(error) = &result {
+        eprintln!("\n{error}\nPress Enter to return to setup.");
+        let mut answer = String::new();
+        let _ = std::io::stdin().read_line(&mut answer);
+    }
+    *terminal = ratatui::init();
+    result
 }
 
 fn apply_pending_browser(app: &mut App) {

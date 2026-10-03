@@ -66,7 +66,10 @@ pub(crate) fn render_quickstart(
             Span::raw("  "),
             Span::styled("Welcome to macrod.", Style::new().bold()),
         ]),
-        Line::styled("Let's get your harness connected.", Style::new().fg(DIM)),
+        Line::styled(
+            "Set up Macro MCP, sign in, then pair your harness.",
+            Style::new().fg(DIM),
+        ),
     ];
     if let Some((message, is_error)) = &setup.status {
         intro_lines.push(Line::styled(
@@ -167,7 +170,7 @@ pub(crate) fn render_quickstart(
         ..submit_area
     };
     frame.render_widget(
-        Paragraph::new("Create and pair")
+        Paragraph::new("Set up and pair")
             .style(button_style)
             .alignment(Alignment::Center)
             .block(
