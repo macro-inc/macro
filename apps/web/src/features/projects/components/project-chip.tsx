@@ -1,6 +1,20 @@
 import StackIcon from '@phosphor/stack.svg';
+import { Badge, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import type { TaskProjectReference } from '../core/project';
+
+/** Read-only chip naming the project a composer adds the new task to. */
+export function ProjectComposerChip(props: { name: string }) {
+  return (
+    <Tooltip label={`Project: ${props.name}`} class="min-w-0">
+      <Badge variant="outline" size="sm" class="max-w-48">
+        <StackIcon class="size-3" aria-hidden="true" />
+        <span class="sr-only">Project:</span>
+        <span class="min-w-0 truncate">{props.name}</span>
+      </Badge>
+    </Tooltip>
+  );
+}
 
 export function ProjectChip(props: {
   reference?: TaskProjectReference;

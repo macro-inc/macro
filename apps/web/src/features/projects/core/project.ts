@@ -35,6 +35,10 @@ export type TaskProjectReference =
   | { state: 'unavailable' }
   | { state: 'visible'; id: string; name: string };
 
+/** A project's name as shown to people, which may be blank on the server. */
+export const projectDisplayName = (project: Pick<Project, 'name'>) =>
+  project.name || 'Untitled project';
+
 export const canEditProject = (project: Pick<Project, 'access'>) =>
   project.access === 'edit' || project.access === 'owner';
 

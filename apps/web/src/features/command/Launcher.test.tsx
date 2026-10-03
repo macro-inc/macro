@@ -8,6 +8,11 @@ const host = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
   createFolder: vi.fn(),
   projectFlag: (): boolean | undefined => true,
+  activeSplitId: undefined as string | undefined,
+}));
+
+vi.mock('@app/signal/splitLayout', () => ({
+  globalSplitManager: () => ({ activeSplitId: () => host.activeSplitId }),
 }));
 
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -63,6 +68,11 @@ vi.mock('@ui', () => ({}));
 vi.mock('@ui/components/Hotkey', () => ({}));
 vi.mock('./mobile/MobileCreateSheet', () => ({}));
 
+import type { SplitId } from '@components/app/split-layout/layoutManager';
+import {
+  type DestinationTaskComposer,
+  registerCreateDestination,
+} from './create-destination';
 import {
   CREATABLE_BLOCKS,
   createMenuOpen,
@@ -71,14 +81,37 @@ import {
   useCreateMenuBlocks,
 } from './Launcher';
 
+let unregisterDestination: (() => void) | undefined;
 beforeEach(() => {
   host.projectFlag = () => true;
+  host.activeSplitId = undefined;
 });
 afterEach(() => {
   cleanup();
+  unregisterDestination?.();
+  unregisterDestination = undefined;
   setCreateMenuOpen(false, false);
   vi.clearAllMocks();
 });
+
+/** A project open in `project-split`, as its detail view registers it. */
+function openProject(): DestinationTaskComposer {
+  const taskComposer: DestinationTaskComposer = {
+    createTask: vi.fn(async () => null),
+    leadingChip: () => null,
+  };
+  unregisterDestination = registerCreateDestination(
+    'project-split' as SplitId,
+    () => ({ label: 'Launch', taskComposer })
+  );
+  return taskComposer;
+}
+
+function creatable(label: string) {
+  const item = CREATABLE_BLOCKS.find((block) => block.label === label);
+  if (!item) throw new Error(`Missing ${label} entry`);
+  return item;
+}
 
 it.each([false, undefined])(
   'blocks Project shortcuts and imperative creation while the flag is %s',
@@ -166,4 +199,71 @@ it('keeps the existing Folder action separate from Project creation', async () =
     parentId: undefined,
   });
   expect(host.popoverSplit).not.toHaveBeenCalled();
+});
+
+it('creates the task in the project open in the active split', () => {
+  const taskComposer = openProject();
+  host.activeSplitId = 'project-split';
+
+  setCreateMenuOpen(true);
+  host.popoverSplit.mockImplementationOnce(() => {
+    // Transfer focus ownership before the launcher closes.
+    expect(createMenuOpen()).toBe(true);
+  });
+  creatable('Task').keyDownHandler();
+
+  expect(host.popoverSplit).toHaveBeenCalledExactlyOnceWith({
+    type: 'component',
+    id: 'task-compose',
+    params: taskComposer,
+  });
+  expect(createMenuOpen()).toBe(false);
+});
+
+it('names the open project beside Task, and only there', () => {
+  openProject();
+  host.activeSplitId = 'project-split';
+  expect(creatable('Task').destinationHint?.()).toBe('In Launch');
+  expect(
+    CREATABLE_BLOCKS.filter((block) => block.destinationHint).map(
+      (block) => block.label
+    )
+  ).toEqual(['Task']);
+
+  host.activeSplitId = 'other-split';
+  expect(creatable('Task').destinationHint?.()).toBeUndefined();
+});
+
+it('opens the plain task composer when the active split is not a project', () => {
+  openProject();
+  host.activeSplitId = 'other-split';
+
+  creatable('Task').keyDownHandler();
+  runCreateAction('task');
+
+  expect(host.popoverSplit.mock.calls).toEqual([
+    [{ type: 'component', id: 'task-compose', params: undefined }],
+    [{ type: 'component', id: 'task-compose', params: undefined }],
+  ]);
+});
+
+it('leaves every other entry unscoped inside a project', async () => {
+  openProject();
+  host.activeSplitId = 'project-split';
+
+  creatable('Project').keyDownHandler();
+  expect(host.popoverSplit).toHaveBeenCalledExactlyOnceWith({
+    type: 'component',
+    id: 'project-compose',
+    params: undefined,
+  });
+
+  host.createFolder.mockResolvedValueOnce('folder-id');
+  creatable('Folder').keyDownHandler();
+  await vi.waitFor(() => expect(host.openWithSplit).toHaveBeenCalledOnce());
+  expect(host.createFolder).toHaveBeenCalledExactlyOnceWith({
+    name: 'New Folder',
+    source: 'create_menu',
+    parentId: undefined,
+  });
 });

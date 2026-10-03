@@ -1,12 +1,15 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import {
+  type DestinationTaskComposer,
+  registerCreateDestination,
+} from '@app/features/command/create-destination';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
   projectTaskRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
-import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
@@ -17,7 +20,8 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StackIcon from '@phosphor/stack.svg';
 import { Button } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, onCleanup, Show, Switch } from 'solid-js';
+import { ProjectComposerChip } from './components/project-chip';
 import {
   type ProjectsContext,
   useProjectsContext,
@@ -27,8 +31,10 @@ import {
   canEditProject,
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
+  projectDisplayName,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import { createProjectDestination } from './primitives/project-destination';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
@@ -100,6 +106,50 @@ function ProjectShareTrigger(props: {
   );
 }
 
+type CreateProjectTask = ReturnType<
+  ProjectsContext['createCommands']
+>['createTask'];
+
+/** Task composer props that add the new task to the project and say so. */
+function projectTaskComposer(
+  project: ProjectDetailData,
+  createTask: CreateProjectTask
+): DestinationTaskComposer {
+  const name = projectDisplayName(project);
+  return {
+    createTask: (...args) => createTask(project.id, ...args),
+    leadingChip: () => <ProjectComposerChip name={name} />,
+  };
+}
+
+function ProjectCreateDestinationHost(props: { projectId: string }) {
+  const context = useProjectsContext();
+  const source = context.createProjectSource(() => props.projectId);
+  const { createTask } = context.createCommands();
+  const panel = useSplitPanelOrThrow();
+  onCleanup(
+    registerCreateDestination(
+      panel.handle.id,
+      createProjectDestination(source.project, (project) =>
+        projectTaskComposer(project, createTask)
+      )
+    )
+  );
+  return null;
+}
+
+/**
+ * Scopes the create menu's Task (`c` then `t`) to this project for as long as
+ * its route is open in the split, including a task opened from the project.
+ */
+export function ProjectCreateDestination(props: { projectId: string }) {
+  return (
+    <Projects>
+      <ProjectCreateDestinationHost projectId={props.projectId} />
+    </Projects>
+  );
+}
+
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
@@ -113,15 +163,17 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       params: { projectId: props.route.id, section },
     });
   const createTask = () => {
-    const projectId = props.route.id;
+    const project = source.project();
+    if (!project) return;
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
-        createTask: (
-          ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
-        ) => commands.createTask(projectId, ...args),
-        onSuccess: () => section('tasks'),
+        ...projectTaskComposer(project, commands.createTask),
+        // The new row appears in the list this button sits above, so skip the
+        // toast. Success lands after the composer has closed, so it must not
+        // navigate either: the user may have moved on.
+        onSuccess: () => {},
       },
     });
   };

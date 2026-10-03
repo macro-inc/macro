@@ -3,6 +3,7 @@ import CloseIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { createUniqueId, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { createMenuHint } from '../create-destination';
 import type { CreatableBlock } from '../types';
 
 /** Touch presentation of the launcher; creation and feature gates belong to the host. */
@@ -46,10 +47,12 @@ export function MobileCreateSheet(props: {
                     </span>
                     <span class="min-w-0 flex-1 text-base font-medium">
                       {item.label}
-                      <Show when={item.launcherHint}>
-                        <span class="mt-0.5 block text-sm font-normal leading-5 text-ink-muted">
-                          {item.launcherHint}
-                        </span>
+                      <Show when={createMenuHint(item)}>
+                        {(text) => (
+                          <span class="mt-0.5 block text-sm font-normal leading-5 text-ink-muted">
+                            {text()}
+                          </span>
+                        )}
                       </Show>
                     </span>
                   </MobileDrawer.Item>

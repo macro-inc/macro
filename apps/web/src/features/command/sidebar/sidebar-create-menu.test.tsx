@@ -13,6 +13,8 @@ import { SidebarCreateMenu } from './sidebar-create-menu';
 
 const host = vi.hoisted(() => ({
   createProject: vi.fn(),
+  createTask: vi.fn(),
+  taskDestination: (): string | undefined => undefined,
   registerInterceptor:
     vi.fn<(callback: (context: HotkeyInterceptorContext) => boolean) => void>(),
 }));
@@ -24,11 +26,21 @@ vi.mock('@app/features/command/Launcher', () => ({
   useCreateMenuBlocks: () => () => [
     {
       label: 'Project',
+      launcherHint: 'Plan work together',
       blockName: 'initiative',
       icon: () => null,
       hotkey: 'p',
       hotkeyToken: TOKENS.create.initiative,
       keyDownHandler: host.createProject,
+    },
+    {
+      label: 'Task',
+      blockName: 'task',
+      icon: () => null,
+      hotkey: 't',
+      hotkeyToken: TOKENS.create.task,
+      destinationHint: () => host.taskDestination(),
+      keyDownHandler: host.createTask,
     },
   ],
 }));
@@ -70,6 +82,7 @@ afterEach(() => {
   cleanup();
   menuStyles.remove();
   vi.unstubAllGlobals();
+  host.taskDestination = () => undefined;
 });
 
 async function openMenu() {
@@ -119,4 +132,19 @@ it('restores the trigger on dismissal without creating anything', async () => {
   await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(trigger));
   expect(host.createProject).not.toHaveBeenCalled();
+});
+
+it('says where an entry creates, without launcher descriptions', async () => {
+  host.taskDestination = () => 'In Launch';
+  const { item } = await openMenu();
+  const task = screen.getByRole('menuitem', { name: /Task/ });
+  expect(task.textContent).toContain('In Launch');
+  expect(item.textContent).toBe('Project');
+
+  host.taskDestination = () => undefined;
+  cleanup();
+  await openMenu();
+  expect(screen.getByRole('menuitem', { name: /Task/ }).textContent).toBe(
+    'Task'
+  );
 });

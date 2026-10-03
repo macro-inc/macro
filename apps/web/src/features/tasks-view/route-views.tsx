@@ -1,5 +1,6 @@
 import {
   ProjectBreadcrumb,
+  ProjectCreateDestination,
   ProjectDetail,
 } from '@app/features/projects/project-detail';
 import { Projects } from '@app/features/projects/projects';
@@ -132,6 +133,8 @@ export function ProjectDetailRouteView() {
         }}
         order={1}
       />
+      {/* Here rather than in ProjectDetail so an open project task keeps it. */}
+      <ProjectCreateDestination projectId={params.projectId} />
       <SplitRouter.Outlet
         fallback={() => (
           <SidePanel.Root floating defaultOpen={false}>

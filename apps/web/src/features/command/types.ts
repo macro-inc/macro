@@ -26,6 +26,13 @@ export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
    * shown in one and hidden in the other. Absent means always available.
    */
   enabled?: () => boolean;
+  /**
+   * Where the entry creates when that depends on the active split, e.g.
+   * "In Launch" for Task inside a project. Read reactively; the menus show it
+   * in place of `launcherHint`. It describes `keyDownHandler`, so an entry
+   * that replaces the handler must drop it.
+   */
+  destinationHint?: () => string | undefined;
 };
 
 export type CategoryFilter =

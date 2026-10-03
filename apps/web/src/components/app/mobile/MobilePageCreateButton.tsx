@@ -44,7 +44,9 @@ export function MobilePageCreateButton() {
 
   const actionForView = (
     view: MobileNavViewId | undefined
-  ): Pick<MobileCreateMenuItem, 'label' | 'onSelect'> | undefined => {
+  ):
+    | (Pick<MobileCreateMenuItem, 'label' | 'onSelect'> & { hint?: string })
+    | undefined => {
     if (view === 'companies') {
       return { label: 'Company', onSelect: openCreateCompanyModal };
     }
@@ -54,7 +56,14 @@ export function MobilePageCreateButton() {
         : undefined;
     }
     const block = mobilePageCreateBlock(view, createBlocks());
-    return block && { label: block.label, onSelect: block.keyDownHandler };
+    return (
+      block && {
+        label: block.label,
+        // E.g. Task inside a project, which creates the task in it.
+        hint: block.destinationHint?.(),
+        onSelect: block.keyDownHandler,
+      }
+    );
   };
 
   const quickActions = (): MobileCreateMenuItem[] => [
@@ -114,7 +123,9 @@ export function MobilePageCreateButton() {
                   aria-label={
                     action().label === 'New'
                       ? 'New'
-                      : `New ${action().label.toLowerCase()}`
+                      : [`New ${action().label.toLowerCase()}`, action().hint]
+                          .filter(Boolean)
+                          .join(', ')
                   }
                   onPointerDown={() => hapticImpact('light')}
                   onClick={() => action().onSelect()}
@@ -122,6 +133,13 @@ export function MobilePageCreateButton() {
                 >
                   <CreateIcon class="size-5.5 shrink-0" />
                   <span>{action().label}</span>
+                  <Show when={action().hint}>
+                    {(hint) => (
+                      <span class="max-w-28 truncate text-sm font-normal text-ink-muted">
+                        {hint()}
+                      </span>
+                    )}
+                  </Show>
                 </button>
               </MobileDockIsland>
             }

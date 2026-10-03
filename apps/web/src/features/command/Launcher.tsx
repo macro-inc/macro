@@ -79,6 +79,11 @@ import {
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { createCallCommand } from './create-call-command';
+import {
+  activeCreateDestination,
+  createMenuHint,
+  type DestinationTaskComposer,
+} from './create-destination';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName } from './types';
 
@@ -261,7 +266,13 @@ const createComponent = async (spec: {
 
 export function runCreateAction(
   blockName: CreatableName,
-  options: { shouldInsert?: boolean; source?: string; projectId?: string } = {}
+  options: {
+    shouldInsert?: boolean;
+    source?: string;
+    projectId?: string;
+    /** Task composer props, e.g. those of the active create destination. */
+    taskComposer?: DestinationTaskComposer;
+  } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
   // Creation analytics fire at the data-layer chokepoints (create.ts /
@@ -330,6 +341,7 @@ export function runCreateAction(
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
+        params: options.taskComposer,
       });
       return;
     case 'initiative':
@@ -624,8 +636,16 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.task,
     altHotkeyToken: TOKENS.create.taskNewSplit,
     hotkey: 't' as const,
+    // Inside a project the task lands in that project, as with its own
+    // New task button.
+    destinationHint: () => {
+      const destination = activeCreateDestination();
+      return destination && `In ${destination.label}`;
+    },
     keyDownHandler: () => {
-      runCreateAction('task');
+      runCreateAction('task', {
+        taskComposer: activeCreateDestination()?.taskComposer,
+      });
       return true;
     },
   },
@@ -849,7 +869,7 @@ type LauncherMenuItemProps = {
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   const selectedIconColor = () =>
     getIconConfig(props.creatableBlock.blockName).foreground;
-  const launcherHint = () => props.creatableBlock.launcherHint;
+  const launcherHint = () => createMenuHint(props.creatableBlock);
 
   return (
     <>

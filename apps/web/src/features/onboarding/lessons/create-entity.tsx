@@ -157,6 +157,8 @@ function CreateEntityDemo(props: LessonContentProps) {
     (block) => block.blockName !== 'initiative'
   ).map((block) => ({
     ...block,
+    // Sandbox entries make mock entities, never into the open split's project.
+    destinationHint: undefined,
     keyDownHandler: () => {
       const sandboxType = BLOCK_TO_SANDBOX[block.blockName];
       if (sandboxType) {

@@ -98,6 +98,33 @@ describe('mobile create availability', () => {
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
+  it('says where the Tasks page button creates, e.g. inside a project', async () => {
+    const { setBlocks } = setup('tasks');
+    const createTask = vi.fn(() => true);
+    const [destination, setDestination] = createSignal<string>();
+    setBlocks([
+      {
+        label: 'Task',
+        description: 'Create task',
+        blockName: 'task',
+        hotkeyToken: TOKENS.create.task,
+        hotkey: 't',
+        icon: () => <svg />,
+        destinationHint: destination,
+        keyDownHandler: createTask,
+      },
+    ]);
+    expect(screen.getByRole('button', { name: 'New task' }).textContent).toBe(
+      'Task'
+    );
+
+    setDestination('In Launch');
+    const button = screen.getByRole('button', { name: 'New task, In Launch' });
+    expect(button.textContent).toBe('TaskIn Launch');
+    fireEvent.click(button);
+    await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
+  });
+
   it('uses a Calendar New menu when enabled and keeps the default fallback', async () => {
     const { setCalendar, setBlocks } = setup('calendar');
     fireEvent.click(screen.getByRole('button', { name: 'New' }));

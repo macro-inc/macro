@@ -59,6 +59,7 @@ import {
   createEffect,
   createSignal,
   For,
+  type JSX,
   on,
   onCleanup,
   onMount,
@@ -336,6 +337,11 @@ export type ComposeTaskSuccess = {
 export interface ComposeTaskProps {
   /** Replaces how the task is created, e.g. to also add it to a project. */
   createTask?: typeof createTaskWithProperties;
+  /**
+   * Rendered first in the property row, e.g. a chip naming the project
+   * `createTask` adds the task to, so it is visible before submitting.
+   */
+  leadingChip?: () => JSX.Element;
   onCreateTask?: (title: string, content: string) => void;
   onClose?: () => void;
   initialTitle?: string;
@@ -564,7 +570,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     popoverSplit({
       type: 'component',
       id: 'task-compose',
-      params: { createTask: props.createTask },
+      params: { createTask: props.createTask, leadingChip: props.leadingChip },
     });
 
   const handleCreateTask = async () => {
@@ -980,6 +986,7 @@ export function ComposeTask(props: ComposeTaskProps) {
                 }
               }}
             >
+              {props.leadingChip?.()}
               <For each={properties()}>
                 {(property) => (
                   <InlinePropertyValue

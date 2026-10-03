@@ -127,6 +127,8 @@ filter sheets. Desktop uses the centered composer dialog.
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
    a `Create More` switch, and `Create Task Ctrl ↵`.
+   A composer that adds the task to a project starts its property row with a
+   read-only chip naming that project (see Projects below).
    The `Shared with Team` row defaults to on and remembers your choice in local
    storage across composer openings and page reloads. Its hint explains whether
    the task will be visible to your whole team or only to you and the people you
@@ -271,6 +273,20 @@ Inside an open task, use the Project pill below the title, the Project row in
 the Properties side panel, or `Add to project…` in the title's actions menu.
 The property shows `No project` until assigned and stays read-only without edit
 access. Choose `No project` in the assignment dialog to remove the association.
+
+The global create menu is scoped to an open project the way Cmd/Ctrl+K is scoped
+to the focused split. While a project is the active split — its Overview, its
+Tasks tab, or a task opened from its list — press `c` (with focus outside any
+editor or input; press Escape first inside a task), then `t`. Choosing `Task` in
+the Create menu, the sidebar `Create` dropdown, or the mobile `+ Task` button
+works the same way. Each shows `In <project name>` beside Task, and the composer's
+property row starts with a read-only chip naming the project (`Untitled project`
+for a blank name). Submitting adds the task to the project and shows the usual
+`Task created` toast; the split stays where it is, and on the Tasks tab the new
+row appears in the list. The project's own `New task` button uses the same
+composer without the toast. Every other create entry (Document, Project, Folder,
+and so on) behaves as it does elsewhere. Outside a project, or for viewers without
+edit access to it, `c` then `t` opens the regular composer with no project chip.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion
