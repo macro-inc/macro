@@ -44,7 +44,12 @@ enum Command {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let ok = match cli.command {
-        Command::Render { file, out, width, slides } => {
+        Command::Render {
+            file,
+            out,
+            width,
+            slides,
+        } => {
             let mut p = Presentation::open(std::fs::read(&file)?)?;
             std::fs::create_dir_all(&out)?;
             let fonts = FontDb::global();

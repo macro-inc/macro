@@ -19,7 +19,10 @@ fn png_round_trip() {
     let back = decode_raster(&png).unwrap();
     assert_eq!((back.width, back.height), (3, 2));
     assert_eq!(&back.pixels[0..4], &[255, 0, 0, 255]);
-    assert!((i32::from(back.pixels[5]) - 64).abs() <= 1 && back.pixels[7] == 128, "premultiplied round trip");
+    assert!(
+        (i32::from(back.pixels[5]) - 64).abs() <= 1 && back.pixels[7] == 128,
+        "premultiplied round trip"
+    );
 }
 
 #[test]
@@ -44,14 +47,35 @@ fn decodes_24bit_bmp() {
 
 #[test]
 fn effects_and_border() {
-    let mut r = Raster { width: 1, height: 1, pixels: vec![255, 255, 255, 255] };
-    apply_effects(&mut r, &[BlipEffect::ClrChange { from: Rgba::WHITE, to: Rgba::TRANSPARENT }]);
+    let mut r = Raster {
+        width: 1,
+        height: 1,
+        pixels: vec![255, 255, 255, 255],
+    };
+    apply_effects(
+        &mut r,
+        &[BlipEffect::ClrChange {
+            from: Rgba::WHITE,
+            to: Rgba::TRANSPARENT,
+        }],
+    );
     assert_eq!(r.pixels[3], 0, "white made transparent");
-    let mut g = Raster { width: 1, height: 1, pixels: vec![255, 0, 0, 255] };
-    apply_effects(&mut g, &[BlipEffect::Grayscale, BlipEffect::AlphaModFix(0.5)]);
+    let mut g = Raster {
+        width: 1,
+        height: 1,
+        pixels: vec![255, 0, 0, 255],
+    };
+    apply_effects(
+        &mut g,
+        &[BlipEffect::Grayscale, BlipEffect::AlphaModFix(0.5)],
+    );
     assert_eq!(g.pixels[0], g.pixels[1]);
     assert!((i32::from(g.pixels[3]) - 128).abs() <= 1);
-    let b = with_border(&Raster { width: 1, height: 1, pixels: vec![1, 2, 3, 4] });
+    let b = with_border(&Raster {
+        width: 1,
+        height: 1,
+        pixels: vec![1, 2, 3, 4],
+    });
     assert_eq!((b.width, b.height), (3, 3));
     assert_eq!(&b.pixels[16..20], &[1, 2, 3, 4]);
     assert_eq!(&b.pixels[0..4], &[0, 0, 0, 0]);

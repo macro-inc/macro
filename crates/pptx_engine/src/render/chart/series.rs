@@ -4,7 +4,7 @@
 use super::canvas::Canvas;
 use super::dlabel::{self, Pending};
 use super::look::Look;
-use super::model::{Blanks, GroupModel, Grouping, Kind, SeriesModel};
+use super::model::{Blanks, GroupModel, Grouping, Kind, LabelPos, SeriesModel};
 use super::plot::{Mapping, Plot, x_values};
 use super::style::{resolve_fill, resolve_line, solid_line};
 use crate::model::color::Rgba;
@@ -26,6 +26,7 @@ fn rank(k: Kind) -> u8 {
 
 /// Draws every axis-based group; data labels are collected into `labels`.
 pub(crate) fn draw(cv: &mut Canvas<'_>, p: &Plot<'_>, chart: Rect, labels: &mut Vec<Pending>) {
+    let mut trend_budget = super::trend::MAX_PER_CHART;
     let mut order: Vec<(usize, usize, usize)> = p.groups.clone();
     order.sort_by_key(|&(gi, _, _)| rank(p.m.groups[gi].kind));
     for (gi, ca, va) in order {
@@ -34,7 +35,7 @@ pub(crate) fn draw(cv: &mut Canvas<'_>, p: &Plot<'_>, chart: Rect, labels: &mut 
             Kind::Bar | Kind::Area => 0.0,
             _ => 8.0,
         };
-        let clip = p.inner.outset(margin);
+        let clip = p.bounds().outset(margin);
         let mut pending = Vec::new();
         cv.clipped(clip, |cv| match g.kind {
             Kind::Bar => bars(cv, p, g, ca, va, &mut pending),
@@ -47,25 +48,33 @@ pub(crate) fn draw(cv: &mut Canvas<'_>, p: &Plot<'_>, chart: Rect, labels: &mut 
             Kind::Scatter | Kind::Bubble => scatter(cv, p, g, ca, va, &mut pending),
             _ => {}
         });
-        for (c, l, block, shape) in pending {
+        for Label {
+            at,
+            point,
+            block,
+            l,
+        } in pending
+        {
+            let center = dlabel::offset(at, &l, chart);
             labels.push(Pending {
+                leader: dlabel::moved_leader(p.m, &l, &block, center, point),
                 block,
-                center: dlabel::offset(c, &l, chart),
-                shape,
-                leader: None,
+                center,
+                shape: l.shape.clone(),
                 rot: dlabel::rotation(&l),
             });
         }
-        super::trend::draw(cv, p, g, ca, va, labels);
+        super::trend::draw(cv, p, g, (ca, va), &mut trend_budget, labels);
     }
 }
 
-type Label = (
-    Point,
-    super::model::LabelModel,
-    super::canvas::Block,
-    super::model::ShapeProps,
-);
+/// A data label at its default place `at`, describing the data point at `point`.
+struct Label {
+    at: Point,
+    point: Point,
+    block: super::canvas::Block,
+    l: super::model::LabelModel,
+}
 
 /// Category count of a category axis.
 fn count(p: &Plot<'_>, ca: usize) -> usize {
@@ -208,11 +217,38 @@ fn bars(
             } else {
                 pl.fill.clone()
             };
-            cv.shape(&Path::rect(r), fill.as_ref(), pl.line.as_ref(), r);
+            // 3-D bars are boxes; their labels follow the front face.
+            let (r, v0, v1) = match &p.depth {
+                Some(d) => {
+                    super::depth::draw_box(cv, d, r, fill.as_ref(), pl.line.as_ref());
+                    let f = d.front(r);
+                    let shift = if g.horizontal { f.x - r.x } else { f.y - r.y };
+                    (f, v0 + shift, v1 + shift)
+                }
+                None => {
+                    cv.shape(&Path::rect(r), fill.as_ref(), pl.line.as_ref(), r);
+                    (r, v0, v1)
+                }
+            };
             if let Some((block, l)) = dlabel::make(cv, m, g, s, i, st.percent(i, v)) {
                 let c = dlabel::place_bar(&block, &l, g, r, v1, v0);
-                let shape = l.shape.clone();
-                labels.push((c, l, block, shape));
+                // Leader lines reach the bar's end (its middle for inside labels).
+                let inside = matches!(
+                    l.pos,
+                    Some(LabelPos::Center | LabelPos::InBase | LabelPos::InEnd)
+                );
+                let mid = Point::new(r.x + r.w / 2.0, r.y + r.h / 2.0);
+                let point = match (inside, g.horizontal) {
+                    (true, _) => mid,
+                    (false, true) => Point::new(v1, mid.y),
+                    (false, false) => Point::new(mid.x, v1),
+                };
+                labels.push(Label {
+                    at: c,
+                    point,
+                    block,
+                    l,
+                });
             }
         }
     }
@@ -282,8 +318,12 @@ fn markers_and_labels(
         }
         if let Some((block, l)) = dlabel::make(cv, m, g, s, i, pct) {
             let c = dlabel::place_point(&block, &l, g, q, size);
-            let shape = l.shape.clone();
-            labels.push((c, l, block, shape));
+            labels.push(Label {
+                at: c,
+                point: q,
+                block,
+                l,
+            });
         }
     }
 }
@@ -387,8 +427,12 @@ fn areas(
         for (i, q, pct) in marks {
             if let Some((block, l)) = dlabel::make(cv, m, g, s, i, pct) {
                 let c = dlabel::place_point(&block, &l, g, q, 0.0);
-                let shape = l.shape.clone();
-                labels.push((c, l, block, shape));
+                labels.push(Label {
+                    at: c,
+                    point: q,
+                    block,
+                    l,
+                });
             }
         }
     }
@@ -448,8 +492,12 @@ fn scatter(
                 cv.shape(&Path::ellipse(c), fill.as_ref(), pl.line.as_ref(), c);
                 if let Some((block, l)) = dlabel::make(cv, m, g, s, i, None) {
                     let at = dlabel::place_point(&block, &l, g, q, 0.0);
-                    let shape = l.shape.clone();
-                    labels.push((at, l, block, shape));
+                    labels.push(Label {
+                        at,
+                        point: q,
+                        block,
+                        l,
+                    });
                 }
             }
             continue;

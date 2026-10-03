@@ -49,9 +49,13 @@ pub fn slide_xml(shapes: &str) -> String {
 const REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 fn rels(items: &[(&str, &str, &str)]) -> String {
-    let mut s = String::from(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#);
+    let mut s = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#,
+    );
     for (id, ty, target) in items {
-        s.push_str(&format!(r#"<Relationship Id="{id}" Type="{REL}/{ty}" Target="{target}"/>"#));
+        s.push_str(&format!(
+            r#"<Relationship Id="{id}" Type="{REL}/{ty}" Target="{target}"/>"#
+        ));
     }
     s.push_str("</Relationships>");
     s
@@ -65,53 +69,114 @@ pub fn deck(slides: &[&str]) -> Vec<u8> {
 /// A deck with slides and extra media parts (`(part name, bytes)`, related as rId10+ from every slide).
 pub fn deck_with_media(slides: &[&str], media: &[(&str, &[u8])]) -> Vec<u8> {
     let mut w = Writer::new();
-    let mut ct = String::from(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#);
+    let mut ct = String::from(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#,
+    );
     for i in 1..=slides.len() {
         ct.push_str(&format!(r#"<Override PartName="/ppt/slides/slide{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>"#));
     }
     ct.push_str("</Types>");
     let mut files: Vec<(String, Vec<u8>)> = vec![
         ("[Content_Types].xml".into(), ct.into_bytes()),
-        ("_rels/.rels".into(), rels(&[("rId1", "officeDocument", "ppt/presentation.xml")]).into_bytes()),
+        (
+            "_rels/.rels".into(),
+            rels(&[("rId1", "officeDocument", "ppt/presentation.xml")]).into_bytes(),
+        ),
     ];
-    let mut pres_rels = vec![("rId1".to_owned(), "slideMaster".to_owned(), "slideMasters/slideMaster1.xml".to_owned())];
+    let mut pres_rels = vec![(
+        "rId1".to_owned(),
+        "slideMaster".to_owned(),
+        "slideMasters/slideMaster1.xml".to_owned(),
+    )];
     let mut sld_ids = String::new();
     for i in 1..=slides.len() {
-        pres_rels.push((format!("rId{}", i + 1), "slide".into(), format!("slides/slide{i}.xml")));
-        sld_ids.push_str(&format!(r#"<p:sldId id="{}" r:id="rId{}"/>"#, 255 + i, i + 1));
+        pres_rels.push((
+            format!("rId{}", i + 1),
+            "slide".into(),
+            format!("slides/slide{i}.xml"),
+        ));
+        sld_ids.push_str(&format!(
+            r#"<p:sldId id="{}" r:id="rId{}"/>"#,
+            255 + i,
+            i + 1
+        ));
     }
-    pres_rels.push((format!("rId{}", slides.len() + 2), "theme".into(), "theme/theme1.xml".into()));
+    pres_rels.push((
+        format!("rId{}", slides.len() + 2),
+        "theme".into(),
+        "theme/theme1.xml".into(),
+    ));
     let pres = format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation {NS}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>{sld_ids}</p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/><p:defaultTextStyle><a:lvl1pPr marL="0" algn="l" defTabSz="914400"><a:defRPr sz="1800" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/></a:defRPr></a:lvl1pPr></p:defaultTextStyle></p:presentation>"#
     );
     files.push(("ppt/presentation.xml".into(), pres.into_bytes()));
-    let pr: Vec<(&str, &str, &str)> = pres_rels.iter().map(|(a, b, c)| (a.as_str(), b.as_str(), c.as_str())).collect();
-    files.push(("ppt/_rels/presentation.xml.rels".into(), rels(&pr).into_bytes()));
-    files.push(("ppt/slideMasters/slideMaster1.xml".into(), master().into_bytes()));
+    let pr: Vec<(&str, &str, &str)> = pres_rels
+        .iter()
+        .map(|(a, b, c)| (a.as_str(), b.as_str(), c.as_str()))
+        .collect();
+    files.push((
+        "ppt/_rels/presentation.xml.rels".into(),
+        rels(&pr).into_bytes(),
+    ));
+    files.push((
+        "ppt/slideMasters/slideMaster1.xml".into(),
+        master().into_bytes(),
+    ));
     files.push((
         "ppt/slideMasters/_rels/slideMaster1.xml.rels".into(),
-        rels(&[("rId1", "slideLayout", "../slideLayouts/slideLayout1.xml"), ("rId2", "theme", "../theme/theme1.xml")]).into_bytes(),
+        rels(&[
+            ("rId1", "slideLayout", "../slideLayouts/slideLayout1.xml"),
+            ("rId2", "theme", "../theme/theme1.xml"),
+        ])
+        .into_bytes(),
     ));
-    files.push(("ppt/slideLayouts/slideLayout1.xml".into(), layout().into_bytes()));
+    files.push((
+        "ppt/slideLayouts/slideLayout1.xml".into(),
+        layout().into_bytes(),
+    ));
     files.push((
         "ppt/slideLayouts/_rels/slideLayout1.xml.rels".into(),
         rels(&[("rId1", "slideMaster", "../slideMasters/slideMaster1.xml")]).into_bytes(),
     ));
     files.push(("ppt/theme/theme1.xml".into(), THEME.as_bytes().to_vec()));
     for (i, s) in slides.iter().enumerate() {
-        files.push((format!("ppt/slides/slide{}.xml", i + 1), slide_xml(s).into_bytes()));
-        let mut sr = vec![("rId1".to_owned(), "slideLayout".to_owned(), "../slideLayouts/slideLayout1.xml".to_owned())];
+        files.push((
+            format!("ppt/slides/slide{}.xml", i + 1),
+            slide_xml(s).into_bytes(),
+        ));
+        let mut sr = vec![(
+            "rId1".to_owned(),
+            "slideLayout".to_owned(),
+            "../slideLayouts/slideLayout1.xml".to_owned(),
+        )];
         for (m, (name, _)) in media.iter().enumerate() {
-            sr.push((format!("rId{}", 10 + m), "image".into(), format!("../media/{name}")));
+            sr.push((
+                format!("rId{}", 10 + m),
+                "image".into(),
+                format!("../media/{name}"),
+            ));
         }
-        let srr: Vec<(&str, &str, &str)> = sr.iter().map(|(a, b, c)| (a.as_str(), b.as_str(), c.as_str())).collect();
-        files.push((format!("ppt/slides/_rels/slide{}.xml.rels", i + 1), rels(&srr).into_bytes()));
+        let srr: Vec<(&str, &str, &str)> = sr
+            .iter()
+            .map(|(a, b, c)| (a.as_str(), b.as_str(), c.as_str()))
+            .collect();
+        files.push((
+            format!("ppt/slides/_rels/slide{}.xml.rels", i + 1),
+            rels(&srr).into_bytes(),
+        ));
     }
     for (name, bytes) in media {
         files.push((format!("ppt/media/{name}"), bytes.to_vec()));
     }
     for (name, data) in &files {
-        w.add(name, WriteData::Fresh { data, compress: true }).unwrap();
+        w.add(
+            name,
+            WriteData::Fresh {
+                data,
+                compress: true,
+            },
+        )
+        .unwrap();
     }
     w.finish().unwrap()
 }
@@ -129,9 +194,16 @@ pub fn fonts() -> &'static crate::font::FontDb {
     DB.get_or_init(|| {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts");
         let mut db = crate::font::FontDb::new();
-        let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        let mut files: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
         files.sort();
-        for f in files.into_iter().filter(|f| f.extension().is_some_and(|e| e == "ttf")) {
+        for f in files
+            .into_iter()
+            .filter(|f| f.extension().is_some_and(|e| e == "ttf"))
+        {
             db.register(std::fs::read(f).unwrap());
         }
         db

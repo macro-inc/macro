@@ -51,7 +51,9 @@ impl PptxDocument {
     pub fn new(bytes: Vec<u8>) -> Result<PptxDocument, JsError> {
         console_error_panic_hook::set_once();
         let pres = Presentation::open(bytes).map_err(js_err)?;
-        Ok(Self { editor: Editor::new(pres) })
+        Ok(Self {
+            editor: Editor::new(pres),
+        })
     }
 
     fn pres(&mut self) -> &mut Presentation {
@@ -87,28 +89,40 @@ impl PptxDocument {
     /// Renders a slide; returns straight-alpha RGBA rows (`width × height × 4` bytes).
     pub fn render(&mut self, index: usize, width: u32) -> Result<Vec<u8>, JsError> {
         let width = width.clamp(16, 8192);
-        let raster = FONTS.with(|f| self.pres().render_slide(index, width, &f.borrow())).map_err(js_err)?;
+        let raster = FONTS
+            .with(|f| self.pres().render_slide(index, width, &f.borrow()))
+            .map_err(js_err)?;
         Ok(raster.to_straight_rgba())
     }
 
     /// Renders one layer of a slide: `mode` is `"without"` (everything except
     /// the shape) or `"only"` (the shape alone over transparency).
     #[wasm_bindgen(js_name = renderLayer)]
-    pub fn render_layer(&mut self, index: usize, width: u32, mode: &str, shape: u32) -> Result<Vec<u8>, JsError> {
+    pub fn render_layer(
+        &mut self,
+        index: usize,
+        width: u32,
+        mode: &str,
+        shape: u32,
+    ) -> Result<Vec<u8>, JsError> {
         let layer = match mode {
             "without" => Layer::Without(shape),
             "only" => Layer::Only(shape),
             other => return Err(JsError::new(&format!("unknown layer mode `{other}`"))),
         };
         let width = width.clamp(16, 8192);
-        let raster = FONTS.with(|f| self.pres().render_layer(index, layer, width, &f.borrow())).map_err(js_err)?;
+        let raster = FONTS
+            .with(|f| self.pres().render_layer(index, layer, width, &f.borrow()))
+            .map_err(js_err)?;
         Ok(raster.to_straight_rgba())
     }
 
     /// Lays out a shape's text for carets as JSON (`TextLayoutInfo`, or `null`).
     #[wasm_bindgen(js_name = textLayout)]
     pub fn text_layout(&mut self, index: usize, shape: u32) -> Result<String, JsError> {
-        let lay = FONTS.with(|f| self.pres().text_layout(index, shape, None, &f.borrow())).map_err(js_err)?;
+        let lay = FONTS
+            .with(|f| self.pres().text_layout(index, shape, None, &f.borrow()))
+            .map_err(js_err)?;
         to_json(&lay)
     }
 
@@ -117,7 +131,9 @@ impl PptxDocument {
     /// Batches with the same `group` merge into one undo step (typing).
     pub fn apply(&mut self, ops: &str, group: Option<String>) -> Result<String, JsError> {
         let ops: Vec<EditOp> = serde_json::from_str(ops).map_err(js_err)?;
-        let result = FONTS.with(|f| self.editor.apply(&ops, group.as_deref(), &f.borrow())).map_err(js_err)?;
+        let result = FONTS
+            .with(|f| self.editor.apply(&ops, group.as_deref(), &f.borrow()))
+            .map_err(js_err)?;
         to_json(&result)
     }
 

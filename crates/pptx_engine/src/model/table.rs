@@ -5,7 +5,7 @@ use super::fill::{Fill, LineProps, find_fill, parse_fill, parse_line};
 use super::presentation::{PartRef, SlideContext};
 use super::text::{Anchor, CellTextStyle, TextBody, Vert, resolve_cell_text};
 use crate::units::emu_to_pt;
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 use std::sync::Arc;
 
 /// Which table parts are switched on (`a:tblPr` flags).
@@ -42,7 +42,14 @@ pub enum Edge {
     BlTr,
 }
 
-const EDGES: [Edge; 6] = [Edge::Left, Edge::Top, Edge::Right, Edge::Bottom, Edge::TlBr, Edge::BlTr];
+const EDGES: [Edge; 6] = [
+    Edge::Left,
+    Edge::Top,
+    Edge::Right,
+    Edge::Bottom,
+    Edge::TlBr,
+    Edge::BlTr,
+];
 
 /// One table cell with everything resolved.
 #[derive(Clone, Debug)]
@@ -118,26 +125,39 @@ pub struct TableStyle {
     background: Option<Fill>,
 }
 
-fn style_part(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, theme: &super::theme::Theme) -> StylePart {
+fn style_part(
+    doc: &XmlDoc,
+    node: NodeId,
+    ctx: &ColorContext<'_>,
+    theme: &super::theme::Theme,
+) -> StylePart {
     let mut p = StylePart::default();
     if let Some(tx) = doc.child(node, Ns::A, "tcTxStyle") {
-        let on_off = |a: &str| doc.attr(tx, a).and_then(|v| match v {
-            "on" => Some(true),
-            "off" => Some(false),
-            _ => None,
-        });
+        let on_off = |a: &str| {
+            doc.attr(tx, a).and_then(|v| match v {
+                "on" => Some(true),
+                "off" => Some(false),
+                _ => None,
+            })
+        };
         p.text.bold = on_off("b");
         p.text.italic = on_off("i");
         if let Some(fr) = doc.child(tx, Ns::A, "fontRef") {
-            let collection = if doc.attr(fr, "idx") == Some("major") { &theme.major } else { &theme.minor };
+            let collection = if doc.attr(fr, "idx") == Some("major") {
+                &theme.major
+            } else {
+                &theme.minor
+            };
             if !collection.latin.is_empty() {
                 p.text.latin = Some(collection.latin.clone());
             }
         }
-        if let Some(f) = doc.child(tx, Ns::A, "font") {
-            if let Some(tf) = doc.child(f, Ns::A, "latin").and_then(|l| doc.attr(l, "typeface")) {
-                p.text.latin = Some(theme.resolve_typeface(tf).to_owned());
-            }
+        if let Some(f) = doc.child(tx, Ns::A, "font")
+            && let Some(tf) = doc
+                .child(f, Ns::A, "latin")
+                .and_then(|l| doc.attr(l, "typeface"))
+        {
+            p.text.latin = Some(theme.resolve_typeface(tf).to_owned());
         }
         p.text.color = find_color(doc, tx, ctx);
     }
@@ -151,7 +171,9 @@ fn style_part(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, theme: &super:
                 } else if let Some(r) = doc.child(e, Ns::A, "lnRef") {
                     let idx = doc.attr_i64(r, "idx").unwrap_or(0).max(0) as u32;
                     let color = find_color(doc, r, ctx);
-                    theme.line_style(idx).map(|n| parse_line(&theme.doc, n, &ctx.with_ph(color), &|_| None))
+                    theme
+                        .line_style(idx)
+                        .map(|n| parse_line(&theme.doc, n, &ctx.with_ph(color), &|_| None))
                 } else {
                     None
                 };
@@ -164,7 +186,9 @@ fn style_part(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, theme: &super:
         if let Some(r) = doc.child(st, Ns::A, "fillRef") {
             let idx = doc.attr_i64(r, "idx").unwrap_or(0).max(0) as u32;
             let color = find_color(doc, r, ctx);
-            p.fill = theme.fill_style(idx).map(|n| parse_fill(&theme.doc, n, &ctx.with_ph(color), &|_| None));
+            p.fill = theme
+                .fill_style(idx)
+                .map(|n| parse_fill(&theme.doc, n, &ctx.with_ph(color), &|_| None));
         }
     }
     p
@@ -172,12 +196,19 @@ fn style_part(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, theme: &super:
 
 impl TableStyle {
     /// Parses an `a:tblStyle` element.
-    pub fn parse(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, theme: &super::theme::Theme) -> Self {
+    pub fn parse(
+        doc: &XmlDoc,
+        node: NodeId,
+        ctx: &ColorContext<'_>,
+        theme: &super::theme::Theme,
+    ) -> Self {
         let mut s = TableStyle::default();
         for c in doc.children(node) {
             match doc.local(c) {
                 "tblBg" => s.background = find_fill(doc, c, ctx, &|_| None),
-                name => s.parts.push((name.to_owned(), style_part(doc, c, ctx, theme))),
+                name => s
+                    .parts
+                    .push((name.to_owned(), style_part(doc, c, ctx, theme))),
             }
         }
         s
@@ -189,11 +220,18 @@ impl TableStyle {
 }
 
 /// Finds the table style `id`: from `tableStyles.xml`, else a built-in definition.
-pub fn find_table_style(ctx: &SlideContext, styles_part: Option<&PartRef>, id: &str) -> Option<TableStyle> {
+pub fn find_table_style(
+    ctx: &SlideContext,
+    styles_part: Option<&PartRef>,
+    id: &str,
+) -> Option<TableStyle> {
     let colors = ctx.colors();
     if let Some(p) = styles_part {
         let doc = &p.doc;
-        if let Some(n) = doc.children(doc.root()).find(|&c| doc.attr(c, "styleId").is_some_and(|s| s.eq_ignore_ascii_case(id))) {
+        if let Some(n) = doc.children(doc.root()).find(|&c| {
+            doc.attr(c, "styleId")
+                .is_some_and(|s| s.eq_ignore_ascii_case(id))
+        }) {
             return Some(TableStyle::parse(doc, n, &colors, &ctx.theme));
         }
     }
@@ -203,7 +241,12 @@ pub fn find_table_style(ctx: &SlideContext, styles_part: Option<&PartRef>, id: &
 }
 
 /// Parses and resolves a table.
-pub fn resolve_table(ctx: &SlideContext, part: &PartRef, tbl: NodeId, style: Option<&TableStyle>) -> Table {
+pub fn resolve_table(
+    ctx: &SlideContext,
+    part: &PartRef,
+    tbl: NodeId,
+    style: Option<&TableStyle>,
+) -> Table {
     let doc: &Arc<XmlDoc> = &part.doc;
     let colors = ctx.colors();
     let rels = part.rels.clone();
@@ -224,7 +267,11 @@ pub fn resolve_table(ctx: &SlideContext, part: &PartRef, tbl: NodeId, style: Opt
         .unwrap_or(Fill::None);
     let cols: Vec<f32> = doc
         .child(tbl, Ns::A, "tblGrid")
-        .map(|g| doc.children_named(g, Ns::A, "gridCol").map(|c| doc.attr_f64(c, "w").map_or(0.0, emu_to_pt)).collect())
+        .map(|g| {
+            doc.children_named(g, Ns::A, "gridCol")
+                .map(|c| doc.attr_f64(c, "w").map_or(0.0, emu_to_pt))
+                .collect()
+        })
         .unwrap_or_default();
     let tr_nodes: Vec<NodeId> = doc.children_named(tbl, Ns::A, "tr").collect();
     let (nrows, ncols) = (tr_nodes.len(), cols.len());
@@ -232,17 +279,31 @@ pub fn resolve_table(ctx: &SlideContext, part: &PartRef, tbl: NodeId, style: Opt
     for (r, tr) in tr_nodes.iter().enumerate() {
         let height = doc.attr_f64(*tr, "h").map_or(0.0, emu_to_pt);
         let mut cells = Vec::with_capacity(ncols);
-        for (c, tc) in doc.children_named(*tr, Ns::A, "tc").enumerate().take(ncols.max(1)) {
+        for (c, tc) in doc
+            .children_named(*tr, Ns::A, "tc")
+            .enumerate()
+            .take(ncols.max(1))
+        {
             let tc_pr = doc.child(tc, Ns::A, "tcPr");
             let parts = applicable_parts(flags, r, c, nrows, ncols);
             // Fill: direct, else the highest-precedence style part with a fill.
             let fill = tc_pr
                 .and_then(|p| find_fill(doc, p, &colors, &resolver))
-                .or_else(|| style.and_then(|s| parts.iter().rev().find_map(|(n, _)| s.part(n).and_then(|p| p.fill.clone()))))
+                .or_else(|| {
+                    style.and_then(|s| {
+                        parts
+                            .iter()
+                            .rev()
+                            .find_map(|(n, _)| s.part(n).and_then(|p| p.fill.clone()))
+                    })
+                })
                 .unwrap_or(Fill::None);
             let grid_span = doc.attr_i64(tc, "gridSpan").unwrap_or(1).max(1) as usize;
             let row_span = doc.attr_i64(tc, "rowSpan").unwrap_or(1).max(1) as usize;
-            let end = ((r + row_span - 1).min(nrows.saturating_sub(1)), (c + grid_span - 1).min(ncols.saturating_sub(1)));
+            let end = (
+                (r + row_span - 1).min(nrows.saturating_sub(1)),
+                (c + grid_span - 1).min(ncols.saturating_sub(1)),
+            );
             let mut borders: [Option<LineProps>; 6] = Default::default();
             for (i, e) in EDGES.iter().enumerate() {
                 let direct_name = match e {
@@ -253,7 +314,8 @@ pub fn resolve_table(ctx: &SlideContext, part: &PartRef, tbl: NodeId, style: Opt
                     Edge::TlBr => "lnTlToBr",
                     Edge::BlTr => "lnBlToTr",
                 };
-                let mut line = style.and_then(|s| border_for(s, flags, (r, c), end, (nrows, ncols), *e));
+                let mut line =
+                    style.and_then(|s| border_for(s, flags, (r, c), end, (nrows, ncols), *e));
                 if let Some(ln) = tc_pr.and_then(|p| doc.child(p, Ns::A, direct_name)) {
                     let mut direct = parse_line(doc, ln, &colors, &resolver);
                     if let Some(base) = &line {
@@ -263,8 +325,17 @@ pub fn resolve_table(ctx: &SlideContext, part: &PartRef, tbl: NodeId, style: Opt
                 }
                 borders[i] = line;
             }
-            let m = |a: &str, d: f64| tc_pr.and_then(|p| doc.attr_f64(p, a)).map_or(emu_to_pt(d), emu_to_pt);
-            let margins = [m("marL", 91440.0), m("marT", 45720.0), m("marR", 91440.0), m("marB", 45720.0)];
+            let m = |a: &str, d: f64| {
+                tc_pr
+                    .and_then(|p| doc.attr_f64(p, a))
+                    .map_or(emu_to_pt(d), emu_to_pt)
+            };
+            let margins = [
+                m("marL", 91440.0),
+                m("marT", 45720.0),
+                m("marR", 91440.0),
+                m("marB", 45720.0),
+            ];
             let anchor = match tc_pr.and_then(|p| doc.attr(p, "anchor")) {
                 Some("ctr") => Anchor::Middle,
                 Some("b") => Anchor::Bottom,
@@ -303,20 +374,33 @@ pub fn resolve_table(ctx: &SlideContext, part: &PartRef, tbl: NodeId, style: Opt
         }
         rows.push(Row { height, cells });
     }
-    Table { cols, rows, flags, background }
+    Table {
+        cols,
+        rows,
+        flags,
+        background,
+    }
 }
 
-/// Style parts that apply to a cell, lowest precedence first, with each part's
-/// region as (first row, first col, last row, last col).
-fn applicable_parts(f: TableFlags, r: usize, c: usize, nrows: usize, ncols: usize) -> Vec<(&'static str, (usize, usize, usize, usize))> {
+/// A cell region: (first row, first col, last row, last col).
+type Region = (usize, usize, usize, usize);
+
+/// Style parts that apply to a cell, lowest precedence first, with each part's region.
+fn applicable_parts(
+    f: TableFlags,
+    r: usize,
+    c: usize,
+    nrows: usize,
+    ncols: usize,
+) -> Vec<(&'static str, Region)> {
     let (lr, lc) = (nrows.saturating_sub(1), ncols.saturating_sub(1));
     let mut parts = vec![("wholeTbl", (0, 0, lr, lc))];
-    let in_body_row = !(f.first_row && r == 0) && !(f.last_row && r == lr);
+    let in_body_row = !(f.first_row && r == 0 || f.last_row && r == lr);
     if f.band_row && in_body_row {
         let k = if f.first_row { r - 1 } else { r };
         parts.push((if k % 2 == 0 { "band1H" } else { "band2H" }, (r, 0, r, lc)));
     }
-    let in_body_col = !(f.first_col && c == 0) && !(f.last_col && c == lc);
+    let in_body_col = !(f.first_col && c == 0 || f.last_col && c == lc);
     if f.band_col && in_body_col {
         let k = if f.first_col { c - 1 } else { c };
         parts.push((if k % 2 == 0 { "band1V" } else { "band2V" }, (0, c, lr, c)));
@@ -368,10 +452,34 @@ fn border_for(
     for (name, (r0, c0, r1, c1)) in parts.iter().rev() {
         let Some(p) = s.part(name) else { continue };
         let key = match e {
-            Edge::Left => if start.1 <= *c0 { "left" } else { "insideV" },
-            Edge::Right => if end.1 >= *c1 { "right" } else { "insideV" },
-            Edge::Top => if start.0 <= *r0 { "top" } else { "insideH" },
-            Edge::Bottom => if end.0 >= *r1 { "bottom" } else { "insideH" },
+            Edge::Left => {
+                if start.1 <= *c0 {
+                    "left"
+                } else {
+                    "insideV"
+                }
+            }
+            Edge::Right => {
+                if end.1 >= *c1 {
+                    "right"
+                } else {
+                    "insideV"
+                }
+            }
+            Edge::Top => {
+                if start.0 <= *r0 {
+                    "top"
+                } else {
+                    "insideH"
+                }
+            }
+            Edge::Bottom => {
+                if end.0 >= *r1 {
+                    "bottom"
+                } else {
+                    "insideH"
+                }
+            }
             Edge::TlBr => "tl2br",
             Edge::BlTr => "tr2bl",
         };

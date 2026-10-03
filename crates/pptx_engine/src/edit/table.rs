@@ -5,7 +5,7 @@ use super::ops::CellRef;
 use super::text;
 use super::xmlutil::import_fragment;
 use crate::error::{Error, Result};
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 
 /// Child order of `a:tc`.
 const TC_ORDER: &[&str] = &["txBody", "tcPr", "extLst"];
@@ -28,7 +28,9 @@ fn cells(doc: &XmlDoc, tr: NodeId) -> Vec<NodeId> {
 }
 
 fn grid_cols(doc: &XmlDoc, tbl: NodeId) -> Vec<NodeId> {
-    doc.child(tbl, Ns::A, "tblGrid").map(|g| doc.children_named(g, Ns::A, "gridCol").collect()).unwrap_or_default()
+    doc.child(tbl, Ns::A, "tblGrid")
+        .map(|g| doc.children_named(g, Ns::A, "gridCol").collect())
+        .unwrap_or_default()
 }
 
 fn flag(doc: &XmlDoc, tc: NodeId, name: &str) -> bool {
@@ -53,8 +55,16 @@ pub fn cell_body(doc: &mut XmlDoc, frame: NodeId, cell: CellRef) -> Result<NodeI
     let all = rows(doc, tbl);
     let mut r = cell.row;
     let mut c = cell.col;
-    let out_of_range = || Error::InvalidEdit(format!("cell ({}, {}) is outside the table", cell.row, cell.col));
-    let mut tc = all.get(r).and_then(|tr| cells(doc, *tr).get(c).copied()).ok_or_else(out_of_range)?;
+    let out_of_range = || {
+        Error::InvalidEdit(format!(
+            "cell ({}, {}) is outside the table",
+            cell.row, cell.col
+        ))
+    };
+    let mut tc = all
+        .get(r)
+        .and_then(|tr| cells(doc, *tr).get(c).copied())
+        .ok_or_else(out_of_range)?;
     // Walk to the anchor of a merged region.
     while flag(doc, tc, "hMerge") && c > 0 {
         c -= 1;
@@ -67,7 +77,10 @@ pub fn cell_body(doc: &mut XmlDoc, frame: NodeId, cell: CellRef) -> Result<NodeI
     if let Some(b) = doc.child(tc, Ns::A, "txBody") {
         return Ok(b);
     }
-    let body = import_fragment(doc, "<a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang=\"en-US\" dirty=\"0\"/></a:p></a:txBody>")?;
+    let body = import_fragment(
+        doc,
+        "<a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang=\"en-US\" dirty=\"0\"/></a:p></a:txBody>",
+    )?;
     doc.insert_in_order(tc, body, TC_ORDER);
     Ok(body)
 }
@@ -102,7 +115,12 @@ fn refresh_ids(doc: &mut XmlDoc, tbl: NodeId, copy: NodeId, local: &str) {
 
 /// Grows (or shrinks) the frame's extent by `dx` × `dy` EMU.
 fn resize_frame(doc: &mut XmlDoc, frame: NodeId, dx: i64, dy: i64) {
-    let Some(ext) = doc.path(frame, Ns::P, &["xfrm"]).and_then(|x| doc.child(x, Ns::A, "ext")) else { return };
+    let Some(ext) = doc
+        .path(frame, Ns::P, &["xfrm"])
+        .and_then(|x| doc.child(x, Ns::A, "ext"))
+    else {
+        return;
+    };
     let cx = (doc.attr_i64(ext, "cx").unwrap_or(0) + dx).max(0);
     let cy = (doc.attr_i64(ext, "cy").unwrap_or(0) + dy).max(0);
     doc.set_attr(ext, "cx", &cx.to_string());
@@ -114,7 +132,9 @@ pub fn insert_row(doc: &mut XmlDoc, frame: NodeId, at: usize) -> Result<()> {
     let tbl = table_of(doc, frame)?;
     let all = rows(doc, tbl);
     if at > all.len() || all.is_empty() {
-        return Err(Error::InvalidEdit(format!("row index {at} is out of range")));
+        return Err(Error::InvalidEdit(format!(
+            "row index {at} is out of range"
+        )));
     }
     let template = all[at.saturating_sub(1).min(all.len() - 1)];
     let new = doc.deep_clone(template);
@@ -125,12 +145,13 @@ pub fn insert_row(doc: &mut XmlDoc, frame: NodeId, at: usize) -> Result<()> {
         doc.remove_attr(tc, "vMerge");
         clear_cell(doc, tc)?;
         // A vertical merge spanning the insertion point grows over the new row.
-        if at > 0 && at < all.len() {
-            if let Some(anchor) = vertical_anchor(doc, &all, at, col) {
-                let n = span(doc, anchor, "rowSpan");
-                set_span(doc, anchor, "rowSpan", n + 1);
-                doc.set_attr(tc, "vMerge", "1");
-            }
+        if at > 0
+            && at < all.len()
+            && let Some(anchor) = vertical_anchor(doc, &all, at, col)
+        {
+            let n = span(doc, anchor, "rowSpan");
+            set_span(doc, anchor, "rowSpan", n + 1);
+            doc.set_attr(tc, "vMerge", "1");
         }
     }
     match all.get(at) {
@@ -162,14 +183,19 @@ pub fn delete_row(doc: &mut XmlDoc, frame: NodeId, row: usize) -> Result<()> {
         return Err(Error::InvalidEdit(format!("row {row} does not exist")));
     }
     if all.len() == 1 {
-        return Err(Error::InvalidEdit("cannot delete the only row; delete the table instead".into()));
+        return Err(Error::InvalidEdit(
+            "cannot delete the only row; delete the table instead".into(),
+        ));
     }
     let tr = all[row];
     for (col, tc) in cells(doc, tr).into_iter().enumerate() {
         let row_span = span(doc, tc, "rowSpan");
         if row_span > 1 && !flag(doc, tc, "vMerge") {
             // The anchor moves down: the cell below takes over text and span.
-            if let Some(below) = all.get(row + 1).and_then(|n| cells(doc, *n).get(col).copied()) {
+            if let Some(below) = all
+                .get(row + 1)
+                .and_then(|n| cells(doc, *n).get(col).copied())
+            {
                 if let Some(body) = doc.child(tc, Ns::A, "txBody") {
                     doc.remove_children_named(below, Ns::A, "txBody");
                     doc.insert_in_order(below, body, TC_ORDER);
@@ -177,14 +203,14 @@ pub fn delete_row(doc: &mut XmlDoc, frame: NodeId, row: usize) -> Result<()> {
                 doc.remove_attr(below, "vMerge");
                 set_span(doc, below, "rowSpan", row_span - 1);
             }
-        } else if flag(doc, tc, "vMerge") {
-            if let Some(anchor) = (0..row).rev().find_map(|r| {
+        } else if flag(doc, tc, "vMerge")
+            && let Some(anchor) = (0..row).rev().find_map(|r| {
                 let a = *cells(doc, all[r]).get(col)?;
                 (!flag(doc, a, "vMerge")).then_some(a)
-            }) {
-                let n = span(doc, anchor, "rowSpan");
-                set_span(doc, anchor, "rowSpan", n - 1);
-            }
+            })
+        {
+            let n = span(doc, anchor, "rowSpan");
+            set_span(doc, anchor, "rowSpan", n - 1);
         }
     }
     let h = doc.attr_i64(tr, "h").unwrap_or(0);
@@ -198,7 +224,9 @@ pub fn insert_column(doc: &mut XmlDoc, frame: NodeId, at: usize) -> Result<()> {
     let tbl = table_of(doc, frame)?;
     let cols = grid_cols(doc, tbl);
     if at > cols.len() || cols.is_empty() {
-        return Err(Error::InvalidEdit(format!("column index {at} is out of range")));
+        return Err(Error::InvalidEdit(format!(
+            "column index {at} is out of range"
+        )));
     }
     let template = at.saturating_sub(1).min(cols.len() - 1);
     let new_col = doc.deep_clone(cols[template]);
@@ -209,19 +237,26 @@ pub fn insert_column(doc: &mut XmlDoc, frame: NodeId, at: usize) -> Result<()> {
     }
     for tr in rows(doc, tbl) {
         let tcs = cells(doc, tr);
-        let Some(&source) = tcs.get(template) else { continue };
+        let Some(&source) = tcs.get(template) else {
+            continue;
+        };
         let tc = doc.deep_clone(source);
         for a in ["gridSpan", "hMerge", "rowSpan", "vMerge"] {
             doc.remove_attr(tc, a);
         }
         clear_cell(doc, tc)?;
         // A horizontal merge spanning the insertion point grows over the new column.
-        if at > 0 && at < tcs.len() && flag(doc, tcs[at], "hMerge") {
-            if let Some(anchor) = (0..at).rev().map(|c| tcs[c]).find(|&c| !flag(doc, c, "hMerge")) {
-                let n = span(doc, anchor, "gridSpan");
-                set_span(doc, anchor, "gridSpan", n + 1);
-                doc.set_attr(tc, "hMerge", "1");
-            }
+        if at > 0
+            && at < tcs.len()
+            && flag(doc, tcs[at], "hMerge")
+            && let Some(anchor) = (0..at)
+                .rev()
+                .map(|c| tcs[c])
+                .find(|&c| !flag(doc, c, "hMerge"))
+        {
+            let n = span(doc, anchor, "gridSpan");
+            set_span(doc, anchor, "gridSpan", n + 1);
+            doc.set_attr(tc, "hMerge", "1");
         }
         match tcs.get(at) {
             Some(&next) => doc.insert_before(next, tc),
@@ -244,7 +279,9 @@ pub fn delete_column(doc: &mut XmlDoc, frame: NodeId, col: usize) -> Result<()> 
         return Err(Error::InvalidEdit(format!("column {col} does not exist")));
     }
     if cols.len() == 1 {
-        return Err(Error::InvalidEdit("cannot delete the only column; delete the table instead".into()));
+        return Err(Error::InvalidEdit(
+            "cannot delete the only column; delete the table instead".into(),
+        ));
     }
     for tr in rows(doc, tbl) {
         let tcs = cells(doc, tr);
@@ -266,11 +303,14 @@ pub fn delete_column(doc: &mut XmlDoc, frame: NodeId, col: usize) -> Result<()> 
                     }
                 }
             }
-        } else if flag(doc, tc, "hMerge") {
-            if let Some(anchor) = (0..col).rev().map(|c| tcs[c]).find(|&c| !flag(doc, c, "hMerge")) {
-                let n = span(doc, anchor, "gridSpan");
-                set_span(doc, anchor, "gridSpan", n - 1);
-            }
+        } else if flag(doc, tc, "hMerge")
+            && let Some(anchor) = (0..col)
+                .rev()
+                .map(|c| tcs[c])
+                .find(|&c| !flag(doc, c, "hMerge"))
+        {
+            let n = span(doc, anchor, "gridSpan");
+            set_span(doc, anchor, "gridSpan", n - 1);
         }
         doc.detach(tc);
     }

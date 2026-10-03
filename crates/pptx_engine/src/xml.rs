@@ -188,7 +188,8 @@ impl XmlDoc {
 
     /// Whether `id` is the element `(ns, local)`.
     pub fn is(&self, id: NodeId, ns: Ns, local: &str) -> bool {
-        self.element(id).is_some_and(|e| e.ns == ns && &*e.local == local)
+        self.element(id)
+            .is_some_and(|e| e.ns == ns && &*e.local == local)
     }
 
     /// All child nodes (elements, text, comments...).
@@ -221,7 +222,8 @@ impl XmlDoc {
 
     /// Follows a path of child element names in one namespace.
     pub fn path(&self, id: NodeId, ns: Ns, path: &[&str]) -> Option<NodeId> {
-        path.iter().try_fold(id, |at, name| self.child(at, ns, name))
+        path.iter()
+            .try_fold(id, |at, name| self.child(at, ns, name))
     }
 
     /// The first child element (of any name).
@@ -252,12 +254,13 @@ impl XmlDoc {
 
     /// Parses an unprefixed attribute as an integer.
     pub fn attr_i64(&self, id: NodeId, name: &str) -> Option<i64> {
-        self.attr(id, name).and_then(|v| parse_i64(v))
+        self.attr(id, name).and_then(parse_i64)
     }
 
     /// Parses an unprefixed attribute as a float.
     pub fn attr_f64(&self, id: NodeId, name: &str) -> Option<f64> {
-        self.attr(id, name).and_then(|v| v.trim().parse::<f64>().ok())
+        self.attr(id, name)
+            .and_then(|v| v.trim().parse::<f64>().ok())
     }
 
     /// Parses an unprefixed boolean attribute (`1`/`true`/`on` vs `0`/`false`/`off`).
@@ -301,7 +304,10 @@ impl XmlDoc {
     /// The URI of a namespace identifier.
     pub fn ns_uri(&self, ns: Ns) -> Option<&str> {
         if ns.0 >= Ns::FIRST_DYNAMIC {
-            return self.dynamic_ns.get(usize::from(ns.0 - Ns::FIRST_DYNAMIC)).map(String::as_str);
+            return self
+                .dynamic_ns
+                .get(usize::from(ns.0 - Ns::FIRST_DYNAMIC))
+                .map(String::as_str);
         }
         ns::canonical(ns).map(|(uri, _)| uri)
     }
@@ -348,13 +354,28 @@ impl XmlDoc {
 
     /// Sets (or adds) the attribute `(ns, local)`.
     pub fn set_attr_ns(&mut self, id: NodeId, ns: Ns, local: &str, value: &str) {
-        let Some(e) = self.element_mut(id) else { return };
-        if let Some(a) = e.attrs.iter_mut().find(|a| !a.is_ns_decl() && a.ns == ns && &*a.local == local) {
+        let Some(e) = self.element_mut(id) else {
+            return;
+        };
+        if let Some(a) = e
+            .attrs
+            .iter_mut()
+            .find(|a| !a.is_ns_decl() && a.ns == ns && &*a.local == local)
+        {
             value.clone_into(&mut a.value);
             return;
         }
-        let prefix = if ns == Ns::NONE { Prefix::Written(None) } else { Prefix::Auto };
-        e.attrs.push(Attr { prefix, local: local.into(), ns, value: value.to_owned() });
+        let prefix = if ns == Ns::NONE {
+            Prefix::Written(None)
+        } else {
+            Prefix::Auto
+        };
+        e.attrs.push(Attr {
+            prefix,
+            local: local.into(),
+            ns,
+            value: value.to_owned(),
+        });
     }
 
     /// Renames an element in place, keeping its namespace, attributes, and children.
@@ -372,7 +393,8 @@ impl XmlDoc {
     /// Removes the attribute `(ns, local)`, if present.
     pub fn remove_attr_ns(&mut self, id: NodeId, ns: Ns, local: &str) {
         if let Some(e) = self.element_mut(id) {
-            e.attrs.retain(|a| a.is_ns_decl() || a.ns != ns || &*a.local != local);
+            e.attrs
+                .retain(|a| a.is_ns_decl() || a.ns != ns || &*a.local != local);
         }
     }
 
@@ -395,7 +417,9 @@ impl XmlDoc {
     /// Inserts `child` at `index` among all child nodes of `parent`.
     pub fn insert_child(&mut self, parent: NodeId, index: usize, child: NodeId) {
         self.detach(child);
-        let Some(e) = self.element_mut(parent) else { return };
+        let Some(e) = self.element_mut(parent) else {
+            return;
+        };
         let index = index.min(e.children.len());
         e.children.insert(index, child);
         self.node_mut(child).parent = Some(parent);
@@ -403,14 +427,22 @@ impl XmlDoc {
 
     /// Inserts `child` immediately before `reference` (a child of `parent`).
     pub fn insert_before(&mut self, reference: NodeId, child: NodeId) {
-        let Some(parent) = self.parent(reference) else { return };
-        let index = self.child_nodes(parent).iter().position(|&c| c == reference).unwrap_or(0);
+        let Some(parent) = self.parent(reference) else {
+            return;
+        };
+        let index = self
+            .child_nodes(parent)
+            .iter()
+            .position(|&c| c == reference)
+            .unwrap_or(0);
         self.insert_child(parent, index, child);
     }
 
     /// Inserts `child` immediately after `reference` (a child of `parent`).
     pub fn insert_after(&mut self, reference: NodeId, child: NodeId) {
-        let Some(parent) = self.parent(reference) else { return };
+        let Some(parent) = self.parent(reference) else {
+            return;
+        };
         let index = self
             .child_nodes(parent)
             .iter()
@@ -479,7 +511,10 @@ impl XmlDoc {
     /// Deep-copies the subtree at `id` (detached copy in the same document).
     pub fn deep_clone(&mut self, id: NodeId) -> NodeId {
         let kind = match &self.node(id).kind {
-            NodeKind::Element(e) => NodeKind::Element(Element { children: Vec::new(), ..e.clone() }),
+            NodeKind::Element(e) => NodeKind::Element(Element {
+                children: Vec::new(),
+                ..e.clone()
+            }),
             other => other.clone(),
         };
         let copy = self.push_node(None, kind);
@@ -505,7 +540,11 @@ impl XmlDoc {
                     .map(|a| {
                         let ans = self.import_ns(other, a.ns);
                         Attr {
-                            prefix: if ans == Ns::NONE { Prefix::Written(None) } else { Prefix::Auto },
+                            prefix: if ans == Ns::NONE {
+                                Prefix::Written(None)
+                            } else {
+                                Prefix::Auto
+                            },
                             local: a.local.clone(),
                             ns: ans,
                             value: a.value.clone(),
@@ -548,7 +587,9 @@ impl XmlDoc {
 pub fn parse_i64(v: &str) -> Option<i64> {
     let v = v.trim();
     let v = v.strip_prefix('+').unwrap_or(v);
-    v.parse::<i64>().ok().or_else(|| v.parse::<f64>().ok().map(|f| f.round() as i64))
+    v.parse::<i64>()
+        .ok()
+        .or_else(|| v.parse::<f64>().ok().map(|f| f.round() as i64))
 }
 
 /// Parses an XML schema boolean.

@@ -12,11 +12,30 @@ fn every_preset_evaluates() {
             for p in &g.paths {
                 for poly in p.path.flatten(1.0) {
                     for pt in poly {
-                        assert!(pt.x.is_finite() && pt.y.is_finite(), "{name} produced non-finite points");
+                        assert!(
+                            pt.x.is_finite() && pt.y.is_finite(),
+                            "{name} produced non-finite points"
+                        );
                     }
                 }
             }
-            if w > 0.0 && h > 0.0 && !matches!(name.as_str(), "line" | "lineInv" | "straightConnector1" | "bentConnector2" | "bentConnector3" | "bentConnector4" | "bentConnector5" | "curvedConnector2" | "curvedConnector3" | "curvedConnector4" | "curvedConnector5") {
+            if w > 0.0
+                && h > 0.0
+                && !matches!(
+                    name.as_str(),
+                    "line"
+                        | "lineInv"
+                        | "straightConnector1"
+                        | "bentConnector2"
+                        | "bentConnector3"
+                        | "bentConnector4"
+                        | "bentConnector5"
+                        | "curvedConnector2"
+                        | "curvedConnector3"
+                        | "curvedConnector4"
+                        | "curvedConnector5"
+                )
+            {
                 assert!(!g.paths.is_empty(), "{name} has no paths");
             }
         }
@@ -26,19 +45,37 @@ fn every_preset_evaluates() {
 #[test]
 fn rect_and_ellipse() {
     let g = preset("rect", 100.0 * EMU, 50.0 * EMU, &[]).unwrap();
-    assert_eq!(g.text_rect, crate::path::Rect::from_xywh(0.0, 0.0, 100.0, 50.0));
+    assert_eq!(
+        g.text_rect,
+        crate::path::Rect::from_xywh(0.0, 0.0, 100.0, 50.0)
+    );
     let b = g.paths[0].path.bounds().unwrap();
     assert_eq!((b.w, b.h), (100.0, 50.0));
     let e = preset("ellipse", 100.0 * EMU, 100.0 * EMU, &[]).unwrap();
     // Text rectangle of an ellipse is the inscribed square.
     let tr = e.text_rect;
-    assert!((tr.x - 14.6447).abs() < 0.01 && (tr.w - 70.7107).abs() < 0.01, "{tr:?}");
+    assert!(
+        (tr.x - 14.6447).abs() < 0.01 && (tr.w - 70.7107).abs() < 0.01,
+        "{tr:?}"
+    );
 }
 
 #[test]
 fn adjust_values_change_geometry() {
-    let small = preset("roundRect", 100.0 * EMU, 100.0 * EMU, &[("adj".into(), 10000.0)]).unwrap();
-    let large = preset("roundRect", 100.0 * EMU, 100.0 * EMU, &[("adj".into(), 50000.0)]).unwrap();
+    let small = preset(
+        "roundRect",
+        100.0 * EMU,
+        100.0 * EMU,
+        &[("adj".into(), 10000.0)],
+    )
+    .unwrap();
+    let large = preset(
+        "roundRect",
+        100.0 * EMU,
+        100.0 * EMU,
+        &[("adj".into(), 50000.0)],
+    )
+    .unwrap();
     // A rounder rectangle has a smaller text rectangle.
     assert!(large.text_rect.w < small.text_rect.w);
 }
@@ -61,7 +98,10 @@ fn custom_geometry_from_xml() {
     assert_eq!((b.w, b.h), (400.0, 100.0), "path space scales to the shape");
     assert_eq!(g.paths[1].fill, PathFill::None);
     assert!(!g.paths[1].stroke);
-    assert_eq!(g.paths[1].path.els[0], crate::path::PathEl::MoveTo(crate::path::Point::new(200.0, 0.0)));
+    assert_eq!(
+        g.paths[1].path.els[0],
+        crate::path::PathEl::MoveTo(crate::path::Point::new(200.0, 0.0))
+    );
 }
 
 #[test]

@@ -8,7 +8,7 @@ mod formula;
 mod presets;
 
 use crate::path::{Path, Point, Rect};
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 pub use formula::Guides;
 
 /// How a geometry sub-path is filled.
@@ -84,12 +84,17 @@ pub fn custom(doc: &XmlDoc, cust_geom: NodeId, w: f64, h: f64) -> ShapeGeometry 
 
 /// Reads the `avLst` overrides of a `prstGeom`/`custGeom` element.
 pub fn adjust_values(doc: &XmlDoc, geom: NodeId) -> Vec<Adjust> {
-    let Some(av) = doc.child(geom, Ns::A, "avLst") else { return Vec::new() };
+    let Some(av) = doc.child(geom, Ns::A, "avLst") else {
+        return Vec::new();
+    };
     doc.children_named(av, Ns::A, "gd")
         .filter_map(|gd| {
             let name = doc.attr(gd, "name")?.to_owned();
             let fmla = doc.attr(gd, "fmla")?;
-            let v = fmla.trim().strip_prefix("val").and_then(|v| v.trim().parse::<f64>().ok())?;
+            let v = fmla
+                .trim()
+                .strip_prefix("val")
+                .and_then(|v| v.trim().parse::<f64>().ok())?;
             Some((name, v))
         })
         .collect()
@@ -100,7 +105,9 @@ fn evaluate(doc: &XmlDoc, geom: NodeId, w: f64, h: f64, adjust: &[Adjust]) -> Sh
     // Shape defaults first, then caller overrides; later guides may reference both.
     if let Some(av) = child_any(doc, geom, "avLst") {
         for gd in doc.children(av).filter(|&g| doc.local(g) == "gd") {
-            let (Some(name), Some(fmla)) = (doc.attr(gd, "name"), doc.attr(gd, "fmla")) else { continue };
+            let (Some(name), Some(fmla)) = (doc.attr(gd, "name"), doc.attr(gd, "fmla")) else {
+                continue;
+            };
             match adjust.iter().find(|(n, _)| n == name) {
                 Some((_, v)) => guides.set(name, *v),
                 None => guides.define(name, fmla),
@@ -120,22 +127,30 @@ fn evaluate(doc: &XmlDoc, geom: NodeId, w: f64, h: f64, adjust: &[Adjust]) -> Sh
         }
     }
     let to_pt = |v: f64| (v / EMU_PER_PT) as f32;
-    let text_rect = child_any(doc, geom, "rect").map_or(
-        Rect::from_xywh(0.0, 0.0, to_pt(w), to_pt(h)),
-        |r| {
+    let text_rect =
+        child_any(doc, geom, "rect").map_or(Rect::from_xywh(0.0, 0.0, to_pt(w), to_pt(h)), |r| {
             let g = |a: &str, d: f64| doc.attr(r, a).map_or(d, |v| guides.get(v));
             let (l, t, rr, b) = (g("l", 0.0), g("t", 0.0), g("r", w), g("b", h));
-            Rect::from_ltrb(to_pt(l.min(rr)), to_pt(t.min(b)), to_pt(rr.max(l)), to_pt(b.max(t)))
-        },
-    );
+            Rect::from_ltrb(
+                to_pt(l.min(rr)),
+                to_pt(t.min(b)),
+                to_pt(rr.max(l)),
+                to_pt(b.max(t)),
+            )
+        });
     let mut connections = Vec::new();
     if let Some(cl) = child_any(doc, geom, "cxnLst") {
         for cxn in doc.children(cl).filter(|&c| doc.local(c) == "cxn") {
-            let Some(pos) = doc.children(cxn).find(|&p| doc.local(p) == "pos") else { continue };
+            let Some(pos) = doc.children(cxn).find(|&p| doc.local(p) == "pos") else {
+                continue;
+            };
             let x = doc.attr(pos, "x").map_or(0.0, |v| guides.get(v));
             let y = doc.attr(pos, "y").map_or(0.0, |v| guides.get(v));
             let ang = doc.attr(cxn, "ang").map_or(0.0, |v| guides.get(v)) / 60000.0;
-            connections.push(ConnectionSite { pos: Point::new(to_pt(x), to_pt(y)), angle: ang });
+            connections.push(ConnectionSite {
+                pos: Point::new(to_pt(x), to_pt(y)),
+                angle: ang,
+            });
         }
     }
     let mut paths = Vec::new();
@@ -144,7 +159,11 @@ fn evaluate(doc: &XmlDoc, geom: NodeId, w: f64, h: f64, adjust: &[Adjust]) -> Sh
             paths.push(build_path(doc, p, &guides, w, h));
         }
     }
-    ShapeGeometry { paths, text_rect, connections }
+    ShapeGeometry {
+        paths,
+        text_rect,
+        connections,
+    }
 }
 
 fn child_any(doc: &XmlDoc, parent: NodeId, local: &str) -> Option<NodeId> {
@@ -176,7 +195,11 @@ fn build_path(doc: &XmlDoc, p: NodeId, guides: &Guides, w: f64, h: f64) -> GeomP
     };
     let mut path = Path::new();
     for cmd in doc.children(p) {
-        let pts: Vec<Point> = doc.children(cmd).filter(|&c| doc.local(c) == "pt").map(pt).collect();
+        let pts: Vec<Point> = doc
+            .children(cmd)
+            .filter(|&c| doc.local(c) == "pt")
+            .map(pt)
+            .collect();
         match doc.local(cmd) {
             "moveTo" => {
                 if let Some(&a) = pts.first() {

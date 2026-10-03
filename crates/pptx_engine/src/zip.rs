@@ -90,7 +90,13 @@ fn decode_cp437(raw: &[u8]) -> String {
         '■', '\u{a0}',
     ];
     raw.iter()
-        .map(|&b| if b < 0x80 { b as char } else { HIGH[(b - 0x80) as usize] })
+        .map(|&b| {
+            if b < 0x80 {
+                b as char
+            } else {
+                HIGH[(b - 0x80) as usize]
+            }
+        })
         .collect()
 }
 
@@ -178,11 +184,15 @@ impl<'a> Archive<'a> {
                 return Err(Error::Unsupported(format!("encrypted zip entry {name}")));
             }
             if uncompressed_size > MAX_ENTRY_SIZE {
-                return Err(Error::LimitExceeded(format!("zip entry {name} is too large")));
+                return Err(Error::LimitExceeded(format!(
+                    "zip entry {name} is too large"
+                )));
             }
             total = total.saturating_add(uncompressed_size);
             if total > MAX_TOTAL_SIZE {
-                return Err(Error::LimitExceeded("archive inflates beyond the size limit".into()));
+                return Err(Error::LimitExceeded(
+                    "archive inflates beyond the size limit".into(),
+                ));
             }
             let lo = to_usize(local_offset)?;
             if u32_at(bytes, lo)? != LOCAL_HEADER_SIG {
@@ -261,7 +271,9 @@ fn apply_zip64_extra(
     while extra.len() >= 4 {
         let id = u16::from_le_bytes([extra[0], extra[1]]);
         let len = usize::from(u16::from_le_bytes([extra[2], extra[3]]));
-        let body = extra.get(4..4 + len).ok_or(Error::Zip("truncated extra field"))?;
+        let body = extra
+            .get(4..4 + len)
+            .ok_or(Error::Zip("truncated extra field"))?;
         if id == ZIP64_EXTRA_ID {
             let mut at = 0;
             for field in [&mut *uncompressed, &mut *compressed, &mut *offset] {
@@ -287,7 +299,9 @@ fn find_eocd(bytes: &[u8]) -> Result<usize> {
             return Ok(at);
         }
         if at == lowest {
-            return Err(Error::Zip("not a zip archive (no end of central directory)"));
+            return Err(Error::Zip(
+                "not a zip archive (no end of central directory)",
+            ));
         }
         at -= 1;
     }
@@ -348,11 +362,24 @@ impl Writer {
             WriteData::Fresh { data, compress } => {
                 let crc = crc32(data);
                 if compress && data.len() > 64 {
-                    let deflated =
-                        miniz_oxide::deflate::compress_to_vec(data, DEFLATE_LEVEL);
-                    (METHOD_DEFLATE, crc, data.len() as u64, 0, DOS_EPOCH_DATE, deflated.into())
+                    let deflated = miniz_oxide::deflate::compress_to_vec(data, DEFLATE_LEVEL);
+                    (
+                        METHOD_DEFLATE,
+                        crc,
+                        data.len() as u64,
+                        0,
+                        DOS_EPOCH_DATE,
+                        deflated.into(),
+                    )
                 } else {
-                    (METHOD_STORED, crc, data.len() as u64, 0, DOS_EPOCH_DATE, data.into())
+                    (
+                        METHOD_STORED,
+                        crc,
+                        data.len() as u64,
+                        0,
+                        DOS_EPOCH_DATE,
+                        data.into(),
+                    )
                 }
             }
             WriteData::Raw { entry, raw } => (
@@ -451,7 +478,11 @@ const fn crc_table() -> [u32; 256] {
         let mut c = i as u32;
         let mut k = 0;
         while k < 8 {
-            c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
             k += 1;
         }
         table[i] = c;

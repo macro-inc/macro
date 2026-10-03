@@ -39,13 +39,19 @@ impl ContentTypes {
                 }
                 "Override" => {
                     if let Some(name) = doc.attr(c, "PartName") {
-                        overrides.push((super::normalize_part_name(&super::percent_decode(name)), ct));
+                        overrides
+                            .push((super::normalize_part_name(&super::percent_decode(name)), ct));
                     }
                 }
                 _ => {}
             }
         }
-        Ok(Self { doc, defaults, overrides, dirty: false })
+        Ok(Self {
+            doc,
+            defaults,
+            overrides,
+            dirty: false,
+        })
     }
 
     /// Whether the content types changed since parsing.
@@ -55,26 +61,41 @@ impl ContentTypes {
 
     /// Content type for a normalized part name.
     pub fn lookup(&self, part: &str) -> Option<&str> {
-        if let Some((_, ct)) = self.overrides.iter().find(|(n, _)| n.eq_ignore_ascii_case(part)) {
+        if let Some((_, ct)) = self
+            .overrides
+            .iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case(part))
+        {
             return Some(ct);
         }
         let ext = part.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase())?;
-        self.defaults.iter().find(|(e, _)| *e == ext).map(|(_, ct)| ct.as_str())
+        self.defaults
+            .iter()
+            .find(|(e, _)| *e == ext)
+            .map(|(_, ct)| ct.as_str())
     }
 
     /// The default content type registered for an extension.
     pub fn default_for(&self, ext: &str) -> Option<&str> {
         let ext = ext.to_ascii_lowercase();
-        self.defaults.iter().find(|(e, _)| *e == ext).map(|(_, ct)| ct.as_str())
+        self.defaults
+            .iter()
+            .find(|(e, _)| *e == ext)
+            .map(|(_, ct)| ct.as_str())
     }
 
     /// Registers (or replaces) an override for `part`.
     pub fn set_override(&mut self, part: &str, content_type: &str) {
-        if self.overrides.iter().any(|(n, ct)| n.eq_ignore_ascii_case(part) && ct == content_type) {
+        if self
+            .overrides
+            .iter()
+            .any(|(n, ct)| n.eq_ignore_ascii_case(part) && ct == content_type)
+        {
             return;
         }
         self.remove_override(part);
-        self.overrides.push((part.to_owned(), content_type.to_owned()));
+        self.overrides
+            .push((part.to_owned(), content_type.to_owned()));
         let el = self.doc.create_element(Ns::CONTENT_TYPES, "Override");
         self.doc.set_attr(el, "PartName", part);
         self.doc.set_attr(el, "ContentType", content_type);
@@ -86,7 +107,8 @@ impl ContentTypes {
     /// Removes the override for `part`, if any.
     pub fn remove_override(&mut self, part: &str) {
         let before = self.overrides.len();
-        self.overrides.retain(|(n, _)| !n.eq_ignore_ascii_case(part));
+        self.overrides
+            .retain(|(n, _)| !n.eq_ignore_ascii_case(part));
         if self.overrides.len() == before {
             return;
         }
@@ -97,7 +119,8 @@ impl ContentTypes {
             .filter(|&c| {
                 self.doc.local(c) == "Override"
                     && self.doc.attr(c, "PartName").is_some_and(|n| {
-                        super::normalize_part_name(&super::percent_decode(n)).eq_ignore_ascii_case(part)
+                        super::normalize_part_name(&super::percent_decode(n))
+                            .eq_ignore_ascii_case(part)
                     })
             })
             .collect();
@@ -119,7 +142,10 @@ impl ContentTypes {
         self.doc.set_attr(el, "ContentType", content_type);
         // Defaults conventionally precede overrides.
         let root = self.doc.root();
-        let first_override = self.doc.children(root).find(|&c| self.doc.local(c) == "Override");
+        let first_override = self
+            .doc
+            .children(root)
+            .find(|&c| self.doc.local(c) == "Override");
         match first_override {
             Some(first_override) => self.doc.insert_before(first_override, el),
             None => self.doc.append_child(root, el),

@@ -385,6 +385,8 @@ pub(crate) struct GroupModel {
     pub up_down: Option<(ShapeProps, ShapeProps, f32)>,
     /// A 3-D group type (`c:bar3DChart`, `c:pie3DChart`...).
     pub is_3d: bool,
+    /// `c:gapDepth`: gap between 3-D series rows, in percent of a bar width.
+    pub gap_depth: f32,
 }
 
 /// Axis type.
@@ -504,6 +506,19 @@ pub(crate) enum Blanks {
     Span,
 }
 
+/// A data table under the plot (`c:dTable`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct DataTableModel {
+    /// Lines between rows, between columns, and around the table.
+    pub horz: bool,
+    pub vert: bool,
+    pub outline: bool,
+    /// Legend keys beside the series names.
+    pub keys: bool,
+    pub shape: ShapeProps,
+    pub text: TextSpec,
+}
+
 /// A parsed chart.
 #[derive(Clone, Debug)]
 pub(crate) struct ChartModel {
@@ -513,6 +528,8 @@ pub(crate) struct ChartModel {
     pub axes: Vec<AxisModel>,
     pub plot_layout: Option<ManualLayout>,
     pub plot_shape: ShapeProps,
+    /// `c:plotArea/c:dTable`.
+    pub data_table: Option<DataTableModel>,
     pub legend: Option<LegendModel>,
     pub space_shape: ShapeProps,
     pub text: TextSpec,
@@ -528,6 +545,12 @@ pub(crate) struct ChartModel {
     pub rot_x: Option<f32>,
     /// `c:view3D/c:rotY` (3-D pies: the first slice's angle).
     pub rot_y: Option<f32>,
+    /// `c:view3D/c:depthPercent`.
+    pub depth_percent: Option<f32>,
+    /// 3-D walls and floor (`c:backWall`, `c:sideWall`, `c:floor`).
+    pub back_wall: ShapeProps,
+    pub side_wall: ShapeProps,
+    pub floor: ShapeProps,
 }
 
 impl ChartModel {

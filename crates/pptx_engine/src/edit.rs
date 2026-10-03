@@ -20,11 +20,11 @@ mod text;
 mod xmlutil;
 
 pub use notes::notes_text;
-pub use slides::{LayoutInfo, layouts};
 pub use ops::{
-    BodyPatch, BulletSpec, CellRef, Created, EditOp, EditResult, FillSpec, LinePatch, NewShape, ParaPatch, RunPatch,
-    TextPos, ZOrder,
+    BodyPatch, BulletSpec, CellRef, Created, EditOp, EditResult, FillSpec, LinePatch, NewShape,
+    ParaPatch, RunPatch, TextPos, ZOrder,
 };
+pub use slides::{LayoutInfo, layouts};
 
 use crate::error::{Error, Result};
 use crate::font::FontDb;
@@ -99,7 +99,11 @@ impl Presentation {
     }
 
     /// Applies a batch, returning the result and the state before the batch.
-    fn apply_batch(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<(EditResult, Presentation)> {
+    fn apply_batch(
+        &mut self,
+        ops: &[EditOp],
+        fonts: &FontDb,
+    ) -> Result<(EditResult, Presentation)> {
         let before = self.clone();
         match self.run_batch(ops, fonts) {
             Ok(created) => {
@@ -116,7 +120,11 @@ impl Presentation {
     }
 
     fn run_batch(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<Vec<Created>> {
-        let gc = if ops.iter().any(EditOp::may_orphan) { Some(parts::baseline(self)?) } else { None };
+        let gc = if ops.iter().any(EditOp::may_orphan) {
+            Some(parts::baseline(self)?)
+        } else {
+            None
+        };
         let mut created = Vec::new();
         let mut refit = Vec::new();
         for op in ops {
@@ -162,27 +170,59 @@ impl Presentation {
         use EditOp as O;
         let mut created = None;
         match op {
-            O::SetText { slide, shape, cell, text } => {
+            O::SetText {
+                slide,
+                shape,
+                cell,
+                text,
+            } => {
                 let part = self.slide_part(*slide)?;
-                self.edit_text(&part, *shape, *cell, |doc, body| text::set_text(doc, body, text))?;
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    text::set_text(doc, body, text)
+                })?;
                 refit.push((part, *shape));
             }
-            O::InsertText { slide, shape, cell, at, text } => {
+            O::InsertText {
+                slide,
+                shape,
+                cell,
+                at,
+                text,
+            } => {
                 let part = self.slide_part(*slide)?;
-                self.edit_text(&part, *shape, *cell, |doc, body| text::insert_text(doc, body, *at, text))?;
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    text::insert_text(doc, body, *at, text)
+                })?;
                 refit.push((part, *shape));
             }
-            O::DeleteText { slide, shape, cell, start, end } => {
+            O::DeleteText {
+                slide,
+                shape,
+                cell,
+                start,
+                end,
+            } => {
                 let part = self.slide_part(*slide)?;
-                self.edit_text(&part, *shape, *cell, |doc, body| text::delete_text(doc, body, *start, *end))?;
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    text::delete_text(doc, body, *start, *end)
+                })?;
                 refit.push((part, *shape));
             }
-            O::FormatText { slide, shape, cell, start, end, props } => {
+            O::FormatText {
+                slide,
+                shape,
+                cell,
+                start,
+                end,
+                props,
+            } => {
                 let part = self.slide_part(*slide)?;
                 let rid = match props.link.as_deref().map(str::trim) {
-                    Some(link) if !link.is_empty() => {
-                        Some(self.rels_mut(&part)?.add(rel_type::HYPERLINK, link, TargetMode::External))
-                    }
+                    Some(link) if !link.is_empty() => Some(self.rels_mut(&part)?.add(
+                        rel_type::HYPERLINK,
+                        link,
+                        TargetMode::External,
+                    )),
                     _ => None,
                 };
                 self.edit_text(&part, *shape, *cell, |doc, body| {
@@ -190,17 +230,43 @@ impl Presentation {
                 })?;
                 refit.push((part, *shape));
             }
-            O::FormatParagraphs { slide, shape, cell, from, to, props } => {
+            O::FormatParagraphs {
+                slide,
+                shape,
+                cell,
+                from,
+                to,
+                props,
+            } => {
                 let part = self.slide_part(*slide)?;
-                self.edit_text(&part, *shape, *cell, |doc, body| text::format_paragraphs(doc, body, *from, *to, props))?;
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    text::format_paragraphs(doc, body, *from, *to, props)
+                })?;
                 refit.push((part, *shape));
             }
-            O::FormatBody { slide, shape, cell, props } => {
+            O::FormatBody {
+                slide,
+                shape,
+                cell,
+                props,
+            } => {
                 let part = self.slide_part(*slide)?;
-                self.edit_text(&part, *shape, *cell, |doc, body| text::format_body(doc, body, props))?;
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    text::format_body(doc, body, props)
+                })?;
                 refit.push((part, *shape));
             }
-            O::SetTransform { slide, shape, x, y, w, h, rotation, flip_h, flip_v } => {
+            O::SetTransform {
+                slide,
+                shape,
+                x,
+                y,
+                w,
+                h,
+                rotation,
+                flip_h,
+                flip_v,
+            } => {
                 let part = self.slide_part(*slide)?;
                 let patch = shapes::TransformPatch {
                     x: *x,
@@ -228,16 +294,30 @@ impl Presentation {
                 let node = shapes::find(doc, *shape)?;
                 shapes::set_line(doc, node, line)?;
             }
-            O::SetGeometry { slide, shape, preset } => {
+            O::SetGeometry {
+                slide,
+                shape,
+                preset,
+            } => {
                 let part = self.slide_part(*slide)?;
                 let doc = self.xml_mut(&part)?;
                 let node = shapes::find(doc, *shape)?;
                 shapes::set_geometry(doc, node, preset)?;
             }
-            O::AddShape { slide, shape, x, y, w, h } => {
+            O::AddShape {
+                slide,
+                shape,
+                x,
+                y,
+                w,
+                h,
+            } => {
                 let part = self.slide_part(*slide)?;
                 let id = shapes::add_shape(self, &part, shape, [*x, *y, *w, *h])?;
-                created = Some(Created { slide: *slide, shape: Some(id) });
+                created = Some(Created {
+                    slide: *slide,
+                    shape: Some(id),
+                });
                 refit.push((part, id));
             }
             O::DeleteShape { slide, shape } => {
@@ -246,10 +326,18 @@ impl Presentation {
                 let node = shapes::find(doc, *shape)?;
                 shapes::delete_shape(doc, node);
             }
-            O::DuplicateShape { slide, shape, dx, dy } => {
+            O::DuplicateShape {
+                slide,
+                shape,
+                dx,
+                dy,
+            } => {
                 let part = self.slide_part(*slide)?;
                 let id = shapes::duplicate_shape(self, &part, *shape, *dx, *dy)?;
-                created = Some(Created { slide: *slide, shape: Some(id) });
+                created = Some(Created {
+                    slide: *slide,
+                    shape: Some(id),
+                });
             }
             O::ReorderShape { slide, shape, to } => {
                 let part = self.slide_part(*slide)?;
@@ -261,10 +349,21 @@ impl Presentation {
                 let part = self.slide_part(*slide)?;
                 shapes::replace_image(self, &part, *shape, data)?;
             }
-            O::SetCellText { slide, shape, row, col, text } => {
+            O::SetCellText {
+                slide,
+                shape,
+                row,
+                col,
+                text,
+            } => {
                 let part = self.slide_part(*slide)?;
-                let cell = CellRef { row: *row, col: *col };
-                self.edit_text(&part, *shape, Some(cell), |doc, body| text::set_text(doc, body, text))?;
+                let cell = CellRef {
+                    row: *row,
+                    col: *col,
+                };
+                self.edit_text(&part, *shape, Some(cell), |doc, body| {
+                    text::set_text(doc, body, text)
+                })?;
             }
             O::InsertTableRow { slide, shape, at } => {
                 let part = self.slide_part(*slide)?;
@@ -290,19 +389,38 @@ impl Presentation {
                 let node = shapes::find(doc, *shape)?;
                 table::delete_column(doc, node, *col)?;
             }
-            O::AddSlide { layout, after, title, body } => {
-                let id = slides::add_slide(self, layout.as_deref(), *after, title.as_deref(), body.as_deref())?;
-                created = Some(Created { slide: id, shape: None });
+            O::AddSlide {
+                layout,
+                after,
+                title,
+                body,
+            } => {
+                let id = slides::add_slide(
+                    self,
+                    layout.as_deref(),
+                    *after,
+                    title.as_deref(),
+                    body.as_deref(),
+                )?;
+                created = Some(Created {
+                    slide: id,
+                    shape: None,
+                });
             }
             O::DuplicateSlide { slide } => {
                 let id = slides::duplicate_slide(self, *slide)?;
-                created = Some(Created { slide: id, shape: None });
+                created = Some(Created {
+                    slide: id,
+                    shape: None,
+                });
             }
             O::DeleteSlide { slide } => slides::delete_slide(self, *slide)?,
             O::MoveSlide { slide, to } => slides::move_slide(self, *slide, *to)?,
             O::SetSlideHidden { slide, hidden } => slides::set_hidden(self, *slide, *hidden)?,
             O::SetNotes { slide, text } => notes::set_notes(self, *slide, text)?,
-            O::SetBackground { slide, fill } => slides::set_background(self, *slide, fill.as_ref())?,
+            O::SetBackground { slide, fill } => {
+                slides::set_background(self, *slide, fill.as_ref())?
+            }
         }
         Ok(created)
     }
@@ -314,13 +432,18 @@ fn diff(before: &Presentation, after: &Presentation) -> EditResult {
     let structure_changed = ids(before) != ids(after) || before.size != after.size;
     let same = |name: &str| before.pkg.part_identity(name) == after.pkg.part_identity(name);
     let notes_part = |p: &Presentation, slide: &str| {
-        p.rels.get(slide).and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
+        p.rels
+            .get(slide)
+            .and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
     };
     let changed_slides = after
         .slides
         .iter()
         .filter(|s| {
-            let unchanged = before.slides.iter().any(|o| o.id == s.id && o.part == s.part)
+            let unchanged = before
+                .slides
+                .iter()
+                .any(|o| o.id == s.id && o.part == s.part)
                 && same(&s.part)
                 && same(&rels_part_name(&s.part))
                 && notes_part(after, &s.part).is_none_or(|n| same(&n));
@@ -328,7 +451,11 @@ fn diff(before: &Presentation, after: &Presentation) -> EditResult {
         })
         .map(|s| s.id)
         .collect();
-    EditResult { created: Vec::new(), changed_slides, structure_changed }
+    EditResult {
+        created: Vec::new(),
+        changed_slides,
+        structure_changed,
+    }
 }
 
 /// Moves parsed-part and decoded-image caches from `from` into `to` for every
@@ -369,7 +496,12 @@ pub struct Editor {
 impl Editor {
     /// Wraps an opened presentation.
     pub fn new(pres: Presentation) -> Self {
-        Self { pres, undo: Vec::new(), redo: Vec::new(), group: None }
+        Self {
+            pres,
+            undo: Vec::new(),
+            redo: Vec::new(),
+            group: None,
+        }
     }
 
     /// The current state.
@@ -386,7 +518,12 @@ impl Editor {
     ///
     /// Consecutive batches with the same `group` key merge into a single undo
     /// step (used for typing); `None` always starts a new step.
-    pub fn apply(&mut self, ops: &[EditOp], group: Option<&str>, fonts: &FontDb) -> Result<EditResult> {
+    pub fn apply(
+        &mut self,
+        ops: &[EditOp],
+        group: Option<&str>,
+        fonts: &FontDb,
+    ) -> Result<EditResult> {
         let (result, before) = self.pres.apply_batch(ops, fonts)?;
         let nothing_changed = result.changed_slides.is_empty() && !result.structure_changed;
         if nothing_changed && result.created.is_empty() {

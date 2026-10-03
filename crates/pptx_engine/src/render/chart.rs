@@ -10,6 +10,7 @@ mod axes;
 mod axis;
 mod canvas;
 mod date;
+mod depth;
 mod dlabel;
 mod legend;
 mod look;
@@ -21,6 +22,7 @@ mod plot;
 mod radar;
 mod series;
 mod style;
+mod table;
 #[cfg(test)]
 mod test;
 mod ticks;

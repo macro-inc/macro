@@ -7,10 +7,12 @@ use crate::error::{Error, Result};
 use crate::model::presentation::Presentation;
 use crate::model::shape::{placeholder_of, sp_tree, tree_children};
 use crate::opc::{Relationships, rel_type};
-use crate::xml::{Ns, NodeId, STANDARD_DECLARATION, XmlDoc};
+use crate::xml::{NodeId, Ns, STANDARD_DECLARATION, XmlDoc};
 
-const NOTES_SLIDE_TYPE: &str = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
-const NOTES_MASTER_TYPE: &str = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
+const NOTES_SLIDE_TYPE: &str =
+    "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
+const NOTES_MASTER_TYPE: &str =
+    "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
 const THEME_TYPE: &str = "application/vnd.openxmlformats-officedocument.theme+xml";
 
 /// The notes body placeholder of a notes slide.
@@ -32,12 +34,19 @@ fn notes_part(pres: &mut Presentation, slide_part: &str) -> Result<Option<String
 /// The speaker notes of a slide (`\n` between paragraphs), if it has any.
 pub fn notes_text(pres: &mut Presentation, slide: u32) -> Result<Option<String>> {
     let part = pres.slide_part(slide)?;
-    let Some(notes) = notes_part(pres, &part)? else { return Ok(None) };
-    let doc = pres.xml(&notes)?;
-    let Some(body) = notes_body(&doc).and_then(|n| doc.children(n).find(|&c| doc.local(c) == "txBody")) else {
+    let Some(notes) = notes_part(pres, &part)? else {
         return Ok(None);
     };
-    let paras: Vec<String> = text::paragraphs(&doc, body).iter().map(|&p| text::para_text(&doc, p)).collect();
+    let doc = pres.xml(&notes)?;
+    let Some(body) =
+        notes_body(&doc).and_then(|n| doc.children(n).find(|&c| doc.local(c) == "txBody"))
+    else {
+        return Ok(None);
+    };
+    let paras: Vec<String> = text::paragraphs(&doc, body)
+        .iter()
+        .map(|&p| text::para_text(&doc, p))
+        .collect();
     let joined = paras.join("\n");
     Ok((!joined.trim().is_empty()).then_some(joined))
 }
@@ -53,7 +62,8 @@ pub fn set_notes(pres: &mut Presentation, slide: u32, value: &str) -> Result<()>
     let shape = match notes_body(doc) {
         Some(s) => s,
         None => {
-            let tree = sp_tree(doc).ok_or_else(|| Error::InvalidEdit("notes slide has no shape tree".into()))?;
+            let tree = sp_tree(doc)
+                .ok_or_else(|| Error::InvalidEdit("notes slide has no shape tree".into()))?;
             let id = super::xmlutil::max_shape_id(doc) + 1;
             let sp = super::xmlutil::import_fragment(doc, &notes_placeholder_xml(id))?;
             doc.append_child(tree, sp);
@@ -73,17 +83,21 @@ fn notes_placeholder_xml(id: u32) -> String {
 
 fn create_notes_slide(pres: &mut Presentation, slide_part: &str) -> Result<String> {
     let master = ensure_notes_master(pres)?;
-    let part = pres.pkg.unique_part_name("/ppt/notesSlides/notesSlide", ".xml");
+    let part = pres
+        .pkg
+        .unique_part_name("/ppt/notesSlides/notesSlide", ".xml");
     let xml = format!(
         "{STANDARD_DECLARATION}<p:notes {PML_NAMESPACES}><p:cSld><p:spTree>{TREE_HEADER}<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"Slide Image Placeholder 1\"/><p:cNvSpPr><a:spLocks noGrp=\"1\" noRot=\"1\" noChangeAspect=\"1\"/></p:cNvSpPr><p:nvPr><p:ph type=\"sldImg\"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>{}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>",
         notes_placeholder_xml(3)
     );
-    pres.pkg.write(&part, xml.into_bytes(), Some(NOTES_SLIDE_TYPE));
+    pres.pkg
+        .write(&part, xml.into_bytes(), Some(NOTES_SLIDE_TYPE));
     let mut rels = Relationships::empty(&part);
     rels.add_internal(rel_type::NOTES_MASTER, &master);
     rels.add_internal(rel_type::SLIDE, slide_part);
     pres.put_rels(rels);
-    pres.rels_mut(slide_part)?.add_internal(rel_type::NOTES_SLIDE, &part);
+    pres.rels_mut(slide_part)?
+        .add_internal(rel_type::NOTES_SLIDE, &part);
     Ok(part)
 }
 
@@ -91,27 +105,39 @@ fn create_notes_slide(pres: &mut Presentation, slide_part: &str) -> Result<Strin
 fn ensure_notes_master(pres: &mut Presentation) -> Result<String> {
     let main = pres.main_part.clone();
     let rels = pres.part_rels(&main)?;
-    if let Some(existing) = rels.first_of_type(rel_type::NOTES_MASTER).map(|r| rels.resolve(r)) {
-        if pres.pkg.has_part(&existing) {
-            return Ok(existing);
-        }
+    if let Some(existing) = rels
+        .first_of_type(rel_type::NOTES_MASTER)
+        .map(|r| rels.resolve(r))
+        && pres.pkg.has_part(&existing)
+    {
+        return Ok(existing);
     }
     // The notes master gets its own theme, as PowerPoint writes it.
     let source_theme = rels
         .first_of_type(rel_type::THEME)
         .map(|r| rels.resolve(r))
-        .ok_or_else(|| Error::InvalidEdit("the presentation has no theme to base notes on".into()))?;
+        .ok_or_else(|| {
+            Error::InvalidEdit("the presentation has no theme to base notes on".into())
+        })?;
     let theme_bytes = pres.pkg.read(&source_theme)?.into_owned();
     let theme = pres.pkg.unique_part_name("/ppt/theme/theme", ".xml");
     pres.pkg.write(&theme, theme_bytes, Some(THEME_TYPE));
 
-    let master = pres.pkg.unique_part_name("/ppt/notesMasters/notesMaster", ".xml");
-    pres.pkg.write(&master, notes_master_xml().into_bytes(), Some(NOTES_MASTER_TYPE));
+    let master = pres
+        .pkg
+        .unique_part_name("/ppt/notesMasters/notesMaster", ".xml");
+    pres.pkg.write(
+        &master,
+        notes_master_xml().into_bytes(),
+        Some(NOTES_MASTER_TYPE),
+    );
     let mut master_rels = Relationships::empty(&master);
     master_rels.add_internal(rel_type::THEME, &theme);
     pres.put_rels(master_rels);
 
-    let rid = pres.rels_mut(&main)?.add_internal(rel_type::NOTES_MASTER, &master);
+    let rid = pres
+        .rels_mut(&main)?
+        .add_internal(rel_type::NOTES_MASTER, &master);
     let doc = pres.xml_mut(&main)?;
     let root = doc.root();
     let list = doc.ensure_child(root, Ns::P, "notesMasterIdLst", PRESENTATION_ORDER);

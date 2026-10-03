@@ -24,10 +24,16 @@ impl Presentation {
             for r in rels.iter().filter(|r| r.mode == TargetMode::Internal) {
                 let target = rels.resolve(r);
                 if !self.pkg.has_part(&target) {
-                    problems.push(format!("{name}: relationship {} points at missing {target}", r.id));
+                    problems.push(format!(
+                        "{name}: relationship {} points at missing {target}",
+                        r.id
+                    ));
                 }
             }
-            let is_xml = self.pkg.content_type(name).is_some_and(|ct| ct.ends_with("+xml") || ct.ends_with("/xml"));
+            let is_xml = self
+                .pkg
+                .content_type(name)
+                .is_some_and(|ct| ct.ends_with("+xml") || ct.ends_with("/xml"));
             if !is_xml || rels.iter().next().is_none() && !name.starts_with("/ppt/slides/") {
                 continue;
             }
@@ -38,7 +44,11 @@ impl Presentation {
             for n in doc.descendants(doc.root()) {
                 for a in doc.attrs(n) {
                     if a.ns() == Ns::R && !a.value().is_empty() && rels.get(a.value()).is_none() {
-                        problems.push(format!("{name}: r:{}=\"{}\" has no relationship", a.local(), a.value()));
+                        problems.push(format!(
+                            "{name}: r:{}=\"{}\" has no relationship",
+                            a.local(),
+                            a.value()
+                        ));
                     }
                 }
             }

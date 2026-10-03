@@ -83,21 +83,24 @@ pub(crate) fn entries(m: &ChartModel, legend: &LegendModel) -> Vec<Entry> {
         }
     }
     // Trendline entries follow every series entry.
-    for g in m.groups.iter().filter(|g| super::trend::supported(g)) {
-        for s in &g.series {
-            for t in &s.trendlines {
-                out.push(Entry {
-                    text: super::trend::legend_text(t, s),
-                    look: Look {
-                        fill: None,
-                        line: super::trend::line(m, g, s, t),
-                        marker: None,
-                    },
-                    kind: KeyKind::Line,
-                    style: base.clone(),
-                });
-            }
-        }
+    let trends = m
+        .groups
+        .iter()
+        .filter(|g| super::trend::supported(g))
+        .flat_map(|g| g.series.iter().map(move |s| (g, s)))
+        .flat_map(|(g, s)| s.trendlines.iter().map(move |t| (g, s, t)))
+        .take(super::trend::MAX_PER_CHART);
+    for (g, s, t) in trends {
+        out.push(Entry {
+            text: super::trend::legend_text(t, s),
+            look: Look {
+                fill: None,
+                line: super::trend::line(m, g, s, t),
+                marker: None,
+            },
+            kind: KeyKind::Line,
+            style: base.clone(),
+        });
     }
     let mut kept: Vec<Entry> = Vec::new();
     for (i, mut e) in out.into_iter().enumerate() {

@@ -19,7 +19,9 @@ fn round_trips_source_exactly() {
 
 #[test]
 fn resolves_namespaces_independent_of_prefix() {
-    let alt = SLIDE.replace("a:", "draw:").replace("xmlns:a=", "xmlns:draw=");
+    let alt = SLIDE
+        .replace("a:", "draw:")
+        .replace("xmlns:a=", "xmlns:draw=");
     for src in [SLIDE.to_owned(), alt] {
         let doc = XmlDoc::parse(src.as_bytes(), "s").unwrap();
         let root = doc.root();
@@ -30,7 +32,11 @@ fn resolves_namespaces_independent_of_prefix() {
             .find(|&n| doc.is(n, Ns::A, "t"))
             .unwrap();
         assert_eq!(doc.text(t), "R&D <2024> caf\u{e9}");
-        let rpr = doc.descendants(root).into_iter().find(|&n| doc.is(n, Ns::A, "rPr")).unwrap();
+        let rpr = doc
+            .descendants(root)
+            .into_iter()
+            .find(|&n| doc.is(n, Ns::A, "rPr"))
+            .unwrap();
         assert_eq!(doc.attr(rpr, "lang"), Some("en-US"));
         assert_eq!(doc.attr_bool(rpr, "dirty"), Some(false));
     }
@@ -47,7 +53,11 @@ fn default_namespace_and_strict_uris() {
 #[test]
 fn created_elements_reuse_in_scope_prefixes() {
     let mut doc = XmlDoc::parse(SLIDE.as_bytes(), "s").unwrap();
-    let rpr = doc.descendants(doc.root()).into_iter().find(|&n| doc.is(n, Ns::A, "rPr")).unwrap();
+    let rpr = doc
+        .descendants(doc.root())
+        .into_iter()
+        .find(|&n| doc.is(n, Ns::A, "rPr"))
+        .unwrap();
     let fill = doc.create_element(Ns::A, "solidFill");
     let clr = doc.create_element(Ns::A, "srgbClr");
     doc.set_attr(clr, "val", "FF0000");
@@ -86,7 +96,10 @@ fn ensure_child_respects_schema_order() {
     const ORDER: &[&str] = &["lnSpc", "spcBef", "spcAft", "buClrTx", "buClr", "buNone"];
     let root = doc.root();
     doc.ensure_child(root, Ns::A, "spcAft", ORDER);
-    let names: Vec<_> = doc.children(root).map(|c| doc.local(c).to_owned()).collect();
+    let names: Vec<_> = doc
+        .children(root)
+        .map(|c| doc.local(c).to_owned())
+        .collect();
     assert_eq!(names, ["lnSpc", "spcAft", "buNone"]);
 }
 
@@ -128,7 +141,10 @@ fn rejects_malformed_documents() {
         "<a/><b/>",
         "text",
     ] {
-        assert!(XmlDoc::parse(bad.as_bytes(), "s").is_err(), "{bad:?} should fail");
+        assert!(
+            XmlDoc::parse(bad.as_bytes(), "s").is_err(),
+            "{bad:?} should fail"
+        );
     }
 }
 
@@ -147,7 +163,11 @@ fn import_maps_namespaces_between_documents() {
     .unwrap();
     let mut dst = XmlDoc::parse(SLIDE.as_bytes(), "b").unwrap();
     let copy = dst.import(&src, src.root());
-    let tree = dst.descendants(dst.root()).into_iter().find(|&n| dst.is(n, Ns::P, "spTree")).unwrap();
+    let tree = dst
+        .descendants(dst.root())
+        .into_iter()
+        .find(|&n| dst.is(n, Ns::P, "spTree"))
+        .unwrap();
     dst.append_child(tree, copy);
     let out = String::from_utf8(dst.to_bytes()).unwrap();
     assert!(out.contains("<p:sp><a:off x=\"1\"/></p:sp>"), "{out}");
@@ -156,7 +176,11 @@ fn import_maps_namespaces_between_documents() {
 #[test]
 fn deep_clone_and_detach() {
     let mut doc = XmlDoc::parse(SLIDE.as_bytes(), "s").unwrap();
-    let sp = doc.descendants(doc.root()).into_iter().find(|&n| doc.is(n, Ns::P, "sp")).unwrap();
+    let sp = doc
+        .descendants(doc.root())
+        .into_iter()
+        .find(|&n| doc.is(n, Ns::P, "sp"))
+        .unwrap();
     let copy = doc.deep_clone(sp);
     doc.insert_after(sp, copy);
     let tree = doc.parent(sp).unwrap();

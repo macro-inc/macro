@@ -8,7 +8,8 @@ use crate::geometry::{self, PathFill, ShapeGeometry};
 use crate::model::fill::{Effects, Fill, Line, LineEnd, LineEndKind};
 use crate::model::presentation::{PartRef, SlideContext};
 use crate::model::shape::{
-    GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, background_fill, resolve_tree, shows_master_shapes, sp_tree,
+    GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, background_fill, resolve_tree,
+    shows_master_shapes, sp_tree,
 };
 use crate::model::text::TextBody;
 use crate::path::{Affine, Path, PathEl, Point, Rect};
@@ -36,7 +37,8 @@ pub enum Layer {
 
 /// Whether `s` is shape `id` or a group containing it.
 fn contains_shape(s: &Shape, id: u32) -> bool {
-    s.id == id || matches!(&s.kind, ShapeKind::Group(children) if children.iter().any(|c| contains_shape(c, id)))
+    s.id == id
+        || matches!(&s.kind, ShapeKind::Group(children) if children.iter().any(|c| contains_shape(c, id)))
 }
 
 /// Builds slide display lists.
@@ -58,36 +60,57 @@ impl Builder<'_> {
 
     /// The display list of one layer of a slide (see [`Layer`]).
     pub fn slide_layer(&mut self, ctx: &SlideContext, layer: Layer) -> Vec<Node> {
-        let (w, h) = (ctx.size.0 as f32 / EMU_PER_PT as f32, ctx.size.1 as f32 / EMU_PER_PT as f32);
+        let (w, h) = (
+            ctx.size.0 as f32 / EMU_PER_PT as f32,
+            ctx.size.1 as f32 / EMU_PER_PT as f32,
+        );
         let mut out = Vec::new();
         let backdrop = !matches!(layer, Layer::Only(_));
         if backdrop {
             let page = Rect::from_xywh(0.0, 0.0, w, h);
             let bg = background_fill(ctx);
             if let Some(p) = fill_paint(&bg, page, &Affine::IDENTITY, self.loader) {
-                out.push(Node::Fill { path: Path::rect(page), paint: p, even_odd: false });
+                out.push(Node::Fill {
+                    path: Path::rect(page),
+                    paint: p,
+                    even_odd: false,
+                });
             }
             let show_layout = shows_master_shapes(&ctx.slide.doc);
-            let show_master = show_layout && ctx.layout.as_ref().is_none_or(|l| shows_master_shapes(&l.doc));
-            if show_master {
-                if let Some(m) = &ctx.master {
-                    self.tree(ctx, m, Inherit::Master, true, Layer::All, &mut out);
-                }
+            let show_master = show_layout
+                && ctx
+                    .layout
+                    .as_ref()
+                    .is_none_or(|l| shows_master_shapes(&l.doc));
+            if show_master && let Some(m) = &ctx.master {
+                self.tree(ctx, m, Inherit::Master, true, Layer::All, &mut out);
             }
-            if show_layout {
-                if let Some(l) = &ctx.layout {
-                    self.tree(ctx, l, Inherit::Layout, true, Layer::All, &mut out);
-                }
+            if show_layout && let Some(l) = &ctx.layout {
+                self.tree(ctx, l, Inherit::Layout, true, Layer::All, &mut out);
             }
         }
-        let inherit = if ctx.master.is_none() && ctx.layout.is_none() { Inherit::Master } else { Inherit::Slide };
+        let inherit = if ctx.master.is_none() && ctx.layout.is_none() {
+            Inherit::Master
+        } else {
+            Inherit::Slide
+        };
         let slide = ctx.slide.clone();
         self.tree(ctx, &slide, inherit, false, layer, &mut out);
         out
     }
 
-    fn tree(&mut self, ctx: &SlideContext, part: &PartRef, inherit: Inherit, skip_placeholders: bool, layer: Layer, out: &mut Vec<Node>) {
-        let Some(tree) = sp_tree(&part.doc) else { return };
+    fn tree(
+        &mut self,
+        ctx: &SlideContext,
+        part: &PartRef,
+        inherit: Inherit,
+        skip_placeholders: bool,
+        layer: Layer,
+        out: &mut Vec<Node>,
+    ) {
+        let Some(tree) = sp_tree(&part.doc) else {
+            return;
+        };
         let walk = WalkCtx { ctx, inherit };
         let shapes = resolve_tree(&walk, part, tree);
         for s in &shapes {
@@ -106,7 +129,14 @@ impl Builder<'_> {
     }
 
     /// Appends the nodes of one shape (and its children) under `parent`.
-    pub fn shape(&mut self, ctx: &SlideContext, s: &Shape, parent: &Affine, group_fill: Option<&Fill>, out: &mut Vec<Node>) {
+    pub fn shape(
+        &mut self,
+        ctx: &SlideContext,
+        s: &Shape,
+        parent: &Affine,
+        group_fill: Option<&Fill>,
+        out: &mut Vec<Node>,
+    ) {
         if s.hidden {
             return;
         }
@@ -136,13 +166,26 @@ impl Builder<'_> {
                 let clip = outline_path(&geom).transform(&world);
                 // Pictures can also carry a background fill behind transparency.
                 if let Some(p) = fill_paint(&fill, bbox, &world, self.loader) {
-                    nodes.push(Node::Fill { path: clip.clone(), paint: p, even_odd: false });
+                    nodes.push(Node::Fill {
+                        path: clip.clone(),
+                        paint: p,
+                        even_odd: false,
+                    });
                 }
                 if let Some(img) = img {
                     if let Some(vector) = self.metafile_nodes(img, bbox, &world, &clip) {
                         nodes.push(vector);
-                    } else if let Some(p) = fill_paint(&Fill::Image(Box::new(img.clone())), bbox, &world, self.loader) {
-                        nodes.push(Node::Fill { path: clip.clone(), paint: p, even_odd: false });
+                    } else if let Some(p) = fill_paint(
+                        &Fill::Image(Box::new(img.clone())),
+                        bbox,
+                        &world,
+                        self.loader,
+                    ) {
+                        nodes.push(Node::Fill {
+                            path: clip.clone(),
+                            paint: p,
+                            even_odd: false,
+                        });
                     } else {
                         placeholder_box(&clip, &mut nodes);
                     }
@@ -155,9 +198,17 @@ impl Builder<'_> {
     }
 
     /// Draws a stretched metafile picture as vectors, clipped to `clip`.
-    fn metafile_nodes(&mut self, img: &crate::model::fill::ImageFill, bbox: Rect, world: &Affine, clip: &Path) -> Option<Node> {
+    fn metafile_nodes(
+        &mut self,
+        img: &crate::model::fill::ImageFill,
+        bbox: Rect,
+        world: &Affine,
+        clip: &Path,
+    ) -> Option<Node> {
         use crate::model::fill::ImageMode;
-        let ImageMode::Stretch(fill_rect) = &img.mode else { return None };
+        let ImageMode::Stretch(fill_rect) = &img.mode else {
+            return None;
+        };
         if !img.effects.is_empty() {
             return None;
         }
@@ -174,17 +225,35 @@ impl Builder<'_> {
         let sh = ((1.0 - s.b) * m.height_pt - sy0).abs().max(1e-3);
         let t = world
             .pre_concat(&Affine::translate(f64::from(dest.x), f64::from(dest.y)))
-            .pre_concat(&Affine::scale(f64::from(dest.w / sw), f64::from(dest.h / sh)))
+            .pre_concat(&Affine::scale(
+                f64::from(dest.w / sw),
+                f64::from(dest.h / sh),
+            ))
             .pre_concat(&Affine::translate(-f64::from(sx0), -f64::from(sy0)));
         let children = m.nodes.iter().map(|n| n.transformed(&t)).collect();
-        Some(Group { children, opacity: 1.0, clip: Some(clip.clone()), effects: Vec::new() }.into_node())
+        Some(
+            Group {
+                children,
+                opacity: 1.0,
+                clip: Some(clip.clone()),
+                effects: Vec::new(),
+            }
+            .into_node(),
+        )
     }
 
     fn geometry(&self, s: &Shape) -> ShapeGeometry {
         shape_geometry(s)
     }
 
-    fn geometry_nodes(&mut self, s: &Shape, geom: &ShapeGeometry, fill: &Fill, world: &Affine, out: &mut Vec<Node>) {
+    fn geometry_nodes(
+        &mut self,
+        s: &Shape,
+        geom: &ShapeGeometry,
+        fill: &Fill,
+        world: &Affine,
+        out: &mut Vec<Node>,
+    ) {
         let bbox = Rect::from_xywh(0.0, 0.0, s.xfrm.w, s.xfrm.h);
         let paint = fill_paint(fill, bbox, world, self.loader);
         if let Some(paint) = paint {
@@ -197,38 +266,73 @@ impl Builder<'_> {
                     PathFill::Darken => shade_paint(paint.clone(), 0.6, false),
                     PathFill::DarkenLess => shade_paint(paint.clone(), 0.8, false),
                 };
-                out.push(Node::Fill { path: gp.path.transform(world), paint, even_odd: false });
+                out.push(Node::Fill {
+                    path: gp.path.transform(world),
+                    paint,
+                    even_odd: false,
+                });
             }
         }
         self.outline_nodes(s, geom, world, out);
     }
 
-    fn outline_nodes(&mut self, s: &Shape, geom: &ShapeGeometry, world: &Affine, out: &mut Vec<Node>) {
+    fn outline_nodes(
+        &mut self,
+        s: &Shape,
+        geom: &ShapeGeometry,
+        world: &Affine,
+        out: &mut Vec<Node>,
+    ) {
         let Some(line) = s.line.resolve() else { return };
         let scale = world.mean_scale() as f32;
         let bbox = Rect::from_xywh(0.0, 0.0, s.xfrm.w, s.xfrm.h);
-        let Some(paint) = fill_paint(&line.fill, bbox, world, self.loader) else { return };
+        let Some(paint) = fill_paint(&line.fill, bbox, world, self.loader) else {
+            return;
+        };
         let stroke = line_stroke(&line, scale);
         for gp in geom.paths.iter().filter(|p| p.stroke) {
             let path = gp.path.transform(world);
             let closed = matches!(gp.path.els.last(), Some(PathEl::Close));
             if closed || (line.head.is_none() && line.tail.is_none()) {
-                out.push(Node::Stroke { path, paint: paint.clone(), stroke: stroke.clone() });
+                out.push(Node::Stroke {
+                    path,
+                    paint: paint.clone(),
+                    stroke: stroke.clone(),
+                });
             } else {
                 let (shortened, heads) = arrowheads(&path, &line, stroke.width, &paint);
-                out.push(Node::Stroke { path: shortened, paint: paint.clone(), stroke: stroke.clone() });
+                out.push(Node::Stroke {
+                    path: shortened,
+                    paint: paint.clone(),
+                    stroke: stroke.clone(),
+                });
                 out.extend(heads);
             }
         }
     }
 
-    fn text_nodes(&mut self, s: &Shape, geom: &ShapeGeometry, text: &TextBody, parent: &Affine, out: &mut Vec<Node>) {
+    fn text_nodes(
+        &mut self,
+        s: &Shape,
+        geom: &ShapeGeometry,
+        text: &TextBody,
+        parent: &Affine,
+        out: &mut Vec<Node>,
+    ) {
         if text.is_empty() {
             return;
         }
         let rect = geom.text_rect;
-        let lay = layout(text, rect.w, rect.h, self.fonts, LayoutParams::from_body(text));
-        let mut t = parent.pre_concat(&s.xfrm.text_to_parent()).pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)));
+        let lay = layout(
+            text,
+            rect.w,
+            rect.h,
+            self.fonts,
+            LayoutParams::from_body(text),
+        );
+        let mut t = parent
+            .pre_concat(&s.xfrm.text_to_parent())
+            .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)));
         if text.body.rot != 0.0 {
             let c = (f64::from(rect.w / 2.0), f64::from(rect.h / 2.0));
             t = t
@@ -242,13 +346,28 @@ impl Builder<'_> {
             let mut clipped = Vec::new();
             text_layout_nodes(self.fonts, &lay, &t, bbox, self.loader, &mut clipped);
             let clip = Path::rect(bbox).transform(&t);
-            out.push(Group { children: clipped, opacity: 1.0, clip: Some(clip), effects: Vec::new() }.into_node());
+            out.push(
+                Group {
+                    children: clipped,
+                    opacity: 1.0,
+                    clip: Some(clip),
+                    effects: Vec::new(),
+                }
+                .into_node(),
+            );
         } else {
             text_layout_nodes(self.fonts, &lay, &t, bbox, self.loader, out);
         }
     }
 
-    fn graphic(&mut self, ctx: &SlideContext, s: &Shape, g: &Graphic, world: &Affine, out: &mut Vec<Node>) {
+    fn graphic(
+        &mut self,
+        ctx: &SlideContext,
+        s: &Shape,
+        g: &Graphic,
+        world: &Affine,
+        out: &mut Vec<Node>,
+    ) {
         let bbox = Rect::from_xywh(0.0, 0.0, s.xfrm.w, s.xfrm.h);
         match g {
             Graphic::Table(tbl) => super::table::table_nodes(self, ctx, s, *tbl, world, out),
@@ -259,8 +378,17 @@ impl Builder<'_> {
             }
             Graphic::Diagram(data_part) => {
                 if let Some(drawing) = self.diagram_drawing(&ctx.slide, data_part.as_deref()) {
-                    let Some(tree) = drawing.doc.children(drawing.doc.root()).find(|&c| drawing.doc.local(c) == "spTree") else { return };
-                    let walk = WalkCtx { ctx, inherit: Inherit::Master };
+                    let Some(tree) = drawing
+                        .doc
+                        .children(drawing.doc.root())
+                        .find(|&c| drawing.doc.local(c) == "spTree")
+                    else {
+                        return;
+                    };
+                    let walk = WalkCtx {
+                        ctx,
+                        inherit: Inherit::Master,
+                    };
                     let shapes = resolve_tree(&walk, &drawing, tree);
                     // Drawing coordinates are relative to the frame's top-left corner.
                     for c in &shapes {
@@ -269,11 +397,20 @@ impl Builder<'_> {
                 }
             }
             Graphic::Ole { preview, spid } => {
-                let img = preview.clone().or_else(|| spid.as_deref().and_then(|id| self.vml_preview(&ctx.slide, id)));
+                let img = preview.clone().or_else(|| {
+                    spid.as_deref()
+                        .and_then(|id| self.vml_preview(&ctx.slide, id))
+                });
                 match img {
                     Some(img) => {
-                        if let Some(p) = fill_paint(&Fill::Image(Box::new(img)), bbox, world, self.loader) {
-                            out.push(Node::Fill { path: Path::rect(bbox).transform(world), paint: p, even_odd: false });
+                        if let Some(p) =
+                            fill_paint(&Fill::Image(Box::new(img)), bbox, world, self.loader)
+                        {
+                            out.push(Node::Fill {
+                                path: Path::rect(bbox).transform(world),
+                                paint: p,
+                                even_odd: false,
+                            });
                         }
                     }
                     None => placeholder_box(&Path::rect(bbox).transform(world), out),
@@ -306,16 +443,29 @@ impl Builder<'_> {
         self.loader.part(&target)
     }
 
-    fn vml_preview(&mut self, slide: &PartRef, spid: &str) -> Option<crate::model::fill::ImageFill> {
-        let vml_rel = slide.rels.iter().find(|r| r.rel_type.ends_with("/vmlDrawing"))?;
+    fn vml_preview(
+        &mut self,
+        slide: &PartRef,
+        spid: &str,
+    ) -> Option<crate::model::fill::ImageFill> {
+        let vml_rel = slide
+            .rels
+            .iter()
+            .find(|r| r.rel_type.ends_with("/vmlDrawing"))?;
         let vml = self.loader.part(&slide.rels.resolve(vml_rel))?;
         let doc = &vml.doc;
         let shape = doc.descendants(doc.root()).into_iter().find(|&n| {
             doc.local(n) == "shape"
-                && (doc.attr_ns(n, crate::xml::Ns::O, "spid") == Some(spid) || doc.attr(n, "id") == Some(spid))
+                && (doc.attr_ns(n, crate::xml::Ns::O, "spid") == Some(spid)
+                    || doc.attr(n, "id") == Some(spid))
         })?;
-        let imagedata = doc.descendants(shape).into_iter().find(|&n| doc.local(n) == "imagedata")?;
-        let rid = doc.attr_ns(imagedata, crate::xml::Ns::O, "relid").or_else(|| doc.attr_ns(imagedata, crate::xml::Ns::R, "id"))?;
+        let imagedata = doc
+            .descendants(shape)
+            .into_iter()
+            .find(|&n| doc.local(n) == "imagedata")?;
+        let rid = doc
+            .attr_ns(imagedata, crate::xml::Ns::O, "relid")
+            .or_else(|| doc.attr_ns(imagedata, crate::xml::Ns::R, "id"))?;
         let part = vml.target(rid)?;
         Some(crate::model::fill::ImageFill {
             part: Some(part),
@@ -328,20 +478,40 @@ impl Builder<'_> {
 }
 
 /// Converts a laid-out text body into nodes under `t` (layout → scene).
-pub fn text_layout_nodes(fonts: &FontDb, lay: &TextLayout, t: &Affine, bbox: Rect, images: &mut dyn ImageSource, out: &mut Vec<Node>) {
+pub fn text_layout_nodes(
+    fonts: &FontDb,
+    lay: &TextLayout,
+    t: &Affine,
+    bbox: Rect,
+    images: &mut dyn ImageSource,
+    out: &mut Vec<Node>,
+) {
     for d in lay.decorations.iter().filter(|d| d.behind) {
         if let Some(p) = fill_paint(&d.fill, bbox, t, images) {
-            out.push(Node::Fill { path: Path::rect(d.rect).transform(t), paint: p, even_odd: false });
+            out.push(Node::Fill {
+                path: Path::rect(d.rect).transform(t),
+                paint: p,
+                even_odd: false,
+            });
         }
     }
     for run in &lay.runs {
         let mut path = Path::new();
         let skew = if run.synthetic_italic { -0.2 } else { 0.0 };
         for g in &run.glyphs {
-            let Some(outline) = fonts.outline(run.face, g.id) else { continue };
+            let Some(outline) = fonts.outline(run.face, g.id) else {
+                continue;
+            };
             let gt = t
                 .pre_concat(&Affine::translate(f64::from(g.x), f64::from(g.y)))
-                .pre_concat(&Affine { a: 1.0, b: 0.0, c: skew, d: 1.0, e: 0.0, f: 0.0 })
+                .pre_concat(&Affine {
+                    a: 1.0,
+                    b: 0.0,
+                    c: skew,
+                    d: 1.0,
+                    e: 0.0,
+                    f: 0.0,
+                })
                 .pre_concat(&Affine::scale(f64::from(run.size), f64::from(run.size)));
             path.extend(&outline.transform(&gt));
         }
@@ -351,12 +521,18 @@ pub fn text_layout_nodes(fonts: &FontDb, lay: &TextLayout, t: &Affine, bbox: Rec
         let text_box = path.bounds().unwrap_or(bbox);
         let paint = match &run.fill {
             // Gradient text fills span the text box.
-            Fill::Gradient(_) | Fill::Image(_) | Fill::Pattern { .. } => fill_paint(&run.fill, bbox, t, images),
+            Fill::Gradient(_) | Fill::Image(_) | Fill::Pattern { .. } => {
+                fill_paint(&run.fill, bbox, t, images)
+            }
             f => fill_paint(f, text_box, &Affine::IDENTITY, images),
         };
         let mut nodes = Vec::new();
         if let Some(p) = paint {
-            nodes.push(Node::Fill { path: path.clone(), paint: p.clone(), even_odd: false });
+            nodes.push(Node::Fill {
+                path: path.clone(),
+                paint: p.clone(),
+                even_odd: false,
+            });
             if run.synthetic_bold {
                 let stroke = Stroke {
                     width: run.size * 0.035 * t.mean_scale() as f32,
@@ -365,13 +541,21 @@ pub fn text_layout_nodes(fonts: &FontDb, lay: &TextLayout, t: &Affine, bbox: Rec
                     miter_limit: 4.0,
                     dash: None,
                 };
-                nodes.push(Node::Stroke { path: path.clone(), paint: p, stroke });
+                nodes.push(Node::Stroke {
+                    path: path.clone(),
+                    paint: p,
+                    stroke,
+                });
             }
         }
-        if let Some(line) = run.outline.as_ref().and_then(|l| l.resolve()) {
-            if let Some(p) = fill_paint(&line.fill, text_box, &Affine::IDENTITY, images) {
-                nodes.push(Node::Stroke { path: path.clone(), paint: p, stroke: line_stroke(&line, t.mean_scale() as f32) });
-            }
+        if let Some(line) = run.outline.as_ref().and_then(|l| l.resolve())
+            && let Some(p) = fill_paint(&line.fill, text_box, &Affine::IDENTITY, images)
+        {
+            nodes.push(Node::Stroke {
+                path: path.clone(),
+                paint: p,
+                stroke: line_stroke(&line, t.mean_scale() as f32),
+            });
         }
         if run.effects.is_empty() {
             out.extend(nodes);
@@ -382,14 +566,21 @@ pub fn text_layout_nodes(fonts: &FontDb, lay: &TextLayout, t: &Affine, bbox: Rec
     }
     for d in lay.decorations.iter().filter(|d| !d.behind) {
         if let Some(p) = fill_paint(&d.fill, bbox, t, images) {
-            out.push(Node::Fill { path: Path::rect(d.rect).transform(t), paint: p, even_odd: false });
+            out.push(Node::Fill {
+                path: Path::rect(d.rect).transform(t),
+                paint: p,
+                even_odd: false,
+            });
         }
     }
 }
 
 /// The evaluated geometry (paths and text rectangle) of a resolved shape.
 pub fn shape_geometry(s: &Shape) -> ShapeGeometry {
-    let (w, h) = (f64::from(s.xfrm.w) * EMU_PER_PT, f64::from(s.xfrm.h) * EMU_PER_PT);
+    let (w, h) = (
+        f64::from(s.xfrm.w) * EMU_PER_PT,
+        f64::from(s.xfrm.h) * EMU_PER_PT,
+    );
     match &s.geometry {
         GeometryRef::Preset(name, adj) => geometry::preset(name, w, h, adj)
             .or_else(|| geometry::preset("rect", w, h, &[]))
@@ -399,7 +590,13 @@ pub fn shape_geometry(s: &Shape) -> ShapeGeometry {
 }
 
 /// Wraps nodes in a layer with the shape's effects (if any).
-pub fn wrap_effects(fx: &Effects, rect: Rect, parent: &Affine, nodes: Vec<Node>, out: &mut Vec<Node>) {
+pub fn wrap_effects(
+    fx: &Effects,
+    rect: Rect,
+    parent: &Affine,
+    nodes: Vec<Node>,
+    out: &mut Vec<Node>,
+) {
     if fx.is_empty() || nodes.is_empty() {
         out.extend(nodes);
         return;
@@ -407,24 +604,49 @@ pub fn wrap_effects(fx: &Effects, rect: Rect, parent: &Affine, nodes: Vec<Node>,
     let scale = parent.mean_scale() as f32;
     let mut effects = Vec::new();
     if let Some(g) = &fx.glow {
-        effects.push(Effect::Glow { color: g.color, radius: g.radius * scale });
+        effects.push(Effect::Glow {
+            color: g.color,
+            radius: g.radius * scale,
+        });
     }
     if let Some(sh) = &fx.outer_shadow {
         let rad = f64::from(sh.dir).to_radians();
-        let offset = Point::new((f64::from(sh.dist) * rad.cos()) as f32 * scale, (f64::from(sh.dist) * rad.sin()) as f32 * scale);
+        let offset = Point::new(
+            (f64::from(sh.dist) * rad.cos()) as f32 * scale,
+            (f64::from(sh.dist) * rad.sin()) as f32 * scale,
+        );
         // Scale/skew about the alignment anchor of the shape box (scene coordinates).
         let bounds = Path::rect(rect).transform(parent).bounds().unwrap_or(rect);
         let (ax, ay) = anchor(&sh.align, bounds);
-        let m = Affine { a: f64::from(sh.sx), b: f64::from(sh.ky).to_radians().tan(), c: f64::from(sh.kx).to_radians().tan(), d: f64::from(sh.sy), e: 0.0, f: 0.0 };
+        let m = Affine {
+            a: f64::from(sh.sx),
+            b: f64::from(sh.ky).to_radians().tan(),
+            c: f64::from(sh.kx).to_radians().tan(),
+            d: f64::from(sh.sy),
+            e: 0.0,
+            f: 0.0,
+        };
         let transform = Affine::translate(f64::from(ax), f64::from(ay))
             .pre_concat(&m)
             .pre_concat(&Affine::translate(-f64::from(ax), -f64::from(ay)));
-        effects.push(Effect::OuterShadow { color: sh.color, blur: sh.blur * scale, offset, transform });
+        effects.push(Effect::OuterShadow {
+            color: sh.color,
+            blur: sh.blur * scale,
+            offset,
+            transform,
+        });
     }
     if let Some(sh) = &fx.inner_shadow {
         let rad = f64::from(sh.dir).to_radians();
-        let offset = Point::new((f64::from(sh.dist) * rad.cos()) as f32 * scale, (f64::from(sh.dist) * rad.sin()) as f32 * scale);
-        effects.push(Effect::InnerShadow { color: sh.color, blur: sh.blur * scale, offset });
+        let offset = Point::new(
+            (f64::from(sh.dist) * rad.cos()) as f32 * scale,
+            (f64::from(sh.dist) * rad.sin()) as f32 * scale,
+        );
+        effects.push(Effect::InnerShadow {
+            color: sh.color,
+            blur: sh.blur * scale,
+            offset,
+        });
     }
     if let Some(r) = fx.soft_edge {
         effects.push(Effect::SoftEdge { radius: r * scale });
@@ -441,7 +663,15 @@ pub fn wrap_effects(fx: &Effects, rect: Rect, parent: &Affine, nodes: Vec<Node>,
             blur: r.blur * scale,
         });
     }
-    out.push(Group { children: nodes, opacity: 1.0, clip: None, effects }.into_node());
+    out.push(
+        Group {
+            children: nodes,
+            opacity: 1.0,
+            clip: None,
+            effects,
+        }
+        .into_node(),
+    );
 }
 
 fn anchor(align: &str, r: Rect) -> (f32, f32) {
@@ -474,11 +704,21 @@ fn outline_path(geom: &ShapeGeometry) -> Path {
 
 fn placeholder_box(path: &Path, out: &mut Vec<Node>) {
     use crate::model::color::Rgba;
-    out.push(Node::Fill { path: path.clone(), paint: Paint::Solid(Rgba::from_u8(0xF2, 0xF2, 0xF2)), even_odd: false });
+    out.push(Node::Fill {
+        path: path.clone(),
+        paint: Paint::Solid(Rgba::from_u8(0xF2, 0xF2, 0xF2)),
+        even_odd: false,
+    });
     out.push(Node::Stroke {
         path: path.clone(),
         paint: Paint::Solid(Rgba::from_u8(0xBF, 0xBF, 0xBF)),
-        stroke: Stroke { width: 0.75, cap: super::scene::LineCap::Butt, join: super::scene::LineJoin::Miter, miter_limit: 4.0, dash: None },
+        stroke: Stroke {
+            width: 0.75,
+            cap: super::scene::LineCap::Butt,
+            join: super::scene::LineJoin::Miter,
+            miter_limit: 4.0,
+            dash: None,
+        },
     });
 }
 
@@ -493,7 +733,11 @@ fn first_tangent(path: &Path) -> Option<(Point, Point)> {
                     return Some((s, p));
                 }
                 if let PathEl::CubicTo(_, c2, e) = *el {
-                    let q = if (c2.x - s.x).abs() + (c2.y - s.y).abs() > 1e-3 { c2 } else { e };
+                    let q = if (c2.x - s.x).abs() + (c2.y - s.y).abs() > 1e-3 {
+                        c2
+                    } else {
+                        e
+                    };
                     return Some((s, q));
                 }
             }
@@ -510,10 +754,10 @@ fn last_tangent(path: &Path) -> Option<(Point, Point)> {
         match *el {
             PathEl::MoveTo(p) => prev = Some(p),
             PathEl::LineTo(p) => {
-                if let Some(a) = prev {
-                    if (p.x - a.x).abs() + (p.y - a.y).abs() > 1e-3 {
-                        result = Some((p, a));
-                    }
+                if let Some(a) = prev
+                    && (p.x - a.x).abs() + (p.y - a.y).abs() > 1e-3
+                {
+                    result = Some((p, a));
                 }
                 prev = Some(p);
             }
@@ -522,7 +766,11 @@ fn last_tangent(path: &Path) -> Option<(Point, Point)> {
                 prev = Some(p);
             }
             PathEl::CubicTo(_, c2, p) => {
-                let from = if (c2.x - p.x).abs() + (c2.y - p.y).abs() > 1e-3 { c2 } else { prev.unwrap_or(c2) };
+                let from = if (c2.x - p.x).abs() + (c2.y - p.y).abs() > 1e-3 {
+                    c2
+                } else {
+                    prev.unwrap_or(c2)
+                };
                 result = Some((p, from));
                 prev = Some(p);
             }
@@ -544,7 +792,9 @@ fn arrowheads(path: &Path, line: &Line, width: f32, paint: &Paint) -> (Path, Vec
         let (ux, uy) = (dx / len, dy / len);
         let (nx, ny) = (-uy, ux);
         let (aw, al) = (end.w * base, end.len * base);
-        let pt = |back: f32, side: f32| Point::new(tip.x - ux * back + nx * side, tip.y - uy * back + ny * side);
+        let pt = |back: f32, side: f32| {
+            Point::new(tip.x - ux * back + nx * side, tip.y - uy * back + ny * side)
+        };
         let mut head = Path::new();
         let mut shorten = 0.0;
         match end.kind {
@@ -573,7 +823,10 @@ fn arrowheads(path: &Path, line: &Line, width: f32, paint: &Paint) -> (Path, Vec
             LineEndKind::Oval => {
                 let r = Rect::from_xywh(-al / 2.0, -aw / 2.0, al, aw);
                 let rot = f64::from(uy).atan2(f64::from(ux)).to_degrees();
-                head = Path::ellipse(r).transform(&Affine::translate(f64::from(tip.x), f64::from(tip.y)).pre_concat(&Affine::rotate(rot)));
+                head = Path::ellipse(r).transform(
+                    &Affine::translate(f64::from(tip.x), f64::from(tip.y))
+                        .pre_concat(&Affine::rotate(rot)),
+                );
             }
             LineEndKind::Arrow => {
                 let mut open = Path::new();
@@ -583,14 +836,24 @@ fn arrowheads(path: &Path, line: &Line, width: f32, paint: &Paint) -> (Path, Vec
                 nodes.push(Node::Stroke {
                     path: open,
                     paint: paint.clone(),
-                    stroke: Stroke { width, cap: super::scene::LineCap::Round, join: super::scene::LineJoin::Miter, miter_limit: 10.0, dash: None },
+                    stroke: Stroke {
+                        width,
+                        cap: super::scene::LineCap::Round,
+                        join: super::scene::LineJoin::Miter,
+                        miter_limit: 10.0,
+                        dash: None,
+                    },
                 });
                 shorten = width / 2.0;
             }
             LineEndKind::None => {}
         }
         if !head.is_empty() {
-            nodes.push(Node::Fill { path: head, paint: paint.clone(), even_odd: false });
+            nodes.push(Node::Fill {
+                path: head,
+                paint: paint.clone(),
+                even_odd: false,
+            });
         }
         if shorten > 0.0 {
             let newp = Point::new(tip.x - ux * shorten, tip.y - uy * shorten);

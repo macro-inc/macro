@@ -25,14 +25,23 @@ fn rgb_over_white(r: &Raster) -> Vec<[f32; 3]> {
         .chunks_exact(4)
         .map(|p| {
             let a = 255.0 - f32::from(p[3]);
-            [f32::from(p[0]) + a, f32::from(p[1]) + a, f32::from(p[2]) + a]
+            [
+                f32::from(p[0]) + a,
+                f32::from(p[1]) + a,
+                f32::from(p[2]) + a,
+            ]
         })
         .collect()
 }
 
 /// Area-averaged resample of an RGB plane.
 fn resample(px: &[[f32; 3]], w: u32, h: u32, nw: u32, nh: u32) -> Vec<[f32; 3]> {
-    let (w, h, nw, nh) = (w as usize, h as usize, nw.max(1) as usize, nh.max(1) as usize);
+    let (w, h, nw, nh) = (
+        w as usize,
+        h as usize,
+        nw.max(1) as usize,
+        nh.max(1) as usize,
+    );
     let mut out = vec![[0.0f32; 3]; nw * nh];
     for (oy, row) in out.chunks_exact_mut(nw).enumerate() {
         let y0 = oy * h / nh;
@@ -94,7 +103,8 @@ fn ssim(a: &[f32], b: &[f32], w: usize, h: usize) -> f32 {
     while y + 8 <= h {
         let mut x = 0;
         while x + 8 <= w {
-            let (mut sa, mut sb, mut saa, mut sbb, mut sab) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+            let (mut sa, mut sb, mut saa, mut sbb, mut sab) =
+                (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
             for yy in y..y + 8 {
                 for xx in x..x + 8 {
                     let (va, vb) = (f64::from(a[yy * w + xx]), f64::from(b[yy * w + xx]));
@@ -110,7 +120,8 @@ fn ssim(a: &[f32], b: &[f32], w: usize, h: usize) -> f32 {
             let va = saa / n - ma * ma;
             let vb = sbb / n - mb * mb;
             let cov = sab / n - ma * mb;
-            total += ((2.0 * ma * mb + C1) * (2.0 * cov + C2)) / ((ma * ma + mb * mb + C1) * (va + vb + C2));
+            total += ((2.0 * ma * mb + C1) * (2.0 * cov + C2))
+                / ((ma * ma + mb * mb + C1) * (va + vb + C2));
             count += 1;
             x += 4;
         }
@@ -135,7 +146,10 @@ fn aligned(a: &Raster, b: &Raster) -> (Vec<[f32; 3]>, Vec<[f32; 3]>, usize, usiz
 pub fn compare(ours: &Raster, reference: &Raster) -> Score {
     let (pa, pb, w, h) = aligned(ours, reference);
     if w == 0 || h == 0 {
-        return Score { ssim: 0.0, mismatch: 1.0 };
+        return Score {
+            ssim: 0.0,
+            mismatch: 1.0,
+        };
     }
     let (ba, bb) = (blur(&pa, w, h), blur(&pb, w, h));
     let mismatched = ba
@@ -145,9 +159,18 @@ pub fn compare(ours: &Raster, reference: &Raster) -> Score {
         .count();
     // Structural similarity at half resolution forgives anti-aliasing differences.
     let (hw, hh) = ((w / 2).max(1), (h / 2).max(1));
-    let la: Vec<f32> = resample(&pa, w as u32, h as u32, hw as u32, hh as u32).into_iter().map(luma).collect();
-    let lb: Vec<f32> = resample(&pb, w as u32, h as u32, hw as u32, hh as u32).into_iter().map(luma).collect();
-    Score { ssim: ssim(&la, &lb, hw, hh), mismatch: mismatched as f32 / (w * h) as f32 }
+    let la: Vec<f32> = resample(&pa, w as u32, h as u32, hw as u32, hh as u32)
+        .into_iter()
+        .map(luma)
+        .collect();
+    let lb: Vec<f32> = resample(&pb, w as u32, h as u32, hw as u32, hh as u32)
+        .into_iter()
+        .map(luma)
+        .collect();
+    Score {
+        ssim: ssim(&la, &lb, hw, hh),
+        mismatch: mismatched as f32 / (w * h) as f32,
+    }
 }
 
 /// A visual diff: the reference in faded gray, mismatched pixels in red.
@@ -187,7 +210,10 @@ pub fn fingerprint_distance(a: &str, b: &str) -> (f32, u32) {
     let mut sum = 0u32;
     let mut max = 0u32;
     for (x, y) in a.chars().zip(b.chars()) {
-        let d = x.to_digit(16).unwrap_or(0).abs_diff(y.to_digit(16).unwrap_or(0));
+        let d = x
+            .to_digit(16)
+            .unwrap_or(0)
+            .abs_diff(y.to_digit(16).unwrap_or(0));
         sum += d;
         max = max.max(d);
     }

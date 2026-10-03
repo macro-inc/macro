@@ -6,11 +6,11 @@
 
 use super::date::TimeUnit;
 use super::model::{
-    AxisKind, AxisModel, Blanks, ChartModel, Crosses, DataRef, GroupModel, Grouping, Kind,
-    LabelModel, LabelPos, LabelsModel, LegendModel, LegendPos, MAX_POINTS, MAX_SERIES,
-    MAX_TRENDLINES, ManualLayout, MarkerModel, NumFmt, PointModel, RichPara, RichRun, RichText,
-    SeriesModel, ShapeProps, Side, Symbol, TextProps, TextSpec, Tick, TickLabels, TitleModel,
-    TrendKind, TrendlineModel,
+    AxisKind, AxisModel, Blanks, ChartModel, Crosses, DataRef, DataTableModel, GroupModel,
+    Grouping, Kind, LabelModel, LabelPos, LabelsModel, LegendModel, LegendPos, MAX_POINTS,
+    MAX_SERIES, MAX_TRENDLINES, ManualLayout, MarkerModel, NumFmt, PointModel, RichPara, RichRun,
+    RichText, SeriesModel, ShapeProps, Side, Symbol, TextProps, TextSpec, Tick, TickLabels,
+    TitleModel, TrendKind, TrendlineModel,
 };
 use super::style::Palette;
 use crate::model::color::{ColorContext, ColorMap, Rgba};
@@ -49,6 +49,16 @@ impl Cx<'_> {
         self.kids(node)
             .into_iter()
             .find(|&c| self.doc.is(c, Ns::C, local))
+    }
+
+    /// An extension child named `local` (`c:extLst/c:ext/*`, any namespace).
+    fn ext_child(&self, node: NodeId, local: &str) -> Option<NodeId> {
+        let doc = self.doc;
+        let list = self.kid(node, "extLst")?;
+        self.kids_named(list, "ext")
+            .into_iter()
+            .flat_map(|e| doc.children(e))
+            .find(|&c| doc.local(c) == local)
     }
 
     /// All chart-namespace children named `local`.
@@ -387,8 +397,18 @@ impl Cx<'_> {
             separator: self.kid(node, "separator").map(|s| doc.text(s)),
             text: self.tx_pr(node),
             shape: self.shape(node),
-            show_leader: self.flag(node, "showLeaderLines"),
-            leader: self.kid(node, "leaderLines").map(|l| self.shape(l)),
+            // Office 2013 keeps leader lines of non-pie labels in an extension.
+            show_leader: self.flag(node, "showLeaderLines").or_else(|| {
+                self.ext_child(node, "showLeaderLines").map(|n| {
+                    doc.attr(n, "val")
+                        .map_or(Some(true), parse_bool)
+                        .unwrap_or(true)
+                })
+            }),
+            leader: self
+                .kid(node, "leaderLines")
+                .or_else(|| self.ext_child(node, "leaderLines"))
+                .map(|l| self.shape(l)),
             ..Default::default()
         };
         if let Some(rich) = self.kid(node, "tx").and_then(|tx| self.kid(tx, "rich")) {
@@ -611,6 +631,9 @@ impl Cx<'_> {
             drop_lines: self.kid(node, "dropLines").map(|h| self.shape(h)),
             up_down,
             is_3d: local.contains("3D"),
+            gap_depth: self
+                .num(node, "gapDepth")
+                .map_or(150.0, |g| g.clamp(0.0, 500.0) as f32),
         })
     }
 
@@ -839,6 +862,7 @@ pub(crate) fn parse(
         .unwrap_or(2);
     let palette = Palette::new(&colors);
     let font = theme.resolve_typeface("+mn-lt");
+    let wall = |name: &str| cx.kid(chart, name).map(|w| cx.shape(w)).unwrap_or_default();
     Some(ChartModel {
         title: cx.kid(chart, "title").map(|t| cx.title(t)),
         auto_title_deleted: cx.flag(chart, "autoTitleDeleted").unwrap_or(true),
@@ -846,6 +870,16 @@ pub(crate) fn parse(
         axes,
         plot_layout: plot.and_then(|p| cx.layout(p)),
         plot_shape: plot.map(|p| cx.shape(p)).unwrap_or_default(),
+        data_table: plot
+            .and_then(|p| cx.kid(p, "dTable"))
+            .map(|d| DataTableModel {
+                horz: cx.flag(d, "showHorzBorder").unwrap_or(false),
+                vert: cx.flag(d, "showVertBorder").unwrap_or(false),
+                outline: cx.flag(d, "showOutline").unwrap_or(false),
+                keys: cx.flag(d, "showKeys").unwrap_or(false),
+                shape: cx.shape(d),
+                text: cx.tx_pr(d),
+            }),
         legend: cx.kid(chart, "legend").map(|l| cx.legend(l)),
         space_shape: cx.shape(root),
         text: cx.tx_pr(root),
@@ -866,6 +900,13 @@ pub(crate) fn parse(
             .kid(chart, "view3D")
             .and_then(|v| cx.num(v, "rotY"))
             .map(|r| r.rem_euclid(360.0) as f32),
+        depth_percent: cx
+            .kid(chart, "view3D")
+            .and_then(|v| cx.num(v, "depthPercent"))
+            .map(|d| d.clamp(20.0, 2000.0) as f32),
+        back_wall: wall("backWall"),
+        side_wall: wall("sideWall"),
+        floor: wall("floor"),
         font: if font.is_empty() {
             "Calibri".to_owned()
         } else {

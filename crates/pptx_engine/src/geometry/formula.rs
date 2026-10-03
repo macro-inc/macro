@@ -16,7 +16,11 @@ pub struct Guides {
 impl Guides {
     /// Guides for a `w`×`h` shape (EMU).
     pub fn new(w: f64, h: f64) -> Self {
-        Self { w, h, values: HashMap::with_capacity(32) }
+        Self {
+            w,
+            h,
+            values: HashMap::with_capacity(32),
+        }
     }
 
     /// Whether a guide has been defined.
@@ -90,14 +94,26 @@ impl Guides {
         let v = match op {
             "val" => a(0),
             "*/" => {
-                if a(2) == 0.0 { 0.0 } else { a(0) * a(1) / a(2) }
+                if a(2) == 0.0 {
+                    0.0
+                } else {
+                    a(0) * a(1) / a(2)
+                }
             }
             "+-" => a(0) + a(1) - a(2),
             "+/" => {
-                if a(2) == 0.0 { 0.0 } else { (a(0) + a(1)) / a(2) }
+                if a(2) == 0.0 {
+                    0.0
+                } else {
+                    (a(0) + a(1)) / a(2)
+                }
             }
             "?:" => {
-                if a(0) > 0.0 { a(1) } else { a(2) }
+                if a(0) > 0.0 {
+                    a(1)
+                } else {
+                    a(2)
+                }
             }
             "abs" => a(0).abs(),
             "at2" => a(1).atan2(a(0)) * 180.0 / PI * DEG,

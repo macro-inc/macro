@@ -34,10 +34,16 @@ impl ImageSource for RenderLoader<'_> {
         if let Some(r) = self.pres.images.get(part) {
             return r.clone();
         }
-        let decoded = self.pres.read_bytes(part).ok().and_then(|bytes| match image::sniff(&bytes) {
-            image::Format::Emf | image::Format::Wmf => metafile::parse(&bytes, self.fonts).ok().map(|m| Arc::new(metafile_raster(&m))),
-            _ => image::decode_raster(&bytes).ok().map(Arc::new),
-        });
+        let decoded =
+            self.pres
+                .read_bytes(part)
+                .ok()
+                .and_then(|bytes| match image::sniff(&bytes) {
+                    image::Format::Emf | image::Format::Wmf => metafile::parse(&bytes, self.fonts)
+                        .ok()
+                        .map(|m| Arc::new(metafile_raster(&m))),
+                    _ => image::decode_raster(&bytes).ok().map(Arc::new),
+                });
         self.pres.images.insert(part.to_owned(), decoded.clone());
         decoded
     }
@@ -52,10 +58,16 @@ impl PartLoader for RenderLoader<'_> {
         if let Some(m) = self.pres.metafiles.get(part) {
             return m.clone();
         }
-        let parsed = self.pres.read_bytes(part).ok().and_then(|bytes| match image::sniff(&bytes) {
-            image::Format::Emf | image::Format::Wmf => metafile::parse(&bytes, self.fonts).ok().map(Arc::new),
-            _ => None,
-        });
+        let parsed = self
+            .pres
+            .read_bytes(part)
+            .ok()
+            .and_then(|bytes| match image::sniff(&bytes) {
+                image::Format::Emf | image::Format::Wmf => {
+                    metafile::parse(&bytes, self.fonts).ok().map(Arc::new)
+                }
+                _ => None,
+            });
         self.pres.metafiles.insert(part.to_owned(), parsed.clone());
         parsed
     }
@@ -76,10 +88,18 @@ impl Presentation {
     }
 
     /// The display list of one layer of slide `index`.
-    pub fn layer_display_list(&mut self, index: usize, layer: Layer, fonts: &FontDb) -> Result<Vec<Node>> {
+    pub fn layer_display_list(
+        &mut self,
+        index: usize,
+        layer: Layer,
+        fonts: &FontDb,
+    ) -> Result<Vec<Node>> {
         let ctx = self.slide_context(index)?;
         let mut loader = RenderLoader { pres: self, fonts };
-        let mut b = Builder { fonts, loader: &mut loader };
+        let mut b = Builder {
+            fonts,
+            loader: &mut loader,
+        };
         Ok(b.slide_layer(&ctx, layer))
     }
 
@@ -89,7 +109,13 @@ impl Presentation {
     }
 
     /// Renders one layer of slide `index` (transparent where nothing is drawn).
-    pub fn render_layer(&mut self, index: usize, layer: Layer, width_px: u32, fonts: &FontDb) -> Result<Raster> {
+    pub fn render_layer(
+        &mut self,
+        index: usize,
+        layer: Layer,
+        width_px: u32,
+        fonts: &FontDb,
+    ) -> Result<Raster> {
         let nodes = self.layer_display_list(index, layer, fonts)?;
         let (cx, cy) = self.slide_size();
         let w_pt = cx as f32 / EMU_PER_PT as f32;

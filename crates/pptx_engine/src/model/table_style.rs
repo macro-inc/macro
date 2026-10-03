@@ -155,9 +155,18 @@ impl Part {
 /// Generates the `a:tblStyle` XML of a built-in style, if `id` is one.
 pub fn builtin_style_xml(id: &str) -> Option<String> {
     let &(_, family, accent) = STYLES.iter().find(|(g, _, _)| g.eq_ignore_ascii_case(id))?;
-    let a = if accent == 0 { None } else { Some(format!("accent{accent}")) };
-    let (mut whole, mut first_row, mut last_row, mut first_col, mut last_col) =
-        (Part::default(), Part::default(), Part::default(), Part::default(), Part::default());
+    let a = if accent == 0 {
+        None
+    } else {
+        Some(format!("accent{accent}"))
+    };
+    let (mut whole, mut first_row, mut last_row, mut first_col, mut last_col) = (
+        Part::default(),
+        Part::default(),
+        Part::default(),
+        Part::default(),
+        Part::default(),
+    );
     let (mut band1h, mut band1v) = (Part::default(), Part::default());
     let mut tbl_bg: Option<String> = None;
     for p in [&mut first_row, &mut last_row, &mut first_col, &mut last_col] {
@@ -174,7 +183,9 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
                 }
                 first_row.text = Some(clr("lt1", None));
                 first_row.fill = Some(clr(acc, None));
-                first_row.borders.push(("bottom", ln(THIN, &clr("lt1", None))));
+                first_row
+                    .borders
+                    .push(("bottom", ln(THIN, &clr("lt1", None))));
                 band1h.fill = Some(clr(acc, Some(("alpha", 40000))));
                 band1v.fill = Some(clr(acc, Some(("alpha", 40000))));
             }
@@ -185,12 +196,18 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
                 tbl_bg = Some(clr(acc, None));
                 whole.text = Some(clr("lt1", None));
                 for e in ["left", "right", "top", "bottom"] {
-                    whole.borders.push((e, ln(THIN, &clr(acc, Some(("tint", 50000))))));
+                    whole
+                        .borders
+                        .push((e, ln(THIN, &clr(acc, Some(("tint", 50000))))));
                 }
                 first_row.text = Some(clr("lt1", None));
-                first_row.borders.push(("bottom", ln(THICK, &clr("lt1", None))));
+                first_row
+                    .borders
+                    .push(("bottom", ln(THICK, &clr("lt1", None))));
                 last_row.borders.push(("top", ln(THICK, &clr("lt1", None))));
-                first_col.borders.push(("right", ln(THIN, &clr("lt1", None))));
+                first_col
+                    .borders
+                    .push(("right", ln(THIN, &clr("lt1", None))));
                 last_col.borders.push(("left", ln(THIN, &clr("lt1", None))));
                 band1h.fill = Some(clr("lt1", Some(("alpha", 20000))));
                 band1v.fill = Some(clr("lt1", Some(("alpha", 20000))));
@@ -207,7 +224,9 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
             whole.text = Some(clr("tx1", None));
             whole.borders.push(("top", ln(THIN, &clr(&acc, None))));
             whole.borders.push(("bottom", ln(THIN, &clr(&acc, None))));
-            first_row.borders.push(("bottom", ln(THIN, &clr(&acc, None))));
+            first_row
+                .borders
+                .push(("bottom", ln(THIN, &clr(&acc, None))));
             last_row.borders.push(("top", ln(THIN, &clr(&acc, None))));
             band1h.fill = Some(clr(&acc, Some(("alpha", 20000))));
             band1v.fill = Some(clr(&acc, Some(("alpha", 20000))));
@@ -233,7 +252,9 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
                 whole.borders.push((e, ln(THIN, &clr(&acc, None))));
             }
             first_row.text = Some(clr(&acc, None));
-            first_row.borders.push(("bottom", ln(25400, &clr(&acc, None))));
+            first_row
+                .borders
+                .push(("bottom", ln(25400, &clr(&acc, None))));
             last_row.borders.push(("top", ln(25400, &clr(&acc, None))));
             band1h.fill = Some(clr(&acc, Some(("alpha", 20000))));
             band1v.fill = Some(clr(&acc, Some(("alpha", 20000))));
@@ -263,7 +284,9 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
                 p.text = Some(clr("lt1", None));
                 p.fill = Some(clr(&acc, None));
             }
-            first_row.borders.push(("bottom", ln(THICK, &clr("lt1", None))));
+            first_row
+                .borders
+                .push(("bottom", ln(THICK, &clr("lt1", None))));
             last_row.borders.push(("top", ln(THICK, &clr("lt1", None))));
             band1h.fill = Some(clr(&acc, Some(("tint", 40000))));
             band1v.fill = Some(clr(&acc, Some(("tint", 40000))));
@@ -276,7 +299,9 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
             whole.borders.push(("bottom", ln(25400, &clr("dk1", None))));
             first_row.text = Some(clr("lt1", None));
             first_row.fill = Some(clr(&acc, None));
-            first_row.borders.push(("bottom", ln(THICK, &clr("dk1", None))));
+            first_row
+                .borders
+                .push(("bottom", ln(THICK, &clr("dk1", None))));
             last_row.fill = Some(clr("lt1", None));
             last_row.borders.push(("top", ln(THICK, &clr("dk1", None))));
             for p in [&mut first_col, &mut last_col] {
@@ -309,13 +334,19 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
             whole.fill = Some(clr(&acc, Some((t, 20000))));
             first_row.text = Some(clr("lt1", None));
             first_row.fill = Some(clr("dk1", None));
-            first_row.borders.push(("bottom", ln(THICK, &clr("lt1", None))));
+            first_row
+                .borders
+                .push(("bottom", ln(THICK, &clr("lt1", None))));
             last_row.fill = Some(clr(&acc, Some((t, 20000))));
             last_row.borders.push(("top", ln(THICK, &clr("lt1", None))));
             first_col.fill = Some(clr(&acc, Some((t, 60000))));
-            first_col.borders.push(("right", ln(THICK, &clr("lt1", None))));
+            first_col
+                .borders
+                .push(("right", ln(THICK, &clr("lt1", None))));
             last_col.fill = Some(clr(&acc, Some((t, 60000))));
-            last_col.borders.push(("left", ln(THICK, &clr("lt1", None))));
+            last_col
+                .borders
+                .push(("left", ln(THICK, &clr("lt1", None))));
             band1h.fill = Some(clr(&acc, Some((t, 40000))));
             band1v.fill = Some(clr(&acc, Some((t, 40000))));
         }

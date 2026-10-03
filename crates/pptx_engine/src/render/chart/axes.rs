@@ -5,11 +5,33 @@ use super::canvas::{Block, Canvas};
 use super::model::{ManualLayout, Side, Tick};
 use super::plot::{Edge, MINOR_TICK_LEN, Mapping, Plot, ROW_GAP, TICK_LEN, TITLE_GAP};
 use super::style::{resolve_fill, resolve_line};
+use crate::model::fill::Line;
 use crate::path::{Path, Point, Rect};
 
 impl Plot<'_> {
-    /// Plot-area background and gridlines.
+    /// The line of an axis' major or minor gridlines, if shown.
+    pub(crate) fn grid_line(&self, ai: usize, minor: bool) -> Option<Line> {
+        let m = self.m;
+        let a = &self.axes[ai];
+        let grid = if minor {
+            &a.model.minor_grid
+        } else {
+            &a.model.major_grid
+        };
+        let auto = if minor {
+            m.auto_minor_line()
+        } else {
+            m.auto_axis_line()
+        };
+        resolve_line(grid.as_ref()?.line.as_ref(), Some(auto))
+    }
+
+    /// Plot-area background and gridlines (walls and floor in 3-D).
     pub fn draw_back(&self, cv: &mut Canvas<'_>) {
+        if let Some(d) = self.depth {
+            self.draw_walls(cv, d);
+            return;
+        }
         let m = self.m;
         let r = self.inner;
         let fill = resolve_fill(&m.plot_shape, None);
@@ -18,18 +40,7 @@ impl Plot<'_> {
         for minor in [true, false] {
             for ai in 0..self.axes.len() {
                 let a = &self.axes[ai];
-                let grid = if minor {
-                    &a.model.minor_grid
-                } else {
-                    &a.model.major_grid
-                };
-                let Some(shape) = grid else { continue };
-                let auto = if minor {
-                    m.auto_minor_line()
-                } else {
-                    m.auto_axis_line()
-                };
-                let Some(l) = resolve_line(shape.line.as_ref(), Some(auto)) else {
+                let Some(l) = self.grid_line(ai, minor) else {
                     continue;
                 };
                 let mut p = Path::new();
@@ -127,6 +138,7 @@ impl Plot<'_> {
             self.draw_outer_rows(cv, ai, edge, anchor_pos, off, line.as_ref());
             self.draw_title(cv, ai, Some((edge, anchor_pos)));
         }
+        self.draw_table(cv);
     }
 
     /// Outer levels of multi-level categories, with separators between groups.

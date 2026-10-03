@@ -116,6 +116,7 @@ impl Plot<'_> {
                     let slot = slot * a.model.label_skip.unwrap_or(1) as f32;
                     let lh = a.style.size * LINE_HEIGHT;
                     let pad = a.style.size * 0.3;
+                    let touch = a.style.size * 0.1;
                     let explicit_rot = a.model.text.rot;
                     let blocks: Vec<Block>;
                     let mut skip;
@@ -149,15 +150,14 @@ impl Plot<'_> {
                             rot = 0.0;
                             blocks = single;
                         } else {
+                            // Wrap to the slot; neighbours then only need not touch.
                             let wrapped: Vec<Block> = a
                                 .cat_text
                                 .iter()
-                                .map(|t| {
-                                    cv.plain(t, &a.style, (slot - pad).max(1.0), HAlign::Center)
-                                })
+                                .map(|t| cv.plain(t, &a.style, slot.max(1.0), HAlign::Center))
                                 .collect();
                             let fits = wrapped.iter().all(|b| b.lines.len() <= 3)
-                                && pairs_fit(&wrapped, 1, slot, pad);
+                                && pairs_fit(&wrapped, 1, slot, touch);
                             // An explicit horizontal angle still wraps, never turns.
                             if fits || explicit_rot.is_some() {
                                 rot = 0.0;
@@ -169,7 +169,7 @@ impl Plot<'_> {
                         }
                         skip = if rot.abs() < 0.5 {
                             (1..blocks.len().max(1))
-                                .find(|&k| pairs_fit(&blocks, k, slot, pad))
+                                .find(|&k| pairs_fit(&blocks, k, slot, touch))
                                 .unwrap_or(blocks.len().max(1))
                         } else {
                             let foot =
@@ -191,6 +191,12 @@ impl Plot<'_> {
             self.axes[ai].rot = rot;
             self.axes[ai].labels = labels;
             self.outer_rows(cv, ai, len);
+        }
+        // A data table replaces the labels of its category axis.
+        self.layout_table(cv);
+        if let Some(ai) = self.table.as_ref().map(|t| t.axis) {
+            self.axes[ai].labels.clear();
+            self.axes[ai].outer.clear();
         }
         // Axis titles.
         for ai in 0..self.axes.len() {

@@ -1,8 +1,8 @@
 //! Theme parts: color scheme, font scheme, and the format-style matrix.
 
-use super::color::{ColorScheme, SCHEME_SLOTS, find_color};
 use super::color::{ColorContext, ColorMap};
-use crate::xml::{Ns, NodeId, XmlDoc};
+use super::color::{ColorScheme, SCHEME_SLOTS, find_color};
+use crate::xml::{NodeId, Ns, XmlDoc};
 use std::sync::Arc;
 
 /// Typefaces of one font collection (`majorFont` or `minorFont`).
@@ -46,8 +46,14 @@ impl Default for Theme {
         Self {
             name: "Office".into(),
             colors: ColorScheme::default(),
-            major: FontCollection { latin: "Calibri Light".into(), ..Default::default() },
-            minor: FontCollection { latin: "Calibri".into(), ..Default::default() },
+            major: FontCollection {
+                latin: "Calibri Light".into(),
+                ..Default::default()
+            },
+            minor: FontCollection {
+                latin: "Calibri".into(),
+                ..Default::default()
+            },
             doc: Arc::new(XmlDoc::new_root(Ns::A, "theme")),
             fill_styles: Vec::new(),
             line_styles: Vec::new(),
@@ -62,20 +68,36 @@ impl Theme {
     pub fn parse(doc: Arc<XmlDoc>) -> Self {
         let root = doc.root();
         let elements = doc.child(root, Ns::A, "themeElements").unwrap_or(root);
-        let mut theme = Theme { name: doc.attr(root, "name").unwrap_or("").to_owned(), doc: Arc::clone(&doc), ..Default::default() };
+        let mut theme = Theme {
+            name: doc.attr(root, "name").unwrap_or("").to_owned(),
+            doc: Arc::clone(&doc),
+            ..Default::default()
+        };
         if let Some(cs) = doc.child(elements, Ns::A, "clrScheme") {
             let map = ColorMap::default();
             let base = ColorScheme::default();
-            let ctx = ColorContext { scheme: &base, map: &map, ph_clr: None };
+            let ctx = ColorContext {
+                scheme: &base,
+                map: &map,
+                ph_clr: None,
+            };
             for (i, slot) in SCHEME_SLOTS.iter().enumerate() {
-                if let Some(c) = doc.child(cs, Ns::A, slot).and_then(|n| find_color(&doc, n, &ctx)) {
+                if let Some(c) = doc
+                    .child(cs, Ns::A, slot)
+                    .and_then(|n| find_color(&doc, n, &ctx))
+                {
                     theme.colors.colors[i] = c;
                 }
             }
         }
         if let Some(fs) = doc.child(elements, Ns::A, "fontScheme") {
-            for (name, target) in [("majorFont", &mut theme.major), ("minorFont", &mut theme.minor)] {
-                let Some(f) = doc.child(fs, Ns::A, name) else { continue };
+            for (name, target) in [
+                ("majorFont", &mut theme.major),
+                ("minorFont", &mut theme.minor),
+            ] {
+                let Some(f) = doc.child(fs, Ns::A, name) else {
+                    continue;
+                };
                 let face = |n: &str| {
                     doc.child(f, Ns::A, n)
                         .and_then(|c| doc.attr(c, "typeface"))
@@ -87,13 +109,20 @@ impl Theme {
                 target.cs = face("cs");
                 target.scripts = doc
                     .children_named(f, Ns::A, "font")
-                    .filter_map(|c| Some((doc.attr(c, "script")?.to_owned(), doc.attr(c, "typeface")?.to_owned())))
+                    .filter_map(|c| {
+                        Some((
+                            doc.attr(c, "script")?.to_owned(),
+                            doc.attr(c, "typeface")?.to_owned(),
+                        ))
+                    })
                     .collect();
             }
         }
         if let Some(fmt) = doc.child(elements, Ns::A, "fmtScheme") {
             let list = |name: &str| -> Vec<NodeId> {
-                doc.child(fmt, Ns::A, name).map(|l| doc.children(l).collect()).unwrap_or_default()
+                doc.child(fmt, Ns::A, name)
+                    .map(|l| doc.children(l).collect())
+                    .unwrap_or_default()
             };
             theme.fill_styles = list("fillStyleLst");
             theme.line_styles = list("lnStyleLst");
@@ -132,11 +161,13 @@ impl Theme {
 
     /// The line-style entry for an `lnRef` index.
     pub fn line_style(&self, idx: u32) -> Option<NodeId> {
-        idx.checked_sub(1).and_then(|i| self.line_styles.get(i as usize).copied())
+        idx.checked_sub(1)
+            .and_then(|i| self.line_styles.get(i as usize).copied())
     }
 
     /// The `effectStyle` entry for an `effectRef` index.
     pub fn effect_style(&self, idx: u32) -> Option<NodeId> {
-        idx.checked_sub(1).and_then(|i| self.effect_styles.get(i as usize).copied())
+        idx.checked_sub(1)
+            .and_then(|i| self.effect_styles.get(i as usize).copied())
     }
 }

@@ -68,39 +68,134 @@ impl Ns {
 /// Well-known namespace URIs, their canonical identifier, and the prefix the
 /// engine uses when it must declare the namespace itself.
 pub(crate) const KNOWN: &[(&str, Ns, &str)] = &[
-    ("http://schemas.openxmlformats.org/presentationml/2006/main", Ns::P, "p"),
+    (
+        "http://schemas.openxmlformats.org/presentationml/2006/main",
+        Ns::P,
+        "p",
+    ),
     ("http://purl.oclc.org/ooxml/presentationml/main", Ns::P, "p"),
-    ("http://schemas.openxmlformats.org/drawingml/2006/main", Ns::A, "a"),
+    (
+        "http://schemas.openxmlformats.org/drawingml/2006/main",
+        Ns::A,
+        "a",
+    ),
     ("http://purl.oclc.org/ooxml/drawingml/main", Ns::A, "a"),
-    ("http://schemas.openxmlformats.org/officeDocument/2006/relationships", Ns::R, "r"),
-    ("http://purl.oclc.org/ooxml/officeDocument/relationships", Ns::R, "r"),
-    ("http://schemas.openxmlformats.org/markup-compatibility/2006", Ns::MC, "mc"),
-    ("http://schemas.openxmlformats.org/drawingml/2006/picture", Ns::PIC, "pic"),
-    ("http://purl.oclc.org/ooxml/drawingml/picture", Ns::PIC, "pic"),
-    ("http://schemas.openxmlformats.org/drawingml/2006/chart", Ns::C, "c"),
+    (
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        Ns::R,
+        "r",
+    ),
+    (
+        "http://purl.oclc.org/ooxml/officeDocument/relationships",
+        Ns::R,
+        "r",
+    ),
+    (
+        "http://schemas.openxmlformats.org/markup-compatibility/2006",
+        Ns::MC,
+        "mc",
+    ),
+    (
+        "http://schemas.openxmlformats.org/drawingml/2006/picture",
+        Ns::PIC,
+        "pic",
+    ),
+    (
+        "http://purl.oclc.org/ooxml/drawingml/picture",
+        Ns::PIC,
+        "pic",
+    ),
+    (
+        "http://schemas.openxmlformats.org/drawingml/2006/chart",
+        Ns::C,
+        "c",
+    ),
     ("http://purl.oclc.org/ooxml/drawingml/chart", Ns::C, "c"),
-    ("http://schemas.openxmlformats.org/drawingml/2006/diagram", Ns::DGM, "dgm"),
-    ("http://purl.oclc.org/ooxml/drawingml/diagram", Ns::DGM, "dgm"),
-    ("http://schemas.microsoft.com/office/drawing/2008/diagram", Ns::DSP, "dsp"),
-    ("http://schemas.openxmlformats.org/package/2006/relationships", Ns::PKG_REL, ""),
-    ("http://schemas.openxmlformats.org/package/2006/content-types", Ns::CONTENT_TYPES, ""),
+    (
+        "http://schemas.openxmlformats.org/drawingml/2006/diagram",
+        Ns::DGM,
+        "dgm",
+    ),
+    (
+        "http://purl.oclc.org/ooxml/drawingml/diagram",
+        Ns::DGM,
+        "dgm",
+    ),
+    (
+        "http://schemas.microsoft.com/office/drawing/2008/diagram",
+        Ns::DSP,
+        "dsp",
+    ),
+    (
+        "http://schemas.openxmlformats.org/package/2006/relationships",
+        Ns::PKG_REL,
+        "",
+    ),
+    (
+        "http://schemas.openxmlformats.org/package/2006/content-types",
+        Ns::CONTENT_TYPES,
+        "",
+    ),
     ("http://www.w3.org/XML/1998/namespace", Ns::XML, "xml"),
     ("urn:schemas-microsoft-com:vml", Ns::V, "v"),
     ("urn:schemas-microsoft-com:office:office", Ns::O, "o"),
-    ("http://schemas.microsoft.com/office/powerpoint/2010/main", Ns::P14, "p14"),
-    ("http://schemas.microsoft.com/office/drawing/2010/main", Ns::A14, "a14"),
-    ("http://schemas.microsoft.com/office/powerpoint/2012/main", Ns::P15, "p15"),
-    ("http://schemas.microsoft.com/office/drawing/2016/SVG/main", Ns::ASVG, "asvg"),
-    ("http://schemas.microsoft.com/office/drawing/2014/main", Ns::A16, "a16"),
-    ("http://schemas.openxmlformats.org/drawingml/2006/chartDrawing", Ns::CDR, "cdr"),
-    ("http://schemas.openxmlformats.org/package/2006/metadata/core-properties", Ns::CP, "cp"),
+    (
+        "http://schemas.microsoft.com/office/powerpoint/2010/main",
+        Ns::P14,
+        "p14",
+    ),
+    (
+        "http://schemas.microsoft.com/office/drawing/2010/main",
+        Ns::A14,
+        "a14",
+    ),
+    (
+        "http://schemas.microsoft.com/office/powerpoint/2012/main",
+        Ns::P15,
+        "p15",
+    ),
+    (
+        "http://schemas.microsoft.com/office/drawing/2016/SVG/main",
+        Ns::ASVG,
+        "asvg",
+    ),
+    (
+        "http://schemas.microsoft.com/office/drawing/2014/main",
+        Ns::A16,
+        "a16",
+    ),
+    (
+        "http://schemas.openxmlformats.org/drawingml/2006/chartDrawing",
+        Ns::CDR,
+        "cdr",
+    ),
+    (
+        "http://schemas.openxmlformats.org/package/2006/metadata/core-properties",
+        Ns::CP,
+        "cp",
+    ),
     ("http://purl.org/dc/elements/1.1/", Ns::DC, "dc"),
-    ("http://schemas.openxmlformats.org/officeDocument/2006/extended-properties", Ns::EXT_PROPS, ""),
-    ("http://schemas.microsoft.com/office/drawing/2007/8/2/chart", Ns::C14, "c14"),
-    ("http://schemas.microsoft.com/office/word/2010/wordprocessingShape", Ns::WPS, "wps"),
+    (
+        "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties",
+        Ns::EXT_PROPS,
+        "",
+    ),
+    (
+        "http://schemas.microsoft.com/office/drawing/2007/8/2/chart",
+        Ns::C14,
+        "c14",
+    ),
+    (
+        "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+        Ns::WPS,
+        "wps",
+    ),
 ];
 
 /// The canonical URI and preferred prefix for a well-known namespace.
 pub(crate) fn canonical(ns: Ns) -> Option<(&'static str, &'static str)> {
-    KNOWN.iter().find(|(_, id, _)| *id == ns).map(|(uri, _, prefix)| (*uri, *prefix))
+    KNOWN
+        .iter()
+        .find(|(_, id, _)| *id == ns)
+        .map(|(uri, _, prefix)| (*uri, *prefix))
 }

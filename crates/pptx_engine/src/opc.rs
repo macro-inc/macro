@@ -29,7 +29,8 @@ pub mod rel_type {
     pub const OFFICE_DOCUMENT_STRICT: &str =
         "http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument";
     /// Presentation → slide.
-    pub const SLIDE: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+    pub const SLIDE: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
     /// Presentation → slide master; slide layout → slide master.
     pub const SLIDE_MASTER: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster";
@@ -37,7 +38,8 @@ pub mod rel_type {
     pub const SLIDE_LAYOUT: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
     /// Master/presentation → theme.
-    pub const THEME: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+    pub const THEME: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     /// Slide → notes slide.
     pub const NOTES_SLIDE: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
@@ -45,9 +47,11 @@ pub mod rel_type {
     pub const NOTES_MASTER: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
     /// Any part → image.
-    pub const IMAGE: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+    pub const IMAGE: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     /// Graphic frame → chart.
-    pub const CHART: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    pub const CHART: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     /// Any part → hyperlink target.
     pub const HYPERLINK: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
@@ -55,9 +59,11 @@ pub mod rel_type {
     pub const TABLE_STYLES: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     /// SmartArt pre-rendered drawing.
-    pub const DIAGRAM_DRAWING: &str = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+    pub const DIAGRAM_DRAWING: &str =
+        "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
     /// Slide → comments.
-    pub const COMMENTS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    pub const COMMENTS: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     /// Package → core properties.
     pub const CORE_PROPERTIES: &str =
         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
@@ -66,7 +72,8 @@ pub mod rel_type {
 /// Well-known content types.
 pub mod content_type {
     /// Slide part.
-    pub const SLIDE: &str = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
+    pub const SLIDE: &str =
+        "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
     /// Notes slide part.
     pub const NOTES_SLIDE: &str =
         "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
@@ -138,12 +145,13 @@ pub fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
     while i < b.len() {
-        if b[i] == b'%' && i + 2 < b.len() {
-            if let (Some(hi), Some(lo)) = (hex(b[i + 1]), hex(b[i + 2])) {
-                out.push(hi << 4 | lo);
-                i += 3;
-                continue;
-            }
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let (Some(hi), Some(lo)) = (hex(b[i + 1]), hex(b[i + 2]))
+        {
+            out.push(hi << 4 | lo);
+            i += 3;
+            continue;
         }
         out.push(b[i]);
         i += 1;
@@ -164,7 +172,10 @@ pub fn resolve_target(source_part: &str, target: &str) -> String {
 
 /// Computes a relative reference from `source_part`'s directory to `target_part`.
 pub fn relative_target(source_part: &str, target_part: &str) -> String {
-    let from: Vec<&str> = part_dir(source_part).split('/').filter(|s| !s.is_empty()).collect();
+    let from: Vec<&str> = part_dir(source_part)
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
     let to: Vec<&str> = target_part.split('/').filter(|s| !s.is_empty()).collect();
     let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
     let mut parts: Vec<&str> = std::iter::repeat_n("..", from.len() - common).collect();
@@ -187,10 +198,19 @@ impl Package {
                 continue;
             }
             index.insert(key, parts.len());
-            parts.push(Part { name, zip_name: entry.name.clone(), data: PartData::Original(entry.clone()) });
+            parts.push(Part {
+                name,
+                zip_name: entry.name.clone(),
+                data: PartData::Original(entry.clone()),
+            });
         }
         drop(archive);
-        let mut pkg = Self { source, parts, index, content_types: ContentTypes::default() };
+        let mut pkg = Self {
+            source,
+            parts,
+            index,
+            content_types: ContentTypes::default(),
+        };
         let ct_bytes = pkg
             .read(CONTENT_TYPES_PART)
             .map_err(|_| Error::MissingPart("[Content_Types].xml (not an Office package)".into()))?
@@ -201,7 +221,8 @@ impl Package {
 
     /// Whether a part exists (case-insensitive, as OPC requires).
     pub fn has_part(&self, name: &str) -> bool {
-        self.index.contains_key(&normalize_part_name(name).to_ascii_lowercase())
+        self.index
+            .contains_key(&normalize_part_name(name).to_ascii_lowercase())
     }
 
     fn part(&self, name: &str) -> Option<&Part> {
@@ -222,10 +243,13 @@ impl Package {
 
     /// Reads (inflating if needed) the bytes of a part.
     pub fn read(&self, name: &str) -> Result<Cow<'_, [u8]>> {
-        let part = self.part(name).ok_or_else(|| Error::MissingPart(name.to_owned()))?;
+        let part = self
+            .part(name)
+            .ok_or_else(|| Error::MissingPart(name.to_owned()))?;
         match &part.data {
             PartData::Original(entry) => {
-                let raw = &self.source[entry.data_start..entry.data_start + entry.compressed_size as usize];
+                let raw = &self.source
+                    [entry.data_start..entry.data_start + entry.compressed_size as usize];
                 Ok(Cow::Owned(zip::inflate_entry(entry, raw)?))
             }
             PartData::Modified(bytes) => Ok(Cow::Borrowed(bytes.as_slice())),
@@ -251,7 +275,8 @@ impl Package {
 
     /// Whether a part was replaced or created since opening.
     pub fn is_modified(&self, name: &str) -> bool {
-        self.part(name).is_some_and(|p| matches!(p.data, PartData::Modified(_)))
+        self.part(name)
+            .is_some_and(|p| matches!(p.data, PartData::Modified(_)))
     }
 
     /// Replaces (or creates) a part. New parts need a content type, either an
@@ -264,7 +289,11 @@ impl Package {
             Some(&i) => self.parts[i].data = data,
             None => {
                 self.index.insert(key, self.parts.len());
-                self.parts.push(Part { zip_name: name[1..].to_owned(), name: name.clone(), data });
+                self.parts.push(Part {
+                    zip_name: name[1..].to_owned(),
+                    name: name.clone(),
+                    data,
+                });
             }
         }
         if let Some(ct) = content_type {
@@ -303,7 +332,11 @@ impl Package {
 
     /// Parses the relationships of `source_part` (empty if it has none).
     pub fn rels(&self, source_part: &str) -> Result<Relationships> {
-        let rels_name = if source_part == "/" { PACKAGE_RELS_PART.to_owned() } else { rels_part_name(source_part) };
+        let rels_name = if source_part == "/" {
+            PACKAGE_RELS_PART.to_owned()
+        } else {
+            rels_part_name(source_part)
+        };
         if !self.has_part(&rels_name) {
             return Ok(Relationships::empty(source_part));
         }
@@ -312,9 +345,14 @@ impl Package {
 
     /// Writes the relationships of a part back to the package.
     pub fn write_rels(&mut self, rels: &Relationships) {
-        let name = if rels.source() == "/" { PACKAGE_RELS_PART.to_owned() } else { rels_part_name(rels.source()) };
+        let name = if rels.source() == "/" {
+            PACKAGE_RELS_PART.to_owned()
+        } else {
+            rels_part_name(rels.source())
+        };
         self.write(&name, rels.to_bytes(), None);
-        self.content_types.ensure_default("rels", content_type::RELATIONSHIPS);
+        self.content_types
+            .ensure_default("rels", content_type::RELATIONSHIPS);
     }
 
     /// Picks an unused part name `"{prefix}{n}{suffix}"` (n ≥ 1).
@@ -329,9 +367,15 @@ impl Package {
     pub fn main_part(&self) -> Result<String> {
         let rels = self.rels("/")?;
         rels.iter()
-            .find(|r| r.rel_type == rel_type::OFFICE_DOCUMENT || r.rel_type == rel_type::OFFICE_DOCUMENT_STRICT)
+            .find(|r| {
+                r.rel_type == rel_type::OFFICE_DOCUMENT
+                    || r.rel_type == rel_type::OFFICE_DOCUMENT_STRICT
+            })
             .map(|r| rels.resolve(r))
-            .or_else(|| self.has_part("/ppt/presentation.xml").then(|| "/ppt/presentation.xml".to_owned()))
+            .or_else(|| {
+                self.has_part("/ppt/presentation.xml")
+                    .then(|| "/ppt/presentation.xml".to_owned())
+            })
             .ok_or_else(|| Error::MissingPart("officeDocument relationship".into()))
     }
 
@@ -344,12 +388,19 @@ impl Package {
         });
         match ct_original {
             Some((part, entry)) => {
-                let raw = &self.source[entry.data_start..entry.data_start + entry.compressed_size as usize];
+                let raw = &self.source
+                    [entry.data_start..entry.data_start + entry.compressed_size as usize];
                 writer.add(&part.zip_name, WriteData::Raw { entry, raw })?;
             }
             None => {
                 let ct_bytes = self.content_types.to_bytes();
-                writer.add("[Content_Types].xml", WriteData::Fresh { data: &ct_bytes, compress: true })?;
+                writer.add(
+                    "[Content_Types].xml",
+                    WriteData::Fresh {
+                        data: &ct_bytes,
+                        compress: true,
+                    },
+                )?;
             }
         }
         for part in &self.parts {
@@ -358,11 +409,18 @@ impl Package {
             }
             match &part.data {
                 PartData::Original(entry) => {
-                    let raw = &self.source[entry.data_start..entry.data_start + entry.compressed_size as usize];
+                    let raw = &self.source
+                        [entry.data_start..entry.data_start + entry.compressed_size as usize];
                     writer.add(&part.zip_name, WriteData::Raw { entry, raw })?;
                 }
                 PartData::Modified(bytes) => {
-                    writer.add(&part.zip_name, WriteData::Fresh { data: bytes, compress: should_compress(&part.name) })?;
+                    writer.add(
+                        &part.zip_name,
+                        WriteData::Fresh {
+                            data: bytes,
+                            compress: should_compress(&part.name),
+                        },
+                    )?;
                 }
             }
         }
@@ -373,7 +431,21 @@ impl Package {
 /// Already-compressed media gains nothing from DEFLATE.
 fn should_compress(name: &str) -> bool {
     let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "mp4" | "m4a" | "mp3" | "zip" | "xlsx" | "docx" | "pptx" | "wdp")
+    !matches!(
+        ext.as_str(),
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "mp4"
+            | "m4a"
+            | "mp3"
+            | "zip"
+            | "xlsx"
+            | "docx"
+            | "pptx"
+            | "wdp"
+    )
 }
 
 #[cfg(test)]

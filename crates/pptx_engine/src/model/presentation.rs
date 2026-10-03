@@ -119,13 +119,22 @@ impl Presentation {
         self.slides.clear();
         if let Some(list) = doc.child(root, Ns::P, "sldIdLst") {
             for s in doc.children_named(list, Ns::P, "sldId") {
-                let (Some(id), Some(rid)) = (doc.attr_i64(s, "id"), doc.attr_ns(s, Ns::R, "id")) else { continue };
-                let Some(part) = main.target(rid) else { continue };
+                let (Some(id), Some(rid)) = (doc.attr_i64(s, "id"), doc.attr_ns(s, Ns::R, "id"))
+                else {
+                    continue;
+                };
+                let Some(part) = main.target(rid) else {
+                    continue;
+                };
                 if !self.pkg.has_part(&part) {
                     continue;
                 }
                 let part = self.pkg.canonical_name(&part).unwrap_or(&part).to_owned();
-                self.slides.push(SlideEntry { id: id as u32, rid: rid.to_owned(), part });
+                self.slides.push(SlideEntry {
+                    id: id as u32,
+                    rid: rid.to_owned(),
+                    part,
+                });
             }
         }
         Ok(())
@@ -153,7 +162,11 @@ impl Presentation {
 
     /// Parsed XML of a part (cached).
     pub fn xml(&mut self, part: &str) -> Result<Arc<XmlDoc>> {
-        let name = self.pkg.canonical_name(part).map(str::to_owned).unwrap_or_else(|| part.to_owned());
+        let name = self
+            .pkg
+            .canonical_name(part)
+            .map(str::to_owned)
+            .unwrap_or_else(|| part.to_owned());
         if let Some(doc) = self.xml.get(&name) {
             return Ok(Arc::clone(doc));
         }
@@ -175,8 +188,16 @@ impl Presentation {
 
     /// A part with its XML and relationships.
     pub fn part(&mut self, name: &str) -> Result<PartRef> {
-        let canonical = self.pkg.canonical_name(name).map(str::to_owned).unwrap_or_else(|| name.to_owned());
-        Ok(PartRef { doc: self.xml(&canonical)?, rels: self.part_rels(&canonical)?, name: canonical })
+        let canonical = self
+            .pkg
+            .canonical_name(name)
+            .map(str::to_owned)
+            .unwrap_or_else(|| name.to_owned());
+        Ok(PartRef {
+            doc: self.xml(&canonical)?,
+            rels: self.part_rels(&canonical)?,
+            name: canonical,
+        })
     }
 
     /// Reads raw bytes of a part.
@@ -187,12 +208,20 @@ impl Presentation {
     /// The theme of a master (or the presentation's first theme).
     pub fn theme_for(&mut self, master: Option<&PartRef>) -> Arc<Theme> {
         let theme_part = master
-            .and_then(|m| m.rels.first_of_type(rel_type::THEME).map(|r| m.rels.resolve(r)))
+            .and_then(|m| {
+                m.rels
+                    .first_of_type(rel_type::THEME)
+                    .map(|r| m.rels.resolve(r))
+            })
             .or_else(|| {
                 let main = self.main_part.clone();
-                self.part_rels(&main).ok().and_then(|r| r.first_of_type(rel_type::THEME).map(|t| r.resolve(t)))
+                self.part_rels(&main)
+                    .ok()
+                    .and_then(|r| r.first_of_type(rel_type::THEME).map(|t| r.resolve(t)))
             });
-        let Some(theme_part) = theme_part else { return Arc::new(Theme::default()) };
+        let Some(theme_part) = theme_part else {
+            return Arc::new(Theme::default());
+        };
         if let Some(t) = self.themes.get(&theme_part) {
             return Arc::clone(t);
         }
@@ -211,7 +240,11 @@ impl Presentation {
             .first_of_type(rel_type::SLIDE_LAYOUT)
             .map(|r| slide.rels.resolve(r))
             .and_then(|n| self.part(&n).ok());
-        let master_of = |p: &PartRef| p.rels.first_of_type(rel_type::SLIDE_MASTER).map(|r| p.rels.resolve(r));
+        let master_of = |p: &PartRef| {
+            p.rels
+                .first_of_type(rel_type::SLIDE_MASTER)
+                .map(|r| p.rels.resolve(r))
+        };
         let master = layout
             .as_ref()
             .and_then(master_of)
@@ -247,31 +280,58 @@ impl Presentation {
         } else {
             self.layout_and_master(&slide)
         };
-        let theme_source = if is_master { Some(&slide) } else { master.as_ref() };
+        let theme_source = if is_master {
+            Some(&slide)
+        } else {
+            master.as_ref()
+        };
         let theme = self.theme_for(theme_source);
         let color_map = effective_color_map(&slide, layout.as_ref(), master.as_ref(), is_master);
         let main = self.main_part.clone();
         let presentation = self.part(&main)?;
-        Ok(SlideContext { slide, layout, master, presentation, theme, color_map, number, size: self.size })
+        Ok(SlideContext {
+            slide,
+            layout,
+            master,
+            presentation,
+            theme,
+            color_map,
+            number,
+            size: self.size,
+        })
     }
 
     /// Mutable XML of a part, marking it for write-back.
     ///
     /// Copy-on-write: snapshots that share the document keep the old version.
     pub(crate) fn xml_mut(&mut self, part: &str) -> Result<&mut XmlDoc> {
-        let name = self.pkg.canonical_name(part).map(str::to_owned).unwrap_or_else(|| part.to_owned());
+        let name = self
+            .pkg
+            .canonical_name(part)
+            .map(str::to_owned)
+            .unwrap_or_else(|| part.to_owned());
         self.xml(&name)?;
         self.dirty_xml.insert(name.clone());
-        let doc = self.xml.get_mut(&name).ok_or_else(|| Error::MissingPart(name.clone()))?;
+        let doc = self
+            .xml
+            .get_mut(&name)
+            .ok_or_else(|| Error::MissingPart(name.clone()))?;
         Ok(Arc::make_mut(doc))
     }
 
     /// Mutable relationships of a part, marking them for write-back.
     pub(crate) fn rels_mut(&mut self, part: &str) -> Result<&mut Relationships> {
-        let name = self.pkg.canonical_name(part).map(str::to_owned).unwrap_or_else(|| part.to_owned());
+        let name = self
+            .pkg
+            .canonical_name(part)
+            .map(str::to_owned)
+            .unwrap_or_else(|| part.to_owned());
         self.part_rels(&name)?;
         self.dirty_rels.insert(name.clone());
-        let rels = self.rels.get_mut(&name).ok_or_else(|| Error::MissingPart(name.clone()))?;
+        let rels = self
+            .rels
+            .get_mut(&name)
+            .ok_or_else(|| Error::MissingPart(name.clone()))?;
         Ok(Arc::make_mut(rels))
     }
 
@@ -320,7 +380,12 @@ impl Presentation {
     }
 }
 
-fn effective_color_map(slide: &PartRef, layout: Option<&PartRef>, master: Option<&PartRef>, is_master: bool) -> ColorMap {
+fn effective_color_map(
+    slide: &PartRef,
+    layout: Option<&PartRef>,
+    master: Option<&PartRef>,
+    is_master: bool,
+) -> ColorMap {
     let override_of = |p: &PartRef| -> Option<ColorMap> {
         let doc = &p.doc;
         let ovr = doc.child(doc.root(), Ns::P, "clrMapOvr")?;
@@ -341,6 +406,10 @@ fn effective_color_map(slide: &PartRef, layout: Option<&PartRef>, master: Option
         return m;
     }
     master
-        .and_then(|m| m.doc.child(m.doc.root(), Ns::P, "clrMap").map(|n| ColorMap::parse(&m.doc, n)))
+        .and_then(|m| {
+            m.doc
+                .child(m.doc.root(), Ns::P, "clrMap")
+                .map(|n| ColorMap::parse(&m.doc, n))
+        })
         .unwrap_or_default()
 }

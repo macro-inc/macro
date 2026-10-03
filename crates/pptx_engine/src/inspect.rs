@@ -7,13 +7,15 @@ use crate::error::{Error, Result};
 use crate::font::FontDb;
 use crate::model::fill::Fill;
 use crate::model::presentation::Presentation;
-use crate::model::shape::{GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, resolve_tree, sp_tree};
+use crate::model::shape::{
+    GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, resolve_tree, sp_tree,
+};
 use crate::model::text::{Align, BulletKind, Paragraph, RunKind, RunProps, Strike, Underline};
 use crate::path::{Affine, Point, Rect};
 use crate::render::build::shape_geometry;
 use crate::render::text::{LayoutParams, LineBox, layout};
 use crate::units::emu_to_pt;
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 use serde::Serialize;
 
 pub use crate::edit::LayoutInfo;
@@ -227,7 +229,11 @@ fn paragraphs_of(doc: &XmlDoc, body: NodeId) -> Vec<ParagraphOutline> {
     doc.children_named(body, Ns::A, "p")
         .map(|p| ParagraphOutline {
             text: dom_paragraph_text(doc, p),
-            level: doc.child(p, Ns::A, "pPr").and_then(|pr| doc.attr_i64(pr, "lvl")).unwrap_or(0).clamp(0, 8) as u8,
+            level: doc
+                .child(p, Ns::A, "pPr")
+                .and_then(|pr| doc.attr_i64(pr, "lvl"))
+                .unwrap_or(0)
+                .clamp(0, 8) as u8,
         })
         .collect()
 }
@@ -235,7 +241,11 @@ fn paragraphs_of(doc: &XmlDoc, body: NodeId) -> Vec<ParagraphOutline> {
 fn table_outline(doc: &XmlDoc, tbl: NodeId) -> TableOutline {
     let column_widths = doc
         .child(tbl, Ns::A, "tblGrid")
-        .map(|g| doc.children_named(g, Ns::A, "gridCol").map(|c| doc.attr_f64(c, "w").map_or(0.0, emu_to_pt)).collect())
+        .map(|g| {
+            doc.children_named(g, Ns::A, "gridCol")
+                .map(|c| doc.attr_f64(c, "w").map_or(0.0, emu_to_pt))
+                .collect()
+        })
         .unwrap_or_default();
     let mut rows = Vec::new();
     let mut row_heights = Vec::new();
@@ -245,13 +255,22 @@ fn table_outline(doc: &XmlDoc, tbl: NodeId) -> TableOutline {
             doc.children_named(tr, Ns::A, "tc")
                 .map(|tc| {
                     doc.child(tc, Ns::A, "txBody")
-                        .map(|b| doc.children_named(b, Ns::A, "p").map(|p| dom_paragraph_text(doc, p)).collect::<Vec<_>>().join("\n"))
+                        .map(|b| {
+                            doc.children_named(b, Ns::A, "p")
+                                .map(|p| dom_paragraph_text(doc, p))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        })
                         .unwrap_or_default()
                 })
                 .collect(),
         );
     }
-    TableOutline { rows, column_widths, row_heights }
+    TableOutline {
+        rows,
+        column_widths,
+        row_heights,
+    }
 }
 
 fn hex(fill: &Fill) -> Option<String> {
@@ -297,7 +316,9 @@ fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
         ShapeKind::Group(_) => (ShapeKindName::Group, None),
         ShapeKind::Connector => (ShapeKindName::Connector, None),
         ShapeKind::Picture(_) => (ShapeKindName::Picture, None),
-        ShapeKind::Frame(Graphic::Table(tbl)) => (ShapeKindName::Table, Some(table_outline(doc, *tbl))),
+        ShapeKind::Frame(Graphic::Table(tbl)) => {
+            (ShapeKindName::Table, Some(table_outline(doc, *tbl)))
+        }
         ShapeKind::Frame(Graphic::Chart(_)) => (ShapeKindName::Chart, None),
         ShapeKind::Frame(Graphic::Diagram(_)) => (ShapeKindName::Diagram, None),
         ShapeKind::Frame(Graphic::Ole { .. }) => (ShapeKindName::Object, None),
@@ -307,14 +328,23 @@ fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
                 .path(s.node, Ns::P, &["nvSpPr", "cNvSpPr"])
                 .and_then(|c| doc.attr_bool(c, "txBox"))
                 .unwrap_or(false);
-            let kind = if s.placeholder.is_some() || text_box { ShapeKindName::Text } else { ShapeKindName::Shape };
+            let kind = if s.placeholder.is_some() || text_box {
+                ShapeKindName::Text
+            } else {
+                ShapeKindName::Shape
+            };
             (kind, None)
         }
     };
     let children = match &s.kind {
         ShapeKind::Group(members) => {
-            let child_parent = parent.pre_concat(&s.xfrm.local_to_parent()).pre_concat(&s.xfrm.child_to_local());
-            members.iter().map(|c| shape_outline(c, &child_parent)).collect()
+            let child_parent = parent
+                .pre_concat(&s.xfrm.local_to_parent())
+                .pre_concat(&s.xfrm.child_to_local());
+            members
+                .iter()
+                .map(|c| shape_outline(c, &child_parent))
+                .collect()
         }
         _ => Vec::new(),
     };
@@ -333,7 +363,11 @@ fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
         hidden: s.hidden,
         alt_text: s.descr.clone(),
         geometry: match &s.geometry {
-            GeometryRef::Preset(name, _) if !matches!(kind, ShapeKindName::Group | ShapeKindName::Table) => Some(name.clone()),
+            GeometryRef::Preset(name, _)
+                if !matches!(kind, ShapeKindName::Group | ShapeKindName::Table) =>
+            {
+                Some(name.clone())
+            }
             _ => None,
         },
         fill: hex(&s.fill),
@@ -347,20 +381,43 @@ fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
 impl Presentation {
     /// The outline of the slide at `index`.
     pub fn slide_outline(&mut self, index: usize) -> Result<SlideOutline> {
-        let entry = self.slides.get(index).cloned().ok_or_else(|| Error::NotFound(format!("slide {index}")))?;
+        let entry = self
+            .slides
+            .get(index)
+            .cloned()
+            .ok_or_else(|| Error::NotFound(format!("slide {index}")))?;
         let ctx = self.slide_context(index)?;
-        let walk = WalkCtx { ctx: &ctx, inherit: Inherit::Slide };
-        let shapes = sp_tree(&ctx.slide.doc).map(|t| resolve_tree(&walk, &ctx.slide, t)).unwrap_or_default();
-        let outlines: Vec<ShapeOutline> = shapes.iter().map(|s| shape_outline(s, &Affine::IDENTITY)).collect();
+        let walk = WalkCtx {
+            ctx: &ctx,
+            inherit: Inherit::Slide,
+        };
+        let shapes = sp_tree(&ctx.slide.doc)
+            .map(|t| resolve_tree(&walk, &ctx.slide, t))
+            .unwrap_or_default();
+        let outlines: Vec<ShapeOutline> = shapes
+            .iter()
+            .map(|s| shape_outline(s, &Affine::IDENTITY))
+            .collect();
         let title = outlines
             .iter()
             .find(|s| matches!(s.placeholder.as_deref(), Some("title" | "ctrTitle")))
-            .map(|s| s.paragraphs.iter().map(|p| p.text.replace('\u{b}', " ")).collect::<Vec<_>>().join(" "))
+            .map(|s| {
+                s.paragraphs
+                    .iter()
+                    .map(|p| p.text.replace('\u{b}', " "))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
             .filter(|t| !t.trim().is_empty());
         let layout = ctx
             .layout
             .as_ref()
-            .and_then(|l| l.doc.child(l.doc.root(), Ns::P, "cSld").and_then(|c| l.doc.attr(c, "name")).map(str::to_owned))
+            .and_then(|l| {
+                l.doc
+                    .child(l.doc.root(), Ns::P, "cSld")
+                    .and_then(|c| l.doc.attr(c, "name"))
+                    .map(str::to_owned)
+            })
             .unwrap_or_default();
         let hidden = ctx.slide.doc.attr_bool(ctx.slide.doc.root(), "show") == Some(false);
         Ok(SlideOutline {
@@ -376,14 +433,21 @@ impl Presentation {
 
     /// The outline of the whole deck.
     pub fn outline(&mut self) -> Result<DeckOutline> {
-        let slides = (0..self.slides.len()).map(|i| self.slide_outline(i)).collect::<Result<Vec<_>>>()?;
+        let slides = (0..self.slides.len())
+            .map(|i| self.slide_outline(i))
+            .collect::<Result<Vec<_>>>()?;
         let theme_colors = match self.slides.first() {
             Some(_) => {
                 let ctx = self.slide_context(0)?;
                 crate::model::color::SCHEME_SLOTS
                     .iter()
                     .zip(ctx.theme.colors.colors.iter())
-                    .map(|(slot, c)| ((*slot).to_owned(), hex(&Fill::Solid(*c)).unwrap_or_default()))
+                    .map(|(slot, c)| {
+                        (
+                            (*slot).to_owned(),
+                            hex(&Fill::Solid(*c)).unwrap_or_default(),
+                        )
+                    })
                     .collect()
             }
             None => Vec::new(),
@@ -401,27 +465,42 @@ impl Presentation {
     ///
     /// Returns `None` when the shape cannot hold text. Shapes inside groups
     /// are supported; their transform includes the group's.
-    pub fn text_layout(&mut self, index: usize, shape: u32, cell: Option<CellRef>, fonts: &FontDb) -> Result<Option<TextLayoutInfo>> {
+    pub fn text_layout(
+        &mut self,
+        index: usize,
+        shape: u32,
+        cell: Option<CellRef>,
+        fonts: &FontDb,
+    ) -> Result<Option<TextLayoutInfo>> {
         if cell.is_some() {
             return Ok(None);
         }
         let ctx = self.slide_context(index)?;
-        let walk = WalkCtx { ctx: &ctx, inherit: Inherit::Slide };
-        let shapes = sp_tree(&ctx.slide.doc).map(|t| resolve_tree(&walk, &ctx.slide, t)).unwrap_or_default();
+        let walk = WalkCtx {
+            ctx: &ctx,
+            inherit: Inherit::Slide,
+        };
+        let shapes = sp_tree(&ctx.slide.doc)
+            .map(|t| resolve_tree(&walk, &ctx.slide, t))
+            .unwrap_or_default();
         let Some((s, parent)) = find_resolved(&shapes, shape, Affine::IDENTITY) else {
             return Err(Error::NotFound(format!("shape {shape}")));
         };
         if !matches!(s.kind, ShapeKind::Shape) {
             return Ok(None);
         }
-        let Some(body) = s.text.clone() else { return Ok(None) };
+        let Some(body) = s.text.clone() else {
+            return Ok(None);
+        };
         if body.paragraphs.is_empty() {
             return Ok(None);
         }
         let geom = shape_geometry(s);
         let rect = geom.text_rect;
         let lay = layout(&body, rect.w, rect.h, fonts, LayoutParams::from_body(&body));
-        let mut t = parent.pre_concat(&s.xfrm.text_to_parent()).pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)));
+        let mut t = parent
+            .pre_concat(&s.xfrm.text_to_parent())
+            .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)));
         if body.body.rot != 0.0 {
             let c = (f64::from(rect.w / 2.0), f64::from(rect.h / 2.0));
             t = t
@@ -430,11 +509,19 @@ impl Presentation {
                 .pre_concat(&Affine::translate(-c.0, -c.1));
         }
         let t = t.pre_concat(&lay.transform);
-        let styles = body.paragraphs.iter().map(|p| paragraph_style(&s.part.doc, p)).collect();
+        let styles = body
+            .paragraphs
+            .iter()
+            .map(|p| paragraph_style(&s.part.doc, p))
+            .collect();
         Ok(Some(TextLayoutInfo {
             transform: [t.a, t.b, t.c, t.d, t.e, t.f],
             size: [rect.w, rect.h],
-            paragraphs: body.paragraphs.iter().map(crate::render::text::paragraph_text).collect(),
+            paragraphs: body
+                .paragraphs
+                .iter()
+                .map(crate::render::text::paragraph_text)
+                .collect(),
             lines: lay.lines,
             styles,
         }))
@@ -461,7 +548,11 @@ fn paragraph_style(doc: &XmlDoc, p: &Paragraph) -> ParagraphStyle {
         .runs
         .iter()
         .map(|r| {
-            let len = if r.kind == RunKind::Break { 1 } else { r.text.chars().count() };
+            let len = if r.kind == RunKind::Break {
+                1
+            } else {
+                r.text.chars().count()
+            };
             let style = run_style(&r.props, offset, offset + len);
             offset += len;
             style
@@ -475,7 +566,11 @@ fn paragraph_style(doc: &XmlDoc, p: &Paragraph) -> ParagraphStyle {
             Align::Justify => "justify",
             Align::Distributed => "distributed",
         },
-        level: doc.child(p.node, Ns::A, "pPr").and_then(|pr| doc.attr_i64(pr, "lvl")).unwrap_or(0).clamp(0, 8) as u8,
+        level: doc
+            .child(p.node, Ns::A, "pPr")
+            .and_then(|pr| doc.attr_i64(pr, "lvl"))
+            .unwrap_or(0)
+            .clamp(0, 8) as u8,
         bullet: !matches!(p.props.bullet.kind, BulletKind::None),
         runs,
         end: run_style(&p.end_props, offset, offset),
@@ -489,7 +584,9 @@ fn find_resolved(shapes: &[Shape], id: u32, parent: Affine) -> Option<(&Shape, A
             return Some((s, parent));
         }
         if let ShapeKind::Group(children) = &s.kind {
-            let child_parent = parent.pre_concat(&s.xfrm.local_to_parent()).pre_concat(&s.xfrm.child_to_local());
+            let child_parent = parent
+                .pre_concat(&s.xfrm.local_to_parent())
+                .pre_concat(&s.xfrm.child_to_local());
             if let Some(found) = find_resolved(children, id, child_parent) {
                 return Some(found);
             }

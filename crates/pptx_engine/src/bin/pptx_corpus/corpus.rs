@@ -22,7 +22,10 @@ pub struct Deck {
 impl Deck {
     /// File stem, used for reference and output directories.
     pub fn stem(&self) -> String {
-        self.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+        self.path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
     }
 }
 
@@ -35,8 +38,15 @@ pub fn discover(root: &Path, only: &[String]) -> std::io::Result<Vec<Deck>> {
             let path = entry?.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pptx")) {
-                let key = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+            } else if path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("pptx"))
+            {
+                let key = path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 if only.is_empty() || only.iter().any(|o| key.contains(o.as_str())) {
                     out.push(Deck { key, path });
                 }
@@ -131,10 +141,15 @@ pub fn par_map<T: Sync, R: Send>(items: &[T], jobs: usize, f: impl Fn(&T) -> R +
             });
         }
     });
-    results.into_iter().map(|r| r.expect("every item is processed")).collect()
+    results
+        .into_iter()
+        .map(|r| r.expect("every item is processed"))
+        .collect()
 }
 
 /// A sensible default worker count.
 pub fn default_jobs() -> usize {
-    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4)
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
 }

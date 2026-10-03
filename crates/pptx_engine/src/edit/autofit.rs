@@ -45,31 +45,60 @@ pub fn refit(pres: &mut Presentation, targets: &[(String, u32)], fonts: &FontDb)
 
 fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> Result<()> {
     let slide = pres.part(part)?;
-    let Some(node) = find_shape(&slide.doc, id) else { return Ok(()) };
+    let Some(node) = find_shape(&slide.doc, id) else {
+        return Ok(());
+    };
     if slide.doc.local(node) != "sp" {
         return Ok(());
     }
     let ctx = pres.context_for(slide.clone(), 1)?;
-    let walk = WalkCtx { ctx: &ctx, inherit: Inherit::Slide };
-    let Some(shape) = resolve_shape(&walk, &slide, node) else { return Ok(()) };
-    let Some(text) = shape.text.as_ref() else { return Ok(()) };
+    let walk = WalkCtx {
+        ctx: &ctx,
+        inherit: Inherit::Slide,
+    };
+    let Some(shape) = resolve_shape(&walk, &slide, node) else {
+        return Ok(());
+    };
+    let Some(text) = shape.text.as_ref() else {
+        return Ok(());
+    };
     if !matches!(text.body.vert, Vert::Horz) {
         return Ok(());
     }
     let rect = shape_geometry(&shape).text_rect;
     match text.body.autofit {
-        Autofit::Normal { font_scale, line_reduction } => {
+        Autofit::Normal {
+            font_scale,
+            line_reduction,
+        } => {
             let fits = |&(s, r): &(f32, f32)| {
-                let lay = layout(text, rect.w, rect.h, fonts, LayoutParams { font_scale: s, line_reduction: r });
+                let lay = layout(
+                    text,
+                    rect.w,
+                    rect.h,
+                    fonts,
+                    LayoutParams {
+                        font_scale: s,
+                        line_reduction: r,
+                    },
+                );
                 lay.content_height <= rect.h + TOLERANCE
             };
-            let (scale, reduction) = LADDER.iter().copied().find(fits).unwrap_or(LADDER[LADDER.len() - 1]);
+            let (scale, reduction) = LADDER
+                .iter()
+                .copied()
+                .find(fits)
+                .unwrap_or(LADDER[LADDER.len() - 1]);
             if (scale - font_scale).abs() < 1e-3 && (reduction - line_reduction).abs() < 1e-3 {
                 return Ok(());
             }
             let doc = pres.xml_mut(part)?;
-            let Some(node) = find_shape(doc, id) else { return Ok(()) };
-            let Some(body) = doc.children(node).find(|&c| doc.local(c) == "txBody") else { return Ok(()) };
+            let Some(node) = find_shape(doc, id) else {
+                return Ok(());
+            };
+            let Some(body) = doc.children(node).find(|&c| doc.local(c) == "txBody") else {
+                return Ok(());
+            };
             let bpr = match doc.child(body, Ns::A, "bodyPr") {
                 Some(b) => b,
                 None => {
@@ -82,12 +111,20 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
             if scale >= 0.9995 {
                 doc.remove_attr(fit, "fontScale");
             } else {
-                doc.set_attr(fit, "fontScale", &((scale * 100_000.0).round() as i64).to_string());
+                doc.set_attr(
+                    fit,
+                    "fontScale",
+                    &((scale * 100_000.0).round() as i64).to_string(),
+                );
             }
             if reduction <= 0.0005 {
                 doc.remove_attr(fit, "lnSpcReduction");
             } else {
-                doc.set_attr(fit, "lnSpcReduction", &((reduction * 100_000.0).round() as i64).to_string());
+                doc.set_attr(
+                    fit,
+                    "lnSpcReduction",
+                    &((reduction * 100_000.0).round() as i64).to_string(),
+                );
             }
         }
         Autofit::Shape => {
@@ -96,13 +133,19 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
             }
             let lay = layout(text, rect.w, rect.h, fonts, LayoutParams::from_body(text));
             let h = (lay.content_height + (shape.xfrm.h - rect.h)).max(1.0);
-            let w = if text.body.wrap { shape.xfrm.w } else { (lay.content_width + (shape.xfrm.w - rect.w)).max(1.0) };
+            let w = if text.body.wrap {
+                shape.xfrm.w
+            } else {
+                (lay.content_width + (shape.xfrm.w - rect.w)).max(1.0)
+            };
             if (h - shape.xfrm.h).abs() < TOLERANCE && (w - shape.xfrm.w).abs() < TOLERANCE {
                 return Ok(());
             }
             let x = shape.xfrm;
             let doc = pres.xml_mut(part)?;
-            let Some(node) = find_shape(doc, id) else { return Ok(()) };
+            let Some(node) = find_shape(doc, id) else {
+                return Ok(());
+            };
             let xfrm = ensure_xfrm(doc, node);
             set_off_ext(doc, xfrm, x.x, x.y, w, h);
         }

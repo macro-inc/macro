@@ -5,10 +5,26 @@
 //! Text positions count Unicode scalar values within a paragraph, where a line
 //! break (`a:br`) counts as one character.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Reads `null` as the default value: AI tool calls in strict mode send
+/// `null` for every optional field they leave out.
+fn nullable<'de, D, T>(de: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(de)?.unwrap_or_default())
+}
+
+fn nullable_start<'de, D: Deserializer<'de>>(de: D) -> Result<u32, D::Error> {
+    Ok(Option::<u32>::deserialize(de)?.unwrap_or_else(one))
+}
 
 /// A position inside a shape's text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct TextPos {
     /// Paragraph index.
     pub paragraph: usize,
@@ -18,6 +34,8 @@ pub struct TextPos {
 
 /// A table cell inside a graphic frame (0-based).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct CellRef {
     /// Row index.
     pub row: usize,
@@ -27,7 +45,8 @@ pub struct CellRef {
 
 /// Character formatting changes (`None` = leave unchanged).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct RunPatch {
     /// Bold.
     pub bold: Option<bool>,
@@ -53,7 +72,8 @@ pub struct RunPatch {
 
 /// Bullet style for paragraphs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
 pub enum BulletSpec {
     /// No bullet.
     None,
@@ -69,7 +89,7 @@ pub enum BulletSpec {
         /// Numbering scheme.
         scheme: String,
         /// First number.
-        #[serde(default = "one")]
+        #[serde(default = "one", deserialize_with = "nullable_start")]
         start: u32,
     },
 }
@@ -80,7 +100,8 @@ fn one() -> u32 {
 
 /// Paragraph formatting changes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ParaPatch {
     /// `left`, `center`, `right`, `justify`, `distributed`.
     pub align: Option<String>,
@@ -102,7 +123,8 @@ pub struct ParaPatch {
 
 /// Text box (body) changes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct BodyPatch {
     /// `top`, `middle`, `bottom`.
     pub anchor: Option<String>,
@@ -118,7 +140,8 @@ pub struct BodyPatch {
 
 /// A fill specification.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
 pub enum FillSpec {
     /// No fill.
     None,
@@ -135,16 +158,18 @@ pub enum FillSpec {
         /// Stop colors (`RRGGBB` or theme names), evenly spaced.
         colors: Vec<String>,
         /// Angle in degrees.
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         angle: f32,
     },
 }
 
 /// Outline changes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct LinePatch {
     /// Remove the outline.
+    #[serde(deserialize_with = "nullable")]
     pub none: bool,
     /// Color (`RRGGBB` or theme name).
     pub color: Option<String>,
@@ -160,12 +185,13 @@ pub struct LinePatch {
 
 /// What to add with [`EditOp::AddShape`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
 pub enum NewShape {
     /// A text box.
     TextBox {
         /// Initial text (`\n` separates paragraphs).
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         text: String,
     },
     /// A preset shape (`rect`, `roundRect`, `ellipse`, `rightArrow`...).
@@ -173,13 +199,13 @@ pub enum NewShape {
         /// Preset geometry name.
         preset: String,
         /// Initial text.
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         text: String,
     },
     /// A straight line from the top-left to the bottom-right of the box.
     Line {
         /// Arrowhead at the end.
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         arrow: bool,
     },
     /// A picture.
@@ -187,7 +213,7 @@ pub enum NewShape {
         /// Base64-encoded PNG, JPEG, or GIF bytes.
         data: String,
         /// Alt text.
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         description: String,
     },
     /// A table.
@@ -199,6 +225,7 @@ pub enum NewShape {
 
 /// Z-order moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ZOrder {
     /// To the top.
@@ -213,7 +240,13 @@ pub enum ZOrder {
 
 /// One edit operation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "op")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "op",
+    deny_unknown_fields
+)]
 pub enum EditOp {
     /// Replaces all text of a shape (`\n` separates paragraphs, `\u{b}` is a line
     /// break), keeping the formatting of the first run of each paragraph.
@@ -388,10 +421,10 @@ pub enum EditOp {
         /// Shape id.
         shape: u32,
         /// Horizontal offset.
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         dx: f32,
         /// Vertical offset.
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         dy: f32,
     },
     /// Changes a shape's z-order.
@@ -518,6 +551,7 @@ pub enum EditOp {
 
 /// Something an edit created.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Created {
     /// Slide id.
@@ -528,6 +562,7 @@ pub struct Created {
 
 /// The outcome of applying a batch of operations.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EditResult {
     /// Ids created by the batch, in order.

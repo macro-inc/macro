@@ -61,11 +61,14 @@ pub struct FontChoice {
     pub synthetic_italic: bool,
 }
 
+/// Glyph outlines by (face, glyph); `None` for glyphs without one.
+type OutlineCache = HashMap<(u32, u16), Option<Arc<Path>>>;
+
 /// A set of registered faces plus glyph caches.
 #[derive(Default)]
 pub struct FontDb {
     faces: Vec<FaceData>,
-    outlines: Mutex<HashMap<(u32, u16), Option<Arc<Path>>>>,
+    outlines: Mutex<OutlineCache>,
     kerning: Mutex<HashMap<(u32, u16, u16), f32>>,
     missing: Mutex<Vec<String>>,
 }
@@ -79,7 +82,10 @@ const SUBSTITUTES: &[(&str, &[&str])] = &[
     ("arial", &["Liberation Sans", "Arimo"]),
     ("helvetica", &["Liberation Sans", "Arimo"]),
     ("helvetica neue", &["Liberation Sans"]),
-    ("arial narrow", &["Liberation Sans Narrow", "Liberation Sans"]),
+    (
+        "arial narrow",
+        &["Liberation Sans Narrow", "Liberation Sans"],
+    ),
     ("arial black", &["Liberation Sans"]),
     ("times new roman", &["Liberation Serif", "Tinos"]),
     ("times", &["Liberation Serif", "Tinos"]),
@@ -114,15 +120,28 @@ const SANS_FALLBACK: &str = "Liberation Sans";
 const SERIF_FALLBACK: &str = "Liberation Serif";
 const MONO_FALLBACK: &str = "Liberation Mono";
 /// Faces tried, in order, for characters the chosen face lacks.
-const GLYPH_FALLBACKS: &[&str] = &["DejaVu Sans", "Liberation Sans", "Carlito", "Liberation Serif"];
+const GLYPH_FALLBACKS: &[&str] = &[
+    "DejaVu Sans",
+    "Liberation Sans",
+    "Carlito",
+    "Liberation Serif",
+];
 
 fn read_metrics(face: &ttf_parser::Face<'_>) -> FaceMetrics {
     let upem = f32::from(face.units_per_em().max(1));
     let (win_ascent, win_descent) = face
         .tables()
         .os2
-        .map(|os2| (f32::from(os2.windows_ascender()), f32::from(os2.windows_descender()).abs()))
-        .unwrap_or((f32::from(face.ascender()), f32::from(face.descender()).abs()));
+        .map(|os2| {
+            (
+                f32::from(os2.windows_ascender()),
+                f32::from(os2.windows_descender()).abs(),
+            )
+        })
+        .unwrap_or((
+            f32::from(face.ascender()),
+            f32::from(face.descender()).abs(),
+        ));
     let underline = face.underline_metrics();
     let strike = face.strikeout_metrics();
     FaceMetrics {
@@ -179,8 +198,12 @@ impl FontDb {
         let count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
         let mut ids = Vec::new();
         for index in 0..count {
-            let Ok(face) = ttf_parser::Face::parse(&data, index) else { continue };
-            let Some(family) = family_name(&face) else { continue };
+            let Ok(face) = ttf_parser::Face::parse(&data, index) else {
+                continue;
+            };
+            let Some(family) = family_name(&face) else {
+                continue;
+            };
             let entry = FaceData {
                 family_lower: family.to_lowercase(),
                 family,
@@ -229,10 +252,10 @@ impl FontDb {
     }
 
     fn note_missing(&self, family: &str) {
-        if let Ok(mut m) = self.missing.lock() {
-            if !m.iter().any(|x| x.eq_ignore_ascii_case(family)) {
-                m.push(family.to_owned());
-            }
+        if let Ok(mut m) = self.missing.lock()
+            && !m.iter().any(|x| x.eq_ignore_ascii_case(family))
+        {
+            m.push(family.to_owned());
         }
     }
 
@@ -271,19 +294,36 @@ impl FontDb {
                 }
             }
         }
-        let generic = if lower.contains("mono") || lower.contains("courier") || lower.contains("code") {
-            MONO_FALLBACK
-        } else if lower.contains("serif") && !lower.contains("sans")
-            || ["times", "roman", "garamond", "georgia", "book", "minion", "baskerville", "bodoni", "caslon"]
+        let generic =
+            if lower.contains("mono") || lower.contains("courier") || lower.contains("code") {
+                MONO_FALLBACK
+            } else if lower.contains("serif") && !lower.contains("sans")
+                || [
+                    "times",
+                    "roman",
+                    "garamond",
+                    "georgia",
+                    "book",
+                    "minion",
+                    "baskerville",
+                    "bodoni",
+                    "caslon",
+                ]
                 .iter()
                 .any(|k| lower.contains(k))
-        {
-            SERIF_FALLBACK
-        } else {
-            SANS_FALLBACK
-        };
+            {
+                SERIF_FALLBACK
+            } else {
+                SANS_FALLBACK
+            };
         self.best_in_family(&generic.to_lowercase(), bold, italic)
-            .or_else(|| self.faces.first().map(|_| FontChoice { face: FaceId(0), synthetic_bold: bold, synthetic_italic: italic }))
+            .or_else(|| {
+                self.faces.first().map(|_| FontChoice {
+                    face: FaceId(0),
+                    synthetic_bold: bold,
+                    synthetic_italic: italic,
+                })
+            })
     }
 
     fn with_face<R>(&self, id: FaceId, f: impl FnOnce(&ttf_parser::Face<'_>) -> R) -> Option<R> {
@@ -294,7 +334,9 @@ impl FontDb {
 
     /// Glyph id for a character in a face.
     pub fn glyph(&self, id: FaceId, ch: char) -> Option<u16> {
-        self.with_face(id, |f| f.glyph_index(ch).map(|g| g.0)).flatten().filter(|g| *g != 0)
+        self.with_face(id, |f| f.glyph_index(ch).map(|g| g.0))
+            .flatten()
+            .filter(|g| *g != 0)
     }
 
     /// Maps characters to glyphs and advances (em units) in one face parse.
@@ -305,7 +347,9 @@ impl FontDb {
                 .iter()
                 .map(|&c| {
                     let g = f.glyph_index(c).filter(|g| g.0 != 0);
-                    let adv = g.and_then(|g| f.glyph_hor_advance(g)).map_or(0.0, |a| f32::from(a) / upem);
+                    let adv = g
+                        .and_then(|g| f.glyph_hor_advance(g))
+                        .map_or(0.0, |a| f32::from(a) / upem);
                     (g.map(|g| g.0), adv)
                 })
                 .collect()
@@ -317,24 +361,36 @@ impl FontDb {
     pub fn advance(&self, id: FaceId, glyph: u16) -> f32 {
         self.with_face(id, |f| {
             let upem = f32::from(f.units_per_em().max(1));
-            f.glyph_hor_advance(ttf_parser::GlyphId(glyph)).map_or(0.0, |a| f32::from(a) / upem)
+            f.glyph_hor_advance(ttf_parser::GlyphId(glyph))
+                .map_or(0.0, |a| f32::from(a) / upem)
         })
         .unwrap_or(0.0)
     }
 
     /// A face (other than `prefer`) that has a glyph for `ch`.
-    pub fn fallback_for(&self, ch: char, prefer: FaceId, bold: bool, italic: bool) -> Option<FontChoice> {
+    pub fn fallback_for(
+        &self,
+        ch: char,
+        prefer: FaceId,
+        bold: bool,
+        italic: bool,
+    ) -> Option<FontChoice> {
         for fam in GLYPH_FALLBACKS {
-            if let Some(c) = self.best_in_family(&fam.to_lowercase(), bold, italic) {
-                if c.face != prefer && self.glyph(c.face, ch).is_some() {
-                    return Some(c);
-                }
+            if let Some(c) = self.best_in_family(&fam.to_lowercase(), bold, italic)
+                && c.face != prefer
+                && self.glyph(c.face, ch).is_some()
+            {
+                return Some(c);
             }
         }
         (0..self.faces.len() as u32)
             .map(FaceId)
             .find(|&id| id != prefer && self.glyph(id, ch).is_some())
-            .map(|face| FontChoice { face, synthetic_bold: bold, synthetic_italic: italic })
+            .map(|face| FontChoice {
+                face,
+                synthetic_bold: bold,
+                synthetic_italic: italic,
+            })
     }
 
     /// Pair kerning between two glyphs, in em units (GPOS `kern`, else `kern` table).
@@ -343,7 +399,9 @@ impl FontDb {
         if let Some(v) = self.kerning.lock().ok().and_then(|m| m.get(&key).copied()) {
             return v;
         }
-        let v = self.with_face(id, |f| pair_kerning(f, left, right)).unwrap_or(0.0);
+        let v = self
+            .with_face(id, |f| pair_kerning(f, left, right))
+            .unwrap_or(0.0);
         if let Ok(mut m) = self.kerning.lock() {
             if m.len() > 200_000 {
                 m.clear();
@@ -362,7 +420,10 @@ impl FontDb {
         let path = self
             .with_face(id, |f| {
                 let upem = f32::from(f.units_per_em().max(1));
-                let mut b = OutlineBuilder { path: Path::new(), scale: 1.0 / upem };
+                let mut b = OutlineBuilder {
+                    path: Path::new(),
+                    scale: 1.0 / upem,
+                };
                 f.outline_glyph(ttf_parser::GlyphId(glyph), &mut b)?;
                 Some(Arc::new(b.path))
             })
@@ -385,17 +446,30 @@ fn pair_kerning(face: &ttf_parser::Face<'_>, left: u16, right: u16) -> f32 {
     if let Some(gpos) = face.tables().gpos {
         let mut found = false;
         let mut total = 0i32;
-        for feature in gpos.features.into_iter().filter(|f| &f.tag.to_bytes() == b"kern") {
+        for feature in gpos
+            .features
+            .into_iter()
+            .filter(|f| &f.tag.to_bytes() == b"kern")
+        {
             for li in feature.lookup_indices {
-                let Some(lookup) = gpos.lookups.get(li) else { continue };
+                let Some(lookup) = gpos.lookups.get(li) else {
+                    continue;
+                };
                 for st in lookup.subtables.into_iter::<PositioningSubtable<'_>>() {
-                    let PositioningSubtable::Pair(pair) = st else { continue };
-                    let Some(first_index) = pair.coverage().get(l) else { continue };
+                    let PositioningSubtable::Pair(pair) = st else {
+                        continue;
+                    };
+                    let Some(first_index) = pair.coverage().get(l) else {
+                        continue;
+                    };
                     let value = match pair {
-                        PairAdjustment::Format1 { sets, .. } => {
-                            sets.get(first_index).and_then(|set| set.get(r)).map(|(a, _)| a.x_advance)
-                        }
-                        PairAdjustment::Format2 { classes, matrix, .. } => {
+                        PairAdjustment::Format1 { sets, .. } => sets
+                            .get(first_index)
+                            .and_then(|set| set.get(r))
+                            .map(|(a, _)| a.x_advance),
+                        PairAdjustment::Format2 {
+                            classes, matrix, ..
+                        } => {
                             let c = (classes.0.get(l), classes.1.get(r));
                             matrix.get(c).map(|(a, _)| a.x_advance)
                         }
@@ -417,10 +491,11 @@ fn pair_kerning(face: &ttf_parser::Face<'_>, left: u16, right: u16) -> f32 {
     }
     if let Some(kern) = face.tables().kern {
         for st in kern.subtables {
-            if st.horizontal && !st.variable {
-                if let Some(v) = st.glyphs_kerning(l, r) {
-                    return f32::from(v) / upem;
-                }
+            if st.horizontal
+                && !st.variable
+                && let Some(v) = st.glyphs_kerning(l, r)
+            {
+                return f32::from(v) / upem;
             }
         }
     }
@@ -520,13 +595,21 @@ pub const BUNDLED_FONT_FILES: &[(&str, &str)] = &[
 /// The bundled family that will serve a requested family (for lazy loading hosts).
 pub fn bundled_family_for(requested: &str) -> &'static str {
     let lower = requested.trim().to_lowercase();
-    if let Some(b) = BUNDLED_FONT_FILES.iter().find(|(fam, _)| fam.to_lowercase() == lower) {
+    if let Some(b) = BUNDLED_FONT_FILES
+        .iter()
+        .find(|(fam, _)| fam.to_lowercase() == lower)
+    {
         return b.0;
     }
-    if let Some((_, subs)) = SUBSTITUTES.iter().find(|(name, _)| *name == lower) {
-        if let Some(s) = subs.iter().find(|s| BUNDLED_FONT_FILES.iter().any(|(f, _)| f == *s)) {
-            return BUNDLED_FONT_FILES.iter().find(|(f, _)| f == s).map_or(SANS_FALLBACK, |b| b.0);
-        }
+    if let Some((_, subs)) = SUBSTITUTES.iter().find(|(name, _)| *name == lower)
+        && let Some(s) = subs
+            .iter()
+            .find(|s| BUNDLED_FONT_FILES.iter().any(|(f, _)| f == *s))
+    {
+        return BUNDLED_FONT_FILES
+            .iter()
+            .find(|(f, _)| f == s)
+            .map_or(SANS_FALLBACK, |b| b.0);
     }
     if SymbolFont::from_family(&lower).is_some() {
         return "DejaVu Sans";

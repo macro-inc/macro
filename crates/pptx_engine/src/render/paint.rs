@@ -3,7 +3,9 @@
 use super::image::{apply_effects, with_border};
 use super::scene::{LineCap, LineJoin, Paint, Raster, Stroke};
 use crate::model::color::Rgba;
-use crate::model::fill::{Cap, Fill, Gradient, GradientKind, ImageFill, ImageMode, Join, Line, PathShape};
+use crate::model::fill::{
+    Cap, Fill, Gradient, GradientKind, ImageFill, ImageMode, Join, Line, PathShape,
+};
 use crate::path::{Affine, Point, Rect};
 use std::sync::Arc;
 
@@ -17,18 +19,27 @@ pub trait ImageSource {
 pub const PT_PER_PX: f32 = 0.75;
 
 /// Builds the paint for `fill` over `bbox` (local coordinates) under `world`.
-pub fn fill_paint(fill: &Fill, bbox: Rect, world: &Affine, images: &mut dyn ImageSource) -> Option<Paint> {
+pub fn fill_paint(
+    fill: &Fill,
+    bbox: Rect,
+    world: &Affine,
+    images: &mut dyn ImageSource,
+) -> Option<Paint> {
     match fill {
         Fill::None | Fill::Group => None,
         Fill::Solid(c) => (c.a > 0.0).then_some(Paint::Solid(*c)),
         Fill::Gradient(g) => gradient_paint(g, bbox, world),
         Fill::Pattern { preset, fg, bg } => {
             let tile = Arc::new(pattern_tile(preset, *fg, *bg));
-            let t = world.pre_concat(&Affine::translate(f64::from(bbox.x), f64::from(bbox.y))).pre_concat(&Affine::scale(
-                f64::from(PT_PER_PX),
-                f64::from(PT_PER_PX),
-            ));
-            Some(Paint::Image { image: tile, transform: t, repeat: true, opacity: 1.0 })
+            let t = world
+                .pre_concat(&Affine::translate(f64::from(bbox.x), f64::from(bbox.y)))
+                .pre_concat(&Affine::scale(f64::from(PT_PER_PX), f64::from(PT_PER_PX)));
+            Some(Paint::Image {
+                image: tile,
+                transform: t,
+                repeat: true,
+                opacity: 1.0,
+            })
         }
         Fill::Image(img) => image_paint(img, bbox, world, images),
     }
@@ -51,8 +62,16 @@ fn gradient_paint(g: &Gradient, bbox: Rect, world: &Affine) -> Option<Paint> {
                 let end = Point::new((0.5 + dx) as f32, (0.5 + dy) as f32);
                 let t = world
                     .pre_concat(&Affine::translate(f64::from(bbox.x), f64::from(bbox.y)))
-                    .pre_concat(&Affine::scale(f64::from(bbox.w.max(0.01)), f64::from(bbox.h.max(0.01))));
-                Some(Paint::Linear { start, end, stops, transform: t })
+                    .pre_concat(&Affine::scale(
+                        f64::from(bbox.w.max(0.01)),
+                        f64::from(bbox.h.max(0.01)),
+                    ));
+                Some(Paint::Linear {
+                    start,
+                    end,
+                    stops,
+                    transform: t,
+                })
             } else {
                 let (w, h) = (f64::from(bbox.w), f64::from(bbox.h));
                 let len = (w * cos).abs() + (h * sin).abs();
@@ -73,15 +92,23 @@ fn gradient_paint(g: &Gradient, bbox: Rect, world: &Affine) -> Option<Paint> {
             match shape {
                 PathShape::Circle => {
                     // A circle around the focus that just reaches the farthest corner.
-                    let r = [(bbox.x, bbox.y), (bbox.right(), bbox.y), (bbox.x, bbox.bottom()), (bbox.right(), bbox.bottom())]
-                        .iter()
-                        .map(|(x, y)| ((x - fx).powi(2) + (y - fy).powi(2)).sqrt())
-                        .fold(0.0f32, f32::max)
-                        .max(0.01);
+                    let r = [
+                        (bbox.x, bbox.y),
+                        (bbox.right(), bbox.y),
+                        (bbox.x, bbox.bottom()),
+                        (bbox.right(), bbox.bottom()),
+                    ]
+                    .iter()
+                    .map(|(x, y)| ((x - fx).powi(2) + (y - fy).powi(2)).sqrt())
+                    .fold(0.0f32, f32::max)
+                    .max(0.01);
                     let t = world
                         .pre_concat(&Affine::translate(f64::from(fx), f64::from(fy)))
                         .pre_concat(&Affine::scale(f64::from(r), f64::from(r)));
-                    Some(Paint::Radial { stops, transform: t })
+                    Some(Paint::Radial {
+                        stops,
+                        transform: t,
+                    })
                 }
                 PathShape::Rect | PathShape::Shape => {
                     let img = Arc::new(rect_gradient(&stops, bbox, fx, fy));
@@ -90,7 +117,12 @@ fn gradient_paint(g: &Gradient, bbox: Rect, world: &Affine) -> Option<Paint> {
                     let t = world
                         .pre_concat(&Affine::translate(f64::from(bbox.x), f64::from(bbox.y)))
                         .pre_concat(&Affine::scale(f64::from(sx), f64::from(sy)));
-                    Some(Paint::Image { image: img, transform: t, repeat: false, opacity: 1.0 })
+                    Some(Paint::Image {
+                        image: img,
+                        transform: t,
+                        repeat: false,
+                        opacity: 1.0,
+                    })
                 }
             }
         }
@@ -125,8 +157,16 @@ fn rect_gradient(stops: &[(f32, Rgba)], bbox: Rect, fx: f32, fy: f32) -> Raster 
         for x in 0..w {
             let px = bbox.x + (x as f32 + 0.5) / w as f32 * bbox.w;
             let py = bbox.y + (y as f32 + 0.5) / h as f32 * bbox.h;
-            let dx = if px < fx { (fx - px) / lx.max(1e-3) } else { (px - fx) / rx.max(1e-3) };
-            let dy = if py < fy { (fy - py) / ty.max(1e-3) } else { (py - fy) / by.max(1e-3) };
+            let dx = if px < fx {
+                (fx - px) / lx.max(1e-3)
+            } else {
+                (px - fx) / rx.max(1e-3)
+            };
+            let dy = if py < fy {
+                (fy - py) / ty.max(1e-3)
+            } else {
+                (py - fy) / by.max(1e-3)
+            };
             let c = sample(stops, dx.max(dy));
             let i = ((y * w + x) * 4) as usize;
             let a = c.a.clamp(0.0, 1.0);
@@ -139,7 +179,12 @@ fn rect_gradient(stops: &[(f32, Rgba)], bbox: Rect, fx: f32, fy: f32) -> Raster 
     r
 }
 
-fn image_paint(img: &ImageFill, bbox: Rect, world: &Affine, images: &mut dyn ImageSource) -> Option<Paint> {
+fn image_paint(
+    img: &ImageFill,
+    bbox: Rect,
+    world: &Affine,
+    images: &mut dyn ImageSource,
+) -> Option<Paint> {
     let part = img.part.as_deref()?;
     let base = images.raster(part)?;
     let mut raster = (*base).clone();
@@ -162,11 +207,29 @@ fn image_paint(img: &ImageFill, bbox: Rect, world: &Affine, images: &mut dyn Ima
             let bordered = Arc::new(with_border(&raster));
             let t = world
                 .pre_concat(&Affine::translate(f64::from(dest.x), f64::from(dest.y)))
-                .pre_concat(&Affine::scale(f64::from(dest.w / sw), f64::from(dest.h / sh)))
-                .pre_concat(&Affine::translate(-f64::from(sx0) - 1.0, -f64::from(sy0) - 1.0));
-            Some(Paint::Image { image: bordered, transform: t, repeat: false, opacity: 1.0 })
+                .pre_concat(&Affine::scale(
+                    f64::from(dest.w / sw),
+                    f64::from(dest.h / sh),
+                ))
+                .pre_concat(&Affine::translate(
+                    -f64::from(sx0) - 1.0,
+                    -f64::from(sy0) - 1.0,
+                ));
+            Some(Paint::Image {
+                image: bordered,
+                transform: t,
+                repeat: false,
+                opacity: 1.0,
+            })
         }
-        ImageMode::Tile { tx, ty, sx, sy, flip: _, align } => {
+        ImageMode::Tile {
+            tx,
+            ty,
+            sx,
+            sy,
+            flip: _,
+            align,
+        } => {
             let (tw, th) = (iw * PT_PER_PX * sx, ih * PT_PER_PX * sy);
             let (ax, ay) = match align.as_str() {
                 "t" => (bbox.w / 2.0 - tw / 2.0, 0.0),
@@ -180,9 +243,20 @@ fn image_paint(img: &ImageFill, bbox: Rect, world: &Affine, images: &mut dyn Ima
                 _ => (0.0, 0.0),
             };
             let t = world
-                .pre_concat(&Affine::translate(f64::from(bbox.x + ax + tx), f64::from(bbox.y + ay + ty)))
-                .pre_concat(&Affine::scale(f64::from(PT_PER_PX * sx), f64::from(PT_PER_PX * sy)));
-            Some(Paint::Image { image: Arc::new(raster), transform: t, repeat: true, opacity: 1.0 })
+                .pre_concat(&Affine::translate(
+                    f64::from(bbox.x + ax + tx),
+                    f64::from(bbox.y + ay + ty),
+                ))
+                .pre_concat(&Affine::scale(
+                    f64::from(PT_PER_PX * sx),
+                    f64::from(PT_PER_PX * sy),
+                ));
+            Some(Paint::Image {
+                image: Arc::new(raster),
+                transform: t,
+                repeat: true,
+                opacity: 1.0,
+            })
         }
     }
 }
@@ -292,7 +366,11 @@ pub fn line_stroke(line: &Line, scale: f32) -> Stroke {
                 .enumerate()
                 .map(|(i, v)| {
                     let len = v * width.max(0.1);
-                    if i % 2 == 0 { (len - cap_ext * width).max(0.01) } else { len + cap_ext * width }
+                    if i % 2 == 0 {
+                        (len - cap_ext * width).max(0.01)
+                    } else {
+                        len + cap_ext * width
+                    }
                 })
                 .collect()
         }),
@@ -303,19 +381,38 @@ pub fn line_stroke(line: &Line, scale: f32) -> Stroke {
 pub fn shade_paint(p: Paint, factor: f32, lighten: bool) -> Paint {
     let adjust = |c: Rgba| {
         if lighten {
-            Rgba { r: c.r + (1.0 - c.r) * factor, g: c.g + (1.0 - c.g) * factor, b: c.b + (1.0 - c.b) * factor, a: c.a }
+            Rgba {
+                r: c.r + (1.0 - c.r) * factor,
+                g: c.g + (1.0 - c.g) * factor,
+                b: c.b + (1.0 - c.b) * factor,
+                a: c.a,
+            }
         } else {
-            Rgba { r: c.r * factor, g: c.g * factor, b: c.b * factor, a: c.a }
+            Rgba {
+                r: c.r * factor,
+                g: c.g * factor,
+                b: c.b * factor,
+                a: c.a,
+            }
         }
     };
     match p {
         Paint::Solid(c) => Paint::Solid(adjust(c)),
-        Paint::Linear { start, end, stops, transform } => {
-            Paint::Linear { start, end, stops: stops.into_iter().map(|(p, c)| (p, adjust(c))).collect(), transform }
-        }
-        Paint::Radial { stops, transform } => {
-            Paint::Radial { stops: stops.into_iter().map(|(p, c)| (p, adjust(c))).collect(), transform }
-        }
+        Paint::Linear {
+            start,
+            end,
+            stops,
+            transform,
+        } => Paint::Linear {
+            start,
+            end,
+            stops: stops.into_iter().map(|(p, c)| (p, adjust(c))).collect(),
+            transform,
+        },
+        Paint::Radial { stops, transform } => Paint::Radial {
+            stops: stops.into_iter().map(|(p, c)| (p, adjust(c))).collect(),
+            transform,
+        },
         other => other,
     }
 }

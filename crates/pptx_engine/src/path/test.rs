@@ -14,9 +14,15 @@ fn affine_composition_order() {
     let m = t.post_concat(&s);
     assert!(close(m.apply(Point::new(1.0, 1.0)), Point::new(22.0, 2.0)));
     let r = Affine::rotate(90.0);
-    assert!(close(r.apply(Point::new(1.0, 0.0)), Point::new(0.0, 1.0)), "clockwise on screen");
+    assert!(
+        close(r.apply(Point::new(1.0, 0.0)), Point::new(0.0, 1.0)),
+        "clockwise on screen"
+    );
     let inv = m.invert().unwrap();
-    assert!(close(inv.apply(m.apply(Point::new(3.0, -4.0))), Point::new(3.0, -4.0)));
+    assert!(close(
+        inv.apply(m.apply(Point::new(3.0, -4.0))),
+        Point::new(3.0, -4.0)
+    ));
 }
 
 #[test]
@@ -34,15 +40,26 @@ fn ooxml_arc_quarter_circle() {
     let mut p = Path::new();
     p.move_to(Point::new(50.0, 0.0));
     p.arc_to_ooxml(50.0, 50.0, 270.0, 90.0);
-    assert!(close(p.current(), Point::new(100.0, 50.0)), "{:?}", p.current());
+    assert!(
+        close(p.current(), Point::new(100.0, 50.0)),
+        "{:?}",
+        p.current()
+    );
     // Elliptical arc honours visual angles: 45° on a wide ellipse.
     let mut q = Path::new();
     q.move_to(Point::new(200.0, 50.0)); // rightmost point of ellipse centered (100, 50), rx=100, ry=50
     q.arc_to_ooxml(100.0, 50.0, 0.0, 45.0);
     let end = q.current();
     let (dx, dy) = (end.x - 100.0, end.y - 50.0);
-    assert!((dy.atan2(dx).to_degrees() - 45.0).abs() < 0.05, "visual angle {:?}", end);
-    assert!(((dx / 100.0).powi(2) + (dy / 50.0).powi(2) - 1.0).abs() < 1e-3, "on the ellipse");
+    assert!(
+        (dy.atan2(dx).to_degrees() - 45.0).abs() < 0.05,
+        "visual angle {:?}",
+        end
+    );
+    assert!(
+        ((dx / 100.0).powi(2) + (dy / 50.0).powi(2) - 1.0).abs() < 1e-3,
+        "on the ellipse"
+    );
 }
 
 #[test]

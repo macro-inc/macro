@@ -197,8 +197,8 @@ pub(crate) fn pie(
             let (mut lw, mut lh) = (0.0f32, 0.0f32);
             for (sl, t) in slices.iter().zip(&texts) {
                 let Some((b, l)) = t else { continue };
-                let auto_outside =
-                    outside(l) && inside_spot(&probe, Point::new(0.0, 0.0), r, sl, b).is_none();
+                let auto_outside = outside(l)
+                    && (g.is_3d || inside_spot(&probe, Point::new(0.0, 0.0), r, sl, b).is_none());
                 if l.pos == Some(LabelPos::OutEnd) || auto_outside {
                     lw = lw.max(b.width);
                     lh = lh.max(b.height);
@@ -291,7 +291,9 @@ pub(crate) fn pie(
                 LabelPos::InEnd => (disk.at(center, r_out - extent, mid), false),
                 LabelPos::InBase => (disk.at(center, extent, mid), false),
                 LabelPos::OutEnd => (outside_at(&disk, center, r_out, mid, &block), true),
-                _ => match inside_spot(&disk, center, r_out, sl, &block) {
+                // Best fit keeps 3-D pie labels outside (their manual offsets
+                // count from there); flat pies take a slice that fits.
+                _ => match inside_spot(&disk, center, r_out, sl, &block).filter(|_| !g.is_3d) {
                     Some(p) => (p, false),
                     None => (outside_at(&disk, center, r_out, mid, &block), true),
                 },

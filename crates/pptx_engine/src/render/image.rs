@@ -45,11 +45,16 @@ pub fn sniff(b: &[u8]) -> Format {
         Format::Bmp
     } else if b.len() > 44 && b[0..4] == [1, 0, 0, 0] && &b[40..44] == b" EMF" {
         Format::Emf
-    } else if b.starts_with(&[0xD7, 0xCD, 0xC6, 0x9A]) || b.starts_with(&[1, 0, 9, 0]) || b.starts_with(&[2, 0, 9, 0]) {
+    } else if b.starts_with(&[0xD7, 0xCD, 0xC6, 0x9A])
+        || b.starts_with(&[1, 0, 9, 0])
+        || b.starts_with(&[2, 0, 9, 0])
+    {
         Format::Wmf
     } else if b.starts_with(b"II*\0") || b.starts_with(b"MM\0*") {
         Format::Tiff
-    } else if b.starts_with(b"<svg") || (b.starts_with(b"<?xml") && b.windows(4).take(2048).any(|w| w == b"<svg")) {
+    } else if b.starts_with(b"<svg")
+        || (b.starts_with(b"<?xml") && b.windows(4).take(2048).any(|w| w == b"<svg"))
+    {
         Format::Svg
     } else {
         Format::Unknown
@@ -91,14 +96,23 @@ pub fn decode_raster(bytes: &[u8]) -> Result<Raster> {
 }
 
 fn decode_png(bytes: &[u8]) -> Result<Raster> {
-    let mut dec = png::Decoder::new_with_limits(std::io::Cursor::new(bytes), png::Limits { bytes: 512 * 1024 * 1024 });
+    let mut dec = png::Decoder::new_with_limits(
+        std::io::Cursor::new(bytes),
+        png::Limits {
+            bytes: 512 * 1024 * 1024,
+        },
+    );
     dec.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = dec.read_info().map_err(|e| Error::Image(e.to_string()))?;
     let (w, h) = (reader.info().width, reader.info().height);
     check_size(w, h)?;
-    let size = reader.output_buffer_size().ok_or_else(|| Error::Image("png too large".into()))?;
+    let size = reader
+        .output_buffer_size()
+        .ok_or_else(|| Error::Image("png too large".into()))?;
     let mut buf = vec![0; size];
-    let info = reader.next_frame(&mut buf).map_err(|e| Error::Image(e.to_string()))?;
+    let info = reader
+        .next_frame(&mut buf)
+        .map_err(|e| Error::Image(e.to_string()))?;
     let n = (w * h) as usize;
     let mut out = Vec::with_capacity(n * 4);
     match info.color_type {
@@ -121,7 +135,11 @@ fn decode_png(bytes: &[u8]) -> Result<Raster> {
         png::ColorType::Indexed => return Err(Error::Image("unexpanded palette".into())),
     }
     premultiply(&mut out);
-    Ok(Raster { width: w, height: h, pixels: out })
+    Ok(Raster {
+        width: w,
+        height: h,
+        pixels: out,
+    })
 }
 
 fn decode_jpeg(bytes: &[u8]) -> Result<Raster> {
@@ -134,26 +152,43 @@ fn decode_jpeg(bytes: &[u8]) -> Result<Raster> {
         .set_max_height(60_000)
         .set_strict_mode(false);
     let mut dec = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
-    dec.decode_headers().map_err(|e| Error::Image(format!("{e:?}")))?;
-    let info = dec.info().ok_or_else(|| Error::Image("jpeg headers".into()))?;
+    dec.decode_headers()
+        .map_err(|e| Error::Image(format!("{e:?}")))?;
+    let info = dec
+        .info()
+        .ok_or_else(|| Error::Image("jpeg headers".into()))?;
     let (w, h) = (u32::from(info.width), u32::from(info.height));
     check_size(w, h)?;
     let pixels = dec.decode().map_err(|e| Error::Image(format!("{e:?}")))?;
     if pixels.len() != (w * h * 4) as usize {
         return Err(Error::Image("jpeg size mismatch".into()));
     }
-    Ok(Raster { width: w, height: h, pixels })
+    Ok(Raster {
+        width: w,
+        height: h,
+        pixels,
+    })
 }
 
 fn decode_gif(bytes: &[u8]) -> Result<Raster> {
     let mut opts = gif::DecodeOptions::new();
     opts.set_color_output(gif::ColorOutput::RGBA);
-    let mut dec = opts.read_info(std::io::Cursor::new(bytes)).map_err(|e| Error::Image(e.to_string()))?;
+    let mut dec = opts
+        .read_info(std::io::Cursor::new(bytes))
+        .map_err(|e| Error::Image(e.to_string()))?;
     let (w, h) = (u32::from(dec.width()), u32::from(dec.height()));
     check_size(w, h)?;
     let mut canvas = vec![0u8; (w * h * 4) as usize];
-    if let Some(frame) = dec.read_next_frame().map_err(|e| Error::Image(e.to_string()))? {
-        let (fx, fy, fw, fh) = (u32::from(frame.left), u32::from(frame.top), u32::from(frame.width), u32::from(frame.height));
+    if let Some(frame) = dec
+        .read_next_frame()
+        .map_err(|e| Error::Image(e.to_string()))?
+    {
+        let (fx, fy, fw, fh) = (
+            u32::from(frame.left),
+            u32::from(frame.top),
+            u32::from(frame.width),
+            u32::from(frame.height),
+        );
         for y in 0..fh {
             for x in 0..fw {
                 let (cx, cy) = (fx + x, fy + y);
@@ -169,7 +204,11 @@ fn decode_gif(bytes: &[u8]) -> Result<Raster> {
         }
     }
     premultiply(&mut canvas);
-    Ok(Raster { width: w, height: h, pixels: canvas })
+    Ok(Raster {
+        width: w,
+        height: h,
+        pixels: canvas,
+    })
 }
 
 fn le16(b: &[u8], at: usize) -> Option<u16> {
@@ -177,7 +216,8 @@ fn le16(b: &[u8], at: usize) -> Option<u16> {
 }
 
 fn le32(b: &[u8], at: usize) -> Option<u32> {
-    b.get(at..at + 4).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    b.get(at..at + 4)
+        .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
 }
 
 fn decode_bmp(bytes: &[u8]) -> Result<Raster> {
@@ -211,7 +251,15 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
     let top_down = h_raw < 0;
     let (w, h) = (w.unsigned_abs(), h_raw.unsigned_abs());
     check_size(w, h)?;
-    let palette_entries = if bpp <= 8 { if colors_used > 0 { colors_used as usize } else { 1usize << bpp } } else { 0 };
+    let palette_entries = if bpp <= 8 {
+        if colors_used > 0 {
+            colors_used as usize
+        } else {
+            1usize << bpp
+        }
+    } else {
+        0
+    };
     let entry = if header_size == 12 { 3 } else { 4 };
     let palette_at = header_size;
     let palette: Vec<[u8; 3]> = (0..palette_entries)
@@ -225,9 +273,23 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
         .collect();
     // BI_BITFIELDS masks follow a 40-byte header.
     let (masks, mask_len) = if compression == 3 && header_size == 40 {
-        (Some([le32(dib, 40).unwrap_or(0), le32(dib, 44).unwrap_or(0), le32(dib, 48).unwrap_or(0)]), 12)
+        (
+            Some([
+                le32(dib, 40).unwrap_or(0),
+                le32(dib, 44).unwrap_or(0),
+                le32(dib, 48).unwrap_or(0),
+            ]),
+            12,
+        )
     } else if compression == 3 && header_size >= 52 {
-        (Some([le32(dib, 40).unwrap_or(0), le32(dib, 44).unwrap_or(0), le32(dib, 48).unwrap_or(0)]), 0)
+        (
+            Some([
+                le32(dib, 40).unwrap_or(0),
+                le32(dib, 44).unwrap_or(0),
+                le32(dib, 48).unwrap_or(0),
+            ]),
+            0,
+        )
     } else {
         (None, 0)
     };
@@ -240,7 +302,9 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
     } else {
         for row in 0..h as usize {
             let src_row = if top_down { row } else { h as usize - 1 - row };
-            let line = bits.get(src_row * stride..src_row * stride + stride).unwrap_or(&[]);
+            let line = bits
+                .get(src_row * stride..src_row * stride + stride)
+                .unwrap_or(&[]);
             for x in 0..w as usize {
                 let px = match bpp {
                     1 | 4 | 8 => {
@@ -254,7 +318,12 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
                     16 => {
                         let v = u32::from(le16(line, x * 2).unwrap_or(0));
                         let [rm, gm, bm] = masks.unwrap_or([0x7C00, 0x03E0, 0x001F]);
-                        [mask_channel(v, rm), mask_channel(v, gm), mask_channel(v, bm), 255]
+                        [
+                            mask_channel(v, rm),
+                            mask_channel(v, gm),
+                            mask_channel(v, bm),
+                            255,
+                        ]
                     }
                     24 => match line.get(x * 3..x * 3 + 3) {
                         Some(p) => [p[2], p[1], p[0], 255],
@@ -263,7 +332,12 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
                     32 => {
                         let v = le32(line, x * 4).unwrap_or(0);
                         match masks {
-                            Some([rm, gm, bm]) => [mask_channel(v, rm), mask_channel(v, gm), mask_channel(v, bm), 255],
+                            Some([rm, gm, bm]) => [
+                                mask_channel(v, rm),
+                                mask_channel(v, gm),
+                                mask_channel(v, bm),
+                                255,
+                            ],
                             None => [(v >> 16) as u8, (v >> 8) as u8, v as u8, 255],
                         }
                     }
@@ -274,7 +348,11 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
             }
         }
     }
-    Ok(Raster { width: w, height: h, pixels: out })
+    Ok(Raster {
+        width: w,
+        height: h,
+        pixels: out,
+    })
 }
 
 fn mask_channel(v: u32, mask: u32) -> u8 {
@@ -305,7 +383,11 @@ fn decode_rle(bits: &[u8], rle4: bool, w: u32, h: u32, palette: &[[u8; 3]], out:
         i += 2;
         if n > 0 {
             for k in 0..u32::from(n) {
-                let idx = if rle4 { if k % 2 == 0 { v >> 4 } else { v & 15 } } else { v };
+                let idx = if rle4 {
+                    if k % 2 == 0 { v >> 4 } else { v & 15 }
+                } else {
+                    v
+                };
                 put(x, y, idx);
                 x += 1;
             }
@@ -326,8 +408,14 @@ fn decode_rle(bits: &[u8], rle4: bool, w: u32, h: u32, palette: &[[u8; 3]], out:
                 let count = u32::from(count);
                 let bytes = if rle4 { count.div_ceil(2) } else { count } as usize;
                 for k in 0..count {
-                    let b = *bits.get(i + if rle4 { (k / 2) as usize } else { k as usize }).unwrap_or(&0);
-                    let idx = if rle4 { if k % 2 == 0 { b >> 4 } else { b & 15 } } else { b };
+                    let b = *bits
+                        .get(i + if rle4 { (k / 2) as usize } else { k as usize })
+                        .unwrap_or(&0);
+                    let idx = if rle4 {
+                        if k % 2 == 0 { b >> 4 } else { b & 15 }
+                    } else {
+                        b
+                    };
                     put(x, y, idx);
                     x += 1;
                 }
@@ -351,8 +439,8 @@ pub fn downscale(r: Raster, max_side: u32) -> Raster {
             for dy in 0..factor {
                 for dx in 0..factor {
                     let s = (((y * factor + dy) * r.width + x * factor + dx) * 4) as usize;
-                    for c in 0..4 {
-                        acc[c] += u32::from(r.pixels[s + c]);
+                    for (sum, &v) in acc.iter_mut().zip(&r.pixels[s..s + 4]) {
+                        *sum += u32::from(v);
                     }
                 }
             }
@@ -363,7 +451,11 @@ pub fn downscale(r: Raster, max_side: u32) -> Raster {
             }
         }
     }
-    Raster { width: w, height: h, pixels: out }
+    Raster {
+        width: w,
+        height: h,
+        pixels: out,
+    }
 }
 
 /// Adds a one-pixel transparent border so clamped sampling fades to nothing.
@@ -373,9 +465,14 @@ pub fn with_border(r: &Raster) -> Raster {
     for y in 0..r.height {
         let s = (y * r.width * 4) as usize;
         let d = (((y + 1) * w + 1) * 4) as usize;
-        out[d..d + (r.width * 4) as usize].copy_from_slice(&r.pixels[s..s + (r.width * 4) as usize]);
+        out[d..d + (r.width * 4) as usize]
+            .copy_from_slice(&r.pixels[s..s + (r.width * 4) as usize]);
     }
-    Raster { width: w, height: h, pixels: out }
+    Raster {
+        width: w,
+        height: h,
+        pixels: out,
+    }
 }
 
 /// Applies picture effects in order (on premultiplied pixels).
@@ -388,7 +485,13 @@ pub fn apply_effects(r: &mut Raster, effects: &[BlipEffect]) {
             }
             // Work in straight alpha.
             let af = f32::from(a) / 255.0;
-            let un = |c: u8| if a == 0 { 0.0 } else { (f32::from(c) / 255.0 / af).min(1.0) };
+            let un = |c: u8| {
+                if a == 0 {
+                    0.0
+                } else {
+                    (f32::from(c) / 255.0 / af).min(1.0)
+                }
+            };
             let (mut cr, mut cg, mut cb, mut ca) = (un(p[0]), un(p[1]), un(p[2]), af);
             match e {
                 BlipEffect::AlphaModFix(k) => ca *= k,
@@ -404,7 +507,11 @@ pub fn apply_effects(r: &mut Raster, effects: &[BlipEffect]) {
                 BlipEffect::Lum { bright, contrast } => {
                     let f = |c: f32| {
                         let c = c + bright;
-                        let k = if *contrast >= 0.0 { 1.0 / (1.0 - contrast).max(0.001) } else { 1.0 + contrast };
+                        let k = if *contrast >= 0.0 {
+                            1.0 / (1.0 - contrast).max(0.001)
+                        } else {
+                            1.0 + contrast
+                        };
                         ((c - 0.5) * k + 0.5).clamp(0.0, 1.0)
                     };
                     (cr, cg, cb) = (f(cr), f(cg), f(cb));
@@ -415,7 +522,10 @@ pub fn apply_effects(r: &mut Raster, effects: &[BlipEffect]) {
                     (cr, cg, cb) = (c.r, c.g, c.b);
                 }
                 BlipEffect::ClrChange { from, to } => {
-                    let d = (cr - from.r).abs().max((cg - from.g).abs()).max((cb - from.b).abs());
+                    let d = (cr - from.r)
+                        .abs()
+                        .max((cg - from.g).abs())
+                        .max((cb - from.b).abs());
                     if d < 0.04 && a > 0 {
                         (cr, cg, cb, ca) = (to.r, to.g, to.b, ca * to.a);
                     }
@@ -437,7 +547,10 @@ pub fn apply_effects(r: &mut Raster, effects: &[BlipEffect]) {
 pub fn shade_color(c: Rgba, amount: f32) -> Rgba {
     let (h, s, l) = rgb_to_hsl(f64::from(c.r), f64::from(c.g), f64::from(c.b));
     let l = (l * f64::from(amount)).clamp(0.0, 1.0);
-    Rgba { a: c.a, ..hsl_to_rgb(h, s, l) }
+    Rgba {
+        a: c.a,
+        ..hsl_to_rgb(h, s, l)
+    }
 }
 
 #[cfg(test)]

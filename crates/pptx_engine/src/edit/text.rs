@@ -4,10 +4,12 @@
 //! fields count as their displayed text, matching the layout's caret stops.
 
 use super::ops::{BodyPatch, BulletSpec, ParaPatch, RunPatch, TextPos};
-use super::xmlutil::{BODY_PR_ORDER, P_PR_ORDER, R_PR_ORDER, color_element, replace_fill, solid_fill};
+use super::xmlutil::{
+    BODY_PR_ORDER, P_PR_ORDER, R_PR_ORDER, color_element, replace_fill, solid_fill,
+};
 use crate::error::{Error, Result};
 use crate::units::pt_to_emu;
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 
 /// The run-like children of a paragraph with their text lengths.
 fn items(doc: &XmlDoc, p: NodeId) -> Vec<(NodeId, usize)> {
@@ -21,7 +23,9 @@ fn items(doc: &XmlDoc, p: NodeId) -> Vec<(NodeId, usize)> {
 }
 
 fn run_text(doc: &XmlDoc, r: NodeId) -> String {
-    doc.child(r, Ns::A, "t").map(|t| doc.text(t)).unwrap_or_default()
+    doc.child(r, Ns::A, "t")
+        .map(|t| doc.text(t))
+        .unwrap_or_default()
 }
 
 fn set_run_text(doc: &mut XmlDoc, r: NodeId, text: &str) {
@@ -43,7 +47,13 @@ pub fn para_len(doc: &XmlDoc, p: NodeId) -> usize {
 pub fn para_text(doc: &XmlDoc, p: NodeId) -> String {
     items(doc, p)
         .iter()
-        .map(|&(n, _)| if doc.local(n) == "br" { "\u{b}".to_owned() } else { run_text(doc, n) })
+        .map(|&(n, _)| {
+            if doc.local(n) == "br" {
+                "\u{b}".to_owned()
+            } else {
+                run_text(doc, n)
+            }
+        })
         .collect()
 }
 
@@ -81,10 +91,8 @@ fn rpr_template(doc: &XmlDoc, p: NodeId, offset: usize) -> Option<NodeId> {
     let mut pos = 0;
     let mut last: Option<NodeId> = None;
     for (node, len) in items(doc, p) {
-        if doc.local(node) == "r" {
-            if pos < offset || last.is_none() {
-                last = doc.child(node, Ns::A, "rPr").or(last);
-            }
+        if doc.local(node) == "r" && (pos < offset || last.is_none()) {
+            last = doc.child(node, Ns::A, "rPr").or(last);
         }
         pos += len;
         if pos >= offset && last.is_some() {
@@ -140,7 +148,10 @@ pub fn insert_text(doc: &mut XmlDoc, body: NodeId, at: TextPos, text: &str) -> R
         let p = paragraph_at(doc, body, pos.paragraph)?;
         let len = para_len(doc, p);
         if pos.offset > len {
-            return Err(Error::InvalidEdit(format!("offset {} is past the end of paragraph {}", pos.offset, pos.paragraph)));
+            return Err(Error::InvalidEdit(format!(
+                "offset {} is past the end of paragraph {}",
+                pos.offset, pos.paragraph
+            )));
         }
         for (k, segment) in piece.split('\u{b}').enumerate() {
             if k > 0 {
@@ -178,7 +189,8 @@ pub fn insert_text(doc: &mut XmlDoc, body: NodeId, at: TextPos, text: &str) -> R
                     set_run_text(doc, run, &chars.into_iter().collect::<String>());
                 }
                 None => {
-                    let template = rpr_template(doc, p, pos.offset).or_else(|| doc.child(p, Ns::A, "endParaRPr"));
+                    let template = rpr_template(doc, p, pos.offset)
+                        .or_else(|| doc.child(p, Ns::A, "endParaRPr"));
                     let run = new_run(doc, segment, template);
                     let idx = split_at(doc, p, pos.offset);
                     doc.insert_child(p, idx, run);
@@ -224,7 +236,10 @@ pub fn split_paragraph(doc: &mut XmlDoc, body: NodeId, at: TextPos) -> Result<Te
         }
     }
     doc.insert_after(p, new_p);
-    Ok(TextPos { paragraph: at.paragraph + 1, offset: 0 })
+    Ok(TextPos {
+        paragraph: at.paragraph + 1,
+        offset: 0,
+    })
 }
 
 /// Deletes the text between `start` and `end` (exclusive), joining paragraphs.
@@ -233,8 +248,12 @@ pub fn delete_text(doc: &mut XmlDoc, body: NodeId, start: TextPos, end: TextPos)
         return Ok(());
     }
     let ps = paragraphs(doc, body);
-    let sp = *ps.get(start.paragraph).ok_or_else(|| Error::InvalidEdit("start paragraph out of range".into()))?;
-    let ep = *ps.get(end.paragraph).ok_or_else(|| Error::InvalidEdit("end paragraph out of range".into()))?;
+    let sp = *ps
+        .get(start.paragraph)
+        .ok_or_else(|| Error::InvalidEdit("start paragraph out of range".into()))?;
+    let ep = *ps
+        .get(end.paragraph)
+        .ok_or_else(|| Error::InvalidEdit("end paragraph out of range".into()))?;
     if start.offset > para_len(doc, sp) || end.offset > para_len(doc, ep) {
         return Err(Error::InvalidEdit("offset out of range".into()));
     }
@@ -246,7 +265,10 @@ pub fn delete_text(doc: &mut XmlDoc, body: NodeId, start: TextPos, end: TextPos)
         remove_range(doc, sp, start.offset, len);
         remove_range(doc, ep, 0, end.offset);
         // Move the rest of the end paragraph into the start paragraph.
-        let rest: Vec<NodeId> = doc.children(ep).filter(|&c| matches!(doc.local(c), "r" | "br" | "fld")).collect();
+        let rest: Vec<NodeId> = doc
+            .children(ep)
+            .filter(|&c| matches!(doc.local(c), "r" | "br" | "fld"))
+            .collect();
         let anchor = doc.child(sp, Ns::A, "endParaRPr");
         for n in rest {
             match anchor {
@@ -259,15 +281,14 @@ pub fn delete_text(doc: &mut XmlDoc, body: NodeId, start: TextPos, end: TextPos)
         }
     }
     // An emptied paragraph remembers the formatting of the deleted text.
-    if para_len(doc, sp) == 0 {
-        if let Some(t) = keep_format {
-            if doc.child(sp, Ns::A, "endParaRPr").is_none() {
-                let copy = doc.deep_clone(t);
-                rename(doc, copy, "endParaRPr");
-                doc.remove_attr(copy, "dirty");
-                doc.append_child(sp, copy);
-            }
-        }
+    if para_len(doc, sp) == 0
+        && let Some(t) = keep_format
+        && doc.child(sp, Ns::A, "endParaRPr").is_none()
+    {
+        let copy = doc.deep_clone(t);
+        rename(doc, copy, "endParaRPr");
+        doc.remove_attr(copy, "dirty");
+        doc.append_child(sp, copy);
     }
     Ok(())
 }
@@ -311,7 +332,11 @@ pub fn set_text(doc: &mut XmlDoc, body: NodeId, text: &str) -> Result<()> {
     let anchor = old.first().copied();
     let mut new_ps = Vec::new();
     for (i, line) in text.split('\n').enumerate() {
-        let (ppr, rpr) = templates.get(i).or(templates.last()).copied().unwrap_or((None, None));
+        let (ppr, rpr) = templates
+            .get(i)
+            .or(templates.last())
+            .copied()
+            .unwrap_or((None, None));
         let p = doc.create_element(Ns::A, "p");
         if let Some(ppr) = ppr {
             let c = doc.deep_clone(ppr);
@@ -364,7 +389,12 @@ fn ensure_rpr(doc: &mut XmlDoc, run: NodeId) -> NodeId {
 }
 
 /// Applies a character-format patch to an `rPr`/`endParaRPr`/`defRPr` element.
-pub fn patch_rpr(doc: &mut XmlDoc, rpr: NodeId, patch: &RunPatch, link_rid: Option<&str>) -> Result<()> {
+pub fn patch_rpr(
+    doc: &mut XmlDoc,
+    rpr: NodeId,
+    patch: &RunPatch,
+    link_rid: Option<&str>,
+) -> Result<()> {
     let flag = |v: bool| if v { "1" } else { "0" };
     if let Some(b) = patch.bold {
         doc.set_attr(rpr, "b", flag(b));
@@ -380,7 +410,9 @@ pub fn patch_rpr(doc: &mut XmlDoc, rpr: NodeId, patch: &RunPatch, link_rid: Opti
     }
     if let Some(sz) = patch.size {
         if !(1.0..=4000.0).contains(&sz) {
-            return Err(Error::InvalidEdit(format!("font size {sz} is out of range")));
+            return Err(Error::InvalidEdit(format!(
+                "font size {sz} is out of range"
+            )));
         }
         doc.set_attr(rpr, "sz", &((sz * 100.0).round() as i64).to_string());
     }
@@ -416,7 +448,8 @@ pub fn patch_rpr(doc: &mut XmlDoc, rpr: NodeId, patch: &RunPatch, link_rid: Opti
     if let Some(link) = &patch.link {
         doc.remove_children_named(rpr, Ns::A, "hlinkClick");
         if !link.is_empty() {
-            let rid = link_rid.ok_or_else(|| Error::InvalidEdit("hyperlink relationship missing".into()))?;
+            let rid = link_rid
+                .ok_or_else(|| Error::InvalidEdit("hyperlink relationship missing".into()))?;
             let el = doc.create_element(Ns::A, "hlinkClick");
             doc.set_attr_ns(el, Ns::R, "id", rid);
             doc.insert_in_order(rpr, el, R_PR_ORDER);
@@ -438,16 +471,35 @@ pub fn format_text(
     if ps.is_empty() {
         return Ok(());
     }
-    let start = start.unwrap_or(TextPos { paragraph: 0, offset: 0 });
+    let start = start.unwrap_or(TextPos {
+        paragraph: 0,
+        offset: 0,
+    });
     let last = ps.len() - 1;
-    let end = end.unwrap_or(TextPos { paragraph: last, offset: para_len(doc, ps[last]) });
+    let end = end.unwrap_or(TextPos {
+        paragraph: last,
+        offset: para_len(doc, ps[last]),
+    });
     if end.paragraph > last || start.paragraph > end.paragraph {
         return Err(Error::InvalidEdit("format range out of bounds".into()));
     }
-    for (i, &p) in ps.iter().enumerate().take(end.paragraph + 1).skip(start.paragraph) {
+    for (i, &p) in ps
+        .iter()
+        .enumerate()
+        .take(end.paragraph + 1)
+        .skip(start.paragraph)
+    {
         let len = para_len(doc, p);
-        let from = if i == start.paragraph { start.offset.min(len) } else { 0 };
-        let to = if i == end.paragraph { end.offset.min(len) } else { len };
+        let from = if i == start.paragraph {
+            start.offset.min(len)
+        } else {
+            0
+        };
+        let to = if i == end.paragraph {
+            end.offset.min(len)
+        } else {
+            len
+        };
         if to > from {
             split_at(doc, p, to);
             split_at(doc, p, from);
@@ -480,7 +532,13 @@ pub fn format_text(
 }
 
 /// Applies paragraph formatting to paragraphs `from..=to`.
-pub fn format_paragraphs(doc: &mut XmlDoc, body: NodeId, from: Option<usize>, to: Option<usize>, patch: &ParaPatch) -> Result<()> {
+pub fn format_paragraphs(
+    doc: &mut XmlDoc,
+    body: NodeId,
+    from: Option<usize>,
+    to: Option<usize>,
+    patch: &ParaPatch,
+) -> Result<()> {
     let ps = paragraphs(doc, body);
     if ps.is_empty() {
         return Ok(());
@@ -527,7 +585,10 @@ pub fn format_paragraphs(doc: &mut XmlDoc, body: NodeId, from: Option<usize>, to
             doc.append_child(el, pct);
             doc.insert_in_order(ppr, el, P_PR_ORDER);
         }
-        for (name, value) in [("spcBef", patch.space_before), ("spcAft", patch.space_after)] {
+        for (name, value) in [
+            ("spcBef", patch.space_before),
+            ("spcAft", patch.space_after),
+        ] {
             if let Some(v) = value {
                 doc.remove_children_named(ppr, Ns::A, name);
                 let el = doc.create_element(Ns::A, name);
@@ -543,7 +604,9 @@ pub fn format_paragraphs(doc: &mut XmlDoc, body: NodeId, from: Option<usize>, to
             }
             match b {
                 BulletSpec::Inherit => {
-                    for name in ["buClrTx", "buClr", "buSzTx", "buSzPct", "buSzPts", "buFontTx", "buFont"] {
+                    for name in [
+                        "buClrTx", "buClr", "buSzTx", "buSzPct", "buSzPts", "buFontTx", "buFont",
+                    ] {
                         doc.remove_children_named(ppr, Ns::A, name);
                     }
                 }

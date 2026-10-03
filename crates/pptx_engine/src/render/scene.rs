@@ -24,7 +24,11 @@ impl std::fmt::Debug for Raster {
 impl Raster {
     /// A transparent image.
     pub fn new(width: u32, height: u32) -> Self {
-        Self { width, height, pixels: vec![0; width as usize * height as usize * 4] }
+        Self {
+            width,
+            height,
+            pixels: vec![0; width as usize * height as usize * 4],
+        }
     }
 
     /// Straight-alpha RGBA (what canvas `ImageData` expects).
@@ -228,7 +232,12 @@ pub struct Group {
 impl Group {
     /// A plain group.
     pub fn new(children: Vec<Node>) -> Self {
-        Self { children, opacity: 1.0, clip: None, effects: Vec::new() }
+        Self {
+            children,
+            opacity: 1.0,
+            clip: None,
+            effects: Vec::new(),
+        }
     }
 
     /// Wraps into a node.
@@ -242,13 +251,32 @@ impl Paint {
     pub fn transformed(&self, t: &Affine) -> Paint {
         match self {
             Paint::Solid(c) => Paint::Solid(*c),
-            Paint::Linear { start, end, stops, transform } => {
-                Paint::Linear { start: *start, end: *end, stops: stops.clone(), transform: t.pre_concat(transform) }
-            }
-            Paint::Radial { stops, transform } => Paint::Radial { stops: stops.clone(), transform: t.pre_concat(transform) },
-            Paint::Image { image, transform, repeat, opacity } => {
-                Paint::Image { image: Arc::clone(image), transform: t.pre_concat(transform), repeat: *repeat, opacity: *opacity }
-            }
+            Paint::Linear {
+                start,
+                end,
+                stops,
+                transform,
+            } => Paint::Linear {
+                start: *start,
+                end: *end,
+                stops: stops.clone(),
+                transform: t.pre_concat(transform),
+            },
+            Paint::Radial { stops, transform } => Paint::Radial {
+                stops: stops.clone(),
+                transform: t.pre_concat(transform),
+            },
+            Paint::Image {
+                image,
+                transform,
+                repeat,
+                opacity,
+            } => Paint::Image {
+                image: Arc::clone(image),
+                transform: t.pre_concat(transform),
+                repeat: *repeat,
+                opacity: *opacity,
+            },
         }
     }
 }
@@ -258,15 +286,28 @@ impl Node {
     pub fn transformed(&self, t: &Affine) -> Node {
         let k = t.mean_scale() as f32;
         match self {
-            Node::Fill { path, paint, even_odd } => {
-                Node::Fill { path: path.transform(t), paint: paint.transformed(t), even_odd: *even_odd }
-            }
-            Node::Stroke { path, paint, stroke } => Node::Stroke {
+            Node::Fill {
+                path,
+                paint,
+                even_odd,
+            } => Node::Fill {
+                path: path.transform(t),
+                paint: paint.transformed(t),
+                even_odd: *even_odd,
+            },
+            Node::Stroke {
+                path,
+                paint,
+                stroke,
+            } => Node::Stroke {
                 path: path.transform(t),
                 paint: paint.transformed(t),
                 stroke: Stroke {
                     width: stroke.width * k,
-                    dash: stroke.dash.as_ref().map(|d| d.iter().map(|v| v * k).collect()),
+                    dash: stroke
+                        .dash
+                        .as_ref()
+                        .map(|d| d.iter().map(|v| v * k).collect()),
                     ..stroke.clone()
                 },
             },
@@ -278,16 +319,30 @@ impl Node {
                     .effects
                     .iter()
                     .map(|e| match e {
-                        Effect::OuterShadow { color, blur, offset, transform } => Effect::OuterShadow {
+                        Effect::OuterShadow {
+                            color,
+                            blur,
+                            offset,
+                            transform,
+                        } => Effect::OuterShadow {
                             color: *color,
                             blur: blur * k,
                             offset: Point::new(offset.x * k, offset.y * k),
                             transform: *transform,
                         },
-                        Effect::InnerShadow { color, blur, offset } => {
-                            Effect::InnerShadow { color: *color, blur: blur * k, offset: Point::new(offset.x * k, offset.y * k) }
-                        }
-                        Effect::Glow { color, radius } => Effect::Glow { color: *color, radius: radius * k },
+                        Effect::InnerShadow {
+                            color,
+                            blur,
+                            offset,
+                        } => Effect::InnerShadow {
+                            color: *color,
+                            blur: blur * k,
+                            offset: Point::new(offset.x * k, offset.y * k),
+                        },
+                        Effect::Glow { color, radius } => Effect::Glow {
+                            color: *color,
+                            radius: radius * k,
+                        },
                         Effect::SoftEdge { radius } => Effect::SoftEdge { radius: radius * k },
                         other => other.clone(),
                     })

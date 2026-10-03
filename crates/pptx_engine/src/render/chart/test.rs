@@ -917,3 +917,64 @@ fn trendlines_draw_over_their_series_with_a_legend_entry() {
     );
     assert!((trend.y - (270.0 - 0.37 * 240.0)).abs() < 1.0, "{trend:?}");
 }
+
+#[test]
+fn data_tables_replace_category_labels() {
+    let s0 = ser(0, "Plan", "", &["North", "South"], &[39050.0, 49457.0]);
+    let s1 = ser(1, "Actual", "", &["North", "South"], &[35958.0, 49769.0]);
+    let m = model(&chart(
+        &format!(
+            r#"<c:barChart><c:barDir val="col"/><c:varyColors val="0"/>{s0}{s1}<c:axId val="1"/><c:axId val="2"/></c:barChart>{AXES}<c:dTable><c:showHorzBorder val="1"/><c:showVertBorder val="1"/><c:showOutline val="1"/><c:showKeys val="1"/></c:dTable>"#
+        ),
+        false,
+    ));
+    assert!(m.data_table.as_ref().is_some_and(|d| d.keys && d.outline));
+    let p = laid_out(&m);
+    let t = p.table.as_ref().expect("table laid out");
+    assert_eq!(t.axis, 0);
+    assert!(
+        p.axes[0].labels.is_empty(),
+        "the header row replaces the labels"
+    );
+    // Header plus two series rows fit under the plot; names fit left of it.
+    assert!(t.height() > 30.0, "{}", t.height());
+    assert!(p.inner.bottom() + t.height() <= 300.0 + 0.5);
+    assert!(
+        t.head_w > 20.0 && p.inner.x >= t.head_w - 0.5,
+        "{} {:?}",
+        t.head_w,
+        p.inner
+    );
+}
+
+#[test]
+fn bar_3d_charts_draw_boxes_in_depth() {
+    let s = ser(0, "S", "C00000", &["a", "b", "c"], &[20.0, 60.0, 40.0]);
+    let plot = format!(
+        r#"<c:bar3DChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>{s}<c:gapWidth val="150"/><c:shape val="box"/><c:axId val="1"/><c:axId val="2"/></c:bar3DChart>{AXES}"#
+    );
+    let xml = chart(&plot, false).replace(
+        "<c:autoTitleDeleted val=\"1\"/>",
+        r#"<c:autoTitleDeleted val="1"/><c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="1"/></c:view3D><c:backWall><c:spPr><a:solidFill><a:srgbClr val="00B050"/></a:solidFill></c:spPr></c:backWall>"#,
+    );
+    let m = model(&xml);
+    let p = laid_out(&m);
+    let d = p.depth.expect("3-D bars recede");
+    assert!(
+        d.dx > 1.0 && d.dy > 1.0 && d.z0 > 0.0 && d.z1 < 1.0,
+        "{d:?}"
+    );
+    let nodes = render(&xml);
+    // One front face per bar in the series color, and the back wall.
+    assert_eq!(fills(&nodes, "C00000").len(), 3);
+    let wall = fills(&nodes, "00B050");
+    assert_eq!(wall.len(), 1);
+    // The manual inner layout (40, 30)–(360, 270) holds the whole box: the
+    // back wall reaches its top and right edges and recedes from the others.
+    let w = wall[0];
+    assert!(
+        (w.y - 30.0).abs() < 0.5 && (w.right() - 360.0).abs() < 0.5,
+        "{w:?}"
+    );
+    assert!(w.x > 45.0 && w.bottom() < 265.0, "{w:?}");
+}

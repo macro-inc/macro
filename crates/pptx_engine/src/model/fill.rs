@@ -2,7 +2,7 @@
 
 use super::color::{ColorContext, Rgba, find_color, percent};
 use crate::units::emu_to_pt;
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 
 /// A rectangle given as fractional insets from each edge (DrawingML `RelativeRect`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -19,9 +19,16 @@ pub struct RelRect {
 
 impl RelRect {
     fn parse(doc: &XmlDoc, node: Option<NodeId>) -> Self {
-        let Some(n) = node else { return Self::default() };
+        let Some(n) = node else {
+            return Self::default();
+        };
         let f = |a: &str| doc.attr(n, a).map_or(0.0, |v| percent(v) as f32);
-        Self { l: f("l"), t: f("t"), r: f("r"), b: f("b") }
+        Self {
+            l: f("l"),
+            t: f("t"),
+            r: f("r"),
+            b: f("b"),
+        }
     }
 
     /// Whether all insets are zero.
@@ -189,34 +196,60 @@ impl Fill {
     }
 }
 
-const FILL_ELEMENTS: [&str; 6] = ["noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"];
+const FILL_ELEMENTS: [&str; 6] = [
+    "noFill",
+    "solidFill",
+    "gradFill",
+    "blipFill",
+    "pattFill",
+    "grpFill",
+];
 
 /// Resolves relationship ids to part names.
 pub type RelResolver<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// The fill-choice child of `parent`, if any.
 pub fn fill_child(doc: &XmlDoc, parent: NodeId) -> Option<NodeId> {
-    doc.children(parent).find(|&c| doc.ns(c) == Ns::A && FILL_ELEMENTS.contains(&doc.local(c)))
+    doc.children(parent)
+        .find(|&c| doc.ns(c) == Ns::A && FILL_ELEMENTS.contains(&doc.local(c)))
 }
 
 /// Parses the fill-choice child of `parent`.
-pub fn find_fill(doc: &XmlDoc, parent: NodeId, ctx: &ColorContext<'_>, rels: RelResolver<'_>) -> Option<Fill> {
+pub fn find_fill(
+    doc: &XmlDoc,
+    parent: NodeId,
+    ctx: &ColorContext<'_>,
+    rels: RelResolver<'_>,
+) -> Option<Fill> {
     fill_child(doc, parent).map(|f| parse_fill(doc, f, ctx, rels))
 }
 
 /// Parses a fill element.
-pub fn parse_fill(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, rels: RelResolver<'_>) -> Fill {
+pub fn parse_fill(
+    doc: &XmlDoc,
+    node: NodeId,
+    ctx: &ColorContext<'_>,
+    rels: RelResolver<'_>,
+) -> Fill {
     match doc.local(node) {
         "noFill" => Fill::None,
         "solidFill" => find_color(doc, node, ctx).map_or(Fill::None, Fill::Solid),
         "gradFill" => parse_gradient(doc, node, ctx),
         "pattFill" => {
             let preset = doc.attr(node, "prst").unwrap_or("pct5").to_owned();
-            let fg = doc.child(node, Ns::A, "fgClr").and_then(|c| find_color(doc, c, ctx)).unwrap_or(Rgba::BLACK);
-            let bg = doc.child(node, Ns::A, "bgClr").and_then(|c| find_color(doc, c, ctx)).unwrap_or(Rgba::WHITE);
+            let fg = doc
+                .child(node, Ns::A, "fgClr")
+                .and_then(|c| find_color(doc, c, ctx))
+                .unwrap_or(Rgba::BLACK);
+            let bg = doc
+                .child(node, Ns::A, "bgClr")
+                .and_then(|c| find_color(doc, c, ctx))
+                .unwrap_or(Rgba::WHITE);
             Fill::Pattern { preset, fg, bg }
         }
-        "blipFill" => parse_blip_fill(doc, node, ctx, rels).map_or(Fill::None, |f| Fill::Image(Box::new(f))),
+        "blipFill" => {
+            parse_blip_fill(doc, node, ctx, rels).map_or(Fill::None, |f| Fill::Image(Box::new(f)))
+        }
         "grpFill" => Fill::Group,
         _ => Fill::None,
     }
@@ -228,8 +261,14 @@ fn parse_gradient(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>) -> Fill {
         .map(|l| {
             doc.children_named(l, Ns::A, "gs")
                 .filter_map(|gs| {
-                    let pos = doc.attr(gs, "pos").map_or(0.0, |v| percent(v) as f32).clamp(0.0, 1.0);
-                    Some(GradientStop { pos, color: find_color(doc, gs, ctx)? })
+                    let pos = doc
+                        .attr(gs, "pos")
+                        .map_or(0.0, |v| percent(v) as f32)
+                        .clamp(0.0, 1.0);
+                    Some(GradientStop {
+                        pos,
+                        color: find_color(doc, gs, ctx)?,
+                    })
                 })
                 .collect()
         })
@@ -240,7 +279,9 @@ fn parse_gradient(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>) -> Fill {
     }
     let kind = if let Some(lin) = doc.child(node, Ns::A, "lin") {
         GradientKind::Linear {
-            angle: doc.attr_f64(lin, "ang").map_or(0.0, |a| (a / 60000.0) as f32),
+            angle: doc
+                .attr_f64(lin, "ang")
+                .map_or(0.0, |a| (a / 60000.0) as f32),
             scaled: doc.attr_bool(lin, "scaled").unwrap_or(false),
         }
     } else if let Some(path) = doc.child(node, Ns::A, "path") {
@@ -253,7 +294,10 @@ fn parse_gradient(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>) -> Fill {
             focus: RelRect::parse(doc, doc.child(path, Ns::A, "fillToRect")),
         }
     } else {
-        GradientKind::Linear { angle: 90.0, scaled: false }
+        GradientKind::Linear {
+            angle: 90.0,
+            scaled: false,
+        }
     };
     Fill::Gradient(Gradient {
         stops,
@@ -263,18 +307,30 @@ fn parse_gradient(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>) -> Fill {
 }
 
 /// Parses a `blipFill` (`a:blipFill` or `p:blipFill`).
-pub fn parse_blip_fill(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, rels: RelResolver<'_>) -> Option<ImageFill> {
+pub fn parse_blip_fill(
+    doc: &XmlDoc,
+    node: NodeId,
+    ctx: &ColorContext<'_>,
+    rels: RelResolver<'_>,
+) -> Option<ImageFill> {
     let blip = doc.child(node, Ns::A, "blip");
-    let part = blip.and_then(|b| doc.attr_ns(b, Ns::R, "embed")).and_then(|id| rels(id));
+    let part = blip
+        .and_then(|b| doc.attr_ns(b, Ns::R, "embed"))
+        .and_then(rels);
     let mut effects = Vec::new();
     if let Some(b) = blip {
         for e in doc.children(b) {
             let val = |a: &str| doc.attr(e, a).map_or(0.0, |v| percent(v) as f32);
             match doc.local(e) {
-                "alphaModFix" => effects.push(BlipEffect::AlphaModFix(doc.attr(e, "amt").map_or(1.0, |v| percent(v) as f32))),
+                "alphaModFix" => effects.push(BlipEffect::AlphaModFix(
+                    doc.attr(e, "amt").map_or(1.0, |v| percent(v) as f32),
+                )),
                 "grayscl" => effects.push(BlipEffect::Grayscale),
                 "biLevel" => effects.push(BlipEffect::BiLevel(val("thresh"))),
-                "lum" => effects.push(BlipEffect::Lum { bright: val("bright"), contrast: val("contrast") }),
+                "lum" => effects.push(BlipEffect::Lum {
+                    bright: val("bright"),
+                    contrast: val("contrast"),
+                }),
                 "duotone" => {
                     let colors: Vec<Rgba> = doc
                         .children(e)
@@ -286,8 +342,12 @@ pub fn parse_blip_fill(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, rels:
                     }
                 }
                 "clrChange" => {
-                    let from = doc.child(e, Ns::A, "clrFrom").and_then(|c| find_color(doc, c, ctx));
-                    let to = doc.child(e, Ns::A, "clrTo").and_then(|c| find_color(doc, c, ctx));
+                    let from = doc
+                        .child(e, Ns::A, "clrFrom")
+                        .and_then(|c| find_color(doc, c, ctx));
+                    let to = doc
+                        .child(e, Ns::A, "clrTo")
+                        .and_then(|c| find_color(doc, c, ctx));
                     if let (Some(from), Some(to)) = (from, to) {
                         effects.push(BlipEffect::ClrChange { from, to });
                     }
@@ -315,7 +375,10 @@ pub fn parse_blip_fill(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, rels:
         }
     } else {
         let stretch = doc.child(node, Ns::A, "stretch");
-        ImageMode::Stretch(RelRect::parse(doc, stretch.and_then(|s| doc.child(s, Ns::A, "fillRect"))))
+        ImageMode::Stretch(RelRect::parse(
+            doc,
+            stretch.and_then(|s| doc.child(s, Ns::A, "fillRect")),
+        ))
     };
     Some(ImageFill {
         part,
@@ -506,7 +569,12 @@ pub fn preset_dash(name: &str) -> Dash {
 }
 
 /// Parses an `a:ln` element.
-pub fn parse_line(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, rels: RelResolver<'_>) -> LineProps {
+pub fn parse_line(
+    doc: &XmlDoc,
+    node: NodeId,
+    ctx: &ColorContext<'_>,
+    rels: RelResolver<'_>,
+) -> LineProps {
     let mut p = LineProps {
         width: doc.attr_f64(node, "w").map(emu_to_pt),
         fill: find_fill(doc, node, ctx, rels),
@@ -539,7 +607,13 @@ pub fn parse_line(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>, rels: RelR
             }
             "round" => p.join = Some(Join::Round),
             "bevel" => p.join = Some(Join::Bevel),
-            "miter" => p.join = Some(Join::Miter(doc.attr(c, "lim").map_or(8.0, |v| percent(v) as f32).max(1.0))),
+            "miter" => {
+                p.join = Some(Join::Miter(
+                    doc.attr(c, "lim")
+                        .map_or(8.0, |v| percent(v) as f32)
+                        .max(1.0),
+                ))
+            }
             "headEnd" => p.head = Some(line_end(doc, c)),
             "tailEnd" => p.tail = Some(line_end(doc, c)),
             _ => {}
@@ -639,7 +713,10 @@ fn shadow(doc: &XmlDoc, node: NodeId, ctx: &ColorContext<'_>) -> Shadow {
         kx: (n("kx", 0.0) / 60000.0) as f32,
         ky: (n("ky", 0.0) / 60000.0) as f32,
         align: doc.attr(node, "algn").unwrap_or("b").to_owned(),
-        color: find_color(doc, node, ctx).unwrap_or(Rgba { a: 0.35, ..Rgba::BLACK }),
+        color: find_color(doc, node, ctx).unwrap_or(Rgba {
+            a: 0.35,
+            ..Rgba::BLACK
+        }),
     }
 }
 

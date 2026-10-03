@@ -3,7 +3,14 @@ use super::*;
 fn build(entries: &[(&str, &[u8], bool)]) -> Vec<u8> {
     let mut w = Writer::new();
     for (name, data, compress) in entries {
-        w.add(name, WriteData::Fresh { data, compress: *compress }).unwrap();
+        w.add(
+            name,
+            WriteData::Fresh {
+                data,
+                compress: *compress,
+            },
+        )
+        .unwrap();
     }
     w.finish().unwrap()
 }
@@ -24,12 +31,22 @@ fn round_trips_stored_and_deflated_entries() {
     ]);
     let archive = Archive::parse(&bytes).unwrap();
     let names: Vec<_> = archive.entries().iter().map(|e| e.name.as_str()).collect();
-    assert_eq!(names, ["[Content_Types].xml", "ppt/slides/slide1.xml", "ppt/media/image1.png"]);
+    assert_eq!(
+        names,
+        [
+            "[Content_Types].xml",
+            "ppt/slides/slide1.xml",
+            "ppt/media/image1.png"
+        ]
+    );
     let slide = &archive.entries()[1];
     assert_eq!(slide.method, METHOD_DEFLATE);
     assert!(slide.compressed_size < slide.uncompressed_size);
     assert_eq!(archive.read(slide).unwrap(), big.as_bytes());
-    assert_eq!(archive.read(&archive.entries()[2]).unwrap(), [0x89, b'P', b'N', b'G']);
+    assert_eq!(
+        archive.read(&archive.entries()[2]).unwrap(),
+        [0x89, b'P', b'N', b'G']
+    );
 }
 
 #[test]
@@ -39,20 +56,40 @@ fn raw_copy_preserves_compressed_bytes() {
     let archive = Archive::parse(&original).unwrap();
     let entry = &archive.entries()[0];
     let mut w = Writer::new();
-    w.add("a.xml", WriteData::Raw { entry, raw: archive.raw_data(entry) }).unwrap();
+    w.add(
+        "a.xml",
+        WriteData::Raw {
+            entry,
+            raw: archive.raw_data(entry),
+        },
+    )
+    .unwrap();
     let copy = w.finish().unwrap();
     let reparsed = Archive::parse(&copy).unwrap();
-    assert_eq!(reparsed.raw_data(&reparsed.entries()[0]), archive.raw_data(entry));
-    assert_eq!(reparsed.read(&reparsed.entries()[0]).unwrap(), data.as_bytes());
+    assert_eq!(
+        reparsed.raw_data(&reparsed.entries()[0]),
+        archive.raw_data(entry)
+    );
+    assert_eq!(
+        reparsed.read(&reparsed.entries()[0]).unwrap(),
+        data.as_bytes()
+    );
 }
 
 #[test]
 fn detects_corruption() {
-    let mut bytes = build(&[("a.xml", b"hello hello hello hello hello hello hello hello hello hello hello", false)]);
+    let mut bytes = build(&[(
+        "a.xml",
+        b"hello hello hello hello hello hello hello hello hello hello hello",
+        false,
+    )]);
     // Flip a payload byte (after the 30-byte header and 5-byte name).
     bytes[36] ^= 0xFF;
     let archive = Archive::parse(&bytes).unwrap();
-    assert!(matches!(archive.read(&archive.entries()[0]), Err(Error::Zip(_))));
+    assert!(matches!(
+        archive.read(&archive.entries()[0]),
+        Err(Error::Zip(_))
+    ));
 }
 
 #[test]

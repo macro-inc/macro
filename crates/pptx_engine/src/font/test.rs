@@ -5,7 +5,14 @@ use crate::test_support::fonts;
 fn registers_bundled_families() {
     let db = fonts();
     assert_eq!(db.len(), 22);
-    for fam in ["Carlito", "Caladea", "Liberation Sans", "Liberation Serif", "Liberation Mono", "DejaVu Sans"] {
+    for fam in [
+        "Carlito",
+        "Caladea",
+        "Liberation Sans",
+        "Liberation Serif",
+        "Liberation Mono",
+        "DejaVu Sans",
+    ] {
         assert!(db.has_family(fam), "{fam}");
     }
 }
@@ -60,9 +67,15 @@ fn outlines_are_cached_paths() {
     let g = db.glyph(c.face, 'O').unwrap();
     let p = db.outline(c.face, g).unwrap();
     let b = p.bounds().unwrap();
-    assert!(b.y < 0.0 && b.bottom() > 0.0, "y down: glyph spans the baseline slightly ({b:?})");
+    assert!(
+        b.y < 0.0 && b.bottom() > 0.0,
+        "y down: glyph spans the baseline slightly ({b:?})"
+    );
     assert!(Arc::ptr_eq(&p, &db.outline(c.face, g).unwrap()));
-    assert!(db.outline(c.face, db.glyph(c.face, ' ').unwrap()).is_none_or(|p| p.is_empty()));
+    assert!(
+        db.outline(c.face, db.glyph(c.face, ' ').unwrap())
+            .is_none_or(|p| p.is_empty())
+    );
 }
 
 #[test]

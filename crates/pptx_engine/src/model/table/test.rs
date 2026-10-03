@@ -10,16 +10,34 @@ fn table_xml(style: &str, flags: &str, rows: &str) -> String {
 }
 
 fn cell(text: &str, attrs: &str, tcpr: &str) -> String {
-    format!(r#"<a:tc {attrs}><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p></a:txBody><a:tcPr {tcpr}/></a:tc>"#)
+    format!(
+        r#"<a:tc {attrs}><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p></a:txBody><a:tcPr {tcpr}/></a:tc>"#
+    )
 }
 
 fn resolve(xml: &str) -> Table {
     let mut p = Presentation::open(deck(&[xml])).unwrap();
     let ctx = p.slide_context(0).unwrap();
     let tree = sp_tree(&ctx.slide.doc).unwrap();
-    let shapes = resolve_tree(&WalkCtx { ctx: &ctx, inherit: Inherit::Slide }, &ctx.slide, tree);
-    let ShapeKind::Frame(Graphic::Table(tbl)) = &shapes[0].kind else { panic!("not a table") };
-    let id = ctx.slide.doc.text(ctx.slide.doc.descendants(*tbl).into_iter().find(|&n| ctx.slide.doc.local(n) == "tableStyleId").unwrap());
+    let shapes = resolve_tree(
+        &WalkCtx {
+            ctx: &ctx,
+            inherit: Inherit::Slide,
+        },
+        &ctx.slide,
+        tree,
+    );
+    let ShapeKind::Frame(Graphic::Table(tbl)) = &shapes[0].kind else {
+        panic!("not a table")
+    };
+    let id = ctx.slide.doc.text(
+        ctx.slide
+            .doc
+            .descendants(*tbl)
+            .into_iter()
+            .find(|&n| ctx.slide.doc.local(n) == "tableStyleId")
+            .unwrap(),
+    );
     let style = find_table_style(&ctx, None, id.trim());
     resolve_table(&ctx, &ctx.slide, *tbl, style.as_ref())
 }
@@ -35,23 +53,42 @@ fn medium_style_2_accent_1_defaults() {
         cell("Margin", "", ""),
         cell("23%", "", "")
     );
-    let t = resolve(&table_xml("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", "firstRow=\"1\" bandRow=\"1\"", &rows));
+    let t = resolve(&table_xml(
+        "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}",
+        "firstRow=\"1\" bandRow=\"1\"",
+        &rows,
+    ));
     assert_eq!(t.cols, vec![144.0, 144.0]);
     let accent1 = Rgba::from_hex("4472C4").unwrap();
-    assert_eq!(t.rows[0].cells[0].fill, Fill::Solid(accent1), "header row is accent1");
+    assert_eq!(
+        t.rows[0].cells[0].fill,
+        Fill::Solid(accent1),
+        "header row is accent1"
+    );
     let head = &t.rows[0].cells[0].text.as_ref().unwrap().paragraphs[0].runs[0].props;
     assert!(head.bold);
     assert_eq!(head.fill, Fill::Solid(Rgba::WHITE));
     // Row 1 is band1H (tint 40%), row 2 band2H falls back to the whole table (tint 20%).
-    let (Fill::Solid(b1), Fill::Solid(b2)) = (&t.rows[1].cells[0].fill, &t.rows[2].cells[0].fill) else { panic!() };
+    let (Fill::Solid(b1), Fill::Solid(b2)) = (&t.rows[1].cells[0].fill, &t.rows[2].cells[0].fill)
+    else {
+        panic!()
+    };
     assert!(b1.r < b2.r, "band1 is darker than band2");
     let body = &t.rows[1].cells[0].text.as_ref().unwrap().paragraphs[0].runs[0].props;
     assert!(!body.bold);
     assert_eq!(body.fill, Fill::Solid(Rgba::BLACK));
     // Header bottom border is the thick white line; inside borders are 1pt white.
-    let bottom = t.rows[0].cells[0].border(Edge::Bottom).unwrap().resolve().unwrap();
+    let bottom = t.rows[0].cells[0]
+        .border(Edge::Bottom)
+        .unwrap()
+        .resolve()
+        .unwrap();
     assert_eq!(bottom.width, 3.0);
-    let inner = t.rows[1].cells[0].border(Edge::Right).unwrap().resolve().unwrap();
+    let inner = t.rows[1].cells[0]
+        .border(Edge::Right)
+        .unwrap()
+        .resolve()
+        .unwrap();
     assert_eq!(inner.width, 1.0);
 }
 
@@ -62,9 +99,13 @@ fn direct_cell_properties_and_merges() {
         cell("Merged", "gridSpan=\"2\"", "anchor=\"ctr\" marL=\"0\""),
         cell("", "hMerge=\"1\"", ""),
         cell("A", "", ""),
-        format!(r#"<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" b="1"/><a:t>B</a:t></a:r></a:p></a:txBody><a:tcPr><a:lnR w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:lnR><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:tcPr></a:tc>"#)
+        r#"<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" b="1"/><a:t>B</a:t></a:r></a:p></a:txBody><a:tcPr><a:lnR w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:lnR><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:tcPr></a:tc>"#
     );
-    let t = resolve(&table_xml("{2D5ABB26-0587-4C30-8999-92F81FD0307C}", "", &rows));
+    let t = resolve(&table_xml(
+        "{2D5ABB26-0587-4C30-8999-92F81FD0307C}",
+        "",
+        &rows,
+    ));
     let m = &t.rows[0].cells[0];
     assert_eq!(m.grid_span, 2);
     assert!(t.rows[0].cells[1].h_merge);

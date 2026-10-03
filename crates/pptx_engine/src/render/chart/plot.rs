@@ -5,6 +5,7 @@ use super::axes::label_shift;
 use super::axis::Scale;
 use super::canvas::{Block, Canvas};
 use super::date::DateAxis;
+use super::depth::Depth;
 use super::legend::category_text;
 use super::model::{
     AxisKind, AxisModel, ChartModel, Crosses, DataRef, GroupModel, Grouping, Kind, NumFmt, Side,
@@ -12,6 +13,7 @@ use super::model::{
 };
 use super::numfmt;
 use super::style::{Role, apply};
+use super::table::Table;
 use crate::path::Rect;
 use crate::render::label::{HAlign, LabelStyle};
 
@@ -91,6 +93,10 @@ pub(crate) struct Plot<'m> {
     /// `(group index, category/x axis, value/y axis)`.
     pub groups: Vec<(usize, usize, usize)>,
     pub inner: Rect,
+    /// The data table under the plot (`c:dTable`).
+    pub table: Option<Table>,
+    /// Receding depth of a 3-D bar plot (`inner` is then the front plane).
+    pub depth: Option<Depth>,
 }
 
 fn default_axis(id: u32, kind: AxisKind, side: Side) -> AxisModel {
@@ -265,6 +271,8 @@ impl<'m> Plot<'m> {
             axes: Vec::new(),
             groups: Vec::new(),
             inner: Rect::default(),
+            table: None,
+            depth: None,
         };
         let mut synthetic = u32::MAX;
         for (gi, g) in m.groups.iter().enumerate() {
@@ -408,7 +416,10 @@ impl<'m> Plot<'m> {
                 let perp = self.axes[ai].perp;
                 let has_bar = uses.iter().any(|&(gi, _)| m.groups[gi].kind == Kind::Bar);
                 let has_area = uses.iter().any(|&(gi, _)| m.groups[gi].kind == Kind::Area);
-                let between = has_bar || self.axes[perp].model.between.unwrap_or(!has_area);
+                // Data tables center every category in its column.
+                let between = has_bar
+                    || m.data_table.is_some()
+                    || self.axes[perp].model.between.unwrap_or(!has_area);
                 let cats = uses
                     .iter()
                     .flat_map(|&(gi, _)| m.groups[gi].series.iter())
@@ -654,13 +665,18 @@ impl<'m> Plot<'m> {
             .sum()
     }
 
-    /// Extent of tick labels perpendicular to the axis.
+    /// Extent of tick labels (or a data table) perpendicular to the axis.
     pub(crate) fn label_extent(&self, ai: usize) -> f32 {
         let a = &self.axes[ai];
         let rows: f32 = (0..a.outer.len())
             .map(|k| ROW_GAP + self.row_extent(ai, k))
             .sum();
-        self.inner_extent(ai) + rows
+        let table = self
+            .table
+            .as_ref()
+            .filter(|t| t.axis == ai)
+            .map_or(0.0, Table::height);
+        self.inner_extent(ai) + rows + table
     }
 
     /// Extent of the innermost tick labels perpendicular to the axis.
@@ -689,6 +705,11 @@ impl<'m> Plot<'m> {
     /// Space needed outside the plot rectangle: `[left, top, right, bottom]`.
     fn extents(&self) -> [f32; 4] {
         let mut ext = [0.0f32; 4];
+        // A 3-D plot recedes up and to the right of its front plane.
+        if let Some(d) = self.depth {
+            ext[1] = d.dy;
+            ext[2] = d.dx;
+        }
         let idx = |e: Edge| match e {
             Edge::Left => 0,
             Edge::Top => 1,
@@ -729,6 +750,11 @@ impl<'m> Plot<'m> {
                     ext[idx(hi_edge)] = ext[idx(hi_edge)].max(half - (len - pos));
                 }
             }
+            if let Some(t) = self.table.as_ref().filter(|t| t.axis == ai) {
+                ext[idx(Edge::Bottom)] = ext[idx(Edge::Bottom)].max(t.height());
+                ext[idx(Edge::Left)] = ext[idx(Edge::Left)].max(t.head_w);
+                label_edge = Some(Edge::Bottom);
+            }
             let band = self.title_band(ai);
             if band > 0.0 {
                 let edge = label_edge.unwrap_or(match a.model.side {
@@ -753,12 +779,21 @@ impl<'m> Plot<'m> {
         let fixed_inner = manual.filter(|(_, inner)| *inner).map(|(r, _)| r);
         let base = manual.map_or(outer, |(r, _)| r);
         self.inner = fixed_inner.unwrap_or(base);
+        if let Some(f) = fixed_inner {
+            // A manual inner layout holds the whole 3-D box.
+            self.depth = self.depth_of(f);
+            if let Some(d) = self.depth {
+                self.inner = Rect::from_ltrb(f.x, f.y + d.dy, f.right() - d.dx, f.bottom());
+            }
+        }
         for _ in 0..3 {
             self.compute_scales(cv);
             self.compute_labels(cv);
             if fixed_inner.is_some() {
+                self.fit_manual(cv);
                 return;
             }
+            self.depth = self.depth_of(self.inner);
             let [l, t, r, b] = self.extents();
             let min_w = base.w * 0.25;
             let min_h = base.h * 0.25;
@@ -784,6 +819,26 @@ impl<'m> Plot<'m> {
         }
         self.compute_scales(cv);
         self.compute_labels(cv);
+    }
+
+    /// Shrinks a manual plot whose labels would leave the chart area
+    /// (Office keeps every element inside the chart).
+    fn fit_manual(&mut self, cv: &Canvas<'_>) {
+        let [l, t, r, b] = self.extents();
+        let (c, i) = (cv.chart, self.inner);
+        let fit = Rect::from_ltrb(
+            i.x.max(c.x + l),
+            i.y.max(c.y + t),
+            i.right().min(c.right() - r),
+            i.bottom().min(c.bottom() - b),
+        );
+        let moved =
+            (fit.x - i.x).abs() + (fit.y - i.y).abs() + (fit.w - i.w).abs() + (fit.h - i.h).abs();
+        if moved > 0.5 && fit.w >= i.w * 0.5 && fit.h >= i.h * 0.5 {
+            self.inner = fit;
+            self.compute_scales(cv);
+            self.compute_labels(cv);
+        }
     }
 
     /// Fractions of gridlines (and tick marks) along an axis.

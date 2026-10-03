@@ -28,18 +28,31 @@ pub struct SlideRow {
 }
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// Writes `out/report.html`.
 pub fn write(out: &Path, rows: &[SlideRow]) -> std::io::Result<()> {
-    let mut sorted: Vec<&SlideRow> = rows.iter().filter(|r| r.score.is_some() || r.error.is_some()).collect();
+    let mut sorted: Vec<&SlideRow> = rows
+        .iter()
+        .filter(|r| r.score.is_some() || r.error.is_some())
+        .collect();
     sorted.sort_by(|a, b| {
         let key = |r: &SlideRow| r.score.map_or(-1.0, |s| s.ssim);
         key(a).total_cmp(&key(b))
     });
-    let scored: Vec<f32> = rows.iter().filter_map(|r| r.score.map(|s| s.ssim)).collect();
-    let mean = if scored.is_empty() { 0.0 } else { scored.iter().sum::<f32>() / scored.len() as f32 };
+    let scored: Vec<f32> = rows
+        .iter()
+        .filter_map(|r| r.score.map(|s| s.ssim))
+        .collect();
+    let mean = if scored.is_empty() {
+        0.0
+    } else {
+        scored.iter().sum::<f32>() / scored.len() as f32
+    };
     let below = |t: f32| scored.iter().filter(|s| **s < t).count();
     let mut html = String::new();
     let _ = write!(
@@ -59,15 +72,39 @@ img{{width:320px;border:1px solid #ccc;background:#fff}}.bad{{color:#b00020;font
         let n = r.slide;
         let score = match r.score {
             Some(s) => {
-                let base = r.baseline_ssim.map(|b| format!("<br>baseline {b:.4}")).unwrap_or_default();
-                let class = if r.baseline_ssim.is_some_and(|b| s.ssim < b - 0.005) { " class=bad" } else { "" };
-                format!("<span{class}>SSIM {:.4}</span><br>mismatch {:.2}%{base}<br>{} ms", s.ssim, s.mismatch * 100.0, r.millis)
+                let base = r
+                    .baseline_ssim
+                    .map(|b| format!("<br>baseline {b:.4}"))
+                    .unwrap_or_default();
+                let class = if r.baseline_ssim.is_some_and(|b| s.ssim < b - 0.005) {
+                    " class=bad"
+                } else {
+                    ""
+                };
+                format!(
+                    "<span{class}>SSIM {:.4}</span><br>mismatch {:.2}%{base}<br>{} ms",
+                    s.ssim,
+                    s.mismatch * 100.0,
+                    r.millis
+                )
             }
             None => String::new(),
         };
-        let note = r.note.as_deref().map(|n| format!("<div class=note>{}</div>", esc(n))).unwrap_or_default();
-        let error = r.error.as_deref().map(|e| format!("<div class=bad>{}</div>", esc(e))).unwrap_or_default();
-        let changed = if r.fingerprint_changed { "<div class=bad>render changed</div>" } else { "" };
+        let note = r
+            .note
+            .as_deref()
+            .map(|n| format!("<div class=note>{}</div>", esc(n)))
+            .unwrap_or_default();
+        let error = r
+            .error
+            .as_deref()
+            .map(|e| format!("<div class=bad>{}</div>", esc(e)))
+            .unwrap_or_default();
+        let changed = if r.fingerprint_changed {
+            "<div class=bad>render changed</div>"
+        } else {
+            ""
+        };
         let _ = write!(
             html,
             "<tr><td>{}<br>slide {n}{note}{error}{changed}</td><td>{score}</td>\
@@ -89,5 +126,8 @@ img{{width:320px;border:1px solid #ccc;background:#fff}}.bad{{color:#b00020;font
             })
         })
         .collect();
-    std::fs::write(out.join("scores.json"), serde_json::to_vec_pretty(&json).map_err(std::io::Error::other)?)
+    std::fs::write(
+        out.join("scores.json"),
+        serde_json::to_vec_pretty(&json).map_err(std::io::Error::other)?,
+    )
 }

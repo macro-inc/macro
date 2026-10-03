@@ -12,12 +12,18 @@ pub fn rasterize(nodes: &[Node], width: u32, height: u32, scale: f32) -> Raster 
     };
     let r = Rasterizer { scale };
     r.draw_nodes(&mut pm, nodes, (0, 0));
-    Raster { width: pm.width(), height: pm.height(), pixels: pm.take() }
+    Raster {
+        width: pm.width(),
+        height: pm.height(),
+        pixels: pm.take(),
+    }
 }
 
 /// Converts an engine transform to tiny-skia's.
 pub fn to_sk_transform(a: &Affine) -> sk::Transform {
-    sk::Transform::from_row(a.a as f32, a.b as f32, a.c as f32, a.d as f32, a.e as f32, a.f as f32)
+    sk::Transform::from_row(
+        a.a as f32, a.b as f32, a.c as f32, a.d as f32, a.e as f32, a.f as f32,
+    )
 }
 
 /// Largest coordinate (points) passed to the rasterizer; far beyond any slide.
@@ -45,10 +51,18 @@ fn el_points_mut(el: &mut PathEl) -> Vec<&mut Point> {
 pub fn to_sk_path(p: &Path) -> Option<sk::Path> {
     // Hostile or degenerate geometry must not reach the rasterizer: tiny-skia
     // overflows its fixed-point maths on coordinates in the millions of pixels.
-    if p.els.iter().any(|el| el_points(el).iter().any(|q| !q.x.is_finite() || !q.y.is_finite())) {
+    if p.els.iter().any(|el| {
+        el_points(el)
+            .iter()
+            .any(|q| !q.x.is_finite() || !q.y.is_finite())
+    }) {
         return None;
     }
-    if p.els.iter().any(|el| el_points(el).iter().any(|q| q.x.abs() > COORD_LIMIT || q.y.abs() > COORD_LIMIT)) {
+    if p.els.iter().any(|el| {
+        el_points(el)
+            .iter()
+            .any(|q| q.x.abs() > COORD_LIMIT || q.y.abs() > COORD_LIMIT)
+    }) {
         let mut clamped = p.clone();
         for el in &mut clamped.els {
             for q in el_points_mut(el) {
@@ -91,12 +105,19 @@ pub fn to_sk_path(p: &Path) -> Option<sk::Path> {
 }
 
 fn color(c: Rgba) -> sk::Color {
-    sk::Color::from_rgba(c.r.clamp(0.0, 1.0), c.g.clamp(0.0, 1.0), c.b.clamp(0.0, 1.0), c.a.clamp(0.0, 1.0))
-        .unwrap_or(sk::Color::BLACK)
+    sk::Color::from_rgba(
+        c.r.clamp(0.0, 1.0),
+        c.g.clamp(0.0, 1.0),
+        c.b.clamp(0.0, 1.0),
+        c.a.clamp(0.0, 1.0),
+    )
+    .unwrap_or(sk::Color::BLACK)
 }
 
 fn stops(s: &[(f32, Rgba)]) -> Vec<sk::GradientStop> {
-    s.iter().map(|(p, c)| sk::GradientStop::new(p.clamp(0.0, 1.0), color(*c))).collect()
+    s.iter()
+        .map(|(p, c)| sk::GradientStop::new(p.clamp(0.0, 1.0), color(*c)))
+        .collect()
 }
 
 struct Rasterizer {
@@ -115,11 +136,21 @@ struct PxRect {
 impl Rasterizer {
     /// Scene → device transform for a layer whose origin is at `origin` (device px).
     fn base(&self, origin: (i32, i32)) -> sk::Transform {
-        sk::Transform::from_row(self.scale, 0.0, 0.0, self.scale, -origin.0 as f32, -origin.1 as f32)
+        sk::Transform::from_row(
+            self.scale,
+            0.0,
+            0.0,
+            self.scale,
+            -origin.0 as f32,
+            -origin.1 as f32,
+        )
     }
 
     fn paint<'a>(&self, p: &'a Paint) -> Option<sk::Paint<'a>> {
-        let mut paint = sk::Paint { anti_alias: true, ..Default::default() };
+        let mut paint = sk::Paint {
+            anti_alias: true,
+            ..Default::default()
+        };
         match p {
             Paint::Solid(c) => {
                 if c.a <= 0.0 {
@@ -127,7 +158,12 @@ impl Rasterizer {
                 }
                 paint.set_color(color(*c));
             }
-            Paint::Linear { start, end, stops: s, transform } => {
+            Paint::Linear {
+                start,
+                end,
+                stops: s,
+                transform,
+            } => {
                 let degenerate = (start.x - end.x).abs() < 1e-6 && (start.y - end.y).abs() < 1e-6;
                 if s.len() == 1 || degenerate {
                     paint.set_color(color(s.last()?.1));
@@ -141,23 +177,46 @@ impl Rasterizer {
                     )?;
                 }
             }
-            Paint::Radial { stops: s, transform } => {
+            Paint::Radial {
+                stops: s,
+                transform,
+            } => {
                 if s.len() == 1 {
                     paint.set_color(color(s[0].1));
                 } else {
                     let c = sk::Point::from_xy(0.0, 0.0);
-                    paint.shader = sk::RadialGradient::new(c, c, 1.0, stops(s), sk::SpreadMode::Pad, to_sk_transform(transform))?;
+                    paint.shader = sk::RadialGradient::new(
+                        c,
+                        c,
+                        1.0,
+                        stops(s),
+                        sk::SpreadMode::Pad,
+                        to_sk_transform(transform),
+                    )?;
                 }
             }
-            Paint::Image { image, transform, repeat, opacity } => {
+            Paint::Image {
+                image,
+                transform,
+                repeat,
+                opacity,
+            } => {
                 // Borrowed, not copied: pictures can be tens of megabytes.
                 let pm = sk::PixmapRef::from_bytes(&image.pixels, image.width, image.height)?;
                 // Downscaled images look better with bicubic filtering.
                 let scale = transform.mean_scale() as f32 * self.scale;
-                let quality = if scale < 0.9 { sk::FilterQuality::Bicubic } else { sk::FilterQuality::Bilinear };
+                let quality = if scale < 0.9 {
+                    sk::FilterQuality::Bicubic
+                } else {
+                    sk::FilterQuality::Bilinear
+                };
                 paint.shader = sk::Pattern::new(
                     pm,
-                    if *repeat { sk::SpreadMode::Repeat } else { sk::SpreadMode::Pad },
+                    if *repeat {
+                        sk::SpreadMode::Repeat
+                    } else {
+                        sk::SpreadMode::Pad
+                    },
                     quality,
                     *opacity,
                     to_sk_transform(transform),
@@ -176,15 +235,31 @@ impl Rasterizer {
     fn draw_node(&self, pm: &mut sk::Pixmap, node: &Node, origin: (i32, i32)) {
         let base = self.base(origin);
         match node {
-            Node::Fill { path, paint, even_odd } => {
+            Node::Fill {
+                path,
+                paint,
+                even_odd,
+            } => {
                 let Some(p) = to_sk_path(path) else { return };
-                let Some(paint) = self.paint(paint) else { return };
-                let rule = if *even_odd { sk::FillRule::EvenOdd } else { sk::FillRule::Winding };
+                let Some(paint) = self.paint(paint) else {
+                    return;
+                };
+                let rule = if *even_odd {
+                    sk::FillRule::EvenOdd
+                } else {
+                    sk::FillRule::Winding
+                };
                 pm.fill_path(&p, &paint, rule, base, None);
             }
-            Node::Stroke { path, paint, stroke } => {
+            Node::Stroke {
+                path,
+                paint,
+                stroke,
+            } => {
                 let Some(p) = to_sk_path(path) else { return };
-                let Some(paint) = self.paint(paint) else { return };
+                let Some(paint) = self.paint(paint) else {
+                    return;
+                };
                 let s = sk_stroke(stroke);
                 pm.stroke_path(&p, &paint, &s, base, None);
             }
@@ -202,13 +277,25 @@ impl Rasterizer {
             return;
         }
         // Allocate a layer only as large as the content plus effect margins.
-        let Some(content) = nodes_bounds(&g.children) else { return };
+        let Some(content) = nodes_bounds(&g.children) else {
+            return;
+        };
         let mut margin = 0.0f32;
         for e in &g.effects {
             margin = margin.max(match e {
-                Effect::OuterShadow { blur, offset, transform, .. } => {
-                    let skew = (transform.c.abs() + transform.b.abs()) as f32 * content.w.max(content.h);
-                    blur * 2.0 + offset.x.abs().max(offset.y.abs()) + skew + content.w.max(content.h) * ((transform.a.abs().max(transform.d.abs()) as f32) - 1.0).max(0.0)
+                Effect::OuterShadow {
+                    blur,
+                    offset,
+                    transform,
+                    ..
+                } => {
+                    let skew =
+                        (transform.c.abs() + transform.b.abs()) as f32 * content.w.max(content.h);
+                    blur * 2.0
+                        + offset.x.abs().max(offset.y.abs())
+                        + skew
+                        + content.w.max(content.h)
+                            * ((transform.a.abs().max(transform.d.abs()) as f32) - 1.0).max(0.0)
                 }
                 Effect::Glow { radius, .. } => radius * 2.0,
                 Effect::Reflection { dist, height, .. } => dist + height,
@@ -235,40 +322,83 @@ impl Rasterizer {
             return;
         }
         let (lw, lh) = ((lx1 - lx0) as u32, (ly1 - ly0) as u32);
-        let Some(mut layer) = sk::Pixmap::new(lw, lh) else { return };
+        let Some(mut layer) = sk::Pixmap::new(lw, lh) else {
+            return;
+        };
         let lorigin = (lx0, ly0);
         self.draw_nodes(&mut layer, &g.children, lorigin);
 
         for e in &g.effects {
             layer = self.apply_effect(layer, e, lorigin);
         }
-        if let Some(clip) = &g.clip {
-            if let (Some(p), Some(mut mask)) = (to_sk_path(clip), sk::Mask::new(lw, lh)) {
-                mask.fill_path(&p, sk::FillRule::Winding, true, self.base(lorigin));
-                layer.apply_mask(&mask);
-            }
+        if let Some(clip) = &g.clip
+            && let (Some(p), Some(mut mask)) = (to_sk_path(clip), sk::Mask::new(lw, lh))
+        {
+            mask.fill_path(&p, sk::FillRule::Winding, true, self.base(lorigin));
+            layer.apply_mask(&mask);
         }
-        let paint = sk::PixmapPaint { opacity: g.opacity.clamp(0.0, 1.0), ..Default::default() };
-        target.draw_pixmap(lx0 - origin.0, ly0 - origin.1, layer.as_ref(), &paint, sk::Transform::identity(), None);
+        let paint = sk::PixmapPaint {
+            opacity: g.opacity.clamp(0.0, 1.0),
+            ..Default::default()
+        };
+        target.draw_pixmap(
+            lx0 - origin.0,
+            ly0 - origin.1,
+            layer.as_ref(),
+            &paint,
+            sk::Transform::identity(),
+            None,
+        );
     }
 
     fn apply_effect(&self, layer: sk::Pixmap, e: &Effect, lorigin: (i32, i32)) -> sk::Pixmap {
         let (w, h) = (layer.width(), layer.height());
         match e {
-            Effect::OuterShadow { color: c, blur, offset, transform } => {
-                let Some(mut shadow) = sk::Pixmap::new(w, h) else { return layer };
+            Effect::OuterShadow {
+                color: c,
+                blur,
+                offset,
+                transform,
+            } => {
+                let Some(mut shadow) = sk::Pixmap::new(w, h) else {
+                    return layer;
+                };
                 // Shadow geometry: the layer, transformed about the anchor and offset.
                 let t = transform;
                 let shift = sk::Transform::from_translate(lorigin.0 as f32, lorigin.1 as f32);
-                let scene_t = sk::Transform::from_row(t.a as f32, t.b as f32, t.c as f32, t.d as f32, t.e as f32 * self.scale, t.f as f32 * self.scale);
+                let scene_t = sk::Transform::from_row(
+                    t.a as f32,
+                    t.b as f32,
+                    t.c as f32,
+                    t.d as f32,
+                    t.e as f32 * self.scale,
+                    t.f as f32 * self.scale,
+                );
                 let full = shift
                     .post_concat(scene_t)
-                    .post_concat(sk::Transform::from_translate(offset.x * self.scale - lorigin.0 as f32, offset.y * self.scale - lorigin.1 as f32));
-                shadow.draw_pixmap(0, 0, layer.as_ref(), &sk::PixmapPaint::default(), full, None);
+                    .post_concat(sk::Transform::from_translate(
+                        offset.x * self.scale - lorigin.0 as f32,
+                        offset.y * self.scale - lorigin.1 as f32,
+                    ));
+                shadow.draw_pixmap(
+                    0,
+                    0,
+                    layer.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    full,
+                    None,
+                );
                 let mut alpha: Vec<u8> = shadow.data().chunks_exact(4).map(|p| p[3]).collect();
                 blur_alpha(&mut alpha, w as usize, h as usize, blur * self.scale);
                 let mut out = colorize(&alpha, w, h, *c);
-                out.draw_pixmap(0, 0, layer.as_ref(), &sk::PixmapPaint::default(), sk::Transform::identity(), None);
+                out.draw_pixmap(
+                    0,
+                    0,
+                    layer.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    sk::Transform::identity(),
+                    None,
+                );
                 out
             }
             Effect::Glow { color: c, radius } => {
@@ -277,7 +407,14 @@ impl Rasterizer {
                 dilate_alpha(&mut alpha, w as usize, h as usize, r * 0.6);
                 blur_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
                 let mut out = colorize(&alpha, w, h, *c);
-                out.draw_pixmap(0, 0, layer.as_ref(), &sk::PixmapPaint::default(), sk::Transform::identity(), None);
+                out.draw_pixmap(
+                    0,
+                    0,
+                    layer.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    sk::Transform::identity(),
+                    None,
+                );
                 out
             }
             Effect::SoftEdge { radius } => {
@@ -294,16 +431,27 @@ impl Rasterizer {
                 }
                 layer
             }
-            Effect::InnerShadow { color: c, blur, offset } => {
+            Effect::InnerShadow {
+                color: c,
+                blur,
+                offset,
+            } => {
                 let mut layer = layer;
                 let src: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
-                let (dx, dy) = ((offset.x * self.scale).round() as i32, (offset.y * self.scale).round() as i32);
+                let (dx, dy) = (
+                    (offset.x * self.scale).round() as i32,
+                    (offset.y * self.scale).round() as i32,
+                );
                 let (wi, hi) = (w as i32, h as i32);
                 let mut inv = vec![0u8; src.len()];
                 for y in 0..hi {
                     for x in 0..wi {
                         let (sx, sy) = (x - dx, y - dy);
-                        let a = if sx >= 0 && sy >= 0 && sx < wi && sy < hi { src[(sy * wi + sx) as usize] } else { 0 };
+                        let a = if sx >= 0 && sy >= 0 && sx < wi && sy < hi {
+                            src[(sy * wi + sx) as usize]
+                        } else {
+                            0
+                        };
                         inv[(y * wi + x) as usize] = 255 - a;
                     }
                 }
@@ -312,30 +460,74 @@ impl Rasterizer {
                     *a = ((u32::from(*a) * u32::from(src[i]) + 127) / 255) as u8;
                 }
                 let shade = colorize(&inv, w, h, *c);
-                layer.draw_pixmap(0, 0, shade.as_ref(), &sk::PixmapPaint::default(), sk::Transform::identity(), None);
+                layer.draw_pixmap(
+                    0,
+                    0,
+                    shade.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    sk::Transform::identity(),
+                    None,
+                );
                 layer
             }
-            Effect::Reflection { axis, dist, start_alpha, end_alpha, end_pos, height, blur: _ } => {
-                let Some(mut out) = sk::Pixmap::new(w, h) else { return layer };
+            Effect::Reflection {
+                axis,
+                dist,
+                start_alpha,
+                end_alpha,
+                end_pos,
+                height,
+                blur: _,
+            } => {
+                let Some(mut out) = sk::Pixmap::new(w, h) else {
+                    return layer;
+                };
                 // Mirror about the axis, shifted down by `dist`.
                 let ay = (axis * self.scale) - lorigin.1 as f32;
-                let mirror = sk::Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 2.0 * ay + dist * self.scale);
+                let mirror =
+                    sk::Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 2.0 * ay + dist * self.scale);
                 let mut refl = sk::Pixmap::new(w, h).unwrap_or_else(|| layer.clone());
-                refl.draw_pixmap(0, 0, layer.as_ref(), &sk::PixmapPaint::default(), mirror, None);
+                refl.draw_pixmap(
+                    0,
+                    0,
+                    layer.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    mirror,
+                    None,
+                );
                 // Fade.
                 let fade_len = (height * end_pos.max(0.01) * self.scale).max(1.0);
                 let start = ay + dist * self.scale;
                 for y in 0..h {
                     let t = ((y as f32 - start) / fade_len).clamp(0.0, 1.0);
-                    let a = if (y as f32) < start { 0.0 } else { start_alpha + (end_alpha - start_alpha) * t };
+                    let a = if (y as f32) < start {
+                        0.0
+                    } else {
+                        start_alpha + (end_alpha - start_alpha) * t
+                    };
                     let k = (a.clamp(0.0, 1.0) * 255.0) as u32;
-                    let row = &mut refl.data_mut()[(y * w * 4) as usize..((y + 1) * w * 4) as usize];
+                    let row =
+                        &mut refl.data_mut()[(y * w * 4) as usize..((y + 1) * w * 4) as usize];
                     for v in row.iter_mut() {
                         *v = ((u32::from(*v) * k + 127) / 255) as u8;
                     }
                 }
-                out.draw_pixmap(0, 0, refl.as_ref(), &sk::PixmapPaint::default(), sk::Transform::identity(), None);
-                out.draw_pixmap(0, 0, layer.as_ref(), &sk::PixmapPaint::default(), sk::Transform::identity(), None);
+                out.draw_pixmap(
+                    0,
+                    0,
+                    refl.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    sk::Transform::identity(),
+                    None,
+                );
+                out.draw_pixmap(
+                    0,
+                    0,
+                    layer.as_ref(),
+                    &sk::PixmapPaint::default(),
+                    sk::Transform::identity(),
+                    None,
+                );
                 out
             }
         }
@@ -395,7 +587,12 @@ pub fn nodes_bounds(nodes: &[Node]) -> Option<Rect> {
 
 fn colorize(alpha: &[u8], w: u32, h: u32, c: Rgba) -> sk::Pixmap {
     let mut pm = sk::Pixmap::new(w.max(1), h.max(1)).expect("non-zero layer");
-    let (r, g, b, a) = (c.r.clamp(0.0, 1.0), c.g.clamp(0.0, 1.0), c.b.clamp(0.0, 1.0), c.a.clamp(0.0, 1.0));
+    let (r, g, b, a) = (
+        c.r.clamp(0.0, 1.0),
+        c.g.clamp(0.0, 1.0),
+        c.b.clamp(0.0, 1.0),
+        c.a.clamp(0.0, 1.0),
+    );
     for (px, &m) in pm.data_mut().chunks_exact_mut(4).zip(alpha) {
         let k = f32::from(m) / 255.0 * a;
         px[0] = (r * k * 255.0).round() as u8;
@@ -461,7 +658,11 @@ fn morph(a: &mut [u8], w: usize, h: usize, radius: f32, dilate: bool) {
             let mut v = if dilate { 0 } else { 255 };
             for k in -r..=r {
                 let xx = x + k;
-                let s = if xx < 0 || xx >= w as i32 { 0 } else { src[(y * w as i32 + xx) as usize] };
+                let s = if xx < 0 || xx >= w as i32 {
+                    0
+                } else {
+                    src[(y * w as i32 + xx) as usize]
+                };
                 v = pick(v, s);
             }
             tmp[(y * w as i32 + x) as usize] = v;
@@ -472,7 +673,11 @@ fn morph(a: &mut [u8], w: usize, h: usize, radius: f32, dilate: bool) {
             let mut v = if dilate { 0 } else { 255 };
             for k in -r..=r {
                 let yy = y + k;
-                let s = if yy < 0 || yy >= h as i32 { 0 } else { tmp[(yy * w as i32 + x) as usize] };
+                let s = if yy < 0 || yy >= h as i32 {
+                    0
+                } else {
+                    tmp[(yy * w as i32 + x) as usize]
+                };
                 v = pick(v, s);
             }
             a[(y * w as i32 + x) as usize] = v;

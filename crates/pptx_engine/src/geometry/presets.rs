@@ -25,7 +25,15 @@ pub fn definitions() -> &'static HashMap<String, PresetDef> {
                 .expect("embedded preset definitions are well-formed"),
         );
         doc.children(doc.root())
-            .map(|node| (doc.local(node).to_owned(), PresetDef { doc: Arc::clone(&doc), node }))
+            .map(|node| {
+                (
+                    doc.local(node).to_owned(),
+                    PresetDef {
+                        doc: Arc::clone(&doc),
+                        node,
+                    },
+                )
+            })
             .collect()
     })
 }

@@ -4,14 +4,14 @@
 use super::ops::{FillSpec, LinePatch, NewShape, ZOrder};
 use super::parts;
 use super::xmlutil::{
-    LN_ORDER, SP_PR_ORDER, color_element, ensure_sp_pr, esc, find_shape, import_fragment, max_shape_id, replace_fill,
-    set_off_ext, solid_fill,
+    LN_ORDER, SP_PR_ORDER, color_element, ensure_sp_pr, esc, find_shape, import_fragment,
+    max_shape_id, replace_fill, set_off_ext, solid_fill,
 };
 use crate::error::{Error, Result};
 use crate::model::presentation::Presentation;
 use crate::model::shape::{Inherit, Xfrm, placeholder_chain, placeholder_of, sp_tree};
 use crate::units::pt_to_emu;
-use crate::xml::{Ns, NodeId, XmlDoc};
+use crate::xml::{NodeId, Ns, XmlDoc};
 use std::collections::HashMap;
 
 /// Child order of `p:sp`.
@@ -19,14 +19,33 @@ const SP_ORDER: &[&str] = &["nvSpPr", "spPr", "style", "txBody", "extLst"];
 /// Child order of `p:graphicFrame`.
 const FRAME_ORDER: &[&str] = &["nvGraphicFramePr", "xfrm", "graphic", "extLst"];
 /// Elements that occupy a z-order slot in a shape tree.
-const TREE_ITEMS: &[&str] = &["sp", "grpSp", "pic", "graphicFrame", "cxnSp", "AlternateContent", "contentPart"];
+const TREE_ITEMS: &[&str] = &[
+    "sp",
+    "grpSp",
+    "pic",
+    "graphicFrame",
+    "cxnSp",
+    "AlternateContent",
+    "contentPart",
+];
 /// The table style PowerPoint applies to new tables (Medium Style 2 - Accent 1).
 const DEFAULT_TABLE_STYLE: &str = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
 /// Arrowhead types accepted by [`LinePatch`].
 const LINE_ENDS: &[&str] = &["none", "triangle", "stealth", "diamond", "oval", "arrow"];
 /// Preset dashes accepted by [`LinePatch`].
-const DASHES: &[&str] =
-    &["solid", "dot", "dash", "lgDash", "dashDot", "lgDashDot", "lgDashDotDot", "sysDash", "sysDot", "sysDashDot", "sysDashDotDot"];
+const DASHES: &[&str] = &[
+    "solid",
+    "dot",
+    "dash",
+    "lgDash",
+    "dashDot",
+    "lgDashDot",
+    "lgDashDotDot",
+    "sysDash",
+    "sysDot",
+    "sysDashDot",
+    "sysDashDotDot",
+];
 
 /// Finds a shape element by id, or fails with `NotFound`.
 pub fn find(doc: &XmlDoc, id: u32) -> Result<NodeId> {
@@ -34,7 +53,9 @@ pub fn find(doc: &XmlDoc, id: u32) -> Result<NodeId> {
 }
 
 fn is_text_box(doc: &XmlDoc, shape: NodeId) -> bool {
-    doc.path(shape, Ns::P, &["nvSpPr", "cNvSpPr"]).and_then(|c| doc.attr_bool(c, "txBox")).unwrap_or(false)
+    doc.path(shape, Ns::P, &["nvSpPr", "cNvSpPr"])
+        .and_then(|c| doc.attr_bool(c, "txBox"))
+        .unwrap_or(false)
 }
 
 /// The text body of a shape, created (with PowerPoint's defaults) when absent.
@@ -56,8 +77,12 @@ pub fn ensure_tx_body(doc: &mut XmlDoc, shape: NodeId) -> Result<NodeId> {
             doc.insert_in_order(shape, body, SP_ORDER);
             Ok(body)
         }
-        "graphicFrame" => Err(Error::InvalidEdit("table text is edited per cell (pass `cell`)".into())),
-        other => Err(Error::InvalidEdit(format!("a `{other}` shape cannot hold text"))),
+        "graphicFrame" => Err(Error::InvalidEdit(
+            "table text is edited per cell (pass `cell`)".into(),
+        )),
+        other => Err(Error::InvalidEdit(format!(
+            "a `{other}` shape cannot hold text"
+        ))),
     }
 }
 
@@ -81,7 +106,8 @@ pub struct TransformPatch {
 }
 
 fn sp_pr(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
-    doc.children(shape).find(|&c| matches!(doc.local(c), "spPr" | "grpSpPr"))
+    doc.children(shape)
+        .find(|&c| matches!(doc.local(c), "spPr" | "grpSpPr"))
 }
 
 fn xfrm_element(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
@@ -128,17 +154,30 @@ fn emu(pt: f32) -> i64 {
 }
 
 /// Moves, resizes, rotates, or flips a shape.
-pub fn set_transform(pres: &mut Presentation, part: &str, shape: u32, patch: &TransformPatch) -> Result<()> {
+pub fn set_transform(
+    pres: &mut Presentation,
+    part: &str,
+    shape: u32,
+    patch: &TransformPatch,
+) -> Result<()> {
     check_finite(&[patch.x, patch.y, patch.w, patch.h, patch.rotation])?;
     if patch.w.is_some_and(|w| w < 0.0) || patch.h.is_some_and(|h| h < 0.0) {
-        return Err(Error::InvalidEdit("width and height must not be negative".into()));
+        return Err(Error::InvalidEdit(
+            "width and height must not be negative".into(),
+        ));
     }
     let current = effective_xfrm(pres, part, shape)?;
     let doc = pres.xml_mut(part)?;
     let node = find(doc, shape)?;
     let frame = doc.local(node) == "graphicFrame";
-    if frame && (patch.rotation.is_some_and(|r| r.rem_euclid(360.0) != 0.0) || patch.flip_h == Some(true) || patch.flip_v == Some(true)) {
-        return Err(Error::InvalidEdit("tables, charts, and other graphic frames cannot be rotated or flipped".into()));
+    if frame
+        && (patch.rotation.is_some_and(|r| r.rem_euclid(360.0) != 0.0)
+            || patch.flip_h == Some(true)
+            || patch.flip_v == Some(true))
+    {
+        return Err(Error::InvalidEdit(
+            "tables, charts, and other graphic frames cannot be rotated or flipped".into(),
+        ));
     }
     let xfrm = ensure_xfrm(doc, node);
     if doc.local(node) == "grpSp" && doc.child(xfrm, Ns::A, "chOff").is_none() {
@@ -183,7 +222,9 @@ pub fn fill_element(doc: &mut XmlDoc, spec: &FillSpec) -> Result<NodeId> {
         FillSpec::Solid { color, alpha } => solid_fill(doc, color, *alpha),
         FillSpec::Gradient { colors, angle } => {
             if colors.len() < 2 {
-                return Err(Error::InvalidEdit("a gradient needs at least two colors".into()));
+                return Err(Error::InvalidEdit(
+                    "a gradient needs at least two colors".into(),
+                ));
             }
             if !angle.is_finite() {
                 return Err(Error::InvalidEdit("gradient angle must be finite".into()));
@@ -213,7 +254,9 @@ pub fn fill_element(doc: &mut XmlDoc, spec: &FillSpec) -> Result<NodeId> {
 /// Sets a shape's fill.
 pub fn set_fill(doc: &mut XmlDoc, shape: NodeId, spec: &FillSpec) -> Result<()> {
     if doc.local(shape) == "graphicFrame" {
-        return Err(Error::InvalidEdit("graphic frames (tables, charts) have no shape fill".into()));
+        return Err(Error::InvalidEdit(
+            "graphic frames (tables, charts) have no shape fill".into(),
+        ));
     }
     let sp_pr = ensure_sp_pr(doc, shape);
     let fill = fill_element(doc, spec)?;
@@ -236,20 +279,27 @@ pub fn set_line(doc: &mut XmlDoc, shape: NodeId, patch: &LinePatch) -> Result<()
     if let Some(c) = &patch.color {
         let f = solid_fill(doc, c, None)?;
         replace_fill(doc, ln, f, LN_ORDER);
-    } else if (patch.width.is_some() || patch.dash.is_some()) && doc.child(ln, Ns::A, "noFill").is_some() {
+    } else if (patch.width.is_some() || patch.dash.is_some())
+        && doc.child(ln, Ns::A, "noFill").is_some()
+    {
         // Giving an invisible outline a width or dash makes it visible.
         let f = solid_fill(doc, "tx1", None)?;
         replace_fill(doc, ln, f, LN_ORDER);
     }
     if let Some(w) = patch.width {
         if !(0.0..=1584.0).contains(&w) {
-            return Err(Error::InvalidEdit(format!("line width {w} is out of range (0-1584 pt)")));
+            return Err(Error::InvalidEdit(format!(
+                "line width {w} is out of range (0-1584 pt)"
+            )));
         }
         doc.set_attr(ln, "w", &emu(w).to_string());
     }
     if let Some(d) = &patch.dash {
         if !DASHES.contains(&d.as_str()) {
-            return Err(Error::InvalidEdit(format!("unknown dash `{d}` (use one of {})", DASHES.join(", "))));
+            return Err(Error::InvalidEdit(format!(
+                "unknown dash `{d}` (use one of {})",
+                DASHES.join(", ")
+            )));
         }
         doc.remove_children_named(ln, Ns::A, "custDash");
         let el = doc.ensure_child(ln, Ns::A, "prstDash", LN_ORDER);
@@ -258,7 +308,10 @@ pub fn set_line(doc: &mut XmlDoc, shape: NodeId, patch: &LinePatch) -> Result<()
     for (name, value) in [("headEnd", &patch.head), ("tailEnd", &patch.tail)] {
         let Some(kind) = value else { continue };
         if !LINE_ENDS.contains(&kind.as_str()) {
-            return Err(Error::InvalidEdit(format!("unknown arrowhead `{kind}` (use one of {})", LINE_ENDS.join(", "))));
+            return Err(Error::InvalidEdit(format!(
+                "unknown arrowhead `{kind}` (use one of {})",
+                LINE_ENDS.join(", ")
+            )));
         }
         let el = doc.ensure_child(ln, Ns::A, name, LN_ORDER);
         doc.set_attr(el, "type", kind);
@@ -273,7 +326,9 @@ pub fn set_line(doc: &mut XmlDoc, shape: NodeId, patch: &LinePatch) -> Result<()
 /// Replaces a shape's geometry with a preset.
 pub fn set_geometry(doc: &mut XmlDoc, shape: NodeId, preset: &str) -> Result<()> {
     if !crate::geometry::is_preset(preset) {
-        return Err(Error::InvalidEdit(format!("unknown preset geometry `{preset}`")));
+        return Err(Error::InvalidEdit(format!(
+            "unknown preset geometry `{preset}`"
+        )));
     }
     if matches!(doc.local(shape), "graphicFrame" | "grpSp") {
         return Err(Error::InvalidEdit("this shape has no geometry".into()));
@@ -297,11 +352,18 @@ fn paragraphs_xml(text: &str, ppr: &str) -> String {
                 .split('\u{b}')
                 .enumerate()
                 .map(|(i, seg)| {
-                    let br = if i > 0 { "<a:br><a:rPr lang=\"en-US\" dirty=\"0\"/></a:br>" } else { "" };
+                    let br = if i > 0 {
+                        "<a:br><a:rPr lang=\"en-US\" dirty=\"0\"/></a:br>"
+                    } else {
+                        ""
+                    };
                     let run = if seg.is_empty() {
                         String::new()
                     } else {
-                        format!("<a:r><a:rPr lang=\"en-US\" dirty=\"0\"/><a:t>{}</a:t></a:r>", esc(seg))
+                        format!(
+                            "<a:r><a:rPr lang=\"en-US\" dirty=\"0\"/><a:t>{}</a:t></a:r>",
+                            esc(seg)
+                        )
                     };
                     format!("{br}{run}")
                 })
@@ -339,18 +401,29 @@ fn preset_display_name(preset: &str) -> String {
 
 /// Appends a shape element to the top of the z-order of a shape tree.
 fn append_to_tree(doc: &mut XmlDoc, tree: NodeId, el: NodeId) {
-    match doc.children(tree).last().filter(|&c| doc.local(c) == "extLst") {
+    match doc
+        .children(tree)
+        .last()
+        .filter(|&c| doc.local(c) == "extLst")
+    {
         Some(ext) => doc.insert_before(ext, el),
         None => doc.append_child(tree, el),
     }
 }
 
 /// Adds a shape; returns its id.
-pub fn add_shape(pres: &mut Presentation, part: &str, new: &NewShape, rect: [f32; 4]) -> Result<u32> {
+pub fn add_shape(
+    pres: &mut Presentation,
+    part: &str,
+    new: &NewShape,
+    rect: [f32; 4],
+) -> Result<u32> {
     check_finite(&rect.map(Some))?;
     let [x, y, mut w, mut h] = rect;
     if w < 0.0 || h < 0.0 {
-        return Err(Error::InvalidEdit("width and height must not be negative".into()));
+        return Err(Error::InvalidEdit(
+            "width and height must not be negative".into(),
+        ));
     }
     let id = max_shape_id(&*pres.xml(part)?) + 1;
     let n = id - 1;
@@ -364,7 +437,9 @@ pub fn add_shape(pres: &mut Presentation, part: &str, new: &NewShape, rect: [f32
         }
         NewShape::Shape { preset, text } => {
             if !crate::geometry::is_preset(preset) {
-                return Err(Error::InvalidEdit(format!("unknown preset geometry `{preset}`")));
+                return Err(Error::InvalidEdit(format!(
+                    "unknown preset geometry `{preset}`"
+                )));
             }
             let xfrm = xfrm_xml(x, y, w, h);
             let name = esc(&preset_display_name(preset));
@@ -376,7 +451,11 @@ pub fn add_shape(pres: &mut Presentation, part: &str, new: &NewShape, rect: [f32
         }
         NewShape::Line { arrow } => {
             let xfrm = xfrm_xml(x, y, w, h);
-            let tail = if *arrow { "<a:tailEnd type=\"triangle\" w=\"med\" len=\"med\"/>" } else { "" };
+            let tail = if *arrow {
+                "<a:tailEnd type=\"triangle\" w=\"med\" len=\"med\"/>"
+            } else {
+                ""
+            };
             format!(
                 "<p:cxnSp><p:nvCxnSpPr><p:cNvPr id=\"{id}\" name=\"Straight Connector {n}\"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr>{xfrm}<a:prstGeom prst=\"line\"><a:avLst/></a:prstGeom><a:ln w=\"19050\">{tail}</a:ln></p:spPr><p:style><a:lnRef idx=\"1\"><a:schemeClr val=\"accent1\"/></a:lnRef><a:fillRef idx=\"0\"><a:schemeClr val=\"accent1\"/></a:fillRef><a:effectRef idx=\"0\"><a:schemeClr val=\"accent1\"/></a:effectRef><a:fontRef idx=\"minor\"><a:schemeClr val=\"tx1\"/></a:fontRef></p:style></p:cxnSp>"
             )
@@ -422,21 +501,30 @@ fn table_xml(id: u32, n: u32, cells: &[Vec<String>], [x, y, w, h]: [f32; 4]) -> 
     let rows = cells.len();
     let cols = cells.iter().map(Vec::len).max().unwrap_or(0);
     if rows == 0 || cols == 0 {
-        return Err(Error::InvalidEdit("a table needs at least one row and one column".into()));
+        return Err(Error::InvalidEdit(
+            "a table needs at least one row and one column".into(),
+        ));
     }
     if rows > 200 || cols > 75 {
-        return Err(Error::InvalidEdit("tables are limited to 200 rows and 75 columns".into()));
+        return Err(Error::InvalidEdit(
+            "tables are limited to 200 rows and 75 columns".into(),
+        ));
     }
     let col_w = emu(w) / cols as i64;
     let row_h = emu(h) / rows as i64;
-    let grid: String = (0..cols).map(|_| format!("<a:gridCol w=\"{col_w}\"/>")).collect();
+    let grid: String = (0..cols)
+        .map(|_| format!("<a:gridCol w=\"{col_w}\"/>"))
+        .collect();
     let body: String = cells
         .iter()
         .map(|row| {
             let tcs: String = (0..cols)
                 .map(|c| {
                     let text = row.get(c).map_or("", String::as_str);
-                    format!("<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>{}</a:txBody><a:tcPr/></a:tc>", paragraphs_xml(text, ""))
+                    format!(
+                        "<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>{}</a:txBody><a:tcPr/></a:tc>",
+                        paragraphs_xml(text, "")
+                    )
                 })
                 .collect();
             format!("<a:tr h=\"{row_h}\">{tcs}</a:tr>")
@@ -464,10 +552,11 @@ pub fn delete_shape(doc: &mut XmlDoc, shape: NodeId) {
     let item = tree_item(doc, shape);
     let parent = doc.parent(item);
     doc.detach(item);
-    if let Some(g) = parent {
-        if doc.local(g) == "grpSp" && !doc.children(g).any(|c| TREE_ITEMS.contains(&doc.local(c))) {
-            delete_shape(doc, g);
-        }
+    if let Some(g) = parent
+        && doc.local(g) == "grpSp"
+        && !doc.children(g).any(|c| TREE_ITEMS.contains(&doc.local(c)))
+    {
+        delete_shape(doc, g);
     }
 }
 
@@ -491,17 +580,23 @@ fn renumber(doc: &mut XmlDoc, root: NodeId, next: &mut u32) -> HashMap<i64, u32>
         doc.remove_children_named(n, Ns::A, "extLst");
     }
     for &n in &nodes {
-        if matches!(doc.local(n), "stCxn" | "endCxn") {
-            if let Some(&new) = doc.attr_i64(n, "id").and_then(|old| map.get(&old)) {
-                doc.set_attr(n, "id", &new.to_string());
-            }
+        if matches!(doc.local(n), "stCxn" | "endCxn")
+            && let Some(&new) = doc.attr_i64(n, "id").and_then(|old| map.get(&old))
+        {
+            doc.set_attr(n, "id", &new.to_string());
         }
     }
     map
 }
 
 /// Duplicates a shape, offset by `(dx, dy)` points; returns the copy's id.
-pub fn duplicate_shape(pres: &mut Presentation, part: &str, shape: u32, dx: f32, dy: f32) -> Result<u32> {
+pub fn duplicate_shape(
+    pres: &mut Presentation,
+    part: &str,
+    shape: u32,
+    dx: f32,
+    dy: f32,
+) -> Result<u32> {
     check_finite(&[Some(dx), Some(dy)])?;
     let current = effective_xfrm(pres, part, shape)?;
     let doc = pres.xml_mut(part)?;
@@ -510,9 +605,13 @@ pub fn duplicate_shape(pres: &mut Presentation, part: &str, shape: u32, dx: f32,
     let copy = doc.deep_clone(item);
     let mut next = max_shape_id(doc) + 1;
     let map = renumber(doc, copy, &mut next);
-    let new_id = *map.get(&i64::from(shape)).ok_or_else(|| Error::InvalidEdit("shape has no id".into()))?;
+    let new_id = *map
+        .get(&i64::from(shape))
+        .ok_or_else(|| Error::InvalidEdit("shape has no id".into()))?;
     let tops: Vec<NodeId> = if doc.local(copy) == "AlternateContent" {
-        doc.children(copy).flat_map(|branch| doc.children(branch).collect::<Vec<_>>()).collect()
+        doc.children(copy)
+            .flat_map(|branch| doc.children(branch).collect::<Vec<_>>())
+            .collect()
     } else {
         vec![copy]
     };
@@ -541,9 +640,16 @@ pub fn duplicate_shape(pres: &mut Presentation, part: &str, shape: u32, dx: f32,
 /// Changes a shape's z-order among its siblings.
 pub fn reorder(doc: &mut XmlDoc, shape: NodeId, to: ZOrder) {
     let item = tree_item(doc, shape);
-    let Some(parent) = doc.parent(item) else { return };
-    let siblings: Vec<NodeId> = doc.children(parent).filter(|&c| TREE_ITEMS.contains(&doc.local(c))).collect();
-    let Some(i) = siblings.iter().position(|&s| s == item) else { return };
+    let Some(parent) = doc.parent(item) else {
+        return;
+    };
+    let siblings: Vec<NodeId> = doc
+        .children(parent)
+        .filter(|&c| TREE_ITEMS.contains(&doc.local(c)))
+        .collect();
+    let Some(i) = siblings.iter().position(|&s| s == item) else {
+        return;
+    };
     let last = siblings.len() - 1;
     let target = match to {
         ZOrder::Front => last,
@@ -573,13 +679,16 @@ pub fn replace_image(pres: &mut Presentation, part: &str, shape: u32, data: &str
         let doc = pres.xml(part)?;
         let node = find(&doc, shape)?;
         if blip_fill_of(&doc, node).is_none() {
-            return Err(Error::InvalidEdit(format!("shape {shape} is not a picture")));
+            return Err(Error::InvalidEdit(format!(
+                "shape {shape} is not a picture"
+            )));
         }
     }
     let image = parts::add_image(pres, part, &bytes)?;
     let doc = pres.xml_mut(part)?;
     let node = find(doc, shape)?;
-    let blip_fill = blip_fill_of(doc, node).ok_or_else(|| Error::InvalidEdit(format!("shape {shape} is not a picture")))?;
+    let blip_fill = blip_fill_of(doc, node)
+        .ok_or_else(|| Error::InvalidEdit(format!("shape {shape} is not a picture")))?;
     let blip = match doc.child(blip_fill, Ns::A, "blip") {
         Some(b) => b,
         None => {
@@ -604,4 +713,3 @@ fn blip_fill_of(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
         _ => None,
     }
 }
-

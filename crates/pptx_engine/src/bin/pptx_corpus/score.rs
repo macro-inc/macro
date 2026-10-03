@@ -57,7 +57,11 @@ struct DeckResult {
 }
 
 fn process(deck: &Deck, refs: Option<&Path>, out: Option<&Path>, width: u32) -> DeckResult {
-    let fail = |e: String| DeckResult { deck: deck.clone(), slides: Vec::new(), error: Some(e) };
+    let fail = |e: String| DeckResult {
+        deck: deck.clone(),
+        slides: Vec::new(),
+        error: Some(e),
+    };
     let bytes = match std::fs::read(&deck.path) {
         Ok(b) => b,
         Err(e) => return fail(e.to_string()),
@@ -77,12 +81,19 @@ fn process(deck: &Deck, refs: Option<&Path>, out: Option<&Path>, width: u32) -> 
     let mut slides = Vec::new();
     for i in 0..pres.slides().len() {
         let start = Instant::now();
-        let mut result = SlideResult { fingerprint: String::new(), score: None, millis: 0, error: None };
+        let mut result = SlideResult {
+            fingerprint: String::new(),
+            score: None,
+            millis: 0,
+            error: None,
+        };
         match pres.render_slide(i, FINGERPRINT_WIDTH, fonts) {
             Ok(r) => result.fingerprint = fidelity::fingerprint(&r),
             Err(e) => result.error = Some(e.to_string()),
         }
-        let reference = refs.map(|r| r.join(deck.stem()).join(format!("slide-{:03}.png", i + 1))).filter(|p| p.exists());
+        let reference = refs
+            .map(|r| r.join(deck.stem()).join(format!("slide-{:03}.png", i + 1)))
+            .filter(|p| p.exists());
         if let (Some(reference), None) = (reference, &result.error) {
             let scored = (|| -> Result<Score, Box<dyn std::error::Error>> {
                 let ours = pres.render_slide(i, width, fonts)?;
@@ -90,7 +101,10 @@ fn process(deck: &Deck, refs: Option<&Path>, out: Option<&Path>, width: u32) -> 
                 let score = fidelity::compare(&ours, &theirs);
                 if let Some(d) = &dir {
                     std::fs::write(d.join(format!("ours-{:03}.png", i + 1)), ours.to_png())?;
-                    std::fs::write(d.join(format!("diff-{:03}.png", i + 1)), fidelity::diff_image(&ours, &theirs).to_png())?;
+                    std::fs::write(
+                        d.join(format!("diff-{:03}.png", i + 1)),
+                        fidelity::diff_image(&ours, &theirs).to_png(),
+                    )?;
                     std::fs::copy(&reference, d.join(format!("ref-{:03}.png", i + 1)))?;
                 }
                 Ok(score)
@@ -103,7 +117,11 @@ fn process(deck: &Deck, refs: Option<&Path>, out: Option<&Path>, width: u32) -> 
         result.millis = start.elapsed().as_millis();
         slides.push(result);
     }
-    DeckResult { deck: deck.clone(), slides, error: None }
+    DeckResult {
+        deck: deck.clone(),
+        slides,
+        error: None,
+    }
 }
 
 /// Fingerprints may differ by rounding noise across platforms, nothing more.
@@ -120,7 +138,14 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
     let decks = corpus::discover(&root, &args.only)?;
     let jobs = args.jobs.unwrap_or_else(corpus::default_jobs);
     let started = Instant::now();
-    let results = corpus::par_map(&decks, jobs, |d| process(d, args.refs.as_deref(), args.out.as_deref(), baseline.score_width));
+    let results = corpus::par_map(&decks, jobs, |d| {
+        process(
+            d,
+            args.refs.as_deref(),
+            args.out.as_deref(),
+            baseline.score_width,
+        )
+    });
 
     let mut rows = Vec::new();
     let (mut failures, mut regressions, mut improvements, mut changed) = (0, 0, 0, 0);
@@ -132,7 +157,12 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
         }
         let old = baseline.decks.get(&r.deck.key);
         if old.is_some_and(|o| o.len() != r.slides.len()) {
-            println!("CHANGED {}: {} slides (baseline has {})", r.deck.key, r.slides.len(), old.map_or(0, Vec::len));
+            println!(
+                "CHANGED {}: {} slides (baseline has {})",
+                r.deck.key,
+                r.slides.len(),
+                old.map_or(0, Vec::len)
+            );
             changed += 1;
         }
         for (i, s) in r.slides.iter().enumerate() {
@@ -142,7 +172,9 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
                 println!("ERROR {label}: {e}");
                 failures += 1;
             }
-            let fp_changed = prev.is_some_and(|p| !p.unstable && fingerprint_changed(&p.fingerprint, &s.fingerprint));
+            let fp_changed = prev.is_some_and(|p| {
+                !p.unstable && fingerprint_changed(&p.fingerprint, &s.fingerprint)
+            });
             if fp_changed {
                 changed += 1;
                 println!("CHANGED {label}: render fingerprint differs from the baseline");
@@ -153,7 +185,11 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
             };
             if delta.is_some_and(|d| d < -args.tolerance) {
                 regressions += 1;
-                println!("REGRESSED {label}: ssim {:.4} → {:.4}", prev.and_then(|p| p.ssim).unwrap_or(0.0), s.score.map_or(0.0, |x| x.ssim));
+                println!(
+                    "REGRESSED {label}: ssim {:.4} → {:.4}",
+                    prev.and_then(|p| p.ssim).unwrap_or(0.0),
+                    s.score.map_or(0.0, |x| x.ssim)
+                );
             } else if delta.is_some_and(|d| d > args.tolerance) {
                 improvements += 1;
             }
@@ -171,8 +207,15 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
         }
     }
 
-    let scored: Vec<f32> = rows.iter().filter_map(|r| r.score.map(|s| s.ssim)).collect();
-    let mean = if scored.is_empty() { 0.0 } else { scored.iter().sum::<f32>() / scored.len() as f32 };
+    let scored: Vec<f32> = rows
+        .iter()
+        .filter_map(|r| r.score.map(|s| s.ssim))
+        .collect();
+    let mean = if scored.is_empty() {
+        0.0
+    } else {
+        scored.iter().sum::<f32>() / scored.len() as f32
+    };
     println!(
         "{} decks, {} slides in {:.1}s; {} scored (mean SSIM {:.4}); {regressions} regressed, {improvements} improved, {changed} changed, {failures} errors",
         results.len(),
@@ -188,17 +231,19 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
 
     if args.update {
         if regressions > 0 && !args.accept_regressions {
-            println!("not updating: {regressions} slides regressed (pass --accept-regressions to record them)");
+            println!(
+                "not updating: {regressions} slides regressed (pass --accept-regressions to record them)"
+            );
             return Ok(false);
         }
         if args.only.is_empty() {
             let keys: Vec<&str> = results.iter().map(|r| r.deck.key.as_str()).collect();
             baseline.decks.retain(|k, _| keys.contains(&k.as_str()));
         }
-        if let Some(refs) = &args.refs {
-            if let Some(version) = reference_version(refs) {
-                baseline.reference = version;
-            }
+        if let Some(refs) = &args.refs
+            && let Some(version) = reference_version(refs)
+        {
+            baseline.reference = version;
         }
         for r in results.iter().filter(|r| r.error.is_none()) {
             let old = baseline.decks.get(&r.deck.key).cloned().unwrap_or_default();

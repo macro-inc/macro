@@ -31,9 +31,15 @@ fn decode(bytes: &[u8]) -> Result<(Cow<'_, str>, bool)> {
     }
     let utf16 = |le: bool, body: &[u8]| -> String {
         let units = body.chunks_exact(2).map(|c| {
-            if le { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) }
+            if le {
+                u16::from_le_bytes([c[0], c[1]])
+            } else {
+                u16::from_be_bytes([c[0], c[1]])
+            }
         });
-        char::decode_utf16(units).map(|r| r.unwrap_or('\u{FFFD}')).collect()
+        char::decode_utf16(units)
+            .map(|r| r.unwrap_or('\u{FFFD}'))
+            .collect()
     };
     if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
         return Ok((Cow::Owned(utf16(true, rest)), true));
@@ -52,7 +58,12 @@ fn decode(bytes: &[u8]) -> Result<(Cow<'_, str>, bool)> {
 
 pub(super) fn parse(bytes: &[u8], part: &str) -> Result<XmlDoc> {
     let (text, was_utf16) = decode(bytes)?;
-    let mut p = Parser { s: &text, b: text.as_bytes(), pos: 0, part };
+    let mut p = Parser {
+        s: &text,
+        b: text.as_bytes(),
+        pos: 0,
+        part,
+    };
     let mut doc = XmlDoc {
         prolog: String::new(),
         nodes: Vec::new(),
@@ -72,7 +83,11 @@ pub(super) fn parse(bytes: &[u8], part: &str) -> Result<XmlDoc> {
 
 impl<'a> Parser<'a> {
     fn err<T>(&self, message: impl Into<String>) -> Result<T> {
-        Err(Error::Xml { part: self.part.to_owned(), message: message.into(), offset: self.pos })
+        Err(Error::Xml {
+            part: self.part.to_owned(),
+            message: message.into(),
+            offset: self.pos,
+        })
     }
 
     fn starts_with(&self, pat: &str) -> bool {
@@ -123,7 +138,9 @@ impl<'a> Parser<'a> {
     /// root element (trailing NUL padding from sloppy writers is tolerated).
     fn check_epilogue(&mut self) -> Result<()> {
         loop {
-            while self.pos < self.b.len() && matches!(self.b[self.pos], b' ' | b'\t' | b'\r' | b'\n' | 0) {
+            while self.pos < self.b.len()
+                && matches!(self.b[self.pos], b' ' | b'\t' | b'\r' | b'\n' | 0)
+            {
                 self.pos += 1;
             }
             if self.pos >= self.b.len() {
@@ -161,7 +178,10 @@ impl<'a> Parser<'a> {
     fn name(&mut self) -> Result<&'a str> {
         let start = self.pos;
         while self.pos < self.b.len()
-            && !matches!(self.b[self.pos], b' ' | b'\t' | b'\r' | b'\n' | b'/' | b'>' | b'=')
+            && !matches!(
+                self.b[self.pos],
+                b' ' | b'\t' | b'\r' | b'\n' | b'/' | b'>' | b'='
+            )
         {
             self.pos += 1;
         }
@@ -182,13 +202,18 @@ impl<'a> Parser<'a> {
             }
             if self.b[self.pos] != b'<' {
                 let start = self.pos;
-                let end = self.s[start..].find('<').map_or(self.b.len(), |i| start + i);
+                let end = self.s[start..]
+                    .find('<')
+                    .map_or(self.b.len(), |i| start + i);
                 self.pos = end;
                 let Some(&(parent, _, _)) = stack.last() else {
                     return self.err("text outside the root element");
                 };
-                let text = decode_entities(&self.s[start..end], false)
-                    .map_err(|m| Error::Xml { part: self.part.to_owned(), message: m, offset: start })?;
+                let text = decode_entities(&self.s[start..end], false).map_err(|m| Error::Xml {
+                    part: self.part.to_owned(),
+                    message: m,
+                    offset: start,
+                })?;
                 let id = doc.push_node(Some(parent), NodeKind::Text(text));
                 push_child(doc, parent, id);
                 continue;
@@ -284,14 +309,24 @@ impl<'a> Parser<'a> {
                             return self.err("unterminated attribute value");
                         };
                         self.pos = end + 1;
-                        let value = decode_entities(&self.s[start..end], true).map_err(|m| {
-                            Error::Xml { part: self.part.to_owned(), message: m, offset: start }
-                        })?;
+                        let value =
+                            decode_entities(&self.s[start..end], true).map_err(|m| Error::Xml {
+                                part: self.part.to_owned(),
+                                message: m,
+                                offset: start,
+                            })?;
                         let (prefix, local) = split_qname(aname);
-                        if raw_attrs.iter().any(|a| a.prefix == prefix && a.local == local) {
+                        if raw_attrs
+                            .iter()
+                            .any(|a| a.prefix == prefix && a.local == local)
+                        {
                             return self.err(format!("duplicate attribute `{aname}`"));
                         }
-                        raw_attrs.push(RawAttr { prefix, local, value });
+                        raw_attrs.push(RawAttr {
+                            prefix,
+                            local,
+                            value,
+                        });
                     }
                     None => return self.err("unterminated start tag"),
                 }
@@ -309,7 +344,8 @@ impl<'a> Parser<'a> {
             let attrs = raw_attrs
                 .into_iter()
                 .map(|a| {
-                    let is_decl = matches!((a.prefix, a.local), (None, "xmlns") | (Some("xmlns"), _));
+                    let is_decl =
+                        matches!((a.prefix, a.local), (None, "xmlns") | (Some("xmlns"), _));
                     let ns = if is_decl || a.prefix.is_none() {
                         Ns::NONE
                     } else {
@@ -372,7 +408,12 @@ fn split_qname(name: &str) -> (Option<&str>, &str) {
     }
 }
 
-fn resolve(doc: &mut XmlDoc, bindings: &[(Option<&str>, Ns)], prefix: Option<&str>, element: bool) -> Ns {
+fn resolve(
+    doc: &mut XmlDoc,
+    bindings: &[(Option<&str>, Ns)],
+    prefix: Option<&str>,
+    element: bool,
+) -> Ns {
     if prefix == Some("xml") {
         return Ns::XML;
     }
@@ -392,7 +433,7 @@ fn resolve(doc: &mut XmlDoc, bindings: &[(Option<&str>, Ns)], prefix: Option<&st
 /// Decodes entity and character references; normalizes line ends (and, for
 /// attribute values, literal whitespace) as XML 1.0 requires.
 fn decode_entities(raw: &str, attribute: bool) -> std::result::Result<String, String> {
-    if !raw.contains(['&', '\r']) && !(attribute && raw.contains(['\n', '\t'])) {
+    if !(raw.contains(['&', '\r']) || attribute && raw.contains(['\n', '\t'])) {
         return Ok(raw.to_owned());
     }
     let mut out = String::with_capacity(raw.len());
@@ -420,7 +461,9 @@ fn decode_entities(raw: &str, attribute: bool) -> std::result::Result<String, St
                     "apos" => out.push('\''),
                     "quot" => out.push('"'),
                     _ => {
-                        let code = if let Some(hex) = name.strip_prefix("#x").or_else(|| name.strip_prefix("#X")) {
+                        let code = if let Some(hex) =
+                            name.strip_prefix("#x").or_else(|| name.strip_prefix("#X"))
+                        {
                             u32::from_str_radix(hex, 16).ok()
                         } else if let Some(dec) = name.strip_prefix('#') {
                             dec.parse::<u32>().ok()

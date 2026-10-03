@@ -9,7 +9,12 @@ fn rect_shape(id: u32, x: i64, color: &str) -> String {
 
 fn px(r: &Raster, x: u32, y: u32) -> [u8; 4] {
     let i = ((y * r.width + x) * 4) as usize;
-    [r.pixels[i], r.pixels[i + 1], r.pixels[i + 2], r.pixels[i + 3]]
+    [
+        r.pixels[i],
+        r.pixels[i + 1],
+        r.pixels[i + 2],
+        r.pixels[i + 3],
+    ]
 }
 
 #[test]
@@ -23,7 +28,9 @@ fn layers_split_a_shape_from_its_backdrop() {
     assert_eq!(px(&only, 150, 150), [255, 0, 0, 255]);
     assert_eq!(px(&only, 350, 150)[3], 0, "other shapes are not drawn");
     assert_eq!(px(&only, 5, 5)[3], 0, "the background is not drawn");
-    let without = pres.render_layer(0, Layer::Without(2), 960, fonts()).unwrap();
+    let without = pres
+        .render_layer(0, Layer::Without(2), 960, fonts())
+        .unwrap();
     assert_eq!(px(&without, 150, 150), [255, 255, 255, 255]);
     assert_eq!(px(&without, 350, 150), [0, 0, 255, 255]);
 }

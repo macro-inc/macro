@@ -39,7 +39,10 @@ fn fingerprints(pres: &mut Presentation, fonts: &FontDb) -> Result<HashMap<u32, 
     let ids: Vec<u32> = pres.slides().iter().map(|s| s.id).collect();
     let mut out = HashMap::new();
     for (i, id) in ids.into_iter().enumerate() {
-        out.insert(id, fidelity::fingerprint(&pres.render_slide(i, FINGERPRINT_WIDTH, fonts)?));
+        out.insert(
+            id,
+            fidelity::fingerprint(&pres.render_slide(i, FINGERPRINT_WIDTH, fonts)?),
+        );
     }
     Ok(out)
 }
@@ -69,7 +72,12 @@ fn text_target(pres: &mut Presentation, index: usize) -> Option<(u32, usize)> {
         .shapes
         .iter()
         .filter(|s| s.text_editable && matches!(s.kind, ShapeKindName::Text | ShapeKindName::Shape))
-        .find_map(|s| s.paragraphs.first().filter(|p| !p.text.is_empty()).map(|_| (s.id, 0)))
+        .find_map(|s| {
+            s.paragraphs
+                .first()
+                .filter(|p| !p.text.is_empty())
+                .map(|_| (s.id, 0))
+        })
 }
 
 fn check(deck: &Deck, out: Option<&Path>) -> Result<Problems, Box<dyn std::error::Error>> {
@@ -84,38 +92,65 @@ fn check(deck: &Deck, out: Option<&Path>) -> Result<Problems, Box<dyn std::error
     // 1. A save without edits keeps every part's bytes.
     let mut pres = Presentation::open(source.clone())?;
     let resaved = Package::open(pres.save()?)?;
-    problems.extend(package_differences(&original, &resaved).into_iter().map(|d| format!("no-op save: {d}")));
+    problems.extend(
+        package_differences(&original, &resaved)
+            .into_iter()
+            .map(|d| format!("no-op save: {d}")),
+    );
 
     // 2. Content edits on the first slides leave every other slide's render unchanged.
     let before = fingerprints(&mut pres, fonts)?;
     let ids: Vec<u32> = pres.slides().iter().map(|s| s.id).collect();
-    let Some(&first) = ids.first() else { return Ok(problems) };
+    let Some(&first) = ids.first() else {
+        return Ok(problems);
+    };
     let mut ed = Editor::new(pres);
     let mut batches: Vec<Vec<EditOp>> = Vec::new();
     if let Some((shape, paragraph)) = text_target(ed.presentation_mut(), 0) {
-        let at = TextPos { paragraph, offset: 0 };
+        let at = TextPos {
+            paragraph,
+            offset: 0,
+        };
         batches.push(vec![
-            EditOp::InsertText { slide: first, shape, cell: None, at, text: "Edited · ".into() },
+            EditOp::InsertText {
+                slide: first,
+                shape,
+                cell: None,
+                at,
+                text: "Edited · ".into(),
+            },
             EditOp::FormatText {
                 slide: first,
                 shape,
                 cell: None,
                 start: Some(at),
-                end: Some(TextPos { paragraph, offset: 9 }),
-                props: RunPatch { bold: Some(true), color: Some("C00000".into()), ..RunPatch::default() },
+                end: Some(TextPos {
+                    paragraph,
+                    offset: 9,
+                }),
+                props: RunPatch {
+                    bold: Some(true),
+                    color: Some("C00000".into()),
+                    ..RunPatch::default()
+                },
             },
         ]);
     }
     batches.push(vec![EditOp::AddShape {
         slide: first,
-        shape: NewShape::TextBox { text: "Added by pptx_engine".into() },
+        shape: NewShape::TextBox {
+            text: "Added by pptx_engine".into(),
+        },
         x: 24.0,
         y: 24.0,
         w: 360.0,
         h: 40.0,
     }]);
     if let Some(&second) = ids.get(1) {
-        batches.push(vec![EditOp::SetNotes { slide: second, text: "Notes written by pptx_engine".into() }]);
+        batches.push(vec![EditOp::SetNotes {
+            slide: second,
+            text: "Notes written by pptx_engine".into(),
+        }]);
     }
     for b in &batches {
         if let Err(e) = ed.apply(b, None, fonts) {
@@ -125,14 +160,19 @@ fn check(deck: &Deck, out: Option<&Path>) -> Result<Problems, Box<dyn std::error
     let after = fingerprints(ed.presentation_mut(), fonts)?;
     for (id, fp) in &before {
         if *id != first && after.get(id) != Some(fp) {
-            problems.push(format!("slide id {id} rendered differently after edits to slide id {first}"));
+            problems.push(format!(
+                "slide id {id} rendered differently after edits to slide id {first}"
+            ));
         }
     }
 
     // 3. Structural edits keep the package sound.
     let mut structural = vec![EditOp::DuplicateSlide { slide: first }];
     if ids.len() >= 3 {
-        structural.push(EditOp::MoveSlide { slide: ids[ids.len() - 1], to: 0 });
+        structural.push(EditOp::MoveSlide {
+            slide: ids[ids.len() - 1],
+            to: 0,
+        });
     }
     if ids.len() >= 4 {
         structural.push(EditOp::DeleteSlide { slide: ids[2] });
@@ -148,7 +188,11 @@ fn check(deck: &Deck, out: Option<&Path>) -> Result<Problems, Box<dyn std::error
         title: title.map(str::to_owned),
         body: body.map(str::to_owned),
     };
-    let added = ed.apply(&[add(Some("New slide"), Some("First point\nSecond point"))], None, fonts);
+    let added = ed.apply(
+        &[add(Some("New slide"), Some("First point\nSecond point"))],
+        None,
+        fonts,
+    );
     if let Err(Error::InvalidEdit(_)) = added {
         if let Err(e) = ed.apply(&[add(None, None)], None, fonts) {
             problems.push(format!("AddSlide failed: {e}"));
@@ -158,7 +202,12 @@ fn check(deck: &Deck, out: Option<&Path>) -> Result<Problems, Box<dyn std::error
     }
     let edited = ed.save()?;
     let mut reopened = Presentation::open(edited.clone())?;
-    problems.extend(reopened.integrity_problems()?.into_iter().map(|p| format!("after edits: {p}")));
+    problems.extend(
+        reopened
+            .integrity_problems()?
+            .into_iter()
+            .map(|p| format!("after edits: {p}")),
+    );
     for i in 0..reopened.slides().len() {
         if let Err(e) = reopened.render_slide(i, FINGERPRINT_WIDTH, fonts) {
             problems.push(format!("edited slide {} failed to render: {e}", i + 1));
@@ -173,7 +222,11 @@ fn check(deck: &Deck, out: Option<&Path>) -> Result<Problems, Box<dyn std::error
         ed.undo();
     }
     let restored = Package::open(ed.save()?)?;
-    problems.extend(package_differences(&original, &restored).into_iter().map(|d| format!("after undo: {d}")));
+    problems.extend(
+        package_differences(&original, &restored)
+            .into_iter()
+            .map(|d| format!("after undo: {d}")),
+    );
     Ok(problems)
 }
 
@@ -182,7 +235,10 @@ fn libreoffice_check(file: &Path, profile: &Path) -> Result<(), String> {
     let out = file.with_extension("lo");
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let status = Command::new("soffice")
-        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .arg(format!(
+            "-env:UserInstallation=file://{}",
+            profile.display()
+        ))
         .args(["--headless", "--convert-to", "pdf", "--outdir"])
         .arg(&out)
         .arg(file)
@@ -190,17 +246,31 @@ fn libreoffice_check(file: &Path, profile: &Path) -> Result<(), String> {
         .map_err(|e| format!("soffice: {e}"))?;
     let pdf = out.join(file.with_extension("pdf").file_name().unwrap_or_default());
     if !pdf.exists() {
-        return Err(format!("LibreOffice could not convert it: {}", String::from_utf8_lossy(&status.stderr)));
+        return Err(format!(
+            "LibreOffice could not convert it: {}",
+            String::from_utf8_lossy(&status.stderr)
+        ));
     }
-    let info = Command::new("pdfinfo").arg(&pdf).output().map_err(|e| format!("pdfinfo: {e}"))?;
+    let info = Command::new("pdfinfo")
+        .arg(&pdf)
+        .output()
+        .map_err(|e| format!("pdfinfo: {e}"))?;
     let pages = String::from_utf8_lossy(&info.stdout)
         .lines()
-        .find_map(|l| l.strip_prefix("Pages:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+        .find_map(|l| {
+            l.strip_prefix("Pages:")
+                .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+        })
         .unwrap_or(0);
-    let slides = Presentation::open(std::fs::read(file).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?.slides().len();
+    let slides = Presentation::open(std::fs::read(file).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?
+        .slides()
+        .len();
     let hidden_ok = pages <= slides && pages > 0;
     if !hidden_ok {
-        return Err(format!("LibreOffice produced {pages} pages for {slides} slides"));
+        return Err(format!(
+            "LibreOffice produced {pages} pages for {slides} slides"
+        ));
     }
     Ok(())
 }
@@ -213,7 +283,9 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
         std::fs::create_dir_all(out)?;
     }
     let jobs = args.jobs.unwrap_or_else(corpus::default_jobs);
-    let results = corpus::par_map(&decks, jobs, |d| check(d, args.out.as_deref()).map_err(|e| e.to_string()));
+    let results = corpus::par_map(&decks, jobs, |d| {
+        check(d, args.out.as_deref()).map_err(|e| e.to_string())
+    });
     let mut failed = 0;
     for (deck, result) in decks.iter().zip(&results) {
         match result {
@@ -231,18 +303,18 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
             }
         }
     }
-    if args.libreoffice {
-        if let Some(out) = &args.out {
-            let lo_jobs = (jobs / 2).max(1);
-            let checks = corpus::par_map(&decks, lo_jobs, |d| {
-                let profile = std::env::temp_dir().join(format!("pptx-roundtrip-lo-{}", d.stem()));
-                libreoffice_check(&out.join(format!("{}.pptx", d.stem())), &profile)
-            });
-            for (deck, c) in decks.iter().zip(checks) {
-                if let Err(e) = c {
-                    failed += 1;
-                    println!("LIBREOFFICE {}: {e}", deck.key);
-                }
+    if args.libreoffice
+        && let Some(out) = &args.out
+    {
+        let lo_jobs = (jobs / 2).max(1);
+        let checks = corpus::par_map(&decks, lo_jobs, |d| {
+            let profile = std::env::temp_dir().join(format!("pptx-roundtrip-lo-{}", d.stem()));
+            libreoffice_check(&out.join(format!("{}.pptx", d.stem())), &profile)
+        });
+        for (deck, c) in decks.iter().zip(checks) {
+            if let Err(e) = c {
+                failed += 1;
+                println!("LIBREOFFICE {}: {e}", deck.key);
             }
         }
     }

@@ -85,9 +85,11 @@ fn solve(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
         a.swap(col, pivot);
         b.swap(col, pivot);
         for row in col + 1..n {
-            let f = a[row][col] / a[col][col];
-            for k in col..n {
-                a[row][k] -= f * a[col][k];
+            let (top, bottom) = a.split_at_mut(row);
+            let (pivot_row, target) = (&top[col], &mut bottom[0]);
+            let f = target[col] / pivot_row[col];
+            for (t, p) in target.iter_mut().zip(pivot_row).skip(col) {
+                *t -= f * p;
             }
             b[row] -= f * b[col];
         }
@@ -376,14 +378,17 @@ fn val_frac(p: &Plot<'_>, ai: usize, v: f64) -> f64 {
     }
 }
 
+/// Most trendlines drawn per chart (each fit is linear in the point count).
+pub(crate) const MAX_PER_CHART: usize = 64;
+
 /// Draws the trendlines of group `g` (category or x axis `ca`, value axis `va`)
-/// and queues their labels.
+/// and queues their labels; `budget` counts down the trendlines still allowed.
 pub(crate) fn draw(
     cv: &mut Canvas<'_>,
     p: &Plot<'_>,
     g: &GroupModel,
-    ca: usize,
-    va: usize,
+    (ca, va): (usize, usize),
+    budget: &mut usize,
     labels: &mut Vec<Pending>,
 ) {
     if !supported(g) {
@@ -418,6 +423,10 @@ pub(crate) fn draw(
             continue;
         };
         for t in &s.trendlines {
+            if *budget == 0 {
+                return;
+            }
+            *budget -= 1;
             let Some(line) = line(m, g, s, t) else {
                 continue;
             };

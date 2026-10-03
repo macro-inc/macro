@@ -16,6 +16,8 @@ default = []
 embedded-fonts = []
 # The `pptx_corpus` developer CLI (rendering reports, fidelity scoring).
 cli = ["dep:clap", "embedded-fonts"]
+# JSON Schemas for the edit operations (AI tool definitions).
+schema = ["dep:schemars"]
 
 [[bin]]
 name = "pptx_corpus"
@@ -27,6 +29,7 @@ clap = { workspace = true, optional = true }
 gif = { workspace = true }
 miniz_oxide = { workspace = true }
 png = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

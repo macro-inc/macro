@@ -6,7 +6,7 @@ use super::model::{
     ChartModel, GroupModel, Grouping, Kind, LabelModel, LabelPos, SeriesModel, ShapeProps,
 };
 use super::numfmt;
-use super::style::{Role, apply, resolve_fill, resolve_line};
+use super::style::{Role, apply, resolve_fill, resolve_line, solid_line, tint};
 use crate::model::fill::Line;
 use crate::path::{Path, Point, Rect};
 use crate::render::label::{HAlign, LabelStyle};
@@ -264,6 +264,32 @@ pub(crate) fn place_point(
         LabelPos::Center | LabelPos::BestFit => p,
         LabelPos::Right => Point::new(p.x + d + w / 2.0, p.y),
     }
+}
+
+/// Least distance (points) between a moved label and its data point that
+/// shows a leader line.
+const LEADER_MIN: f32 = 6.0;
+
+/// The leader line of a manually moved label (`c15:showLeaderLines`) from its
+/// data point at `point`, when the label sits clear of the point.
+pub(crate) fn moved_leader(
+    m: &ChartModel,
+    l: &LabelModel,
+    b: &Block,
+    center: Point,
+    point: Point,
+) -> Option<(Point, Line)> {
+    if l.offset.is_none() || l.show_leader != Some(true) {
+        return None;
+    }
+    let near = nearest_on_box(center, b.rotated_size(rotation(l)), point);
+    let (dx, dy) = (near.x - point.x, near.y - point.y);
+    if dx * dx + dy * dy < LEADER_MIN * LEADER_MIN {
+        return None;
+    }
+    let auto = solid_line(tint(m.palette.tx1, 0.75), 0.75);
+    m.element_line(l.leader.as_ref(), Some(auto))
+        .map(|line| (point, line))
 }
 
 /// Applies a label's manual offset (fractions of the chart size).

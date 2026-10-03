@@ -4,7 +4,7 @@
 //! Nodes created by the engine ([`Prefix::Auto`]) reuse an in-scope prefix
 //! for their namespace, declaring one only when none is bound.
 
-use super::{ns, Element, NodeId, NodeKind, Ns, Prefix, XmlDoc};
+use super::{Element, NodeId, NodeKind, Ns, Prefix, XmlDoc, ns};
 
 struct Binding {
     prefix: Option<String>,
@@ -18,7 +18,11 @@ struct Writer<'a> {
 }
 
 pub(super) fn write(doc: &XmlDoc) -> Vec<u8> {
-    let mut w = Writer { doc, out: String::with_capacity(4096), scope: Vec::new() };
+    let mut w = Writer {
+        doc,
+        out: String::with_capacity(4096),
+        scope: Vec::new(),
+    };
     w.out.push_str(&doc.prolog);
     w.node(doc.root);
     w.out.into_bytes()
@@ -62,7 +66,11 @@ impl Writer<'_> {
     }
 
     fn default_ns(&self) -> Ns {
-        self.scope.iter().rev().find(|b| b.prefix.is_none()).map_or(Ns::NONE, |b| b.ns)
+        self.scope
+            .iter()
+            .rev()
+            .find(|b| b.prefix.is_none())
+            .map_or(Ns::NONE, |b| b.ns)
     }
 
     /// Picks a fresh prefix for `ns` and records the declaration to emit.
@@ -70,7 +78,10 @@ impl Writer<'_> {
         let (uri, preferred) = match ns::canonical(ns) {
             Some((uri, p)) if !p.is_empty() => (uri.to_owned(), p.to_owned()),
             Some((uri, _)) => (uri.to_owned(), "ns".to_owned()),
-            None => (self.doc.ns_uri(ns).unwrap_or_default().to_owned(), "ns".to_owned()),
+            None => (
+                self.doc.ns_uri(ns).unwrap_or_default().to_owned(),
+                "ns".to_owned(),
+            ),
         };
         let mut prefix = preferred.clone();
         let mut n = 1;
@@ -78,7 +89,10 @@ impl Writer<'_> {
             prefix = format!("{preferred}{n}");
             n += 1;
         }
-        self.scope.push(Binding { prefix: Some(prefix.clone()), ns });
+        self.scope.push(Binding {
+            prefix: Some(prefix.clone()),
+            ns,
+        });
         decls.push((prefix.clone(), uri));
         prefix
     }
@@ -124,7 +138,10 @@ impl Writer<'_> {
                 if e.ns == Ns::NONE {
                     if self.default_ns() != Ns::NONE {
                         default_reset = true;
-                        self.scope.push(Binding { prefix: None, ns: Ns::NONE });
+                        self.scope.push(Binding {
+                            prefix: None,
+                            ns: Ns::NONE,
+                        });
                     }
                     e.local.to_string()
                 } else {

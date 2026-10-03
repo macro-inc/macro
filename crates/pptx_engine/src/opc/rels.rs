@@ -35,7 +35,10 @@ pub struct Relationships {
 impl Relationships {
     /// No relationships for `source`.
     pub fn empty(source: &str) -> Self {
-        Self { source: source.to_owned(), rels: Vec::new() }
+        Self {
+            source: source.to_owned(),
+            rels: Vec::new(),
+        }
     }
 
     /// Parses the relationships part of `source`.
@@ -49,7 +52,10 @@ impl Relationships {
                     id: doc.attr(c, "Id")?.to_owned(),
                     rel_type: doc.attr(c, "Type").unwrap_or_default().to_owned(),
                     target: doc.attr(c, "Target").unwrap_or_default().to_owned(),
-                    mode: if doc.attr(c, "TargetMode").is_some_and(|m| m.eq_ignore_ascii_case("External")) {
+                    mode: if doc
+                        .attr(c, "TargetMode")
+                        .is_some_and(|m| m.eq_ignore_ascii_case("External"))
+                    {
                         TargetMode::External
                     } else {
                         TargetMode::Internal
@@ -57,7 +63,10 @@ impl Relationships {
                 })
             })
             .collect();
-        Ok(Self { source: source.to_owned(), rels })
+        Ok(Self {
+            source: source.to_owned(),
+            rels,
+        })
     }
 
     /// The source part these relationships belong to.

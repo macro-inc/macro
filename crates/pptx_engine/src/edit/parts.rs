@@ -3,7 +3,9 @@
 
 use crate::error::{Error, Result};
 use crate::model::presentation::Presentation;
-use crate::opc::{Relationship, Relationships, TargetMode, rel_type, rels_part_name, relative_target};
+use crate::opc::{
+    Relationship, Relationships, TargetMode, rel_type, relative_target, rels_part_name,
+};
 use crate::xml::Ns;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -32,7 +34,10 @@ pub fn decode_base64(data: &str) -> Result<Vec<u8>> {
     base64::engine::general_purpose::STANDARD
         .decode(cleaned.as_bytes())
         .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(cleaned.as_bytes()))
-        .or_else(|_| base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(cleaned.trim_end_matches('=').as_bytes()))
+        .or_else(|_| {
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .decode(cleaned.trim_end_matches('=').as_bytes())
+        })
         .map_err(|e| Error::InvalidEdit(format!("image data is not valid base64: {e}")))
 }
 
@@ -87,11 +92,15 @@ pub fn image_size(bytes: &[u8]) -> Option<(u32, u32)> {
 
 /// Stores a picture (reusing an identical media part) and relates it to `source_part`.
 pub fn add_image(pres: &mut Presentation, source_part: &str, bytes: &[u8]) -> Result<AddedImage> {
-    let (ext, content_type) =
-        sniff(bytes).ok_or_else(|| Error::InvalidEdit("unsupported image format (use PNG, JPEG, or GIF)".into()))?;
-    let (width, height) = image_size(bytes).ok_or_else(|| Error::InvalidEdit("image header is corrupt".into()))?;
+    let (ext, content_type) = sniff(bytes).ok_or_else(|| {
+        Error::InvalidEdit("unsupported image format (use PNG, JPEG, or GIF)".into())
+    })?;
+    let (width, height) =
+        image_size(bytes).ok_or_else(|| Error::InvalidEdit("image header is corrupt".into()))?;
     if width == 0 || height == 0 || u64::from(width) * u64::from(height) > MAX_IMAGE_PIXELS {
-        return Err(Error::InvalidEdit(format!("image size {width}x{height} is not supported")));
+        return Err(Error::InvalidEdit(format!(
+            "image size {width}x{height} is not supported"
+        )));
     }
     let existing = pres
         .pkg
@@ -103,19 +112,29 @@ pub fn add_image(pres: &mut Presentation, source_part: &str, bytes: &[u8]) -> Re
     let part = match existing {
         Some(p) => p,
         None => {
-            let name = pres.pkg.unique_part_name("/ppt/media/image", &format!(".{ext}"));
+            let name = pres
+                .pkg
+                .unique_part_name("/ppt/media/image", &format!(".{ext}"));
             pres.pkg.write(&name, bytes.to_vec(), None);
             if pres.pkg.content_type(&name) != Some(content_type) {
-                pres.pkg.content_types_mut().set_override(&name, content_type);
+                pres.pkg
+                    .content_types_mut()
+                    .set_override(&name, content_type);
             }
-            pres.pkg.content_types_mut().ensure_default(ext, content_type);
+            pres.pkg
+                .content_types_mut()
+                .ensure_default(ext, content_type);
             name
         }
     };
     let rels = pres.rels_mut(source_part)?;
     let existing_rel = rels
         .iter()
-        .find(|r| r.rel_type == rel_type::IMAGE && r.mode == TargetMode::Internal && rels.resolve(r) == part)
+        .find(|r| {
+            r.rel_type == rel_type::IMAGE
+                && r.mode == TargetMode::Internal
+                && rels.resolve(r) == part
+        })
         .map(|r| r.id.clone());
     let rid = match existing_rel {
         Some(id) => id,
@@ -138,8 +157,19 @@ pub fn sibling_name(pres: &Presentation, part: &str) -> String {
 /// Relationship types whose targets a copied part shares instead of copying.
 fn shares_target(rel_type: &str) -> bool {
     const SHARED: &[&str] = &[
-        "/slideLayout", "/slideMaster", "/notesMaster", "/handoutMaster", "/theme", "/image", "/media", "/video",
-        "/audio", "/slide", "/presentation", "/hyperlink", "/font",
+        "/slideLayout",
+        "/slideMaster",
+        "/notesMaster",
+        "/handoutMaster",
+        "/theme",
+        "/image",
+        "/media",
+        "/video",
+        "/audio",
+        "/slide",
+        "/presentation",
+        "/hyperlink",
+        "/font",
     ];
     SHARED.iter().any(|s| rel_type.ends_with(s))
 }
@@ -154,7 +184,11 @@ fn dropped_on_copy(rel_type: &str) -> bool {
 /// `renamed` maps original part names to their copies; targets found in it
 /// are redirected, so a notes slide copied with its slide points back at the
 /// new slide.
-pub fn copy_part_tree(pres: &mut Presentation, part: &str, renamed: &mut HashMap<String, String>) -> Result<String> {
+pub fn copy_part_tree(
+    pres: &mut Presentation,
+    part: &str,
+    renamed: &mut HashMap<String, String>,
+) -> Result<String> {
     if let Some(done) = renamed.get(part) {
         return Ok(done.clone());
     }
@@ -166,7 +200,15 @@ pub fn copy_part_tree(pres: &mut Presentation, part: &str, renamed: &mut HashMap
     let needs_override = content_type
         .as_deref()
         .is_some_and(|ct| pres.pkg.content_types().default_for(ext) != Some(ct));
-    pres.pkg.write(&new, bytes, if needs_override { content_type.as_deref() } else { None });
+    pres.pkg.write(
+        &new,
+        bytes,
+        if needs_override {
+            content_type.as_deref()
+        } else {
+            None
+        },
+    );
 
     let source_rels = pres.part_rels(part)?;
     let mut rels = Relationships::empty(&new);
@@ -183,7 +225,11 @@ pub fn copy_part_tree(pres: &mut Presentation, part: &str, renamed: &mut HashMap
             // Dangling internal targets are dropped rather than copied.
             continue;
         }
-        let target = pres.pkg.canonical_name(&target).unwrap_or(&target).to_owned();
+        let target = pres
+            .pkg
+            .canonical_name(&target)
+            .unwrap_or(&target)
+            .to_owned();
         let new_target = if let Some(mapped) = renamed.get(&target) {
             mapped.clone()
         } else if shares_target(&r.rel_type) {
@@ -212,7 +258,9 @@ pub fn reachable(pres: &mut Presentation) -> Result<HashSet<String>> {
         let rels = pres.part_rels(&part)?;
         for r in rels.iter().filter(|r| r.mode == TargetMode::Internal) {
             let target = rels.resolve(r);
-            let Some(canonical) = pres.pkg.canonical_name(&target).map(str::to_owned) else { continue };
+            let Some(canonical) = pres.pkg.canonical_name(&target).map(str::to_owned) else {
+                continue;
+            };
             if seen.insert(canonical.clone()) {
                 queue.push_back(canonical);
             }
@@ -229,7 +277,10 @@ pub struct GcBaseline {
 
 /// Records which parts exist and are reachable before a batch.
 pub fn baseline(pres: &mut Presentation) -> Result<GcBaseline> {
-    Ok(GcBaseline { reachable: reachable(pres)?, existing: pres.pkg.part_names().map(str::to_owned).collect() })
+    Ok(GcBaseline {
+        reachable: reachable(pres)?,
+        existing: pres.pkg.part_names().map(str::to_owned).collect(),
+    })
 }
 
 /// Deletes parts that became unreachable during the batch (or were created
@@ -241,7 +292,9 @@ pub fn collect_garbage(pres: &mut Presentation, before: &GcBaseline) -> Result<(
         .pkg
         .part_names()
         .filter(|n| !now.contains(*n))
-        .filter(|n| !n.ends_with(".rels") && !n.eq_ignore_ascii_case(crate::opc::CONTENT_TYPES_PART))
+        .filter(|n| {
+            !n.ends_with(".rels") && !n.eq_ignore_ascii_case(crate::opc::CONTENT_TYPES_PART)
+        })
         .filter(|n| before.reachable.contains(*n) || !before.existing.contains(*n))
         .map(str::to_owned)
         .collect();
@@ -256,8 +309,19 @@ pub fn collect_garbage(pres: &mut Presentation, before: &GcBaseline) -> Result<(
 /// Relationship types that only exist to serve explicit `r:` references in a slide.
 fn prunable(rel_type: &str) -> bool {
     const PRUNABLE: &[&str] = &[
-        "/image", "/chart", "/hyperlink", "/oleObject", "/package", "/video", "/audio", "/media", "/diagramData",
-        "/diagramLayout", "/diagramQuickStyle", "/diagramColors", "/slide",
+        "/image",
+        "/chart",
+        "/hyperlink",
+        "/oleObject",
+        "/package",
+        "/video",
+        "/audio",
+        "/media",
+        "/diagramData",
+        "/diagramLayout",
+        "/diagramQuickStyle",
+        "/diagramColors",
+        "/slide",
     ];
     PRUNABLE.iter().any(|s| rel_type.ends_with(s))
 }

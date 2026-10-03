@@ -39,7 +39,12 @@ impl Rect {
 
     /// From edges.
     pub fn from_ltrb(l: f32, t: f32, r: f32, b: f32) -> Self {
-        Self { x: l, y: t, w: (r - l).max(0.0), h: (b - t).max(0.0) }
+        Self {
+            x: l,
+            y: t,
+            w: (r - l).max(0.0),
+            h: (b - t).max(0.0),
+        }
     }
 
     /// Right edge.
@@ -59,7 +64,12 @@ impl Rect {
 
     /// Smallest rectangle containing both.
     pub fn union(&self, o: &Rect) -> Rect {
-        Rect::from_ltrb(self.x.min(o.x), self.y.min(o.y), self.right().max(o.right()), self.bottom().max(o.bottom()))
+        Rect::from_ltrb(
+            self.x.min(o.x),
+            self.y.min(o.y),
+            self.right().max(o.right()),
+            self.bottom().max(o.bottom()),
+        )
     }
 
     /// Grows (or shrinks, if negative) every edge by `d`.
@@ -98,22 +108,44 @@ impl Default for Affine {
 
 impl Affine {
     /// The identity transform.
-    pub const IDENTITY: Affine = Affine { a: 1.0, b: 0.0, c: 0.0, d: 1.0, e: 0.0, f: 0.0 };
+    pub const IDENTITY: Affine = Affine {
+        a: 1.0,
+        b: 0.0,
+        c: 0.0,
+        d: 1.0,
+        e: 0.0,
+        f: 0.0,
+    };
 
     /// Translation.
     pub fn translate(x: f64, y: f64) -> Self {
-        Self { e: x, f: y, ..Self::IDENTITY }
+        Self {
+            e: x,
+            f: y,
+            ..Self::IDENTITY
+        }
     }
 
     /// Scale.
     pub fn scale(sx: f64, sy: f64) -> Self {
-        Self { a: sx, d: sy, ..Self::IDENTITY }
+        Self {
+            a: sx,
+            d: sy,
+            ..Self::IDENTITY
+        }
     }
 
     /// Rotation by `deg` degrees (clockwise on screen, as y points down).
     pub fn rotate(deg: f64) -> Self {
         let (s, c) = (deg * PI / 180.0).sin_cos();
-        Self { a: c, b: s, c: -s, d: c, e: 0.0, f: 0.0 }
+        Self {
+            a: c,
+            b: s,
+            c: -s,
+            d: c,
+            e: 0.0,
+            f: 0.0,
+        }
     }
 
     /// `self ∘ other`: `other` is applied first, then `self` (Skia's pre-concat).
@@ -137,7 +169,10 @@ impl Affine {
     /// Maps a point.
     pub fn apply(&self, p: Point) -> Point {
         let (x, y) = (f64::from(p.x), f64::from(p.y));
-        Point::new((self.a * x + self.c * y + self.e) as f32, (self.b * x + self.d * y + self.f) as f32)
+        Point::new(
+            (self.a * x + self.c * y + self.e) as f32,
+            (self.b * x + self.d * y + self.f) as f32,
+        )
     }
 
     /// The inverse transform, if invertible.
@@ -287,8 +322,14 @@ impl Path {
         for _ in 0..segments {
             let (s0, c0) = t.sin_cos();
             let (s1, c1) = (t + step).sin_cos();
-            let p1 = Point::new((cx + rx * (c0 - k * s0)) as f32, (cy + ry * (s0 + k * c0)) as f32);
-            let p2 = Point::new((cx + rx * (c1 + k * s1)) as f32, (cy + ry * (s1 - k * c1)) as f32);
+            let p1 = Point::new(
+                (cx + rx * (c0 - k * s0)) as f32,
+                (cy + ry * (s0 + k * c0)) as f32,
+            );
+            let p2 = Point::new(
+                (cx + rx * (c1 + k * s1)) as f32,
+                (cy + ry * (s1 - k * c1)) as f32,
+            );
             let p3 = Point::new((cx + rx * c1) as f32, (cy + ry * s1) as f32);
             self.cubic_to(p1, p2, p3);
             t += step;
@@ -341,7 +382,11 @@ impl Path {
                 PathEl::Close => PathEl::Close,
             })
             .collect();
-        Path { els, current: t.apply(self.current), start: t.apply(self.start) }
+        Path {
+            els,
+            current: t.apply(self.current),
+            start: t.apply(self.start),
+        }
     }
 
     /// Bounding box of all points (including control points).
@@ -399,8 +444,14 @@ impl Path {
                         let t = i as f32 / n as f32;
                         let mt = 1.0 - t;
                         let q = Point::new(
-                            mt * mt * mt * p0.x + 3.0 * mt * mt * t * a.x + 3.0 * mt * t * t * b.x + t * t * t * p.x,
-                            mt * mt * mt * p0.y + 3.0 * mt * mt * t * a.y + 3.0 * mt * t * t * b.y + t * t * t * p.y,
+                            mt * mt * mt * p0.x
+                                + 3.0 * mt * mt * t * a.x
+                                + 3.0 * mt * t * t * b.x
+                                + t * t * t * p.x,
+                            mt * mt * mt * p0.y
+                                + 3.0 * mt * mt * t * a.y
+                                + 3.0 * mt * t * t * b.y
+                                + t * t * t * p.y,
                         );
                         push_pt(&mut out, p0, q);
                     }
