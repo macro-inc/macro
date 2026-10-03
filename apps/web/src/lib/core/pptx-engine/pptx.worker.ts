@@ -127,9 +127,10 @@ async function serve(
   const { id } = request;
   return match(request)
     .with({ kind: 'open' }, ({ docKey, bytes }) => {
-      documents.get(docKey)?.doc.free();
       const source = new Uint8Array(bytes);
+      // Parse first: a file that fails to open leaves the current one in place.
       const doc = new wasm.PptxDocument(source);
+      documents.get(docKey)?.doc.free();
       documents.set(docKey, { doc, source, log: [] });
       const size = doc.slideSize();
       const response: PptxResponse = {

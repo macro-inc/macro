@@ -5,6 +5,8 @@
  * Every change goes through `apply`/`undo`/`redo`, which keep the outline in
  * step with the engine and bump the render version of each slide whose
  * pixels changed. Saving is automatic after a short pause and on demand.
+ * When the stored file changes elsewhere (an AI edit), the session loads it,
+ * unless it holds unsaved edits of its own.
  */
 
 import type {
@@ -27,6 +29,11 @@ export interface PresentationSessionOptions {
   persist: (bytes: Uint8Array) => Promise<void>;
   canEdit: Accessor<boolean>;
   notifyError: (message: string) => void;
+  notifyInfo?: (message: string) => void;
+  /** Subscribes to outside changes of the stored file; returns an unsubscribe. */
+  watchStoredFile?: (onChange: () => void) => () => void;
+  /** The latest stored version. */
+  fetchLatest?: () => Promise<ArrayBuffer>;
   /** Quiet period before an automatic save (ms); `0` disables autosave. */
   autosaveDelay?: number;
 }
@@ -49,6 +56,13 @@ export interface PresentationSession {
   save: () => Promise<void>;
   /** Reloads the outline from the engine. */
   refresh: () => Promise<void>;
+  /**
+   * Loads the latest stored version in place of the open one. Returns
+   * whether it did: unsaved edits are never discarded.
+   */
+  reload: () => Promise<boolean>;
+  /** Calls `listener` after the open presentation was replaced by `reload`. */
+  onReplaced: (listener: () => void) => void;
 }
 
 export function createPresentationSession(
@@ -72,6 +86,7 @@ export function createPresentationSession(
   let saving: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
+  const replacedListeners = new Set<() => void>();
 
   const clampIndex = (index: number, deck = outline()) =>
     Math.max(0, Math.min(index, (deck?.slides.length ?? 1) - 1));
@@ -193,6 +208,44 @@ export function createPresentationSession(
     if (changeCount !== savedCount) scheduleSave();
   }
 
+  async function reload(): Promise<boolean> {
+    const fetchLatest = options.fetchLatest;
+    if (!fetchLatest || disposed) return false;
+    if (saving || changeCount !== savedCount) return false;
+    const bytes = await fetchLatest();
+    // Edits made while downloading win: the next save keeps them.
+    if (disposed || saving || changeCount !== savedCount) return false;
+    await engine.reopen(bytes);
+    const deck = await engine.outline();
+    batch(() => {
+      setHistory({ canUndo: false, canRedo: false });
+      setOutline(deck);
+      bump(deck.slides.map((s) => s.id));
+      setSlideIndexRaw((i) => clampIndex(i, deck));
+    });
+    for (const listener of replacedListeners) listener();
+    return true;
+  }
+
+  async function onStoredFileChanged() {
+    try {
+      if (await reload()) {
+        options.notifyInfo?.('Updated with changes made elsewhere.');
+      } else if (!disposed && options.fetchLatest) {
+        options.notifyInfo?.(
+          'This presentation was changed elsewhere. Saving your edits will replace those changes.'
+        );
+      }
+    } catch (error) {
+      options.notifyError(
+        error instanceof Error
+          ? error.message
+          : 'The latest version could not be loaded.'
+      );
+    }
+  }
+  const unwatch = options.watchStoredFile?.(() => void onStoredFileChanged());
+
   // Unsaved work is flushed when the tab is hidden and when the editor closes.
   const onHide = () => {
     if (document.visibilityState === 'hidden' && changeCount !== savedCount) {
@@ -201,6 +254,8 @@ export function createPresentationSession(
   };
   document.addEventListener('visibilitychange', onHide);
   onCleanup(() => {
+    unwatch?.();
+    replacedListeners.clear();
     document.removeEventListener('visibilitychange', onHide);
     clearTimeout(timer);
     if (changeCount !== savedCount) void save().catch(() => {});
@@ -226,5 +281,9 @@ export function createPresentationSession(
     },
     save,
     refresh,
+    reload,
+    onReplaced: (listener) => {
+      replacedListeners.add(listener);
+    },
   };
 }

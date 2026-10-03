@@ -42,6 +42,9 @@ export async function openWorkerPresentation(
     undo: () => undoEdit(key),
     redo: () => redoEdit(key),
     save: () => savePresentation(key),
+    reopen: async (next) => {
+      await openPresentation(key, next);
+    },
     close: () => closePresentation(key),
   };
 }

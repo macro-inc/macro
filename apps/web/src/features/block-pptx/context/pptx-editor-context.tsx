@@ -47,6 +47,11 @@ export interface PresentationEngine {
   redo: () => Promise<EditOutcome>;
   /** The current presentation as `.pptx` bytes. */
   save: () => Promise<Uint8Array>;
+  /**
+   * Replaces the open presentation with `bytes` (transferred), dropping its
+   * undo history. Rejects, keeping the current one, when they can't be read.
+   */
+  reopen: (bytes: ArrayBuffer) => Promise<void>;
   /** Releases the engine's memory. */
   close: () => void;
 }
@@ -63,6 +68,17 @@ export interface PptxEditorContext {
   download: (bytes: Uint8Array, fileName: string) => void;
   /** Reports a failure to the user. */
   notifyError: (message: string) => void;
+  /** Tells the user about something that is not a failure. */
+  notifyInfo?: (message: string) => void;
+  /**
+   * Calls `onChange` when the stored file changes outside this editor (an
+   * AI edit, say); returns an unsubscribe. Hosts without such signals omit it.
+   */
+  watchStoredFile?: (onChange: () => void) => () => void;
+  /** Downloads the latest stored version, for reloading after outside changes. */
+  fetchLatest?: () => Promise<ArrayBuffer>;
+  /** Quiet period before an automatic save (ms); `0` saves only on demand. */
+  autosaveDelay?: number;
 }
 
 const Context = createContext<PptxEditorContext>();

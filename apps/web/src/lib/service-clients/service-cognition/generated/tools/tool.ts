@@ -101,6 +101,10 @@ type ToolParserMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditPresentation: {
+    call: types.EditPresentation;
+    response: types.PresentationEditOutcome;
+  };
   EditSpreadsheet: {
     call: types.EditSpreadsheet;
     response: types.SpreadsheetResponse;
@@ -233,6 +237,10 @@ type ToolParserMap = {
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
+  };
+  ReadPresentation: {
+    call: types.ReadPresentation;
+    response: types.ReadPresentationResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
@@ -426,6 +434,10 @@ const toolParserMap = {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
   },
+  EditPresentation: {
+    call: schemas.EditPresentation,
+    response: schemas.PresentationEditOutcome,
+  },
   EditSpreadsheet: {
     call: schemas.EditSpreadsheet,
     response: schemas.SpreadsheetResponse,
@@ -579,6 +591,10 @@ const toolParserMap = {
   ReadMetadata: {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
+  },
+  ReadPresentation: {
+    call: schemas.ReadPresentation,
+    response: schemas.ReadPresentationResponse,
   },
   ReadProject: {
     call: schemas.ReadProject,
@@ -789,6 +805,10 @@ type ToolDataMap = {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
   };
+  EditPresentation: {
+    call: types.EditPresentation;
+    response: types.PresentationEditOutcome;
+  };
   EditSpreadsheet: {
     call: types.EditSpreadsheet;
     response: types.SpreadsheetResponse;
@@ -921,6 +941,10 @@ type ToolDataMap = {
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
+  };
+  ReadPresentation: {
+    call: types.ReadPresentation;
+    response: types.ReadPresentationResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };

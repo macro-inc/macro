@@ -73,6 +73,10 @@ import {
   markNotificationsSeenHandler,
 } from './Notifications';
 import {
+  editPresentationHandler,
+  readPresentationHandler,
+} from './Presentation';
+import {
   bulkSetEntityPropertyOptionsHandler,
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
@@ -129,6 +133,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
+  ReadPresentation: readPresentationHandler,
+  EditPresentation: editPresentationHandler,
   ConfigureAgent: configureAgentHandler,
   ListAgents: listAgentsHandler,
   ConfigureBot: configureBotHandler,

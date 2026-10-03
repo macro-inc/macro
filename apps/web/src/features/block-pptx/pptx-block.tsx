@@ -24,6 +24,7 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { blockDataSignal } from '@core/internal/BlockLoader';
+import { watchPresentationChanges } from '@core/pptx-engine/changes';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import {
@@ -50,7 +51,11 @@ import {
 } from './context/pptx-editor-context';
 import type { PptxData } from './definition';
 import { openWorkerPresentation } from './queries/presentation-engine';
-import { PPTX_MIME, savePresentationFile } from './queries/presentation-file';
+import {
+  fetchPresentationFile,
+  PPTX_MIME,
+  savePresentationFile,
+} from './queries/presentation-file';
 import { PptxEditor } from './views/pptx-editor';
 
 function download(bytes: Uint8Array | Blob, name: string) {
@@ -100,6 +105,10 @@ function PresentationHost(props: {
     fileName: props.fileName,
     download: (bytes, name) => download(bytes, name),
     notifyError: (message) => toast.failure(message),
+    notifyInfo: (message) => toast.success(message),
+    watchStoredFile: (onChange) =>
+      watchPresentationChanges(props.documentId, onChange),
+    fetchLatest: () => fetchPresentationFile(props.documentId),
   });
 
   return (

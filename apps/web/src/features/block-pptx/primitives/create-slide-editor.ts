@@ -228,6 +228,17 @@ export function createSlideEditor(options: SlideEditorOptions) {
     }
   }
 
+  // A reloaded presentation invalidates selection and text editing.
+  session.onReplaced(() => {
+    batch(() => {
+      setEditing(null);
+      setSelected(null);
+      setSelectedLayout(null);
+      setDrag(null);
+    });
+    textDragAnchor = null;
+  });
+
   function goToSlide(i: number) {
     stopEditing();
     batch(() => {

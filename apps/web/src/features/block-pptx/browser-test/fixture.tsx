@@ -1,11 +1,14 @@
 /**
  * Mounts the real PPTX editor (wasm engine in its worker) without the app:
  * no authentication, routes, or document storage. Saving keeps the bytes in
- * memory; `window.pptxFixture` exposes them to tests.
+ * memory; `window.pptxFixture` exposes them to tests, and `externalEdit`
+ * stands in for an edit saved elsewhere (an AI tool call) by applying
+ * operations to the stored copy with a second engine instance.
  */
 
 import '@fontsource-variable/inter';
 import '../../../index.css';
+import type { EditOp, EditResult } from '@core/pptx-engine/types';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
@@ -39,6 +42,9 @@ declare global {
       saves: () => number;
       engine: () => PresentationEngine | undefined;
       errors: () => string[];
+      notices: () => string[];
+      /** Applies `ops` to the stored copy as another client would, then announces it. */
+      externalEdit: (ops: EditOp[]) => Promise<EditResult>;
     };
   }
 }
@@ -46,20 +52,48 @@ declare global {
 function Fixture() {
   const params = new URLSearchParams(location.search);
   const readonly = params.has('readonly');
+  const autosave = params.get('autosave');
   const [engine, setEngine] = createSignal<PresentationEngine>();
   const [error, setError] = createSignal<string>();
   const [name, setName] = createSignal('Presentation.pptx');
   const [saved, setSaved] = createSignal<Uint8Array | null>(null);
   const [saves, setSaves] = createSignal(0);
   const [errors, setErrors] = createSignal<string[]>([]);
+  const [notices, setNotices] = createSignal<string[]>([]);
+  /** The "server" copy: what was opened, then each save. */
+  let stored: Uint8Array = new Uint8Array();
+  const watchers = new Set<() => void>();
 
-  window.pptxFixture = { saved, saves, engine, errors };
+  async function externalEdit(ops: EditOp[]): Promise<EditResult> {
+    const other = await openWorkerPresentation(
+      stored.slice().buffer as ArrayBuffer
+    );
+    try {
+      const { result } = await other.apply(ops);
+      if (!result) throw new Error('The edit was refused.');
+      stored = await other.save();
+      for (const watcher of watchers) watcher();
+      return result;
+    } finally {
+      other.close();
+    }
+  }
+
+  window.pptxFixture = {
+    saved,
+    saves,
+    engine,
+    errors,
+    notices,
+    externalEdit,
+  };
 
   async function open(bytes: ArrayBuffer, fileName: string) {
     engine()?.close();
     setEngine(undefined);
     setError(undefined);
     setName(fileName);
+    stored = new Uint8Array(bytes.slice(0));
     try {
       setEngine(await openWorkerPresentation(bytes));
     } catch (e) {
@@ -82,6 +116,7 @@ function Fixture() {
     engine: e,
     persist: async (bytes) => {
       await new Promise((r) => setTimeout(r, 150));
+      stored = bytes.slice();
       setSaved(bytes);
       setSaves((n) => n + 1);
     },
@@ -96,6 +131,13 @@ function Fixture() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
     notifyError: (message) => setErrors((list) => [...list, message]),
+    notifyInfo: (message) => setNotices((list) => [...list, message]),
+    watchStoredFile: (onChange) => {
+      watchers.add(onChange);
+      return () => watchers.delete(onChange);
+    },
+    fetchLatest: async () => stored.slice().buffer as ArrayBuffer,
+    autosaveDelay: autosave === null ? undefined : Number(autosave),
   });
 
   return (
@@ -128,8 +170,19 @@ function Fixture() {
             }}
           />
         </label>
+        <Show when={notices().at(-1)}>
+          {(notice) => (
+            <span
+              class="ml-auto rounded bg-success-bg px-2 py-0.5 text-success text-xs"
+              data-testid="fixture-notice"
+            >
+              {notice()}
+            </span>
+          )}
+        </Show>
         <span
-          class="ml-auto text-ink-muted text-xs"
+          class="text-ink-muted text-xs"
+          classList={{ 'ml-auto': notices().length === 0 }}
           data-testid="fixture-saves"
         >
           {saves()} saves

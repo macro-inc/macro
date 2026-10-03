@@ -133,6 +133,7 @@ async fn edit_saves_one_new_version_and_describes_the_change() {
         .unwrap();
 
     assert_eq!(files.count(), 2, "exactly one new version");
+    assert_eq!(outcome.document_id, DOCUMENT);
     assert!(outcome.structure_changed);
     assert_eq!(outcome.created.len(), 1);
     assert!(outcome.created[0].shape.is_none());

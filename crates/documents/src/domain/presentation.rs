@@ -57,6 +57,8 @@ pub struct CreatedItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PresentationEditOutcome {
+    /// The edited document (clients reload open editors of it).
+    pub document_id: String,
     /// Slides and shapes the operations created, in order.
     pub created: Vec<CreatedItem>,
     /// Whether slides were added, removed, or reordered.
@@ -124,7 +126,8 @@ impl PresentationService {
             .await
             .context("reading the presentation file")?;
         let ops = ops.to_vec();
-        let (saved, outcome) = tokio::task::spawn_blocking(move || apply(bytes, &ops))
+        let id = document_id.clone();
+        let (saved, outcome) = tokio::task::spawn_blocking(move || apply(id, bytes, &ops))
             .await
             .context("editing the presentation")??;
         // The write runs to completion even if this request is dropped, so a
@@ -143,7 +146,11 @@ fn open(bytes: Vec<u8>) -> anyhow::Result<Presentation> {
 }
 
 /// Applies a batch to a deck; returns the new file and what changed.
-fn apply(bytes: Vec<u8>, ops: &[EditOp]) -> anyhow::Result<(Vec<u8>, PresentationEditOutcome)> {
+fn apply(
+    document_id: String,
+    bytes: Vec<u8>,
+    ops: &[EditOp],
+) -> anyhow::Result<(Vec<u8>, PresentationEditOutcome)> {
     let mut pres = open(bytes)?;
     let result = pres
         .apply(ops, embedded_fonts())
@@ -165,6 +172,7 @@ fn apply(bytes: Vec<u8>, ops: &[EditOp]) -> anyhow::Result<(Vec<u8>, Presentatio
         describe(&mut pres, Some(&numbers))?
     };
     let outcome = PresentationEditOutcome {
+        document_id,
         created: result
             .created
             .iter()

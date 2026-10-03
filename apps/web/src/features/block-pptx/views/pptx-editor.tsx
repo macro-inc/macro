@@ -90,6 +90,10 @@ export function PptxEditor() {
     persist: context.persist,
     canEdit: context.canEdit,
     notifyError: context.notifyError,
+    notifyInfo: context.notifyInfo,
+    watchStoredFile: context.watchStoredFile,
+    fetchLatest: context.fetchLatest,
+    autosaveDelay: context.autosaveDelay,
   });
   const [loadError, setLoadError] = createSignal<string>();
   void session.refresh().catch((e: unknown) => {
