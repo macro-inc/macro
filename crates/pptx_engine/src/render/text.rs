@@ -565,11 +565,16 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
 }
 
 fn next_tab(x: f32, pp: &ParaProps) -> (f32, TabAlign) {
-    for t in &pp.tabs {
-        if t.pos > x + 0.01 {
-            return (t.pos, t.align);
-        }
+    let explicit = pp.tabs.iter().find(|t| t.pos > x + 0.01);
+    // A hanging indent's margin is the first line's first stop (as in Word
+    // and PowerPoint), unless an explicit stop comes before it.
+    if pp.indent < 0.0 && pp.mar_l > x + 0.01 && explicit.is_none_or(|t| t.pos > pp.mar_l) {
+        return (pp.mar_l, TabAlign::Left);
     }
+    if let Some(t) = explicit {
+        return (t.pos, t.align);
+    }
+    // Default stops are measured from the text box's edge, like explicit ones.
     let d = pp.default_tab.max(1.0);
     ((((x + 0.01) / d).floor() + 1.0) * d, TabAlign::Left)
 }

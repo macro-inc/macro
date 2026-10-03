@@ -109,3 +109,29 @@ fn tabs_that_do_not_fit_start_the_next_line() {
     let end = second.stops.iter().find(|s| s.index == 13).unwrap();
     assert!((end.x - (7.2 + 72.0)).abs() < 0.5, "{}", end.x);
 }
+
+/// With a hanging indent, a tab on the first line stops at the margin
+/// before the default grid.
+#[test]
+fn hanging_indent_margin_is_the_first_tab_stop() {
+    let l = lay(
+        "<a:p><a:pPr marL=\"342900\" indent=\"-342900\"/><a:r><a:rPr lang=\"en-US\" sz=\"1800\"/><a:t>\t(A) taxes</a:t></a:r></a:p>",
+        5_080_000,
+    );
+    let stop = l.lines[0].stops.iter().find(|s| s.index == 1).unwrap();
+    assert!((stop.x - (7.2 + 27.0)).abs() < 0.1, "{}", stop.x);
+    // Past the margin, default stops stay on the box-relative grid.
+    let l = lay(
+        "<a:p><a:pPr marL=\"342900\" indent=\"-342900\"/><a:r><a:rPr lang=\"en-US\" sz=\"1800\"/><a:t>\t\t(A) taxes</a:t></a:r></a:p>",
+        5_080_000,
+    );
+    let stop = l.lines[0].stops.iter().find(|s| s.index == 2).unwrap();
+    assert!((stop.x - (7.2 + 72.0)).abs() < 0.1, "{}", stop.x);
+    // Without a hanging indent the default grid applies.
+    let l = lay(
+        "<a:p><a:r><a:rPr lang=\"en-US\" sz=\"1800\"/><a:t>\t(A) taxes</a:t></a:r></a:p>",
+        5_080_000,
+    );
+    let stop = l.lines[0].stops.iter().find(|s| s.index == 1).unwrap();
+    assert!(stop.x > 7.2 + 27.5, "{}", stop.x);
+}

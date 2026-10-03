@@ -111,5 +111,8 @@ one that differs from PowerPoint (pattern fills, for example).
   poster frames.
 - Effects: 3-D bevels and extrusion are not drawn; soft edges and reflections
   are approximations.
+- SmartArt is drawn from the drawing PowerPoint caches with it; the rare
+  diagram saved without one (1 of 16 in the corpus) is left empty, since the
+  SmartArt layout algorithms are not implemented.
 - Editing does not create charts, SmartArt, or animations; it keeps the ones
   a deck has.

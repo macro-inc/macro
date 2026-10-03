@@ -154,6 +154,12 @@ pattern/gradient outlines, gradient/pattern/outline-only text fills, text glow,
 `wordArtVert`/`mongolianVert`/`wordArtVertRtl`, `vertOverflow`, `rtlCol`, diagonal table cell
 borders, EMF `EMR_GRADIENTFILL`, EMF polygon fill mode and hatched brushes, some SmartArt layouts
 (wild `census-fesac-2010-hogue-blumerman` slide 11). Live date fields render as the current date.
+LibreOffice also re-runs `normAutofit` shrinking with its own algorithm, while PowerPoint (and
+the engine) use the stored `fontScale`/`lnSpcReduction` until the text is edited, so slides
+with shrunk text differ in size and line breaks. LibreOffice measures default tab stops from the
+paragraph's left margin (and ignores explicit stops in unbulleted paragraphs with an indent); the
+engine measures both from the text box edge, which is what tab-aligned text in the wild decks was
+laid out against.
 Fonts are substituted: Calibri → Carlito, Cambria → Caladea, Arial/Times New Roman/Courier New →
 Liberation. With `--fontconfig` LibreOffice and the engine use the same substitutes; families
 with no metric-compatible substitute (Candara, Corbel, Garamond, Franklin Gothic, Century Gothic,
