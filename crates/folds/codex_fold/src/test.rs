@@ -12,12 +12,6 @@ fn completed(item: Value) -> String {
 #[test]
 fn a_command_turn_streams_messages_commands_and_its_end() {
     let mut log = CodexLog::default();
-    assert!(
-        log.entry(&completed(
-            json!({"type": "UserMessage", "id": "u1", "content": [{"type": "text", "text": "hi"}]})
-        ))
-        .is_empty()
-    );
     assert_eq!(
         log.entry(&completed(json!({
             "type": "AgentMessage", "id": "m1", "phase": "commentary",
@@ -120,4 +114,55 @@ fn bookkeeping_is_ignored() {
     ] {
         assert!(log.entry(&line).is_empty());
     }
+}
+
+#[test]
+fn conversation_snapshot() {
+    let mut fold = CodexLog::default();
+    let events: Vec<_> = include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| fold.entry(line))
+        .collect();
+    insta::assert_json_snapshot!(events);
+}
+
+#[test]
+fn malformed_records_do_not_poison_following_records() {
+    let mut fold = CodexLog::default();
+    assert!(fold.entry("{").is_empty());
+    let actual: Vec<_> = include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| fold.entry(line))
+        .collect();
+    let mut fresh = CodexLog::default();
+    let expected: Vec<_> = include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| fresh.entry(line))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn api_messages_snapshot() {
+    let mut native = CodexLog::default();
+    let mut wire = String::new();
+    for event in include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| native.entry(line))
+    {
+        let (method, params) = match event {
+            LogEvent::Update(update) => {
+                ("session/update", json!({"sessionId":"s", "update":update}))
+            }
+            LogEvent::TurnEnded(stop) => (
+                "_session/turn_complete",
+                json!({"sessionId":"s", "outcome":{"kind":if stop == "cancelled" {"cancelled"} else {"finished"}}}),
+            ),
+        };
+        wire.push_str(&json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":method, "params":params}}).to_string());
+        wire.push('\n');
+    }
+    let messages = agent_fold::domain::fold::fold(agent_fold::testing::parse_log(&wire));
+    assert!(messages.len() >= 3, "native turns must reach API messages");
+    insta::assert_json_snapshot!(messages);
 }

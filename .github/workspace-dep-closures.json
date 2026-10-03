@@ -2755,6 +2755,16 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "claude_fold": [
+      "crates/agent_runtime_protocol",
+      "crates/cowlike",
+      "crates/folds/agent_fold",
+      "crates/folds/claude_fold",
+      "crates/macro_user_id",
+      "crates/macro_uuid",
+      "crates/non_empty",
+      "crates/workspace-hack"
+    ],
     "codex_cloud_agents": [
       "crates/activity",
       "crates/agent",
@@ -2954,6 +2964,16 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "codex_fold": [
+      "crates/agent_runtime_protocol",
+      "crates/cowlike",
+      "crates/folds/agent_fold",
+      "crates/folds/codex_fold",
+      "crates/macro_user_id",
+      "crates/macro_uuid",
+      "crates/non_empty",
+      "crates/workspace-hack"
+    ],
     "coding_agent_worker": [
       "crates/activity",
       "crates/agent",
@@ -2998,6 +3018,8 @@
       "crates/entity_registry/shared_entity_registry",
       "crates/filter_ast",
       "crates/folds/agent_fold",
+      "crates/folds/claude_fold",
+      "crates/folds/codex_fold",
       "crates/foreign_entity",
       "crates/frecency",
       "crates/genai_telemetry",

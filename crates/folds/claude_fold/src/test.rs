@@ -28,6 +28,7 @@ fn a_tool_turn_streams_calls_results_and_its_end() {
                 "kind": "edit",
                 "status": "in_progress",
                 "rawInput": {"file_path": "/r/todo.html", "content": "<html>"},
+                "_meta": {"claudeCode": {"toolName": "Write"}},
             })),
         ]
     );
@@ -84,10 +85,9 @@ fn failed_tools_and_block_results_are_reported() {
 }
 
 #[test]
-fn prompts_bookkeeping_and_sidechains_are_skipped() {
+fn bookkeeping_and_sidechains_are_skipped() {
     let mut log = ClaudeLog::default();
     for entry in [
-        json!({"type": "user", "uuid": "a", "message": {"content": "build a todo app"}}),
         json!({"type": "attachment", "uuid": "b"}),
         json!({"type": "ai-title", "aiTitle": "Todo app"}),
         json!({"type": "assistant", "uuid": "c", "isSidechain": true,
@@ -109,4 +109,55 @@ fn bash_calls_are_titled_by_their_description() {
     );
     assert_eq!(tool_title("Bash", &json!({"command": "ls"})), "Bash ls");
     assert_eq!(tool_title("TodoWrite", &json!({})), "TodoWrite");
+}
+
+#[test]
+fn conversation_snapshot() {
+    let mut fold = ClaudeLog::default();
+    let events: Vec<_> = include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| fold.entry(line))
+        .collect();
+    insta::assert_json_snapshot!(events);
+}
+
+#[test]
+fn malformed_records_do_not_poison_following_records() {
+    let mut fold = ClaudeLog::default();
+    assert!(fold.entry("{").is_empty());
+    let actual: Vec<_> = include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| fold.entry(line))
+        .collect();
+    let mut fresh = ClaudeLog::default();
+    let expected: Vec<_> = include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| fresh.entry(line))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn api_messages_snapshot() {
+    let mut native = ClaudeLog::default();
+    let mut wire = String::new();
+    for event in include_str!("../fixtures/conversation.jsonl")
+        .lines()
+        .flat_map(|line| native.entry(line))
+    {
+        let (method, params) = match event {
+            LogEvent::Update(update) => {
+                ("session/update", json!({"sessionId":"s", "update":update}))
+            }
+            LogEvent::TurnEnded(stop) => (
+                "_session/turn_complete",
+                json!({"sessionId":"s", "outcome":{"kind":if stop == "cancelled" {"cancelled"} else {"finished"}}}),
+            ),
+        };
+        wire.push_str(&json!({"direction":"to_server", "content":{"type":"acp", "jsonrpc":"2.0", "method":method, "params":params}}).to_string());
+        wire.push('\n');
+    }
+    let messages = agent_fold::domain::fold::fold(agent_fold::testing::parse_log(&wire));
+    assert!(messages.len() >= 3, "native turns must reach API messages");
+    insta::assert_json_snapshot!(messages);
 }

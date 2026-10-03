@@ -6,11 +6,12 @@
 //! messages, reasoning, commands, file changes, tool calls) and a
 //! `task_complete` or `turn_aborted` when a turn ends.
 
+#![deny(missing_docs)]
+
+use agent_fold::domain::transcript::{Fold, LogEvent, truncate};
 use std::collections::HashSet;
 
 use serde_json::{Value, json};
-
-use super::claude_log::{LogEvent, truncate};
 
 #[cfg(test)]
 mod test;
@@ -19,13 +20,13 @@ const TITLE_LIMIT: usize = 80;
 
 /// Rollout reader state, so a reopened file never replays an item.
 #[derive(Debug, Default)]
-pub(crate) struct CodexLog {
+pub struct CodexLog {
     seen: HashSet<String>,
 }
 
-impl CodexLog {
+impl Fold for CodexLog {
     /// Translate one rollout line.
-    pub(crate) fn entry(&mut self, line: &str) -> Vec<LogEvent> {
+    fn entry(&mut self, line: &str) -> Vec<LogEvent> {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             return Vec::new();
         };
@@ -74,11 +75,11 @@ fn item_update(item: &Value) -> Option<Value> {
     let id = item.get("id").and_then(Value::as_str).unwrap_or_default();
     let field = |name: &str| item.get(name).and_then(Value::as_str);
     match item.get("type").and_then(Value::as_str)? {
-        "AgentMessage" => {
+        "AgentMessage" | "UserMessage" => {
             let text = texts(item.get("content"), "text");
             (!text.is_empty()).then(|| {
                 json!({
-                    "sessionUpdate": "agent_message_chunk",
+                    "sessionUpdate": if item["type"] == "UserMessage" { "user_message_chunk" } else { "agent_message_chunk" },
                     "content": {"type": "text", "text": text},
                 })
             })
