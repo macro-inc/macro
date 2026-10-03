@@ -1120,12 +1120,13 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-Calendar scheduling requires the PostHog flag `enable-calendar-scheduling`, which
-is off unless enabled remotely (including in dev). For local browser checks,
-`VITE_ENABLE_CALENDAR_SCHEDULING=true` overrides it. While off, the Calendar settings
-tab and calendar booking shortcuts are hidden; public booking and receipt links
-show an unavailable page without fetching scheduling data. When enabling a hosted
-rollout, include anonymous visitors so invitees can open those links.
+Calendar scheduling is on by default in dev. Production uses the PostHog flag
+`enable-calendar-scheduling` and stays off unless enabled remotely. Set
+`VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
+While off, the Calendar settings tab and calendar booking shortcuts are hidden;
+public booking and receipt links show an unavailable page without fetching
+scheduling data. When enabling a production rollout, include anonymous visitors
+so invitees can open those links.
 
 When enabled, calendar scheduling lives in **Settings → Calendar** (`/app/settings/calendar`).
 The scheduling sidebar opens Event types, Bookings, Availability, Teams, Insights,
