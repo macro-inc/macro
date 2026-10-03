@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomePreferencesProvider } from '../home-prefs';
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   agentsEnabled: true,
   asideCollapsed: false,
   asideOverlay: false,
+  attachFiles: vi.fn<(files: File[]) => void>(),
 }));
 
 vi.mock('@app/components/view-shell', () => ({
@@ -42,8 +43,27 @@ vi.mock('@core/component/AI/component/DragDrop', () => ({
 vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: ChildrenProps) => props.children,
 }));
+vi.mock('@core/util/upload', () => ({
+  handleFileFolderDrop: (
+    entries: FileSystemFileEntry[],
+    _folders: FileSystemDirectoryEntry[],
+    onFilesReady: (files: { file: File; isFolder: boolean }[]) => void
+  ) => {
+    const files: { file: File; isFolder: boolean }[] = [];
+    for (const entry of entries) {
+      entry.file((file) => files.push({ file, isFolder: false }));
+    }
+    onFilesReady(files);
+  },
+}));
 vi.mock('../home-chat-input', () => ({
-  HomeChatInput: () => <div data-testid="home-chat-input" />,
+  HomeChatInput: (props: {
+    registerAttachFiles?: (attach: (files: File[]) => void) => void;
+  }) => {
+    // The agent composer hands its attach function up like NewChatPage does.
+    if (mocks.agentsEnabled) props.registerAttachFiles?.(mocks.attachFiles);
+    return <div data-testid="home-chat-input" />;
+  },
 }));
 vi.mock('../home-getting-started-link', () => ({
   HomeGettingStartedLink: () => <div data-testid="getting-started-link" />,
@@ -56,6 +76,7 @@ beforeEach(() => {
   mocks.agentsEnabled = true;
   mocks.asideCollapsed = false;
   mocks.asideOverlay = false;
+  mocks.attachFiles.mockReset();
 });
 afterEach(cleanup);
 
@@ -66,6 +87,53 @@ function renderHome() {
     </HomePreferencesProvider>
   ));
 }
+
+/** A drag carrying one file, shaped like the browser's DataTransfer. */
+function fileTransfer(file: File) {
+  return {
+    types: ['Files'],
+    files: [file],
+    items: [
+      {
+        kind: 'file',
+        type: file.type,
+        webkitGetAsEntry: () => null,
+        getAsFile: () => file,
+      },
+    ],
+    getData: () => '',
+  };
+}
+
+describe('Home pane file drops', () => {
+  it('attaches files dropped anywhere on the pane to the agent composer', async () => {
+    renderHome();
+    const frame = document.querySelector('[data-home-agent-drop-frame]');
+    if (!frame) throw new Error('agents Home did not render its drop frame');
+    const file = new File(['png'], 'shot.png', { type: 'image/png' });
+    const dataTransfer = fileTransfer(file);
+    const pane = screen.getByTestId('home-suggestions');
+
+    fireEvent.dragEnter(pane, { dataTransfer });
+    expect(
+      screen.getByText('Drop files to attach to your message')
+    ).toBeTruthy();
+
+    fireEvent.drop(pane, { dataTransfer });
+    await Promise.resolve();
+    expect(mocks.attachFiles).toHaveBeenCalledWith([file]);
+    expect(
+      screen.queryByText('Drop files to attach to your message')
+    ).toBeNull();
+  });
+
+  it('keeps the legacy chat upload frame when agents are disabled', () => {
+    mocks.agentsEnabled = false;
+    renderHome();
+    expect(screen.getByTestId('home-composer-frame')).toBeTruthy();
+    expect(document.querySelector('[data-home-agent-drop-frame]')).toBeNull();
+  });
+});
 
 describe('Home agent composer alignment', () => {
   it('matches the Agents new-conversation topbar and padding when the list is open', () => {

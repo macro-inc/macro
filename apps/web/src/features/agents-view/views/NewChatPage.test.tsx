@@ -1,3 +1,4 @@
+import { uploadInputAttachments } from '@channel/Input';
 import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
@@ -780,6 +781,31 @@ describe('agent-led new conversation', () => {
       expect.objectContaining({ effortOverride: undefined })
     );
   });
+});
+
+it('uploads files a host drops outside the composer into the same attachments', () => {
+  let attach: ((files: File[]) => void) | undefined;
+  render(() => (
+    <NewChatPage
+      roster={buildAgentRoster({
+        agents: [],
+        runtimes: [],
+        cursorConnected: true,
+        cursorNeedsConnection: false,
+      })}
+      rosterLoading={false}
+      registerAttachFiles={(callback) => {
+        attach = callback;
+      }}
+      onStart={vi.fn()}
+      onOpenRoster={vi.fn()}
+    />
+  ));
+  const file = new File(['png'], 'dropped.png', { type: 'image/png' });
+  attach?.([file]);
+  expect(uploadInputAttachments).toHaveBeenCalledWith(
+    expect.objectContaining({ files: [file] })
+  );
 });
 
 it('starts a conversation with an uploaded image and no text', () => {

@@ -34,6 +34,12 @@ export type HomeChatInputProps = {
    * the conversation (the Agents view and its sidebar) opens it in place.
    */
   openChat?: (chatId: string) => void;
+  /**
+   * Receives the agent composer's attach function so the host can forward
+   * files dropped anywhere on the pane. Legacy input drops go through
+   * `DragDropWrapper` and the chat upload queue instead.
+   */
+  registerAttachFiles?: (attach: (files: File[]) => void) => void;
 };
 
 export const HomeChatInput = (props: HomeChatInputProps) => {
@@ -51,7 +57,10 @@ export const HomeChatInput = (props: HomeChatInputProps) => {
         name="Home.agent-composer"
         fallback={<div class="min-h-24" />}
       >
-        <HomeAgentComposer autoFocus={props.autoFocusOnMount} />
+        <HomeAgentComposer
+          autoFocus={props.autoFocusOnMount}
+          registerAttachFiles={props.registerAttachFiles}
+        />
       </DebugSuspense>
     </Show>
   );

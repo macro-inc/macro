@@ -23,7 +23,10 @@ import {
 import { buildHomeAgentPrompt } from './queries/home-agent-prompt';
 
 /** Home supplies suggestions and navigation to the same composer used by Agents. */
-export function HomeAgentComposer(props: { autoFocus?: boolean }) {
+export function HomeAgentComposer(props: {
+  autoFocus?: boolean;
+  registerAttachFiles?: (attach: (files: File[]) => void) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const input = useChatInputContext();
   const roster = createAgentRosterSource();
@@ -103,6 +106,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
         registerFocus={(callback) => {
           focus = callback;
         }}
+        registerAttachFiles={props.registerAttachFiles}
         onStart={start}
         onOpenRoster={() => settings.openSettings('Agents')}
       />

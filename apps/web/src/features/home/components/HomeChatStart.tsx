@@ -7,10 +7,11 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
-import { Show } from 'solid-js';
+import { type ParentProps, Show } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
 import { HomeGettingStartedLink } from '../home-getting-started-link';
 import { useHomePreferences } from '../home-prefs';
+import { HomeAgentDropFrame } from './home-agent-drop-frame';
 import { HomeRecommendedActions } from './home-recommended-actions';
 
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
@@ -20,6 +21,26 @@ export function HomeChatStart() {
   const preferences = useHomePreferences();
   const showHomeTopBar = () =>
     shell.aside.isCollapsed() || shell.aside.isOverlay();
+  // Registered by the agent composer once it mounts; drops on the pane
+  // outside the composer land in the same attachment list as drops on it.
+  let attachToComposer: ((files: File[]) => void) | undefined;
+
+  const Frame = (frame: ParentProps<{ class: string }>) => (
+    <Show
+      when={agents().enabled}
+      fallback={
+        <DragDropWrapper class={frame.class}>{frame.children}</DragDropWrapper>
+      }
+    >
+      <HomeAgentDropFrame
+        class={frame.class}
+        onDropFiles={(files) => attachToComposer?.(files)}
+      >
+        {frame.children}
+      </HomeAgentDropFrame>
+    </Show>
+  );
+
   return (
     <ChatInputProvider>
       <Show when={showHomeTopBar()}>
@@ -27,7 +48,7 @@ export function HomeChatStart() {
           <ViewSidebar.Title>Home</ViewSidebar.Title>
         </ViewShell.TopBar>
       </Show>
-      <DragDropWrapper class="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-6">
+      <Frame class="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-6">
         <div
           class={
             agents().enabled
@@ -66,6 +87,9 @@ export function HomeChatStart() {
               variant="default"
               placeholder="Type @ to reference / for skills"
               autoFocusOnMount={false}
+              registerAttachFiles={(attach) => {
+                attachToComposer = attach;
+              }}
             />
             <div class="min-h-0 min-w-0 pb-8">
               <HomeGettingStartedLink preferences={preferences} />
@@ -73,7 +97,7 @@ export function HomeChatStart() {
             </div>
           </div>
         </div>
-      </DragDropWrapper>
+      </Frame>
     </ChatInputProvider>
   );
 }
