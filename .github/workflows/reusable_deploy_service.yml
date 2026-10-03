@@ -179,17 +179,27 @@ jobs:
           exit 1
         fi
         mkdir -p "$RUNNER_TEMP/handoff"
+        download() {
+          local file="$1" attempt
+          for ((attempt = GITHUB_RUN_ATTEMPT; attempt >= 1; attempt--)); do
+            if nsc artifact download "handoff/${GITHUB_RUN_ID}-${attempt}/${SERVICE}/${file}" "$RUNNER_TEMP/handoff/${file}"; then
+              return 0
+            fi
+          done
+          echo "::error::${file} for ${SERVICE} not found in attempts 1-${GITHUB_RUN_ATTEMPT} of run ${GITHUB_RUN_ID}; handoff artifacts expire after 24h, so re-run all jobs."
+          return 1
+        }
         if [[ "$HAS_BINARIES" == "true" ]]; then
-          nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
+          download prebuilt-binaries.tar.gz
         fi
         if [[ "$HAS_LAMBDAS" == "true" ]]; then
-          nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
+          download lambda-artifacts.tar.gz
         fi
       shell: bash
       env:
+        SERVICE: ${{ inputs.service-name }}
         HAS_BINARIES: ${{ needs.setup.outputs.has_binaries }}
         HAS_LAMBDAS: ${{ needs.setup.outputs.has_lambdas }}
-        BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ inputs.service-name }}
     - name: Cache Pulumi plugins
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:

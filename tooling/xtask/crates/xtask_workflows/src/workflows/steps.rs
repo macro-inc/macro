@@ -386,8 +386,9 @@ pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
 
 /// Upload a build's handoff tarball to Namespace artifact storage: strongly
 /// consistent object storage that rides Namespace's network rather than the
-/// GitHub artifacts API. Attempt-scoped path so re-runs never collide with
-/// stale uploads; the deploy job logs the same hash on read.
+/// GitHub artifacts API. Attempt-scoped path so re-runs never overwrite an
+/// earlier upload; [`download_handoff_artifacts`] resolves the newest one.
+/// The deploy job logs the same hash on read.
 pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
     Step::new("Upload handoff artifact")
         .run(format!("nsc artifact upload {file} \"$DEST\" --expires_in=24h"))
@@ -396,6 +397,43 @@ pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
             "DEST",
             format!("handoff/${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}/{service_expr}/{file}"),
         ))
+}
+
+/// Pull the handoff tars from Namespace artifact storage into runner.temp
+/// (outside the workspace, which the composite action's checkout cleans).
+/// Callers gate the step and set `HAS_BINARIES` / `HAS_LAMBDAS`.
+///
+/// "Re-run failed jobs" keeps the successful build job from the earlier
+/// attempt, so its upload lives under that attempt's path. Search from the
+/// current attempt down: a rebuilt artifact always wins over an older one.
+pub fn download_handoff_artifacts(service_expr: &str) -> Step<Run> {
+    Step::new("Download handoff artifacts")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            if ! command -v nsc >/dev/null 2>&1; then
+              echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
+              exit 1
+            fi
+            mkdir -p "$RUNNER_TEMP/handoff"
+            download() {
+              local file="$1" attempt
+              for ((attempt = GITHUB_RUN_ATTEMPT; attempt >= 1; attempt--)); do
+                if nsc artifact download "handoff/${GITHUB_RUN_ID}-${attempt}/${SERVICE}/${file}" "$RUNNER_TEMP/handoff/${file}"; then
+                  return 0
+                fi
+              done
+              echo "::error::${file} for ${SERVICE} not found in attempts 1-${GITHUB_RUN_ATTEMPT} of run ${GITHUB_RUN_ID}; handoff artifacts expire after 24h, so re-run all jobs."
+              return 1
+            }
+            if [[ "$HAS_BINARIES" == "true" ]]; then
+              download prebuilt-binaries.tar.gz
+            fi
+            if [[ "$HAS_LAMBDAS" == "true" ]]; then
+              download lambda-artifacts.tar.gz
+            fi
+        "#})
+        .shell("bash")
+        .add_env(Env::new("SERVICE", service_expr))
 }
 
 /// Mount Pulumi's provider-plugin dir on a Namespace cache volume. Plugins are

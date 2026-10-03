@@ -116,6 +116,9 @@ runs:
         github-token: ${{ inputs.github-token }}
       env:
         PULUMI_ACCESS_TOKEN: ${{ inputs.pulumi-access-token }}
+        # Third-party providers (e.g. pulumiverse/doppler) download from the
+        # GitHub API, whose unauthenticated limit shared runner IPs exhaust.
+        GITHUB_TOKEN: ${{ github.token }}
         DD_APP_KEY: ${{ inputs.dd-app-key }}
         DD_API_KEY: ${{ inputs.dd-api-key }}
         DD_HOST: ${{ inputs.dd-host }}

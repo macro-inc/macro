@@ -68,6 +68,74 @@ fn default_dev_shell_does_not_pass_a_shell_input() {
     );
 }
 
+/// Run the handoff download step against a fake `nsc` whose store holds one
+/// `prebuilt-binaries.tar.gz` per attempt in `uploaded_attempts`, each
+/// containing its attempt number. Returns the downloaded content on success.
+fn download_handoff(run_attempt: u32, uploaded_attempts: &[u32]) -> Result<String, String> {
+    let dir = tempfile::tempdir().unwrap();
+    let store = dir.path().join("store");
+    for attempt in uploaded_attempts {
+        let blob = store.join(format!("handoff/42-{attempt}/svc/prebuilt-binaries.tar.gz"));
+        std::fs::create_dir_all(blob.parent().unwrap()).unwrap();
+        std::fs::write(blob, attempt.to_string()).unwrap();
+    }
+    let bin = dir.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let nsc = bin.join("nsc");
+    std::fs::write(
+        &nsc,
+        "#!/usr/bin/env bash\n\
+         [[ \"$1 $2\" == \"artifact download\" ]] || exit 2\n\
+         [[ -f \"$FAKE_STORE/$3\" ]] || { echo 'Failed: blob not found'; exit 1; }\n\
+         cp \"$FAKE_STORE/$3\" \"$4\"\n",
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&nsc).unwrap().permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+    std::fs::set_permissions(&nsc, perms).unwrap();
+
+    let runner_temp = dir.path().join("runner-temp");
+    std::fs::create_dir(&runner_temp).unwrap();
+    let script = download_handoff_artifacts("svc").value.run.unwrap();
+    let output = std::process::Command::new("bash")
+        .args(["-c", &format!("PATH=\"$FAKE_BIN:$PATH\"\n{script}")])
+        .env("FAKE_BIN", &bin)
+        .env("FAKE_STORE", &store)
+        .env("RUNNER_TEMP", &runner_temp)
+        .env("GITHUB_RUN_ID", "42")
+        .env("GITHUB_RUN_ATTEMPT", run_attempt.to_string())
+        .env("SERVICE", "svc")
+        .env("HAS_BINARIES", "true")
+        .env("HAS_LAMBDAS", "false")
+        .output()
+        .unwrap();
+    if output.status.success() {
+        Ok(std::fs::read_to_string(runner_temp.join("handoff/prebuilt-binaries.tar.gz")).unwrap())
+    } else {
+        Err(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+}
+
+#[test]
+fn handoff_download_falls_back_to_the_attempt_that_built_it() {
+    assert_eq!(download_handoff(3, &[1]), Ok("1".to_string()));
+}
+
+#[test]
+fn handoff_download_prefers_the_newest_attempt() {
+    assert_eq!(download_handoff(3, &[1, 3]), Ok("3".to_string()));
+    assert_eq!(download_handoff(1, &[1]), Ok("1".to_string()));
+}
+
+#[test]
+fn handoff_download_fails_when_no_attempt_uploaded() {
+    let stdout = download_handoff(2, &[]).unwrap_err();
+    assert!(
+        stdout.contains("::error::prebuilt-binaries.tar.gz for svc not found in attempts 1-2"),
+        "{stdout}"
+    );
+}
+
 #[test]
 fn web_build_cache_volume_includes_wasm_pack_and_cargo() {
     let step = mount_web_build_cache_volume();

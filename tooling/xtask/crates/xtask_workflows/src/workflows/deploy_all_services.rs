@@ -377,29 +377,12 @@ fn check_artifact_config() -> Step<Run> {
         .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
 }
 
-/// Pull the handoff tars from Namespace artifact storage into runner.temp
-/// (outside the workspace, which the composite action's checkout cleans).
 /// The composite's tar-path branch handles receipts + the extract guard.
 fn download_handoff_artifacts() -> Step<Run> {
-    Step::new("Download handoff artifacts")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            if ! command -v nsc >/dev/null 2>&1; then
-              echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
-              exit 1
-            fi
-            mkdir -p "$RUNNER_TEMP/handoff"
-            if [[ "$HAS_BINARIES" == "true" ]]; then
-              nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
-            fi
-            if [[ "$HAS_LAMBDAS" == "true" ]]; then
-              nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
-            fi
-        "#})
+    steps::download_handoff_artifacts("${{ matrix.service }}")
         .if_condition(Expression::new(
             "${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}",
         ))
-        .shell("bash")
         .add_env(Env::new(
             "HAS_BINARIES",
             "${{ steps.check-artifacts.outputs.has_binaries }}",
@@ -407,10 +390,6 @@ fn download_handoff_artifacts() -> Step<Run> {
         .add_env(Env::new(
             "HAS_LAMBDAS",
             "${{ steps.check-artifacts.outputs.has_lambdas }}",
-        ))
-        .add_env(Env::new(
-            "BASE",
-            "handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}",
         ))
 }
 
