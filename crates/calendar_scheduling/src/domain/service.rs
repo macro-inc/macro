@@ -436,10 +436,16 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 .await?;
             slot.hosts
                 .sort_by_key(|host| (counts.get(host).copied().unwrap_or(0), host.clone()));
-            slot.hosts.truncate(1);
         }
+        let mut backup_hosts =
+            if event.mode == SchedulingMode::RoundRobin && slot.hosts.len() > 1 {
+                slot.hosts.split_off(1)
+            } else {
+                Vec::new()
+            }
+            .into_iter();
         let (day_start, day_end) = day_bounds(schedule, date)?;
-        let record = BookingRecord {
+        let mut record = BookingRecord {
             revision: 0,
             event: event.clone(),
             schedule: schedule.clone(),
@@ -479,14 +485,22 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             },
         };
         let reservation_id = record.booking.id;
-        let record = self
-            .repository
-            .reserve(record, event.daily_limit, day_start, day_end)
-            .await?;
-        if record.booking.id != reservation_id {
-            return Ok(record);
+        loop {
+            match self
+                .repository
+                .reserve(record.clone(), event.daily_limit, day_start, day_end)
+                .await
+            {
+                Ok(reserved) if reserved.booking.id != reservation_id => return Ok(reserved),
+                Ok(reserved) => return self.finish_operation(reserved).await,
+                Err(Error::Conflict) => {
+                    let host = backup_hosts.next().ok_or(Error::Conflict)?;
+                    record.calendar_id = Some(self.calendars.creation_calendar(&host).await?);
+                    record.booking.hosts = vec![host];
+                }
+                Err(error) => return Err(error),
+            }
         }
-        self.finish_operation(record).await
     }
     /// Read bookings for a profile, with authorization and a bounded range.
     pub async fn bookings(&self, user: &str, team: Option<Uuid>) -> Result<Vec<Booking>, Error> {

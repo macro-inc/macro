@@ -9,6 +9,8 @@ use std::{
 #[derive(Default)]
 struct Memory {
     fail_completion: AtomicBool,
+    reserve_barrier: Option<tokio::sync::Barrier>,
+    reserve_calls: AtomicUsize,
     profiles: Mutex<HashMap<Uuid, OwnedProfile>>,
     bookings: Mutex<HashMap<Uuid, BookingRecord>>,
 }
@@ -131,6 +133,11 @@ impl Repository for Arc<Memory> {
         _: DateTime<Utc>,
         _: DateTime<Utc>,
     ) -> Result<BookingRecord, Error> {
+        if let Some(barrier) = &self.reserve_barrier
+            && self.reserve_calls.fetch_add(1, Ordering::SeqCst) < 2
+        {
+            barrier.wait().await;
+        }
         let mut data = self.bookings.lock().unwrap();
         if data.values().any(|b| {
             b.booking.status != BookingStatus::Cancelled
@@ -198,8 +205,8 @@ struct Calendar {
     events: Mutex<HashMap<Uuid, Uuid>>,
 }
 impl Calendars for Arc<Calendar> {
-    async fn creation_calendar(&self, _: &str) -> Result<Uuid, Error> {
-        Ok(Uuid::nil())
+    async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
+        Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, host.as_bytes()))
     }
     async fn busy(
         &self,
@@ -395,25 +402,49 @@ async fn booking_retry_is_idempotent_and_another_request_conflicts() {
     );
 }
 #[tokio::test]
-async fn round_robin_assigns_distinct_available_hosts() {
-    let service = TestService::new(
-        Arc::new(Memory::default()),
-        Arc::new(Calendar::default()),
-        Members,
-    );
+async fn concurrent_round_robin_bookings_use_distinct_hosts_and_calendars() {
+    let repo = Arc::new(Memory {
+        reserve_barrier: Some(tokio::sync::Barrier::new(2)),
+        ..Default::default()
+    });
+    let cal = Arc::new(Calendar::default());
+    let service = TestService::new(repo.clone(), cal.clone(), Members);
     let team = Some(Uuid::new_v4());
     let p = service.save("admin", team, profile(team)).await.unwrap();
-    let a = service
-        .book(p.id, p.event_types[0].id, request())
-        .await
-        .unwrap();
-    let b = service
-        .book(p.id, p.event_types[0].id, request())
-        .await
-        .unwrap();
+    let retry = request();
+    let (a, b) = tokio::join!(
+        service.book(p.id, p.event_types[0].id, retry.clone()),
+        service.book(p.id, p.event_types[0].id, request()),
+    );
+    let (a, b) = (a.unwrap(), b.unwrap());
     assert_ne!(a.booking.hosts, b.booking.hosts);
     assert_eq!(a.booking.hosts.len(), 1);
     assert_eq!(b.booking.hosts.len(), 1);
+    for record in [&a, &b] {
+        assert_eq!(
+            record.calendar_id,
+            Some(
+                cal.creation_calendar(&record.booking.hosts[0])
+                    .await
+                    .unwrap()
+            )
+        );
+    }
+    assert_eq!(cal.creates.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        service
+            .book(p.id, p.event_types[0].id, retry)
+            .await
+            .unwrap()
+            .booking
+            .id,
+        a.booking.id
+    );
+    assert!(matches!(
+        service.book(p.id, p.event_types[0].id, request()).await,
+        Err(Error::Conflict)
+    ));
+    assert_eq!(cal.creates.load(Ordering::SeqCst), 2);
 }
 #[tokio::test]
 async fn pending_booking_can_be_approved_after_link_is_removed() {
