@@ -75,8 +75,21 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
 };
 
 export function DocumentCard(props: DocumentCardDecoratorProps) {
+  const [_, previewBoxHeight] = stringifyPreviewBox(
+    props.previewBox || DEFAULT_PREVIEW_BOX
+  );
   return (
-    <Suspense>
+    <Suspense
+      fallback={
+        <div
+          class="my-2 flex min-h-80 items-center justify-center rounded-xl text-ink-muted"
+          style={{ height: previewBoxHeight }}
+          aria-busy="true"
+        >
+          <LoadingSpinner class="size-6 animate-spin" />
+        </div>
+      }
+    >
       <DocumentCardInner {...props} />
     </Suspense>
   );
@@ -319,6 +332,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     props.previewBox || DEFAULT_PREVIEW_BOX
   );
 
+  // Keep the card's height while the preview query loads so a remount or
+  // loading flash cannot collapse the layout and jump the document scroll.
+  const shouldReservePreviewHeight = () => {
+    if (!ENABLE_BLOCK_IN_BLOCK) return false;
+    if (channelMessageId()) return false;
+    if (item().loading) return true;
+    return isPreviewable();
+  };
+
   const [previewBoxRef, setPreviewBoxRef] = createSignal<HTMLDivElement | null>(
     null
   );
@@ -465,10 +487,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         isSelectedAsNode() &&
           !channelMessageId() &&
           'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted',
-        isPreviewable() && 'resize-y shrink-0 min-h-80'
+        shouldReservePreviewHeight() && 'shrink-0 min-h-80',
+        isPreviewable() && 'resize-y'
       )}
       style={{
-        height: isPreviewable() ? previewBoxHeight : 'auto',
+        height: shouldReservePreviewHeight() ? previewBoxHeight : 'auto',
       }}
       onClick={(e) => {
         if (channelMessageId()) return;
@@ -486,7 +509,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     >
       <Switch>
         <Match when={item().loading}>
-          <div class="flex items-center justify-center p-4 text-ink-muted">
+          <div
+            class="flex min-h-80 items-center justify-center p-4 text-ink-muted"
+            aria-busy="true"
+          >
             <LoadingSpinner class="size-6 animate-spin" />
           </div>
         </Match>
