@@ -1,4 +1,3 @@
-import Cursor from '@phosphor/cursor.svg';
 import Envelope from '@phosphor/envelope.svg';
 import Hash from '@phosphor/hash.svg';
 import PaperPlane from '@phosphor/paper-plane-tilt.svg';
@@ -6,6 +5,7 @@ import X from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { homepagePeople } from '../../core/homepage-demo-people';
+import { DemoCursor } from '../DemoCursor';
 import { HomepageConversation } from '../HomepageConversation';
 import { demoEmails } from './email-fixtures';
 import { ChannelComposer } from './frozen/ChannelComposer';
@@ -352,7 +352,7 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
                 transform: `translate(${position().x}px, ${position().y}px)`,
               }}
             >
-              <Cursor />
+              <DemoCursor label="Jacob" clicking={phase() === 5} />
             </div>
           )}
         </Show>

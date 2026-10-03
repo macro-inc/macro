@@ -1,0 +1,100 @@
+/* GitHub page: Home (unified inbox), block-pr's PrDetail, and the PR mention. */
+
+/* Desktop Home: the list is the view's sidebar; the opened item fills the rest. */
+.review-home { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; }
+.review-home > .dummy-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; padding: 8px 8px 12px; border-right: 1px solid var(--color-edge-frame); background: var(--color-panel); }
+.review-home-sidebar { flex: 0 0 256px; width: 256px; border-right: 1px solid var(--color-edge-frame); }
+.review-home-main { flex: 1; min-width: 0; }
+.review-home-group { margin-bottom: 12px; padding-inline: 8px; color: var(--color-ink-muted); font-size: 12px; }
+.review-home-row .review-home-time { display: none; flex: none; color: var(--color-ink-extra-muted); font-size: 12px; }
+.review-home-row:hover .review-home-time { display: block; }
+.review-home-row[data-arriving='true'] { animation: review-row-in 420ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes review-row-in { from { opacity: 0; transform: translateY(-6px); } }
+
+/* The app rail around the hero; Home is selected. */
+.review-rail { flex: 0 0 56px; width: 56px; }
+.review-rail-nav { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 16px; }
+.review-rail-button { display: inline-flex; width: 40px; height: 40px; flex: none; align-items: center; justify-content: center; border-radius: 12px; color: var(--color-ink-muted); }
+.review-rail-button[data-create='true'] { border: 1px solid var(--color-edge-button); background: var(--color-control); }
+.review-rail-button[data-active='true'] { background: var(--color-hover); color: var(--color-ink); }
+
+/* Section 1 shows Home closer up, without the rail. */
+.review-home-zoomed .review-home-sidebar { flex-basis: 300px; width: 300px; }
+
+/* Mark done's toast, as the app's ToastRegion raises it. */
+.review-toast { position: absolute; right: 16px; bottom: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; width: min(340px, calc(100% - 32px)); padding: 10px 10px 10px 12px; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-menu); box-shadow: 0 16px 40px rgb(0 0 0 / 0.45); font-size: 14px; animation: review-toast 3.6s ease both; }
+.review-toast-icon { display: inline-flex; width: 20px; height: 20px; flex: none; align-items: center; justify-content: center; border-radius: 999px; background: var(--color-success); color: var(--color-surface); }
+@keyframes review-toast { 0% { opacity: 0; transform: translateY(8px); } 8%, 86% { opacity: 1; transform: none; } 100% { opacity: 0; visibility: hidden; } }
+
+/* PrDetail: centered max-w-3xl column. */
+.review-pr { max-width: 768px; min-width: 0; margin-inline: auto; padding: 48px 24px; text-align: left; }
+.review-pr h1 { font: 600 24px/32px 'Inter Variable', Inter, sans-serif; }
+.review-pr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 24px; font-size: 14px; }
+.review-pr-pill { display: inline-flex; min-width: 0; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--color-edge-muted); border-radius: 999px; background: var(--color-surface); line-height: 1.25; }
+.review-pr-description { font-size: 14px; overflow-wrap: break-word; }
+.review-pr-description .website-demo-markdown h2 { margin-top: 20px; }
+.review-pr-description .website-demo-markdown p { margin-block: 8px 16px; }
+.review-pr-timeline { margin-top: 32px; padding-bottom: 24px; }
+.review-pr-timeline-head { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
+.review-pr-timeline-head > button { display: flex; align-items: center; gap: 4px; padding-inline: 8px; font-size: 12px; }
+.review-pr-timeline-head > button:hover { opacity: 0.7; }
+.review-pr-rule { flex: 1; border-top: 1px solid var(--color-edge-muted); }
+.review-pr-rule-short { flex: 0 0 24px; }
+.review-pr-comments { display: flex; flex-direction: column; padding-top: 8px; }
+
+/* GithubMessageView: channel message rows, replies on the thread rail. */
+.review-gh-thread { position: relative; isolation: isolate; }
+.review-gh-thread[data-thread-open='true']::before { content: ''; position: absolute; z-index: -1; top: 52px; bottom: 30px; left: 16px; width: 1px; background: var(--color-edge); }
+.review-gh-comment { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px; padding: 12px 0 4px; }
+.review-gh-header { display: flex; min-width: 0; align-items: center; gap: 4px; }
+.review-gh-badge { display: inline-flex; min-width: 0; align-items: center; overflow: hidden; padding: 2px 8px; border-radius: 4px; background: var(--color-hover); color: var(--color-ink-muted); font-size: 12px; font-weight: 500; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.review-gh-badge[data-anchor='true'] { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.review-gh-body { margin-top: 2px; font-size: 14px; line-height: 22px; overflow-wrap: break-word; }
+.review-gh-replies { position: relative; margin-left: 40px; }
+.review-gh-comment[data-reply='true']::before { content: ''; position: absolute; z-index: -1; top: 0; left: -24px; width: 20px; height: 28px; border-bottom: 1px solid var(--color-edge); border-left: 1px solid var(--color-edge); border-bottom-left-radius: 14px; }
+
+/* PullRequestMention: icon, underlined title, muted #N. */
+.review-pr-mention { padding: 2px 0; border-radius: 2px; cursor: pointer; outline: none; }
+.review-pr-mention:hover, .review-pr-mention[data-hovered='true'] { background: var(--color-hover); }
+.review-pr-mention:focus-visible { background: var(--color-active); }
+.review-pr-mention-icon { position: relative; top: 0.125em; display: inline-flex; width: 1em; height: 1em; margin-inline: 4px; }
+.review-pr-mention-label { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 20%, transparent); text-decoration-thickness: max(1px, 0.1em); text-underline-offset: 2px; }
+.review-message-body { margin-top: 2px; font-size: 15px; line-height: 24px; overflow-wrap: break-word; }
+
+/* PullRequestPreviewCard: w-80 Surface depth 3, rounded-xl, shadow-lg. */
+.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 400 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
+
+/* Walkthrough overlays sit over the window, measured from their targets. */
+.review-flow-frame { position: relative; }
+.review-flow-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; transition: transform 600ms cubic-bezier(.2, .8, .2, 1); }
+.review-flow-card { position: absolute; top: 0; left: 0; z-index: 10; animation: review-card-in 160ms ease-out both; }
+@keyframes review-card-in { from { opacity: 0; } }
+.review-channel-log .sample-channel-thread { margin-bottom: 12px; }
+
+/* The homepage styles its own #coding-agents heading; keep this page's.
+   Its demo sits in a bare .dummy-workspace so its buttons keep their type. */
+.product-page .review-agent-demo.dummy-workspace { display: block; height: auto; min-height: 0; background: none; color: inherit; font: inherit; text-align: inherit; }
+.product-page .review-agent-demo :is(section, div) { min-width: 0; }
+.product-page #coding-agents .homepage-feature-title { flex-direction: row; }
+
+@media (max-width: 699px) {
+  .review-home > .dummy-rail { display: none; }
+  .review-home .review-home-sidebar { flex: 1 1 auto; width: 100%; border-right: 0; }
+  .review-home[data-pane='list'] .review-home-main, .review-home[data-pane='detail'] .review-home-sidebar { display: none; }
+  .review-pr { padding: 28px 16px; }
+  .review-pr h1 { font-size: 20px; line-height: 28px; }
+  .review-gh-replies { margin-left: 28px; }
+  .review-gh-comment[data-reply='true']::before { left: -12px; width: 8px; }
+  .review-channel-invite { display: none; }
+  .review-message-body { font-size: 14px; }
+  .review-toast { right: 12px; bottom: 12px; width: calc(100% - 24px); }
+  .product-page #coding-agents.feature-page-section { padding-top: 56px; }
+  .product-page #coding-agents .homepage-feature-title { gap: 16px; }
+  .product-page #coding-agents .homepage-feature-heading h2 { font-size: clamp(28px, 3.2vw, 40px); white-space: normal; }
+  /* The homepage lays this demo out at an 18px gutter; give it the same room. */
+  .product-page .review-agent-demo.dummy-workspace { width: calc(100% + 24px); margin-inline: -12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-flow-pointer { display: none; }
+  .review-home-row[data-arriving='true'], .review-flow-card { animation: none; }
+}

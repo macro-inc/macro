@@ -8,8 +8,7 @@
 .homepage-crm-card { height: 62px; flex-shrink: 0; }
 .homepage-crm-company-mark { display: flex; width: 16px; height: 16px; align-items: center; justify-content: center; border-radius: 4px; background: var(--color-surface-4); font-size: 10px; color: var(--color-ink-muted); }
 .homepage-crm-drag { position: absolute; top: 0; left: 0; width: 256px; z-index: 2; pointer-events: none; filter: drop-shadow(0 16px 18px rgb(0 0 0 / 0.4)); }
-.homepage-crm-cursor { position: absolute; left: 0; top: 0; z-index: 3; font-size: 20px; pointer-events: none; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.4)); }
-.homepage-crm-cursor > span { position: absolute; top: 16px; left: 15px; padding: 3px 8px; background: var(--color-ink); color: var(--color-surface-0); font: 500 11px Inter, sans-serif; border-radius: 4px 10px 10px; }
+.homepage-crm-cursor { z-index: 3; }
 .homepage-crm-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 12px; min-height: 62px; }
 .homepage-crm-footer button { transition: color 160ms; }
 .homepage-crm-footer button:hover { color: var(--color-ink); }
