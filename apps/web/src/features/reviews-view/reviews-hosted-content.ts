@@ -1,4 +1,5 @@
 import type { SplitLocation, SplitRouteMatch } from '@app/lib/split-router';
+import { paneRoute } from '@app/routes/app-route';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 
 const hostedDetailRoutes = {
@@ -22,7 +23,7 @@ export function reviewsHostedContent(
     type: 'component',
     id: 'reviews',
     entryMetadata: {
-      route: { matches: [{ id: 'view-reviews', params: {} }, detail] },
+      route: paneRoute({ id: 'view-reviews', params: {} }, detail),
       ...(search ? { search } : {}),
     },
   };

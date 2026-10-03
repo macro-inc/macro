@@ -10,6 +10,8 @@ pub mod github_sync_client;
 pub mod pg_github_repo;
 #[cfg(feature = "sync")]
 pub mod pg_github_sync_repo;
+#[cfg(feature = "sync")]
+pub mod pull_request_diff;
 #[cfg(any(feature = "link", feature = "sync"))]
 pub(crate) mod pull_request_metadata;
 

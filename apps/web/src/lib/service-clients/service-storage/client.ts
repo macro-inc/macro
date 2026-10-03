@@ -115,6 +115,9 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
+import type { GithubPullRequestChangesPatchResponse } from './generated/schemas/githubPullRequestChangesPatchResponse';
+import type { GithubPullRequestChangesResponse } from './generated/schemas/githubPullRequestChangesResponse';
+import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
@@ -162,6 +165,7 @@ import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest'
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
@@ -1749,6 +1753,72 @@ export const storageServiceClient = {
 
     return await dssFetch<ForeignEntity>(
       `/foreign_entity/by_source/${encodeURIComponent(source)}/${encodedForeignEntityId}`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * Repositories and authors among the GitHub pull requests visible to the
+   * caller and their team, most pull requests first.
+   */
+  async getGithubPullRequestFacets(): Promise<
+    Result<GithubPullRequestFacets, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<GithubPullRequestFacets>(
+      '/github_pull_requests/facets',
+      { method: 'GET' }
+    );
+  },
+
+  /** The pull request behind a foreign entity record the caller can view. */
+  async getGithubPullRequest({
+    id,
+  }: {
+    id: string;
+  }): Promise<
+    Result<StoredGithubPullRequest, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<StoredGithubPullRequest>(
+      `/github_pull_requests/${id}`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * The changes of that pull request at its current base and head, or why
+   * GitHub could not provide them.
+   */
+  async getGithubPullRequestChanges({
+    id,
+  }: {
+    id: string;
+  }): Promise<
+    Result<
+      GithubPullRequestChangesResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestChangesResponse>(
+      `/github_pull_requests/${id}/changes`,
+      { method: 'GET' }
+    );
+  },
+
+  /** The patch of one changeset of that pull request. */
+  async getGithubPullRequestChangesPatch({
+    id,
+    changeset,
+  }: {
+    id: string;
+    changeset: string;
+  }): Promise<
+    Result<
+      GithubPullRequestChangesPatchResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestChangesPatchResponse>(
+      `/github_pull_requests/${id}/changes/patch?changeset=${encodeURIComponent(changeset)}`,
       { method: 'GET' }
     );
   },

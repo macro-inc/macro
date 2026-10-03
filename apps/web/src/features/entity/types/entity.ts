@@ -53,6 +53,12 @@ export type UnknownForeignEntity = ForeignEntityBase & {
   };
 };
 
+/** A GitHub label; `color` is GitHub's six-digit hex without `#`. */
+export type GithubPullRequestLabel = {
+  name: string;
+  color?: string | null;
+};
+
 // Consider making this a generic pull request entity so we can display
 // pull requests from other sources besides github
 export type GithubPullRequestEntity = ForeignEntityBase & {
@@ -68,6 +74,7 @@ export type GithubPullRequestEntity = ForeignEntityBase & {
     deletions: number;
     comments: GithubPullRequestComment[];
     checks: GithubPullRequestCheckRun[];
+    labels: GithubPullRequestLabel[];
     authorLogin?: string;
     authorId?: number;
   };

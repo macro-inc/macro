@@ -13,20 +13,21 @@ mod realtime;
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubAppInstallationSource, GithubError, GithubInstallationAccessToken,
-        GithubInstallationSetupAction, GithubKey, GithubPullRequestDetails,
-        GithubPullRequestStatus, GithubWebhookEventType, InstallationState, MacroTaskId,
-        ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
-        sign_installation_state, verify_installation_state,
+        EnrichedGithubPullRequest, GitRef, GithubAppInstallationSource, GithubError,
+        GithubInstallationAccessToken, GithubInstallationSetupAction, GithubKey,
+        GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestReview,
+        GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
+        GithubWebhookEventType, InstallationState, MacroTaskId, ResolvedTeamTaskReference,
+        TeamTaskReference, ValidatedGithubWebhookEvent, latest_reviews, sign_installation_state,
+        verify_installation_state,
     },
     ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService},
 };
 use documents::domain::{models::DocumentError, ports::DocumentService};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
-use foreign_entity::domain::{
-    models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity},
-    ports::ForeignEntityService,
+use foreign_entity::domain::models::SourceId;
+use github_pull_requests::domain::{
+    models::UpsertGithubPullRequest, ports::GithubPullRequestService,
 };
 use hmac::{Hmac, Mac};
 use macro_env_var::maybe_env_vars;
@@ -66,13 +67,13 @@ pub struct GithubSyncServiceImpl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
 > {
     config: GithubSyncConfig,
     document_service: Arc<D>,
-    foreign_entity_service: Arc<F>,
+    pull_request_service: Arc<G>,
     notification_ingress: N,
     realtime: P,
     repo: R,
@@ -83,16 +84,16 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
-> GithubSyncServiceImpl<D, R, C, F, N, P>
+> GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     /// Create a new github sync service.
     pub fn new(
         config: GithubSyncConfig,
         document_service: Arc<D>,
-        foreign_entity_service: Arc<F>,
+        pull_request_service: Arc<G>,
         notification_ingress: N,
         repo: R,
         client: C,
@@ -101,7 +102,7 @@ impl<
         Self {
             config,
             document_service,
-            foreign_entity_service,
+            pull_request_service,
             notification_ingress,
             realtime,
             repo,
@@ -147,10 +148,10 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
-> GithubSyncServiceImpl<D, R, C, F, N, P>
+> GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     /// Extract PR metadata and generate an installation access token.
     /// Returns `None` if any required field is missing or token generation fails.
@@ -231,6 +232,11 @@ impl<
             github_key: github_key.as_ref().to_string(),
             owner: owner.to_string(),
             repo: repo.to_string(),
+            repository_id: event
+                .payload
+                .get("repository")
+                .and_then(|repository| repository.get("id"))
+                .and_then(|value| value.as_u64()),
             number,
             url,
             display_name: format!("{owner}/{repo}#{number}"),
@@ -261,6 +267,85 @@ impl<
             comments: None,
             checks: None,
             participant_github_user_ids: Self::participant_ids_from_payload(pull_request),
+            draft: pull_request
+                .and_then(|pr| pr.get("draft"))
+                .and_then(|value| value.as_bool()),
+            requested_reviewer_github_user_ids: pull_request
+                .and_then(|pr| pr.get("requested_reviewers"))
+                .and_then(|value| value.as_array())
+                .map(|users| {
+                    users
+                        .iter()
+                        .filter_map(|user| user.get("id").and_then(|value| value.as_u64()))
+                        .map(|id| id.to_string())
+                        .collect()
+                }),
+            github_updated_at: pull_request
+                .and_then(|pr| pr.get("updated_at"))
+                .and_then(|value| value.as_str())
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|updated_at| updated_at.with_timezone(&chrono::Utc)),
+            assignees: pull_request
+                .and_then(|pr| pr.get("assignees"))
+                .and_then(|value| value.as_array())
+                .map(|users| users.iter().filter_map(Self::user_from_payload).collect()),
+            labels: pull_request
+                .and_then(|pr| pr.get("labels"))
+                .and_then(|value| value.as_array())
+                .map(|labels| labels.iter().filter_map(Self::label_from_payload).collect()),
+            reviews: Self::review_from_payload(event.payload.get("review"))
+                .map(|review| vec![review]),
+            base: pull_request.and_then(|pr| Self::git_ref_from_payload(pr.get("base")?)),
+            head: pull_request.and_then(|pr| Self::git_ref_from_payload(pr.get("head")?)),
+        })
+    }
+
+    /// A pull request payload's `base` or `head`: the branch and the commit it points at.
+    fn git_ref_from_payload(branch: &serde_json::Value) -> Option<GitRef> {
+        let name = branch
+            .get("ref")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        let sha = branch
+            .get("sha")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        (name.is_some() || sha.is_some()).then_some(GitRef { name, sha })
+    }
+
+    fn user_from_payload(user: &serde_json::Value) -> Option<GithubPullRequestUser> {
+        Some(GithubPullRequestUser {
+            github_user_id: user.get("id")?.as_u64()?.to_string(),
+            login: user
+                .get("login")
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+        })
+    }
+
+    fn label_from_payload(label: &serde_json::Value) -> Option<GithubPullRequestLabel> {
+        Some(GithubPullRequestLabel {
+            name: label.get("name")?.as_str()?.to_string(),
+            color: label
+                .get("color")
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+        })
+    }
+
+    /// The review a `pull_request_review` event carries, as its reviewer's state.
+    fn review_from_payload(review: Option<&serde_json::Value>) -> Option<GithubPullRequestReview> {
+        let review = review?;
+        let reviewer = Self::user_from_payload(review.get("user")?)?;
+        Some(GithubPullRequestReview {
+            reviewer_github_user_id: reviewer.github_user_id,
+            reviewer_login: reviewer.login,
+            state: GithubPullRequestReviewState::from_github(review.get("state")?.as_str()?)?,
+            submitted_at: review
+                .get("submitted_at")
+                .and_then(|value| value.as_str())
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|submitted_at| submitted_at.with_timezone(&chrono::Utc)),
         })
     }
 
@@ -349,6 +434,7 @@ impl<
             github_key: fallback.github_key,
             owner: fallback.owner,
             repo: fallback.repo,
+            repository_id: details.repository_id.or(fallback.repository_id),
             number: fallback.number,
             url: fallback.url,
             display_name: fallback.display_name,
@@ -364,6 +450,24 @@ impl<
             participant_github_user_ids: details
                 .participant_github_user_ids
                 .or(fallback.participant_github_user_ids),
+            draft: details.draft.or(fallback.draft),
+            requested_reviewer_github_user_ids: details
+                .requested_reviewer_github_user_ids
+                .or(fallback.requested_reviewer_github_user_ids),
+            github_updated_at: details.github_updated_at.or(fallback.github_updated_at),
+            assignees: details.assignees.or(fallback.assignees),
+            labels: details.labels.or(fallback.labels),
+            reviews: match (details.reviews, fallback.reviews) {
+                (None, None) => None,
+                (details, fallback) => Some(latest_reviews(
+                    details
+                        .into_iter()
+                        .flatten()
+                        .chain(fallback.into_iter().flatten()),
+                )),
+            },
+            base: details.base.or(fallback.base),
+            head: details.head.or(fallback.head),
         }
     }
 
@@ -478,169 +582,55 @@ impl<
         Some((pull_request, upserts))
     }
 
-    /// Create or refresh foreign entity rows from already-enriched pull request metadata.
+    /// Create or refresh one foreign entity record per installation source from already-enriched
+    /// pull request metadata.
     #[tracing::instrument(skip(self, pull_request, stored_for_sources))]
     async fn upsert_enriched_pull_request_foreign_entities(
         &self,
         pull_request: EnrichedGithubPullRequest,
         stored_for_sources: &[GithubAppInstallationSource],
     ) -> Vec<PullRequestForeignEntityUpsert> {
-        let existing = match self
-            .foreign_entity_service
-            .get_foreign_entities_by_foreign_entity_id(
-                &pull_request.github_key,
-                Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
-            )
-            .await
-        {
-            Ok(existing) => existing,
-            Err(error) => {
-                tracing::error!(error=?error, "failed to fetch existing PR foreign entities");
-                return Vec::new();
-            }
-        };
-
         let mut upserts = Vec::new();
         let mut seen_sources = HashSet::new();
         for source in stored_for_sources {
-            let stored_for_id = source.source_id();
-            let stored_for_auth_entity = source.source_type().to_string();
-            if !seen_sources.insert((stored_for_id.clone(), stored_for_auth_entity.clone())) {
+            let stored_for = SourceId::new(source.source_id(), source.source_type());
+            if !seen_sources.insert(stored_for.clone()) {
                 continue;
             }
 
-            let existing_entity = existing.iter().find(|entity| {
-                entity.stored_for_id.as_str() == stored_for_id.as_str()
-                    && entity.stored_for_auth_entity.as_str() == stored_for_auth_entity.as_str()
-            });
-            let previous_status = existing_entity
-                .and_then(|entity| Self::pull_request_status_from_metadata(&entity.metadata));
-            let existing_metadata = existing_entity
-                .map(|entity| &entity.metadata)
-                .or_else(|| existing.first().map(|entity| &entity.metadata));
-            let metadata = match pull_request.foreign_entity_metadata(existing_metadata) {
-                Ok(metadata) => metadata,
+            let upserted = match self
+                .pull_request_service
+                .upsert_pull_request(UpsertGithubPullRequest {
+                    pull_request: pull_request.clone(),
+                    stored_for,
+                })
+                .await
+            {
+                Ok(upserted) => upserted,
                 Err(error) => {
-                    tracing::error!(error=?error, "failed to serialize PR foreign entity metadata");
-                    return Vec::new();
+                    tracing::error!(
+                        error=?error,
+                        source_id=%source.source_id(),
+                        source_type=%source.source_type(),
+                        "failed to store PR foreign entity"
+                    );
+                    continue;
                 }
             };
-            let participant_github_user_ids =
-                Self::participant_github_user_ids_from_metadata(&metadata);
 
-            let foreign_entity = if let Some(entity) = existing_entity {
-                self.patch_pull_request_foreign_entity(
-                    entity,
-                    metadata,
-                    &pull_request.github_key,
-                    &stored_for_id,
-                    &stored_for_auth_entity,
-                )
-                .await
-            } else {
-                self.create_pull_request_foreign_entity(
-                    &pull_request.github_key,
-                    metadata,
-                    &stored_for_id,
-                    &stored_for_auth_entity,
-                )
-                .await
-            };
-
-            let Some(foreign_entity) = foreign_entity else {
-                continue;
-            };
-
-            self.publish_pull_request(source, &foreign_entity).await;
+            self.publish_pull_request(source, &upserted.foreign_entity)
+                .await;
 
             upserts.push(PullRequestForeignEntityUpsert {
                 source: source.clone(),
-                foreign_entity_id: foreign_entity.id,
-                previous_status,
+                foreign_entity_id: upserted.foreign_entity.id,
+                previous_status: upserted.previous_status,
                 status: pull_request.status,
-                participant_github_user_ids,
+                participant_github_user_ids: upserted.participant_github_user_ids,
             });
         }
 
         upserts
-    }
-
-    async fn patch_pull_request_foreign_entity(
-        &self,
-        entity: &ForeignEntity,
-        metadata: serde_json::Value,
-        github_key: &str,
-        stored_for_id: &str,
-        stored_for_auth_entity: &str,
-    ) -> Option<ForeignEntity> {
-        self.foreign_entity_service
-            .patch_foreign_entity(
-                entity.id,
-                PatchForeignEntity {
-                    metadata: Some(metadata),
-                    ..PatchForeignEntity::default()
-                },
-            )
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error=?error,
-                    foreign_entity_id=%github_key,
-                    stored_for_id=%stored_for_id,
-                    stored_for_auth_entity=%stored_for_auth_entity,
-                    "failed to patch PR foreign entity"
-                );
-            })
-            .ok()
-    }
-
-    async fn create_pull_request_foreign_entity(
-        &self,
-        github_key: &str,
-        metadata: serde_json::Value,
-        stored_for_id: &str,
-        stored_for_auth_entity: &str,
-    ) -> Option<ForeignEntity> {
-        self.foreign_entity_service
-            .create_foreign_entity(CreateForeignEntity {
-                foreign_entity_id: github_key.to_string(),
-                foreign_entity_source: GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string(),
-                metadata,
-                stored_for_id: stored_for_id.to_string(),
-                stored_for_auth_entity: stored_for_auth_entity.to_string(),
-            })
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error=?error,
-                    foreign_entity_id=%github_key,
-                    stored_for_id=%stored_for_id,
-                    stored_for_auth_entity=%stored_for_auth_entity,
-                    "failed to create PR foreign entity"
-                );
-            })
-            .ok()
-    }
-
-    fn pull_request_status_from_metadata(
-        metadata: &serde_json::Value,
-    ) -> Option<GithubPullRequestStatus> {
-        metadata
-            .get("status")
-            .and_then(|status| serde_json::from_value(status.clone()).ok())
-    }
-
-    fn participant_github_user_ids_from_metadata(metadata: &serde_json::Value) -> Vec<String> {
-        let Some(ids) = metadata
-            .get("participantGithubUserIds")
-            .and_then(|value| value.as_array())
-        else {
-            return Vec::new();
-        };
-
-        ids.iter()
-            .filter_map(|value| value.as_str().map(str::to_string))
-            .collect()
     }
 
     /// Extract both legacy `MACRO-{short_uuid}` IDs and team-scoped
@@ -873,10 +863,10 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
-> GithubSyncService for GithubSyncServiceImpl<D, R, C, F, N, P>
+> GithubSyncService for GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     #[tracing::instrument(skip(self, body), err)]
     async fn validate_webhook_event(

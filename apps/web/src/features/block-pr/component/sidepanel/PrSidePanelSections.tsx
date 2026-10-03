@@ -4,9 +4,11 @@ import {
 } from '@components/app/side-panel';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Show } from 'solid-js';
+import { PrAgentSessionsSection } from './PrAgentSessionsSection';
 
 export function PrSidePanelSections(props: {
   enrichment?: GithubPullRequestWithDetails;
+  status: 'pending' | 'error' | 'success';
 }) {
   return (
     <>
@@ -44,6 +46,11 @@ export function PrSidePanelSections(props: {
       <SidePanel.Section id="pr-checks" title="Checks" order={20}>
         <GithubPullRequestChecksContent enrichment={props.enrichment} />
       </SidePanel.Section>
+
+      <PrAgentSessionsSection
+        url={props.enrichment?.url}
+        prStatus={props.status}
+      />
     </>
   );
 }

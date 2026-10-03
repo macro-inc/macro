@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::{ChangesetId, ChangesetRange};
+use crate::domain::model::{ChangedFile, ChangesetId, ChangesetRange, FileChangeKind};
 
 #[test]
 fn the_changes_response_says_when_a_capture_is_running() {

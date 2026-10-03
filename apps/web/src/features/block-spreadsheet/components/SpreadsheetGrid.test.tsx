@@ -1011,15 +1011,14 @@ describe('cell context menu', () => {
       show: vi.fn(),
     };
     const view = renderGrid({}, { comments, hiddenColumns: [0] });
+    // Keep full-grid role queries outside the polling callback so they cannot
+    // starve the menu's deferred close/focus handlers on slower CI runners.
+    const anchor = view.getByRole('gridcell', { name: 'B2' });
     view.controller.selectRange({ row: 1, column: 0 }, { row: 1, column: 25 });
     fireEvent.keyDown(view.element, { key: 'ContextMenu' });
     const comment = await screen.findByRole('menuitem', { name: 'Comment' });
     fireEvent.keyDown(comment, { key: 'Enter' });
-    await waitFor(() =>
-      expect(comments.add).toHaveBeenCalledWith(
-        view.getByRole('gridcell', { name: 'B2' })
-      )
-    );
+    await waitFor(() => expect(comments.add).toHaveBeenCalledWith(anchor));
   });
 
   it('keeps the native text editing menu and does not open the cell menu over headers', async () => {
