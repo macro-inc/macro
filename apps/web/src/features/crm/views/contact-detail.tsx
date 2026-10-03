@@ -1,5 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useCrmContext } from '../context/crm-context';
 import {
   type ContactSection,
@@ -60,6 +61,22 @@ export function Contact(props: {
                   contact={contact()}
                   onOpenCompany={props.onOpenCompany}
                 />
+                <Show when={context.MarketingEnrollments}>
+                  {(Enrollments) => (
+                    <Suspense
+                      fallback={
+                        <div class="text-xs text-ink-muted">
+                          Loading enrollments…
+                        </div>
+                      }
+                    >
+                      <Dynamic
+                        component={Enrollments()}
+                        email={contact()?.email ?? ''}
+                      />
+                    </Suspense>
+                  )}
+                </Show>
                 <ContactDiscussionSection contactId={props.contactId} />
               </div>
             </div>

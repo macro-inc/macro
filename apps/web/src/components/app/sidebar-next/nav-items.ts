@@ -10,6 +10,7 @@ import EnvelopeIcon from '@phosphor/envelope.svg';
 import FolderSimpleIcon from '@phosphor/folder-simple.svg';
 import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
+import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
@@ -19,6 +20,7 @@ import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
 import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
+import PaperPlaneTiltFillIcon from '@phosphor-fill/paper-plane-tilt-fill.svg';
 import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
 import type { NavIcon } from './nav-glyph';
 
@@ -89,6 +91,15 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: ChatsCircleFillIcon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
+  },
+  {
+    id: 'email-marketing',
+    label: 'Email Marketing',
+    href: '/email-marketing',
+    icon: PaperPlaneTiltIcon,
+    iconActive: PaperPlaneTiltFillIcon,
+    hotkey: 'k',
+    hotkeyToken: TOKENS.sidebar.goTo.emailMarketing,
   },
   {
     id: 'tasks',

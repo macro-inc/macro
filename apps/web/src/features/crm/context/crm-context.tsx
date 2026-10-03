@@ -72,6 +72,7 @@ export type CrmContext = {
   ): ItemListSource;
   /** The record's Tasks tab, scoped to tasks associated with it. */
   RecordTasks: Component<{ scope: CrmRecordScope }>;
+  MarketingEnrollments?: Component<{ email: string }>;
   createPropertyCommands(): PropertyCommands;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<

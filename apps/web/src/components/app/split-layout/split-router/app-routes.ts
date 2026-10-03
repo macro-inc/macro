@@ -11,6 +11,7 @@ import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
 import { companiesRoute } from '@app/features/crm/route';
 import { driveSplitRoute } from '@app/features/drive-view/route';
+import { emailMarketingRoute } from '@app/features/email-marketing/route';
 import { emailSplitRoute } from '@app/features/email-view/route';
 import { gettingStartedRoute } from '@app/features/getting-started/route';
 import { homeSplitRoute } from '@app/features/home/route';
@@ -46,6 +47,7 @@ export const appSplitRoutes = defineRoutes({
     remindersRoute,
     agentsViewRoute,
     emailSplitRoute,
+    emailMarketingRoute,
     tasksSplitRoute,
     reviewsSplitRoute,
     calendarSplitRoute,

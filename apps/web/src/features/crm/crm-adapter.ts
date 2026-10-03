@@ -73,6 +73,10 @@ import { createAppDealStages } from './stage-adapter';
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
+const MarketingEnrollments = lazy(async () => ({
+  default: (await import('../email-marketing/contact-card'))
+    .MarketingContactCard,
+}));
 
 /**
  * Soup rows carry raw notification arrays; `ListEntity` reads them through
@@ -172,6 +176,7 @@ export function createAppCrmContext(): CrmContext {
     createRecordCalls: (scope) =>
       withRowNotifications(useRecordCallsQuery(useSoupAstItemsQuery, scope)),
     RecordTasks: CrmRecordTasks,
+    MarketingEnrollments,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

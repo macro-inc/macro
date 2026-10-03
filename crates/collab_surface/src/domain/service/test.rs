@@ -433,3 +433,62 @@ async fn delete_requires_edit_capable_permission() {
     let gone = svc.get_parent(surface.id).await.unwrap_err();
     assert!(matches!(gone, CollabSurfaceError::NotFound));
 }
+
+#[tokio::test]
+async fn database_surface_tokens_inherit_database_access_and_reject_other_parents() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_initialize()
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo, init);
+    let database_id = macro_uuid::generate_uuid_v7().to_string();
+    let actor = user("macro|a@b.c");
+    let surface = svc
+        .ensure_surface(
+            &actor,
+            receipt_for(
+                "macro|a@b.c",
+                EntityType::Database,
+                &database_id,
+                edit_permission(),
+            ),
+            surface_id(),
+            String::new(),
+        )
+        .await
+        .unwrap();
+    for access_level in [AccessLevel::View, AccessLevel::Edit] {
+        let token = svc
+            .mint_token(
+                &actor,
+                receipt_for(
+                    "macro|a@b.c",
+                    EntityType::Database,
+                    &database_id,
+                    EntityPermission::AccessLevel { access_level },
+                ),
+                surface.id,
+            )
+            .await
+            .unwrap();
+        let claims: model::document::DocumentPermissionsToken =
+            macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+        assert_eq!(claims.access_level, access_level);
+        assert_eq!(claims.document_id, surface.id.to_string());
+    }
+    let other_database = macro_uuid::generate_uuid_v7().to_string();
+    let error = svc
+        .mint_token(
+            &actor,
+            receipt_for(
+                "macro|a@b.c",
+                EntityType::Database,
+                &other_database,
+                edit_permission(),
+            ),
+            surface.id,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, CollabSurfaceError::AccessDenied));
+}

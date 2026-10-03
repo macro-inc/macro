@@ -9,6 +9,7 @@ import { ChannelsRouteView } from '@app/features/channels-view/route';
 import { CompaniesRouteView } from '@app/features/crm/route';
 import { DriveRouteView } from '@app/features/drive-view/route';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
+import { EmailMarketingRouteView } from '@app/features/email-marketing/route';
 import { MailRouteView } from '@app/features/email-view/route';
 import { GettingStartedRouteView } from '@app/features/getting-started/route';
 import { HomeRouteView } from '@app/features/home/route';
@@ -269,6 +270,11 @@ registerComponent(
   })
 );
 registerComponent('folders', () => <FoldersRouteView />);
+registerComponent(
+  'email-marketing',
+  () => <EmailMarketingRouteView />,
+  () => ({ splitPanelLayout: 'composable' })
+);
 registerComponent('search', () => <SearchRouteView />);
 registerComponent('firehose', () => (
   <RedirectSplit to={{ type: 'component', id: 'activity' }} />

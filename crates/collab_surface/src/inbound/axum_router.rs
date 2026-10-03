@@ -112,7 +112,34 @@ const SUPPORTED_PARENT_TYPES: &[EntityType] = &[
     EntityType::Chat,
     EntityType::EmailThread,
     EntityType::Call,
+    EntityType::Database,
 ];
+
+#[cfg(test)]
+mod parent_validation_tests {
+    use super::*;
+
+    #[test]
+    fn database_surface_uses_its_database_as_the_permission_parent() {
+        let id = Uuid::new_v4().to_string();
+        let parent = build_parent(EntityType::Database, &id).unwrap();
+        assert_eq!(parent.entity_type, EntityType::Database);
+        assert_eq!(parent.entity_id.as_ref(), id);
+    }
+
+    #[test]
+    fn unsupported_and_malformed_parents_still_fail_before_authorization() {
+        let id = Uuid::new_v4().to_string();
+        assert!(matches!(
+            build_parent(EntityType::User, &id),
+            Err(CollabSurfaceError::BadRequest(_))
+        ));
+        assert!(matches!(
+            build_parent(EntityType::Database, "not-a-uuid"),
+            Err(CollabSurfaceError::BadRequest(_))
+        ));
+    }
+}
 
 /// Request body for ensuring a collab surface.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
