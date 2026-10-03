@@ -1,4 +1,5 @@
 use super::*;
+use crate::types::response::web_search::{SearchResult, WebSearchContent, WebSearchToolError};
 use crate::types::response::{Content, MessageResponse, ResponseContentKind};
 use ai_billing::domain::{
     DenyReason,
@@ -460,6 +461,150 @@ fn deserialize_web_search_response() {
             }
         }
     }
+}
+
+fn search_result(url: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "web_search_result",
+        "url": url,
+        "title": format!("Title of {url}"),
+        "encrypted_content": "EqgfCioIARgB...",
+        "page_age": "April 30, 2025"
+    })
+}
+
+fn search_result_block(tool_use_id: &str, content: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "type": "web_search_tool_result",
+        "tool_use_id": tool_use_id,
+        "content": content
+    })
+}
+
+/// A paused server-tool loop is a real stop reason for web search, so the
+/// tool must hand back the results found so far rather than fail on the
+/// envelope; stop reasons this crate has never seen must not fail it either.
+#[tokio::test]
+async fn web_search_survives_paused_and_unknown_stop_reasons() {
+    use ai_toolset::{AsyncTool, ServiceContext};
+    for stop_reason in [
+        "pause_turn",
+        "model_context_window_exceeded",
+        "some_future_reason",
+    ] {
+        let body = serde_json::json!({
+            "id": "msg-1",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "a"}},
+                search_result_block("srv-1", serde_json::json!([search_result("https://a.example")])),
+                {"type": "server_tool_use", "id": "srv-2", "name": "web_search", "input": {"query": "b"}},
+            ],
+            "stop_reason": stop_reason,
+            "stop_sequence": null,
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        });
+        let context = context_with_response(&body.to_string(), Arc::default()).await;
+        let request = RequestContext::new(
+            "macro|authenticated@example.com"
+                .to_owned()
+                .try_into()
+                .unwrap(),
+        );
+        let response = WebSearch {
+            input: "a and b".into(),
+        }
+        .call(ServiceContext(context), request)
+        .await
+        .unwrap_or_else(|error| panic!("{stop_reason}: {}", error.description));
+        assert_eq!(response.tool_use_id, "srv-1");
+        match response.content {
+            WebSearchContent::Results(results) => assert_eq!(results.len(), 1),
+            WebSearchContent::Error(error) => panic!("{stop_reason}: {error:?}"),
+        }
+    }
+}
+
+#[test]
+fn web_search_output_folds_every_search_without_encrypted_content() {
+    let blocks: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
+        {"type": "text", "text": "Searching."},
+        {"type": "server_tool_use", "id": "srv-1", "name": "web_search", "input": {"query": "a"}},
+        search_result_block("srv-1", serde_json::json!([
+            search_result("https://a.example"),
+            search_result("https://shared.example"),
+        ])),
+        search_result_block("srv-2", serde_json::json!({
+            "type": "web_search_tool_result_error",
+            "error_code": "too_many_requests"
+        })),
+        search_result_block("srv-3", serde_json::json!([
+            search_result("https://shared.example"),
+            search_result("https://c.example"),
+        ])),
+    ]))
+    .unwrap();
+
+    let response = web_search::collect_results(blocks).expect("a search ran");
+    assert_eq!(response.tool_use_id, "srv-1");
+    let WebSearchContent::Results(results) = response.content else {
+        panic!("one failed search must not hide the others' results");
+    };
+    let urls: Vec<_> = results
+        .iter()
+        .map(|result| match result {
+            SearchResult::WebSearchResult {
+                url,
+                encrypted_content,
+                ..
+            } => {
+                assert_eq!(encrypted_content, &None);
+                url.as_str()
+            }
+        })
+        .collect();
+    assert_eq!(
+        urls,
+        [
+            "https://a.example",
+            "https://shared.example",
+            "https://c.example"
+        ]
+    );
+}
+
+#[test]
+fn web_search_output_reports_the_error_only_when_nothing_was_found() {
+    let blocks: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
+        search_result_block(
+            "srv-1",
+            serde_json::json!({
+                "type": "web_search_tool_result_error",
+                "error_code": "max_uses_exceeded"
+            })
+        ),
+        search_result_block(
+            "srv-2",
+            serde_json::json!({
+                "type": "web_search_tool_result_error",
+                "error_code": "unavailable"
+            })
+        ),
+    ]))
+    .unwrap();
+    let response = web_search::collect_results(blocks).expect("a search ran");
+    assert_eq!(response.tool_use_id, "srv-1");
+    assert!(matches!(
+        response.content,
+        WebSearchContent::Error(WebSearchToolError { ref error_code, .. }) if error_code == "max_uses_exceeded"
+    ));
+
+    let no_search: Vec<ResponseContentKind> = serde_json::from_value(serde_json::json!([
+        {"type": "text", "text": "I do not need to search for that."}
+    ]))
+    .unwrap();
+    assert!(web_search::collect_results(no_search).is_none());
 }
 
 #[test]
