@@ -10,26 +10,8 @@ use initiative::{
     outbound::{PgInitiativeRepo, resources::ProjectResources},
 };
 
-type ToolDescriptionSurfaces = initiative_description::InitiativeDescriptionSurfacesAdapter<
-    PgCollabSurfaceService<ToolCollabSurfaceDocumentIds>,
->;
-
-/// Glue giving collab surfaces their view of the document id namespace, which
-/// they share in sync-service.
-pub struct ToolCollabSurfaceDocumentIds(sqlx::PgPool);
-
-impl collab_surface::domain::ports::DocumentIds for ToolCollabSurfaceDocumentIds {
-    #[tracing::instrument(err, skip(self))]
-    async fn is_document_id(&self, id: uuid::Uuid) -> Result<bool, rootcause::Report> {
-        // Soft-deleted documents keep their session, so the helper counts them.
-        macro_db_client::dcs::does_document_exist::does_document_exist(
-            self.0.clone(),
-            &id.to_string(),
-        )
-        .await
-        .map_err(|e| rootcause::report!("failed to look up document id {id}: {e:?}").into_dynamic())
-    }
-}
+type ToolDescriptionSurfaces =
+    initiative_description::InitiativeDescriptionSurfacesAdapter<PgCollabSurfaceService>;
 
 /// Production initiative service with the same description lifecycle as DSS.
 pub type ToolInitiativeService = InitiativeServiceImpl<PgInitiativeRepo, ToolDescriptionSurfaces>;
@@ -54,7 +36,6 @@ pub fn build_initiative_tool_context(
             pool.clone(),
             documents.lexical_client.as_ref().clone(),
             documents.sync_service_client.as_ref().clone(),
-            ToolCollabSurfaceDocumentIds(pool.clone()),
             documents.document_permission_jwt_secret.clone(),
         ),
     ));
