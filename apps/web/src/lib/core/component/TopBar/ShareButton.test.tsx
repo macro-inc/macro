@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   updateChatPermissions: vi.fn(),
   fetchCallSharePermission: vi.fn(),
   updateCallTeamShare: vi.fn(),
+  updateCallChannelShare: vi.fn(),
   setCallRecordTeamShareCache: vi.fn(),
   callRecordShared: true,
   callRecordChannelId: 'channel-1' as string | null,
@@ -195,6 +196,8 @@ vi.mock('@queries/call/call', () => ({
     mocks.fetchCallSharePermission(...args),
   updateCallTeamShare: (...args: unknown[]) =>
     mocks.updateCallTeamShare(...args),
+  updateCallChannelShare: (...args: unknown[]) =>
+    mocks.updateCallChannelShare(...args),
   setCallRecordTeamShareCache: (...args: unknown[]) =>
     mocks.setCallRecordTeamShareCache(...args),
   sharePermissionFromCallRecord: (record: {

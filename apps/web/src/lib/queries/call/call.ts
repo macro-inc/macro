@@ -210,6 +210,13 @@ export function updateCallTeamShare(callId: string, shared: boolean) {
   });
 }
 
+export function updateCallChannelShare(
+  callId: string,
+  sharePermission: UpdateSharePermissionRequestV2
+) {
+  return callServiceClient.editCallRecord({ callId, sharePermission });
+}
+
 function patchCachedCallTeamShare(
   record: CallRecord,
   shared: boolean
