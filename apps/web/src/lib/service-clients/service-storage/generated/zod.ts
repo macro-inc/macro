@@ -14986,56 +14986,6 @@ export const updateInitiativeResponse = zod
   );
 
 /**
- * @summary Assign tasks the caller can edit.
- */
-export const assignInitiativeTasksParams = zod.object({
-  initiative_id: zod.string().describe('Initiative identifier.'),
-});
-
-export const assignInitiativeTasksBody = zod
-  .object({
-    taskIds: zod
-      .array(zod.string())
-      .describe('Task ids to assign, in request order.'),
-  })
-  .describe('Assign-tasks HTTP body.');
-
-export const assignInitiativeTasksResponse = zod
-  .object({
-    results: zod
-      .array(
-        zod
-          .object({
-            status: zod
-              .enum([
-                'assigned',
-                'moved',
-                'notATask',
-                'notFound',
-                'skippedNoPermission',
-              ])
-              .describe('Status written onto one assign result.'),
-            taskId: zod.string().describe('Task id this outcome describes.'),
-          })
-          .describe('Per-task outcome of an assign call.')
-      )
-      .describe('Outcomes in request order after dedupe.'),
-  })
-  .describe('Assign-tasks HTTP response.');
-
-/**
- * @summary Unassign one task the caller can edit.
- */
-export const unassignInitiativeTaskParams = zod.object({
-  initiative_id: zod.string().describe('Initiative identifier.'),
-  task_id: zod.string().describe('Task identifier.'),
-});
-
-export const unassignInitiativeTaskResponse = zod.object({
-  success: zod.boolean().describe('Indicates if the request was successful'),
-});
-
-/**
  * @summary Gets the instructions document for the current user
  */
 export const getInstructionsHandlerResponse = zod.object({

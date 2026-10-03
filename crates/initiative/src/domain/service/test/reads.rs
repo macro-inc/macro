@@ -12,6 +12,8 @@ use std::{
 #[derive(Debug, Default)]
 pub(super) struct FakeResources {
     denied: HashSet<String>,
+    /// Every project's tasks, from their Project property.
+    tasks: Vec<String>,
     values: HashMap<String, InitiativePropertySnapshot>,
     fail_initialization: bool,
 }
@@ -38,6 +40,9 @@ impl InitiativeResources for FakeResources {
     }
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async { Ok(()) })
+    }
+    fn project_tasks(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+        Box::pin(async { Ok(self.tasks.clone()) })
     }
     fn view(
         &self,
@@ -87,19 +92,16 @@ fn summary(id: u128, name: &str) -> InitiativeSummary {
 #[tokio::test]
 async fn single_summary_counts_only_visible_tasks_and_uses_canonical_properties() {
     let mut repo = MockInitiativeRepo::new();
-    repo.expect_get_detail().times(1).return_once(|_| {
-        Box::pin(async {
-            let mut d = detail(Vec::new());
-            d.task_ids = vec!["open".into(), "done".into(), "hidden".into()];
-            Ok(Some(d))
-        })
-    });
+    repo.expect_get_detail()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
     let status = uuid::Uuid::from_u128(50);
     let project_id = detail(Vec::new()).id.to_string();
     let svc = service_with_resources(
         repo,
         FakeResources {
             denied: HashSet::from(["hidden".into()]),
+            tasks: vec!["open".into(), "done".into(), "hidden".into()],
             values: HashMap::from([
                 (
                     project_id,
@@ -212,17 +214,14 @@ async fn failed_initialization_compensation_does_not_purge_a_remaining_project()
 #[tokio::test]
 async fn task_paging_filters_visibility_before_counting_and_page_boundaries() {
     let mut repo = MockInitiativeRepo::new();
-    repo.expect_get_detail().times(2).returning(|_| {
-        Box::pin(async {
-            let mut d = detail(Vec::new());
-            d.task_ids = vec!["z".into(), "hidden".into(), "a".into()];
-            Ok(Some(d))
-        })
-    });
+    repo.expect_get_detail()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
     let svc = service_with_resources(
         repo,
         FakeResources {
             denied: HashSet::from(["hidden".into()]),
+            tasks: vec!["z".into(), "hidden".into(), "a".into()],
             ..Default::default()
         },
     );
@@ -264,14 +263,6 @@ async fn collection_filters_properties_before_paging_and_counts_only_visible_tas
             })
         })
     });
-    repo.expect_get_detail().times(2).returning(|id| {
-        Box::pin(async move {
-            let mut d = detail(Vec::new());
-            d.id = id;
-            d.task_ids = vec!["visible".into(), "hidden".into()];
-            Ok(Some(d))
-        })
-    });
     let selected = InitiativePropertySnapshot {
         status: Some(status),
         ..Default::default()
@@ -280,6 +271,7 @@ async fn collection_filters_properties_before_paging_and_counts_only_visible_tas
         repo,
         FakeResources {
             denied: HashSet::from(["hidden".into()]),
+            tasks: vec!["visible".into(), "hidden".into()],
             values: HashMap::from([
                 (summary(1, "").id.to_string(), selected.clone()),
                 (summary(2, "").id.to_string(), selected),
@@ -316,79 +308,6 @@ async fn collection_filters_properties_before_paging_and_counts_only_visible_tas
         .unwrap();
     assert_eq!(last.initiatives[0].initiative.name, "Beta");
     assert!(last.next_cursor.is_none());
-}
-
-#[tokio::test]
-async fn task_references_distinguish_unassigned_from_inaccessible_without_metadata_leaks() {
-    let visible_project = summary(1, "Visible").id;
-    let hidden_project = summary(2, "Secret").id;
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_task_memberships()
-        .withf(|ids| ids == &["unassigned", "visible", "secret"])
-        .return_once(move |_| {
-            Box::pin(async move {
-                Ok(HashMap::from([
-                    ("visible".into(), visible_project),
-                    ("secret".into(), hidden_project),
-                ]))
-            })
-        });
-    repo.expect_get_basic()
-        .withf(move |id| *id == visible_project)
-        .times(1)
-        .return_once(move |_| {
-            Box::pin(async move {
-                Ok(Some(InitiativeBasic {
-                    id: visible_project,
-                    name: "Visible".into(),
-                    owner_id: user(OWNER),
-                }))
-            })
-        });
-    let svc = service_with_resources(
-        repo,
-        FakeResources {
-            denied: HashSet::from([hidden_project.to_string(), "hidden-task".into()]),
-            ..Default::default()
-        },
-    );
-    let response = svc
-        .task_references(
-            &user(OWNER),
-            TaskInitiativeReferencesRequest {
-                task_ids: vec![
-                    "unassigned".into(),
-                    "visible".into(),
-                    "secret".into(),
-                    "hidden-task".into(),
-                    "visible".into(),
-                ],
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.references.len(), 4);
-    assert!(matches!(
-        response.references[0],
-        TaskInitiativeReference::None { .. }
-    ));
-    assert!(matches!(
-        response.references[1],
-        TaskInitiativeReference::Visible { .. }
-    ));
-    assert!(matches!(
-        response.references[2],
-        TaskInitiativeReference::Unavailable { .. }
-    ));
-    assert!(matches!(
-        response.references[3],
-        TaskInitiativeReference::Unavailable { .. }
-    ));
-    assert!(
-        !serde_json::to_string(&response)
-            .unwrap()
-            .contains(&hidden_project.to_string())
-    );
 }
 
 #[tokio::test]
@@ -484,9 +403,6 @@ async fn removed_name_cursor_anchor_requires_restarting_instead_of_silently_skip
                 })
             })
         });
-    repo.expect_get_detail()
-        .times(1)
-        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
     let svc = service_with_resources(repo, FakeResources::default());
     let mut request = InitiativePageRequest {
         limit: Some(1),
@@ -542,9 +458,6 @@ async fn renamed_name_cursor_anchor_requires_restarting_in_both_directions() {
                     })
                 })
             });
-        repo.expect_get_detail()
-            .times(1)
-            .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
         let svc = service_with_resources(repo, FakeResources::default());
         let mut request = InitiativePageRequest {
             limit: Some(1),

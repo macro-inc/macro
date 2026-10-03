@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-
-mod access;
 use std::sync::{Arc, Mutex};
 
 use axum::http::{StatusCode, header};
@@ -30,18 +27,14 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::{
     models::{
-        AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRequest,
-        InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
-        InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment, UpdateInitiativeRequest,
+        CreateInitiativeRequest, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+        InitiativeList, InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, UpdateInitiativeRequest,
     },
     ports::InitiativeService,
 };
 
 const USER_ID: &str = "macro|initiative-router@macro.com";
 const VALID_JWT: &str = "valid";
-const TASK_OK: &str = "task-ok";
-const TASK_DENIED: &str = "task-denied";
-const TASK_MISSING: &str = "task-missing";
 
 fn existing_id() -> InitiativeId {
     InitiativeId::from_uuid(Uuid::from_u128(1))
@@ -131,23 +124,12 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 #[derive(Clone)]
 struct FakeEntityAccessService {
     initiative_access: Option<AccessLevel>,
-    document_denials: HashMap<String, fn() -> AccessError>,
 }
 
 impl FakeEntityAccessService {
     fn without_initiative_access() -> Self {
         Self {
             initiative_access: None,
-            document_denials: HashMap::new(),
-        }
-    }
-
-    fn denying_document(task_id: &str, denial: fn() -> AccessError) -> Self {
-        let mut document_denials = HashMap::new();
-        document_denials.insert(task_id.to_string(), denial);
-        Self {
-            initiative_access: Some(AccessLevel::Owner),
-            document_denials,
         }
     }
 }
@@ -156,7 +138,6 @@ impl Default for FakeEntityAccessService {
     fn default() -> Self {
         Self {
             initiative_access: Some(AccessLevel::Owner),
-            document_denials: HashMap::new(),
         }
     }
 }
@@ -171,9 +152,6 @@ impl EntityAccessService for FakeEntityAccessService {
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         if entity_type != EntityType::Document {
             return Err(AccessError::internal("test access failure"));
-        }
-        if let Some(denial) = self.document_denials.get(entity_id) {
-            return Err(denial());
         }
         EntityAccessReceipt::try_new_authenticated_user(
             MacroUserIdStr::parse_from_str(USER_ID)
@@ -286,9 +264,6 @@ enum ServiceCall {
     Create { name: String },
     Get,
     Update,
-    Assign(Vec<AssignTasksResult>),
-    Unassign { task_id: String },
-    Clear { task_id: String },
     Delete,
 }
 
@@ -355,16 +330,6 @@ impl InitiativeService for FakeInitiativeService {
         })
     }
 
-    async fn task_references(
-        &self,
-        _user_id: &MacroUserIdStr<'_>,
-        _request: crate::domain::reads::TaskInitiativeReferencesRequest,
-    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
-        Ok(crate::domain::reads::TaskInitiativeReferences {
-            references: Vec::new(),
-        })
-    }
-
     async fn create(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -424,51 +389,6 @@ impl InitiativeService for FakeInitiativeService {
         }
         self.record(ServiceCall::Update);
         Ok(sample_detail())
-    }
-
-    async fn assign_tasks(
-        &self,
-        _receipt: EntityAccessReceipt<EditAccessLevel>,
-        assignments: Vec<TaskAssignment>,
-    ) -> Result<AssignTasksResponse, InitiativeError> {
-        let response = AssignTasksResponse {
-            results: assignments
-                .into_iter()
-                .map(|assignment| AssignTasksResult {
-                    status: match &assignment {
-                        TaskAssignment::Authorized { .. } => AssignTaskStatus::Assigned,
-                        TaskAssignment::NotFound { .. } => AssignTaskStatus::NotFound,
-                        TaskAssignment::SkippedNoPermission { .. } => {
-                            AssignTaskStatus::SkippedNoPermission
-                        }
-                    },
-                    task_id: assignment.task_id().to_string(),
-                })
-                .collect(),
-        };
-        self.record(ServiceCall::Assign(response.results.clone()));
-        Ok(response)
-    }
-
-    async fn unassign_task(
-        &self,
-        _receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<(), InitiativeError> {
-        self.record(ServiceCall::Unassign {
-            task_id: task_receipt.entity().entity_id.clone(),
-        });
-        Ok(())
-    }
-
-    async fn clear_task(
-        &self,
-        task_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<(), InitiativeError> {
-        self.record(ServiceCall::Clear {
-            task_id: task_receipt.entity().entity_id.clone(),
-        });
-        Ok(())
     }
 
     async fn grant_assignees(
@@ -698,64 +618,6 @@ async fn update_returns_200() {
 }
 
 #[tokio::test]
-async fn assign_tasks_returns_200() {
-    let service = FakeInitiativeService::default();
-    let response = send(
-        build_router(service.clone(), FakeEntityAccessService::default()),
-        authed(axum::http::Request::put(format!(
-            "/{}/tasks",
-            existing_id()
-        )))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(json_body(serde_json::json!({ "taskIds": [TASK_OK] })))
-        .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({
-            "results": [{ "taskId": TASK_OK, "status": "assigned" }]
-        })
-    );
-    assert_eq!(
-        service.calls(),
-        vec![ServiceCall::Assign(vec![AssignTasksResult {
-            task_id: TASK_OK.to_string(),
-            status: AssignTaskStatus::Assigned,
-        }])]
-    );
-}
-
-#[tokio::test]
-async fn unassign_task_returns_200() {
-    let service = FakeInitiativeService::default();
-    let response = send(
-        build_router(service.clone(), FakeEntityAccessService::default()),
-        authed(axum::http::Request::delete(format!(
-            "/{}/tasks/{TASK_OK}",
-            existing_id()
-        )))
-        .body(axum::body::Body::empty())
-        .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({ "success": true })
-    );
-    assert_eq!(
-        service.calls(),
-        vec![ServiceCall::Unassign {
-            task_id: TASK_OK.to_string()
-        }]
-    );
-}
-
-#[tokio::test]
 async fn delete_returns_200() {
     let service = FakeInitiativeService::default();
     let response = send(
@@ -796,122 +658,6 @@ async fn a_name_that_is_too_long_is_422() {
 }
 
 #[tokio::test]
-async fn assign_unauthorized_is_skipped_no_permission() {
-    let service = FakeInitiativeService::default();
-    let response = send(
-        build_router(
-            service.clone(),
-            FakeEntityAccessService::denying_document(TASK_DENIED, || AccessError::Unauthorized),
-        ),
-        authed(axum::http::Request::put(format!(
-            "/{}/tasks",
-            existing_id()
-        )))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(json_body(serde_json::json!({
-            "taskIds": [TASK_DENIED, TASK_OK]
-        })))
-        .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({
-            "results": [
-                { "taskId": TASK_DENIED, "status": "skippedNoPermission" },
-                { "taskId": TASK_OK, "status": "assigned" }
-            ]
-        })
-    );
-}
-
-#[tokio::test]
-async fn assign_unauthorized_with_message_is_skipped_no_permission() {
-    let response = send(
-        build_router(
-            FakeInitiativeService::default(),
-            FakeEntityAccessService::denying_document(TASK_DENIED, || {
-                AccessError::UnauthorizedWithMessage("nope")
-            }),
-        ),
-        authed(axum::http::Request::put(format!(
-            "/{}/tasks",
-            existing_id()
-        )))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(json_body(serde_json::json!({ "taskIds": [TASK_DENIED] })))
-        .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({
-            "results": [{ "taskId": TASK_DENIED, "status": "skippedNoPermission" }]
-        })
-    );
-}
-
-#[tokio::test]
-async fn assign_not_found_is_not_found() {
-    let response = send(
-        build_router(
-            FakeInitiativeService::default(),
-            FakeEntityAccessService::denying_document(TASK_MISSING, || {
-                AccessError::NotFound("task")
-            }),
-        ),
-        authed(axum::http::Request::put(format!(
-            "/{}/tasks",
-            existing_id()
-        )))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(json_body(serde_json::json!({ "taskIds": [TASK_MISSING] })))
-        .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({
-            "results": [{ "taskId": TASK_MISSING, "status": "notFound" }]
-        })
-    );
-}
-
-#[tokio::test]
-async fn assign_bad_request_is_not_found() {
-    let response = send(
-        build_router(
-            FakeInitiativeService::default(),
-            FakeEntityAccessService::denying_document(TASK_MISSING, || {
-                AccessError::BadRequest("bad")
-            }),
-        ),
-        authed(axum::http::Request::put(format!(
-            "/{}/tasks",
-            existing_id()
-        )))
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(json_body(serde_json::json!({ "taskIds": [TASK_MISSING] })))
-        .expect("request should build"),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        read_json(response).await,
-        serde_json::json!({
-            "results": [{ "taskId": TASK_MISSING, "status": "notFound" }]
-        })
-    );
-}
-
-#[tokio::test]
 async fn list_without_credentials_is_401() {
     let response = send(
         build_router(
@@ -925,4 +671,31 @@ async fn list_without_credentials_is_401() {
     .await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn task_membership_routes_are_gone() {
+    // Tasks join a project through their Project property instead.
+    let service = FakeInitiativeService::default();
+    for request in [
+        authed(axum::http::Request::put(format!(
+            "/{}/tasks",
+            existing_id()
+        )))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(json_body(serde_json::json!({ "taskIds": ["task-1"] }))),
+        authed(axum::http::Request::delete(format!(
+            "/{}/tasks/task-1",
+            existing_id()
+        )))
+        .body(axum::body::Body::empty()),
+    ] {
+        let response = send(
+            build_router(service.clone(), FakeEntityAccessService::default()),
+            request.expect("request should build"),
+        )
+        .await;
+        assert!(response.status().is_client_error(), "{}", response.status());
+    }
+    assert!(service.calls().is_empty());
 }

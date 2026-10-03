@@ -49,6 +49,9 @@ impl InitiativeResources for RecordingResources {
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("a create never purges through a receipt")
     }
+    fn project_tasks(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
     fn view(
         &self,
         _auth: EntityAccessAuth,

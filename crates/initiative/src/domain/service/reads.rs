@@ -11,13 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use super::{InitiativeServiceImpl, receipt_access_level};
 use crate::domain::{
-    models::{InitiativeError, InitiativeId, MAX_TASKS_PER_ASSIGN},
+    models::{InitiativeError, InitiativeId},
     ports::{InitiativeDescriptionSurfaces, InitiativeRepo, InitiativeService},
     reads::{
-        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeReference,
-        InitiativeSort, InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH,
-        TaskInitiativeReference, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
-        page_size as limit,
+        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeSort,
+        InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH, page_size as limit,
     },
 };
 
@@ -345,16 +343,8 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         let mut tasks_by_project = HashMap::new();
         let mut task_receipts = Vec::new();
         for row in &rows {
-            let Some(detail) = self
-                .repo
-                .get_detail(row.initiative.id)
-                .await
-                .map_err(Into::into)?
-            else {
-                continue;
-            };
             let mut ids = Vec::new();
-            for id in detail.task_ids {
+            for id in self.resources.project_tasks(row.initiative.id).await? {
                 if let Some(receipt) = self
                     .resources
                     .view(
@@ -401,79 +391,5 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
     ) -> Result<InitiativeTasksPage, InitiativeError> {
         request.validate()?;
         self.get(receipt).await?.task_page(request)
-    }
-
-    pub(super) async fn read_task_references(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        request: TaskInitiativeReferencesRequest,
-    ) -> Result<TaskInitiativeReferences, InitiativeError> {
-        let mut seen = std::collections::HashSet::new();
-        let mut ids = Vec::new();
-        for id in request.task_ids {
-            if id.is_empty() || id.len() > 128 {
-                return Err(InitiativeError::BadRequest("invalid task id".into()));
-            }
-            if seen.insert(id.clone()) {
-                if ids.len() == MAX_TASKS_PER_ASSIGN {
-                    return Err(InitiativeError::BadRequest(
-                        "at most 100 task ids are allowed".into(),
-                    ));
-                }
-                ids.push(id);
-            }
-        }
-        let auth = EntityAccessAuth::Authenticated(user_id.clone().into_owned());
-        let visible = self.visible_tasks(&auth, ids.clone()).await?;
-        let memberships = self
-            .repo
-            .task_memberships(visible.clone())
-            .await
-            .map_err(Into::into)?;
-        let mut projects = HashMap::new();
-        for id in memberships.values() {
-            if projects.contains_key(id) {
-                continue;
-            }
-            let basic = if self
-                .resources
-                .view(
-                    auth.clone(),
-                    Entity {
-                        entity_id: id.to_string(),
-                        entity_type: EntityType::Initiative,
-                    },
-                )
-                .await?
-                .is_some()
-            {
-                self.repo.get_basic(*id).await.map_err(Into::into)?
-            } else {
-                None
-            };
-            projects.insert(*id, basic);
-        }
-        let references = ids
-            .into_iter()
-            .map(|task_id| {
-                if !visible.contains(&task_id) {
-                    return TaskInitiativeReference::Unavailable { task_id };
-                }
-                match memberships.get(&task_id) {
-                    None => TaskInitiativeReference::None { task_id },
-                    Some(id) => match projects.get(id).and_then(Option::as_ref) {
-                        Some(project) => TaskInitiativeReference::Visible {
-                            task_id,
-                            initiative: InitiativeReference {
-                                id: *id,
-                                name: project.name.clone(),
-                            },
-                        },
-                        None => TaskInitiativeReference::Unavailable { task_id },
-                    },
-                }
-            })
-            .collect();
-        Ok(TaskInitiativeReferences { references })
     }
 }

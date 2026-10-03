@@ -171,18 +171,6 @@ type CompleteMutationRoot {
 	Delete an initiative after its owner capability has been verified.
 	"""
 	deleteInitiative(initiativeId: ID!): Boolean!
-	"""
-	Assign or move tasks, preserving partial task authorization results.
-	"""
-	assignInitiativeTasks(initiativeId: ID!, taskIds: [ID!]!): [InitiativeTaskAssignment!]!
-	"""
-	Remove a task using project and task edit capabilities.
-	"""
-	unassignInitiativeTask(initiativeId: ID!, taskId: ID!): Boolean!
-	"""
-	Clear a task's project using task edit access, even after project access is revoked.
-	"""
-	clearTaskInitiative(taskId: ID!): Boolean!
 }
 
 """
@@ -7084,10 +7072,6 @@ type GraphqlUser {
 	"""
 	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
 	"""
-	Initiative chips for tasks, without inaccessible project metadata.
-	"""
-	taskInitiativeReferences(taskIds: [ID!]!): [TaskInitiativeReference!]!
-	"""
 	AI routines the authenticated user can access.
 	"""
 	scheduledActions: [GraphqlScheduledAction!]!
@@ -7334,46 +7318,6 @@ input InitiativeSharePermissionInput {
 	Changes to channel grants.
 	"""
 	channelSharePermissions: [InitiativeChannelShareInput!]
-}
-
-"""
-One result in the deduplicated request order.
-"""
-type InitiativeTaskAssignment {
-	"""
-	Task whose assignment was attempted.
-	"""
-	taskId: ID!
-	"""
-	Domain result of this assignment.
-	"""
-	status: InitiativeTaskAssignmentStatus!
-}
-
-"""
-Per-task result of an assignment request.
-"""
-enum InitiativeTaskAssignmentStatus {
-	"""
-	Newly assigned or already assigned here.
-	"""
-	ASSIGNED
-	"""
-	Moved from another initiative.
-	"""
-	MOVED
-	"""
-	Document exists but is not a task.
-	"""
-	NOT_A_TASK
-	"""
-	Task could not be found.
-	"""
-	NOT_FOUND
-	"""
-	Viewer cannot edit this task.
-	"""
-	SKIPPED_NO_PERMISSION
 }
 
 """
@@ -7815,42 +7759,6 @@ type SoupUpdated {
 	The hydrated entity for this update.
 	"""
 	item: GraphqlSoupEntity!
-}
-
-"""
-Permission-filtered relationship between a task and its project.
-"""
-type TaskInitiativeReference {
-	"""
-	Task whose relationship is described, never this object's identity.
-	"""
-	taskId: ID!
-	"""
-	Permission-filtered relationship state.
-	"""
-	state: TaskInitiativeReferenceState!
-	"""
-	The same initiative entity used by collection/detail queries.
-	"""
-	initiative: GraphqlSoupInitiative
-}
-
-"""
-Visibility state of a task's initiative.
-"""
-enum TaskInitiativeReferenceState {
-	"""
-	Visible task without an initiative.
-	"""
-	NONE
-	"""
-	Task or initiative cannot be viewed.
-	"""
-	UNAVAILABLE
-	"""
-	Both task and initiative can be viewed.
-	"""
-	VISIBLE
 }
 
 """

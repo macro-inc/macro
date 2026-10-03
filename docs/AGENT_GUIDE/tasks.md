@@ -252,13 +252,17 @@ have description documents; older ones are ignored and stay hidden from document
 search, history, and Soup lists.
 An unavailable connection shows `Retry description` without clearing saved content.
 
+A task's project is its `Project` system property: one reference to the project,
+set only on tasks. Setting it needs edit access to the task and the project;
+removing it needs edit access to the task. The project's Tasks tab lists the
+tasks whose Project property names the project.
+
 The project's Tasks tab starts with the task search, controls, and unified list;
 the project title and property pills appear only on Overview. Use
-`New task` to create a task associated with the project. The normal task row is
-inserted into the query cache before the composer closes, including its selected
-properties and project chip. It stays in its group while saving and assigning,
-then uses the saved task ID. Failed creations or assignments roll back that row.
-Verify this with GraphQL Soup both enabled and disabled. The section tabs
+`New task` to create a task in the project: the create request carries the
+Project property, so there is no separate assignment step. The new row appears
+once the task is created. Verify this with GraphQL Soup both enabled and
+disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task`, search for tasks, select several, and confirm `Add N tasks`. Tasks
 already in this project are excluded. Adding a task moves it from its previous
@@ -274,6 +278,8 @@ Inside an open task, use the Project pill below the title, the Project row in
 the Properties side panel, or `Add to project…` in the title's actions menu.
 The property shows `No project` until assigned and stays read-only without edit
 access. Choose `No project` in the assignment dialog to remove the association.
+The Project property does not appear in the generic Properties list or the
+`Add property` picker; these project controls set it.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion
