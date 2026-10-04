@@ -57,15 +57,19 @@ impl<'a> Env<'a> {
         cache: Option<&'a super::LayoutCache>,
     ) -> Self {
         let parts = doc.parts();
+        let mut formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            doc.decls(),
+        );
+        if let Some(c) = cache {
+            formats = formats.with_cache(c.formats(doc.generation));
+        }
         Env {
             doc,
-            formats: Formats::new(
-                &parts.styles,
-                &parts.numbering,
-                &parts.settings,
-                &parts.theme,
-                doc.decls(),
-            ),
+            formats,
             fonts: Fonts::new(fonts),
             options,
             note_numbers: HashMap::new(),
@@ -208,8 +212,8 @@ pub(super) fn layout(
     sections.push(doc.final_section());
     let refs = effective_refs(&sections);
     // Page-count fields need the page count: lay out again when the first
-    // pass's guess was wrong.
-    let mut total = 1;
+    // pass's guess (the last layout's count) was wrong.
+    let mut total = cache.and_then(|c| c.last_pages()).unwrap_or(1) as i64;
     let mut pages = Vec::new();
     for _ in 0..3 {
         let mut flow = body::Flow::new(&env, sections.clone(), refs.clone(), total);
@@ -220,6 +224,9 @@ pub(super) fn layout(
             break;
         }
         total = count;
+    }
+    if let Some(c) = cache {
+        c.set_last_pages(pages.len());
     }
     Layout { pages }
 }

@@ -759,3 +759,58 @@ fn tables_insert_and_change_shape() {
     run(&mut s, EditOp::DeleteTable);
     assert_eq!(count(&s, BlockKind::Table), 0);
 }
+
+#[test]
+fn typing_reports_a_band_around_the_changed_lines() {
+    let mut paras = String::new();
+    for i in 0..30 {
+        paras.push_str(&p(&format!("Paragraph {i} with some text.")));
+    }
+    let mut s = open(&paras);
+    s.pages(fonts());
+    caret_at(&mut s, 3, 0);
+    let r = type_text(&mut s, "x");
+    assert_eq!(r.bands.len(), 1, "{:?}", r.bands);
+    let band = r.bands[0];
+    let caret = r.caret.unwrap();
+    assert_eq!(band.page, 0);
+    assert!(band.top <= caret.y && band.bottom >= caret.y + caret.height);
+    assert!(band.bottom - band.top < 40.0, "{band:?}");
+}
+
+#[test]
+fn selected_text_joins_paragraphs() {
+    let mut s = open(&format!("{}{}", p("Hello world"), p("Second line")));
+    select(&mut s, (0, 6), (1, 6));
+    assert_eq!(s.selected_text(), "world\nSecond");
+}
+
+#[test]
+#[ignore = "timing probe over a corpus document; run with --ignored --nocapture"]
+fn zz_typing_profile() {
+    let path = std::env::var("DOCX_PROFILE").unwrap_or_default();
+    let Ok(bytes) = std::fs::read(&path) else { return };
+    let doc = Document::open(bytes).unwrap();
+    let mut s = Session::new(doc);
+    let t = std::time::Instant::now();
+    let pages = s.pages(fonts()).len();
+    eprintln!("first layout {:?} ({pages} pages)", t.elapsed());
+    let target = s.document().body().paragraphs()[20].clone();
+    s.apply(&[EditOp::Select { anchor: Pos::new(target.clone(), 3), focus: Pos::new(target, 3) }], None, fonts()).unwrap();
+    for i in 0..5 {
+        let t = std::time::Instant::now();
+        let r = s.apply(&[EditOp::InsertText { text: "x".into() }], Some("typing"), fonts()).unwrap();
+        let total = t.elapsed();
+        let t2 = std::time::Instant::now();
+        let json = serde_json::to_string(&r).unwrap();
+        eprintln!("keystroke {i}: apply {total:?}, json {:?} ({} bytes)", t2.elapsed(), json.len());
+    }
+    // Layout alone.
+    let t = std::time::Instant::now();
+    let cache = crate::layout::LayoutCache::new();
+    s.document().layout_cached(fonts(), &crate::layout::LayoutOptions::default(), &cache);
+    eprintln!("cold layout {:?}", t.elapsed());
+    let t = std::time::Instant::now();
+    s.document().layout_cached(fonts(), &crate::layout::LayoutOptions::default(), &cache);
+    eprintln!("warm layout {:?}", t.elapsed());
+}

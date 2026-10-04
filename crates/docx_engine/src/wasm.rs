@@ -179,6 +179,12 @@ impl DocxDocument {
         to_json(&rects)
     }
 
+    /// The selected text, for the clipboard.
+    #[wasm_bindgen(js_name = selectedText)]
+    pub fn selected_text(&mut self) -> String {
+        self.session.selected_text()
+    }
+
     /// Paragraph ids and texts in document order (`ParagraphText[]` JSON).
     pub fn paragraphs(&self) -> Result<String, JsError> {
         to_json(&self.session.paragraphs())
@@ -199,6 +205,31 @@ impl DocxDocument {
             .collect();
         out.sort_by(|a, b| (a.priority, &a.name).cmp(&(b.priority, &b.name)));
         to_json(&out)
+    }
+
+    /// Shows tracked changes inline (`true`) or the final text; returns the
+    /// `EditResult` JSON.
+    #[wasm_bindgen(js_name = setMarkup)]
+    pub fn set_markup(&mut self, markup: bool) -> Result<String, JsError> {
+        self.session.set_markup(markup);
+        self.state()
+    }
+
+    /// Renders a strip of a page (`top..bottom` in points) at the page width
+    /// `width`; returns straight-alpha RGBA rows.
+    #[wasm_bindgen(js_name = renderBand)]
+    pub fn render_band(&mut self, page: usize, width: u32, top: f32, bottom: f32) -> Result<Vec<u8>, JsError> {
+        let width = width.clamp(16, 8192);
+        FONTS.with(|f| {
+            let fonts = f.borrow();
+            let layout = self.session.layout(&fonts);
+            let raster = self
+                .session
+                .document()
+                .render_band(&layout, page, width, top, bottom, &fonts, &mut self.images)
+                .ok_or_else(|| JsError::new("no such page"))?;
+            Ok(raster.to_straight_rgba())
+        })
     }
 
     /// Ends the current typing group.

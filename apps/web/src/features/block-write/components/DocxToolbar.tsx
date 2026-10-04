@@ -21,21 +21,28 @@ export type DocxInlineFormat = 'bold' | 'italic' | 'underline' | 'strike';
 export type DocxAlignment = 'left' | 'center' | 'right' | 'justify';
 export type DocxParagraphStyle = { id: string; name: string };
 
+/** Font sizes offered in the size picker (points). */
+const FONT_SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
+
 export type DocxToolbarProps = {
   canEdit: boolean;
   canComment: boolean;
   format: Partial<Record<DocxInlineFormat, boolean>>;
+  /** Font size at the selection (points). */
+  fontSize: number | null;
   paragraphStyle: string | null;
   paragraphStyles: DocxParagraphStyle[];
-  trackChanges: boolean;
+  /** Tracked changes shown inline (else the document as if accepted). */
+  showMarkup: boolean;
   onFormat: (format: DocxInlineFormat) => void;
+  onFontSize: (size: number) => void;
   onParagraphStyle: (styleId: string) => void;
-  onList: (kind: 'bullet' | 'decimal') => void;
+  onList: (kind: 'bullet' | 'number') => void;
   onAlign: (alignment: DocxAlignment) => void;
   onUndo: () => void;
   onRedo: () => void;
   onInsertTable: () => void;
-  onToggleTrackChanges: () => void;
+  onToggleMarkup: () => void;
   onComment: () => void;
   onDownload: () => void;
 };
@@ -140,7 +147,37 @@ export function DocxToolbar(props: DocxToolbarProps) {
               </option>
             </Show>
             <For each={props.paragraphStyles}>
-              {(style) => <option value={style.id}>{style.name}</option>}
+              {(style) => (
+                <option
+                  value={style.id}
+                  selected={style.id === props.paragraphStyle}
+                >
+                  {style.name}
+                </option>
+              )}
+            </For>
+          </select>
+          <select
+            aria-label="Font size"
+            class="h-6 w-14 rounded-md border border-edge-muted bg-input px-1 text-xs text-ink"
+            value={props.fontSize ?? ''}
+            onChange={(event) =>
+              props.onFontSize(Number(event.currentTarget.value))
+            }
+          >
+            <Show
+              when={
+                props.fontSize !== null && !FONT_SIZES.includes(props.fontSize)
+              }
+            >
+              <option value={props.fontSize ?? ''}>{props.fontSize}</option>
+            </Show>
+            <For each={FONT_SIZES}>
+              {(size) => (
+                <option value={size} selected={size === props.fontSize}>
+                  {size}
+                </option>
+              )}
             </For>
           </select>
           <Toolbar.Divider />
@@ -168,7 +205,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
             </Toolbar.Button>
             <Toolbar.Button
               label="Numbered list"
-              onClick={() => props.onList('decimal')}
+              onClick={() => props.onList('number')}
             >
               <ListNumbers />
             </Toolbar.Button>
@@ -195,10 +232,10 @@ export function DocxToolbar(props: DocxToolbarProps) {
           </Toolbar.Button>
           <Toolbar.Button
             label={
-              props.trackChanges ? 'Stop tracking changes' : 'Track changes'
+              props.showMarkup ? 'Hide tracked changes' : 'Show tracked changes'
             }
-            aria-pressed={props.trackChanges}
-            onClick={() => props.onToggleTrackChanges()}
+            aria-pressed={props.showMarkup}
+            onClick={() => props.onToggleMarkup()}
           >
             <PencilSimpleLine />
           </Toolbar.Button>

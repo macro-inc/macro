@@ -23,7 +23,7 @@ pub use txn::{BlockRecord, Change, Step, content_delta};
 
 use crate::document::Document;
 use crate::layout::format::{Formats, ParaFormat, TableCtx};
-use crate::layout::{Item, Layout, LayoutCache, LayoutOptions, Page};
+use crate::layout::{Item, Layout, LayoutCache, LayoutOptions, Page, ParaBox};
 use crate::model::block::{BlockId, BlockKind};
 use crate::model::content::{Attrs, OBJECT_CHAR, key, utf16_len};
 use crate::model::props::Align;
@@ -305,6 +305,8 @@ pub struct EditResult {
     pub changes: Vec<Change>,
     /// The selection afterwards.
     pub selection: Selection,
+    /// The selection's ends in document order.
+    pub range: Range,
     /// The caret (at the focus).
     pub caret: Option<CaretRect>,
     /// Selection highlight rectangles.
@@ -312,8 +314,20 @@ pub struct EditResult {
     /// Pages, when the layout changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pages: Option<Vec<PageInfo>>,
+    /// Where pages changed since the previous result, when the layout changed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub bands: Vec<Band>,
     /// Formatting at the selection.
     pub format: FormatState,
+}
+
+/// A selection's ends in document order.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Range {
+    /// The start.
+    pub from: Pos,
+    /// The end.
+    pub to: Pos,
 }
 
 /// A change other peers made, as the shared containers now hold it.
@@ -417,6 +431,11 @@ pub struct Session {
     /// Undo history is kept by the caller (collaborative editing).
     external_undo: bool,
     order: Option<(u64, Arc<ParaOrder>)>,
+    /// Changed strips since the last result.
+    bands: Vec<Band>,
+    line_hashes: LineHashes,
+    keys: PageKeys,
+    fingerprints: Vec<u64>,
 }
 
 impl std::fmt::Debug for Session {
@@ -428,103 +447,228 @@ impl std::fmt::Debug for Session {
     }
 }
 
-/// A stable hash of a page's content.
-fn page_fingerprint(page: &Page) -> u64 {
+/// A horizontal strip of a page that changed (points).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct Band {
+    /// Page index.
+    pub page: usize,
+    /// Top.
+    pub top: f32,
+    /// Bottom.
+    pub bottom: f32,
+}
+
+/// Hashes of a paragraph's lines (glyphs, positions and run styles),
+/// remembered per laid-out paragraph: cached paragraphs keep theirs between
+/// layouts, so fingerprinting a page after an edit costs little.
+#[derive(Default)]
+struct LineHashes {
+    map: HashMap<usize, (std::sync::Weak<ParaBox>, Arc<Vec<u64>>)>,
+}
+
+fn rgba_bits(c: &pptx_engine::model::color::Rgba) -> [u32; 4] {
+    [c.r.to_bits(), c.g.to_bits(), c.b.to_bits(), c.a.to_bits()]
+}
+
+fn run_hash(r: &crate::layout::inline::RunStyle) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    page.width.to_bits().hash(&mut h);
-    page.height.to_bits().hash(&mut h);
-    page.number.hash(&mut h);
-    for item in page.all_items() {
-        match item {
-            Item::Line(l) => {
-                0u8.hash(&mut h);
-                l.x.to_bits().hash(&mut h);
-                l.y.to_bits().hash(&mut h);
-                if let Some(c) = &l.clip {
-                    (c.x.to_bits(), c.y.to_bits(), c.w.to_bits(), c.h.to_bits()).hash(&mut h);
+    let p = &r.props;
+    (r.size.to_bits(), r.shift.to_bits(), rgba_bits(&r.color)).hash(&mut h);
+    (p.bold, p.italic, p.strike, p.dstrike, p.caps, p.small_caps).hash(&mut h);
+    match &p.underline {
+        Some(u) => {
+            std::mem::discriminant(&u.style).hash(&mut h);
+            u.color.as_ref().map(rgba_bits).hash(&mut h);
+        }
+        None => 0u8.hash(&mut h),
+    }
+    p.highlight.as_ref().map(rgba_bits).hash(&mut h);
+    p.shading.as_ref().map(rgba_bits).hash(&mut h);
+    r.revision.hash(&mut h);
+    h.finish()
+}
+
+fn para_line_hashes(pb: &ParaBox) -> Vec<u64> {
+    let runs: Vec<u64> = pb.inline.runs.iter().map(run_hash).collect();
+    pb.lines
+        .lines
+        .iter()
+        .map(|line| {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (line.width.to_bits(), line.hyphen, line.height.to_bits()).hash(&mut h);
+            for ci in line.start..line.end {
+                let c = &pb.inline.clusters[ci];
+                (c.ch, c.glyph, pb.lines.x[ci].to_bits()).hash(&mut h);
+                if let Some(f) = &c.font {
+                    f.face.hash(&mut h);
                 }
-                let pb = &l.para;
-                let line = l.line();
-                line.width.to_bits().hash(&mut h);
-                line.hyphen.hash(&mut h);
-                for ci in line.start..line.end {
-                    let c = &pb.inline.clusters[ci];
-                    (c.ch, c.glyph, c.run).hash(&mut h);
-                    pb.lines.x[ci].to_bits().hash(&mut h);
-                    if let Some(f) = &c.font {
-                        f.face.hash(&mut h);
-                    }
-                    if let Some(r) = pb.inline.runs.get(c.run as usize) {
-                        let p = &r.props;
-                        (r.size.to_bits(), r.shift.to_bits()).hash(&mut h);
-                        (
-                            r.color.r.to_bits(),
-                            r.color.g.to_bits(),
-                            r.color.b.to_bits(),
-                            r.color.a.to_bits(),
-                        )
-                            .hash(&mut h);
-                        (p.bold, p.italic, p.strike, p.dstrike, p.caps, p.small_caps).hash(&mut h);
-                        format!(
-                            "{:?}{:?}{:?}{:?}",
-                            p.underline, p.highlight, p.shading, r.revision
-                        )
-                        .hash(&mut h);
-                    }
-                }
+                runs.get(c.run as usize).hash(&mut h);
             }
-            Item::Fill { rect, color } => {
-                1u8.hash(&mut h);
-                (
-                    rect.x.to_bits(),
-                    rect.y.to_bits(),
-                    rect.w.to_bits(),
-                    rect.h.to_bits(),
-                )
-                    .hash(&mut h);
-                (
-                    color.r.to_bits(),
-                    color.g.to_bits(),
-                    color.b.to_bits(),
-                    color.a.to_bits(),
-                )
-                    .hash(&mut h);
+            h.finish()
+        })
+        .collect()
+}
+
+impl LineHashes {
+    fn of(&mut self, pb: &Arc<ParaBox>) -> Arc<Vec<u64>> {
+        let key = Arc::as_ptr(pb) as usize;
+        if let Some((weak, hashes)) = self.map.get(&key)
+            && weak.upgrade().is_some_and(|p| Arc::ptr_eq(&p, pb))
+        {
+            return Arc::clone(hashes);
+        }
+        let hashes = Arc::new(para_line_hashes(pb));
+        self.map
+            .insert(key, (Arc::downgrade(pb), Arc::clone(&hashes)));
+        hashes
+    }
+
+    /// Forgets paragraphs no layout holds any more.
+    fn prune(&mut self) {
+        self.map.retain(|_, (weak, _)| weak.strong_count() > 0);
+    }
+}
+
+/// A hash of one item and the vertical extent it paints.
+fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let (top, bottom) = match item {
+        Item::Line(l) => {
+            0u8.hash(&mut h);
+            (l.x.to_bits(), l.y.to_bits()).hash(&mut h);
+            if let Some(c) = &l.clip {
+                (c.x.to_bits(), c.y.to_bits(), c.w.to_bits(), c.h.to_bits()).hash(&mut h);
             }
-            Item::Rule {
-                x0,
-                y0,
-                x1,
-                y1,
-                border,
-            } => {
-                2u8.hash(&mut h);
-                (x0.to_bits(), y0.to_bits(), x1.to_bits(), y1.to_bits()).hash(&mut h);
-                format!("{border:?}").hash(&mut h);
+            lines.of(&l.para).get(l.line).hash(&mut h);
+            // Glyphs can reach a little past the line box.
+            (l.y - 3.0, l.y + l.line().height + 3.0)
+        }
+        Item::Fill { rect, color } => {
+            1u8.hash(&mut h);
+            (rect.x.to_bits(), rect.y.to_bits(), rect.w.to_bits(), rect.h.to_bits()).hash(&mut h);
+            rgba_bits(color).hash(&mut h);
+            (rect.y - 1.0, rect.y + rect.h + 1.0)
+        }
+        Item::Rule {
+            x0,
+            y0,
+            x1,
+            y1,
+            border,
+        } => {
+            2u8.hash(&mut h);
+            (x0.to_bits(), y0.to_bits(), x1.to_bits(), y1.to_bits()).hash(&mut h);
+            (
+                std::mem::discriminant(&border.style),
+                border.width.to_bits(),
+                border.space.to_bits(),
+            )
+                .hash(&mut h);
+            format!("{:?}", border.color).hash(&mut h);
+            let pad = border.width * 3.0 + 2.0;
+            (y0.min(*y1) - pad, y0.max(*y1) + pad)
+        }
+        Item::Drawing(d) => {
+            3u8.hash(&mut h);
+            (Arc::as_ptr(&d.drawing) as usize).hash(&mut h);
+            (d.rect.x.to_bits(), d.rect.y.to_bits(), d.rect.w.to_bits(), d.rect.h.to_bits())
+                .hash(&mut h);
+            // Rotated or effect-extended drawings can reach further.
+            let pad = d.rect.w.max(d.rect.h) * 0.5;
+            (d.rect.y - pad, d.rect.y + d.rect.h + pad)
+        }
+        Item::LineNumber {
+            text,
+            right,
+            baseline,
+            size,
+            ..
+        } => {
+            4u8.hash(&mut h);
+            text.hash(&mut h);
+            (right.to_bits(), baseline.to_bits()).hash(&mut h);
+            (baseline - size * 1.2, baseline + size * 0.5)
+        }
+    };
+    (h.finish(), top, bottom)
+}
+
+/// Item keys of every page.
+type PageKeys = Vec<Vec<(u64, f32, f32)>>;
+
+fn page_keys(layout: &Layout, lines: &mut LineHashes) -> PageKeys {
+    layout
+        .pages
+        .iter()
+        .map(|p| p.all_items().map(|i| item_key(i, lines)).collect())
+        .collect()
+}
+
+/// A page's fingerprint from its item keys.
+fn fingerprint(page: &Page, keys: &[(u64, f32, f32)]) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (page.width.to_bits(), page.height.to_bits(), page.number).hash(&mut h);
+    for k in keys {
+        k.0.hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Strips of each page that differ between two layouts; a page whose size
+/// changed (or that is new) is dirty from top to bottom.
+fn dirty_bands(old: &Layout, old_keys: &PageKeys, new: &Layout, new_keys: &PageKeys) -> Vec<Band> {
+    let mut out = Vec::new();
+    for (i, page) in new.pages.iter().enumerate() {
+        let (Some(before), Some(a)) = (old.pages.get(i), old_keys.get(i)) else {
+            out.push(Band {
+                page: i,
+                top: 0.0,
+                bottom: page.height,
+            });
+            continue;
+        };
+        if before.width != page.width || before.height != page.height || before.number != page.number {
+            out.push(Band {
+                page: i,
+                top: 0.0,
+                bottom: page.height,
+            });
+            continue;
+        }
+        let b = &new_keys[i];
+        let mut count: HashMap<u64, i64> = HashMap::new();
+        for k in a {
+            *count.entry(k.0).or_default() += 1;
+        }
+        for k in b {
+            *count.entry(k.0).or_default() -= 1;
+        }
+        // Items rarely swap paint order without moving; compare as multisets.
+        let mut spans: Vec<(f32, f32)> = a
+            .iter()
+            .chain(b)
+            .filter(|k| count.get(&k.0).is_some_and(|c| *c != 0))
+            .map(|k| (k.1.max(0.0), k.2.min(page.height)))
+            .collect();
+        spans.sort_by(|x, y| x.0.total_cmp(&y.0));
+        let mut merged: Vec<(f32, f32)> = Vec::new();
+        for (t, bt) in spans {
+            match merged.last_mut() {
+                Some(last) if t <= last.1 + 2.0 => last.1 = last.1.max(bt),
+                _ => merged.push((t, bt)),
             }
-            Item::Drawing(d) => {
-                3u8.hash(&mut h);
-                (Arc::as_ptr(&d.drawing) as usize).hash(&mut h);
-                (
-                    d.rect.x.to_bits(),
-                    d.rect.y.to_bits(),
-                    d.rect.w.to_bits(),
-                    d.rect.h.to_bits(),
-                )
-                    .hash(&mut h);
-            }
-            Item::LineNumber {
-                text,
-                right,
-                baseline,
-                ..
-            } => {
-                4u8.hash(&mut h);
-                text.hash(&mut h);
-                (right.to_bits(), baseline.to_bits()).hash(&mut h);
+        }
+        for (top, bottom) in merged {
+            if bottom > top {
+                out.push(Band {
+                    page: i,
+                    top,
+                    bottom,
+                });
             }
         }
     }
-    h.finish()
+    out
 }
 
 /// Kinds of characters for word movement.
@@ -647,6 +791,10 @@ impl Session {
             open_group: None,
             external_undo: false,
             order: None,
+            bands: Vec::new(),
+            line_hashes: LineHashes::default(),
+            keys: Vec::new(),
+            fingerprints: Vec::new(),
         };
         let first = first.unwrap_or_else(|| s.ensure_paragraph());
         s.sel = Selection::caret(Pos::new(first, 0));
@@ -723,10 +871,11 @@ impl Session {
         self.layout
             .pages
             .iter()
-            .map(|p| PageInfo {
+            .zip(&self.fingerprints)
+            .map(|(p, f)| PageInfo {
                 width: p.width,
                 height: p.height,
-                fingerprint: format!("{:016x}", page_fingerprint(p)),
+                fingerprint: format!("{f:016x}"),
             })
             .collect()
     }
@@ -737,7 +886,19 @@ impl Session {
         }
         let layout = self.doc.layout_cached(fonts, &self.options, &self.cache);
         self.index = Arc::new(ViewIndex::build(&layout));
+        let keys = page_keys(&layout, &mut self.line_hashes);
+        let bands = dirty_bands(&self.layout, &self.keys, &layout, &keys);
+        self.bands.extend(bands);
+        self.fingerprints = layout
+            .pages
+            .iter()
+            .zip(&keys)
+            .map(|(p, k)| fingerprint(p, k))
+            .collect();
+        self.keys = keys;
         self.layout = Arc::new(layout);
+        // The old layout is gone: forget its paragraphs' hashes.
+        self.line_hashes.prune();
         self.stale = false;
         true
     }
@@ -961,9 +1122,14 @@ impl Session {
             changed: !changes.is_empty(),
             changes,
             selection: self.sel.clone(),
+            range: Range {
+                from: start.clone(),
+                to: end.clone(),
+            },
             caret,
             rects,
             pages: relaid.then(|| self.page_infos()),
+            bands: std::mem::take(&mut self.bands),
             format,
         }
     }
@@ -987,6 +1153,44 @@ impl Session {
     /// The shared state of the document.
     pub fn collab_state(&self) -> crate::Result<crate::collab::CollabState> {
         self.doc.collab_state()
+    }
+
+    /// The selected text, paragraphs separated by newlines (objects such
+    /// as pictures and field markers left out), for the clipboard.
+    pub fn selected_text(&mut self) -> String {
+        let (s, e) = self.ordered();
+        if s.same_place(&e) {
+            return String::new();
+        }
+        let paras = self.paras_between(&s.block, &e.block);
+        let mut out = String::new();
+        for (k, id) in paras.iter().enumerate() {
+            let Some(b) = self.doc.body.get(id) else {
+                continue;
+            };
+            if k > 0 {
+                out.push('\n');
+            }
+            let from = if k == 0 { s.offset } else { 0 };
+            let to = if k + 1 == paras.len() {
+                e.offset
+            } else {
+                b.content.len()
+            };
+            for (at, span) in b.content.spans_at() {
+                let len = utf16_len(&span.text);
+                if at + len <= from || at >= to || span.attrs.is_object() || span.attrs.is_instr() {
+                    continue;
+                }
+                let lo = from.saturating_sub(at);
+                let hi = (to - at).min(len);
+                let text = &span.text;
+                let a = crate::model::content::byte_at(text, lo);
+                let b = crate::model::content::byte_at(text, hi);
+                out.push_str(&text[a..b]);
+            }
+        }
+        out
     }
 
     /// Paragraph ids and texts in document order.

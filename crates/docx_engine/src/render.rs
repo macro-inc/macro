@@ -237,6 +237,31 @@ impl Renderer<'_> {
 }
 
 impl Document {
+    /// Renders a strip (`top..bottom` points) of page `index` of `layout`,
+    /// at the scale that makes the page `width_px` pixels wide.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_band(
+        &self,
+        layout: &Layout,
+        index: usize,
+        width_px: u32,
+        top: f32,
+        bottom: f32,
+        fonts: &FontDb,
+        images: &mut ImageCache,
+    ) -> Option<Raster> {
+        let page = layout.pages.get(index)?;
+        let scale = width_px.clamp(16, 16_384) as f32 / page.width.max(1.0);
+        let top = top.clamp(0.0, page.height);
+        let bottom = bottom.clamp(top + 1.0 / scale, page.height.max(top + 1.0 / scale));
+        let mut r = Renderer {
+            doc: self,
+            fonts,
+            images,
+        };
+        Some(r.render_band(page, scale, top, bottom))
+    }
+
     /// Renders page `index` of `layout` `width_px` pixels wide.
     pub fn render_page(
         &self,

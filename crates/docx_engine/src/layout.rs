@@ -209,6 +209,10 @@ struct Cached {
 #[derive(Debug, Default)]
 pub struct LayoutCache {
     paras: Mutex<(u64, HashMap<(StoryRef, BlockId), Cached>)>,
+    /// Resolved formats of one style sheet generation.
+    formats: Mutex<Option<(u64, Arc<format::FormatCache>)>>,
+    /// Page count of the last layout (the first guess for page-count fields).
+    pages: Mutex<Option<usize>>,
 }
 
 impl LayoutCache {
@@ -252,6 +256,28 @@ impl LayoutCache {
         let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = guard.0;
         guard.1.retain(|_, c| c.epoch == epoch);
+    }
+
+    /// The format cache for a style sheet generation.
+    pub(crate) fn formats(&self, generation: u64) -> Arc<format::FormatCache> {
+        let mut guard = self.formats.lock().unwrap_or_else(|e| e.into_inner());
+        match &*guard {
+            Some((g, cache)) if *g == generation => Arc::clone(cache),
+            _ => {
+                let cache = Arc::new(format::FormatCache::default());
+                *guard = Some((generation, Arc::clone(&cache)));
+                cache
+            }
+        }
+    }
+
+    /// The last layout's page count.
+    pub(crate) fn last_pages(&self) -> Option<usize> {
+        *self.pages.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(crate) fn set_last_pages(&self, pages: usize) {
+        *self.pages.lock().unwrap_or_else(|e| e.into_inner()) = Some(pages);
     }
 
     /// Number of cached paragraphs.

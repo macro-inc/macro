@@ -1,3 +1,4 @@
+import type { PageRect, ParagraphText, Pos } from '@core/docx-engine/types';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -5,6 +6,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -18,11 +20,6 @@ import {
   writeCommentMark,
 } from '../core/comment-marks';
 import { DOCX_LORO_CONTAINERS } from '../core/docx-loro';
-import {
-  blockSpanOfRange,
-  contentRange,
-  contentText,
-} from '../core/text-offsets';
 
 export type DocxCommentDraft = { markId: string; mark: CommentMark };
 
@@ -32,11 +29,11 @@ export type LocatedThread = {
   markId: string;
   root: MessageListItem | null;
   resolved: boolean;
-  block: HTMLElement;
-  range: Range;
+  /** Where the commented text is, as found in the current document. */
+  mark: CommentMark;
+  /** Its highlight rectangles on the pages. */
+  rects: PageRect[];
 };
-
-type Paragraph = { id: string; text: string; element: HTMLElement };
 
 /** A placeholder mark for a thread known only by its quoted text. */
 function quotedMark(root: MessageListItem): CommentMark | null {
@@ -52,18 +49,24 @@ export function threadMarkId(root: MessageListItem): string | null {
   return anchor && anchor.type === 'markdown' ? anchor.mark_id : null;
 }
 
+/** What comment placement needs from the editor. */
+export type CommentGeometry = {
+  revision: Accessor<number>;
+  paragraphs: () => Promise<ParagraphText[]>;
+  rangeRects: (from: Pos, to: Pos) => Promise<PageRect[]>;
+  /** The current selection, in document order. */
+  selection: () => { from: Pos; to: Pos } | undefined;
+};
+
 /**
- * Comment anchoring for a rendered DOCX: marks live in the collaborative
- * document, threads come from the shared message store, and both are joined
- * to the paragraphs currently on screen.
+ * Comment anchoring for a DOCX: marks live in the collaborative document,
+ * threads come from the shared message store, and both are joined to the
+ * text the engine currently lays out.
  */
 export function createDocxComments(options: {
   doc: LoroDoc | null;
   roots: Accessor<MessageListItem[]>;
-  /** The element the editor renders the document body into. */
-  root: Accessor<HTMLElement | undefined>;
-  /** Bumps whenever the rendered document may have changed. */
-  revision: Accessor<number>;
+  geometry: CommentGeometry;
   canEdit: Accessor<boolean>;
 }) {
   const [marks, setMarks] = createSignal<Map<string, CommentMark>>(
@@ -71,6 +74,8 @@ export function createDocxComments(options: {
   );
   const [draft, setDraft] = createSignal<DocxCommentDraft>();
   const [active, setActive] = createSignal<string | null>(null);
+  const [paragraphs, setParagraphs] = createSignal<ParagraphText[]>([]);
+  const [located, setLocated] = createSignal<LocatedThread[]>([]);
 
   if (options.doc) {
     const doc = options.doc;
@@ -80,27 +85,30 @@ export function createDocxComments(options: {
     onCleanup(unsubscribe);
   }
 
-  const paragraphs = createMemo<Paragraph[]>(() => {
-    options.revision();
-    const root = options.root();
-    if (!root) return [];
-    const body = root.querySelector<HTMLElement>('.docx-body-flow') ?? root;
-    return Array.from(body.querySelectorAll<HTMLElement>('[data-anchor]'))
-      .filter((element) => !element.querySelector('[data-anchor]'))
-      .map((element) => ({
-        id: element.getAttribute('data-anchor')!,
-        text: contentText(element),
-        element,
-      }));
-  });
-
   const live = (root: MessageListItem) => !root.state.deleted_at;
 
+  // The engine's text: refreshed shortly after the document changes.
+  let textTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(
+    on(options.geometry.revision, () => {
+      clearTimeout(textTimer);
+      textTimer = setTimeout(() => {
+        options.geometry
+          .paragraphs()
+          .then(setParagraphs)
+          .catch(() => {});
+      }, 120);
+    })
+  );
+  onCleanup(() => clearTimeout(textTimer));
+
+  /** Marks resolved against the current text. */
   const placement = createMemo(() => {
     const blocks = paragraphs();
     const all = marks();
-    const out: LocatedThread[] = [];
+    const out: Array<Omit<LocatedThread, 'rects'>> = [];
     const relocations: Array<[string, CommentMark]> = [];
+    if (!blocks.length) return { threads: out, relocations };
     const place = (
       id: string,
       markId: string,
@@ -108,30 +116,21 @@ export function createDocxComments(options: {
       root: MessageListItem | null
     ) => {
       const found = resolveMark(mark, blocks);
-      if (!found) return false;
-      const block = blocks.find((paragraph) => paragraph.id === found.block);
-      const range =
-        block && contentRange(block.element, found.start, found.length);
-      if (!block || !range) return false;
-      if (found.relocated && root)
-        relocations.push([
-          markId,
-          {
-            block: found.block,
-            start: found.start,
-            length: found.length,
-            text: found.text,
-          },
-        ]);
+      if (!found) return;
+      const placed: CommentMark = {
+        block: found.block,
+        start: found.start,
+        length: found.length,
+        text: found.text,
+      };
+      if (found.relocated && root) relocations.push([markId, placed]);
       out.push({
         id,
         markId,
         root,
         resolved: !!root?.state.resolved,
-        block: block.element,
-        range,
+        mark: placed,
       });
-      return true;
     };
     for (const root of options.roots()) {
       if (!live(root)) continue;
@@ -147,7 +146,30 @@ export function createDocxComments(options: {
     if (pending) place(pending.markId, pending.markId, pending.mark, null);
     return { threads: out, relocations };
   });
-  const located = () => placement().threads;
+
+  // Highlight geometry comes from the engine (asynchronously).
+  let generation = 0;
+  createEffect(
+    on([placement, options.geometry.revision], ([{ threads }]) => {
+      const current = ++generation;
+      Promise.all(
+        threads.map(async (thread) => ({
+          ...thread,
+          rects: await options.geometry.rangeRects(
+            { block: thread.mark.block, offset: thread.mark.start },
+            {
+              block: thread.mark.block,
+              offset: thread.mark.start + thread.mark.length,
+            }
+          ),
+        }))
+      )
+        .then((next) => {
+          if (current === generation) setLocated(next);
+        })
+        .catch(() => {});
+    })
+  );
 
   // Keep stored offsets close to the text so later edits relocate cheaply.
   // Writing a relocated mark re-resolves it in place, so this settles; marks
@@ -174,7 +196,9 @@ export function createDocxComments(options: {
 
   /** Threads that cannot be shown beside the text: legacy anchors or removed text. */
   const detached = createMemo(() => {
-    const shown = new Set(located().map((thread) => thread.id));
+    // Until the text is known every thread would look detached.
+    if (!paragraphs().length) return [];
+    const shown = new Set(placement().threads.map((thread) => thread.id));
     return options
       .roots()
       .filter((root) => live(root) && root.state.anchor && !shown.has(root.id));
@@ -182,23 +206,22 @@ export function createDocxComments(options: {
 
   /** Start a comment on the current selection. False when nothing usable is selected. */
   function beginDraft(): boolean {
-    const root = options.root();
-    const selection = window.getSelection();
-    if (
-      !root ||
-      !selection ||
-      selection.rangeCount === 0 ||
-      selection.isCollapsed
-    )
-      return false;
-    const span = blockSpanOfRange(selection.getRangeAt(0), root);
-    if (!span) return false;
-    const id = span.block.getAttribute('data-anchor');
-    const length = Math.min(span.length, MAX_MARK_TEXT);
-    const text = contentText(span.block).slice(span.start, span.start + length);
-    if (!id || !text.trim()) return false;
+    const selection = options.geometry.selection();
+    if (!selection) return false;
+    const { from, to } = selection;
+    if (from.block === to.block && from.offset === to.offset) return false;
+    const paragraph = paragraphs().find((p) => p.id === from.block);
+    if (!paragraph) return false;
+    // A selection over several paragraphs anchors on the first one's part.
+    const end = to.block === from.block ? to.offset : paragraph.text.length;
+    const length = Math.min(end - from.offset, MAX_MARK_TEXT);
+    const text = paragraph.text.slice(from.offset, from.offset + length);
+    if (!text.trim()) return false;
     const markId = uuidv7();
-    setDraft({ markId, mark: { block: id, start: span.start, length, text } });
+    setDraft({
+      markId,
+      mark: { block: from.block, start: from.offset, length, text },
+    });
     setActive(markId);
     return true;
   }
@@ -228,13 +251,15 @@ export function createDocxComments(options: {
     }
   }
 
-  /** The thread whose highlight contains a caret position. */
-  function threadAt(node: Node, offset: number): string | null {
+  /** The thread whose text contains a position. */
+  function threadAt(pos: Pos): string | null {
     for (const thread of located()) {
       if (thread.resolved && active() !== thread.id) continue;
+      const { block, start, length } = thread.mark;
       if (
-        thread.range.comparePoint(node, offset) === 0 &&
-        thread.block.contains(node)
+        block === pos.block &&
+        pos.offset >= start &&
+        pos.offset <= start + length
       )
         return thread.id;
     }

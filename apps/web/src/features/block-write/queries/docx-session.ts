@@ -104,6 +104,9 @@ function isSelection(value: unknown): value is DocxSelection {
 export function createDocxSession(options: DocxSessionOptions): DocxSession {
   const manager = new LoroManager(DOCX_LORO_SCHEMA, {
     documentId: options.documentId,
+    // The editor reads the document directly; a JSON mirror of it would be
+    // rebuilt on every keystroke.
+    mirror: false,
   });
   const snapshots =
     options.persistence?.snapshots ??
