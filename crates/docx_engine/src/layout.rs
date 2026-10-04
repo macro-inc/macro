@@ -217,7 +217,12 @@ impl LayoutCache {
         Self::default()
     }
 
-    pub(crate) fn get(&self, story: &StoryRef, block: &BlockId, key: &ParaKey) -> Option<Arc<ParaBox>> {
+    pub(crate) fn get(
+        &self,
+        story: &StoryRef,
+        block: &BlockId,
+        key: &ParaKey,
+    ) -> Option<Arc<ParaBox>> {
         let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = guard.0;
         let hit = guard.1.get_mut(&(story.clone(), block.clone()))?;
@@ -273,7 +278,12 @@ impl Document {
 
     /// Lays the document out, reusing paragraph measurements from `cache`
     /// (and leaving this layout's in it).
-    pub fn layout_cached(&self, fonts: &FontDb, options: &LayoutOptions, cache: &LayoutCache) -> Layout {
+    pub fn layout_cached(
+        &self,
+        fonts: &FontDb,
+        options: &LayoutOptions,
+        cache: &LayoutCache,
+    ) -> Layout {
         cache.begin();
         let layout = flow::layout(self, fonts, options, Some(cache));
         cache.end();

@@ -368,6 +368,23 @@ impl Story {
         order::key_between(low, high)
     }
 
+    /// The position key for a new child of `parent` placed just before
+    /// `before`.
+    pub fn key_before(&self, parent: Option<&BlockId>, before: &BlockId) -> String {
+        let kids = self.children(parent);
+        let index = kids.iter().position(|k| k == before).unwrap_or(0);
+        let low = index
+            .checked_sub(1)
+            .and_then(|i| kids.get(i))
+            .and_then(|k| self.blocks.get(k))
+            .map(|b| b.order.as_str());
+        let high = kids
+            .get(index)
+            .and_then(|k| self.blocks.get(k))
+            .map(|b| b.order.as_str());
+        order::key_between(low, high)
+    }
+
     /// Re-sorts every children list (after bulk changes to order keys).
     pub fn resort(&mut self) {
         let parents: Vec<Option<BlockId>> = self.children.keys().cloned().collect();

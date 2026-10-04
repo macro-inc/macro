@@ -35,7 +35,9 @@ impl BlockRecord {
         Self {
             id: b.id.clone(),
             k: b.kind.code().to_owned(),
-            p: b.parent.as_ref().map_or_else(String::new, |p| p.as_str().to_owned()),
+            p: b.parent
+                .as_ref()
+                .map_or_else(String::new, |p| p.as_str().to_owned()),
             o: b.order.clone(),
             a: b.attrs.clone(),
             x: b.props.clone(),
@@ -51,7 +53,11 @@ impl BlockRecord {
         b.attrs = self.a.clone();
         b.props = self.x.clone();
         if kind == BlockKind::Paragraph {
-            b.content = self.t.as_deref().map(Content::from_delta).unwrap_or_default();
+            b.content = self
+                .t
+                .as_deref()
+                .map(Content::from_delta)
+                .unwrap_or_default();
         }
         Some(b)
     }
@@ -119,16 +125,13 @@ pub fn content_delta(before: &Content, after: &Content) -> Vec<DeltaOp> {
     let a_len = before.len();
     let b_len = after.len();
     let mut out: Vec<DeltaOp> = Vec::new();
-    let mut push = |op: DeltaOp, out: &mut Vec<DeltaOp>| match (out.last_mut(), op) {
+    let push = |op: DeltaOp, out: &mut Vec<DeltaOp>| match (out.last_mut(), op) {
         (
             Some(DeltaOp::Retain {
                 retain: r,
                 attributes: ra,
             }),
-            DeltaOp::Retain {
-                retain,
-                attributes,
-            },
+            DeltaOp::Retain { retain, attributes },
         ) if *ra == attributes => *r += retain,
         (_, op) => out.push(op),
     };
@@ -189,7 +192,11 @@ fn block_changes(before: &Block, after: &Block, out: &mut Vec<Change>) {
         return;
     }
     let mut fields = BTreeMap::new();
-    let parent = |b: &Block| b.parent.as_ref().map_or_else(String::new, |p| p.as_str().to_owned());
+    let parent = |b: &Block| {
+        b.parent
+            .as_ref()
+            .map_or_else(String::new, |p| p.as_str().to_owned())
+    };
     if before.parent != after.parent {
         fields.insert("p".to_owned(), parent(after));
     }
