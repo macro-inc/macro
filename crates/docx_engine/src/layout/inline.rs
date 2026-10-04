@@ -25,6 +25,20 @@ const SUPER_RAISE: f32 = 0.33;
 const SUB_DROP: f32 = 0.08;
 /// Small capitals size relative to the run.
 const SMALL_CAPS_SIZE: f32 = 0.8;
+/// Resolution of the device Word measures some runs on.
+const DEVICE_DPI: f32 = 600.0;
+
+/// Whether Word measures a run with a device font: runs with character
+/// scaling or kerning come out as wide as a font of a whole number of
+/// pixels at 600 dpi (10pt text measures as 9.96pt).
+fn device_metrics(props: &RunProps, size: f32) -> bool {
+    (props.scale - 1.0).abs() > 0.001 || (props.kern > 0.0 && size >= props.kern)
+}
+
+/// `size` rounded to whole device pixels.
+fn device_size(size: f32) -> f32 {
+    (size * DEVICE_DPI / 72.0).round().max(1.0) * 72.0 / DEVICE_DPI
+}
 
 /// What a cluster is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -194,6 +208,26 @@ struct FieldState {
     in_result: bool,
     dynamic: Option<Dynamic>,
     emitted: bool,
+    /// A legacy check box form field: whether it is checked.
+    checkbox: Option<bool>,
+}
+
+/// Whether a field's `w:fldChar` start holds a check box form field, and
+/// its state.
+fn checkbox_state(xml: &str) -> Option<bool> {
+    let start = xml.find(":checkBox")?;
+    let rest = &xml[start..];
+    let on = |name: &str| {
+        rest.find(name).is_some_and(|i| {
+            let tag = &rest[i..rest[i..].find('>').map_or(rest.len(), |e| i + e)];
+            !(tag.contains("\"0\"") || tag.contains("\"false\"") || tag.contains("\"off\""))
+        })
+    };
+    Some(if rest.contains(":checked") {
+        on(":checked")
+    } else {
+        on(":default")
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -247,6 +281,63 @@ fn is_complex(c: char) -> bool {
         | 0x1000..=0x109F | 0x1780..=0x17FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF)
 }
 
+/// East Asian punctuation that may not start a line (kinsoku).
+fn no_line_start(c: char) -> bool {
+    matches!(
+        c,
+        '\u{3001}'
+            | '\u{3002}'
+            | '\u{FF0C}'
+            | '\u{FF0E}'
+            | '\u{FF1A}'
+            | '\u{FF1B}'
+            | '\u{FF01}'
+            | '\u{FF1F}'
+            | '\u{FF09}'
+            | '\u{FF3D}'
+            | '\u{FF5D}'
+            | '\u{300D}'
+            | '\u{300F}'
+            | '\u{3009}'
+            | '\u{300B}'
+            | '\u{3011}'
+            | '\u{3015}'
+            | '\u{3017}'
+            | '\u{3019}'
+            | '\u{301B}'
+            | '\u{2019}'
+            | '\u{201D}'
+            | '\u{30FC}'
+            | '\u{3005}'
+            | '\u{309D}'
+            | '\u{309E}'
+            | '\u{30FD}'
+            | '\u{30FE}'
+            | '\u{FF65}'
+    )
+}
+
+/// East Asian punctuation that may not end a line (kinsoku).
+fn no_line_end(c: char) -> bool {
+    matches!(
+        c,
+        '\u{FF08}'
+            | '\u{FF3B}'
+            | '\u{FF5B}'
+            | '\u{300C}'
+            | '\u{300E}'
+            | '\u{3008}'
+            | '\u{300A}'
+            | '\u{3010}'
+            | '\u{3014}'
+            | '\u{3016}'
+            | '\u{3018}'
+            | '\u{301A}'
+            | '\u{2018}'
+            | '\u{201C}'
+    )
+}
+
 /// Characters after which a line may break besides spaces.
 fn breaks_after(c: char, next: Option<char>) -> bool {
     match c {
@@ -254,6 +345,8 @@ fn breaks_after(c: char, next: Option<char>) -> bool {
             next.is_some_and(|n| !n.is_ascii_digit() && !n.is_whitespace())
         }
         '\u{200B}' => true,
+        c if no_line_end(c) => false,
+        _ if next.is_some_and(no_line_start) => false,
         c if is_cjk(c) => true,
         _ => next.is_some_and(is_cjk),
     }
@@ -274,6 +367,16 @@ impl Builder<'_, '_> {
         }
         let fonts = self.ctx.fonts;
         let font = fonts.select(&props.ascii, props.bold, props.italic);
+        // A condensed family drawn with a regular-width face is squeezed.
+        let factor = font.map_or(1.0, |f| fonts.width_factor(&props.ascii, f.face));
+        let props = &if (factor - 1.0).abs() > f32::EPSILON {
+            Arc::new(RunProps {
+                scale: props.scale * factor,
+                ..(**props).clone()
+            })
+        } else {
+            Arc::clone(props)
+        };
         let (ascent, descent, leading) = match font {
             Some(f) => {
                 let m = fonts.vmetrics_for(&props.ascii, f.face);
@@ -290,10 +393,9 @@ impl Builder<'_, '_> {
             VertAlign::Sub => (props.size * SCRIPT_SIZE, -props.size * SUB_DROP),
             VertAlign::Baseline => (props.size, 0.0),
         };
+        // Links take their color from their formatting (usually the
+        // Hyperlink character style), like any other text.
         let mut color = props.color.unwrap_or_else(|| auto_color(props));
-        if link && props.color.is_none() {
-            color = Rgba::from_u8(0x05, 0x63, 0xC1);
-        }
         if revision != Revision::None && self.ctx.markup {
             // Word's default "by author" revision color for one author.
             color = Rgba::from_u8(0xC0, 0x00, 0x00);
@@ -363,6 +465,9 @@ impl Builder<'_, '_> {
             VertAlign::Baseline => size,
             _ => size * SCRIPT_SIZE,
         };
+        if device_metrics(&props, size) {
+            size = device_size(size);
+        }
         let Some(font) = fonts.select(family, bold, italic) else {
             self.zero(offset, len, run);
             return;
@@ -419,6 +524,17 @@ impl Builder<'_, '_> {
         }
         if chars.is_empty() && first_len > 0 {
             self.zero(offset, first_len, run);
+        }
+    }
+
+    /// A legacy check box form field: a box as wide as the font is high.
+    fn checkbox(&mut self, checked: bool, offset: usize, len: usize, run: u16) {
+        let ch = if checked { '\u{2612}' } else { '\u{2610}' };
+        self.text_char(ch, None, offset, len, run);
+        if let Some(c) = self.out.clusters.last_mut()
+            && c.kind == Kind::Text
+        {
+            c.advance = c.size.max(1.0);
         }
     }
 
@@ -674,6 +790,7 @@ fn object(
                     in_result: false,
                     dynamic: None,
                     emitted: false,
+                    checkbox: checkbox_state(xml),
                 }),
                 "separate" => {
                     if let Some(f) = fields.last_mut() {
@@ -697,7 +814,17 @@ fn object(
                     }
                 }
                 "end" => {
-                    if let Some(f) = fields.pop()
+                    let f = fields.pop();
+                    if let Some(f) = &f
+                        && let Some(checked) = f.checkbox
+                        && f.instr.split_whitespace().next() == Some("FORMCHECKBOX")
+                        && !hidden
+                        && !fields_hidden(fields)
+                    {
+                        b.checkbox(checked, offset, len, run);
+                        return;
+                    }
+                    if let Some(f) = f
                         && !f.emitted
                         && let Some(kind) = field_kind(&f.instr)
                         && !f.in_result

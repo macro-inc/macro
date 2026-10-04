@@ -7,8 +7,9 @@ use super::super::lines::{LineCtx, break_lines};
 use super::super::table::{CellGeom, TableGeom, geometry};
 use super::super::{Item, ParaBox, PlacedDrawing, PlacedLine, StoryRef};
 use super::Env;
+use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, place_in_container};
 use crate::model::block::{Block, BlockId, BlockKind, Story};
-use crate::model::props::{HeightRule, LineSpacing, ParaProps, VMerge};
+use crate::model::props::{HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
 use pptx_engine::path::Rect;
 use std::sync::Arc;
 
@@ -38,6 +39,8 @@ pub struct Stack {
     pub height: f32,
     /// Notes referenced inside.
     pub notes: Vec<(bool, i64)>,
+    /// Text frames to place once the page is known.
+    pub frames: Vec<PendingFrame>,
 }
 
 /// What a stack is laid out in.
@@ -52,6 +55,9 @@ pub struct StackCtx {
     pub fields: FieldValues,
     /// The note being laid out, for its own number.
     pub note_number: Option<String>,
+    /// Leave text frames for the page to place (headers and footers);
+    /// otherwise they are placed inside the stack.
+    pub float_frames: bool,
 }
 
 /// The previous paragraph, for spacing between paragraphs.
@@ -67,6 +73,50 @@ pub struct PrevPara {
     pub auto_after: bool,
     /// It is a list item.
     pub numbered: bool,
+    /// Its borders and indents, for border groups.
+    pub border: BorderBox,
+}
+
+/// What decides whether consecutive paragraphs share one border box.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BorderBox {
+    /// Borders.
+    pub borders: ParaBorders,
+    /// Left and right indents.
+    pub indents: (f32, f32),
+}
+
+impl BorderBox {
+    /// A paragraph's border frame.
+    pub fn of(props: &ParaProps) -> Self {
+        Self {
+            borders: props.borders,
+            indents: (props.ind_left, props.ind_right),
+        }
+    }
+}
+
+/// How a paragraph joins the border box of its neighbours: Word draws
+/// consecutive paragraphs with the same borders as one box, with the
+/// `between` border (if any) instead of a bottom and top border inside it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BorderJoin {
+    /// The previous paragraph is in the same box.
+    pub prev: bool,
+    /// The next paragraph is in the same box.
+    pub next: bool,
+}
+
+impl BorderJoin {
+    /// The join of a paragraph between `prev` and `next` (their formats).
+    pub fn new(props: &ParaProps, prev: Option<&BorderBox>, next: Option<&ParaProps>) -> Self {
+        let own = BorderBox::of(props);
+        let shares = |o: &BorderBox| own.borders.any() && *o == own;
+        Self {
+            prev: prev.is_some_and(shares),
+            next: next.is_some_and(|n| shares(&BorderBox::of(n))),
+        }
+    }
 }
 
 /// Space before a paragraph (points), given the one before it. Word 2007
@@ -130,6 +180,7 @@ pub fn prev_record(props: &ParaProps) -> PrevPara {
         contextual: props.contextual_spacing,
         auto_after: props.after_auto,
         numbered: props.num.is_some(),
+        border: BorderBox::of(props),
     }
 }
 
@@ -144,7 +195,16 @@ pub(in crate::layout) fn para_box(
     note_number: Option<&str>,
     grid: Option<f32>,
 ) -> Arc<ParaBox> {
-    let label = env.labels.get(&block.id).map(|(l, p)| (l, p));
+    // Body labels are numbered across the document; other stories (whose
+    // block ids may repeat the body's) number their paragraphs themselves.
+    let own_label = (*story != StoryRef::Body)
+        .then(|| env.story_label(block, table))
+        .flatten();
+    let label = if *story == StoryRef::Body {
+        env.labels.get(&block.id).map(|(l, p)| (l, p))
+    } else {
+        own_label.as_ref().map(|(l, p)| (l, p))
+    };
     let key = env.cache.map(|_| {
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -185,6 +245,7 @@ pub(in crate::layout) fn para_box(
             default_tab: env.doc.parts().settings.default_tab,
             no_expand_shift_return: env.doc.parts().settings.do_not_expand_shift_return,
             grid,
+            shrink_spaces: env.doc.parts().settings.compat_mode >= 15,
         },
         None,
     );
@@ -206,12 +267,19 @@ pub(in crate::layout) fn para_box(
 }
 
 /// Border spacing a paragraph adds above and below its lines.
-pub fn border_space(props: &ParaProps) -> (f32, f32) {
-    let top = props.borders.top.map_or(0.0, |b| b.space + b.total_width());
-    let bottom = props
-        .borders
-        .bottom
-        .map_or(0.0, |b| b.space + b.total_width());
+pub fn border_space(props: &ParaProps, join: BorderJoin) -> (f32, f32) {
+    let space =
+        |b: Option<crate::model::props::Border>| b.map_or(0.0, |b| b.space + b.total_width());
+    let top = if join.prev {
+        space(props.borders.between)
+    } else {
+        space(props.borders.top)
+    };
+    let bottom = if join.next {
+        0.0
+    } else {
+        space(props.borders.bottom)
+    };
     (top, bottom)
 }
 
@@ -224,6 +292,7 @@ pub fn decorate(
     first: bool,
     last: bool,
     width: f32,
+    join: BorderJoin,
     out: &mut Vec<Item>,
 ) {
     let left = x + props
@@ -250,7 +319,8 @@ pub fn decorate(
         });
     }
     let b = &props.borders;
-    if first && let Some(t) = b.top {
+    let top_border = if join.prev { b.between } else { b.top };
+    if first && let Some(t) = top_border {
         out.push(Item::Rule {
             x0: left - pad_l,
             y0: top + t.total_width() / 2.0,
@@ -259,7 +329,10 @@ pub fn decorate(
             border: t,
         });
     }
-    if last && let Some(bt) = b.bottom {
+    if last
+        && !join.next
+        && let Some(bt) = b.bottom
+    {
         out.push(Item::Rule {
             x0: left - pad_l,
             y0: bottom - bt.total_width() / 2.0,
@@ -341,12 +414,50 @@ pub(in crate::layout) fn stack_story(
     parent: Option<&BlockId>,
     sc: &StackCtx,
 ) -> Stack {
-    let mut out = Stack::default();
     let mut blocks: Vec<&Block> = Vec::new();
     super::flow_blocks(story, parent, &mut blocks);
+    stack_blocks(env, story, &blocks, sc, true)
+}
+
+/// Lays out `blocks` of `story` top to bottom; with `frames`, paragraphs
+/// in text frames are taken out of the flow.
+pub(in crate::layout) fn stack_blocks(
+    env: &Env<'_>,
+    story: &Story,
+    blocks: &[&Block],
+    sc: &StackCtx,
+    frames: bool,
+) -> Stack {
+    let mut out = Stack::default();
     let mut y = 0.0f32;
     let mut prev: Option<PrevPara> = None;
+    let mut skip_to = 0;
     for (i, b) in blocks.iter().enumerate() {
+        if i < skip_to {
+            continue;
+        }
+        if frames
+            && b.kind == BlockKind::Paragraph
+            && let Some((mut f, end)) = frame_box(env, story, blocks, i, sc)
+        {
+            skip_to = end;
+            f.para_top = y;
+            // Text continues below a frame anchored to it that allows
+            // nothing beside it.
+            let band = if f.wrap() == FrameWrap::NotBeside && f.follows_text() {
+                f.height
+            } else {
+                0.0
+            };
+            if sc.float_frames {
+                out.frames.push(f);
+            } else {
+                let rect = place_in_container(&f, sc.width);
+                emit_frame(&f, rect, &mut out.items, &mut out.anchors);
+            }
+            y += band;
+            continue;
+        }
         match b.kind {
             BlockKind::Paragraph => {
                 let pb = para_box(
@@ -360,14 +471,25 @@ pub(in crate::layout) fn stack_story(
                     None,
                 );
                 let props = &pb.format.props;
+                let gap_top = y;
                 y += space_before(
                     props,
                     prev.as_ref(),
                     i == 0,
                     !env.doc.parts().settings.html_auto_spacing,
                 );
-                let (bt, bb) = border_space(props);
-                let top = y;
+                let next = blocks
+                    .get(i + 1)
+                    .filter(|n| n.kind == BlockKind::Paragraph)
+                    .map(|n| env.formats.paragraph(&n.props, &sc.table));
+                let join = BorderJoin::new(
+                    props,
+                    prev.as_ref().map(|p| &p.border),
+                    next.as_ref().map(|f| &f.props),
+                );
+                let (bt, bb) = border_space(props, join);
+                // A box shared with the previous paragraph spans the gap too.
+                let top = if join.prev { gap_top } else { y };
                 y += bt;
                 let n = pb.lines.lines.len();
                 let h = emit_lines(
@@ -384,7 +506,7 @@ pub(in crate::layout) fn stack_story(
                 y += h + bb;
                 if props.shading.is_some() || props.borders.any() {
                     let mut deco = Vec::new();
-                    decorate(props, 0.0, top, y, true, true, sc.width, &mut deco);
+                    decorate(props, 0.0, top, y, true, true, sc.width, join, &mut deco);
                     // Decorations go under the text.
                     let at = out.items.len() - n;
                     out.items.splice(at..at, deco);
@@ -494,6 +616,7 @@ pub(in crate::layout) fn table_box(
                         table: cell.ctx.clone(),
                         fields: fields.clone(),
                         note_number: None,
+                        float_frames: false,
                     },
                 )
             };

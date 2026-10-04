@@ -1,6 +1,7 @@
 //! `docx_corpus`: renders documents and scores them against reference renders.
 
 mod fontconfig;
+mod lines;
 mod render;
 mod score;
 
@@ -21,6 +22,8 @@ enum Command {
     Score(score::Args),
     /// Writes a fontconfig file for LibreOffice reference renders.
     Fontconfig(fontconfig::Args),
+    /// Dumps the text lines of every page with their positions as JSON.
+    Lines(lines::Args),
 }
 
 fn main() {
@@ -29,6 +32,7 @@ fn main() {
         Command::Render(args) => render::run(&args),
         Command::Score(args) => score::run(&args),
         Command::Fontconfig(args) => fontconfig::run(&args),
+        Command::Lines(args) => lines::run(&args),
     };
     match ok {
         Ok(true) => {}

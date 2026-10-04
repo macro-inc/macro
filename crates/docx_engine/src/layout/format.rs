@@ -197,6 +197,12 @@ impl<'d> Formats<'d> {
             (None, Some(s)) => props.apply(&s.ppr),
             (None, None) => {}
         }
+        if direct.num.num_id == Some(0) && style_num.num_id.is_some_and(|id| id > 0) {
+            // Turning a list style's numbering off also drops the indents
+            // that go with it.
+            props.ind_left = self.styles.doc_ppr.ind_left;
+            props.ind_first = self.styles.doc_ppr.ind_first;
+        }
         props.apply(&direct);
         props.style = style.map(|s| s.id.clone()).or(direct.style.clone());
         // Run base: defaults, table style, paragraph style (toggling).
@@ -258,12 +264,33 @@ impl<'d> Formats<'d> {
         if let Some(cs) = direct.style.as_deref()
             && let Some(c) = self.styles.character_style(Some(cs))
         {
-            r.apply(&c.rpr, true);
+            if c.name.eq_ignore_ascii_case("hyperlink") && self.is_toc_entry(para) {
+                // Word shows table of contents links in the entry's own
+                // formatting, without the link color or underline.
+                let mut link = c.rpr.clone();
+                link.color = None;
+                link.underline = None;
+                r.apply(&link, true);
+            } else {
+                r.apply(&c.rpr, true);
+            }
         }
         r.apply(&direct, false);
         let resolved = Arc::new(r.resolve());
         lock(&self.cache.runs).insert(cache_key, Arc::clone(&resolved));
         resolved
+    }
+
+    /// Whether a paragraph is a table of contents entry (a built-in `toc N`
+    /// style, whatever the document's language calls it).
+    fn is_toc_entry(&self, para: &ParaFormat) -> bool {
+        self.styles
+            .paragraph_style(para.props.style.as_deref())
+            .is_some_and(|s| {
+                let name = s.name.to_ascii_lowercase();
+                name.strip_prefix("toc ")
+                    .is_some_and(|n| n.trim().parse::<u8>().is_ok())
+            })
     }
 
     /// Label run properties: the paragraph mark's, with the level's on top.

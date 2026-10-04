@@ -2,6 +2,7 @@
 
 use super::Renderer;
 use crate::layout::PlacedLine;
+use crate::layout::fonts::is_wide;
 use crate::layout::inline::{Kind, Revision, RunStyle};
 use crate::model::props::{TabLeader, UnderlineStyle};
 use pptx_engine::font::FaceId;
@@ -11,6 +12,13 @@ use pptx_engine::render::scene::{LineCap, LineJoin, Node, Paint, Stroke};
 
 /// Slant of synthesized italics.
 const SYNTHETIC_SLANT: f64 = 0.2;
+
+/// Inset of the box drawn for an East Asian character no face has (em).
+const PLACEHOLDER_INSET: f32 = 0.1;
+/// Top of that box above the baseline (em).
+const PLACEHOLDER_RISE: f32 = 0.8;
+/// Its opacity relative to the text color.
+const PLACEHOLDER_ALPHA: f32 = 0.25;
 
 /// Glyphs collected into one path per color.
 struct GlyphBatch {
@@ -193,6 +201,20 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
                     continue;
                 };
                 if c.glyph == 0 {
+                    if is_wide(c.ch) {
+                        // No face has the character: a light box shows
+                        // where it is.
+                        batch.flush(out);
+                        let size = if c.size > 0.0 { c.size } else { style.size };
+                        let x = pl.x + lines.x[k] + size * PLACEHOLDER_INSET;
+                        let side = size * (1.0 - 2.0 * PLACEHOLDER_INSET);
+                        let y = baseline - style.shift - size * PLACEHOLDER_RISE;
+                        out.push(Node::Fill {
+                            path: Path::rect(Rect::from_xywh(x, y, side, side)),
+                            paint: Paint::Solid(style.color.with_alpha_mul(PLACEHOLDER_ALPHA)),
+                            even_odd: false,
+                        });
+                    }
                     continue;
                 }
                 let size = if c.size > 0.0 { c.size } else { style.size };

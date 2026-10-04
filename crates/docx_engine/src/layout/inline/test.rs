@@ -29,9 +29,34 @@ fn reads_attributes_from_tags() {
 }
 
 #[test]
+fn scaled_and_kerned_runs_measure_at_device_sizes() {
+    assert!((device_size(10.0) - 9.96).abs() < 1e-4);
+    assert!((device_size(12.0) - 12.0).abs() < 1e-4);
+    assert!((device_size(8.5) - 8.52).abs() < 1e-4);
+    let mut props = crate::model::props::RPr::default().resolve();
+    assert!(!device_metrics(&props, 10.0));
+    props.scale = 1.03;
+    assert!(device_metrics(&props, 10.0));
+    props.scale = 1.0;
+    props.kern = 14.0;
+    assert!(!device_metrics(&props, 10.0));
+    assert!(device_metrics(&props, 14.0));
+}
+
+#[test]
 fn breaks_after_hyphens_and_cjk() {
     assert!(breaks_after('-', Some('a')));
     assert!(!breaks_after('-', Some('1')));
     assert!(breaks_after('中', Some('文')));
     assert!(!breaks_after('a', Some('b')));
+}
+
+#[test]
+fn east_asian_punctuation_keeps_to_its_text() {
+    // Closing punctuation never starts a line, opening never ends one.
+    assert!(!breaks_after('中', Some('，')));
+    assert!(!breaks_after('中', Some('。')));
+    assert!(breaks_after('，', Some('文')));
+    assert!(!breaks_after('《', Some('文')));
+    assert!(!breaks_after('「', Some('文')));
 }
