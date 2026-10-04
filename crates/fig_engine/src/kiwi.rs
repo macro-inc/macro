@@ -398,9 +398,256 @@ pub struct Msg {
 }
 
 impl Msg {
+    /// An empty message (or struct) of type `def`.
+    pub fn new(def: u32) -> Msg {
+        Msg {
+            def,
+            fields: Vec::new(),
+            present: 0,
+        }
+    }
+
     #[inline]
     fn may_have(&self, index: u16) -> bool {
         self.present & (1u128 << (index & 127)) != 0
+    }
+
+    fn refresh_present(&mut self) {
+        self.present = self
+            .fields
+            .iter()
+            .fold(0u128, |bits, (i, _)| bits | (1u128 << (i & 127)));
+    }
+
+    /// Sets the field named `name`, replacing any value it had. Returns
+    /// `false` when the type has no such field (older schemas).
+    pub fn set(&mut self, schema: &Schema, name: &str, value: Value) -> bool {
+        let Some(index) = schema.def(self.def).index_of(name) else {
+            return false;
+        };
+        match self.fields.binary_search_by_key(&index, |(i, _)| *i) {
+            Ok(at) => self.fields[at].1 = value,
+            Err(at) => self.fields.insert(at, (index, value)),
+        }
+        self.refresh_present();
+        true
+    }
+
+    /// Removes the field named `name`.
+    pub fn remove(&mut self, schema: &Schema, name: &str) {
+        if let Some(index) = schema.def(self.def).index_of(name) {
+            self.fields.retain(|(i, _)| *i != index);
+            self.refresh_present();
+        }
+    }
+
+    /// The value of the field named `name`.
+    pub fn get(&self, schema: &Schema, name: &str) -> Option<&Value> {
+        let index = schema.def(self.def).index_of(name)?;
+        self.fields
+            .binary_search_by_key(&index, |(i, _)| *i)
+            .ok()
+            .map(|at| &self.fields[at].1)
+    }
+}
+
+/// Writes kiwi primitives.
+#[derive(Default)]
+pub struct Writer {
+    pub bytes: Vec<u8>,
+}
+
+impl Writer {
+    pub fn byte(&mut self, b: u8) {
+        self.bytes.push(b);
+    }
+
+    pub fn var_uint(&mut self, mut v: u32) {
+        loop {
+            let byte = (v & 127) as u8;
+            v >>= 7;
+            if v == 0 {
+                self.byte(byte);
+                return;
+            }
+            self.byte(byte | 128);
+        }
+    }
+
+    pub fn var_uint64(&mut self, mut v: u64) {
+        loop {
+            let byte = (v & 127) as u8;
+            v >>= 7;
+            if v == 0 {
+                self.byte(byte);
+                return;
+            }
+            self.byte(byte | 128);
+        }
+    }
+
+    pub fn var_int(&mut self, v: i32) {
+        self.var_uint(((v << 1) ^ (v >> 31)) as u32);
+    }
+
+    pub fn float(&mut self, v: f32) {
+        // The exponent lands in the low byte; a zero exponent (zero and
+        // denormals) is written as a single zero byte, as kiwi does.
+        let bits = v.to_bits().rotate_right(23);
+        if bits & 255 == 0 {
+            self.byte(0);
+            return;
+        }
+        self.bytes.extend_from_slice(&bits.to_le_bytes());
+    }
+
+    pub fn string(&mut self, s: &str) {
+        // Kiwi strings end at a zero byte, so one cannot contain it.
+        self.bytes.extend(s.bytes().filter(|&b| b != 0));
+        self.byte(0);
+    }
+}
+
+impl Schema {
+    /// Writes `msg` (a message or struct) in this schema.
+    pub fn encode(&self, msg: &Msg, w: &mut Writer) {
+        let def = self.def(msg.def);
+        match def.kind {
+            Kind::Struct => {
+                for (i, field) in def.fields.iter().enumerate() {
+                    match msg.fields.binary_search_by_key(&(i as u16), |(f, _)| *f) {
+                        Ok(at) => self.encode_field(field, &msg.fields[at].1, w),
+                        Err(_) => self.encode_zero(field, w),
+                    }
+                }
+            }
+            Kind::Message => {
+                for (i, value) in &msg.fields {
+                    let field = &def.fields[*i as usize];
+                    w.var_uint(field.id);
+                    self.encode_field(field, value, w);
+                }
+                w.var_uint(0);
+            }
+            Kind::Enum => {}
+        }
+    }
+
+    fn encode_field(&self, field: &Field, value: &Value, w: &mut Writer) {
+        if !field.array {
+            self.encode_value(field.ty, value, w);
+            return;
+        }
+        match value {
+            Value::Bytes(b) => {
+                w.var_uint(b.len() as u32);
+                w.bytes.extend_from_slice(b);
+            }
+            Value::Floats(v) => {
+                w.var_uint(v.len() as u32);
+                for &f in v.iter() {
+                    w.float(f);
+                }
+            }
+            Value::Uints(v) => {
+                w.var_uint(v.len() as u32);
+                for &u in v.iter() {
+                    w.var_uint(u);
+                }
+            }
+            Value::List(items) => {
+                w.var_uint(items.len() as u32);
+                for item in items {
+                    self.encode_value(field.ty, item, w);
+                }
+            }
+            _ => w.var_uint(0),
+        }
+    }
+
+    fn encode_value(&self, ty: Ty, value: &Value, w: &mut Writer) {
+        match (ty, value) {
+            (Ty::Bool, Value::Bool(b)) => w.byte(u8::from(*b)),
+            (Ty::Byte, Value::Uint(v)) => w.byte(*v as u8),
+            (Ty::Int, Value::Int(v)) => w.var_int(*v),
+            (Ty::Uint, Value::Uint(v)) => w.var_uint(*v),
+            (Ty::Float, Value::Float(v)) => w.float(*v),
+            (Ty::String, Value::Str(s)) => w.string(s),
+            (Ty::Int64, Value::Int64(v)) => w.var_uint64(((v << 1) ^ (v >> 63)) as u64),
+            (Ty::Uint64, Value::Uint64(v)) => w.var_uint64(*v),
+            (Ty::Def(_), Value::Enum(_, v)) => w.var_uint(*v),
+            (Ty::Def(_), Value::Msg(m)) => self.encode(m, w),
+            // A value of the wrong shape (a caller bug) writes as zero so
+            // the stream stays well formed.
+            (ty, _) => self.encode_zero_ty(ty, w),
+        }
+    }
+
+    fn encode_zero(&self, field: &Field, w: &mut Writer) {
+        if field.array {
+            w.var_uint(0);
+        } else {
+            self.encode_zero_ty(field.ty, w);
+        }
+    }
+
+    fn encode_zero_ty(&self, ty: Ty, w: &mut Writer) {
+        match ty {
+            Ty::Bool | Ty::Byte | Ty::Float | Ty::String => w.byte(0),
+            Ty::Int | Ty::Uint | Ty::Int64 | Ty::Uint64 => w.var_uint(0),
+            Ty::Def(i) => match self.def(i).kind {
+                Kind::Enum => w.var_uint(0),
+                _ => self.encode(&Msg::new(i), w),
+            },
+        }
+    }
+
+    /// An enum value by name, if `def_name` defines it.
+    pub fn enum_value(&self, def_name: &str, value: &str) -> Option<Value> {
+        let def = self.def_index(def_name)?;
+        let field = self.def(def).fields.iter().find(|f| f.name == value)?;
+        Some(Value::Enum(def, field.id))
+    }
+
+    /// The type of the field `name` of `def` (for building nested values).
+    pub fn field_def(&self, def: u32, name: &str) -> Option<u32> {
+        let i = self.def(def).index_of(name)?;
+        match self.def(def).fields[i as usize].ty {
+            Ty::Def(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    /// Encodes the schema itself, in kiwi's binary schema format.
+    pub fn encode_schema(&self) -> Vec<u8> {
+        let mut w = Writer::default();
+        w.var_uint(self.defs.len() as u32);
+        for d in &self.defs {
+            w.string(&d.name);
+            w.byte(match d.kind {
+                Kind::Enum => 0,
+                Kind::Struct => 1,
+                Kind::Message => 2,
+            });
+            w.var_uint(d.fields.len() as u32);
+            for f in &d.fields {
+                w.string(&f.name);
+                w.var_int(match f.ty {
+                    Ty::Bool => -1,
+                    Ty::Byte => -2,
+                    Ty::Int => -3,
+                    Ty::Uint => -4,
+                    Ty::Float => -5,
+                    Ty::String => -6,
+                    Ty::Int64 => -7,
+                    Ty::Uint64 => -8,
+                    Ty::Def(i) => i as i32,
+                });
+                w.byte(u8::from(f.array));
+                w.var_uint(f.id);
+            }
+        }
+        w.bytes
     }
 }
 
@@ -471,7 +718,7 @@ impl<'s> Decoder<'s> {
         })
     }
 
-    fn field(&self, r: &mut Reader, field: &Field, depth: u32) -> Result<Value> {
+    pub fn field(&self, r: &mut Reader, field: &Field, depth: u32) -> Result<Value> {
         if !field.array {
             return self.value(r, field.ty, depth);
         }
@@ -537,7 +784,7 @@ impl<'s> Decoder<'s> {
         Ok(())
     }
 
-    fn skip(&self, r: &mut Reader, ty: Ty, depth: u32) -> Result<()> {
+    pub fn skip(&self, r: &mut Reader, ty: Ty, depth: u32) -> Result<()> {
         match ty {
             Ty::Bool | Ty::Byte => {
                 r.byte()?;
@@ -763,6 +1010,88 @@ impl<'a> ValRef<'a> {
             _ => None,
         }
     }
+}
+
+struct DefSpec {
+    name: String,
+    kind: Kind,
+    fields: Vec<(String, String, bool)>,
+}
+
+fn parse_spec(text: &str) -> Vec<DefSpec> {
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|line| {
+            let mut words = line.split_whitespace();
+            let kind = match words.next() {
+                Some("enum") => Kind::Enum,
+                Some("struct") => Kind::Struct,
+                _ => Kind::Message,
+            };
+            let name = words.next().unwrap_or_default().to_owned();
+            let fields = words
+                .map(|w| match w.split_once(':') {
+                    Some((field, ty)) => {
+                        let array = ty.ends_with("[]");
+                        (
+                            field.to_owned(),
+                            ty.trim_end_matches("[]").to_owned(),
+                            array,
+                        )
+                    }
+                    None => (w.to_owned(), String::new(), false),
+                })
+                .collect();
+            DefSpec { name, kind, fields }
+        })
+        .collect()
+}
+
+/// Encodes a schema written in a compact text form, one type per line:
+/// `enum Name A B C`, `struct Name field:type …`, or `message Name
+/// field:type[] …`, where types are kiwi primitives or other type names.
+pub fn schema_from_text(text: &str) -> Vec<u8> {
+    let specs = parse_spec(text);
+    let index = |name: &str| {
+        specs
+            .iter()
+            .position(|d| d.name == name)
+            .unwrap_or_else(|| panic!("unknown type {name}")) as i32
+    };
+    let mut w = Writer::default();
+    w.var_uint(specs.len() as u32);
+    for d in &specs {
+        w.string(&d.name);
+        w.byte(match d.kind {
+            Kind::Enum => 0,
+            Kind::Struct => 1,
+            Kind::Message => 2,
+        });
+        w.var_uint(d.fields.len() as u32);
+        for (i, (name, ty, array)) in d.fields.iter().enumerate() {
+            w.string(name);
+            w.var_int(match ty.as_str() {
+                "" => 0,
+                "bool" => -1,
+                "byte" => -2,
+                "int" => -3,
+                "uint" => -4,
+                "float" => -5,
+                "string" => -6,
+                "int64" => -7,
+                "uint64" => -8,
+                other => index(other),
+            });
+            w.byte(u8::from(*array));
+            // Message field ids start at 1; enum values at 0.
+            w.var_uint(if d.kind == Kind::Enum {
+                i as u32
+            } else {
+                i as u32 + 1
+            });
+        }
+    }
+    w.bytes
 }
 
 #[cfg(test)]

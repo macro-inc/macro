@@ -1,0 +1,1072 @@
+//! Editing: operations on a [`Document`], with undo and redo.
+//!
+//! Operations name nodes by their Figma ids (`12:34`) and arrive as JSON
+//! from the editor. Each call to [`History::apply`] is one undoable step:
+//! every node it touches is snapshotted before its first change, so undo
+//! restores those snapshots and redo the ones taken after. Nodes an edit
+//! creates start out removed, so undoing their creation removes them again.
+//!
+//! Edited properties are recorded per node in [`Node::edits`]; saving
+//! (see [`crate::save`]) rewrites only those fields of the original file.
+//! Instance sublayers (`I…` ids) are not editable here.
+
+use crate::document::{Document, Node, NodeIdx};
+use crate::error::{FigError, Result};
+use crate::geometry;
+use crate::model::{
+    Affine, BlendMode, Color, CornerRadii, Guid, NodeType, Paint, PathRef, Props, Rect,
+    StrokeAlign, Vec2,
+};
+use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+/// Bits of [`Node::edits`].
+pub mod flags {
+    pub const TRANSFORM: u32 = 1 << 0;
+    pub const SIZE: u32 = 1 << 1;
+    pub const NAME: u32 = 1 << 2;
+    pub const VISIBLE: u32 = 1 << 3;
+    pub const LOCKED: u32 = 1 << 4;
+    pub const OPACITY: u32 = 1 << 5;
+    pub const FILLS: u32 = 1 << 6;
+    pub const STROKES: u32 = 1 << 7;
+    pub const STROKE_WEIGHT: u32 = 1 << 8;
+    pub const STROKE_ALIGN: u32 = 1 << 9;
+    pub const RADIUS: u32 = 1 << 10;
+    pub const TEXT: u32 = 1 << 11;
+    /// Parent or position among siblings.
+    pub const PARENT: u32 = 1 << 12;
+    pub const BLEND: u32 = 1 << 13;
+    pub const CLIP: u32 = 1 << 14;
+    /// Fill and stroke geometry replaced (or dropped to be recomputed).
+    pub const GEOMETRY: u32 = 1 << 15;
+    pub const EFFECTS: u32 = 1 << 16;
+    /// The node did not exist in the file.
+    pub const CREATED: u32 = 1 << 17;
+}
+
+/// A paint as the editor describes it.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaintSpec {
+    /// Keep the node's existing paint at this index (gradients and images
+    /// the editor does not rebuild), with the overrides below applied.
+    pub keep: Option<usize>,
+    /// `RRGGBB` or `RRGGBBAA` for a solid paint.
+    pub color: Option<String>,
+    pub opacity: Option<f32>,
+    pub visible: Option<bool>,
+    pub blend_mode: Option<String>,
+}
+
+/// Properties to set; absent fields are left alone.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Patch {
+    pub name: Option<String>,
+    /// Position of the node's origin relative to its coordinate parent (the
+    /// nearest frame-like ancestor; the page for top-level layers), as the
+    /// design panel shows it.
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+    /// Degrees, counter-clockwise as Figma shows them; about the center.
+    pub rotation: Option<f64>,
+    pub opacity: Option<f32>,
+    pub visible: Option<bool>,
+    pub locked: Option<bool>,
+    pub fills: Option<Vec<PaintSpec>>,
+    pub strokes: Option<Vec<PaintSpec>>,
+    pub stroke_weight: Option<f32>,
+    /// `INSIDE`, `OUTSIDE`, or `CENTER`.
+    pub stroke_align: Option<String>,
+    pub corner_radius: Option<f32>,
+    pub clip_content: Option<bool>,
+    pub blend_mode: Option<String>,
+    /// Replaces a text layer's characters (laid out by [`crate::text`]).
+    pub characters: Option<String>,
+    pub font_size: Option<f32>,
+}
+
+/// A layer to create.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewNode {
+    /// `FRAME`, `RECTANGLE`, `ELLIPSE`, `TEXT`, `LINE`, `GROUP`.
+    #[serde(rename = "type")]
+    pub node_type: String,
+    pub name: Option<String>,
+    /// Page coordinates of the top left.
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    #[serde(default)]
+    pub props: Patch,
+}
+
+/// How [`Op::Arrange`] moves layers among their siblings.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Arrangement {
+    Forward,
+    Backward,
+    Front,
+    Back,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum Op {
+    Set {
+        ids: Vec<String>,
+        props: Patch,
+    },
+    /// Moves layers by a page-space offset.
+    Translate {
+        ids: Vec<String>,
+        dx: f64,
+        dy: f64,
+    },
+    /// Creates a layer in `parent` (a page or layer id), on top unless
+    /// `index` (bottom is 0) says otherwise.
+    Create {
+        parent: String,
+        index: Option<usize>,
+        node: NewNode,
+    },
+    Delete {
+        ids: Vec<String>,
+    },
+    /// Moves layers into `parent` at `index`, keeping their page position.
+    Reorder {
+        ids: Vec<String>,
+        parent: String,
+        index: usize,
+    },
+    Arrange {
+        ids: Vec<String>,
+        how: Arrangement,
+    },
+    /// Copies layers (with their children) above the originals, offset.
+    Duplicate {
+        ids: Vec<String>,
+        #[serde(default)]
+        dx: f64,
+        #[serde(default)]
+        dy: f64,
+    },
+    /// Wraps layers in a group (or a frame) in their common parent.
+    Group {
+        ids: Vec<String>,
+        #[serde(default)]
+        frame: bool,
+    },
+    /// Replaces groups (and frames) by their children.
+    Ungroup {
+        ids: Vec<String>,
+    },
+}
+
+/// What an applied step changed.
+#[derive(Debug, Default)]
+pub struct Applied {
+    /// Every node the step changed (including created and removed ones).
+    pub touched: Vec<NodeIdx>,
+    /// Ids of created layers, in operation order (for selecting them).
+    pub created: Vec<String>,
+}
+
+struct Step {
+    before: Vec<(NodeIdx, Node)>,
+    after: Vec<(NodeIdx, Node)>,
+    coalesce: Option<String>,
+}
+
+/// The undo and redo stacks of one editing session.
+#[derive(Default)]
+pub struct History {
+    undo: Vec<Step>,
+    redo: Vec<Step>,
+}
+
+const MAX_UNDO: usize = 200;
+
+/// Snapshots nodes before their first change in a step.
+struct Txn<'a> {
+    doc: &'a mut Document,
+    before: Vec<(NodeIdx, Node)>,
+    seen: HashSet<NodeIdx>,
+    created: Vec<String>,
+}
+
+impl<'a> Txn<'a> {
+    fn touch(&mut self, i: NodeIdx) -> &mut Node {
+        if self.seen.insert(i) {
+            self.before.push((i, self.doc.nodes[i as usize].clone()));
+        }
+        &mut self.doc.nodes[i as usize]
+    }
+
+    fn edit(&mut self, i: NodeIdx, flag: u32) -> &mut Props {
+        let node = self.touch(i);
+        node.edits |= flag;
+        &mut node.props
+    }
+
+    fn resolve(&self, id: &str) -> Result<NodeIdx> {
+        if id.starts_with('I') {
+            return Err(FigError::Unsupported(
+                "layers inside an instance cannot be edited".into(),
+            ));
+        }
+        let guid = Guid::parse(id).ok_or_else(|| FigError::NoSuchNode(id.into()))?;
+        let i = self
+            .doc
+            .find(guid)
+            .ok_or_else(|| FigError::NoSuchNode(id.into()))?;
+        if self.doc.node(i).removed {
+            return Err(FigError::NoSuchNode(id.into()));
+        }
+        Ok(i)
+    }
+
+    fn resolve_all(&self, ids: &[String]) -> Result<Vec<NodeIdx>> {
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            let i = self.resolve(id)?;
+            if !out.contains(&i) {
+                out.push(i);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Editable layers only (not pages or the document).
+    fn layers(&self, ids: &[String]) -> Result<Vec<NodeIdx>> {
+        let all = self.resolve_all(ids)?;
+        Ok(all
+            .into_iter()
+            .filter(|&i| {
+                !matches!(
+                    self.doc.props(i).node_type(),
+                    NodeType::Canvas | NodeType::Document
+                ) && self.doc.node(i).parent.is_some()
+            })
+            .collect())
+    }
+
+    // ---- structure -------------------------------------------------------
+
+    fn detach(&mut self, i: NodeIdx) {
+        if let Some(p) = self.doc.node(i).parent {
+            self.touch(p).children.retain(|&c| c != i);
+        }
+        self.touch(i).parent = None;
+    }
+
+    /// Inserts `i` into `parent` at `index` (0 = bottom), keeping its page
+    /// transform when `keep_world`.
+    fn attach(&mut self, i: NodeIdx, parent: NodeIdx, index: usize, keep_world: bool) {
+        let world = self.doc.world(i);
+        self.detach(i);
+        let len = self.doc.node(parent).children.len();
+        let index = index.min(len);
+        self.touch(parent).children.insert(index, i);
+        self.touch(i).parent = Some(parent);
+        self.edit(i, flags::PARENT);
+        let parent_guid = self.doc.props(parent).guid;
+        self.edit(i, flags::PARENT).parent = parent_guid;
+        if keep_world {
+            let parent_world = self.doc.world(parent);
+            let local = parent_world.invert().unwrap_or_default().mul(&world);
+            self.edit(i, flags::TRANSFORM).transform = Some(local);
+        }
+        self.position(parent, index);
+    }
+
+    /// Gives the child at `index` a position string between its neighbors,
+    /// renumbering the siblings when there is no room.
+    fn position(&mut self, parent: NodeIdx, index: usize) {
+        let children = self.doc.node(parent).children.clone();
+        let pos = |doc: &Document, at: Option<usize>| {
+            at.and_then(|a| children.get(a))
+                .and_then(|&c| doc.props(c).position.clone())
+        };
+        let lo = index.checked_sub(1).and_then(|a| pos(self.doc, Some(a)));
+        let hi = pos(self.doc, Some(index + 1));
+        let lo_s = lo.as_deref().unwrap_or("");
+        if let Some(p) = between(lo_s, hi.as_deref()) {
+            self.edit(children[index], flags::PARENT).position = Some(p.into());
+            return;
+        }
+        // No room between the neighbors (or they are out of order):
+        // renumber every sibling.
+        let mut last = String::new();
+        for &c in &children {
+            let p = between(&last, None).unwrap_or_else(|| format!("{last}O"));
+            self.edit(c, flags::PARENT).position = Some(p.as_str().into());
+            last = p;
+        }
+    }
+
+    // ---- geometry --------------------------------------------------------
+
+    /// The nearest frame-like ancestor, whose space x and y are shown in.
+    fn coordinate_parent(&self, i: NodeIdx) -> Option<NodeIdx> {
+        let mut at = self.doc.node(i).parent?;
+        loop {
+            let t = self.doc.props(at).node_type();
+            if matches!(t, NodeType::Canvas | NodeType::Document) {
+                return None;
+            }
+            if t.is_frame_like() || t == NodeType::BooleanOperation {
+                return Some(at);
+            }
+            at = self.doc.node(at).parent?;
+        }
+    }
+
+    fn translate(&mut self, i: NodeIdx, dx: f64, dy: f64) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let parent_world = self
+            .doc
+            .node(i)
+            .parent
+            .map(|p| self.doc.world(p))
+            .unwrap_or_default();
+        let inv = parent_world.invert().unwrap_or_default();
+        // The page offset in the parent's space (linear part only).
+        let d = Vec2::new(inv.m00 * dx + inv.m01 * dy, inv.m10 * dx + inv.m11 * dy);
+        let mut t = self.doc.props(i).transform();
+        t.m02 += d.x;
+        t.m12 += d.y;
+        self.edit(i, flags::TRANSFORM).transform = Some(t);
+    }
+
+    fn set_position(&mut self, i: NodeIdx, x: Option<f64>, y: Option<f64>) {
+        let origin = self.doc.world(i).apply(Vec2::default());
+        let space = self
+            .coordinate_parent(i)
+            .map(|p| self.doc.world(p))
+            .unwrap_or_default();
+        let current = space.invert().unwrap_or_default().apply(origin);
+        let target = space.apply(Vec2::new(x.unwrap_or(current.x), y.unwrap_or(current.y)));
+        self.translate(i, target.x - origin.x, target.y - origin.y);
+    }
+
+    fn set_rotation(&mut self, i: NodeIdx, degrees: f64) {
+        let props = self.doc.props(i);
+        let size = props.size();
+        let t = props.transform();
+        let center = t.apply(Vec2::new(size.x / 2.0, size.y / 2.0));
+        // Figma's rotation is counter-clockwise in a y-down space.
+        let r = Affine::rotate(-degrees.to_radians());
+        let mut next = r;
+        let c = next.apply(Vec2::new(size.x / 2.0, size.y / 2.0));
+        next.m02 = center.x - c.x;
+        next.m12 = center.y - c.y;
+        self.edit(i, flags::TRANSFORM).transform = Some(next);
+    }
+
+    fn resize(&mut self, i: NodeIdx, width: Option<f64>, height: Option<f64>) {
+        let props = self.doc.props(i);
+        let old = props.size();
+        let w = width.unwrap_or(old.x).max(0.01);
+        let h = height.unwrap_or(old.y).max(0.01);
+        if (w - old.x).abs() < 1e-9 && (h - old.y).abs() < 1e-9 {
+            return;
+        }
+        let node_type = props.node_type();
+        let sx = if old.x > 0.0 { w / old.x } else { 1.0 };
+        let sy = if old.y > 0.0 { h / old.y } else { 1.0 };
+        let fill = props.fill_geometry.clone();
+        let stroke = props.stroke_geometry.clone();
+        self.edit(i, flags::SIZE).size = Some(Vec2::new(w, h));
+        let boxy = node_type.is_frame_like()
+            || matches!(
+                node_type,
+                NodeType::Rectangle | NodeType::RoundedRectangle | NodeType::Ellipse
+            );
+        if node_type == NodeType::Text {
+            return;
+        }
+        if boxy {
+            // Rebuilt from the size when drawn.
+            let p = self.edit(i, flags::GEOMETRY);
+            p.fill_geometry = None;
+            p.stroke_geometry = None;
+            return;
+        }
+        let scale = Affine::scale(sx, sy);
+        let fill = fill.map(|g| self.scaled(&g, &scale));
+        let stroke = stroke.map(|g| self.scaled(&g, &scale));
+        let p = self.edit(i, flags::GEOMETRY);
+        p.fill_geometry = fill;
+        p.stroke_geometry = stroke;
+    }
+
+    fn scaled(&mut self, paths: &[PathRef], t: &Affine) -> Arc<[PathRef]> {
+        paths
+            .iter()
+            .filter_map(|r| {
+                let path = self.doc.blobs.path(r.blob)?;
+                let scaled = path.path.clone().transform(t.to_skia())?;
+                let blob = self.doc.blobs.push(&geometry::encode_blob(&scaled));
+                Some(PathRef {
+                    winding: r.winding,
+                    blob,
+                })
+            })
+            .collect()
+    }
+
+    // ---- properties ------------------------------------------------------
+
+    fn paints(existing: &[Paint], specs: &[PaintSpec]) -> Arc<[Paint]> {
+        specs
+            .iter()
+            .filter_map(|s| {
+                let mut paint = match s.keep {
+                    Some(k) => existing.get(k)?.clone(),
+                    None => Paint::solid(Color::BLACK),
+                };
+                if let Some(c) = s.color.as_deref().and_then(parse_hex) {
+                    paint.kind = crate::model::PaintKind::Solid(c);
+                }
+                if let Some(o) = s.opacity {
+                    paint.opacity = o.clamp(0.0, 1.0);
+                }
+                if let Some(v) = s.visible {
+                    paint.visible = v;
+                }
+                if let Some(b) = &s.blend_mode {
+                    paint.blend_mode = BlendMode::parse(b);
+                }
+                Some(paint)
+            })
+            .collect()
+    }
+
+    fn set(&mut self, i: NodeIdx, patch: &Patch) -> Result<()> {
+        if let Some(name) = &patch.name {
+            self.edit(i, flags::NAME).name = Some(name.as_str().into());
+        }
+        if let Some(v) = patch.visible {
+            self.edit(i, flags::VISIBLE).visible = Some(v);
+        }
+        if let Some(v) = patch.locked {
+            self.edit(i, flags::LOCKED).locked = Some(v);
+        }
+        if let Some(v) = patch.opacity {
+            self.edit(i, flags::OPACITY).opacity = Some(v.clamp(0.0, 1.0));
+        }
+        if let Some(b) = &patch.blend_mode {
+            self.edit(i, flags::BLEND).blend_mode = Some(BlendMode::parse(b));
+        }
+        if let Some(specs) = &patch.fills {
+            let fills = Self::paints(self.doc.props(i).fills(), specs);
+            let p = self.edit(i, flags::FILLS);
+            p.fills = Some(fills);
+            // Fills now draw directly; drop a shared style reference.
+            p.fill_style = None;
+        }
+        if let Some(specs) = &patch.strokes {
+            let strokes = Self::paints(self.doc.props(i).strokes(), specs);
+            let p = self.edit(i, flags::STROKES);
+            p.strokes = Some(strokes);
+            p.stroke_style = None;
+        }
+        if let Some(w) = patch.stroke_weight {
+            self.edit(i, flags::STROKE_WEIGHT | flags::GEOMETRY)
+                .stroke_weight = Some(w.max(0.0));
+            self.drop_stroke_geometry(i);
+        }
+        if let Some(a) = &patch.stroke_align {
+            self.edit(i, flags::STROKE_ALIGN).stroke_align = Some(match a.as_str() {
+                "INSIDE" => StrokeAlign::Inside,
+                "OUTSIDE" => StrokeAlign::Outside,
+                _ => StrokeAlign::Center,
+            });
+            self.drop_stroke_geometry(i);
+        }
+        if let Some(r) = patch.corner_radius {
+            let p = self.edit(i, flags::RADIUS | flags::GEOMETRY);
+            p.corner_radius = Some(r.max(0.0));
+            p.corner_radii = Some(CornerRadii::uniform(r.max(0.0)));
+            p.fill_geometry = None;
+            p.stroke_geometry = None;
+        }
+        if let Some(c) = patch.clip_content {
+            self.edit(i, flags::CLIP).clip_disabled = Some(!c);
+        }
+        if patch.width.is_some() || patch.height.is_some() {
+            self.resize(i, patch.width, patch.height);
+        }
+        if let Some(r) = patch.rotation {
+            self.set_rotation(i, r);
+        }
+        if patch.x.is_some() || patch.y.is_some() {
+            self.set_position(i, patch.x, patch.y);
+        }
+        if patch.characters.is_some() || patch.font_size.is_some() {
+            crate::text::edit(self.doc, i, patch.characters.as_deref(), patch.font_size)?;
+            self.touch(i).edits |= flags::TEXT | flags::SIZE;
+        }
+        Ok(())
+    }
+
+    fn drop_stroke_geometry(&mut self, i: NodeIdx) {
+        // Stroke outlines are precomputed for one weight and alignment;
+        // without them the stroke is drawn from the shape.
+        if self.doc.props(i).node_type() == NodeType::Text {
+            return;
+        }
+        self.edit(i, flags::GEOMETRY).stroke_geometry = None;
+    }
+
+    // ---- creation --------------------------------------------------------
+
+    fn new_node(&mut self, props: Props) -> NodeIdx {
+        let i = self.doc.nodes.len() as NodeIdx;
+        let guid = props.guid.expect("new nodes have ids");
+        self.doc.nodes.push(Node {
+            props: Props::default(),
+            parent: None,
+            children: Vec::new(),
+            edits: flags::CREATED,
+            removed: true,
+            source: None,
+        });
+        self.doc.by_guid.insert(guid, i);
+        let node = self.touch(i);
+        node.props = props;
+        node.removed = false;
+        node.edits = u32::MAX;
+        i
+    }
+
+    fn create(&mut self, parent: NodeIdx, index: Option<usize>, spec: &NewNode) -> Result<NodeIdx> {
+        let node_type = NodeType::parse(&spec.node_type);
+        let siblings = self.doc.node(parent).children.len();
+        let count = self
+            .doc
+            .node(parent)
+            .children
+            .iter()
+            .filter(|&&c| self.doc.props(c).node_type() == node_type)
+            .count();
+        let label = match node_type {
+            NodeType::RoundedRectangle => "Rectangle",
+            NodeType::Line => "Line",
+            _ => node_type.label(),
+        };
+        let guid = self.doc.new_guid();
+        let gray = Color {
+            r: 0.851,
+            g: 0.851,
+            b: 0.851,
+            a: 1.0,
+        };
+        let (fills, strokes): (Vec<Paint>, Vec<Paint>) = match node_type {
+            NodeType::Frame | NodeType::Symbol => (vec![Paint::solid(Color::WHITE)], vec![]),
+            NodeType::Text => (vec![Paint::solid(Color::BLACK)], vec![]),
+            NodeType::Line => (vec![], vec![Paint::solid(Color::BLACK)]),
+            NodeType::Group => (vec![], vec![]),
+            _ => (vec![Paint::solid(gray)], vec![]),
+        };
+        let props = Props {
+            guid: Some(guid),
+            node_type: Some(node_type),
+            name: Some(
+                spec.name
+                    .clone()
+                    .unwrap_or_else(|| format!("{label} {}", count + 1))
+                    .into(),
+            ),
+            visible: Some(true),
+            locked: Some(false),
+            opacity: Some(1.0),
+            blend_mode: Some(BlendMode::PassThrough),
+            size: Some(Vec2::new(spec.width.max(0.01), spec.height.max(0.01))),
+            transform: Some(Affine::IDENTITY),
+            fills: Some(fills.into()),
+            strokes: Some(strokes.into()),
+            stroke_weight: Some(1.0),
+            stroke_align: Some(match node_type {
+                NodeType::Frame | NodeType::Rectangle | NodeType::Ellipse => StrokeAlign::Inside,
+                _ => StrokeAlign::Center,
+            }),
+            corner_radius: Some(0.0),
+            ..Props::default()
+        };
+        let i = self.new_node(props);
+        self.attach(i, parent, index.unwrap_or(siblings), false);
+        // Place it: the spec is in page coordinates.
+        let parent_world = self.doc.world(parent);
+        let local = parent_world
+            .invert()
+            .unwrap_or_default()
+            .mul(&Affine::translate(spec.x, spec.y));
+        self.edit(i, flags::TRANSFORM).transform = Some(local);
+        if node_type == NodeType::Text {
+            crate::text::edit(
+                self.doc,
+                i,
+                Some(spec.props.characters.as_deref().unwrap_or("")),
+                spec.props.font_size.or(Some(12.0)),
+            )?;
+        }
+        let mut patch = spec.props.clone();
+        patch.characters = None;
+        patch.font_size = None;
+        self.set(i, &patch)?;
+        self.created.push(guid.to_string());
+        Ok(i)
+    }
+
+    /// Copies `i` and its subtree into `parent` at `index`.
+    fn copy_tree(&mut self, i: NodeIdx, parent: NodeIdx, index: usize) -> NodeIdx {
+        let mut props = self.doc.props(i).clone();
+        let guid = self.doc.new_guid();
+        let original = self.doc.node(i);
+        // A copy of a file node is saved from that node's record, with its
+        // edits; a copy of a new node is written from its properties.
+        let source = if original.edits & flags::CREATED != 0 {
+            original.source
+        } else {
+            props.guid
+        };
+        let edits = if source.is_some() {
+            original.edits | flags::CREATED | flags::PARENT | flags::TRANSFORM
+        } else {
+            u32::MAX
+        };
+        props.guid = Some(guid);
+        props.override_key = None;
+        let copy = self.new_node(props);
+        let node = self.touch(copy);
+        node.source = source;
+        node.edits = edits;
+        self.attach(copy, parent, index, false);
+        let children = self.doc.node(i).children.clone();
+        for (k, c) in children.into_iter().enumerate() {
+            if !self.doc.node(c).removed {
+                self.copy_tree(c, copy, k);
+            }
+        }
+        copy
+    }
+
+    fn remove_tree(&mut self, i: NodeIdx) {
+        self.detach(i);
+        let mut stack = vec![i];
+        while let Some(n) = stack.pop() {
+            stack.extend(self.doc.node(n).children.clone());
+            let node = self.touch(n);
+            node.removed = true;
+            node.edits |= flags::PARENT;
+        }
+    }
+
+    /// Page-space bounds of a layer's frame.
+    fn frame_bounds(&self, i: NodeIdx) -> Rect {
+        let size = self.doc.props(i).size();
+        self.doc
+            .world(i)
+            .map_rect(&Rect::new(0.0, 0.0, size.x, size.y))
+    }
+
+    fn group(&mut self, ids: &[NodeIdx], frame: bool) -> Result<Option<NodeIdx>> {
+        let Some(&first) = ids.first() else {
+            return Ok(None);
+        };
+        let parent = self
+            .doc
+            .node(first)
+            .parent
+            .ok_or_else(|| FigError::Unsupported("a page cannot be grouped".into()))?;
+        // Members move into the first one's parent; the group goes where
+        // the topmost of them was.
+        let siblings = &self.doc.node(parent).children;
+        let top = ids
+            .iter()
+            .filter_map(|i| siblings.iter().position(|c| c == i))
+            .max()
+            .unwrap_or(siblings.len());
+        let bounds = ids
+            .iter()
+            .fold(Rect::EMPTY, |acc, &i| acc.union(&self.frame_bounds(i)));
+        if bounds.is_empty() {
+            return Ok(None);
+        }
+        let spec = NewNode {
+            node_type: if frame { "FRAME" } else { "GROUP" }.into(),
+            name: None,
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.w,
+            height: bounds.h,
+            props: Patch::default(),
+        };
+        let g = self.create(parent, Some(top + 1), &spec)?;
+        if frame {
+            // "Frame selection" makes a frame with no fill around them.
+            self.edit(g, flags::FILLS).fills = Some(Arc::from([]));
+        }
+        // Keep the members' stacking order.
+        let order: Vec<NodeIdx> = self
+            .doc
+            .node(parent)
+            .children
+            .iter()
+            .copied()
+            .filter(|c| ids.contains(c))
+            .collect();
+        for (k, &m) in order.iter().enumerate() {
+            self.attach(m, g, k, true);
+        }
+        Ok(Some(g))
+    }
+
+    fn ungroup(&mut self, g: NodeIdx) -> Vec<NodeIdx> {
+        let node_type = self.doc.props(g).node_type();
+        if !matches!(
+            node_type,
+            NodeType::Group | NodeType::Frame | NodeType::BooleanOperation | NodeType::Section
+        ) {
+            return Vec::new();
+        }
+        let Some(parent) = self.doc.node(g).parent else {
+            return Vec::new();
+        };
+        let at = self
+            .doc
+            .node(parent)
+            .children
+            .iter()
+            .position(|&c| c == g)
+            .unwrap_or(0);
+        let children = self.doc.node(g).children.clone();
+        for (k, &c) in children.iter().enumerate() {
+            self.attach(c, parent, at + k, true);
+        }
+        self.remove_tree(g);
+        children
+    }
+
+    fn apply(&mut self, op: &Op) -> Result<()> {
+        match op {
+            Op::Set { ids, props } => {
+                for i in self.layers(ids)? {
+                    self.set(i, props)?;
+                }
+            }
+            Op::Translate { ids, dx, dy } => {
+                let all = self.layers(ids)?;
+                // Moving a layer moves its children; skip selected children
+                // of selected layers.
+                for &i in &all {
+                    if !self.has_ancestor_in(i, &all) {
+                        self.translate(i, *dx, *dy);
+                    }
+                }
+            }
+            Op::Create {
+                parent,
+                index,
+                node,
+            } => {
+                let parent = self.resolve(parent)?;
+                self.create(parent, *index, node)?;
+            }
+            Op::Delete { ids } => {
+                for i in self.layers(ids)? {
+                    if !self.doc.node(i).removed {
+                        self.remove_tree(i);
+                    }
+                }
+            }
+            Op::Reorder { ids, parent, index } => {
+                let parent = self.resolve(parent)?;
+                let all = self.layers(ids)?;
+                let mut at = *index;
+                for i in all {
+                    if i == parent || self.is_ancestor(i, parent) {
+                        continue;
+                    }
+                    // Removing it from below the target shifts the target.
+                    if self.doc.node(i).parent == Some(parent)
+                        && let Some(cur) =
+                            self.doc.node(parent).children.iter().position(|&c| c == i)
+                        && cur < at
+                    {
+                        at -= 1;
+                    }
+                    self.attach(i, parent, at, true);
+                    at += 1;
+                }
+            }
+            Op::Arrange { ids, how } => {
+                let all = self.layers(ids)?;
+                for i in all {
+                    let Some(parent) = self.doc.node(i).parent else {
+                        continue;
+                    };
+                    let children = &self.doc.node(parent).children;
+                    let Some(cur) = children.iter().position(|&c| c == i) else {
+                        continue;
+                    };
+                    let last = children.len() - 1;
+                    let target = match how {
+                        Arrangement::Forward => (cur + 1).min(last),
+                        Arrangement::Backward => cur.saturating_sub(1),
+                        Arrangement::Front => last,
+                        Arrangement::Back => 0,
+                    };
+                    if target != cur {
+                        self.attach(i, parent, target, false);
+                    }
+                }
+            }
+            Op::Duplicate { ids, dx, dy } => {
+                for i in self.layers(ids)? {
+                    let Some(parent) = self.doc.node(i).parent else {
+                        continue;
+                    };
+                    let at = self
+                        .doc
+                        .node(parent)
+                        .children
+                        .iter()
+                        .position(|&c| c == i)
+                        .map_or(0, |p| p + 1);
+                    let copy = self.copy_tree(i, parent, at);
+                    self.translate(copy, *dx, *dy);
+                    let guid = self.doc.props(copy).guid.unwrap_or_default();
+                    self.created.push(guid.to_string());
+                }
+            }
+            Op::Group { ids, frame } => {
+                let all = self.layers(ids)?;
+                // Only layers sharing the first one's parent are grouped.
+                let parent = all.first().and_then(|&i| self.doc.node(i).parent);
+                let same: Vec<NodeIdx> = all
+                    .into_iter()
+                    .filter(|&i| self.doc.node(i).parent == parent)
+                    .collect();
+                if let Some(g) = self.group(&same, *frame)? {
+                    let _ = g;
+                }
+            }
+            Op::Ungroup { ids } => {
+                for i in self.layers(ids)? {
+                    let children = self.ungroup(i);
+                    for c in children {
+                        let guid = self.doc.props(c).guid.unwrap_or_default();
+                        self.created.push(guid.to_string());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn is_ancestor(&self, ancestor: NodeIdx, mut i: NodeIdx) -> bool {
+        while let Some(p) = self.doc.node(i).parent {
+            if p == ancestor {
+                return true;
+            }
+            i = p;
+        }
+        false
+    }
+
+    fn has_ancestor_in(&self, i: NodeIdx, set: &[NodeIdx]) -> bool {
+        set.iter().any(|&a| a != i && self.is_ancestor(a, i))
+    }
+}
+
+impl History {
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    /// Applies `ops` as one undoable step. Consecutive steps with the same
+    /// `coalesce` key (a drag, say) undo as one. On error nothing changes.
+    pub fn apply(
+        &mut self,
+        doc: &mut Document,
+        ops: &[Op],
+        coalesce: Option<&str>,
+    ) -> Result<Applied> {
+        let blobs_before = doc.blobs.len();
+        let next_guid = doc.next_guid;
+        let mut txn = Txn {
+            doc,
+            before: Vec::new(),
+            seen: HashSet::new(),
+            created: Vec::new(),
+        };
+        for op in ops {
+            if let Err(e) = txn.apply(op) {
+                let Txn { doc, before, .. } = txn;
+                restore(doc, &before);
+                doc.next_guid = next_guid;
+                let _ = blobs_before;
+                return Err(e);
+            }
+        }
+        let Txn {
+            doc,
+            before,
+            created,
+            ..
+        } = txn;
+        let touched: Vec<NodeIdx> = before.iter().map(|(i, _)| *i).collect();
+        let after: Vec<(NodeIdx, Node)> = touched
+            .iter()
+            .map(|&i| (i, doc.nodes[i as usize].clone()))
+            .collect();
+        if touched.is_empty() {
+            return Ok(Applied::default());
+        }
+        self.redo.clear();
+        let merge = coalesce.is_some()
+            && self
+                .undo
+                .last()
+                .is_some_and(|s| s.coalesce.as_deref() == coalesce);
+        if merge {
+            let last = self.undo.last_mut().expect("checked above");
+            let known: HashSet<NodeIdx> = last.before.iter().map(|(i, _)| *i).collect();
+            for (i, n) in before {
+                if !known.contains(&i) {
+                    last.before.push((i, n));
+                }
+            }
+            let mut after_map: HashMap<NodeIdx, Node> = last.after.drain(..).collect();
+            for (i, n) in after {
+                after_map.insert(i, n);
+            }
+            last.after = after_map.into_iter().collect();
+        } else {
+            self.undo.push(Step {
+                before,
+                after,
+                coalesce: coalesce.map(str::to_owned),
+            });
+            if self.undo.len() > MAX_UNDO {
+                self.undo.remove(0);
+            }
+        }
+        Ok(Applied { touched, created })
+    }
+
+    /// Undoes the last step; returns the nodes it changed.
+    pub fn undo(&mut self, doc: &mut Document) -> Option<Vec<NodeIdx>> {
+        let step = self.undo.pop()?;
+        restore(doc, &step.before);
+        let touched = step.before.iter().map(|(i, _)| *i).collect();
+        self.redo.push(step);
+        Some(touched)
+    }
+
+    pub fn redo(&mut self, doc: &mut Document) -> Option<Vec<NodeIdx>> {
+        let mut step = self.redo.pop()?;
+        restore(doc, &step.after);
+        let touched = step.after.iter().map(|(i, _)| *i).collect();
+        step.coalesce = None;
+        self.undo.push(step);
+        Some(touched)
+    }
+}
+
+fn restore(doc: &mut Document, snapshots: &[(NodeIdx, Node)]) {
+    for (i, n) in snapshots {
+        doc.nodes[*i as usize] = n.clone();
+    }
+}
+
+/// A fractional-index position strictly between `lo` and `hi` (`None`:
+/// unbounded above), in Figma's alphabet of printable ASCII (`!`..`~`);
+/// `None` when no such string exists (`hi` is `lo` followed by `!`s, or not
+/// above `lo`).
+pub fn between(lo: &str, hi: Option<&str>) -> Option<String> {
+    const MIN: u32 = 1;
+    const MAX: u32 = 94;
+    let digit = |c: u8| u32::from(c.clamp(b'!', b'~') - b' ');
+    let lob = lo.as_bytes();
+    let hib = hi.map(str::as_bytes);
+    let mut out = Vec::new();
+    let (mut lo_bound, mut hi_bound) = (true, hib.is_some());
+    let mut i = 0;
+    loop {
+        let x = if lo_bound {
+            lob.get(i).map_or(0, |&c| digit(c))
+        } else {
+            0
+        };
+        let y = match (hi_bound, hib) {
+            (true, Some(h)) => h.get(i).map_or(0, |&c| digit(c)),
+            _ => MAX + 1,
+        };
+        if y > x + 1 {
+            out.push(((x + y) / 2) as u8 + b' ');
+            break;
+        }
+        if y <= x && hi_bound {
+            // `hi` ended or dips below `lo` here: nothing fits.
+            if y < x || y == 0 {
+                return None;
+            }
+        }
+        let d = if x >= MIN { x } else { y };
+        if d < MIN {
+            return None;
+        }
+        out.push(d as u8 + b' ');
+        lo_bound = lo_bound && d == x;
+        hi_bound = hi_bound && d == y;
+        i += 1;
+        if i > 64 {
+            return None;
+        }
+    }
+    let p = String::from_utf8(out).ok()?;
+    let ok = p.as_str() > lo && hi.is_none_or(|h| p.as_str() < h);
+    ok.then_some(p)
+}
+
+/// Parses `RRGGBB` or `RRGGBBAA` (with or without `#`).
+pub fn parse_hex(s: &str) -> Option<Color> {
+    let s = s.trim().trim_start_matches('#');
+    let byte = |i: usize| u8::from_str_radix(s.get(i..i + 2)?, 16).ok();
+    let c = |i: usize| byte(i).map(|b| f32::from(b) / 255.0);
+    match s.len() {
+        6 => Some(Color {
+            r: c(0)?,
+            g: c(2)?,
+            b: c(4)?,
+            a: 1.0,
+        }),
+        8 => Some(Color {
+            r: c(0)?,
+            g: c(2)?,
+            b: c(4)?,
+            a: c(6)?,
+        }),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test;

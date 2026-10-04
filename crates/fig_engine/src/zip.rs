@@ -1,5 +1,5 @@
-//! A read-only ZIP reader: the central directory, stored and deflated
-//! entries, and the ZIP64 extensions large exports need.
+//! A ZIP reader (the central directory, stored and deflated entries, and the
+//! ZIP64 extensions large exports need) and a writer of stored entries.
 
 use crate::error::{Result, corrupt};
 
@@ -138,4 +138,65 @@ impl<'a> ZipArchive<'a> {
             ))),
         }
     }
+}
+
+/// A ZIP archive of stored (uncompressed) entries.
+pub(crate) fn write_stored(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut central = Vec::new();
+    for (name, data) in entries {
+        let offset = out.len() as u32;
+        let crc = crc32(data);
+        let local = |buf: &mut Vec<u8>, sig: u32, central: bool| {
+            buf.extend_from_slice(&sig.to_le_bytes());
+            if central {
+                buf.extend_from_slice(&20u16.to_le_bytes());
+            }
+            buf.extend_from_slice(&20u16.to_le_bytes()); // version needed
+            buf.extend_from_slice(&0u16.to_le_bytes()); // flags
+            buf.extend_from_slice(&0u16.to_le_bytes()); // stored
+            buf.extend_from_slice(&0u32.to_le_bytes()); // time, date
+            buf.extend_from_slice(&crc.to_le_bytes());
+            buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            buf.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            buf.extend_from_slice(&0u16.to_le_bytes()); // extra
+            if central {
+                buf.extend_from_slice(&0u16.to_le_bytes()); // comment
+                buf.extend_from_slice(&0u16.to_le_bytes()); // disk
+                buf.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
+                buf.extend_from_slice(&0u32.to_le_bytes()); // external attrs
+                buf.extend_from_slice(&offset.to_le_bytes());
+            }
+            buf.extend_from_slice(name.as_bytes());
+        };
+        local(&mut out, 0x0403_4b50, false);
+        out.extend_from_slice(data);
+        local(&mut central, 0x0201_4b50, true);
+    }
+    let central_offset = out.len() as u32;
+    out.extend_from_slice(&central);
+    out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes()); // disk numbers
+    out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+    out.extend_from_slice(&(central.len() as u32).to_le_bytes());
+    out.extend_from_slice(&central_offset.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes()); // comment
+    out
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 {
+                (crc >> 1) ^ 0xedb8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
 }

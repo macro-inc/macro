@@ -81,6 +81,27 @@ pub fn parse_blob(bytes: &[u8]) -> Option<ParsedPath> {
     pb.finish().map(|path| ParsedPath { path })
 }
 
+/// Encodes a path as a Figma command blob (the inverse of [`parse_blob`]).
+pub fn encode_blob(path: &Path) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut put = |cmd: u8, pts: &[f32]| {
+        out.push(cmd);
+        for p in pts {
+            out.extend_from_slice(&p.to_le_bytes());
+        }
+    };
+    for seg in path.segments() {
+        match seg {
+            PathSegment::MoveTo(a) => put(1, &[a.x, a.y]),
+            PathSegment::LineTo(a) => put(2, &[a.x, a.y]),
+            PathSegment::QuadTo(c, a) => put(3, &[c.x, c.y, a.x, a.y]),
+            PathSegment::CubicTo(c1, c2, a) => put(4, &[c1.x, c1.y, c2.x, c2.y, a.x, a.y]),
+            PathSegment::Close => put(0, &[]),
+        }
+    }
+    out
+}
+
 /// A rectangle with per-corner radii. `smoothing` (Figma's corner
 /// smoothing, 0..1) stretches each corner into a squircle-like curve.
 pub fn rounded_rect(w: f32, h: f32, radii: CornerRadii, smoothing: f32) -> Option<Path> {

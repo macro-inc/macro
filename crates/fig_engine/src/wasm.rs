@@ -4,7 +4,8 @@
 //! premultiplied RGBA bytes. Every call names a page by index; the worker
 //! keeps the most recently used page expanded.
 
-use crate::document::Document;
+use crate::document::{Document, NodeIdx};
+use crate::edit::{History, Op};
 use crate::images::{ImageStore, encode_png};
 use crate::inspect;
 use crate::model::{Rect, Vec2};
@@ -58,12 +59,28 @@ struct NodeGeometry {
     bounds: Rect,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EditResult {
+    /// Ids of layers the step created (to select them).
+    created: Vec<String>,
+    /// Page area whose pixels may have changed (the open page).
+    dirty: Option<Rect>,
+    can_undo: bool,
+    can_redo: bool,
+    /// The page's layer count changed or layers moved between parents.
+    structure: bool,
+}
+
 /// An open `.fig` file.
 #[wasm_bindgen]
 pub struct FigFile {
     doc: Document,
     scene: Option<(usize, Scene)>,
     images: ImageStore,
+    /// The file as opened (saving patches it).
+    original: Vec<u8>,
+    history: History,
 }
 
 #[wasm_bindgen]
@@ -77,7 +94,102 @@ impl FigFile {
             doc,
             scene: None,
             images: ImageStore::default(),
+            original: bytes.to_vec(),
+            history: History::default(),
         })
+    }
+
+    /// A new, empty design (a `.fig` file with one page).
+    pub fn blank(name: &str) -> Vec<u8> {
+        crate::save::blank(name)
+    }
+
+    /// Makes a font family available to text editing; returns its name.
+    #[wasm_bindgen(js_name = registerFont)]
+    pub fn register_font(bytes: Vec<u8>) -> Option<String> {
+        crate::text::register_font(bytes)
+    }
+
+    /// Page-space bounds of everything drawn for `touched` nodes on the
+    /// open page.
+    fn touched_bounds(&self, touched: &[NodeIdx]) -> Rect {
+        let Some((_, scene)) = &self.scene else {
+            return Rect::EMPTY;
+        };
+        let set: std::collections::HashSet<NodeIdx> = touched.iter().copied().collect();
+        scene
+            .nodes
+            .iter()
+            .skip(1)
+            .filter(|n| set.contains(&n.src))
+            .fold(Rect::EMPTY, |acc, n| acc.union(&n.bounds))
+    }
+
+    fn after_edit(
+        &mut self,
+        page: usize,
+        touched: Vec<NodeIdx>,
+        created: Vec<String>,
+    ) -> Result<String, JsError> {
+        let before = self.touched_bounds(&touched);
+        let count_before = self.scene.as_ref().map_or(0, |(_, s)| s.nodes.len());
+        self.scene = None;
+        self.scene(page)?;
+        let after = self.touched_bounds(&touched);
+        let count_after = self.scene.as_ref().map_or(0, |(_, s)| s.nodes.len());
+        let dirty = before.union(&after);
+        let structure = count_before != count_after
+            || touched
+                .iter()
+                .any(|&i| self.doc.node(i).edits & crate::edit::flags::PARENT != 0);
+        to_json(&EditResult {
+            created,
+            dirty: (!dirty.is_empty()).then_some(dirty),
+            can_undo: self.history.can_undo(),
+            can_redo: self.history.can_redo(),
+            structure,
+        })
+    }
+
+    /// Applies edit operations (`Op[]` JSON) as one undoable step. Steps
+    /// with the same `coalesce` key in a row (one drag) undo together.
+    /// Returns an `EditResult` JSON.
+    pub fn apply(
+        &mut self,
+        page: usize,
+        ops: &str,
+        coalesce: Option<String>,
+    ) -> Result<String, JsError> {
+        let ops: Vec<Op> = serde_json::from_str(ops).map_err(js_err)?;
+        self.scene(page)?;
+        let applied = self
+            .history
+            .apply(&mut self.doc, &ops, coalesce.as_deref())
+            .map_err(js_err)?;
+        self.after_edit(page, applied.touched, applied.created)
+    }
+
+    pub fn undo(&mut self, page: usize) -> Result<String, JsError> {
+        self.scene(page)?;
+        let touched = self.history.undo(&mut self.doc).unwrap_or_default();
+        self.after_edit(page, touched, Vec::new())
+    }
+
+    pub fn redo(&mut self, page: usize) -> Result<String, JsError> {
+        self.scene(page)?;
+        let touched = self.history.redo(&mut self.doc).unwrap_or_default();
+        self.after_edit(page, touched, Vec::new())
+    }
+
+    /// The edited file, as `.fig` bytes.
+    pub fn save(&self) -> Result<Vec<u8>, JsError> {
+        crate::save::save(&self.doc, &self.original).map_err(js_err)
+    }
+
+    /// Whether anything was edited since the file was opened.
+    #[wasm_bindgen(js_name = isEdited)]
+    pub fn is_edited(&self) -> bool {
+        self.doc.nodes.iter().any(|n| n.edits != 0)
     }
 
     /// Pages and file details (`FileSummary` JSON).

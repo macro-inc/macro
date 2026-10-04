@@ -40,6 +40,9 @@ enum Command {
         out: PathBuf,
         files: Vec<PathBuf>,
     },
+    /// Edit each file (move every top-level layer), save, reopen, and check
+    /// the saved file renders like the edited one.
+    Roundtrip { files: Vec<PathBuf> },
 }
 
 fn main() {
@@ -59,6 +62,11 @@ fn main() {
             std::fs::create_dir_all(&out).expect("output directory");
             for path in files {
                 render_pages(&path, &out, max, outline);
+            }
+        }
+        Command::Roundtrip { files } => {
+            for path in files {
+                roundtrip(&path);
             }
         }
         Command::Compare { out, files } => {
@@ -276,4 +284,85 @@ fn compare(path: &Path, out: &Path) -> Option<f64> {
     .ok()?;
     println!("{}: similarity {score:.4} ({elapsed:?})", stem(path));
     Some(score)
+}
+
+/// Renders page 0's content at a small scale.
+fn small_render(doc: &Document) -> Option<Pixmap> {
+    let &page = doc.pages.first()?;
+    let scene = Scene::build(doc, page);
+    let b = scene.node(scene.root()).bounds;
+    if b.is_empty() {
+        return None;
+    }
+    let scale = (512.0 / b.w.max(b.h)).min(1.0);
+    render::render(
+        doc,
+        &scene,
+        &mut ImageStore::default(),
+        &Viewport {
+            x: b.x,
+            y: b.y,
+            scale,
+            width: ((b.w * scale).ceil() as u32).max(1),
+            height: ((b.h * scale).ceil() as u32).max(1),
+        },
+        RenderOptions {
+            outline: false,
+            background: Some(doc.page_background(page)),
+        },
+    )
+}
+
+fn roundtrip(path: &Path) {
+    use fig_engine::edit::{History, Op};
+    let Some((bytes, mut doc)) = open(path) else {
+        return;
+    };
+    let started = Instant::now();
+    let page = doc.pages[0];
+    let ids: Vec<String> = doc
+        .node(page)
+        .children
+        .iter()
+        .filter_map(|&c| doc.props(c).guid.map(|g| format!("\"{g}\"")))
+        .collect();
+    let ops: Vec<Op> = serde_json::from_str(&format!(
+        r#"[{{"op":"translate","ids":[{}],"dx":17,"dy":-9}}]"#,
+        ids.join(",")
+    ))
+    .expect("ops");
+    if let Err(e) = History::default().apply(&mut doc, &ops, None) {
+        println!("{}: EDIT ERROR {e}", stem(path));
+        return;
+    }
+    let saved = match fig_engine::save::save(&doc, &bytes) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("{}: SAVE ERROR {e}", stem(path));
+            return;
+        }
+    };
+    let took = started.elapsed();
+    let reopened = match Document::open(&saved) {
+        Ok(d) => d,
+        Err(e) => {
+            println!("{}: REOPEN ERROR {e}", stem(path));
+            return;
+        }
+    };
+    let (a, b) = (small_render(&doc), small_render(&reopened));
+    let same = match (&a, &b) {
+        (Some(a), Some(b)) => a.data() == b.data(),
+        (None, None) => true,
+        _ => false,
+    };
+    println!(
+        "{}: nodes {} -> {} saved {} KB -> {} KB in {took:?}, renders {}",
+        stem(path),
+        doc.nodes.iter().filter(|n| !n.removed).count(),
+        reopened.nodes.len(),
+        bytes.len() / 1024,
+        saved.len() / 1024,
+        if same { "identical" } else { "DIFFER" }
+    );
 }

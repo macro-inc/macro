@@ -13,10 +13,19 @@ use std::sync::{Arc, OnceLock};
 /// Index of a node in [`Document::nodes`].
 pub type NodeIdx = u32;
 
+#[derive(Clone)]
 pub struct Node {
     pub props: Props,
     pub parent: Option<NodeIdx>,
     pub children: Vec<NodeIdx>,
+    /// Which properties were edited since the file was opened
+    /// ([`crate::edit::flags`]); saving rewrites only those.
+    pub edits: u32,
+    /// Deleted by an edit (kept so undo can bring it back).
+    pub removed: bool,
+    /// For a copy made by an edit: the file node it was copied from, whose
+    /// stored record saving starts from.
+    pub source: Option<Guid>,
 }
 
 /// The binary blobs (path geometry, mostly) a file carries, kept in the
@@ -34,6 +43,15 @@ impl Blobs {
 
     pub fn is_empty(&self) -> bool {
         self.ranges.is_empty()
+    }
+
+    /// Adds a blob (new geometry from an edit); returns its index.
+    pub fn push(&mut self, bytes: &[u8]) -> u32 {
+        let at = self.data.len() as u32;
+        self.data.extend_from_slice(bytes);
+        self.ranges.push((at, bytes.len() as u32));
+        self.paths.push(OnceLock::new());
+        (self.ranges.len() - 1) as u32
     }
 
     pub fn bytes(&self, index: u32) -> Option<&[u8]> {
@@ -71,6 +89,12 @@ pub struct Document {
     pub thumbnail: Option<Vec<u8>>,
     /// The file name Figma saved, from `meta.json`.
     pub file_name: Option<String>,
+    /// Blobs the file arrived with; later ones were added by edits.
+    pub original_blobs: usize,
+    /// The next id for a node an edit creates (a session no node uses).
+    pub next_guid: Guid,
+    /// Glyph outlines laid out by edits: `(font, weight, glyph)` → blob.
+    pub glyph_cache: HashMap<(usize, u32, u16), Option<u32>>,
 }
 
 impl Document {
@@ -165,6 +189,17 @@ impl Document {
             })
             .collect();
         drop(container.message);
+        let original_blobs = ranges.len();
+        let next_guid = Guid {
+            session: nodes
+                .iter()
+                .filter_map(|n| n.props.guid)
+                .map(|g| g.session)
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1),
+            local: 1,
+        };
         let paths = (0..ranges.len()).map(|_| OnceLock::new()).collect();
         Ok(Document {
             version: container.version,
@@ -181,7 +216,48 @@ impl Document {
             images: container.images,
             thumbnail: container.thumbnail,
             file_name,
+            original_blobs,
+            next_guid,
+            glyph_cache: HashMap::new(),
         })
+    }
+
+    /// A fresh node id.
+    pub fn new_guid(&mut self) -> Guid {
+        let g = self.next_guid;
+        self.next_guid.local += 1;
+        g
+    }
+
+    /// Node → page transform (document nodes; pages are the identity).
+    pub fn world(&self, index: NodeIdx) -> crate::model::Affine {
+        let mut chain = Vec::new();
+        let mut at = Some(index);
+        while let Some(i) = at {
+            let t = self.props(i).node_type();
+            if matches!(t, NodeType::Canvas | NodeType::Document) {
+                break;
+            }
+            chain.push(i);
+            at = self.nodes[i as usize].parent;
+        }
+        chain
+            .iter()
+            .rev()
+            .fold(crate::model::Affine::IDENTITY, |acc, &i| {
+                acc.mul(&self.props(i).transform())
+            })
+    }
+
+    /// The page a node is on, if it is attached to one.
+    pub fn page_of(&self, index: NodeIdx) -> Option<NodeIdx> {
+        let mut at = index;
+        loop {
+            if self.props(at).node_type() == NodeType::Canvas {
+                return Some(at);
+            }
+            at = self.nodes[at as usize].parent?;
+        }
     }
 
     pub fn node(&self, index: NodeIdx) -> &Node {
@@ -238,6 +314,9 @@ impl NodeTable {
                     props: p,
                     parent: None,
                     children: Vec::new(),
+                    edits: 0,
+                    removed: false,
+                    source: None,
                 });
             }
         }

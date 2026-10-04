@@ -7546,6 +7546,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tiny-skia",
+ "ttf-parser",
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",

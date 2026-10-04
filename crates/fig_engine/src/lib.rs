@@ -5,6 +5,7 @@
 pub mod container;
 pub mod decode;
 pub mod document;
+pub mod edit;
 pub mod error;
 pub mod geometry;
 pub mod images;
@@ -12,9 +13,11 @@ pub mod inspect;
 pub mod kiwi;
 pub mod model;
 pub mod render;
+pub mod save;
 pub mod scene;
 #[cfg(test)]
 pub(crate) mod testing;
+pub mod text;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 mod zip;

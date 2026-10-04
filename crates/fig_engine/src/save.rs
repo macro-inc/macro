@@ -1,0 +1,923 @@
+//! Writing a `.fig` file after edits.
+//!
+//! The original file is decoded again with its complete schema, so every
+//! field the engine does not model survives. Each edited node's record is
+//! patched in the fields its [`Node::edits`] name, removed nodes' records are
+//! dropped, created nodes get new records (copies start from their source's),
+//! and blobs the edits added are appended. The result is the current ZIP
+//! layout: `canvas.fig`, `meta.json`, a fresh `thumbnail.png`, and the image
+//! fills.
+//!
+//! [`blank`] makes a new, empty design with a built-in schema that follows
+//! Figma's field names and types.
+
+use crate::container::Container;
+use crate::document::{Document, Node};
+use crate::edit::flags;
+use crate::error::{Result, corrupt};
+use crate::images::{ImageStore, encode_png};
+use crate::kiwi::{Decoder, Msg, Reader, Schema, Value, Writer, schema_from_text};
+use crate::model::{
+    Affine, BlendMode, Color, Effect, EffectKind, GradientKind, Guid, ImageScaleMode, NodeType,
+    Paint, PaintKind, PathRef, Props, StrokeAlign, Vec2, WindingRule,
+};
+use crate::render::{self, RenderOptions, Viewport};
+use crate::scene::Scene;
+use std::collections::HashMap;
+
+/// The schema of designs created in Macro: a subset of Figma's, with the
+/// same type and field names, so the files are ordinary `.fig` files.
+pub const MACRO_SCHEMA: &str = "
+enum MessageType JOIN_START NODE_CHANGES USER_CHANGES JOIN_END SIGNAL STYLE STYLE_SET_CHANGES INTERACTIVE_SLIDE_CHANGE
+enum NodePhase CREATED REMOVED
+enum NodeType NONE DOCUMENT CANVAS GROUP FRAME BOOLEAN_OPERATION VECTOR STAR LINE ELLIPSE RECTANGLE REGULAR_POLYGON ROUNDED_RECTANGLE TEXT SLICE SYMBOL INSTANCE STICKY SHAPE_WITH_TEXT CONNECTOR CODE_BLOCK WIDGET STAMP MEDIA HIGHLIGHT SECTION SECTION_OVERLAY WASHI_TAPE VARIABLE TABLE TABLE_CELL
+enum BlendMode PASS_THROUGH NORMAL DARKEN MULTIPLY LINEAR_BURN COLOR_BURN LIGHTEN SCREEN LINEAR_DODGE COLOR_DODGE OVERLAY SOFT_LIGHT HARD_LIGHT DIFFERENCE EXCLUSION HUE SATURATION COLOR LUMINOSITY
+enum PaintType SOLID GRADIENT_LINEAR GRADIENT_RADIAL GRADIENT_ANGULAR GRADIENT_DIAMOND IMAGE EMOJI VIDEO
+enum ImageScaleMode STRETCH FIT FILL TILE
+enum EffectType INNER_SHADOW DROP_SHADOW FOREGROUND_BLUR BACKGROUND_BLUR
+enum StrokeAlign CENTER INSIDE OUTSIDE
+enum StrokeCap NONE ROUND SQUARE ARROW_LINES ARROW_EQUILATERAL
+enum StrokeJoin MITER BEVEL ROUND
+enum WindingRule NONZERO ODD
+enum NumberUnits RAW PIXELS PERCENT
+enum TextAlignHorizontal LEFT CENTER RIGHT JUSTIFIED
+enum TextAlignVertical TOP CENTER BOTTOM
+enum TextAutoResize NONE WIDTH_AND_HEIGHT HEIGHT
+struct GUID sessionID:uint localID:uint
+struct Color r:float g:float b:float a:float
+struct Vector x:float y:float
+struct Matrix m00:float m01:float m02:float m10:float m11:float m12:float
+message ParentIndex guid:GUID position:string
+message Number value:float units:NumberUnits
+message FontName family:string style:string postscript:string
+message ColorStop color:Color position:float
+message Image hash:byte[] name:string
+message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode rotation:float scale:float originalImageWidth:uint originalImageHeight:uint
+message Effect type:EffectType color:Color offset:Vector radius:float visible:bool blendMode:BlendMode spread:float showShadowBehindNode:bool
+message Path windingRule:WindingRule commandsBlob:uint styleID:uint
+message Glyph commandsBlob:uint position:Vector styleID:uint fontSize:float firstCharacter:uint advance:float
+message Baseline position:Vector width:float lineY:float lineHeight:float lineAscent:float firstCharacter:uint endCharacter:uint
+message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[]
+message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:NodeChange[]
+message GUIDPath guids:GUID[]
+message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
+message Blob bytes:byte[]
+message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
+";
+
+/// The format version written into new files' headers.
+const MACRO_VERSION: u32 = 48;
+
+/// Kiwi values built against one schema.
+struct Build<'s> {
+    schema: &'s Schema,
+}
+
+impl<'s> Build<'s> {
+    fn def(&self, name: &str) -> Option<u32> {
+        self.schema.def_index(name)
+    }
+
+    /// The type of `parent`'s field `field`.
+    fn sub(&self, parent: u32, field: &str) -> Option<u32> {
+        self.schema.field_def(parent, field)
+    }
+
+    /// The enum value `value` of `parent`'s enum-typed field `field`.
+    fn enum_of(&self, parent: u32, field: &str, value: &str) -> Option<Value> {
+        let def = self.sub(parent, field)?;
+        let f = self
+            .schema
+            .def(def)
+            .fields
+            .iter()
+            .find(|f| f.name == value)?;
+        Some(Value::Enum(def, f.id))
+    }
+
+    fn set_enum(&self, m: &mut Msg, field: &str, value: &str) {
+        if let Some(v) = self.enum_of(m.def, field, value) {
+            m.set(self.schema, field, v);
+        }
+    }
+
+    fn msg_field(&self, m: &mut Msg, field: &str, build: impl FnOnce(&Self, &mut Msg)) {
+        if let Some(def) = self.sub(m.def, field) {
+            let mut inner = Msg::new(def);
+            build(self, &mut inner);
+            m.set(self.schema, field, Value::Msg(Box::new(inner)));
+        }
+    }
+
+    fn list_field(&self, m: &mut Msg, field: &str, items: Vec<Value>) {
+        m.set(self.schema, field, Value::List(items));
+    }
+
+    fn guid(&self, def: u32, g: Guid) -> Msg {
+        let mut m = Msg::new(def);
+        m.set(self.schema, "sessionID", Value::Uint(g.session));
+        m.set(self.schema, "localID", Value::Uint(g.local));
+        m
+    }
+
+    fn guid_field(&self, m: &mut Msg, field: &str, g: Guid) {
+        if let Some(def) = self.sub(m.def, field) {
+            let v = self.guid(def, g);
+            m.set(self.schema, field, Value::Msg(Box::new(v)));
+        }
+    }
+
+    fn vector(&self, m: &mut Msg, field: &str, v: Vec2) {
+        self.msg_field(m, field, |b, inner| {
+            inner.set(b.schema, "x", Value::Float(v.x as f32));
+            inner.set(b.schema, "y", Value::Float(v.y as f32));
+        });
+    }
+
+    fn color(&self, m: &mut Msg, field: &str, c: Color) {
+        self.msg_field(m, field, |b, inner| {
+            inner.set(b.schema, "r", Value::Float(c.r));
+            inner.set(b.schema, "g", Value::Float(c.g));
+            inner.set(b.schema, "b", Value::Float(c.b));
+            inner.set(b.schema, "a", Value::Float(c.a));
+        });
+    }
+
+    fn matrix(&self, m: &mut Msg, field: &str, t: &Affine) {
+        self.msg_field(m, field, |b, inner| {
+            for (name, v) in [
+                ("m00", t.m00),
+                ("m01", t.m01),
+                ("m02", t.m02),
+                ("m10", t.m10),
+                ("m11", t.m11),
+                ("m12", t.m12),
+            ] {
+                inner.set(b.schema, name, Value::Float(v as f32));
+            }
+        });
+    }
+
+    fn paint(&self, def: u32, p: &Paint) -> Option<Value> {
+        let mut m = Msg::new(def);
+        let kind = match &p.kind {
+            PaintKind::Solid(c) => {
+                self.color(&mut m, "color", *c);
+                "SOLID"
+            }
+            PaintKind::Gradient {
+                kind,
+                stops,
+                transform,
+            } => {
+                let stop_def = self.sub(def, "stops");
+                let items = stop_def
+                    .map(|sd| {
+                        stops
+                            .iter()
+                            .map(|s| {
+                                let mut sm = Msg::new(sd);
+                                self.color(&mut sm, "color", s.color);
+                                sm.set(self.schema, "position", Value::Float(s.position));
+                                Value::Msg(Box::new(sm))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                self.list_field(&mut m, "stops", items);
+                self.matrix(&mut m, "transform", transform);
+                match kind {
+                    GradientKind::Linear => "GRADIENT_LINEAR",
+                    GradientKind::Radial => "GRADIENT_RADIAL",
+                    GradientKind::Angular => "GRADIENT_ANGULAR",
+                    GradientKind::Diamond => "GRADIENT_DIAMOND",
+                }
+            }
+            PaintKind::Image(img) => {
+                if let Some(hash) = img.hash.as_deref().and_then(unhex) {
+                    self.msg_field(&mut m, "image", |b, inner| {
+                        inner.set(b.schema, "hash", Value::Bytes(hash.into()));
+                    });
+                }
+                self.set_enum(
+                    &mut m,
+                    "imageScaleMode",
+                    match img.scale_mode {
+                        ImageScaleMode::Stretch => "STRETCH",
+                        ImageScaleMode::Fit => "FIT",
+                        ImageScaleMode::Fill => "FILL",
+                        ImageScaleMode::Tile => "TILE",
+                    },
+                );
+                self.matrix(&mut m, "transform", &img.transform);
+                m.set(self.schema, "scale", Value::Float(img.scale));
+                m.set(self.schema, "rotation", Value::Float(img.rotation));
+                if let Some(s) = img.original_size {
+                    m.set(self.schema, "originalImageWidth", Value::Uint(s.x as u32));
+                    m.set(self.schema, "originalImageHeight", Value::Uint(s.y as u32));
+                }
+                "IMAGE"
+            }
+            PaintKind::Unsupported(_) => return None,
+        };
+        self.set_enum(&mut m, "type", kind);
+        m.set(self.schema, "opacity", Value::Float(p.opacity));
+        m.set(self.schema, "visible", Value::Bool(p.visible));
+        self.set_enum(&mut m, "blendMode", blend_name(p.blend_mode));
+        Some(Value::Msg(Box::new(m)))
+    }
+
+    fn paints(&self, m: &mut Msg, field: &str, paints: &[Paint]) {
+        let Some(def) = self.sub(m.def, field) else {
+            return;
+        };
+        let items = paints.iter().filter_map(|p| self.paint(def, p)).collect();
+        self.list_field(m, field, items);
+    }
+
+    fn effects(&self, m: &mut Msg, effects: &[Effect]) {
+        let Some(def) = self.sub(m.def, "effects") else {
+            return;
+        };
+        let items = effects
+            .iter()
+            .filter_map(|e| {
+                let kind = match e.kind {
+                    EffectKind::DropShadow => "DROP_SHADOW",
+                    EffectKind::InnerShadow => "INNER_SHADOW",
+                    EffectKind::LayerBlur => "FOREGROUND_BLUR",
+                    EffectKind::BackgroundBlur => "BACKGROUND_BLUR",
+                    EffectKind::Other => return None,
+                };
+                let mut em = Msg::new(def);
+                self.set_enum(&mut em, "type", kind);
+                self.color(&mut em, "color", e.color);
+                self.vector(&mut em, "offset", e.offset);
+                em.set(self.schema, "radius", Value::Float(e.radius));
+                em.set(self.schema, "spread", Value::Float(e.spread));
+                em.set(self.schema, "visible", Value::Bool(e.visible));
+                self.set_enum(&mut em, "blendMode", blend_name(e.blend_mode));
+                Some(Value::Msg(Box::new(em)))
+            })
+            .collect();
+        self.list_field(m, "effects", items);
+    }
+
+    fn geometry(&self, m: &mut Msg, field: &str, paths: Option<&[PathRef]>) {
+        let Some(paths) = paths else {
+            m.remove(self.schema, field);
+            return;
+        };
+        let Some(def) = self.sub(m.def, field) else {
+            return;
+        };
+        let items = paths
+            .iter()
+            .map(|p| {
+                let mut pm = Msg::new(def);
+                self.set_enum(
+                    &mut pm,
+                    "windingRule",
+                    match p.winding {
+                        WindingRule::NonZero => "NONZERO",
+                        WindingRule::EvenOdd => "ODD",
+                    },
+                );
+                pm.set(self.schema, "commandsBlob", Value::Uint(p.blob));
+                pm.set(self.schema, "styleID", Value::Uint(0));
+                Value::Msg(Box::new(pm))
+            })
+            .collect();
+        self.list_field(m, field, items);
+    }
+
+    fn text(&self, m: &mut Msg, props: &Props) {
+        if let Some(content) = &props.text_content {
+            let existing = match m.get(self.schema, "textData") {
+                Some(Value::Msg(t)) => Some((**t).clone()),
+                _ => None,
+            };
+            if let Some(def) = self.sub(m.def, "textData") {
+                let mut t = existing.unwrap_or_else(|| Msg::new(def));
+                t.set(
+                    self.schema,
+                    "characters",
+                    Value::Str(content.characters.as_ref().into()),
+                );
+                if content.style_ids.is_empty() {
+                    t.remove(self.schema, "characterStyleIDs");
+                } else {
+                    t.set(
+                        self.schema,
+                        "characterStyleIDs",
+                        Value::Uints(content.style_ids.as_ref().into()),
+                    );
+                }
+                m.set(self.schema, "textData", Value::Msg(Box::new(t)));
+            }
+        }
+        if let Some(style) = &props.text_style {
+            if let Some(fs) = style.font_size {
+                m.set(self.schema, "fontSize", Value::Float(fs));
+            }
+            if let Some(family) = &style.font_family {
+                let font_style = style.font_style.as_deref().unwrap_or("Regular");
+                self.msg_field(m, "fontName", |b, inner| {
+                    inner.set(b.schema, "family", Value::Str(family.as_str().into()));
+                    inner.set(b.schema, "style", Value::Str(font_style.into()));
+                    let ps = format!(
+                        "{}-{}",
+                        family.replace(' ', ""),
+                        font_style.replace(' ', "")
+                    );
+                    inner.set(b.schema, "postscript", Value::Str(ps.into()));
+                });
+            }
+            if let Some(a) = &style.auto_resize {
+                self.set_enum(m, "textAutoResize", a);
+            }
+            if let Some(a) = &style.align_horizontal {
+                self.set_enum(m, "textAlignHorizontal", a);
+            }
+            if let Some(a) = &style.align_vertical {
+                self.set_enum(m, "textAlignVertical", a);
+            }
+        }
+        if let Some(layout) = &props.text_layout
+            && let Some(def) = self.sub(m.def, "derivedTextData")
+        {
+            let mut d = Msg::new(def);
+            self.vector(
+                &mut d,
+                "layoutSize",
+                layout.layout_size.unwrap_or(props.size()),
+            );
+            if let Some(gdef) = self.sub(def, "glyphs") {
+                let glyphs = layout
+                    .glyphs
+                    .iter()
+                    .map(|g| {
+                        let mut gm = Msg::new(gdef);
+                        if let Some(b) = g.blob {
+                            gm.set(self.schema, "commandsBlob", Value::Uint(b));
+                        }
+                        self.vector(
+                            &mut gm,
+                            "position",
+                            Vec2::new(f64::from(g.x), f64::from(g.y)),
+                        );
+                        gm.set(self.schema, "styleID", Value::Uint(g.style_id));
+                        gm.set(self.schema, "fontSize", Value::Float(g.font_size));
+                        gm.set(self.schema, "firstCharacter", Value::Uint(g.first_char));
+                        gm.set(self.schema, "advance", Value::Float(g.advance));
+                        Value::Msg(Box::new(gm))
+                    })
+                    .collect();
+                self.list_field(&mut d, "glyphs", glyphs);
+            }
+            m.set(self.schema, "derivedTextData", Value::Msg(Box::new(d)));
+        }
+    }
+
+    /// Rewrites the fields of `m` that `edits` names, from `node`.
+    fn patch(&self, m: &mut Msg, node: &Node, doc: &Document, edits: u32) {
+        let p = &node.props;
+        let s = self.schema;
+        if edits & flags::TRANSFORM != 0 {
+            self.matrix(m, "transform", &p.transform());
+        }
+        if edits & flags::SIZE != 0 {
+            self.vector(m, "size", p.size());
+        }
+        if edits & flags::NAME != 0 {
+            m.set(s, "name", Value::Str(p.name().into()));
+        }
+        if edits & flags::VISIBLE != 0 {
+            m.set(s, "visible", Value::Bool(p.visible()));
+        }
+        if edits & flags::LOCKED != 0 {
+            m.set(s, "locked", Value::Bool(p.locked.unwrap_or(false)));
+        }
+        if edits & flags::OPACITY != 0 {
+            m.set(s, "opacity", Value::Float(p.opacity()));
+        }
+        if edits & flags::BLEND != 0 {
+            self.set_enum(m, "blendMode", blend_name(p.blend_mode()));
+        }
+        if edits & flags::FILLS != 0 {
+            self.paints(m, "fillPaints", p.fills());
+            if p.fill_style.is_none() {
+                for f in ["styleIdForFill", "inheritFillStyleID"] {
+                    m.remove(s, f);
+                }
+            }
+            if matches!(p.node_type(), NodeType::Frame | NodeType::Symbol) {
+                // Older files keep frame fills as a background.
+                for f in ["backgroundPaints", "backgroundEnabled"] {
+                    m.remove(s, f);
+                }
+            }
+        }
+        if edits & flags::STROKES != 0 {
+            self.paints(m, "strokePaints", p.strokes());
+            if p.stroke_style.is_none() {
+                for f in ["styleIdForStrokeFill", "inheritFillStyleIDForStroke"] {
+                    m.remove(s, f);
+                }
+            }
+        }
+        if edits & flags::STROKE_WEIGHT != 0 {
+            m.set(s, "strokeWeight", Value::Float(p.stroke_weight()));
+        }
+        if edits & flags::STROKE_ALIGN != 0 {
+            self.set_enum(
+                m,
+                "strokeAlign",
+                match p.stroke_align() {
+                    StrokeAlign::Center => "CENTER",
+                    StrokeAlign::Inside => "INSIDE",
+                    StrokeAlign::Outside => "OUTSIDE",
+                },
+            );
+        }
+        if edits & flags::RADIUS != 0 {
+            let r = p.radii();
+            m.set(
+                s,
+                "cornerRadius",
+                Value::Float(p.corner_radius.unwrap_or(r.top_left)),
+            );
+            m.set(s, "rectangleTopLeftCornerRadius", Value::Float(r.top_left));
+            m.set(
+                s,
+                "rectangleTopRightCornerRadius",
+                Value::Float(r.top_right),
+            );
+            m.set(
+                s,
+                "rectangleBottomLeftCornerRadius",
+                Value::Float(r.bottom_left),
+            );
+            m.set(
+                s,
+                "rectangleBottomRightCornerRadius",
+                Value::Float(r.bottom_right),
+            );
+            m.set(s, "rectangleCornerRadiiIndependent", Value::Bool(false));
+        }
+        if edits & flags::CLIP != 0 {
+            m.set(
+                s,
+                "frameMaskDisabled",
+                Value::Bool(p.clip_disabled.unwrap_or(false)),
+            );
+        }
+        if edits & flags::EFFECTS != 0 {
+            self.effects(m, p.effects());
+        }
+        if edits & flags::GEOMETRY != 0 {
+            self.geometry(m, "fillGeometry", p.fill_geometry.as_deref());
+            self.geometry(m, "strokeGeometry", p.stroke_geometry.as_deref());
+        }
+        if edits & flags::TEXT != 0 {
+            self.text(m, p);
+        }
+        if edits & flags::PARENT != 0 {
+            let parent_guid = node.parent.and_then(|pi| doc.props(pi).guid);
+            if let (Some(g), Some(def)) = (parent_guid, self.sub(m.def, "parentIndex")) {
+                let mut pm = Msg::new(def);
+                if let Some(gdef) = self.sub(def, "guid") {
+                    let gm = self.guid(gdef, g);
+                    pm.set(s, "guid", Value::Msg(Box::new(gm)));
+                }
+                pm.set(
+                    s,
+                    "position",
+                    Value::Str(p.position.as_deref().unwrap_or("!").into()),
+                );
+                m.set(s, "parentIndex", Value::Msg(Box::new(pm)));
+            }
+        }
+    }
+
+    /// A complete record for a node created in Macro.
+    fn create(&self, def: u32, node: &Node, doc: &Document) -> Msg {
+        let mut m = Msg::new(def);
+        let p = &node.props;
+        if let Some(g) = p.guid {
+            self.guid_field(&mut m, "guid", g);
+        }
+        self.set_enum(&mut m, "phase", "CREATED");
+        let t = match p.node_type() {
+            NodeType::RoundedRectangle => "ROUNDED_RECTANGLE",
+            other => type_name(other),
+        };
+        self.set_enum(&mut m, "type", t);
+        let mut edits = !flags::GEOMETRY;
+        if p.fill_geometry.is_some() || p.stroke_geometry.is_some() {
+            edits |= flags::GEOMETRY;
+        }
+        if p.node_type() != NodeType::Text {
+            edits &= !flags::TEXT;
+        }
+        self.patch(&mut m, node, doc, edits);
+        m
+    }
+}
+
+fn blend_name(b: BlendMode) -> &'static str {
+    use BlendMode::*;
+    match b {
+        PassThrough => "PASS_THROUGH",
+        Normal => "NORMAL",
+        Darken => "DARKEN",
+        Multiply => "MULTIPLY",
+        LinearBurn => "LINEAR_BURN",
+        ColorBurn => "COLOR_BURN",
+        Lighten => "LIGHTEN",
+        Screen => "SCREEN",
+        LinearDodge => "LINEAR_DODGE",
+        ColorDodge => "COLOR_DODGE",
+        Overlay => "OVERLAY",
+        SoftLight => "SOFT_LIGHT",
+        HardLight => "HARD_LIGHT",
+        Difference => "DIFFERENCE",
+        Exclusion => "EXCLUSION",
+        Hue => "HUE",
+        Saturation => "SATURATION",
+        Color => "COLOR",
+        Luminosity => "LUMINOSITY",
+    }
+}
+
+fn type_name(t: NodeType) -> &'static str {
+    use NodeType::*;
+    match t {
+        Document => "DOCUMENT",
+        Canvas => "CANVAS",
+        Group => "GROUP",
+        Frame => "FRAME",
+        BooleanOperation => "BOOLEAN_OPERATION",
+        Vector => "VECTOR",
+        Star => "STAR",
+        Line => "LINE",
+        Ellipse => "ELLIPSE",
+        Rectangle => "RECTANGLE",
+        RegularPolygon => "REGULAR_POLYGON",
+        RoundedRectangle => "ROUNDED_RECTANGLE",
+        Text => "TEXT",
+        Slice => "SLICE",
+        Symbol => "SYMBOL",
+        Instance => "INSTANCE",
+        Section => "SECTION",
+        _ => "FRAME",
+    }
+}
+
+fn unhex(s: &str) -> Option<Vec<u8>> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok())
+        .collect()
+}
+
+/// What saving does with one node's records.
+enum Plan {
+    Patch(usize),
+    Drop,
+}
+
+/// Reads a node change's id, leaving `r` after the record.
+fn scan_guid(
+    decoder: &Decoder,
+    schema: &Schema,
+    r: &mut Reader,
+    node_def: u32,
+) -> Result<Option<Guid>> {
+    let def = schema.def(node_def);
+    let mut guid = None;
+    loop {
+        let id = r.var_uint()?;
+        if id == 0 {
+            return Ok(guid);
+        }
+        let field = def
+            .field_by_id(id)
+            .ok_or_else(|| corrupt(format!("kiwi: {} has no field {id}", def.name)))?;
+        if field.name == "guid" {
+            if let Value::Msg(m) = decoder.field(r, field, 0)? {
+                let uint = |name| match m.get(schema, name) {
+                    Some(Value::Uint(v)) => *v,
+                    _ => 0,
+                };
+                guid = Some(Guid {
+                    session: uint("sessionID"),
+                    local: uint("localID"),
+                });
+            }
+        } else {
+            decoder.skip_field(r, field, 0)?;
+        }
+    }
+}
+
+/// Writes the edited document as a `.fig` file. `original` is the file it
+/// was opened from. Records of unedited nodes are copied byte for byte;
+/// only edited ones are decoded and re-encoded.
+pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
+    let container = Container::open(original)?;
+    let schema = Schema::decode(&container.schema)?;
+    let b = Build { schema: &schema };
+    let message_def = b
+        .def("Message")
+        .ok_or_else(|| corrupt("the schema has no Message type"))?;
+    let node_def = b
+        .sub(message_def, "nodeChanges")
+        .ok_or_else(|| corrupt("the schema has no node changes"))?;
+    let blob_def = b.sub(message_def, "blobs");
+    let decoder = Decoder::new(&schema);
+
+    let mut plans: HashMap<Guid, Plan> = HashMap::new();
+    let mut sources: HashMap<Guid, Option<Msg>> = HashMap::new();
+    for (k, node) in doc.nodes.iter().enumerate() {
+        let Some(guid) = node.props.guid else {
+            continue;
+        };
+        if node.edits == 0 {
+            continue;
+        }
+        if node.edits & flags::CREATED != 0 {
+            if !node.removed
+                && let Some(s) = node.source
+            {
+                sources.insert(s, None);
+            }
+            continue;
+        }
+        plans.insert(
+            guid,
+            if node.removed {
+                Plan::Drop
+            } else {
+                Plan::Patch(k)
+            },
+        );
+    }
+
+    let data = container.message.as_slice();
+    let mut r = Reader::new(data);
+    let mut out = Writer::default();
+    let def = schema.def(message_def);
+    let mut wrote_blobs = false;
+    let new_blobs = || -> Vec<u8> {
+        let mut w = Writer::default();
+        if let Some(blob_def) = blob_def {
+            for k in doc.original_blobs..doc.blobs.len() {
+                let mut m = Msg::new(blob_def);
+                m.set(
+                    &schema,
+                    "bytes",
+                    Value::Bytes(doc.blobs.bytes(k as u32).unwrap_or_default().into()),
+                );
+                schema.encode(&m, &mut w);
+            }
+        }
+        w.bytes
+    };
+    loop {
+        let start = r.at;
+        let id = r.var_uint()?;
+        if id == 0 {
+            break;
+        }
+        let field = def
+            .field_by_id(id)
+            .ok_or_else(|| corrupt(format!("kiwi: Message has no field {id}")))?;
+        if field.array && field.name == "nodeChanges" {
+            let count = r.var_uint()? as usize;
+            let mut records = Writer::default();
+            let mut written = 0u32;
+            for _ in 0..count {
+                let rs = r.at;
+                let guid = scan_guid(&decoder, &schema, &mut r, node_def)?;
+                let raw = &data[rs..r.at];
+                let decode = || decoder.decode(&mut Reader::new(raw), node_def);
+                if let Some(g) = guid
+                    && let Some(slot) = sources.get_mut(&g)
+                {
+                    let m = decode()?;
+                    match slot {
+                        // A later record for the same node updates it.
+                        Some(base) => {
+                            for (i, v) in m.fields {
+                                let name = schema.def(node_def).fields[i as usize].name.clone();
+                                base.set(&schema, &name, v);
+                            }
+                        }
+                        None => *slot = Some(m),
+                    }
+                }
+                match guid.and_then(|g| plans.get(&g)) {
+                    Some(Plan::Drop) => {}
+                    Some(Plan::Patch(k)) => {
+                        let mut m = decode()?;
+                        let node = &doc.nodes[*k];
+                        b.patch(&mut m, node, doc, node.edits);
+                        schema.encode(&m, &mut records);
+                        written += 1;
+                    }
+                    None => {
+                        records.bytes.extend_from_slice(raw);
+                        written += 1;
+                    }
+                }
+            }
+            for node in &doc.nodes {
+                if node.edits & flags::CREATED == 0 || node.removed {
+                    continue;
+                }
+                let Some(guid) = node.props.guid else {
+                    continue;
+                };
+                let record = match node.source.and_then(|s| sources.get(&s).cloned().flatten()) {
+                    Some(mut base) => {
+                        b.guid_field(&mut base, "guid", guid);
+                        base.remove(&schema, "overrideKey");
+                        b.patch(&mut base, node, doc, node.edits);
+                        base
+                    }
+                    None => b.create(node_def, node, doc),
+                };
+                schema.encode(&record, &mut records);
+                written += 1;
+            }
+            out.var_uint(id);
+            out.var_uint(written);
+            out.bytes.extend_from_slice(&records.bytes);
+        } else if field.array && field.name == "blobs" {
+            let count = r.var_uint()?;
+            let rs = r.at;
+            for _ in 0..count {
+                decoder.skip(&mut r, field.ty, 0)?;
+            }
+            let added = (doc.blobs.len() - doc.original_blobs) as u32;
+            out.var_uint(id);
+            out.var_uint(count + added);
+            out.bytes.extend_from_slice(&data[rs..r.at]);
+            out.bytes.extend_from_slice(&new_blobs());
+            wrote_blobs = true;
+        } else {
+            decoder.skip_field(&mut r, field, 0)?;
+            out.bytes.extend_from_slice(&data[start..r.at]);
+        }
+    }
+    if !wrote_blobs
+        && doc.blobs.len() > doc.original_blobs
+        && let Some(f) = def.fields.iter().find(|f| f.name == "blobs")
+    {
+        out.var_uint(f.id);
+        out.var_uint((doc.blobs.len() - doc.original_blobs) as u32);
+        out.bytes.extend_from_slice(&new_blobs());
+    }
+    out.var_uint(0);
+    let canvas = document_bytes(container.version, &container.schema, &out.bytes);
+    Ok(package(doc, &canvas, container.meta.as_ref()))
+}
+
+/// `fig-kiwi` header and the deflated schema and message chunks.
+fn document_bytes(version: u32, schema: &[u8], message: &[u8]) -> Vec<u8> {
+    let mut out = b"fig-kiwi".to_vec();
+    out.extend_from_slice(&version.to_le_bytes());
+    for chunk in [schema, message] {
+        // Fast deflate: big files' messages are tens of megabytes.
+        let compressed = miniz_oxide::deflate::compress_to_vec(chunk, 1);
+        out.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&compressed);
+    }
+    out
+}
+
+/// The ZIP around a document: meta, thumbnail, and images.
+fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> Vec<u8> {
+    let mut meta = meta.cloned().unwrap_or_else(|| serde_json::json!({}));
+    if let Some(obj) = meta.as_object_mut() {
+        obj.insert(
+            "file_name".into(),
+            serde_json::Value::String(doc.file_name.clone().unwrap_or_else(|| "Untitled".into())),
+        );
+    }
+    let meta_bytes = serde_json::to_vec(&meta).unwrap_or_default();
+    let thumb = thumbnail(doc).unwrap_or_default();
+    let mut names: Vec<(String, &[u8])> = vec![
+        ("canvas.fig".into(), canvas),
+        ("meta.json".into(), meta_bytes.as_slice()),
+    ];
+    if !thumb.is_empty() {
+        names.push(("thumbnail.png".into(), thumb.as_slice()));
+    }
+    let mut hashes: Vec<&String> = doc.images.keys().collect();
+    hashes.sort();
+    for h in hashes {
+        names.push((format!("images/{h}"), doc.images[h].as_slice()));
+    }
+    let entries: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
+    crate::zip::write_stored(&entries)
+}
+
+/// A render of the first page's content, at most 400 px wide, as Figma
+/// stores for file previews.
+pub fn thumbnail(doc: &Document) -> Option<Vec<u8>> {
+    let &page = doc.pages.first()?;
+    let scene = Scene::build(doc, page);
+    let bounds = scene.node(scene.root()).bounds;
+    if bounds.is_empty() {
+        return None;
+    }
+    let scale = (400.0 / bounds.w).min(300.0 / bounds.h).min(2.0);
+    let pixmap = render::render(
+        doc,
+        &scene,
+        &mut ImageStore::default(),
+        &Viewport {
+            x: bounds.x,
+            y: bounds.y,
+            scale,
+            width: ((bounds.w * scale).ceil() as u32).max(1),
+            height: ((bounds.h * scale).ceil() as u32).max(1),
+        },
+        RenderOptions {
+            outline: false,
+            background: Some(doc.page_background(page)),
+        },
+    )?;
+    Some(encode_png(&pixmap))
+}
+
+/// A new design: one empty page named "Page 1", on Figma's canvas gray.
+pub fn blank(name: &str) -> Vec<u8> {
+    let schema_bytes = schema_from_text(MACRO_SCHEMA);
+    let schema = Schema::decode(&schema_bytes).expect("the built-in schema decodes");
+    let b = Build { schema: &schema };
+    let node_def = b.def("NodeChange").expect("NodeChange");
+    let message_def = b.def("Message").expect("Message");
+    let node = |guid: Guid, parent: Option<Guid>, t: &str, name: &str, position: &str| {
+        let mut m = Msg::new(node_def);
+        b.guid_field(&mut m, "guid", guid);
+        b.set_enum(&mut m, "phase", "CREATED");
+        b.set_enum(&mut m, "type", t);
+        m.set(&schema, "name", Value::Str(name.into()));
+        m.set(&schema, "visible", Value::Bool(true));
+        m.set(&schema, "opacity", Value::Float(1.0));
+        if let Some(p) = parent {
+            b.msg_field(&mut m, "parentIndex", |b2, pm| {
+                if let Some(gdef) = b2.sub(pm.def, "guid") {
+                    let gm = b2.guid(gdef, p);
+                    pm.set(b2.schema, "guid", Value::Msg(Box::new(gm)));
+                }
+                pm.set(b2.schema, "position", Value::Str(position.into()));
+            });
+        }
+        m
+    };
+    let root = Guid {
+        session: 0,
+        local: 0,
+    };
+    let page = Guid {
+        session: 0,
+        local: 1,
+    };
+    let doc_node = node(root, None, "DOCUMENT", "Document", "");
+    let mut page_node = node(page, Some(root), "CANVAS", "Page 1", "!");
+    b.color(
+        &mut page_node,
+        "backgroundColor",
+        Color {
+            r: 0.961,
+            g: 0.961,
+            b: 0.961,
+            a: 1.0,
+        },
+    );
+    let mut message = Msg::new(message_def);
+    b.set_enum(&mut message, "type", "NODE_CHANGES");
+    message.set(
+        &schema,
+        "nodeChanges",
+        Value::List(vec![
+            Value::Msg(Box::new(doc_node)),
+            Value::Msg(Box::new(page_node)),
+        ]),
+    );
+    message.set(&schema, "blobs", Value::List(Vec::new()));
+    let mut w = Writer::default();
+    schema.encode(&message, &mut w);
+    let canvas = document_bytes(MACRO_VERSION, &schema_bytes, &w.bytes);
+    let meta = serde_json::json!({ "file_name": name, "client_meta": { "background_color": { "r": 0.961, "g": 0.961, "b": 0.961, "a": 1.0 } } });
+    let meta_bytes = serde_json::to_vec(&meta).unwrap_or_default();
+    crate::zip::write_stored(&[("canvas.fig", &canvas), ("meta.json", &meta_bytes)])
+}
+
+#[cfg(test)]
+mod test;
