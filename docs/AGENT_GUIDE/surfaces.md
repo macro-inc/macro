@@ -2125,8 +2125,8 @@ contracts and test coverage.
 Actions live in the top bar immediately before Share, with consistent compact
 buttons (labels collapse on narrow headers). There are no Actions sections in
 information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
-includes Ask Macro and Create task; PDF and calls include Ask Macro; native
-projects expose Delete project with its existing confirmation dialog.
+includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
+projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata is quiet, non-collapsible text at the bottom of each panel,
 separated by a muted divider. Owner and available timestamps share one format;
