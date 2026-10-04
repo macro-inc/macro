@@ -22,7 +22,7 @@ PDF export, using the engine's bundled fonts through the generated
 fontconfig file so differences are layout rather than font choice) and
 rasterizes Word's PDFs where they exist. `score` renders every page with the
 engine, compares it with both references (SSIM per page, page counts) and
-writes `index.html` with side-by-side pages, plus `scores.json`. `lines`
+writes `report.html` with side-by-side pages, plus `scores.json`. `lines`
 dumps the engine's text lines with positions for comparing line breaks
 with a reference PDF's.
 
