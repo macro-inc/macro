@@ -2473,6 +2473,48 @@ export const EditPresentation = z.object({
                   highlight: z.union([z.string(), z.null()]).optional(),
                   baseline: z.union([z.number(), z.null()]).optional(),
                   link: z.union([z.string(), z.null()]).optional(),
+                  shadow: z
+                    .union([
+                      z.union([
+                        z.string(),
+                        z
+                          .object({
+                            preset: z.union([z.string(), z.null()]).optional(),
+                            color: z.union([z.string(), z.null()]).optional(),
+                            transparency: z
+                              .union([z.number(), z.null()])
+                              .optional(),
+                            sizePct: z.union([z.number(), z.null()]).optional(),
+                            blurPt: z.union([z.number(), z.null()]).optional(),
+                            distancePt: z
+                              .union([z.number(), z.null()])
+                              .optional(),
+                            angleDeg: z
+                              .union([z.number(), z.null()])
+                              .optional(),
+                          })
+                          .strict(),
+                      ]),
+                      z.null(),
+                    ])
+                    .optional(),
+                  glow: z
+                    .union([
+                      z.union([
+                        z.string(),
+                        z
+                          .object({
+                            color: z.union([z.string(), z.null()]).optional(),
+                            sizePt: z.union([z.number(), z.null()]).optional(),
+                            transparency: z
+                              .union([z.number(), z.null()])
+                              .optional(),
+                          })
+                          .strict(),
+                      ]),
+                      z.null(),
+                    ])
+                    .optional(),
                 })
                 .strict(),
               op: z.literal('formatText'),
@@ -3465,6 +3507,130 @@ export const EditPresentation = z.object({
               fromSlide: z.number().int().gte(0),
               fromShape: z.number().int().gte(0),
               op: z.literal('pasteFormat'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              left: z.union([z.number(), z.null()]).optional(),
+              top: z.union([z.number(), z.null()]).optional(),
+              right: z.union([z.number(), z.null()]).optional(),
+              bottom: z.union([z.number(), z.null()]).optional(),
+              mode: z
+                .union([
+                  z.any().superRefine((x, ctx) => {
+                    const schemas = [z.literal('fill'), z.literal('fit')];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  z.null(),
+                ])
+                .optional(),
+              op: z.literal('cropPicture'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shapes: z.array(z.number().int().gte(0)),
+              brightness: z.union([z.number(), z.null()]).optional(),
+              contrast: z.union([z.number(), z.null()]).optional(),
+              recolor: z.union([z.string(), z.null()]).optional(),
+              transparency: z.union([z.number(), z.null()]).optional(),
+              reset: z.boolean().optional(),
+              op: z.literal('formatPicture'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shapes: z.array(z.number().int().gte(0)),
+              shadow: z
+                .union([
+                  z.union([
+                    z.string(),
+                    z
+                      .object({
+                        preset: z.union([z.string(), z.null()]).optional(),
+                        color: z.union([z.string(), z.null()]).optional(),
+                        transparency: z
+                          .union([z.number(), z.null()])
+                          .optional(),
+                        sizePct: z.union([z.number(), z.null()]).optional(),
+                        blurPt: z.union([z.number(), z.null()]).optional(),
+                        distancePt: z.union([z.number(), z.null()]).optional(),
+                        angleDeg: z.union([z.number(), z.null()]).optional(),
+                      })
+                      .strict(),
+                  ]),
+                  z.null(),
+                ])
+                .optional(),
+              glow: z
+                .union([
+                  z.union([
+                    z.string(),
+                    z
+                      .object({
+                        color: z.union([z.string(), z.null()]).optional(),
+                        sizePt: z.union([z.number(), z.null()]).optional(),
+                        transparency: z
+                          .union([z.number(), z.null()])
+                          .optional(),
+                      })
+                      .strict(),
+                  ]),
+                  z.null(),
+                ])
+                .optional(),
+              softEdge: z
+                .union([
+                  z.union([
+                    z.string(),
+                    z
+                      .object({
+                        sizePt: z.union([z.number(), z.null()]).optional(),
+                      })
+                      .strict(),
+                  ]),
+                  z.null(),
+                ])
+                .optional(),
+              reflection: z
+                .union([
+                  z.union([
+                    z.string(),
+                    z
+                      .object({
+                        preset: z.union([z.string(), z.null()]).optional(),
+                        transparency: z
+                          .union([z.number(), z.null()])
+                          .optional(),
+                        sizePct: z.union([z.number(), z.null()]).optional(),
+                        distancePt: z.union([z.number(), z.null()]).optional(),
+                        blurPt: z.union([z.number(), z.null()]).optional(),
+                      })
+                      .strict(),
+                  ]),
+                  z.null(),
+                ])
+                .optional(),
+              op: z.literal('setShapeEffects'),
             })
             .strict(),
           z
