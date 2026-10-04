@@ -159,11 +159,151 @@ export interface ShapeOutline {
   table?: TableOutline;
   /** Chart content, for charts. */
   chart?: ChartOutline;
+  /** Crop and adjustments, for pictures. */
+  picture?: PictureOutline;
+  /** Shadow, glow, soft edges, and reflection, when the shape has any. */
+  effects?: EffectsOutline;
   /**
    * Group members, back to front. Their box, rotation, and flips are in
    * slide space (what `setTransform` takes and ungrouping gives them).
    */
   children?: ShapeOutline[];
+}
+
+/**
+ * Fractions of the original image cropped off each edge (negative = empty
+ * padding). The whole image spans the picture's box grown by these
+ * fractions of the image: in the box's own (unrotated) coordinates its width
+ * is `w / (1 - left - right)`, its left edge `x - left × that width`, and
+ * likewise vertically; rotation and flips then apply about the box center.
+ */
+export interface CropOutline {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** A recolor (`formatPicture`); colors are `RRGGBB` or theme names. */
+export type PictureRecolor =
+  | 'none'
+  | 'grayscale'
+  | 'sepia'
+  | 'washout'
+  /** 50% threshold. */
+  | 'blackWhite'
+  | 'blackWhite25'
+  | 'blackWhite75'
+  /** `duotone:<color>`: dark shades of the color on white (PowerPoint's Dark Variations); `duotone:<dark>,<light>`: black and white become these colors. */
+  | `duotone:${string}`
+  /** Light shades of the color on black (PowerPoint's Light Variations). */
+  | `duotoneLight:${string}`;
+
+/** A picture's crop and adjustments (`inspect::PictureOutline`). */
+export interface PictureOutline {
+  crop: CropOutline;
+  /** -1 to 1 (0 = unchanged). */
+  brightness: number;
+  /** -1 to 1 (0 = unchanged). */
+  contrast: number;
+  recolor: PictureRecolor;
+  /** 0 (opaque) to 1. */
+  transparency: number;
+  /** Pixel size of the image, when its header gives it. */
+  naturalWidth?: number;
+  naturalHeight?: number;
+}
+
+/** Shadow presets of PowerPoint's Shadow gallery (`setShapeEffects`). */
+export type ShadowPreset =
+  | 'outerBottomRight'
+  | 'outerBottom'
+  | 'outerBottomLeft'
+  | 'outerRight'
+  | 'outerCenter'
+  | 'outerLeft'
+  | 'outerTopRight'
+  | 'outerTop'
+  | 'outerTopLeft'
+  | 'innerTopLeft'
+  | 'innerTop'
+  | 'innerTopRight'
+  | 'innerLeft'
+  | 'innerCenter'
+  | 'innerRight'
+  | 'innerBottomLeft'
+  | 'innerBottom'
+  | 'innerBottomRight'
+  | 'perspectiveUpperLeft'
+  | 'perspectiveUpperRight'
+  | 'perspectiveBelow'
+  | 'perspectiveLowerLeft'
+  | 'perspectiveLowerRight';
+
+/** Reflection presets: how much is reflected, and the gap (touching, 4 pt, 8 pt). */
+export type ReflectionPreset =
+  | 'tightTouching'
+  | 'halfTouching'
+  | 'fullTouching'
+  | 'tight4pt'
+  | 'half4pt'
+  | 'full4pt'
+  | 'tight8pt'
+  | 'half8pt'
+  | 'full8pt';
+
+/** A shadow (`inspect::ShadowOutline`). */
+export interface ShadowOutline {
+  kind: 'outer' | 'inner';
+  /** The gallery preset these values match, if any. */
+  preset?: ShadowPreset;
+  /** `#RRGGBB`. */
+  color: string;
+  /** 0 (opaque) to 1. */
+  transparency: number;
+  /** Percent of the shape (100 for inner shadows). */
+  sizePct: number;
+  blurPt: number;
+  distancePt: number;
+  /** Degrees clockwise from the right (45 = toward the bottom right). */
+  angleDeg: number;
+}
+
+export interface GlowOutline {
+  /** `#RRGGBB`. */
+  color: string;
+  /** 0 (opaque) to 1. */
+  transparency: number;
+  sizePt: number;
+}
+
+export interface SoftEdgeOutline {
+  sizePt: number;
+}
+
+export interface ReflectionOutline {
+  /** The gallery preset these values match, if any. */
+  preset?: ReflectionPreset;
+  /** Where the reflection starts, 0 (opaque) to 1. */
+  transparency: number;
+  /** How much of the shape is reflected, in percent of its height. */
+  sizePct: number;
+  distancePt: number;
+  blurPt: number;
+}
+
+/** A shape's (or text run's) effects (`inspect::EffectsOutline`). */
+export interface EffectsOutline {
+  /** An outer shadow when the shape has both kinds. */
+  shadow?: ShadowOutline;
+  glow?: GlowOutline;
+  softEdge?: SoftEdgeOutline;
+  reflection?: ReflectionOutline;
+  /**
+   * The effects come from the theme's effect style (or a layout
+   * placeholder); `setShapeEffects` copies them onto the shape first.
+   */
+  inherited: boolean;
 }
 
 export interface SlideOutline {
@@ -278,6 +418,8 @@ export interface RunStyle {
   baseline?: number;
   /** Highlight color as `#RRGGBB`. */
   highlight?: string;
+  /** Text shadow and glow (WordArt effects). */
+  effects?: EffectsOutline;
 }
 
 export interface ParagraphStyle {
@@ -322,7 +464,69 @@ export interface RunPatch {
   highlight?: string;
   baseline?: number;
   link?: string;
+  /** Text shadow, as `setShapeEffects` takes it. */
+  shadow?: ShadowSpec;
+  /** Text glow, as `setShapeEffects` takes it. */
+  glow?: GlowSpec;
 }
+
+/**
+ * Shadow options. Omitted fields keep the current shadow's values (or those
+ * of `preset`, or of `outerBottomRight` for a shape without a shadow).
+ */
+export interface ShadowOptions {
+  preset?: ShadowPreset;
+  /** `RRGGBB` or a theme color name (presets use black). */
+  color?: string;
+  /** 0 (opaque) to 1. */
+  transparency?: number;
+  /** Percent of the shape, 1-200 (outer shadows only). */
+  sizePct?: number;
+  /** 0-100. */
+  blurPt?: number;
+  /** 0-200. */
+  distancePt?: number;
+  /** Degrees clockwise from the right. */
+  angleDeg?: number;
+}
+
+/** Glow options; a new glow defaults to accent1, 10 pt, 0.6 transparency. */
+export interface GlowOptions {
+  /** `RRGGBB` or a theme color name (theme colors get PowerPoint's 175% saturation). */
+  color?: string;
+  /** 0-150; 0 removes the glow. */
+  sizePt?: number;
+  /** 0 (opaque) to 1. */
+  transparency?: number;
+}
+
+/** Soft edge options; a new soft edge defaults to 5 pt. */
+export interface SoftEdgeOptions {
+  /** 0-100; 0 removes it. */
+  sizePt?: number;
+}
+
+/**
+ * Reflection options. Omitted fields keep the current reflection's values
+ * (or those of `preset`, or of `tightTouching`).
+ */
+export interface ReflectionOptions {
+  preset?: ReflectionPreset;
+  /** Where it starts, 0 (opaque) to 1. */
+  transparency?: number;
+  /** Percent of the shape's height, 1-100. */
+  sizePct?: number;
+  /** 0-100. */
+  distancePt?: number;
+  /** 0-100. */
+  blurPt?: number;
+}
+
+/** `'none'` removes the effect; a preset or options set it. */
+export type ShadowSpec = 'none' | ShadowPreset | ShadowOptions;
+export type GlowSpec = 'none' | GlowOptions;
+export type SoftEdgeSpec = 'none' | SoftEdgeOptions;
+export type ReflectionSpec = 'none' | ReflectionPreset | ReflectionOptions;
 
 export type BulletSpec =
   | { kind: 'none' }
@@ -598,6 +802,45 @@ export type EditOp =
       shapes: number[];
       fromSlide: number;
       fromShape: number;
+    }
+  /**
+   * Crops a picture: edges are fractions of the original image (negative =
+   * padding; omitted edges keep their crop), and the frame moves so the
+   * image stays put. `mode` (without edges) crops (`fill`) or pads (`fit`)
+   * to the frame's aspect ratio, keeping the frame.
+   */
+  | ({
+      op: 'cropPicture';
+      left?: number;
+      top?: number;
+      right?: number;
+      bottom?: number;
+      mode?: 'fill' | 'fit';
+    } & ShapeTarget)
+  /** Picture corrections, recolor, and transparency; omitted fields stay. */
+  | {
+      op: 'formatPicture';
+      slide: number;
+      shapes: number[];
+      /** -1 to 1. */
+      brightness?: number;
+      /** -1 to 1. */
+      contrast?: number;
+      recolor?: PictureRecolor;
+      /** 0 (opaque) to 1. */
+      transparency?: number;
+      /** First remove the crop (the frame grows back) and every adjustment. */
+      reset?: boolean;
+    }
+  /** Shape effects; omitted = keep, `'none'` = remove. */
+  | {
+      op: 'setShapeEffects';
+      slide: number;
+      shapes: number[];
+      shadow?: ShadowSpec;
+      glow?: GlowSpec;
+      softEdge?: SoftEdgeSpec;
+      reflection?: ReflectionSpec;
     }
   /** Recolors the deck's theme (slots: dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink). */
   | {
