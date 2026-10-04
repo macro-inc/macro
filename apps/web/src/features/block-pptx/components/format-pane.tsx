@@ -510,6 +510,26 @@ export function FormatPane(props: {
               Lock aspect ratio
             </label>
           </Section>
+          <Show when={one()}>
+            {(shape) => (
+              <Section title="Alt text">
+                <textarea
+                  aria-label="Alt text"
+                  data-testid="pptx-alt-text"
+                  placeholder="Describe this object for people who can't see it"
+                  class="h-20 resize-none rounded-md border border-edge-muted bg-input p-2 text-ink text-xs outline-none focus:border-accent"
+                  disabled={ro()}
+                  value={shape().altText ?? ''}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    const text = e.currentTarget.value;
+                    if (text !== (shape().altText ?? ''))
+                      void c.setAltText(text);
+                  }}
+                />
+              </Section>
+            )}
+          </Show>
           <Section title="Position">
             <Row label="Horizontal">
               <NumberField
@@ -705,10 +725,7 @@ export function FormatPane(props: {
               size="sm"
               variant="outline"
               disabled={ro()}
-              onClick={() => {
-                const s = env.slide();
-                if (s) c.applyBackgroundToAll?.(s.id);
-              }}
+              onClick={() => c.applyBackgroundToAll()}
             >
               Apply to all
             </Button>

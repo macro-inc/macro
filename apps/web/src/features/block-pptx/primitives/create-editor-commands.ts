@@ -20,6 +20,7 @@ import type {
   RunPatch,
   ShapeOutline,
   SlideOutline,
+  TransitionPatch,
 } from '@core/pptx-engine/types';
 import type { PptxEditorContext } from '../context/pptx-editor-context';
 import { formatState, stepFontSize } from '../core/formatting';
@@ -873,6 +874,56 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     ]);
   };
 
+  // ---- grouping, layouts, transitions -----------------------------------------
+
+  /** Groups the selected shapes (two or more). */
+  const group = async () => {
+    const s = slide();
+    const list = editor.selection();
+    if (!s || list.length < 2) return;
+    const result = await apply([
+      { op: 'groupShapes', slide: s.id, shapes: list.map((x) => x.id) },
+    ]);
+    const id = result?.created[0]?.shape;
+    if (id !== undefined && id !== null) editor.select(id);
+  };
+  /** Ungroups every selected group, selecting their members. */
+  const ungroup = async () => {
+    const s = slide();
+    const groups = editor.selection().filter((x) => x.kind === 'group');
+    if (!s || groups.length === 0) return;
+    const result = await apply(
+      groups.map((g) => ({
+        op: 'ungroupShape' as const,
+        slide: s.id,
+        shape: g.id,
+      }))
+    );
+    const ids = (result?.created ?? [])
+      .map((c) => c.shape)
+      .filter((id): id is number => id !== undefined && id !== null);
+    if (ids.length > 0) editor.setSelection(ids);
+  };
+  /** Gives the current slide another layout. */
+  const setLayout = async (layout: string) => {
+    const s = slide();
+    if (!s) return;
+    await apply([{ op: 'setSlideLayout', slide: s.id, layout }]);
+  };
+  /** Changes the current slide's transition (or every slide's). */
+  const setTransition = (patch: Omit<TransitionPatch, 'slide'>) => {
+    const s = slide();
+    if (!s) return Promise.resolve(null);
+    return apply([{ op: 'setTransition', slide: s.id, ...patch }]);
+  };
+  /** Alt text of the one selected shape. */
+  const setAltText = (text: string) => {
+    const s = slide();
+    const shape = editor.selectedShape();
+    if (!s || !shape) return Promise.resolve(null);
+    return apply([{ op: 'setAltText', slide: s.id, shape: shape.id, text }]);
+  };
+
   return {
     canEdit,
     insertRows,
@@ -933,18 +984,18 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     setRotation,
     styleShapes,
     selectAll,
-    /** Groups the selected shapes (needs engine support). */
-    group: undefined as (() => Promise<void>) | undefined,
-    ungroup: undefined as (() => Promise<void>) | undefined,
-    /** Changes the current slide's layout (needs engine support). */
-    setLayout: undefined as ((layout: string) => Promise<void>) | undefined,
+    group,
+    ungroup,
+    setLayout,
+    setTransition,
+    setAltText,
     insertTextBox,
     insertShape,
     insertImage,
     insertTable,
     replaceImage,
-    formatChart: formatChart as typeof formatChart | undefined,
-    setChartType: setChartType as typeof setChartType | undefined,
+    formatChart,
+    setChartType,
     setChartData,
     insertChart,
     goToSlideId,
@@ -954,9 +1005,7 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     toggleHidden,
     moveSlide,
     setBackground,
-    applyBackgroundToAll: applyBackgroundToAll as
-      | ((slide: number) => void)
-      | undefined,
+    applyBackgroundToAll,
     paragraphs,
     apply,
   };

@@ -2,6 +2,7 @@
  * The Design, Slide Show, View, and Shape Format tabs.
  */
 
+import type { TransitionKind } from '@core/pptx-engine/types';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
@@ -15,13 +16,14 @@ import Play from '@phosphor/play.svg';
 import ProjectorScreen from '@phosphor/projector-screen.svg';
 import ShapesIcon from '@phosphor/shapes.svg';
 import Stack from '@phosphor/stack.svg';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { boxOf } from '../../core/geometry';
 import { swatchCss } from '../../core/palette';
 import { unionBounds } from '../../core/selection';
 import {
   ColorPicker,
   NumberField,
+  PopoverItem,
   RibbonButton,
   RibbonGroup,
   RibbonPopover,
@@ -389,5 +391,306 @@ function ShapeStyles() {
         </div>
       )}
     </RibbonPopover>
+  );
+}
+
+const TRANSITIONS: { kind: TransitionKind; label: string }[] = [
+  { kind: 'none', label: 'None' },
+  { kind: 'morph', label: 'Morph' },
+  { kind: 'fade', label: 'Fade' },
+  { kind: 'push', label: 'Push' },
+  { kind: 'wipe', label: 'Wipe' },
+  { kind: 'split', label: 'Split' },
+  { kind: 'reveal', label: 'Reveal' },
+  { kind: 'cut', label: 'Cut' },
+  { kind: 'randomBar', label: 'Random bars' },
+  { kind: 'shape', label: 'Shape' },
+  { kind: 'uncover', label: 'Uncover' },
+  { kind: 'cover', label: 'Cover' },
+  { kind: 'zoom', label: 'Zoom' },
+  { kind: 'flash', label: 'Flash' },
+  { kind: 'dissolve', label: 'Dissolve' },
+];
+
+/** Effect options per transition, as PowerPoint names them. */
+const EFFECT_OPTIONS: Partial<Record<TransitionKind, [string, string][]>> = {
+  fade: [
+    ['smooth', 'Smoothly'],
+    ['black', 'Through black'],
+  ],
+  push: [
+    ['u', 'From bottom'],
+    ['l', 'From right'],
+    ['d', 'From top'],
+    ['r', 'From left'],
+  ],
+  wipe: [
+    ['l', 'From right'],
+    ['u', 'From bottom'],
+    ['r', 'From left'],
+    ['d', 'From top'],
+  ],
+  cover: [
+    ['l', 'From right'],
+    ['u', 'From bottom'],
+    ['r', 'From left'],
+    ['d', 'From top'],
+    ['lu', 'From bottom-right'],
+    ['ru', 'From bottom-left'],
+    ['ld', 'From top-right'],
+    ['rd', 'From top-left'],
+  ],
+  uncover: [
+    ['l', 'To left'],
+    ['u', 'To top'],
+    ['r', 'To right'],
+    ['d', 'To bottom'],
+  ],
+  split: [
+    ['vertOut', 'Vertical out'],
+    ['vertIn', 'Vertical in'],
+    ['horzOut', 'Horizontal out'],
+    ['horzIn', 'Horizontal in'],
+  ],
+  reveal: [
+    ['l', 'From right'],
+    ['r', 'From left'],
+  ],
+  randomBar: [
+    ['vert', 'Vertical'],
+    ['horz', 'Horizontal'],
+  ],
+  shape: [
+    ['circle', 'Circle'],
+    ['diamond', 'Diamond'],
+    ['plus', 'Plus'],
+  ],
+  zoom: [
+    ['in', 'In'],
+    ['out', 'Out'],
+  ],
+  morph: [
+    ['byObject', 'Objects'],
+    ['byWord', 'Words'],
+    ['byChar', 'Characters'],
+  ],
+};
+
+/** A thumbnail of how a transition moves. */
+function TransitionIcon(props: { kind: TransitionKind }) {
+  const k = () => props.kind;
+  return (
+    <svg viewBox="0 0 24 16" class="h-4 w-6">
+      <rect
+        x="0.5"
+        y="0.5"
+        width="23"
+        height="15"
+        rx="1.5"
+        class="fill-none stroke-current/40"
+      />
+      <Show when={k() === 'fade' || k() === 'dissolve' || k() === 'flash'}>
+        <rect
+          x="3"
+          y="3"
+          width="18"
+          height="10"
+          rx="1"
+          class="fill-current/30"
+        />
+      </Show>
+      <Show
+        when={
+          k() === 'push' ||
+          k() === 'cover' ||
+          k() === 'uncover' ||
+          k() === 'reveal'
+        }
+      >
+        <rect
+          x="9"
+          y="3"
+          width="12"
+          height="10"
+          rx="1"
+          class="fill-current/40"
+        />
+        <path
+          d="M4 8h4M6 6l2 2-2 2"
+          class="fill-none stroke-current"
+          stroke-width="1.2"
+        />
+      </Show>
+      <Show when={k() === 'wipe' || k() === 'randomBar'}>
+        <rect x="3" y="3" width="9" height="10" class="fill-current/40" />
+        <path d="M12 3v10" class="stroke-current" stroke-width="1.2" />
+      </Show>
+      <Show when={k() === 'split'}>
+        <path
+          d="M12 3v10M8 8H4M16 8h4"
+          class="fill-none stroke-current"
+          stroke-width="1.2"
+        />
+      </Show>
+      <Show when={k() === 'shape' || k() === 'zoom'}>
+        <circle
+          cx="12"
+          cy="8"
+          r="4"
+          class="fill-current/40 stroke-current"
+          stroke-width="1"
+        />
+      </Show>
+      <Show when={k() === 'morph'}>
+        <path
+          d="M5 11 Q12 1 19 11"
+          class="fill-none stroke-current"
+          stroke-width="1.2"
+        />
+      </Show>
+      <Show when={k() === 'cut'}>
+        <path d="M12 2v12" class="stroke-current" stroke-width="1.5" />
+      </Show>
+    </svg>
+  );
+}
+
+export function TransitionsTab() {
+  const env = useRibbon();
+  const c = env.commands;
+  const ro = () => env.readonly();
+  const current = () => env.slide()?.transition;
+  const kind = () => (current()?.kind ?? 'none') as TransitionKind;
+  const options = () => EFFECT_OPTIONS[kind()];
+  return (
+    <>
+      <RibbonGroup label="Transition to this slide">
+        <div class="flex items-center gap-0.5" data-testid="pptx-transitions">
+          <For each={TRANSITIONS}>
+            {(t) => (
+              <button
+                type="button"
+                title={t.label}
+                aria-pressed={kind() === t.kind}
+                data-testid={`pptx-transition-${t.kind}`}
+                disabled={ro()}
+                class="flex h-8 w-12 flex-col items-center justify-center rounded-md text-[9px] leading-tight hover:bg-ink/5 disabled:opacity-50"
+                classList={{ 'bg-accent-bg text-accent': kind() === t.kind }}
+                onClick={() => void c.setTransition({ kind: t.kind })}
+              >
+                <TransitionIcon kind={t.kind} />
+                {t.label}
+              </button>
+            )}
+          </For>
+        </div>
+        <Show when={options()}>
+          {(list) => (
+            <RibbonPopover
+              label="Effect options"
+              text="Effect options"
+              icon={<span class="sr-only">Effect options</span>}
+              disabled={ro()}
+            >
+              {(close) => (
+                <div class="flex w-44 flex-col">
+                  <For each={list()}>
+                    {([direction, label]) => (
+                      <PopoverItem
+                        label={label}
+                        active={current()?.direction === direction}
+                        onClick={() => {
+                          close();
+                          void c.setTransition({ kind: kind(), direction });
+                        }}
+                      />
+                    )}
+                  </For>
+                </div>
+              )}
+            </RibbonPopover>
+          )}
+        </Show>
+      </RibbonGroup>
+      <RibbonGroup label="Timing">
+        <span class="px-1 text-ink-muted text-xs">Duration</span>
+        <NumberField
+          label="Duration (seconds)"
+          unit="s"
+          value={(current()?.durationMs ?? 0) / 1000 || undefined}
+          min={0.01}
+          max={59.99}
+          step={0.25}
+          precision={2}
+          disabled={ro() || kind() === 'none'}
+          testId="pptx-transition-duration"
+          onCommit={(s) =>
+            void c.setTransition({
+              kind: kind(),
+              durationMs: Math.round(s * 1000),
+            })
+          }
+        />
+        <label class="flex items-center gap-1 px-1 text-xs">
+          <input
+            type="checkbox"
+            class="accent-accent"
+            disabled={ro()}
+            checked={current()?.advanceOnClick ?? true}
+            onChange={(e) =>
+              void c.setTransition({
+                kind: kind(),
+                advanceOnClick: e.currentTarget.checked,
+              })
+            }
+          />
+          On click
+        </label>
+        <label class="flex items-center gap-1 px-1 text-xs">
+          <input
+            type="checkbox"
+            class="accent-accent"
+            disabled={ro()}
+            checked={current()?.advanceAfterMs !== undefined}
+            onChange={(e) =>
+              void c.setTransition({
+                kind: kind(),
+                advanceAfterMs: e.currentTarget.checked ? 5000 : null,
+              })
+            }
+          />
+          After
+        </label>
+        <NumberField
+          label="Advance after (seconds)"
+          unit="s"
+          value={
+            current()?.advanceAfterMs !== undefined
+              ? current()!.advanceAfterMs! / 1000
+              : undefined
+          }
+          min={0}
+          max={3600}
+          precision={2}
+          disabled={ro() || current()?.advanceAfterMs === undefined}
+          onCommit={(s) =>
+            void c.setTransition({
+              kind: kind(),
+              advanceAfterMs: Math.round(s * 1000),
+            })
+          }
+        />
+        <RibbonTextButton
+          label="Apply to all"
+          disabled={ro()}
+          data-testid="pptx-transition-all"
+          onClick={() =>
+            void c.setTransition({ kind: kind(), applyToAll: true })
+          }
+        >
+          Apply to all
+        </RibbonTextButton>
+      </RibbonGroup>
+    </>
   );
 }

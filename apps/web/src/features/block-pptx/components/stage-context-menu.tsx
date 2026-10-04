@@ -20,6 +20,7 @@ import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowLineDown from '@phosphor/arrow-line-down.svg';
 import ArrowLineUp from '@phosphor/arrow-line-up.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
+import CheckIcon from '@phosphor/check.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import Columns from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -134,26 +135,24 @@ function ArrangeItems(props: { a: StageMenuActions }) {
   const align = (mode: AlignMode) => () => c().alignShapes(mode);
   return (
     <>
-      <Show when={c().group}>
-        <Sub
+      <Sub
+        text="Group"
+        icon={<Stack class="size-4" />}
+        disabled={props.a.readonly}
+      >
+        <MenuItem
           text="Group"
-          icon={<Stack class="size-4" />}
-          disabled={props.a.readonly}
-        >
-          <MenuItem
-            text="Group"
-            shortcut="cmd+g"
-            disabled={props.a.selectionCount < 2}
-            onClick={() => void c().group?.()}
-          />
-          <MenuItem
-            text="Ungroup"
-            shortcut="cmd+shift+g"
-            disabled={!props.a.isGroup}
-            onClick={() => void c().ungroup?.()}
-          />
-        </Sub>
-      </Show>
+          shortcut="cmd+g"
+          disabled={props.a.selectionCount < 2}
+          onClick={() => void c().group()}
+        />
+        <MenuItem
+          text="Ungroup"
+          shortcut="cmd+shift+g"
+          disabled={!props.a.isGroup}
+          onClick={() => void c().ungroup()}
+        />
+      </Sub>
       <Sub
         text="Bring to front"
         icon={<ArrowLineUp class="size-4" />}
@@ -300,16 +299,14 @@ export function StageMenuItems(props: {
           disabled={ro()}
           onClick={a().newSlide}
         />
-        <Show when={c().setLayout && a().layouts.length > 0}>
+        <Show when={a().layouts.length > 0}>
           <Sub text="Layout" disabled={ro()}>
             <For each={a().layouts}>
               {(layout) => (
                 <MenuItem
                   text={layout}
-                  selectorType="radio"
-                  value={layout}
-                  groupValue={a().currentLayout ?? ''}
-                  onClick={() => void c().setLayout?.(layout)}
+                  icon={layout === a().currentLayout ? CheckIcon : undefined}
+                  onClick={() => void c().setLayout(layout)}
                 />
               )}
             </For>
@@ -447,60 +444,54 @@ export function StageMenuItems(props: {
           />
           <MenuItem text="Select table" onClick={() => a().selectTable?.()} />
         </Sub>
-        <>
-          <MenuItem
-            text="Merge cells"
-            disabled={ro() || !c().canMerge()}
-            onClick={() => void c().mergeCells()}
-          />
-          <MenuItem
-            text="Split cells"
-            disabled={ro() || !c().canSplit()}
-            onClick={() => void c().splitCells()}
-          />
-        </>
+        <MenuItem
+          text="Merge cells"
+          disabled={ro() || !c().canMerge()}
+          onClick={() => void c().mergeCells()}
+        />
+        <MenuItem
+          text="Split cells"
+          disabled={ro() || !c().canSplit()}
+          onClick={() => void c().splitCells()}
+        />
         <MenuSeparator />
-        <>
-          <ColorSub
-            text="Shading"
-            icon={<PaintBucket class="size-4" />}
-            swatches={a().swatches}
-            noneLabel="No fill"
-            disabled={ro()}
-            onPick={(v) => void c().fillCells(v)}
+        <ColorSub
+          text="Shading"
+          icon={<PaintBucket class="size-4" />}
+          swatches={a().swatches}
+          noneLabel="No fill"
+          disabled={ro()}
+          onPick={(v) => void c().fillCells(v)}
+        />
+        <Sub text="Borders" disabled={ro()}>
+          <For
+            each={
+              [
+                ['all', 'All borders'],
+                ['outside', 'Outside borders'],
+                ['inside', 'Inside borders'],
+                ['top', 'Top border'],
+                ['bottom', 'Bottom border'],
+                ['left', 'Left border'],
+                ['right', 'Right border'],
+                ['insideHorizontal', 'Inside horizontal border'],
+                ['insideVertical', 'Inside vertical border'],
+              ] as const
+            }
+          >
+            {([edges, label]) => (
+              <MenuItem
+                text={label}
+                onClick={() => void c().borderCells(edges)}
+              />
+            )}
+          </For>
+          <MenuSeparator />
+          <MenuItem
+            text="No border"
+            onClick={() => void c().borderCells('all', true)}
           />
-        </>
-        <>
-          <Sub text="Borders" disabled={ro()}>
-            <For
-              each={
-                [
-                  ['all', 'All borders'],
-                  ['outside', 'Outside borders'],
-                  ['inside', 'Inside borders'],
-                  ['top', 'Top border'],
-                  ['bottom', 'Bottom border'],
-                  ['left', 'Left border'],
-                  ['right', 'Right border'],
-                  ['insideHorizontal', 'Inside horizontal border'],
-                  ['insideVertical', 'Inside vertical border'],
-                ] as const
-              }
-            >
-              {([edges, label]) => (
-                <MenuItem
-                  text={label}
-                  onClick={() => void c().borderCells(edges)}
-                />
-              )}
-            </For>
-            <MenuSeparator />
-            <MenuItem
-              text="No border"
-              onClick={() => void c().borderCells('all', true)}
-            />
-          </Sub>
-        </>
+        </Sub>
         <Sub text="Align text" disabled={ro()}>
           <MenuItem
             text="Left"
@@ -534,18 +525,16 @@ export function StageMenuItems(props: {
             onClick={() => void c().anchorCells('bottom')}
           />
         </Sub>
-        <>
-          <MenuItem
-            text="Distribute rows"
-            disabled={ro()}
-            onClick={() => void c().distributeRows()}
-          />
-          <MenuItem
-            text="Distribute columns"
-            disabled={ro()}
-            onClick={() => void c().distributeColumns()}
-          />
-        </>
+        <MenuItem
+          text="Distribute rows"
+          disabled={ro()}
+          onClick={() => void c().distributeRows()}
+        />
+        <MenuItem
+          text="Distribute columns"
+          disabled={ro()}
+          onClick={() => void c().distributeColumns()}
+        />
         <MenuSeparator />
         <ArrangeItems a={a()} />
         <MenuItem

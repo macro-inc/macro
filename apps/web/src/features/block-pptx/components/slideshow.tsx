@@ -22,72 +22,163 @@ import {
 } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 
-/** How a slide enters: keyframes for the incoming layer. */
-function enterKeyframes(
+/** Keyframes for the incoming and outgoing slide of a transition. */
+interface TransitionFrames {
+  incoming?: Keyframe[];
+  outgoing?: Keyframe[];
+}
+
+/**
+ * A transition as keyframes. OOXML directions name where the motion goes:
+ * `l` moves leftwards, so a pushed slide enters from the right.
+ */
+export function transitionFrames(
   kind: string,
   direction: string | undefined
-): Keyframe[] | null {
-  const from = (() => {
-    switch (direction) {
-      case 'l':
-        return 'translateX(-100%)';
+): TransitionFrames | null {
+  const offset = (d: string | undefined) => {
+    switch (d) {
+      case 'r':
+        return { from: 'translateX(-100%)', to: 'translateX(100%)' };
       case 'u':
-        return 'translateY(-100%)';
+        return { from: 'translateY(100%)', to: 'translateY(-100%)' };
       case 'd':
-        return 'translateY(100%)';
+        return { from: 'translateY(-100%)', to: 'translateY(100%)' };
+      case 'lu':
+        return { from: 'translate(100%, 100%)', to: 'translate(-100%, -100%)' };
+      case 'ru':
+        return { from: 'translate(-100%, 100%)', to: 'translate(100%, -100%)' };
+      case 'ld':
+        return { from: 'translate(100%, -100%)', to: 'translate(-100%, 100%)' };
+      case 'rd':
+        return { from: 'translate(-100%, -100%)', to: 'translate(100%, 100%)' };
       default:
-        return 'translateX(100%)';
+        return { from: 'translateX(100%)', to: 'translateX(-100%)' };
     }
-  })();
+  };
+  const fadeIn: Keyframe[] = [{ opacity: 0 }, { opacity: 1 }];
   switch (kind) {
     case 'none':
     case 'cut':
       return null;
-    case 'push':
+    case 'push': {
+      const o = offset(direction);
+      return {
+        incoming: [{ transform: o.from }, { transform: 'none' }],
+        outgoing: [{ transform: 'none' }, { transform: o.to }],
+      };
+    }
     case 'cover':
+      return {
+        incoming: [
+          { transform: offset(direction).from },
+          { transform: 'none' },
+        ],
+      };
+    case 'uncover':
     case 'pull':
-      return [{ transform: from }, { transform: 'none' }];
+      // The old slide slides away and reveals the new one underneath.
+      return {
+        incoming: [{ opacity: 1 }, { opacity: 1 }],
+        outgoing: [{ transform: 'none' }, { transform: offset(direction).to }],
+      };
     case 'wipe':
-      return [
-        {
-          clipPath:
-            direction === 'l'
-              ? 'inset(0 0 0 100%)'
-              : direction === 'u'
-                ? 'inset(100% 0 0 0)'
-                : direction === 'd'
-                  ? 'inset(0 0 100% 0)'
-                  : 'inset(0 100% 0 0)',
-        },
-        { clipPath: 'inset(0 0 0 0)' },
-      ];
+      return {
+        incoming: [
+          {
+            clipPath:
+              direction === 'r'
+                ? 'inset(0 100% 0 0)'
+                : direction === 'u'
+                  ? 'inset(100% 0 0 0)'
+                  : direction === 'd'
+                    ? 'inset(0 0 100% 0)'
+                    : 'inset(0 0 0 100%)',
+          },
+          { clipPath: 'inset(0 0 0 0)' },
+        ],
+      };
     case 'split':
-      return [
-        { clipPath: 'inset(0 50% 0 50%)' },
-        { clipPath: 'inset(0 0 0 0)' },
-      ];
+      return {
+        incoming: [
+          {
+            clipPath: direction?.startsWith('horz')
+              ? direction.endsWith('In')
+                ? 'inset(0 0 0 0)'
+                : 'inset(50% 0 50% 0)'
+              : direction?.endsWith('In')
+                ? 'inset(0 0 0 0)'
+                : 'inset(0 50% 0 50%)',
+          },
+          { clipPath: 'inset(0 0 0 0)' },
+        ],
+      };
+    case 'reveal':
+      return {
+        incoming: fadeIn,
+        outgoing: [
+          { transform: 'none', opacity: 1 },
+          { transform: offset(direction).to, opacity: 0 },
+        ],
+      };
     case 'shape':
     case 'circle':
-      return [
-        { clipPath: 'circle(0% at 50% 50%)' },
-        { clipPath: 'circle(75% at 50% 50%)' },
-      ];
+      return {
+        incoming: [
+          {
+            clipPath:
+              direction === 'diamond'
+                ? 'polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)'
+                : 'circle(0% at 50% 50%)',
+          },
+          {
+            clipPath:
+              direction === 'diamond'
+                ? 'polygon(50% -50%, 150% 50%, 50% 150%, -50% 50%)'
+                : 'circle(75% at 50% 50%)',
+          },
+        ],
+      };
     case 'zoom':
-      return [
-        { transform: 'scale(0.3)', opacity: 0 },
-        { transform: 'none', opacity: 1 },
-      ];
-    case 'reveal':
-    case 'uncover':
-      return [{ opacity: 0 }, { opacity: 1 }];
+      return direction === 'out'
+        ? {
+            incoming: fadeIn,
+            outgoing: [
+              { transform: 'none', opacity: 1 },
+              { transform: 'scale(1.6)', opacity: 0 },
+            ],
+          }
+        : {
+            incoming: [
+              { transform: 'scale(0.3)', opacity: 0 },
+              { transform: 'none', opacity: 1 },
+            ],
+          };
     case 'flash':
-      return [
-        { filter: 'brightness(3)', opacity: 0 },
-        { filter: 'brightness(1)', opacity: 1 },
-      ];
+      return {
+        incoming: [
+          { filter: 'brightness(4)', opacity: 0 },
+          { filter: 'brightness(1)', opacity: 1 },
+        ],
+      };
+    case 'fade':
+      return direction === 'black'
+        ? {
+            incoming: [
+              { opacity: 0 },
+              { opacity: 0, offset: 0.5 },
+              { opacity: 1 },
+            ],
+            outgoing: [
+              { opacity: 1 },
+              { opacity: 0, offset: 0.5 },
+              { opacity: 0 },
+            ],
+          }
+        : { incoming: fadeIn };
     default:
-      // fade, dissolve, morph (approximated), randomBar...
-      return [{ opacity: 0 }, { opacity: 1 }];
+      // dissolve, randomBar, morph (approximated with a fade)...
+      return { incoming: fadeIn };
   }
 }
 
@@ -161,6 +252,8 @@ export function SlideShow(props: {
   );
 
   let first = true;
+  /** Uncover-style transitions move the old slide over the new one. */
+  const [outgoingOnTop, setOutgoingOnTop] = createSignal(false);
   createEffect(
     on(shown, (value) => {
       if (!value) return;
@@ -172,15 +265,26 @@ export function SlideShow(props: {
       }
       draw(incoming, value.bitmap);
       const t = slides()[value.i]?.transition;
+      // Slides without a transition just appear, as in PowerPoint.
       const frames = first
         ? null
-        : enterKeyframes(t?.kind ?? 'fade', t?.direction);
+        : transitionFrames(t?.kind ?? 'none', t?.direction);
       first = false;
-      if (frames)
-        incoming.animate(frames, {
-          duration: t?.durationMs ?? 500,
-          easing: 'ease-in-out',
-        });
+      setOutgoingOnTop(
+        ['uncover', 'pull', 'reveal'].includes(t?.kind ?? '') ||
+          (t?.kind === 'zoom' && t.direction === 'out')
+      );
+      const timing = { duration: t?.durationMs ?? 500, easing: 'ease-in-out' };
+      if (frames?.incoming) incoming.animate(frames.incoming, timing);
+      // The old slide stays visible underneath until the new one covers it.
+      if (frames) {
+        const leaving = outgoing.animate(
+          frames.outgoing ?? [{ opacity: 1 }, { opacity: 1 }],
+          timing
+        );
+        // Once gone, the old slide drops below the new one for good.
+        leaving.onfinish = () => setOutgoingOnTop(false);
+      }
       // Preload the neighbours.
       const next = step(1);
       if (next !== undefined) void render(next).catch(() => {});
@@ -345,9 +449,14 @@ export function SlideShow(props: {
         class="relative overflow-hidden"
         style={{ width: `${fit().w}px`, height: `${fit().h}px` }}
       >
-        <canvas ref={outgoing} class="absolute inset-0 size-full" />
+        <canvas
+          ref={outgoing}
+          class="absolute inset-0 size-full"
+          style={{ 'z-index': outgoingOnTop() ? 1 : 0 }}
+        />
         <canvas
           ref={incoming}
+          style={{ 'z-index': outgoingOnTop() ? 0 : 1 }}
           data-testid="pptx-slideshow-canvas"
           data-slide-index={shown()?.i}
           class="absolute inset-0 size-full"

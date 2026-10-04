@@ -139,23 +139,21 @@ export function ArrangeMenu(props: { close: () => void }) {
         hint="⌘["
         onClick={run(() => c.arrange('backward'))}
       />
-      <Show when={c.group}>
-        <PopoverLabel>Group objects</PopoverLabel>
-        <PopoverItem
-          label="Group"
-          icon={<Stack />}
-          hint="⌘G"
-          disabled={count() < 2}
-          onClick={run(() => c.group?.())}
-        />
-        <PopoverItem
-          label="Ungroup"
-          icon={<Stack />}
-          hint="⇧⌘G"
-          disabled={!env.selection().some((s) => s.kind === 'group')}
-          onClick={run(() => c.ungroup?.())}
-        />
-      </Show>
+      <PopoverLabel>Group objects</PopoverLabel>
+      <PopoverItem
+        label="Group"
+        icon={<Stack />}
+        hint="⌘G"
+        disabled={count() < 2}
+        onClick={run(() => c.group())}
+      />
+      <PopoverItem
+        label="Ungroup"
+        icon={<Stack />}
+        hint="⇧⌘G"
+        disabled={!env.selection().some((s) => s.kind === 'group')}
+        onClick={run(() => c.ungroup())}
+      />
       <PopoverLabel>Position objects</PopoverLabel>
       <For each={alignItems}>
         {(item) => (
@@ -419,7 +417,7 @@ export function HomeTab() {
             </div>
           )}
         </RibbonPopover>
-        <Show when={c.setLayout}>
+        <>
           <RibbonPopover
             label="Layout"
             icon={<span>Layout</span>}
@@ -434,7 +432,7 @@ export function HomeTab() {
                       active={layout.name === env.slide()?.layout}
                       onClick={() => {
                         close();
-                        void c.setLayout?.(layout.name);
+                        void c.setLayout(layout.name);
                       }}
                     />
                   )}
@@ -442,7 +440,7 @@ export function HomeTab() {
               </div>
             )}
           </RibbonPopover>
-        </Show>
+        </>
         <RibbonButton
           label="Duplicate slide"
           tooltip="Duplicate slide"

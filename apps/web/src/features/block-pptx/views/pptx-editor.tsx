@@ -57,6 +57,7 @@ import {
   DesignTab,
   ShapeFormatTab,
   SlideShowTab,
+  TransitionsTab,
   ViewTab,
 } from '../components/ribbon/other-tabs';
 import {
@@ -710,7 +711,7 @@ export function PptxEditor() {
         editor.selectAll();
       } else if (lower === 'g' && !readonly()) {
         e.preventDefault();
-        void (e.shiftKey ? commands.ungroup?.() : commands.group?.());
+        void (e.shiftKey ? commands.ungroup() : commands.group());
       } else if (lower === 'd' && !readonly()) {
         e.preventDefault();
         void editor.duplicateSelected();
@@ -1176,7 +1177,11 @@ export function PptxEditor() {
       </Show>
     ),
   };
-  const transitionsTab: RibbonTab | undefined = undefined;
+  const transitionsTab: RibbonTab = {
+    id: 'transitions',
+    label: 'Transitions',
+    content: () => <TransitionsTab />,
+  };
 
   const tabs = createMemo((): RibbonTab[] => {
     const list = ribbonSelection();
@@ -1190,7 +1195,7 @@ export function PptxEditor() {
         content: () => <InsertTab chartMenu={chartInsertMenu} />,
       },
       { id: 'design', label: 'Design', content: () => <DesignTab /> },
-      ...(transitionsTab ? [transitionsTab] : []),
+      transitionsTab,
       { id: 'slideshow', label: 'Slide Show', content: () => <SlideShowTab /> },
       { id: 'view', label: 'View', content: () => <ViewTab /> },
       ...(drawable && !readonly()
@@ -1299,26 +1304,24 @@ export function PptxEditor() {
               onClick={() => void commands.deleteSlides([s().id])}
             />
             <MenuSeparator />
-            <Show when={commands.setLayout}>
-              <ContextMenu.Sub overlap gutter={2}>
-                <ContextMenu.SubTrigger class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-ink text-sm outline-none data-[highlighted]:bg-ink/5">
-                  Layout
-                </ContextMenu.SubTrigger>
-                <ContextMenu.Portal>
-                  <ContextMenuContent submenu class="w-56">
-                    <For each={session.outline()?.layouts ?? []}>
-                      {(layout) => (
-                        <MenuItem
-                          text={layout.name}
-                          disabled={readonly()}
-                          onClick={() => void commands.setLayout?.(layout.name)}
-                        />
-                      )}
-                    </For>
-                  </ContextMenuContent>
-                </ContextMenu.Portal>
-              </ContextMenu.Sub>
-            </Show>
+            <ContextMenu.Sub overlap gutter={2}>
+              <ContextMenu.SubTrigger class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-ink text-sm outline-none data-[highlighted]:bg-ink/5">
+                Layout
+              </ContextMenu.SubTrigger>
+              <ContextMenu.Portal>
+                <ContextMenuContent submenu class="w-56">
+                  <For each={session.outline()?.layouts ?? []}>
+                    {(layout) => (
+                      <MenuItem
+                        text={layout.name}
+                        disabled={readonly()}
+                        onClick={() => void commands.setLayout(layout.name)}
+                      />
+                    )}
+                  </For>
+                </ContextMenuContent>
+              </ContextMenu.Portal>
+            </ContextMenu.Sub>
             <MenuItem
               text="Format background…"
               icon={PaintBucket}

@@ -629,7 +629,7 @@ export function ChartDesignTab(props: {
                 label="None"
                 onClick={() => {
                   close();
-                  void c.formatChart?.({ title: '' });
+                  void c.formatChart({ title: '' });
                 }}
               />
               <form
@@ -638,7 +638,7 @@ export function ChartDesignTab(props: {
                   e.preventDefault();
                   const value = new FormData(e.currentTarget).get('title');
                   close();
-                  void c.formatChart?.({ title: String(value ?? '') });
+                  void c.formatChart({ title: String(value ?? '') });
                 }}
               >
                 <input
@@ -670,7 +670,7 @@ export function ChartDesignTab(props: {
                     active={(chart()?.legend ?? 'none') === pos}
                     onClick={() => {
                       close();
-                      void c.formatChart?.({ legend: pos });
+                      void c.formatChart({ legend: pos });
                     }}
                   />
                 )}
@@ -684,7 +684,7 @@ export function ChartDesignTab(props: {
           aria-pressed={!!chart()?.dataLabels}
           disabled={ro()}
           onClick={() =>
-            void c.formatChart?.({ dataLabels: !chart()?.dataLabels })
+            void c.formatChart({ dataLabels: !chart()?.dataLabels })
           }
         >
           Data labels
@@ -718,7 +718,7 @@ export function ChartDesignTab(props: {
                     onClick={() => {
                       close();
                       const n = chart()?.series.length ?? 0;
-                      void c.formatChart?.({
+                      void c.formatChart({
                         seriesColors: Array.from({ length: n }, (_, i) => ({
                           series: i,
                           color: p.colors[i % p.colors.length],
@@ -773,7 +773,7 @@ export function ChartDesignTab(props: {
               current={chart()}
               onPick={(choice) => {
                 close();
-                void c.setChartType?.(choice.kind, choice.grouping);
+                void c.setChartType(choice.kind, choice.grouping);
               }}
             />
           )}
