@@ -250,6 +250,7 @@ pub fn add_slide(
         pres.slide_part(a)?;
     }
     let layout_part = find_layout(pres, layout, after)?;
+    let reference = after.or_else(|| pres.slides.last().map(|s| s.id));
     let layout_doc = pres.xml(&layout_part)?;
     let xml = slide_from_layout(&layout_doc);
     let part = pres.pkg.unique_part_name("/ppt/slides/slide", ".xml");
@@ -278,6 +279,7 @@ pub fn add_slide(
         let tx = super::shapes::ensure_tx_body(doc, node)?;
         text::set_text(doc, tx, value)?;
     }
+    super::header_footer::follow_masters(pres, id, reference)?;
     Ok(id)
 }
 
@@ -324,92 +326,9 @@ pub(super) fn register_slide(
         Some(p) => doc.insert_after(p, el),
         None => doc.append_child(list, el),
     }
-    sections_insert(doc, id, after);
+    super::sections::place(doc, id);
     pres.reload_structure()?;
     Ok(id as u32)
-}
-
-/// The `p14:sldIdLst` element of every section, in order.
-fn section_lists(doc: &XmlDoc) -> Vec<NodeId> {
-    let Some(ext) = doc.child(doc.root(), Ns::P, "extLst") else {
-        return Vec::new();
-    };
-    let Some(sections) = doc
-        .descendants(ext)
-        .into_iter()
-        .find(|&n| doc.local(n) == "sectionLst")
-    else {
-        return Vec::new();
-    };
-    doc.children(sections)
-        .filter(|&s| doc.local(s) == "section")
-        .filter_map(|s| doc.children(s).find(|&c| doc.local(c) == "sldIdLst"))
-        .collect()
-}
-
-fn sections_insert(doc: &mut XmlDoc, id: i64, after: Option<u32>) {
-    let lists = section_lists(doc);
-    let Some(&last) = lists.last() else { return };
-    let ns = doc.ns(last);
-    let el = doc.create_element(ns, "sldId");
-    doc.set_attr(el, "id", &id.to_string());
-    let previous = after.and_then(|a| {
-        lists.iter().find_map(|&l| {
-            doc.children(l)
-                .find(|&s| doc.attr_i64(s, "id") == Some(i64::from(a)))
-        })
-    });
-    match previous {
-        Some(p) => doc.insert_after(p, el),
-        None => doc.append_child(last, el),
-    }
-}
-
-fn sections_remove(doc: &mut XmlDoc, id: u32) {
-    for l in section_lists(doc) {
-        let doomed: Vec<NodeId> = doc
-            .children(l)
-            .filter(|&s| doc.attr_i64(s, "id") == Some(i64::from(id)))
-            .collect();
-        for d in doomed {
-            doc.detach(d);
-        }
-    }
-}
-
-/// Re-derives section membership after a move: the moved slide joins the
-/// section of the slide now before it, keeping every section contiguous.
-fn sections_after_move(doc: &mut XmlDoc, order: &[i64], moved: i64) {
-    let lists = section_lists(doc);
-    if lists.is_empty() {
-        return;
-    }
-    let mut member: HashMap<i64, usize> = HashMap::new();
-    for (i, &l) in lists.iter().enumerate() {
-        for s in doc.children(l) {
-            if let Some(id) = doc.attr_i64(s, "id") {
-                member.insert(id, i);
-            }
-        }
-    }
-    let pos = order.iter().position(|&x| x == moved).unwrap_or(0);
-    let section = if pos == 0 {
-        0
-    } else {
-        member.get(&order[pos - 1]).copied().unwrap_or(0)
-    };
-    member.insert(moved, section);
-    let ns = doc.ns(lists[0]);
-    for (i, &l) in lists.iter().enumerate() {
-        for c in doc.child_nodes(l).to_vec() {
-            doc.detach(c);
-        }
-        for &id in order.iter().filter(|id| member.get(id) == Some(&i)) {
-            let el = doc.create_element(ns, "sldId");
-            doc.set_attr(el, "id", &id.to_string());
-            doc.append_child(l, el);
-        }
-    }
 }
 
 /// Duplicates a slide (with its notes, charts, and diagrams) right after itself.
@@ -461,7 +380,7 @@ pub fn delete_slide(pres: &mut Presentation, id: u32) -> Result<()> {
                 doc.detach(d);
             }
         }
-        sections_remove(doc, id);
+        super::sections::remove(doc, i64::from(id));
         if let Some(shows) = doc.child(root, Ns::P, "custShowLst") {
             let doomed: Vec<NodeId> = doc
                 .descendants(shows)
@@ -538,11 +457,7 @@ pub fn move_slide(pres: &mut Presentation, id: u32, to: usize) -> Result<()> {
             None => doc.append_child(list, node),
         },
     }
-    let order: Vec<i64> = doc
-        .children_named(list, Ns::P, "sldId")
-        .filter_map(|s| doc.attr_i64(s, "id"))
-        .collect();
-    sections_after_move(doc, &order, i64::from(id));
+    super::sections::place(doc, i64::from(id));
     pres.reload_structure()
 }
 

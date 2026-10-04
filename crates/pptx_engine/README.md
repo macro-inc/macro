@@ -102,6 +102,18 @@ Other PowerPoint presets read under their names (`blinds`, `basicZoom`,
 `boomerang`, `fontColor`, media `play`...) or as `custom`; those, and media
 and OLE-verb actions, can be kept but not created.
 
+Deck-level edits follow PowerPoint's dialogs. Header & Footer adds or removes
+the slide number, date, and footer placeholders (copied from each slide's
+layout) and, applied to all slides, records the choice in the masters' `p:hf`,
+which slides added later follow. Slide numbers count from the deck's
+`firstSlideNum`; automatic dates render from the clock the host sets
+(`Presentation::set_clock`; the browser worker passes its local time) and from
+the text cached in the file without one, so tests and the corpus stay
+deterministic. Slide Size rewrites `p:sldSz` and can scale every slide,
+layout, master, chart, and SmartArt drawing as "Ensure Fit" or "Maximize" do.
+Sections (`p14:sectionLst`) can be added, renamed, removed, and moved, and stay
+consistent when slides are added, duplicated, pasted, moved, or deleted.
+
 ### Collaboration
 
 `collab` describes a presentation as flat string maps (Loro containers in the

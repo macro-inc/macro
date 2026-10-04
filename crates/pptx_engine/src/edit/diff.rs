@@ -1,15 +1,20 @@
 //! What an edit changed: the slides whose rendering differs between two
 //! states of a presentation, and the caches an undo can carry over.
 
-use super::EditResult;
+use super::{EditResult, sections};
 use crate::model::presentation::Presentation;
 use crate::opc::{TargetMode, rel_type, rels_part_name};
 
 /// Which slides differ between two states of the same presentation.
 pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
     let ids = |p: &Presentation| p.slides.iter().map(|s| s.id).collect::<Vec<_>>();
-    let structure_changed = ids(before) != ids(after) || before.size != after.size;
     let same = |name: &str| before.pkg.part_identity(name) == after.pkg.part_identity(name);
+    // The slide size and numbering show on every slide.
+    let deck_changed =
+        before.size != after.size || before.first_slide_number != after.first_slide_number;
+    let sections_changed =
+        !same(&after.main_part) && sections::snapshot(before) != sections::snapshot(after);
+    let structure_changed = ids(before) != ids(after) || deck_changed || sections_changed;
     let notes_part = |p: &Presentation, slide: &str| {
         p.rels
             .get(slide)
@@ -30,12 +35,13 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
     };
     // Themes, masters, and layouts are drawn under every slide that uses
     // them; a change to any of them redraws every slide.
-    let shared_changed = after.pkg.part_names().any(|name| {
-        (name.starts_with("/ppt/theme/")
-            || name.starts_with("/ppt/slideMasters/")
-            || name.starts_with("/ppt/slideLayouts/"))
-            && !same(name)
-    });
+    let shared_changed = deck_changed
+        || after.pkg.part_names().any(|name| {
+            (name.starts_with("/ppt/theme/")
+                || name.starts_with("/ppt/slideMasters/")
+                || name.starts_with("/ppt/slideLayouts/"))
+                && !same(name)
+        });
     let changed_slides = after
         .slides
         .iter()

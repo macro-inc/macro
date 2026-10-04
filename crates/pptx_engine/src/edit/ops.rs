@@ -687,6 +687,103 @@ pub enum EditOp {
         #[serde(default)]
         name: Option<String>,
     },
+    // ---- deck ----
+    /// Shows, hides, or changes the slide number, date, and footer of slides
+    /// (PowerPoint's Insert ▸ Header & Footer). Each element shown is a
+    /// placeholder that takes its position and style from the slide's
+    /// layout; a slide whose layout has no such placeholder cannot show it.
+    /// Omitted fields keep each slide's current state.
+    SetHeaderFooter {
+        /// Slide ids to change; omit (or null) for every slide ("Apply to
+        /// All", which also makes slides added later show the same elements).
+        #[serde(default)]
+        slides: Option<Vec<u32>>,
+        /// Show the slide number.
+        #[serde(default)]
+        slide_number: Option<bool>,
+        /// Show the date.
+        #[serde(default)]
+        date: Option<bool>,
+        /// Fixed date text (e.g. "Q3 2026"); `""` makes the date automatic
+        /// (it shows the current date). Changes slides that show a date, so
+        /// pass `date: true` to turn it on.
+        #[serde(default)]
+        date_text: Option<String>,
+        /// Format of an automatic date: `datetime1` (10/12/2007, the
+        /// default), `datetime2` (Friday, October 12, 2007), `datetime3` (12
+        /// October 2007), `datetime4` (October 12, 2007), `datetime5`
+        /// (12-Oct-07), `datetime6` (October 07), `datetime7` (Oct-07),
+        /// `datetime8` (10/12/2007 4:28 PM), `datetime9` (10/12/2007 4:28:34
+        /// PM), `datetime10` (16:28), `datetime11` (16:28:34), `datetime12`
+        /// (4:28 PM), or `datetime13` (4:28:34 PM). A format without
+        /// `dateText` makes the date automatic.
+        #[serde(default)]
+        date_format: Option<String>,
+        /// Show the footer.
+        #[serde(default)]
+        footer: Option<bool>,
+        /// Footer text. Changes slides that show a footer, so pass
+        /// `footer: true` to turn it on.
+        #[serde(default)]
+        footer_text: Option<String>,
+        /// Don't show the elements on slides whose layout is a Title Slide
+        /// layout (they are removed there).
+        #[serde(default, deserialize_with = "nullable")]
+        not_on_title: bool,
+    },
+    /// Changes the slide size of the deck (PowerPoint's Design ▸ Slide
+    /// Size). Every slide, layout, and master changes; speaker notes keep
+    /// their size.
+    SetSlideSize {
+        /// Width in points, 72-4032 (960 for 16:9 widescreen, 720 for 4:3
+        /// and 16:9 on-screen show, 780 for A4).
+        width: f32,
+        /// Height in points, 72-4032 (540 for widescreen, 4:3, and A4; 405
+        /// for 16:9 on-screen show).
+        height: f32,
+        /// How content follows: `none` (the default when omitted; it keeps
+        /// its size and position), `fit` (PowerPoint's "Ensure Fit": scaled
+        /// by the smaller of the width and height ratios and centered, text
+        /// and lines too), or `maximize` (scaled by the larger ratio and
+        /// centered).
+        #[serde(default)]
+        scale: Option<SlideScale>,
+    },
+    /// Starts a new section at a slide: the section takes that slide and the
+    /// slides after it in its current section. In a deck without sections,
+    /// the slides before it go into a "Default Section", as in PowerPoint.
+    /// The new section's id is reported in the result.
+    AddSection {
+        /// Section name.
+        name: String,
+        /// Id of the section's first slide.
+        before_slide: u32,
+    },
+    /// Renames a section.
+    RenameSection {
+        /// Section id (a GUID from the deck outline's `sections`).
+        id: String,
+        /// New name.
+        name: String,
+    },
+    /// Removes a section. Its slides join the previous section (the next
+    /// one when it is the first), or are deleted with `deleteSlides`.
+    /// Removing the only section leaves the deck without sections.
+    RemoveSection {
+        /// Section id.
+        id: String,
+        /// Delete the section's slides too.
+        #[serde(default, deserialize_with = "nullable")]
+        delete_slides: bool,
+    },
+    /// Moves a section and all its slides to a 0-based position among the
+    /// sections; the slides are reordered to match.
+    MoveSection {
+        /// Section id.
+        id: String,
+        /// New index among the sections.
+        to_index: usize,
+    },
 }
 
 /// Something an edit created.
@@ -694,10 +791,13 @@ pub enum EditOp {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Created {
-    /// Slide id.
+    /// Slide id (a new section's first slide).
     pub slide: u32,
     /// Shape id, for created shapes.
     pub shape: Option<u32>,
+    /// Section id, for created sections.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
 }
 
 /// The outcome of applying a batch of operations.
@@ -709,7 +809,8 @@ pub struct EditResult {
     pub created: Vec<Created>,
     /// Slides whose rendering changed.
     pub changed_slides: Vec<u32>,
-    /// Whether slides were added, removed, or reordered.
+    /// Whether slides were added, removed, or reordered, or the slide size
+    /// or sections changed.
     pub structure_changed: bool,
     /// Text replacements made by `replaceText` operations.
     #[serde(default)]

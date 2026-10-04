@@ -400,6 +400,25 @@ pub enum ZOrder {
     Backward,
 }
 
+/// How slide content follows a new slide size
+/// ([`EditOp::SetSlideSize`](super::EditOp::SetSlideSize)).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum SlideScale {
+    /// Content keeps its size and position (it may overflow or leave space).
+    #[default]
+    None,
+    /// PowerPoint's "Ensure Fit": content, text, and lines scale by the
+    /// smaller of the width and height ratios and are centered, so all of
+    /// it stays on the slide.
+    Fit,
+    /// PowerPoint's "Maximize": content, text, and lines scale by the larger
+    /// of the two ratios and are centered, filling the slide (content may
+    /// run off its edges).
+    Maximize,
+}
+
 /// Which borders of a cell range [`EditOp::FormatCells`](super::EditOp::FormatCells) changes. A border
 /// between two cells is shared, so both cells get the change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

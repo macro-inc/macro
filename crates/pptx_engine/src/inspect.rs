@@ -265,6 +265,31 @@ pub struct SlideOutline {
     /// Animations of the main sequence, in playback order.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub animations: Vec<AnimationOutline>,
+    /// The slide number, date, and footer the slide shows (absent: none).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_footer: Option<HeaderFooterOutline>,
+}
+
+/// What a slide shows of PowerPoint's Header & Footer elements: the slide
+/// number, date, and footer placeholders it carries.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeaderFooterOutline {
+    /// Shows the slide number.
+    pub slide_number: bool,
+    /// Shows a date.
+    pub date: bool,
+    /// The fixed date text, when the date is fixed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_text: Option<String>,
+    /// The format of an automatic date (`datetime1`-`datetime13`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_format: Option<String>,
+    /// Shows a footer.
+    pub footer: bool,
+    /// The footer text, when it shows a footer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub footer_text: Option<String>,
 }
 
 /// A slide transition.
@@ -307,6 +332,22 @@ pub struct DeckOutline {
     pub theme_fonts: Option<ThemeFonts>,
     /// Table styles to offer: the deck's own, then PowerPoint's built-in ones.
     pub table_styles: Vec<TableStyleInfo>,
+    /// Sections in order (absent when the deck has none). Every slide is in
+    /// exactly one; a section may be empty.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sections: Option<Vec<SectionOutline>>,
+}
+
+/// A named run of consecutive slides (PowerPoint's slide sections).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SectionOutline {
+    /// Section id (a GUID such as `{8D2E61C4-0B1F-4E6A-9C3B-2A1D5F7E9B10}`).
+    pub id: String,
+    /// Section name.
+    pub name: String,
+    /// Ids of the section's slides, in deck order.
+    pub slide_ids: Vec<u32>,
 }
 
 /// A theme's heading and body Latin typefaces.
@@ -629,6 +670,7 @@ impl Presentation {
             notes: notes_text(self, entry.id)?,
             transition: crate::edit::transition::read(&ctx.slide.doc),
             animations: crate::edit::animation::read(&ctx.slide.doc),
+            header_footer: crate::edit::header_footer::read(&ctx.slide.doc),
         })
     }
 
@@ -673,6 +715,7 @@ impl Presentation {
             theme_colors,
             theme_fonts,
             table_styles: self.table_style_gallery()?,
+            sections: crate::edit::sections::read(&*self.xml(&self.main_part.clone())?),
         })
     }
 

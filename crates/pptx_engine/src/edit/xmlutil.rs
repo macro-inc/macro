@@ -261,6 +261,42 @@ pub fn import_fragment(doc: &mut XmlDoc, xml: &str) -> Result<NodeId> {
     Ok(doc.import(&frag, first))
 }
 
+/// A new GUID in braces (`{8D2E61C4-...}`, as PowerPoint writes section and
+/// field ids) that is not in `taken` (compared ignoring case). Random with
+/// `ids` (collaborative editing, where peers must not collide); otherwise
+/// derived from `seed`, so replaying an edit gives the same file.
+pub fn new_guid(ids: Option<&crate::opc::IdSource>, seed: &str, taken: &[String]) -> String {
+    // FNV-1a of the seed, then splitmix64 steps.
+    let mut state = seed.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01B3)
+    });
+    let mut next = || match ids {
+        Some(ids) => ids.next_in(0..u64::MAX),
+        None => {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+    };
+    loop {
+        let (hi, lo) = (next(), next());
+        // Version 4 / RFC 4122 variant bits, like the GUIDs Office writes.
+        let guid = format!(
+            "{{{:08X}-{:04X}-{:04X}-{:04X}-{:012X}}}",
+            hi >> 32,
+            (hi >> 16) & 0xFFFF,
+            (hi & 0x0FFF) | 0x4000,
+            ((lo >> 48) & 0x3FFF) | 0x8000,
+            lo & 0xFFFF_FFFF_FFFF
+        );
+        if !taken.iter().any(|t| t.eq_ignore_ascii_case(&guid)) {
+            return guid;
+        }
+    }
+}
+
 /// Escapes text for XML fragments.
 pub fn esc(s: &str) -> String {
     s.replace('&', "&amp;")

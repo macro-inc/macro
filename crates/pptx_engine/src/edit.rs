@@ -32,7 +32,10 @@ mod diff;
 mod find;
 mod format_painter;
 pub(crate) mod group;
+pub(crate) mod header_footer;
 mod relayout;
+pub(crate) mod sections;
+mod slide_size;
 mod theme;
 pub(crate) mod transition;
 
@@ -42,7 +45,7 @@ pub use ops::{
     BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
     FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
 };
-pub use ops::{BorderEdges, BorderLine, CellBorders, ThemeColor};
+pub use ops::{BorderEdges, BorderLine, CellBorders, SlideScale, ThemeColor};
 pub use slides::{LayoutInfo, layouts};
 
 pub use clipboard::{
@@ -114,7 +117,15 @@ impl EditOp {
             | O::SetAnimations { slide, .. }
             | O::AddAnimation { slide, .. }
             | O::RemoveAnimations { slide, .. } => Some(*slide),
-            O::PasteSlides { .. } | O::SetThemeColors { .. } | O::SetThemeFonts { .. } => None,
+            O::PasteSlides { .. }
+            | O::SetThemeColors { .. }
+            | O::SetThemeFonts { .. }
+            | O::SetHeaderFooter { .. }
+            | O::SetSlideSize { .. }
+            | O::AddSection { .. }
+            | O::RenameSection { .. }
+            | O::RemoveSection { .. }
+            | O::MoveSection { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
     }
@@ -134,6 +145,7 @@ impl EditOp {
                 | EditOp::SetCellText { .. }
                 | EditOp::SetBackground { .. }
                 | EditOp::SetFill { .. }
+                | EditOp::RemoveSection { .. }
         )
     }
 }
@@ -409,6 +421,7 @@ impl Presentation {
                 created = Some(Created {
                     slide: *slide,
                     shape: Some(id),
+                    section: None,
                 });
                 refit.push((part, id));
             }
@@ -429,6 +442,7 @@ impl Presentation {
                 created = Some(Created {
                     slide: *slide,
                     shape: Some(id),
+                    section: None,
                 });
             }
             O::ReorderShape { slide, shape, to } => {
@@ -566,6 +580,7 @@ impl Presentation {
                 created = Some(Created {
                     slide: id,
                     shape: None,
+                    section: None,
                 });
             }
             O::DuplicateSlide { slide } => {
@@ -573,6 +588,7 @@ impl Presentation {
                 created = Some(Created {
                     slide: id,
                     shape: None,
+                    section: None,
                 });
             }
             O::DeleteSlide { slide } => slides::delete_slide(self, *slide)?,
@@ -623,6 +639,7 @@ impl Presentation {
                 created = Some(Created {
                     slide: *slide,
                     shape: Some(id),
+                    section: None,
                 });
             }
             O::UngroupShape { slide, shape } => {
@@ -631,6 +648,7 @@ impl Presentation {
                     out.created.push(Created {
                         slide: *slide,
                         shape: Some(id),
+                        section: None,
                     });
                 }
             }
@@ -645,6 +663,7 @@ impl Presentation {
                     out.created.push(Created {
                         slide: *slide,
                         shape: Some(id),
+                        section: None,
                     });
                     refit.push((part.clone(), id));
                 }
@@ -654,6 +673,7 @@ impl Presentation {
                     out.created.push(Created {
                         slide: id,
                         shape: None,
+                        section: None,
                     });
                 }
             }
@@ -743,6 +763,51 @@ impl Presentation {
                 let from_part = self.slide_part(*from_slide)?;
                 format_painter::paste_format(self, &from_part, *from_shape, &part, shapes)?;
             }
+            O::SetHeaderFooter {
+                slides,
+                slide_number,
+                date,
+                date_text,
+                date_format,
+                footer,
+                footer_text,
+                not_on_title,
+            } => {
+                use header_footer::DateContent;
+                let date_content = match (date_text.as_deref(), date_format.as_deref()) {
+                    (Some(text), _) if !text.is_empty() => DateContent::Fixed(text),
+                    (Some(_), format) | (None, format @ Some(_)) => DateContent::Auto(format),
+                    (None, None) => DateContent::Keep,
+                };
+                let patch = header_footer::HeaderFooterPatch {
+                    slides: slides.as_deref(),
+                    slide_number: *slide_number,
+                    date: *date,
+                    date_content,
+                    footer: *footer,
+                    footer_text: footer_text.as_deref(),
+                    not_on_title: *not_on_title,
+                };
+                header_footer::set_header_footer(self, &patch)?;
+            }
+            O::SetSlideSize {
+                width,
+                height,
+                scale,
+            } => slide_size::set_slide_size(self, *width, *height, scale.unwrap_or_default())?,
+            O::AddSection { name, before_slide } => {
+                let id = sections::add_section(self, name, *before_slide)?;
+                created = Some(Created {
+                    slide: *before_slide,
+                    shape: None,
+                    section: Some(id),
+                });
+            }
+            O::RenameSection { id, name } => sections::rename_section(self, id, name)?,
+            O::RemoveSection { id, delete_slides } => {
+                sections::remove_section(self, id, *delete_slides)?
+            }
+            O::MoveSection { id, to_index } => sections::move_section(self, id, *to_index)?,
         }
         out.created.extend(created);
         Ok(())
