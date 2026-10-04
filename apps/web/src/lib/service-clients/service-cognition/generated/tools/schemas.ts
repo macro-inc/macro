@@ -2811,6 +2811,32 @@ export const EditPresentation = z.object({
                       kind: z.literal('chart'),
                     })
                     .strict(),
+                  z
+                    .object({
+                      layout: z.string(),
+                      items: z
+                        .union([
+                          z.array(
+                            z
+                              .object({
+                                text: z.string(),
+                                level: z
+                                  .number()
+                                  .int()
+                                  .gte(0)
+                                  .lte(255)
+                                  .optional(),
+                              })
+                              .strict()
+                          ),
+                          z.null(),
+                        ])
+                        .optional(),
+                      colors: z.union([z.string(), z.null()]).optional(),
+                      style: z.union([z.string(), z.null()]).optional(),
+                      kind: z.literal('smartArt'),
+                    })
+                    .strict(),
                 ];
                 const errors = schemas.reduce<z.ZodError[]>(
                   (errors, schema) =>
@@ -3696,6 +3722,151 @@ export const EditPresentation = z.object({
             .strict(),
           z
             .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              paths: z.array(
+                z
+                  .object({
+                    commands: z.array(
+                      z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z
+                            .object({
+                              x: z.number(),
+                              y: z.number(),
+                              cmd: z.literal('moveTo'),
+                            })
+                            .strict(),
+                          z
+                            .object({
+                              x: z.number(),
+                              y: z.number(),
+                              cmd: z.literal('lineTo'),
+                            })
+                            .strict(),
+                          z
+                            .object({
+                              x1: z.number(),
+                              y1: z.number(),
+                              x2: z.number(),
+                              y2: z.number(),
+                              x: z.number(),
+                              y: z.number(),
+                              cmd: z.literal('cubicBezTo'),
+                            })
+                            .strict(),
+                          z
+                            .object({
+                              x1: z.number(),
+                              y1: z.number(),
+                              x: z.number(),
+                              y: z.number(),
+                              cmd: z.literal('quadBezTo'),
+                            })
+                            .strict(),
+                          z
+                            .object({
+                              wR: z.number(),
+                              hR: z.number(),
+                              stAng: z.number(),
+                              swAng: z.number(),
+                              cmd: z.literal('arcTo'),
+                            })
+                            .strict(),
+                          z.object({ cmd: z.literal('close') }).strict(),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      })
+                    ),
+                    fill: z
+                      .union([
+                        z.any().superRefine((x, ctx) => {
+                          const schemas = [
+                            z.literal('norm'),
+                            z.literal('none'),
+                            z.literal('lighten'),
+                            z.literal('lightenLess'),
+                            z.literal('darken'),
+                            z.literal('darkenLess'),
+                          ];
+                          const errors = schemas.reduce<z.ZodError[]>(
+                            (errors, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? [...errors, result.error]
+                                  : errors)(schema.safeParse(x)),
+                            []
+                          );
+                          if (schemas.length - errors.length !== 1) {
+                            ctx.addIssue({
+                              path: ctx.path,
+                              code: 'invalid_union',
+                              unionErrors: errors,
+                              message:
+                                'Invalid input: Should pass single schema',
+                            });
+                          }
+                        }),
+                        z.null(),
+                      ])
+                      .optional(),
+                    stroke: z.union([z.boolean(), z.null()]).optional(),
+                  })
+                  .strict()
+              ),
+              fit: z.union([z.boolean(), z.null()]).optional(),
+              op: z.literal('setCustomGeometry'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shapes: z.array(z.number().int().gte(0)),
+              mode: z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('union'),
+                  z.literal('combine'),
+                  z.literal('fragment'),
+                  z.literal('intersect'),
+                  z.literal('subtract'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              op: z.literal('mergeShapes'),
+            })
+            .strict(),
+          z
+            .object({
               colors: z.array(
                 z.object({ slot: z.string(), color: z.string() }).strict()
               ),
@@ -3823,6 +3994,338 @@ export const EditPresentation = z.object({
                   .strict()
               ),
               op: z.literal('setGuides'),
+            })
+            .strict(),
+          z
+            .object({
+              master: z.union([z.number().int().gte(0), z.null()]).optional(),
+              after: z.union([z.number().int().gte(0), z.null()]).optional(),
+              duplicate: z
+                .union([z.number().int().gte(0), z.null()])
+                .optional(),
+              name: z.union([z.string(), z.null()]).optional(),
+              op: z.literal('addLayout'),
+            })
+            .strict(),
+          z
+            .object({
+              layout: z.number().int().gte(0),
+              name: z.string(),
+              op: z.literal('renameLayout'),
+            })
+            .strict(),
+          z
+            .object({
+              layout: z.number().int().gte(0),
+              op: z.literal('deleteLayout'),
+            })
+            .strict(),
+          z
+            .object({
+              layout: z.number().int().gte(0),
+              kind: z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('content'),
+                  z.literal('text'),
+                  z.literal('picture'),
+                  z.literal('chart'),
+                  z.literal('table'),
+                  z.literal('smartArt'),
+                  z.literal('media'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              x: z.number(),
+              y: z.number(),
+              w: z.number(),
+              h: z.number(),
+              vertical: z.boolean().optional(),
+              op: z.literal('insertPlaceholder'),
+            })
+            .strict(),
+          z
+            .object({
+              layout: z.number().int().gte(0),
+              title: z.union([z.boolean(), z.null()]).optional(),
+              footers: z.union([z.boolean(), z.null()]).optional(),
+              hideBackgroundGraphics: z
+                .union([z.boolean(), z.null()])
+                .optional(),
+              op: z.literal('setLayoutOptions'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              style: z.number().int().gte(0).lte(255),
+              op: z.literal('setBackgroundStyle'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              text: z.string(),
+              author: z.string(),
+              initials: z.union([z.string(), z.null()]).optional(),
+              x: z.union([z.number(), z.null()]).optional(),
+              y: z.union([z.number(), z.null()]).optional(),
+              shape: z.union([z.number().int().gte(0), z.null()]).optional(),
+              op: z.literal('addComment'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              comment: z.string(),
+              text: z.string(),
+              author: z.string(),
+              initials: z.union([z.string(), z.null()]).optional(),
+              op: z.literal('replyComment'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              comment: z.string(),
+              text: z.string(),
+              op: z.literal('editComment'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              comment: z.string(),
+              resolved: z.boolean(),
+              op: z.literal('resolveComment'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              comment: z.string(),
+              op: z.literal('deleteComment'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.union([z.number().int().gte(0), z.null()]).optional(),
+              op: z.literal('deleteAllComments'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.union([z.number().int().gte(0), z.null()]).optional(),
+              cell: z
+                .union([
+                  z
+                    .object({
+                      row: z.number().int().gte(0),
+                      col: z.number().int().gte(0),
+                    })
+                    .strict(),
+                  z.null(),
+                ])
+                .optional(),
+              at: z
+                .union([
+                  z
+                    .object({
+                      paragraph: z.number().int().gte(0),
+                      offset: z.number().int().gte(0),
+                    })
+                    .strict(),
+                  z.null(),
+                ])
+                .optional(),
+              latex: z.string(),
+              display: z.union([z.boolean(), z.null()]).optional(),
+              op: z.literal('insertEquation'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              cell: z
+                .union([
+                  z
+                    .object({
+                      row: z.number().int().gte(0),
+                      col: z.number().int().gte(0),
+                    })
+                    .strict(),
+                  z.null(),
+                ])
+                .optional(),
+              paragraph: z.number().int().gte(0),
+              index: z.number().int().gte(0),
+              latex: z.string(),
+              display: z.union([z.boolean(), z.null()]).optional(),
+              op: z.literal('setEquation'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              edit: z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z
+                    .object({
+                      node: z.string(),
+                      text: z.string(),
+                      action: z.literal('setText'),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      node: z.union([z.string(), z.null()]).optional(),
+                      position: z
+                        .intersection(
+                          z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.literal('after'),
+                              z.literal('before'),
+                              z.literal('above'),
+                              z.literal('below'),
+                              z.literal('assistant'),
+                            ];
+                            const errors = schemas.reduce<z.ZodError[]>(
+                              (errors, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? [...errors, result.error]
+                                    : errors)(schema.safeParse(x)),
+                              []
+                            );
+                            if (schemas.length - errors.length !== 1) {
+                              ctx.addIssue({
+                                path: ctx.path,
+                                code: 'invalid_union',
+                                unionErrors: errors,
+                                message:
+                                  'Invalid input: Should pass single schema',
+                              });
+                            }
+                          }),
+                          z.any().default('after')
+                        )
+                        .optional(),
+                      text: z.string().optional(),
+                      action: z.literal('addNode'),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      node: z.string(),
+                      action: z.literal('deleteNode'),
+                    })
+                    .strict(),
+                  z
+                    .object({ node: z.string(), action: z.literal('promote') })
+                    .strict(),
+                  z
+                    .object({ node: z.string(), action: z.literal('demote') })
+                    .strict(),
+                  z
+                    .object({ node: z.string(), action: z.literal('moveUp') })
+                    .strict(),
+                  z
+                    .object({ node: z.string(), action: z.literal('moveDown') })
+                    .strict(),
+                  z
+                    .object({
+                      items: z.array(
+                        z
+                          .object({
+                            text: z.string(),
+                            level: z.number().int().gte(0).lte(255).optional(),
+                          })
+                          .strict()
+                      ),
+                      action: z.literal('setNodes'),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      layout: z.string(),
+                      action: z.literal('setLayout'),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      colors: z.string(),
+                      action: z.literal('setColors'),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      style: z.string(),
+                      action: z.literal('setStyle'),
+                    })
+                    .strict(),
+                  z.object({ action: z.literal('reset') }).strict(),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              op: z.literal('editSmartArt'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              to: z.any().superRefine((x, ctx) => {
+                const schemas = [z.literal('shapes'), z.literal('text')];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              }),
+              op: z.literal('convertSmartArt'),
             })
             .strict(),
         ];
