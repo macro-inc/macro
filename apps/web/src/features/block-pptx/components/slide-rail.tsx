@@ -7,6 +7,7 @@
 import { ContextMenuContent } from '@core/component/ContextMenu';
 import type { SlideOutline } from '@core/pptx-engine/types';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import ChatIcon from '@phosphor/chat.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import EyeIcon from '@phosphor/eye.svg';
 import EyeSlashIcon from '@phosphor/eye-slash.svg';
@@ -17,6 +18,22 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { PresentationPeer } from '../context/pptx-editor-context';
 import { BitmapCanvas } from './bitmap-canvas';
 import { SlidePeers } from './peer-presence';
+
+/** The comment icon PowerPoint shows beside slides that have comments. */
+function SlideCommentsBadge(props: { slide: SlideOutline }) {
+  const count = () => props.slide.comments?.length ?? 0;
+  return (
+    <Show when={count() > 0}>
+      <span
+        title={count() === 1 ? '1 comment' : `${count()} comments`}
+        aria-label={count() === 1 ? '1 comment' : `${count()} comments`}
+        data-testid="pptx-thumbnail-comments"
+      >
+        <ChatIcon class="size-3" />
+      </span>
+    </Show>
+  );
+}
 
 export interface SlideRailProps {
   slides: SlideOutline[];
@@ -222,8 +239,9 @@ export function SlideRail(props: SlideRailProps) {
                   <div class="absolute top-0 bottom-6 -right-3.5 w-0.5 rounded bg-accent" />
                 </Show>
                 <Show when={!props.grid}>
-                  <span class="w-4 shrink-0 pt-0.5 text-right text-ink-muted text-xs tabular-nums">
+                  <span class="flex w-4 shrink-0 flex-col items-end gap-1 pt-0.5 text-ink-muted text-xs tabular-nums">
                     {i() + 1}
+                    <SlideCommentsBadge slide={slide} />
                   </span>
                 </Show>
                 <button
@@ -260,9 +278,10 @@ export function SlideRail(props: SlideRailProps) {
                 </button>
                 <Show when={props.grid}>
                   <div class="flex items-center justify-between px-0.5 text-ink-muted text-xs">
-                    <span class="tabular-nums">
+                    <span class="flex items-center gap-1 tabular-nums">
                       {i() + 1}
                       <Show when={slide.hidden}> (hidden)</Show>
+                      <SlideCommentsBadge slide={slide} />
                     </span>
                     <Show
                       when={

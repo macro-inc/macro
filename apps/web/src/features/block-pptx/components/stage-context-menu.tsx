@@ -21,6 +21,7 @@ import ArrowLineDown from '@phosphor/arrow-line-down.svg';
 import ArrowLineUp from '@phosphor/arrow-line-up.svg';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
+import ChatText from '@phosphor/chat-text.svg';
 import CheckIcon from '@phosphor/check.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import Columns from '@phosphor/columns.svg';
@@ -47,6 +48,7 @@ import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { Swatch } from '../core/palette';
 import type { AlignMode } from '../core/selection';
 import type { EditorCommands } from '../primitives/create-editor-commands';
+import { type SpellingMenu, SpellingMenuItems } from './spelling-menu';
 
 /** What a right-click landed on. */
 export type MenuTarget =
@@ -94,6 +96,10 @@ export interface StageMenuActions {
   /** Follows a link (opens a web address, goes to a slide). */
   openLink: (link: string) => void;
   removeLink: () => void;
+  /** Review ▸ New Comment on what was right-clicked. */
+  newComment?: () => void;
+  /** Corrections for a misspelled word that was right-clicked. */
+  spelling?: SpellingMenu;
 }
 
 /** Link…, or Edit/Open/Copy/Remove Link for something linked. */
@@ -351,382 +357,405 @@ export function StageMenuItems(props: {
   const c = () => props.a.commands;
   const ro = () => props.a.readonly;
   return (
-    <Switch>
-      <Match when={props.target.kind === 'canvas'}>
-        <ClipboardItems a={a()} copyOnly />
-        <MenuSeparator />
-        <MenuItem
-          text="Select all"
-          icon={SelectionAll}
-          shortcut="cmd+a"
-          onClick={() => c().selectAll()}
-        />
-        <MenuSeparator />
-        <MenuItem
-          text="New slide"
-          icon={Plus}
-          shortcut="cmd+m"
-          disabled={ro()}
-          onClick={a().newSlide}
-        />
-        <Show when={a().layouts.length > 0}>
-          <Sub text="Layout" disabled={ro()}>
-            <For each={a().layouts}>
-              {(layout) => (
+    <>
+      <Show when={a().spelling}>
+        {(menu) => <SpellingMenuItems menu={menu()} />}
+      </Show>
+      <Switch>
+        <Match when={props.target.kind === 'canvas'}>
+          <ClipboardItems a={a()} copyOnly />
+          <MenuSeparator />
+          <MenuItem
+            text="Select all"
+            icon={SelectionAll}
+            shortcut="cmd+a"
+            onClick={() => c().selectAll()}
+          />
+          <MenuSeparator />
+          <MenuItem
+            text="New slide"
+            icon={Plus}
+            shortcut="cmd+m"
+            disabled={ro()}
+            onClick={a().newSlide}
+          />
+          <Show when={a().layouts.length > 0}>
+            <Sub text="Layout" disabled={ro()}>
+              <For each={a().layouts}>
+                {(layout) => (
+                  <MenuItem
+                    text={layout}
+                    icon={layout === a().currentLayout ? CheckIcon : undefined}
+                    onClick={() => void c().setLayout(layout)}
+                  />
+                )}
+              </For>
+            </Sub>
+          </Show>
+          <MenuItem
+            text={a().slideHidden ? 'Unhide slide' : 'Hide slide'}
+            disabled={ro()}
+            onClick={a().hideSlide}
+          />
+          <MenuSeparator />
+          <MenuItem
+            text="Format background…"
+            icon={PaintBucket}
+            disabled={ro()}
+            onClick={() => a().openFormatPane('background')}
+          />
+        </Match>
+        <Match when={props.target.kind === 'text'}>
+          <ClipboardItems a={a()} />
+          <MenuSeparator />
+          <MenuItem
+            text="Font…"
+            icon={TextAa}
+            disabled={ro()}
+            onClick={() => a().openFormatPane('text')}
+          />
+          <MenuItem
+            text="Paragraph…"
+            icon={ListBullets}
+            disabled={ro()}
+            onClick={() => a().openFormatPane('text')}
+          />
+          <Sub
+            text="Bullets"
+            icon={<ListBullets class="size-4" />}
+            disabled={ro()}
+          >
+            <MenuItem
+              text="None"
+              onClick={() => void c().setBullets({ kind: 'none' })}
+            />
+            <For each={['•', '○', '▪', '➢', '✓', '–']}>
+              {(char) => (
                 <MenuItem
-                  text={layout}
-                  icon={layout === a().currentLayout ? CheckIcon : undefined}
-                  onClick={() => void c().setLayout(layout)}
+                  text={`${char}  Bullet`}
+                  onClick={() => void c().setBullets({ kind: 'char', char })}
                 />
               )}
             </For>
           </Sub>
-        </Show>
-        <MenuItem
-          text={a().slideHidden ? 'Unhide slide' : 'Hide slide'}
-          disabled={ro()}
-          onClick={a().hideSlide}
-        />
-        <MenuSeparator />
-        <MenuItem
-          text="Format background…"
-          icon={PaintBucket}
-          disabled={ro()}
-          onClick={() => a().openFormatPane('background')}
-        />
-      </Match>
-      <Match when={props.target.kind === 'text'}>
-        <ClipboardItems a={a()} />
-        <MenuSeparator />
-        <MenuItem
-          text="Font…"
-          icon={TextAa}
-          disabled={ro()}
-          onClick={() => a().openFormatPane('text')}
-        />
-        <MenuItem
-          text="Paragraph…"
-          icon={ListBullets}
-          disabled={ro()}
-          onClick={() => a().openFormatPane('text')}
-        />
-        <Sub
-          text="Bullets"
-          icon={<ListBullets class="size-4" />}
-          disabled={ro()}
-        >
-          <MenuItem
-            text="None"
-            onClick={() => void c().setBullets({ kind: 'none' })}
-          />
-          <For each={['•', '○', '▪', '➢', '✓', '–']}>
-            {(char) => (
-              <MenuItem
-                text={`${char}  Bullet`}
-                onClick={() => void c().setBullets({ kind: 'char', char })}
-              />
-            )}
-          </For>
-        </Sub>
-        <Sub text="Numbering" disabled={ro()}>
-          <MenuItem
-            text="None"
-            onClick={() => void c().setBullets({ kind: 'none' })}
-          />
-          <For
-            each={[
-              ['arabicPeriod', '1. 2. 3.'],
-              ['arabicParenR', '1) 2) 3)'],
-              ['romanUcPeriod', 'I. II. III.'],
-              ['alphaUcPeriod', 'A. B. C.'],
-              ['alphaLcParenR', 'a) b) c)'],
-            ]}
-          >
-            {([scheme, label]) => (
-              <MenuItem
-                text={label}
-                onClick={() =>
-                  void c().setBullets({ kind: 'number', scheme, start: 1 })
-                }
-              />
-            )}
-          </For>
-        </Sub>
-        <LinkItems a={a()} />
-        <MenuSeparator />
-        <MenuItem
-          text="Select all"
-          icon={SelectionAll}
-          shortcut="cmd+a"
-          onClick={() => c().selectAll()}
-        />
-      </Match>
-      <Match when={props.target.kind === 'table'}>
-        <ClipboardItems a={a()} />
-        <MenuSeparator />
-        <Sub text="Insert" icon={<Plus class="size-4" />} disabled={ro()}>
-          <MenuItem
-            text="Insert rows above"
-            icon={Rows}
-            onClick={() => void c().insertRows('above')}
-          />
-          <MenuItem
-            text="Insert rows below"
-            icon={Rows}
-            onClick={() => void c().insertRows('below')}
-          />
-          <MenuItem
-            text="Insert columns left"
-            icon={Columns}
-            onClick={() => void c().insertColumns('left')}
-          />
-          <MenuItem
-            text="Insert columns right"
-            icon={Columns}
-            onClick={() => void c().insertColumns('right')}
-          />
-        </Sub>
-        <Sub text="Delete" icon={<Trash class="size-4" />} disabled={ro()}>
-          <MenuItem text="Delete rows" onClick={() => void c().deleteRows()} />
-          <MenuItem
-            text="Delete columns"
-            onClick={() => void c().deleteColumns()}
-          />
-          <MenuItem
-            text="Delete table"
-            onClick={() => void c().deleteTable()}
-          />
-        </Sub>
-        <Sub text="Select" icon={<TableIcon class="size-4" />}>
-          <MenuItem text="Select row" onClick={() => a().selectRows?.()} />
-          <MenuItem
-            text="Select column"
-            onClick={() => a().selectColumns?.()}
-          />
-          <MenuItem text="Select table" onClick={() => a().selectTable?.()} />
-        </Sub>
-        <MenuItem
-          text="Merge cells"
-          disabled={ro() || !c().canMerge()}
-          onClick={() => void c().mergeCells()}
-        />
-        <MenuItem
-          text="Split cells"
-          disabled={ro() || !c().canSplit()}
-          onClick={() => void c().splitCells()}
-        />
-        <MenuSeparator />
-        <ColorSub
-          text="Shading"
-          icon={<PaintBucket class="size-4" />}
-          swatches={a().swatches}
-          noneLabel="No fill"
-          disabled={ro()}
-          onPick={(v) => void c().fillCells(v)}
-        />
-        <Sub text="Borders" disabled={ro()}>
-          <For
-            each={
-              [
-                ['all', 'All borders'],
-                ['outside', 'Outside borders'],
-                ['inside', 'Inside borders'],
-                ['top', 'Top border'],
-                ['bottom', 'Bottom border'],
-                ['left', 'Left border'],
-                ['right', 'Right border'],
-                ['insideHorizontal', 'Inside horizontal border'],
-                ['insideVertical', 'Inside vertical border'],
-              ] as const
-            }
-          >
-            {([edges, label]) => (
-              <MenuItem
-                text={label}
-                onClick={() => void c().borderCells(edges)}
-              />
-            )}
-          </For>
-          <MenuSeparator />
-          <MenuItem
-            text="No border"
-            onClick={() => void c().borderCells('all', true)}
-          />
-        </Sub>
-        <Sub text="Align text" disabled={ro()}>
-          <MenuItem
-            text="Left"
-            icon={AlignLeft}
-            onClick={() => void c().alignCells('left')}
-          />
-          <MenuItem
-            text="Center"
-            icon={AlignCenterHorizontal}
-            onClick={() => void c().alignCells('center')}
-          />
-          <MenuItem
-            text="Right"
-            icon={AlignRight}
-            onClick={() => void c().alignCells('right')}
-          />
-          <MenuSeparator />
-          <MenuItem
-            text="Top"
-            icon={AlignTop}
-            onClick={() => void c().anchorCells('top')}
-          />
-          <MenuItem
-            text="Middle"
-            icon={AlignCenterVertical}
-            onClick={() => void c().anchorCells('middle')}
-          />
-          <MenuItem
-            text="Bottom"
-            icon={AlignBottom}
-            onClick={() => void c().anchorCells('bottom')}
-          />
-        </Sub>
-        <MenuItem
-          text="Distribute rows"
-          disabled={ro()}
-          onClick={() => void c().distributeRows()}
-        />
-        <MenuItem
-          text="Distribute columns"
-          disabled={ro()}
-          onClick={() => void c().distributeColumns()}
-        />
-        <MenuSeparator />
-        <ArrangeItems a={a()} />
-        <MenuItem
-          text="Format shape…"
-          icon={SlidersHorizontal}
-          disabled={ro()}
-          onClick={() => a().openFormatPane('shape')}
-        />
-      </Match>
-      <Match when={props.target.kind === 'chart'}>
-        <ClipboardItems a={a()} />
-        <MenuSeparator />
-        <Show when={a().editChartData}>
-          <MenuItem
-            text="Edit data…"
-            icon={TableIcon}
-            disabled={ro()}
-            onClick={() => a().editChartData?.()}
-          />
-        </Show>
-        <Show when={a().changeChartType}>
-          <MenuItem
-            text="Change chart type…"
-            icon={ChartBar}
-            disabled={ro()}
-            onClick={() => a().changeChartType?.()}
-          />
-        </Show>
-        <MenuSeparator />
-        <ArrangeItems a={a()} />
-        <MenuItem
-          text="Format chart area…"
-          icon={SlidersHorizontal}
-          disabled={ro()}
-          onClick={() => a().openFormatPane('shape')}
-        />
-        <MenuSeparator />
-        <MenuItem
-          text="Delete"
-          icon={Trash}
-          shortcut="delete"
-          disabled={ro()}
-          onClick={() => void a().commands.deleteSelection()}
-        />
-      </Match>
-      <Match when={props.target.kind === 'shapes'}>
-        <ClipboardItems a={a()} />
-        <MenuItem
-          text="Duplicate"
-          icon={CopySimple}
-          shortcut="cmd+d"
-          disabled={ro()}
-          onClick={() => void c().duplicateSelection()}
-        />
-        <MenuSeparator />
-        <Show when={a().editText && a().textShape && a().selectionCount === 1}>
-          <MenuItem
-            text="Edit text"
-            icon={PencilSimple}
-            shortcut="enter"
-            disabled={ro()}
-            onClick={() => a().editText?.()}
-          />
-        </Show>
-        <Show when={a().isPicture && a().replacePicture}>
-          <MenuItem
-            text="Change picture…"
-            icon={ImageIcon}
-            disabled={ro()}
-            onClick={() => a().replacePicture?.()}
-          />
-        </Show>
-        <Show when={a().isPicture && a().crop}>
-          <MenuItem
-            text="Crop"
-            icon={CropIcon}
-            disabled={ro()}
-            onClick={() => a().crop?.()}
-          />
-        </Show>
-        <ArrangeItems a={a()} />
-        <Show when={a().selectionCount > 0}>
-          <MenuSeparator />
+          <Sub text="Numbering" disabled={ro()}>
+            <MenuItem
+              text="None"
+              onClick={() => void c().setBullets({ kind: 'none' })}
+            />
+            <For
+              each={[
+                ['arabicPeriod', '1. 2. 3.'],
+                ['arabicParenR', '1) 2) 3)'],
+                ['romanUcPeriod', 'I. II. III.'],
+                ['alphaUcPeriod', 'A. B. C.'],
+                ['alphaLcParenR', 'a) b) c)'],
+              ]}
+            >
+              {([scheme, label]) => (
+                <MenuItem
+                  text={label}
+                  onClick={() =>
+                    void c().setBullets({ kind: 'number', scheme, start: 1 })
+                  }
+                />
+              )}
+            </For>
+          </Sub>
           <LinkItems a={a()} />
-        </Show>
-        <MenuSeparator />
-        <ColorSub
-          text="Fill"
-          icon={<PaintBucket class="size-4" />}
-          swatches={a().swatches}
-          noneLabel="No fill"
-          disabled={ro()}
-          onPick={(v) => void c().fillColor(v)}
-        />
-        <ColorSub
-          text="Outline"
-          icon={<PencilSimple class="size-4" />}
-          swatches={a().swatches}
-          noneLabel="No outline"
-          disabled={ro()}
-          onPick={(v) => void c().setLine(v ? { color: v } : { none: true })}
-        />
-        <MenuItem
-          text="Size and position…"
-          disabled={ro()}
-          onClick={() => a().openFormatPane('size')}
-        />
-        <Show when={a().savePicture && a().selectionCount === 1}>
+          <MenuSeparator />
           <MenuItem
-            text="Save as picture…"
-            icon={ImageSquare}
-            onClick={() => a().savePicture?.()}
+            text="Select all"
+            icon={SelectionAll}
+            shortcut="cmd+a"
+            onClick={() => c().selectAll()}
           />
-        </Show>
-        <MenuItem
-          text={a().isPicture ? 'Format picture…' : 'Format shape…'}
-          icon={SlidersHorizontal}
-          disabled={ro()}
-          onClick={() =>
-            a().openFormatPane(a().isPicture ? 'picture' : 'shape')
-          }
-        />
-        <MenuSeparator />
-        <MenuItem
-          text="Delete"
-          icon={Trash}
-          shortcut="delete"
-          disabled={ro()}
-          onClick={() => void c().deleteSelection()}
-        />
-      </Match>
-    </Switch>
+        </Match>
+        <Match when={props.target.kind === 'table'}>
+          <ClipboardItems a={a()} />
+          <MenuSeparator />
+          <Sub text="Insert" icon={<Plus class="size-4" />} disabled={ro()}>
+            <MenuItem
+              text="Insert rows above"
+              icon={Rows}
+              onClick={() => void c().insertRows('above')}
+            />
+            <MenuItem
+              text="Insert rows below"
+              icon={Rows}
+              onClick={() => void c().insertRows('below')}
+            />
+            <MenuItem
+              text="Insert columns left"
+              icon={Columns}
+              onClick={() => void c().insertColumns('left')}
+            />
+            <MenuItem
+              text="Insert columns right"
+              icon={Columns}
+              onClick={() => void c().insertColumns('right')}
+            />
+          </Sub>
+          <Sub text="Delete" icon={<Trash class="size-4" />} disabled={ro()}>
+            <MenuItem
+              text="Delete rows"
+              onClick={() => void c().deleteRows()}
+            />
+            <MenuItem
+              text="Delete columns"
+              onClick={() => void c().deleteColumns()}
+            />
+            <MenuItem
+              text="Delete table"
+              onClick={() => void c().deleteTable()}
+            />
+          </Sub>
+          <Sub text="Select" icon={<TableIcon class="size-4" />}>
+            <MenuItem text="Select row" onClick={() => a().selectRows?.()} />
+            <MenuItem
+              text="Select column"
+              onClick={() => a().selectColumns?.()}
+            />
+            <MenuItem text="Select table" onClick={() => a().selectTable?.()} />
+          </Sub>
+          <MenuItem
+            text="Merge cells"
+            disabled={ro() || !c().canMerge()}
+            onClick={() => void c().mergeCells()}
+          />
+          <MenuItem
+            text="Split cells"
+            disabled={ro() || !c().canSplit()}
+            onClick={() => void c().splitCells()}
+          />
+          <MenuSeparator />
+          <ColorSub
+            text="Shading"
+            icon={<PaintBucket class="size-4" />}
+            swatches={a().swatches}
+            noneLabel="No fill"
+            disabled={ro()}
+            onPick={(v) => void c().fillCells(v)}
+          />
+          <Sub text="Borders" disabled={ro()}>
+            <For
+              each={
+                [
+                  ['all', 'All borders'],
+                  ['outside', 'Outside borders'],
+                  ['inside', 'Inside borders'],
+                  ['top', 'Top border'],
+                  ['bottom', 'Bottom border'],
+                  ['left', 'Left border'],
+                  ['right', 'Right border'],
+                  ['insideHorizontal', 'Inside horizontal border'],
+                  ['insideVertical', 'Inside vertical border'],
+                ] as const
+              }
+            >
+              {([edges, label]) => (
+                <MenuItem
+                  text={label}
+                  onClick={() => void c().borderCells(edges)}
+                />
+              )}
+            </For>
+            <MenuSeparator />
+            <MenuItem
+              text="No border"
+              onClick={() => void c().borderCells('all', true)}
+            />
+          </Sub>
+          <Sub text="Align text" disabled={ro()}>
+            <MenuItem
+              text="Left"
+              icon={AlignLeft}
+              onClick={() => void c().alignCells('left')}
+            />
+            <MenuItem
+              text="Center"
+              icon={AlignCenterHorizontal}
+              onClick={() => void c().alignCells('center')}
+            />
+            <MenuItem
+              text="Right"
+              icon={AlignRight}
+              onClick={() => void c().alignCells('right')}
+            />
+            <MenuSeparator />
+            <MenuItem
+              text="Top"
+              icon={AlignTop}
+              onClick={() => void c().anchorCells('top')}
+            />
+            <MenuItem
+              text="Middle"
+              icon={AlignCenterVertical}
+              onClick={() => void c().anchorCells('middle')}
+            />
+            <MenuItem
+              text="Bottom"
+              icon={AlignBottom}
+              onClick={() => void c().anchorCells('bottom')}
+            />
+          </Sub>
+          <MenuItem
+            text="Distribute rows"
+            disabled={ro()}
+            onClick={() => void c().distributeRows()}
+          />
+          <MenuItem
+            text="Distribute columns"
+            disabled={ro()}
+            onClick={() => void c().distributeColumns()}
+          />
+          <MenuSeparator />
+          <ArrangeItems a={a()} />
+          <MenuItem
+            text="Format shape…"
+            icon={SlidersHorizontal}
+            disabled={ro()}
+            onClick={() => a().openFormatPane('shape')}
+          />
+        </Match>
+        <Match when={props.target.kind === 'chart'}>
+          <ClipboardItems a={a()} />
+          <MenuSeparator />
+          <Show when={a().editChartData}>
+            <MenuItem
+              text="Edit data…"
+              icon={TableIcon}
+              disabled={ro()}
+              onClick={() => a().editChartData?.()}
+            />
+          </Show>
+          <Show when={a().changeChartType}>
+            <MenuItem
+              text="Change chart type…"
+              icon={ChartBar}
+              disabled={ro()}
+              onClick={() => a().changeChartType?.()}
+            />
+          </Show>
+          <MenuSeparator />
+          <ArrangeItems a={a()} />
+          <MenuItem
+            text="Format chart area…"
+            icon={SlidersHorizontal}
+            disabled={ro()}
+            onClick={() => a().openFormatPane('shape')}
+          />
+          <MenuSeparator />
+          <MenuItem
+            text="Delete"
+            icon={Trash}
+            shortcut="delete"
+            disabled={ro()}
+            onClick={() => void a().commands.deleteSelection()}
+          />
+        </Match>
+        <Match when={props.target.kind === 'shapes'}>
+          <ClipboardItems a={a()} />
+          <MenuItem
+            text="Duplicate"
+            icon={CopySimple}
+            shortcut="cmd+d"
+            disabled={ro()}
+            onClick={() => void c().duplicateSelection()}
+          />
+          <MenuSeparator />
+          <Show
+            when={a().editText && a().textShape && a().selectionCount === 1}
+          >
+            <MenuItem
+              text="Edit text"
+              icon={PencilSimple}
+              shortcut="enter"
+              disabled={ro()}
+              onClick={() => a().editText?.()}
+            />
+          </Show>
+          <Show when={a().isPicture && a().replacePicture}>
+            <MenuItem
+              text="Change picture…"
+              icon={ImageIcon}
+              disabled={ro()}
+              onClick={() => a().replacePicture?.()}
+            />
+          </Show>
+          <Show when={a().isPicture && a().crop}>
+            <MenuItem
+              text="Crop"
+              icon={CropIcon}
+              disabled={ro()}
+              onClick={() => a().crop?.()}
+            />
+          </Show>
+          <ArrangeItems a={a()} />
+          <Show when={a().selectionCount > 0}>
+            <MenuSeparator />
+            <LinkItems a={a()} />
+          </Show>
+          <MenuSeparator />
+          <ColorSub
+            text="Fill"
+            icon={<PaintBucket class="size-4" />}
+            swatches={a().swatches}
+            noneLabel="No fill"
+            disabled={ro()}
+            onPick={(v) => void c().fillColor(v)}
+          />
+          <ColorSub
+            text="Outline"
+            icon={<PencilSimple class="size-4" />}
+            swatches={a().swatches}
+            noneLabel="No outline"
+            disabled={ro()}
+            onPick={(v) => void c().setLine(v ? { color: v } : { none: true })}
+          />
+          <MenuItem
+            text="Size and position…"
+            disabled={ro()}
+            onClick={() => a().openFormatPane('size')}
+          />
+          <Show when={a().savePicture && a().selectionCount === 1}>
+            <MenuItem
+              text="Save as picture…"
+              icon={ImageSquare}
+              onClick={() => a().savePicture?.()}
+            />
+          </Show>
+          <MenuItem
+            text={a().isPicture ? 'Format picture…' : 'Format shape…'}
+            icon={SlidersHorizontal}
+            disabled={ro()}
+            onClick={() =>
+              a().openFormatPane(a().isPicture ? 'picture' : 'shape')
+            }
+          />
+          <MenuSeparator />
+          <MenuItem
+            text="Delete"
+            icon={Trash}
+            shortcut="delete"
+            disabled={ro()}
+            onClick={() => void c().deleteSelection()}
+          />
+        </Match>
+      </Switch>
+      <Show when={a().newComment}>
+        {(newComment) => (
+          <>
+            <MenuSeparator />
+            <MenuItem
+              text="New Comment"
+              icon={ChatText}
+              disabled={ro()}
+              onClick={() => newComment()()}
+            />
+          </>
+        )}
+      </Show>
+    </>
   );
 }

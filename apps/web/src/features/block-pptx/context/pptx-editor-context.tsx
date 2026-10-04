@@ -159,6 +159,17 @@ export interface PptxEditorContext {
   autosaveDelay?: number;
   /** Presence of other people, for collaborative presentations. */
   collaboration?: PresentationCollaboration;
+  /**
+   * The person using the editor, as comments they write name them. Hosts
+   * that don't know omit it; the editor then signs comments "Author".
+   */
+  currentUser?: Accessor<CommentAuthor>;
+}
+
+/** Who writes a comment: a display name and optional initials. */
+export interface CommentAuthor {
+  name: string;
+  initials?: string;
 }
 
 const Context = createContext<PptxEditorContext>();
