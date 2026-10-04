@@ -1,11 +1,11 @@
-//! Project collection and task-reference read contracts.
+//! Project collection and task read contracts.
 
 use chrono::{DateTime, Utc};
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::models::{InitiativeDetail, InitiativeError, InitiativeId, InitiativeSummary};
+use super::models::{InitiativeDetail, InitiativeError, InitiativeSummary};
 
 const DEFAULT_PAGE_SIZE: u16 = 50;
 const MAX_PAGE_SIZE: u16 = 100;
@@ -170,64 +170,3 @@ impl InitiativeDetail {
         })
     }
 }
-
-/// Bounded batch of task ids to resolve.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct TaskInitiativeReferencesRequest {
-    /// At most one hundred distinct task ids.
-    pub task_ids: Vec<String>,
-}
-
-/// Minimal project display reference.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct InitiativeReference {
-    /// Project id.
-    pub id: InitiativeId,
-    /// Authorized project name.
-    pub name: String,
-}
-
-/// A task's project. An inaccessible project never exposes its id or name.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(
-    tag = "state",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum TaskInitiativeReference {
-    /// The visible task has no project.
-    None {
-        /// Task id.
-        #[serde(rename = "taskId")]
-        task_id: String,
-    },
-    /// The task or its project is not visible to the caller.
-    Unavailable {
-        /// Requested task id, with no inaccessible metadata.
-        #[serde(rename = "taskId")]
-        task_id: String,
-    },
-    /// Both task and project are visible.
-    Visible {
-        /// Task id.
-        #[serde(rename = "taskId")]
-        task_id: String,
-        /// Authorized project reference.
-        initiative: InitiativeReference,
-    },
-}
-
-/// Task references in deduplicated request order.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct TaskInitiativeReferences {
-    /// Per-task visibility-aware references.
-    pub references: Vec<TaskInitiativeReference>,
-}
-
-#[cfg(all(test, feature = "inbound"))]
-mod test;

@@ -11,6 +11,8 @@ export const BlockRegistry = [
   'image',
   'canvas',
   'spreadsheet',
+  // PowerPoint presentations, edited in the browser.
+  'pptx',
   'channel',
   'project',
   'unknown',

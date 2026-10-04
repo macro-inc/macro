@@ -19,6 +19,8 @@ pub mod mention_tracker;
 pub mod pg_document_repo;
 #[cfg(feature = "outbound")]
 pub mod s3_markdown_source;
+#[cfg(feature = "ai_tools")]
+pub mod s3_presentation_files;
 #[cfg(feature = "outbound")]
 pub mod s3_upload_url;
 #[cfg(feature = "outbound")]

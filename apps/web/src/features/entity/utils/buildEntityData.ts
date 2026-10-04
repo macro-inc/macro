@@ -108,6 +108,7 @@ export function buildEntityData(
         'image',
         'canvas',
         'spreadsheet',
+        'pptx',
         'video',
         'unknown',
         'csv',

@@ -439,7 +439,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
         macro_event_broker.clone(),
     );
 

@@ -1,4 +1,5 @@
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '../identifiers';
 import type { PropertyDefinitionDomain } from '../types';
 
 export function usePropertySelection(
@@ -25,7 +26,9 @@ export function usePropertySelection(
         !existingIds.has(property.id) &&
         // Tag definitions are managed through the dedicated Tags UI, never the
         // generic property pickers.
-        property.valueType !== 'TAG'
+        property.valueType !== 'TAG' &&
+        // A task's project is set from its own Project row and pickers.
+        property.id !== SYSTEM_PROPERTY_IDS.PROJECT
     );
 
     // Then apply search filter

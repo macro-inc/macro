@@ -34,6 +34,10 @@ pub mod response;
 #[cfg(feature = "ai_tools")]
 pub mod spreadsheet;
 
+/// Reading and editing PowerPoint presentations with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod presentation;
+
 #[cfg(feature = "ports")]
 pub mod ports;
 

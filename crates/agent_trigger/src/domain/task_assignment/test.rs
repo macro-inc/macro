@@ -426,8 +426,7 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
     ] {
         assert!(instructions.contains("read the project's current description before starting"));
         assert!(instructions.contains("ReadInitiative"));
-        assert!(instructions.contains("ReadContent"));
-        assert!(instructions.contains("descriptionDocumentId"));
+        assert!(instructions.contains("description field"));
     }
     assert_eq!(metadata["parent"]["type"], "document");
 }

@@ -14,13 +14,9 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { queryClient } from '@queries/client';
-import {
-  getGraphqlSoupCacheHost,
-  getGraphqlSoupClient,
-} from '@service-storage/graphql-soup';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
-import type { Accessor } from 'solid-js';
 import {
   createSignal,
   ErrorBoundary,
@@ -66,7 +62,7 @@ function createProjectsContext() {
   );
   return createProjectSources(
     initiativeClient,
-    { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
+    { client: getGraphqlSoupClient },
     queryClient,
     userId,
     createProjectReadGate
@@ -190,8 +186,4 @@ export function ProjectAssignmentDialog(props: {
       <ProjectAssignment taskIds={props.taskIds} onClose={props.onClose} />
     </Projects>
   );
-}
-
-export function useTaskProjectReferences(ids: Accessor<readonly string[]>) {
-  return createProjectsContext().createReferencesSource(ids);
 }

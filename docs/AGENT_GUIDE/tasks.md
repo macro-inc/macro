@@ -240,22 +240,38 @@ For verification, create a task from the project's Tasks tab, then move another
 task into the project through `Add to project…`; both should start the assigned
 agent's normal task session and show its message in the task's Discussion.
 
-Overview's Description uses the shared collaborative Markdown editor and saves
-automatically to the existing backing document. Edit/owner access allows typing;
-view/comment access is read-only. The description is part of the native project
-view and does not open a separate document block. Discussion appears below the
-description, using the same discussion component as tasks.
-Backing descriptions remain available through direct reads, but are omitted from
-ordinary document search, history, and Soup lists.
+Overview's Description uses the shared collaborative Markdown editor on the
+project's collab surface and saves automatically; its access follows project
+access. Edit/owner access allows typing; view/comment access is read-only. Two
+tabs on the same project see each other's edits live. The description is part
+of the native project view and does not open a separate document block.
+It edits like a markdown document body: `/` opens the commands menu (headings,
+lists, checklists, quotes, code blocks, tables, equations, links, images,
+video, dividers, and creating a task), `@` mentions, `:` emoji, `;` snippets,
+and markdown shortcuts work. Tables have the document's insert, resize, move,
+and delete controls; blocks have drag handles; files and images can be pasted
+or dropped in, and items dragged from lists insert mentions. Mentions in a
+description are not tracked as document references, so mentioned users are not
+notified. Document-only tools (comments, tags, AI writing, find and replace) are
+not available in descriptions.
+Discussion appears below the description, using the same discussion component
+as tasks. The surface has the project's id and is created on first open, or at
+creation when one is given (agents can pass a description). Projects no longer
+have description documents; older ones are ignored and stay hidden from document
+search, history, and Soup lists.
 An unavailable connection shows `Retry description` without clearing saved content.
+
+A task's project is its `Project` system property: one reference to the project,
+set only on tasks. Setting it needs edit access to the task and the project;
+removing it needs edit access to the task. The project's Tasks tab lists the
+tasks whose Project property names the project.
 
 The project's Tasks tab starts with the task search, controls, and unified list;
 the project title and property pills appear only on Overview. Use
-`New task` to create a task associated with the project. The normal task row is
-inserted into the query cache before the composer closes, including its selected
-properties and project chip. It stays in its group while saving and assigning,
-then uses the saved task ID. Failed creations or assignments roll back that row.
-Verify this with GraphQL Soup both enabled and disabled. The section tabs
+`New task` to create a task in the project: the create request carries the
+Project property, so there is no separate assignment step. The new row appears
+once the task is created. Verify this with GraphQL Soup both enabled and
+disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task`, search for tasks, select several, and confirm `Add N tasks`. Tasks
 already in this project are excluded. Adding a task moves it from its previous
@@ -271,6 +287,8 @@ Inside an open task, use the Project pill below the title, the Project row in
 the Properties side panel, or `Add to project…` in the title's actions menu.
 The property shows `No project` until assigned and stays read-only without edit
 access. Choose `No project` in the assignment dialog to remove the association.
+The Project property does not appear in the generic Properties list or the
+`Add property` picker; these project controls set it.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion

@@ -1084,7 +1084,6 @@ describe('Quick Access source integration', () => {
         id: 'initiative-1',
         name: 'Roadmap',
         ownerId: 'owner',
-        descriptionDocumentId: 'description-1',
         updatedAt: '2025-01-02T00:00:00.000Z',
       },
     ];

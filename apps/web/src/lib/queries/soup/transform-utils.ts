@@ -750,7 +750,6 @@ export const mapApiSoupItemToEntity = (
     .with({ tag: 'initiative' }, (item) => ({
       ...item.data,
       type: 'initiative' as const,
-      descriptionDocumentId: item.data.descriptionDocumentId ?? '',
       name: item.data.name || 'Untitled project',
       frecencyScore: item.frecency_score,
     }))

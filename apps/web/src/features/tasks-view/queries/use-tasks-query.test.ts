@@ -37,11 +37,10 @@ vi.mock('@queries/soup/grouped/create-grouped-soup-queries', () => ({
 
 import { useTasksDataSource } from './use-tasks-query';
 
-it('retains cached rows during membership changes but filters them by current access', () => {
+it('retains cached rows while a referenced list refetches and hides them when disabled', () => {
   const [placeholder, setPlaceholder] = createSignal(false);
   const [enabled, setEnabled] = createSignal(true);
-  const [members, setMembers] = createSignal(['task']);
-  const task: TaskEntityWithProperties = {
+  const task = {
     type: 'document',
     fileType: 'md',
     id: 'task',
@@ -50,8 +49,16 @@ it('retains cached rows during membership changes but filters them by current ac
     createdAt: new Date(),
     updatedAt: new Date(),
     subType: { type: 'task', is_completed: false },
-    properties: [],
-  };
+    properties: [
+      {
+        definition: { id: 'project-definition' },
+        value: {
+          type: 'EntityReference',
+          value: [{ entity_type: 'INITIATIVE', entity_id: 'project' }],
+        },
+      },
+    ],
+  } as unknown as TaskEntityWithProperties;
   fixture.query = {
     isLoading: false,
     get isPlaceholderData() {
@@ -74,7 +81,10 @@ it('retains cached rows during membership changes but filters them by current ac
           tagSets: () => [],
           tagSetsReady: () => true,
           isGroupExpanded: () => true,
-          taskIds: members,
+          reference: () => ({
+            propertyDefinitionId: 'project-definition',
+            entityId: 'project',
+          }),
           enabled,
         }
       );
@@ -83,12 +93,7 @@ it('retains cached rows during membership changes but filters them by current ac
       setPlaceholder(true);
       expect(source.items()).toHaveLength(1);
       expect(source.isLoading()).toBe(false);
-      setMembers([]);
-      expect(source.items()).toEqual([]);
-      setMembers(['task']);
       setPlaceholder(false);
-      expect(source.items()).toHaveLength(1);
-      expect(source.isLoading()).toBe(false);
       setEnabled(false);
       expect(source.items()).toEqual([]);
       expect(source.isLoading()).toBe(false);

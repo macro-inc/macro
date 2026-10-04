@@ -3,7 +3,6 @@
             'database_row' as "item_type",
             r.id::text as "id",
             NULL as "document_version_id",
-            NULL::text as "description_document_id",
             row_database.owner_id as "user_id",
             NULL::text as "name",
             NULL as "branched_from_id",

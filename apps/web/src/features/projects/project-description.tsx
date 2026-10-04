@@ -5,24 +5,28 @@ import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { createProductionProjectDescriptionSession } from './queries/production-project-description';
 
 function DescriptionSession(props: {
-  documentId: string;
+  projectId: string;
   canEdit: boolean;
   onRetry(): void;
 }) {
-  const session = createProductionProjectDescriptionSession(props.documentId);
+  const session = createProductionProjectDescriptionSession(props.projectId);
   onCleanup(session.dispose);
   return (
     <>
       <CollabMarkdownEditor
         resolveAppLink={useMacroMentionLinkResolver()}
-        sourceId={props.documentId}
+        sourceId={props.projectId}
         session={session}
         canEdit={() => props.canEdit}
         canComment={() => false}
         label="Project description"
         namespace="project-description"
-        class="min-h-24 text-sm"
-        placeholder={props.canEdit ? 'Add a description…' : 'No description'}
+        class="min-h-24 mt-1.5 text-base"
+        placeholder={
+          props.canEdit
+            ? "Add a description. Press '/' for commands, '@' to mention…"
+            : 'No description'
+        }
       />
       <Show when={session.connectionError()}>
         <Button size="sm" onClick={props.onRetry}>
@@ -33,19 +37,19 @@ function DescriptionSession(props: {
   );
 }
 
-/** Production adapter for the existing description document's collaboration session. */
+/** Production adapter for the project's collaborative description surface. */
 export function ProjectDescription(props: {
-  documentId: string;
+  projectId: string;
   canEdit: boolean;
 }) {
   const [attempt, setAttempt] = createSignal(0);
-  // Project refreshes re-read the same documentId; only a new id or retry reopens.
+  // Project refreshes keep the same session; only a new project or retry reopens.
   const identity = createMemo(
-    () => ({ documentId: props.documentId, attempt: attempt() }),
+    () => ({ projectId: props.projectId, attempt: attempt() }),
     undefined,
     {
       equals: (previous, next) =>
-        previous.documentId === next.documentId &&
+        previous.projectId === next.projectId &&
         previous.attempt === next.attempt,
     }
   );
@@ -53,7 +57,7 @@ export function ProjectDescription(props: {
     <Show when={identity()} keyed>
       {(identity) => (
         <DescriptionSession
-          documentId={identity.documentId}
+          projectId={identity.projectId}
           canEdit={props.canEdit}
           onRetry={() => setAttempt((attempt) => attempt + 1)}
         />

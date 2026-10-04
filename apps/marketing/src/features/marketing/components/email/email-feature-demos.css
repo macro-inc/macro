@@ -71,18 +71,14 @@
 .email-tag-summary > :last-child { margin-left: auto; white-space: nowrap; }
 
 .email-agent-pointer {
-  --c0: #f0eee8;
   position: absolute;
   z-index: 4;
   pointer-events: none;
   top: calc(119px + var(--email-cursor-row) * 52px);
   left: 63%;
-  font-size: 20px;
-  filter: drop-shadow(0 2px 3px #0006);
   transition: top 650ms ease, left 650ms ease;
 }
 .email-agent-pointer[data-menu='true'] { top: calc(106px + var(--email-tag-index) * 36px); left: calc(100% - 95px); }
-.email-agent-pointer > span { position: absolute; top: 16px; left: 15px; padding: 4px 9px; background: #f0eee8; color: #171717; font: 500 11px Inter, sans-serif; border-radius: 4px 10px 10px; }
 .email-keyboard-demo:focus { outline: none; }
 .email-keyboard-demo:focus-visible .mail-app { outline: 1px solid var(--color-accent); outline-offset: 4px; }
 .email-keyboard-content { flex: 1; min-height: 440px; }

@@ -353,6 +353,95 @@ client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
 
+## Presentations (PowerPoint)
+
+Uploaded `.pptx` files open in the `pptx` block (`/app/pptx/<documentId>`).
+With the `enable-pptx-editor` PostHog flag (on by default in development
+builds; `ENABLE_PPTX_EDITOR` overrides it) the block is a full editor; with the
+flag off it offers the file for download, as before. The deck is parsed,
+rendered, and edited by the Rust `pptx_engine` compiled to WebAssembly in a
+lazily created module worker, so the first open of a session pays a
+one-time ~6 MB module download.
+
+Layout and test hooks:
+
+- **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one
+  `pptx-thumbnail` button per slide, labelled `Slide N: <title>`, with
+  `aria-current="true"` on the current one. Hovering a thumbnail shows
+  **Duplicate slide**, **Hide slide**/**Show slide**, and **Delete slide**;
+  thumbnails reorder by dragging. **New slide** is at the bottom.
+- **Stage** (`pptx-stage`, focusable): click selects a shape
+  (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
+  `pptx-rotate-handle`); drag moves it; handles resize and rotate. The stage
+  covers exactly the slide, so slide point `(x, y)` is at
+  `stage.left + x × stage.width / slideWidth`.
+- **Text**: double-click (or Enter/F2 on a selected text shape) starts
+  editing; keystrokes go to a hidden textarea (`pptx-text-input`, "Slide
+  text"). The caret is `pptx-caret`, an SVG line of zero width, so assert it
+  with `toBeAttached()`, not `toBeVisible()`. Escape stops editing.
+- **Tables**: double-click a cell to edit it in `pptx-cell-input`; Enter
+  commits, Escape cancels.
+- **Toolbar** (`pptx-toolbar`): Undo, Redo, Text box (`pptx-insert-textbox`),
+  Insert shape (`pptx-insert-shape`, then `pptx-shape-<preset>`), Picture,
+  Table (`pptx-insert-table`), Bold (`pptx-bold`), Italic, Underline,
+  Smaller/Larger text (`pptx-font-size` shows the size), Text color, alignment,
+  Bullets, Shape fill, the save state, Save, and Download.
+- **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
+  Cmd/Ctrl+S saves now, Cmd/Ctrl+D duplicates, arrows nudge (Shift for 10 pt),
+  Delete removes, PageUp/PageDown change slides.
+- **Speaker notes** (`pptx-notes`) sit below the slide.
+
+Changes save automatically 1.5 s after the last edit, when the tab is hidden,
+and when the editor closes; `pptx-save-state` reads **Saved**, **Unsaved
+changes**, **Saving…**, or **Save failed**. Each save stores the whole file as a
+new document version through `PUT /documents/{id}/simple_save` (limit
+100 MB). Viewers without edit access get the same view with editing disabled.
+
+Everyone with the deck open edits it live. The deck is shared through the sync
+service as Loro maps (one entry per shape, slide position, relationship, and
+part; see `pptx_engine::collab`), seeded from the stored file the first time
+someone who can edit opens it. Others' edits appear within a second; edits to
+different shapes merge, and edits to the same shape resolve to the latest.
+Undo takes back only your own changes. Presence shows in the stage's top-right
+corner (`pptx-collaborators`, one `pptx-collaborator` avatar per person), as
+outlines with name tags around the shapes others selected
+(`pptx-peer-selection`, `data-peer="<name>"`, "… is typing" while they type),
+and as colored dots on the thumbnails of slides they are on. A viewer who opens
+a deck nobody has shared yet, or anyone when the sync service is unreachable,
+gets the stored file read-only.
+
+Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
+and every shape with its id, kind, placeholder role, position in points, text,
+and table cells; `ReadContent` returns the same description) and changes them
+with `EditPresentation`, an atomic batch of the editor's own operations saved
+as a new version. When an `EditPresentation` result arrives in chat, an open
+editor of that deck reloads in place and says **Updated with changes made
+elsewhere.** If it holds unsaved edits it keeps them and says the deck also
+changed elsewhere; saving those edits replaces the other version.
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web`:
+
+```sh
+bunx vite --config src/features/block-pptx/browser-test/vite.config.ts
+# http://127.0.0.1:3018/?deck=generated/kitchen-sink-financial.pptx
+```
+
+It mounts the real editor and worker over corpus decks (`?readonly` for a
+viewer, `?autosave=0` to save only on demand). `window.pptxFixture` exposes
+`saved()`, `saves()`, `engine()`, `errors()`, `notices()`, and
+`externalEdit(ops)`, which applies operations to the stored copy with a second
+engine instance and announces the change the way an AI edit does. With `document`, `user`, `worker`, `socket`, and `token` parameters the
+fixture is one collaborator on the real sync service
+(`browser-test/sync-server.ts` boots the compiled sync Worker in Miniflare;
+build it once with `\cd services/sync-service && just worker-build`), and
+`window.pptxFixture.collab` exposes the connection status, peers, and shared
+entries. Its Playwright suites run with
+`bunx playwright test --config src/features/block-pptx/browser-test/playwright.config.ts`
+(set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
+`/app/pptx` route itself needs a backend with an uploaded deck.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts

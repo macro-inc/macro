@@ -8,10 +8,6 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
-  AssignTasksToInitiative: {
-    call: types.AssignTasksToInitiative;
-    response: types.AssignTasksToInitiativeResponse;
-  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -100,6 +96,10 @@ type ToolParserMap = {
   EditDocument: {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
+  };
+  EditPresentation: {
+    call: types.EditPresentation;
+    response: types.PresentationEditOutcome;
   };
   EditSpreadsheet: {
     call: types.EditSpreadsheet;
@@ -234,15 +234,15 @@ type ToolParserMap = {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
   };
+  ReadPresentation: {
+    call: types.ReadPresentation;
+    response: types.ReadPresentationResponse;
+  };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
   ReadSpreadsheet: {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
-  };
-  ReadTaskInitiatives: {
-    call: types.ReadTaskInitiatives;
-    response: types.TaskProjectReferences;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameChannel: {
@@ -294,18 +294,10 @@ type ToolParserMap = {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
   };
-  SetTaskInitiative: {
-    call: types.SetTaskInitiative;
-    response: types.TaskProjectOutcomes;
-  };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
-  };
-  UnassignTasksFromInitiative: {
-    call: types.UnassignTasksFromInitiative;
-    response: types.UnassignTasksFromInitiativeResponse;
   };
   UpdateCalendarEvent: {
     call: types.UpdateCalendarEvent;
@@ -330,10 +322,6 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
-  AssignTasksToInitiative: {
-    call: schemas.AssignTasksToInitiative,
-    response: schemas.AssignTasksToInitiativeResponse,
-  },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
@@ -425,6 +413,10 @@ const toolParserMap = {
   EditDocument: {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
+  },
+  EditPresentation: {
+    call: schemas.EditPresentation,
+    response: schemas.PresentationEditOutcome,
   },
   EditSpreadsheet: {
     call: schemas.EditSpreadsheet,
@@ -580,6 +572,10 @@ const toolParserMap = {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
   },
+  ReadPresentation: {
+    call: schemas.ReadPresentation,
+    response: schemas.ReadPresentationResponse,
+  },
   ReadProject: {
     call: schemas.ReadProject,
     response: schemas.ReadProjectResponse,
@@ -588,10 +584,6 @@ const toolParserMap = {
   ReadSpreadsheet: {
     call: schemas.ReadSpreadsheet,
     response: schemas.SpreadsheetResponse,
-  },
-  ReadTaskInitiatives: {
-    call: schemas.ReadTaskInitiatives,
-    response: schemas.TaskProjectReferences,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
   RenameChannel: {
@@ -646,18 +638,10 @@ const toolParserMap = {
     call: schemas.SetSenderPolicy,
     response: schemas.SetSenderPolicyResponse,
   },
-  SetTaskInitiative: {
-    call: schemas.SetTaskInitiative,
-    response: schemas.TaskProjectOutcomes,
-  },
   Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
   TextEditorCodeExecution: {
     call: schemas.TextEditorCodeExecution,
     response: schemas.TextEditorCodeExecutionResponse,
-  },
-  UnassignTasksFromInitiative: {
-    call: schemas.UnassignTasksFromInitiative,
-    response: schemas.UnassignTasksFromInitiativeResponse,
   },
   UpdateCalendarEvent: {
     call: schemas.UpdateCalendarEvent,
@@ -696,10 +680,6 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
-  AssignTasksToInitiative: {
-    call: types.AssignTasksToInitiative;
-    response: types.AssignTasksToInitiativeResponse;
-  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -788,6 +768,10 @@ type ToolDataMap = {
   EditDocument: {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
+  };
+  EditPresentation: {
+    call: types.EditPresentation;
+    response: types.PresentationEditOutcome;
   };
   EditSpreadsheet: {
     call: types.EditSpreadsheet;
@@ -922,15 +906,15 @@ type ToolDataMap = {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
   };
+  ReadPresentation: {
+    call: types.ReadPresentation;
+    response: types.ReadPresentationResponse;
+  };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
   ReadSpreadsheet: {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
-  };
-  ReadTaskInitiatives: {
-    call: types.ReadTaskInitiatives;
-    response: types.TaskProjectReferences;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameChannel: {
@@ -982,18 +966,10 @@ type ToolDataMap = {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
   };
-  SetTaskInitiative: {
-    call: types.SetTaskInitiative;
-    response: types.TaskProjectOutcomes;
-  };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
     response: types.TextEditorCodeExecutionResponse;
-  };
-  UnassignTasksFromInitiative: {
-    call: types.UnassignTasksFromInitiative;
-    response: types.UnassignTasksFromInitiativeResponse;
   };
   UpdateCalendarEvent: {
     call: types.UpdateCalendarEvent;

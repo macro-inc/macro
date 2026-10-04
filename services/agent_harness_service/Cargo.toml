@@ -79,6 +79,7 @@ macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
+system_properties = { path = "../../crates/system_properties" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }

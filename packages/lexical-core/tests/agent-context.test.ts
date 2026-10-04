@@ -171,7 +171,7 @@ describe('composeAgentContextPrompt', () => {
       blockParams: {},
     })}</m-document-mention>`;
     const guidance =
-      "Read the project's current description before starting. Call ReadInitiative with the linked project's initiativeId, then ReadContent with the returned project's descriptionDocumentId.";
+      "Read the project's current description before starting. Call ReadInitiative with the linked project's initiativeId; its description field holds the project's description.";
     const composed = composeAgentContextPrompt({
       promptMarkdown: `You were assigned ${task}.\n\nProject: ${project}. ${guidance}`,
     });

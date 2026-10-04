@@ -13,6 +13,7 @@ import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -173,6 +174,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     // Pins control the title row only. The panel lists every assigned property.
     const visible = mergedProperties().filter((property) => {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
+      // A task's project has its own row beside the properties.
+      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT) {
         return false;
       }
       if (props.propertyFilter && !props.propertyFilter(property)) {
