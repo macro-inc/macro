@@ -507,7 +507,9 @@ Layout and test hooks:
   direction `fig-layout-direction`, gap `fig-field-gap` as a number or
   `Auto`, padding `fig-field-padding-h|v`, and the alignment grid
   `fig-layout-align`), width and height sizing (`fig-sizing-w|h`: Fixed,
-  Hug, Fill) and `fig-absolute` for layers in auto layout, effects, and
+  Hug, Fill) and `fig-absolute` for layers in auto layout, constraints
+  (`fig-constraint-h|v`; children follow them when their frame is resized,
+  and groups scale theirs), effects, and
   export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color.

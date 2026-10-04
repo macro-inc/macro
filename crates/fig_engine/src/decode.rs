@@ -676,11 +676,12 @@ pub fn props(m: MsgRef) -> Props {
         );
     }
     p.boolean_operation = m.enum_name("booleanOperation").map(Into::into);
-    if let (Some(h), Some(v)) = (
+    let (h, v) = (
         m.enum_name("horizontalConstraint"),
         m.enum_name("verticalConstraint"),
-    ) {
-        p.constraints = Some((h.into(), v.into()));
+    );
+    if h.is_some() || v.is_some() {
+        p.constraints = Some((h.unwrap_or("MIN").into(), v.unwrap_or("MIN").into()));
     }
     p.description = m
         .str("description")

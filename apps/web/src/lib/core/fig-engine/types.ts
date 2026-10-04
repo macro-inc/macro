@@ -219,6 +219,8 @@ export interface NodeInfo {
   sizing: [Sizing, Sizing] | null;
   /** Set when the layer is in an auto layout frame. */
   layoutParent: 'AUTO' | 'ABSOLUTE' | null;
+  /** In a frame whose resizing the layer's constraints follow. */
+  constrained: boolean;
   constraints: [string, string] | null;
   exportSettings: ExportSetting[];
   mainComponent: string | null;

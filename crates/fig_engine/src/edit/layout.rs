@@ -681,5 +681,71 @@ impl Txn<'_> {
     }
 }
 
+impl Txn<'_> {
+    /// Moves and resizes the children of `i` as their constraints say, as
+    /// `i` goes from `old` to `new` size. Groups and boolean operations scale
+    /// their children; stacks lay out theirs (only absolutely positioned
+    /// children follow constraints).
+    pub(super) fn apply_constraints(&mut self, i: NodeIdx, old: Vec2, new: Vec2) {
+        let node_type = self.doc.props(i).node_type();
+        let scales = matches!(node_type, NodeType::Group | NodeType::BooleanOperation);
+        if !(scales || node_type.is_frame_like()) || node_type == NodeType::Instance {
+            return;
+        }
+        let stack = self.is_stack(i);
+        let children = self.doc.node(i).children.clone();
+        for c in children {
+            let props = self.doc.props(c);
+            if self.doc.node(c).removed {
+                continue;
+            }
+            let absolute = props.layout_child.as_ref().is_some_and(|l| l.is_absolute());
+            if stack && !absolute {
+                continue;
+            }
+            let (h, v) = if scales {
+                ("SCALE".into(), "SCALE".into())
+            } else {
+                props
+                    .constraints
+                    .clone()
+                    .unwrap_or_else(|| ("MIN".into(), "MIN".into()))
+            };
+            let b = self.local_bounds(c);
+            let (x, w) = constrain(&h, b.x, b.w, old.x, new.x);
+            let (y, ht) = constrain(&v, b.y, b.h, old.y, new.y);
+            if (w - b.w).abs() > EPS || (ht - b.h).abs() > EPS {
+                let width = ((w - b.w).abs() > EPS).then_some(w.max(0.01));
+                let height = ((ht - b.h).abs() > EPS).then_some(ht.max(0.01));
+                self.size_child(c, width, height);
+            }
+            let now = self.local_bounds(c);
+            let (dx, dy) = (x - now.x, y - now.y);
+            if dx.abs() > EPS || dy.abs() > EPS {
+                let mut t = self.doc.props(c).transform();
+                t.m02 += dx;
+                t.m12 += dy;
+                self.edit(c, flags::TRANSFORM).transform = Some(t);
+            }
+        }
+    }
+}
+
+/// A child's new start and length on one axis, for a constraint, when its
+/// frame goes from `old` to `new` long.
+fn constrain(constraint: &str, pos: f64, len: f64, old: f64, new: f64) -> (f64, f64) {
+    let d = new - old;
+    match constraint {
+        "MAX" => (pos + d, len),
+        "CENTER" => (pos + d / 2.0, len),
+        "STRETCH" => (pos, len + d),
+        "SCALE" if old > 0.0 => {
+            let k = new / old;
+            (pos * k, len * k)
+        }
+        _ => (pos, len),
+    }
+}
+
 #[cfg(test)]
 mod test;

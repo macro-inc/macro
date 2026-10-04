@@ -50,6 +50,7 @@ enum StackJustify MIN CENTER MAX SPACE_EVENLY SPACE_BETWEEN SPACE_AROUND SPACE_E
 enum StackSize FIXED RESIZE_TO_FIT RESIZE_TO_FIT_WITH_IMPLICIT_SIZE
 enum StackPositioning AUTO ABSOLUTE
 enum StackWrap NO_WRAP WRAP
+enum ConstraintType MIN CENTER MAX STRETCH SCALE FIXED_MIN FIXED_MAX
 enum TextDecoration NONE UNDERLINE STRIKETHROUGH
 enum TextCase ORIGINAL UPPER LOWER TITLE SMALL_CAPS SMALL_CAPS_FORCED
 struct GUID sessionID:uint localID:uint
@@ -72,7 +73,7 @@ message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[] de
 message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:NodeChange[]
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -603,6 +604,12 @@ impl<'s> Build<'s> {
         }
         if edits & flags::TEXT != 0 {
             self.text(m, p);
+        }
+        if edits & flags::CONSTRAINTS != 0
+            && let Some((h, v)) = &p.constraints
+        {
+            self.set_enum(m, "horizontalConstraint", h);
+            self.set_enum(m, "verticalConstraint", v);
         }
         if edits & flags::AUTO_LAYOUT != 0 {
             self.auto_layout(m, p.auto_layout.as_deref());

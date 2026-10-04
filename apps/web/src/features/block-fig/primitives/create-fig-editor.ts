@@ -61,7 +61,12 @@ export interface Patch {
   sizingHorizontal?: Sizing;
   sizingVertical?: Sizing;
   layoutPositioning?: 'AUTO' | 'ABSOLUTE';
+  constraintHorizontal?: Constraint;
+  constraintVertical?: Constraint;
 }
+
+/** How a layer follows its frame's resizing. */
+export type Constraint = 'MIN' | 'MAX' | 'CENTER' | 'STRETCH' | 'SCALE';
 
 /** A paint as the editor sends it: an existing one kept, or a solid. */
 export interface PaintSpec {

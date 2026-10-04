@@ -28,7 +28,11 @@ import { cssColor, cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
 import type { PaintSpec, Patch } from '../primitives/create-fig-editor';
-import { AutoLayoutControls, SizingControls } from './auto-layout-controls';
+import {
+  AutoLayoutControls,
+  ConstraintControls,
+  SizingControls,
+} from './auto-layout-controls';
 import {
   NumberField,
   PaintEditRow,
@@ -535,15 +539,33 @@ export function DesignPanel(props: {
                     </label>
                   </Show>
                 </Show>
-                <Show when={info().clipsContent && info().childCount > 0}>
-                  <span class="text-ink-muted">Clips content</span>
-                </Show>
-                <Show when={info().constraints}>
-                  {(c) => (
-                    <span class="text-ink-muted">
-                      Constraints: {title(c()[0])} · {title(c()[1])}
-                    </span>
-                  )}
+                <Show
+                  when={props.onPatch && info().constrained}
+                  fallback={
+                    <>
+                      <Show
+                        when={
+                          !props.onPatch &&
+                          info().clipsContent &&
+                          info().childCount > 0
+                        }
+                      >
+                        <span class="text-ink-muted">Clips content</span>
+                      </Show>
+                      <Show when={info().constraints}>
+                        {(c) => (
+                          <span class="text-ink-muted">
+                            Constraints: {title(c()[0])} · {title(c()[1])}
+                          </span>
+                        )}
+                      </Show>
+                    </>
+                  }
+                >
+                  <ConstraintControls
+                    constraints={info().constraints}
+                    onPatch={(patch) => props.onPatch?.(patch, false)}
+                  />
                 </Show>
               </Section>
               <Show

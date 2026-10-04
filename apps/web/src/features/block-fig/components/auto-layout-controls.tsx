@@ -9,7 +9,7 @@ import type { AutoLayout, NodeInfo, Sizing } from '@core/fig-engine/types';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { For, Show } from 'solid-js';
-import type { Patch } from '../primitives/create-fig-editor';
+import type { Constraint, Patch } from '../primitives/create-fig-editor';
 import { ChoiceRow, NumberField, ParsedField } from './design-fields';
 
 const icon = 'size-3.5';
@@ -197,5 +197,67 @@ export function SizingControls(props: {
         </For>
       </div>
     </Show>
+  );
+}
+
+const HORIZONTAL_CONSTRAINTS = [
+  ['MIN', 'Left'],
+  ['MAX', 'Right'],
+  ['STRETCH', 'Left & right'],
+  ['CENTER', 'Center'],
+  ['SCALE', 'Scale'],
+] as const;
+
+const VERTICAL_CONSTRAINTS = [
+  ['MIN', 'Top'],
+  ['MAX', 'Bottom'],
+  ['STRETCH', 'Top & bottom'],
+  ['CENTER', 'Center'],
+  ['SCALE', 'Scale'],
+] as const;
+
+/** How the layer follows its frame when the frame is resized. */
+export function ConstraintControls(props: {
+  constraints: [string, string] | null;
+  onPatch: (patch: Patch) => void;
+}) {
+  const current = (axis: 0 | 1) => props.constraints?.[axis] ?? 'MIN';
+  return (
+    <div class="flex flex-col gap-1" data-testid="fig-constraints">
+      <span class="text-ink-muted">Constraints</span>
+      <div class="grid grid-cols-2 gap-1.5">
+        <For each={[0, 1] as const}>
+          {(axis) => (
+            <select
+              class="min-w-0 rounded-md bg-inset px-2 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent"
+              aria-label={
+                axis === 0 ? 'Horizontal constraint' : 'Vertical constraint'
+              }
+              data-testid={axis === 0 ? 'fig-constraint-h' : 'fig-constraint-v'}
+              onChange={(e) => {
+                const v = e.currentTarget.value;
+                props.onPatch(
+                  axis === 0
+                    ? { constraintHorizontal: v as Constraint }
+                    : { constraintVertical: v as Constraint }
+                );
+              }}
+            >
+              <For
+                each={
+                  axis === 0 ? HORIZONTAL_CONSTRAINTS : VERTICAL_CONSTRAINTS
+                }
+              >
+                {([value, label]) => (
+                  <option value={value} selected={value === current(axis)}>
+                    {label}
+                  </option>
+                )}
+              </For>
+            </select>
+          )}
+        </For>
+      </div>
+    </div>
   );
 }

@@ -50,6 +50,8 @@ pub mod flags {
     pub const AUTO_LAYOUT: u32 = 1 << 19;
     /// How a layer sits in its auto layout parent.
     pub const LAYOUT_CHILD: u32 = 1 << 20;
+    /// How a layer follows its frame when the frame is resized.
+    pub const CONSTRAINTS: u32 = 1 << 21;
 }
 
 /// A paint as the editor describes it.
@@ -131,6 +133,10 @@ pub struct Patch {
     /// `ABSOLUTE` takes a layer out of its auto layout parent's flow;
     /// `AUTO` puts it back.
     pub layout_positioning: Option<String>,
+    /// How the layer follows its frame's resizing: `MIN` (left or top),
+    /// `MAX`, `CENTER`, `STRETCH` (both sides), or `SCALE`.
+    pub constraint_horizontal: Option<String>,
+    pub constraint_vertical: Option<String>,
 }
 
 /// A length as the design panel shows it: `PIXELS`, `PERCENT` (of the font
@@ -497,6 +503,8 @@ impl<'a> Txn<'a> {
             return;
         }
         let node_type = props.node_type();
+        self.apply_constraints(i, old, Vec2::new(w, h));
+        let props = self.doc.props(i);
         let sx = if old.x > 0.0 { w / old.x } else { 1.0 };
         let sy = if old.y > 0.0 { h / old.y } else { 1.0 };
         let fill = props.fill_geometry.clone();
@@ -626,6 +634,21 @@ impl<'a> Txn<'a> {
             p.corner_radii = Some(CornerRadii::uniform(r.max(0.0)));
             p.fill_geometry = None;
             p.stroke_geometry = None;
+        }
+        if patch.constraint_horizontal.is_some() || patch.constraint_vertical.is_some() {
+            let (h, v) = self
+                .doc
+                .props(i)
+                .constraints
+                .clone()
+                .unwrap_or_else(|| ("MIN".into(), "MIN".into()));
+            let pick = |new: &Option<String>, old: Arc<str>| -> Arc<str> {
+                new.as_deref().map(Into::into).unwrap_or(old)
+            };
+            self.edit(i, flags::CONSTRAINTS).constraints = Some((
+                pick(&patch.constraint_horizontal, h),
+                pick(&patch.constraint_vertical, v),
+            ));
         }
         if let Some(c) = patch.clip_content {
             self.edit(i, flags::CLIP).clip_disabled = Some(!c);

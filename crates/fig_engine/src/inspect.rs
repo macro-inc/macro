@@ -124,6 +124,8 @@ pub struct NodeInfo {
     /// The layer is in an auto layout frame's flow (or `ABSOLUTE`ly
     /// positioned in one).
     pub layout_parent: Option<&'static str>,
+    /// The layer is in a frame whose resizing its constraints follow.
+    pub constrained: bool,
     pub constraints: Option<(String, String)>,
     pub export_settings: Vec<crate::model::ExportSetting>,
     /// For instances: the main component's name.
@@ -337,6 +339,15 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
                 crate::edit::layout::axis_sizing(doc, node.src, false),
             )
         }),
+        constrained: node.path.is_none()
+            && doc.node(node.src).parent.is_some_and(|p| {
+                let pp = doc.props(p);
+                let t = pp.node_type();
+                t.is_frame_like()
+                    && t != NodeType::Instance
+                    && (pp.auto_layout.as_ref().is_none_or(|a| !a.is_stack())
+                        || props.layout_child.as_ref().is_some_and(|c| c.is_absolute()))
+            }),
         layout_parent: node
             .path
             .is_none()

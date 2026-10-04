@@ -276,6 +276,27 @@ test('lays out with auto layout', async ({ page }) => {
   await expect(page.getByTestId('fig-field-w')).toHaveValue('150');
 });
 
+test('keeps layers pinned with constraints', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('f');
+  await dragOnCanvas(page, [50, 50], [350, 250]);
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [250, 100], [300, 150]);
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('200');
+  await page.getByTestId('fig-constraint-h').selectOption('MAX');
+  await canvas.focus();
+  await page.keyboard.press('Shift+Enter');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Frame 1');
+  await page.getByTestId('fig-field-w').fill('400');
+  await page.getByTestId('fig-field-w').press('Enter');
+  await canvas.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('300');
+});
+
 test('edits fills from the design panel and undoes', async ({ page }) => {
   await openNew(page);
   await page.getByTestId('fig-canvas').focus();

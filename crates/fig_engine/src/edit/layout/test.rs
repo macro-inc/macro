@@ -262,3 +262,61 @@ fn wraps_layers_in_a_hugging_stack() {
     // 40 + 40 gap + 60 wide, as tall as the taller one.
     assert_eq!(doc.props(frame).size(), Vec2::new(140.0, 30.0));
 }
+
+#[test]
+fn children_follow_their_constraints() {
+    let original = blank("x");
+    let mut doc = Document::open(&original).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = row(&mut doc, &mut h);
+    // Kids at x 10, 90, 170 (widths 40, 60, 20) in a 300 wide frame.
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"set","ids":["{}"],"props":{{"constraintHorizontal":"MAX"}}}},
+                {{"op":"set","ids":["{}"],"props":{{"constraintHorizontal":"STRETCH","constraintVertical":"CENTER"}}}},
+                {{"op":"set","ids":["{}"],"props":{{"constraintHorizontal":"SCALE"}}}}]"#,
+            kids[0], kids[1], kids[2]
+        ),
+    );
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"set","ids":["{frame}"],"props":{{"width":600,"height":200}}}}]"#),
+    );
+    assert_eq!(bounds(&doc, &kids[0]).0, 310.0);
+    let (x, y, w, _) = bounds(&doc, &kids[1]);
+    assert_eq!((x, w), (90.0, 360.0));
+    assert_eq!(y, 60.0, "centred: 10 + 100 / 2");
+    let (x, _, w, _) = bounds(&doc, &kids[2]);
+    assert_eq!((x, w), (340.0, 40.0));
+    let reopened = Document::open(&save(&doc, &original).unwrap()).unwrap();
+    let c = reopened
+        .props(idx(&reopened, &kids[1]))
+        .constraints
+        .clone()
+        .unwrap();
+    assert_eq!((&*c.0, &*c.1), ("STRETCH", "CENTER"));
+}
+
+#[test]
+fn groups_scale_their_layers() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (_, kids) = row(&mut doc, &mut h);
+    let group = apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"group","ids":["{}","{}"]}}]"#, kids[0], kids[1]),
+    )[0]
+    .clone();
+    let (_, _, gw, _) = bounds(&doc, &group);
+    assert_eq!(gw, 140.0);
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"set","ids":["{group}"],"props":{{"width":280}}}}]"#),
+    );
+    assert_eq!(bounds(&doc, &kids[1]).2, 120.0);
+}
