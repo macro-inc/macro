@@ -203,14 +203,8 @@ exports[`real-world XLSX corpus > github-alibhatti23-dcf-comps-lbo-merger… 1`]
 {
   "calculation": {
     "compared": 432,
-    "matched": 404,
-    "mismatchedFunctions": {
-      "(no function)": 1,
-      "IFERROR": 25,
-      "MAX": 1,
-      "MIN": 1,
-      "SUMPRODUCT": 25,
-    },
+    "matched": 432,
+    "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 843,
@@ -538,7 +532,18 @@ exports[`real-world XLSX corpus > libreoffice-missing-path-external-shift… 1`]
 
 exports[`real-world XLSX corpus > nrel-sam-ppa-single-owner-project-finan… 1`] = `
 {
-  "calculation": "IronCalc takes minutes to evaluate this model’s debt-sizing rows; the product reports a calculation timeout.",
+  "calculation": {
+    "compared": 16248,
+    "matched": 15716,
+    "mismatchedFunctions": {
+      "(no function)": 244,
+      "IF": 52,
+      "ISNUMBER": 22,
+      "LOOKUP": 180,
+      "SUM": 78,
+    },
+    "volatile": 0,
+  },
   "cells": 18067,
   "formulas": 16248,
   "roundTrip": "identical",
@@ -559,16 +564,8 @@ exports[`real-world XLSX corpus > nrel-sam-residential-solar-cash-flow.xl… 1`]
 {
   "calculation": {
     "compared": 22431,
-    "matched": 21993,
-    "mismatchedFunctions": {
-      "(no function)": 1,
-      "AND": 25,
-      "IF": 434,
-      "ISNUMBER": 432,
-      "NPV": 3,
-      "ROUND": 20,
-      "SUM": 37,
-    },
+    "matched": 22431,
+    "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 23003,
@@ -592,12 +589,8 @@ exports[`real-world XLSX corpus > obr-efo-ready-reckoner-spring-2025.xlsx 1`] = 
 {
   "calculation": {
     "compared": 4601,
-    "matched": 4552,
-    "mismatchedFunctions": {
-      "(no function)": 14,
-      "SUM": 28,
-      "SUMIF": 7,
-    },
+    "matched": 4601,
+    "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 8608,
@@ -886,11 +879,12 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
 {
   "calculation": {
     "compared": 1281,
-    "matched": 1219,
+    "matched": 1221,
     "mismatchedFunctions": {
+      "ADDRESS": 1,
       "AND": 1,
       "AVEDEV": 3,
-      "DATE": 6,
+      "DATE": 5,
       "DAY": 2,
       "DEVSQ": 2,
       "INDEX": 1,
@@ -898,7 +892,6 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
       "LEFT": 3,
       "LOOKUP": 1,
       "MAXA": 1,
-      "MIN": 2,
       "MINA": 1,
       "MODE": 4,
       "MONTH": 2,
@@ -1047,7 +1040,7 @@ exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
 {
   "calculation": {
     "compared": 438,
-    "matched": 412,
+    "matched": 413,
     "mismatchedFunctions": {
       "AGGREGATE": 1,
       "AREAS": 1,
@@ -1068,7 +1061,6 @@ exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
       "PHONETIC": 1,
       "TEXT": 1,
       "TREND": 2,
-      "TYPE": 1,
       "XIRR": 1,
       "XNPV": 1,
     },

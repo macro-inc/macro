@@ -68,7 +68,7 @@
         "@fullcalendar/interaction": "^6.1.21",
         "@fullcalendar/timegrid": "^6.1.21",
         "@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#6ddd6600e20436388f169e936b610fe93944b7b0",
-        "@ironcalc/wasm": "0.8.4",
+        "@ironcalc/wasm": "workspace:*",
         "@kobalte/core": "^0.13.11",
         "@leeoniya/ufuzzy": "^1.0.19",
         "@lexical/history": "0.45.0",
@@ -375,7 +375,7 @@
       "name": "@macro-inc/spreadsheet",
       "version": "0.1.0",
       "dependencies": {
-        "@ironcalc/wasm": "0.8.4",
+        "@ironcalc/wasm": "workspace:*",
         "@loro-mirror/core": "workspace:*",
         "loro-crdt": "catalog:",
         "ssf": "0.11.2",
@@ -395,7 +395,7 @@
         "@ai-sdk/google": "^3.0.83",
         "@ai-sdk/openai": "^3.0.73",
         "@hono/zod-validator": "^0.8.0",
-        "@ironcalc/wasm": "0.8.4",
+        "@ironcalc/wasm": "workspace:*",
         "@loro-mirror/core": "workspace:*",
         "@macro-inc/collaboration": "workspace:*",
         "@macro-inc/lexical-core": "workspace:*",
@@ -495,6 +495,10 @@
         "tsx": "^4.20.3",
         "wrangler": "^4.25.1",
       },
+    },
+    "vendor/ironcalc/pkg": {
+      "name": "@ironcalc/wasm",
+      "version": "0.8.4-macro.1",
     },
   },
   "trustedDependencies": [
@@ -1107,7 +1111,7 @@
 
     "@internationalized/number": ["@internationalized/number@3.6.7", "", { "dependencies": { "@swc/helpers": "^0.5.0" } }, "sha512-3ji1fcrT+FPAK86UqEhB/psHixYo6niWPJtt7+qRaYFynt/BaJG8GhAPimtWUpEiVSTq8ZM8L5psMxGquiB/Vg=="],
 
-    "@ironcalc/wasm": ["@ironcalc/wasm@0.8.4", "", {}, "sha512-kdOr3nzb170Wrd2S371QEuCRC3q1EoBdu9CCOU06E3L2dr3cswOuSJmlJM4KHumqFaWEpWb2kiBfOz/szgZ/3Q=="],
+    "@ironcalc/wasm": ["@ironcalc/wasm@workspace:vendor/ironcalc/pkg"],
 
     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],
 

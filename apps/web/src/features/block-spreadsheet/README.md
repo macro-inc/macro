@@ -197,8 +197,8 @@ nothing) and patches only the results that changed, so large workbooks do not
 cross the worker boundary on every keystroke. A restarted worker receives the full
 workbook again.
 
-Inside the worker, `createSpreadsheetCalculator()` lazily initializes the pinned `@ironcalc/wasm`
-engine. Loading failures can be retried. A calculation session keeps one model per
+Inside the worker, `createSpreadsheetCalculator()` lazily initializes the `@ironcalc/wasm`
+engine, a fork vendored in `vendor/ironcalc` (see its README). Loading failures can be retried. A calculation session keeps one model per
 workbook: an edit re-enters only the changed cells, evaluates, and re-reads the
 changed cells, every formula, and every spill, returning just the results that
 changed. Entering a 450,000-cell workbook takes seconds; updating it takes about a
@@ -268,8 +268,9 @@ continues to work normally.
 Primary integration references: [IronCalc JavaScript bindings](https://docs.ironcalc.com/programming/javascript-bindings.html),
 [engine-only versus XLSX bindings](https://github.com/ironcalc/IronCalc/blob/main/bindings/wasm/README.md),
 and [upstream WASM API](https://github.com/ironcalc/IronCalc/blob/main/bindings/wasm/src/lib.rs).
-The npm package is pinned to `0.8.4`; engine upgrades should run the adapter tests
-and compare formula, error, and formatting behavior before updating the pin.
+The engine is vendored from upstream `main` in `vendor/ironcalc`, with Macro's
+patches listed in its README; upgrades should run the adapter and corpus tests and
+compare formula, error, and formatting behavior before replacing it.
 
 ## MVP boundaries and next steps
 

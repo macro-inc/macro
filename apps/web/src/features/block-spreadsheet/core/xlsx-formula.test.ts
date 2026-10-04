@@ -145,6 +145,22 @@ describe('implicit intersection', () => {
     );
   });
 
+  it('reads the first value of ROW and COLUMN over ranges outside arrays', () => {
+    expect(mark('COLUMN(B11:D11)')).toBe('@COLUMN(B11:D11)');
+    expect(mark('ROW(1:2)+1')).toBe('@ROW(1:2)+1');
+    expect(mark('SUM(ROW(Revenue))')).toBe('SUM(@ROW(Revenue))');
+    expect(mark('SUMPRODUCT(ROW(A1:A3)*B1:B3)')).toBe(
+      'SUMPRODUCT(ROW(A1:A3)*B1:B3)'
+    );
+    expect(mark('ROW(A1)+COLUMN()')).toBe('ROW(A1)+COLUMN()');
+    expect(exportImplicitIntersections('@COLUMN(B11:D11)', names, true)).toBe(
+      'COLUMN(B11:D11)'
+    );
+    expect(exportImplicitIntersections('@ROW(A1:A3)', names, false)).toBe(
+      '_xlfn.SINGLE(ROW(A1:A3))'
+    );
+  });
+
   it('keeps ranges where Excel passes or evaluates them whole', () => {
     for (const formula of [
       'SUM(A1:A9)',

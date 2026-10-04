@@ -368,8 +368,12 @@ function argumentClass(name: string, index: number): 'V' | 'R' | 'A' {
   return classes[Math.min(index, classes.length - 1)] as 'V' | 'R' | 'A';
 }
 
+/** Functions returning one value per cell of a reference argument. */
+const ARRAY_RESULT_FUNCTIONS = new Set(['ROW', 'COLUMN']);
+
 type Operand = {
-  /** First and last piece of a multi-cell range or range name. */
+  /** First and last piece of a multi-cell range, range name, or a call
+   * returning an array for one. */
   start: number;
   end: number;
   /** An explicit `@` precedes the operand. */
@@ -385,6 +389,7 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
     let at = index + step;
     while (at >= 0 && at < pieces.length && !pieces[at].text.trim()) at += step;
     return {
+      at,
       piece: pieces[at] as Piece | undefined,
       spaced: at !== index + step,
     };
@@ -481,6 +486,23 @@ function rangeOperands(pieces: Piece[], rangeNames: ReadonlySet<string>) {
           (!named?.name || argumentClass(named.name, named.argument) === 'V');
     } else intersects = true;
     operands.push({ start, end, marked, intersects });
+    // ROW(A1:A3) and COLUMN(A1:A3) return arrays; outside an array argument
+    // a legacy formula reads their first value, as `@ROW(A1:A3)` does.
+    if (
+      !marked &&
+      top?.name &&
+      ARRAY_RESULT_FUNCTIONS.has(top.name) &&
+      before.piece?.text === '(' &&
+      after.piece?.text === ')'
+    ) {
+      const call = before.at - 1;
+      operands.push({
+        start: call,
+        end: after.at,
+        marked: pieces[call - 1]?.text === '@',
+        intersects: !arrayContext,
+      });
+    }
     index = end;
   }
   return operands;

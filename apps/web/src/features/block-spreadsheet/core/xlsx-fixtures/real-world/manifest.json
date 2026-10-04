@@ -15,8 +15,7 @@
     "file": "nrel-sam-ppa-single-owner-project-finance-cash-flow.xlsx",
     "title": "NREL/NLR System Advisor Model — PPA Single Owner project-finance cash flow (Send to Excel with equations, SAM 2022.11.21)",
     "source": "https://sam.nlr.gov/financial",
-    "license": "NLR/DOE Data & Software notice (free use/copy with notice retained)",
-    "skipCalculation": "IronCalc takes minutes to evaluate this model’s debt-sizing rows; the product reports a calculation timeout."
+    "license": "NLR/DOE Data & Software notice (free use/copy with notice retained)"
   },
   {
     "file": "nrel-sam-residential-solar-cash-flow.xlsx",
