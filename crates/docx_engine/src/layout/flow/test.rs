@@ -736,3 +736,35 @@ fn sections_keep_space_before_from_word_2013_on() {
         assert!((two.y - y).abs() < 0.01, "mode {mode}: {}", two.y);
     }
 }
+
+#[test]
+fn footnotes_leave_room_for_the_continuation_notice() {
+    let separator = r#"<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>"#;
+    // An empty paragraph with a 20pt mark: 23pt high.
+    let notice = r#"<w:footnote w:type="continuationNotice" w:id="0"><w:p><w:pPr><w:rPr><w:sz w:val="40"/></w:rPr></w:pPr></w:p></w:footnote>"#;
+    let note = r#"<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> The note.</w:t></w:r></w:p></w:footnote>"#;
+    let body = format!(
+        r#"<w:p><w:r><w:t>Text</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p>{LETTER}"#
+    );
+    let note_bottom = |footnotes: &str| {
+        let l = layout(
+            &body,
+            &Parts {
+                footnotes: Some(footnotes),
+                ..arial_10()
+            },
+        );
+        let line = l.pages[0]
+            .lines_of(&StoryRef::Footnote(1))
+            .next()
+            .expect("the note");
+        line.y + line.line().height
+    };
+    let plain = note_bottom(&format!("{separator}{note}"));
+    assert!((plain - 720.0).abs() < 0.01, "{plain}");
+    let with_notice = note_bottom(&format!("{separator}{notice}{note}"));
+    assert!(
+        (with_notice - (720.0 - 20.0 * 1.1499)).abs() < 0.01,
+        "{with_notice}"
+    );
+}

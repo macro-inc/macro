@@ -6,27 +6,51 @@ use super::super::offset_items;
 use super::super::stack::{Stack, StackCtx, stack_story};
 use super::Flow;
 
+/// The story id of the footnote separator.
+const SEPARATOR: i64 = -1;
+/// The story id of the footnote continuation notice.
+const CONTINUATION_NOTICE: i64 = -3;
+
 impl Flow<'_, '_> {
+    /// The footnote of a special `kind` (the separator, the continuation
+    /// notice), laid out.
+    fn special_note(&self, kind: &str, story: StoryRef) -> Option<Stack> {
+        let notes = self.env.doc.footnotes();
+        let note = notes.by_id.values().find(|n| n.kind == kind)?;
+        Some(stack_story(
+            self.env,
+            &note.story,
+            None,
+            &StackCtx {
+                story,
+                width: self.section().text_width(),
+                table: Default::default(),
+                fields: self.fields(),
+                note_number: None,
+                float_frames: false,
+                page: None,
+            },
+        ))
+    }
+
+    /// The room Word keeps below a page's footnotes for the notice that a
+    /// note goes on overleaf, when the document has one.
+    fn notice_height(&mut self) -> f32 {
+        if self.notice.is_none() {
+            let story = StoryRef::Footnote(CONTINUATION_NOTICE);
+            let height = self
+                .special_note("continuationNotice", story)
+                .map_or(0.0, |s| s.height);
+            self.notice = Some(height);
+        }
+        self.notice.unwrap_or(0.0)
+    }
+
     pub(super) fn separator_stack(&mut self) -> Option<Stack> {
         if self.separator.is_none() {
-            let notes = self.env.doc.footnotes();
-            let sep = notes.by_id.values().find(|n| n.kind == "separator");
-            let width = self.section().text_width();
+            let sep = self.special_note("separator", StoryRef::Footnote(SEPARATOR));
             self.separator = Some(match sep {
-                Some(n) => stack_story(
-                    self.env,
-                    &n.story,
-                    None,
-                    &StackCtx {
-                        story: StoryRef::Footnote(-1),
-                        width,
-                        table: Default::default(),
-                        fields: self.fields(),
-                        note_number: None,
-                        float_frames: false,
-                        page: None,
-                    },
-                ),
+                Some(stack) => stack,
                 None => Stack {
                     items: vec![Item::Rule {
                         x0: 0.0,
@@ -96,7 +120,7 @@ impl Flow<'_, '_> {
         }
         let mut h: f32 = fresh.iter().map(|&id| self.note_height(id)).sum();
         if self.cur.as_ref().is_some_and(|c| c.notes.is_empty()) {
-            h += self.separator_stack().map_or(0.0, |s| s.height);
+            h += self.separator_stack().map_or(0.0, |s| s.height) + self.notice_height();
         }
         h
     }

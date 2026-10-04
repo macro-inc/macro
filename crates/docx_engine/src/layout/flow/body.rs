@@ -72,6 +72,8 @@ pub(in crate::layout) struct Flow<'e, 'a> {
     boxes: HashMap<BlockId, Arc<ParaBox>>,
     note_stacks: HashMap<i64, Stack>,
     separator: Option<Stack>,
+    /// Height of the footnote continuation notice, once measured.
+    notice: Option<f32>,
     total_pages: i64,
 }
 
@@ -96,6 +98,7 @@ impl<'e, 'a> Flow<'e, 'a> {
             boxes: HashMap::new(),
             note_stacks: HashMap::new(),
             separator: None,
+            notice: None,
             total_pages,
         }
     }
