@@ -229,9 +229,13 @@ impl Parse<'_> {
                 }
                 "buNone" => p.bu_kind = Some(BulletKind::None),
                 "buChar" => {
-                    p.bu_kind = Some(BulletKind::Char(
-                        doc.attr(c, "char").unwrap_or("\u{2022}").to_owned(),
-                    ))
+                    // Only the first character shows (SmartArt drawings
+                    // often write the bullet twice).
+                    let ch = doc
+                        .attr(c, "char")
+                        .and_then(|s| s.chars().next())
+                        .unwrap_or('\u{2022}');
+                    p.bu_kind = Some(BulletKind::Char(ch.to_string()))
                 }
                 "buAutoNum" => {
                     p.bu_kind = Some(BulletKind::AutoNum {

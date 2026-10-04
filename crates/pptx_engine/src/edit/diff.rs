@@ -20,7 +20,8 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
             .get(slide)
             .and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
     };
-    // Charts live in parts of their own; editing one changes the slide's rendering.
+    // Charts and SmartArt live in parts of their own; editing one changes
+    // the slide's rendering.
     let charts_unchanged = |slide: &str| {
         let rels = match after.rels.get(slide) {
             Some(r) => std::sync::Arc::clone(r),
@@ -30,7 +31,10 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
             },
         };
         rels.iter()
-            .filter(|r| r.rel_type == rel_type::CHART && r.mode == TargetMode::Internal)
+            .filter(|r| {
+                (r.rel_type == rel_type::CHART || r.rel_type.contains("/diagram"))
+                    && r.mode == TargetMode::Internal
+            })
             .all(|r| same(&rels.resolve(r)))
     };
     // Themes, masters, and layouts are drawn under every slide that uses

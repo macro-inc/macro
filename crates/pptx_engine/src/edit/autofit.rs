@@ -51,6 +51,9 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
         return Ok(());
     };
     if slide.doc.local(node) == "graphicFrame" {
+        if super::smartart::is_smart_art(&slide.doc, node) {
+            return super::smartart::refresh(pres, part, id, fonts);
+        }
         return refit_table(pres, part, id, fonts);
     }
     if slide.doc.local(node) != "sp" {

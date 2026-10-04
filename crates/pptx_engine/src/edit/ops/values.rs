@@ -268,6 +268,31 @@ pub enum NewShape {
         #[serde(default)]
         title: Option<String>,
     },
+    /// A SmartArt graphic (PowerPoint's Insert ▸ SmartArt), laid out to
+    /// fill the box. PowerPoint's default box on a 16:9 slide is 640 x 426.7
+    /// points at (160, 56.7).
+    SmartArt {
+        /// Layout: `default` (Basic Block List), `vList2` (Vertical Bullet
+        /// List), `hList1` (Horizontal Bullet List), `process1` (Basic
+        /// Process), `chevron1` (Basic Chevron Process), `cycle2` (Basic
+        /// Cycle), `radial1` (Basic Radial: the first item is the center,
+        /// level-2 items around it), `hierarchy1` (Hierarchy), `orgChart1`
+        /// (Organization Chart), `venn1` (Basic Venn), or `pyramid1` (Basic
+        /// Pyramid).
+        layout: String,
+        /// The text as an outline (one item per node); omit for the
+        /// layout's sample nodes showing the "[Text]" prompt.
+        #[serde(default)]
+        items: Option<Vec<super::SmartArtItem>>,
+        /// Color variation (`accent1_2` when omitted; see `editSmartArt`'s
+        /// `setColors`).
+        #[serde(default)]
+        colors: Option<String>,
+        /// SmartArt style (`simple1` when omitted; see `editSmartArt`'s
+        /// `setStyle`).
+        #[serde(default)]
+        style: Option<String>,
+    },
 }
 
 /// One series of chart data.

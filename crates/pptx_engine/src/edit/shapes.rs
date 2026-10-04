@@ -555,6 +555,20 @@ pub fn add_shape(
             };
             chart_new::create(pres, part, id, n, &spec, [x, y, w, h])?
         }
+        NewShape::SmartArt {
+            layout,
+            items,
+            colors,
+            style,
+        } => {
+            let spec = super::smartart::NewSmartArt {
+                layout,
+                items: items.as_deref(),
+                colors: colors.as_deref(),
+                style: style.as_deref(),
+            };
+            super::smartart::create(pres, part, id, n, &spec, [x, y, w, h])?
+        }
     };
     let doc = pres.xml_mut(part)?;
     let el = import_fragment(doc, &fragment)?;
