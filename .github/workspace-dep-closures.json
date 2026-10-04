@@ -5879,6 +5879,9 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "fig_engine": [
+      "crates/fig_engine"
+    ],
     "filter_ast": [
       "crates/filter_ast"
     ],
@@ -7676,7 +7679,6 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
       "crates/rate_limit",

@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "fig_engine"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so native tools and tests link it.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# The `fig_render` developer CLI (page renders, document dumps, fidelity
+# scoring against the thumbnails Figma embeds in its files).
+cli = ["dep:clap"]
+
+[[bin]]
+name = "fig_render"
+required-features = ["cli"]
+
+[dependencies]
+clap = { workspace = true, optional = true }
+gif = { workspace = true }
+image-webp = { workspace = true }
+miniz_oxide = { workspace = true }
+png = { workspace = true }
+ruzstd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tiny-skia = { workspace = true }
+zune-core = { workspace = true }
+zune-jpeg = { workspace = true }
+
+# The wasm-bindgen shell in `wasm`, which only exists on wasm32. Target-gated
+# rather than behind a feature so a native build never resolves any of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

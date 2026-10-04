@@ -1,0 +1,99 @@
+/**
+ * Typed surface of the generated wasm package (`fig_engine`), loaded
+ * dynamically so the repo type-checks without the generated artifacts.
+ *
+ * Build the package with:
+ *   just build-fig-engine-wasm
+ * which runs wasm-pack over crates/fig_engine into
+ * src/lib/core/fig-engine/wasm/ (gitignored).
+ */
+
+/** One open `.fig` file. Mirrors `fig_engine::wasm::FigFile`. */
+export interface WasmFigFile {
+  /** `FileSummary` JSON. */
+  summary: () => string;
+  /** `PageLayout` JSON. */
+  openPage: (page: number) => string;
+  /** Premultiplied RGBA, `width × height × 4` bytes. */
+  render: (
+    page: number,
+    x: number,
+    y: number,
+    scale: number,
+    width: number,
+    height: number,
+    outline: boolean
+  ) => Uint8Array;
+  /** `LayerRow[]` JSON. */
+  layers: (page: number, parent?: string | null) => string;
+  /** `LayerRow[]` JSON for a JSON array of ids. */
+  rows: (page: number, ids: string) => string;
+  /** `NodeInfo` JSON. */
+  nodeInfo: (page: number, id: string) => string;
+  /** `LayerRow[]` JSON. */
+  hitTest: (page: number, x: number, y: number, tolerance: number) => string;
+  /** `LayerRow[]` JSON. */
+  ancestry: (page: number, id: string) => string;
+  /** `NodeGeometry[]` JSON for a JSON array of ids. */
+  geometry: (page: number, ids: string) => string;
+  /** SVG path data, page coordinates. */
+  outline: (page: number, id: string) => string;
+  /** `SearchHit[]` JSON. */
+  search: (page: number, query: string, limit: number) => string;
+  /** `string[]` JSON. */
+  inRect: (
+    page: number,
+    parent: string | null | undefined,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) => string;
+  /** PNG bytes. */
+  exportPng: (page: number, id: string, scale: number) => Uint8Array;
+  thumbnail: () => Uint8Array | undefined;
+  free: () => void;
+}
+
+interface FigEngineWasmModule {
+  default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
+  FigFile: new (bytes: Uint8Array) => WasmFigFile;
+}
+
+let modulePromise: Promise<FigEngineWasmModule> | undefined;
+
+/** Loads and initializes the wasm module once per worker; a failed load is tried again. */
+export function loadFigEngineWasm(): Promise<FigEngineWasmModule> {
+  if (!modulePromise) {
+    modulePromise = (async () => {
+      try {
+        const base = new URL('./wasm/fig_engine.js', import.meta.url);
+        const mod = (await import(
+          /* @vite-ignore */ base.href
+        )) as FigEngineWasmModule;
+        // The generated JS's own relative wasm URL 404s in production; a static
+        // `new URL` makes vite emit and rewrite the binary.
+        const wasmUrl = new URL('./wasm/fig_engine_bg.wasm', import.meta.url);
+        await mod.default({ module_or_path: wasmUrl });
+        return mod;
+      } catch (error) {
+        modulePromise = undefined;
+        throw error;
+      }
+    })();
+  }
+  return modulePromise;
+}
+
+/** Whether an error came from a trapped (panicked) wasm instance. */
+export function isWasmTrap(error: unknown): boolean {
+  if (
+    typeof WebAssembly !== 'undefined' &&
+    error instanceof WebAssembly.RuntimeError
+  )
+    return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /unreachable|recursive use of an object|already borrowed|already mutably borrowed/i.test(
+    message
+  );
+}

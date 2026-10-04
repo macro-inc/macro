@@ -1,0 +1,332 @@
+//! A decoded `.fig` file: every node change as a tree, the geometry blobs,
+//! and the image files.
+
+use crate::container::Container;
+use crate::decode;
+use crate::error::{FigError, Result, corrupt};
+use crate::geometry::{self, ParsedPath};
+use crate::kiwi::{Decoder, Kind, MsgRef, Reader, Schema};
+use crate::model::{Guid, NodeType, Props};
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
+
+/// Index of a node in [`Document::nodes`].
+pub type NodeIdx = u32;
+
+pub struct Node {
+    pub props: Props,
+    pub parent: Option<NodeIdx>,
+    pub children: Vec<NodeIdx>,
+}
+
+/// The binary blobs (path geometry, mostly) a file carries, kept in the
+/// decompressed message they arrived in and parsed on first use.
+pub struct Blobs {
+    data: Vec<u8>,
+    ranges: Vec<(u32, u32)>,
+    paths: Vec<OnceLock<Option<Arc<ParsedPath>>>>,
+}
+
+impl Blobs {
+    pub fn len(&self) -> usize {
+        self.ranges.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ranges.is_empty()
+    }
+
+    pub fn bytes(&self, index: u32) -> Option<&[u8]> {
+        let &(start, len) = self.ranges.get(index as usize)?;
+        self.data.get(start as usize..(start + len) as usize)
+    }
+
+    /// The path a geometry blob encodes, parsed once.
+    pub fn path(&self, index: u32) -> Option<Arc<ParsedPath>> {
+        self.paths
+            .get(index as usize)?
+            .get_or_init(|| {
+                self.bytes(index)
+                    .and_then(geometry::parse_blob)
+                    .map(Arc::new)
+            })
+            .clone()
+    }
+}
+
+pub struct Document {
+    /// Format version from the file header.
+    pub version: u32,
+    pub nodes: Vec<Node>,
+    pub by_guid: HashMap<Guid, NodeIdx>,
+    /// `overrideKey` → the node carrying it, for instance override paths.
+    pub by_override_key: HashMap<Guid, Guid>,
+    pub root: NodeIdx,
+    /// The pages shown in the pages list, in order.
+    pub pages: Vec<NodeIdx>,
+    pub blobs: Blobs,
+    /// Encoded image files by lowercase hex SHA-1.
+    pub images: HashMap<String, Vec<u8>>,
+    /// Figma's own render of part of the first page.
+    pub thumbnail: Option<Vec<u8>>,
+    /// The file name Figma saved, from `meta.json`.
+    pub file_name: Option<String>,
+}
+
+impl Document {
+    /// Decodes a `.fig` file (either container layout).
+    pub fn open(bytes: &[u8]) -> Result<Document> {
+        let container = Container::open(bytes)?;
+        Self::from_container(container)
+    }
+
+    pub fn from_container(container: Container) -> Result<Document> {
+        let mut schema = Schema::decode(&container.schema)?;
+        decode::restrict_schema(&mut schema);
+        let mut table = NodeTable::default();
+        let ranges = read_message(&schema, &container.message, &mut table)?;
+        let NodeTable {
+            mut nodes,
+            by_guid,
+            by_override_key,
+        } = table;
+
+        // Link parents; children are ordered by their fractional position.
+        let mut root = None;
+        for i in 0..nodes.len() {
+            let parent = nodes[i].props.parent.and_then(|g| by_guid.get(&g).copied());
+            match parent {
+                Some(p) if p as usize != i => {
+                    nodes[i].parent = Some(p);
+                    nodes[p as usize].children.push(i as NodeIdx);
+                }
+                _ => {
+                    if nodes[i].props.node_type() == NodeType::Document && root.is_none() {
+                        root = Some(i as NodeIdx);
+                    }
+                }
+            }
+        }
+        for i in 0..nodes.len() {
+            if nodes[i].children.len() > 1 {
+                let mut children = std::mem::take(&mut nodes[i].children);
+                children.sort_by(|&a, &b| {
+                    let pa = &nodes[a as usize].props;
+                    let pb = &nodes[b as usize].props;
+                    pa.position
+                        .as_deref()
+                        .unwrap_or("")
+                        .cmp(pb.position.as_deref().unwrap_or(""))
+                        .then_with(|| pa.guid.cmp(&pb.guid))
+                });
+                nodes[i].children = children;
+            }
+        }
+        let root = root
+            .or_else(|| {
+                nodes
+                    .iter()
+                    .position(|n| n.parent.is_none())
+                    .map(|i| i as NodeIdx)
+            })
+            .ok_or_else(|| corrupt("the file has no document node"))?;
+        let pages: Vec<NodeIdx> = nodes[root as usize]
+            .children
+            .iter()
+            .copied()
+            .filter(|&c| {
+                let p = &nodes[c as usize].props;
+                p.node_type() == NodeType::Canvas && !p.internal_only.unwrap_or(false)
+            })
+            .collect();
+        if pages.is_empty() {
+            return Err(FigError::Unsupported("the file has no pages".into()));
+        }
+
+        let file_name = container
+            .meta
+            .as_ref()
+            .and_then(|m| m.get("file_name"))
+            .and_then(|n| n.as_str())
+            .map(str::to_owned);
+        // Keep only the blob bytes; the rest of the message has been read.
+        let total: usize = ranges.iter().map(|&(_, len)| len as usize).sum();
+        let mut data = Vec::with_capacity(total);
+        let ranges: Vec<(u32, u32)> = ranges
+            .into_iter()
+            .map(|(start, len)| {
+                let at = data.len() as u32;
+                let bytes = container
+                    .message
+                    .get(start as usize..(start + len) as usize)
+                    .unwrap_or_default();
+                data.extend_from_slice(bytes);
+                (at, bytes.len() as u32)
+            })
+            .collect();
+        drop(container.message);
+        let paths = (0..ranges.len()).map(|_| OnceLock::new()).collect();
+        Ok(Document {
+            version: container.version,
+            nodes,
+            by_guid,
+            by_override_key,
+            root,
+            pages,
+            blobs: Blobs {
+                data,
+                ranges,
+                paths,
+            },
+            images: container.images,
+            thumbnail: container.thumbnail,
+            file_name,
+        })
+    }
+
+    pub fn node(&self, index: NodeIdx) -> &Node {
+        &self.nodes[index as usize]
+    }
+
+    pub fn props(&self, index: NodeIdx) -> &Props {
+        &self.nodes[index as usize].props
+    }
+
+    pub fn find(&self, guid: Guid) -> Option<NodeIdx> {
+        self.by_guid.get(&guid).copied()
+    }
+
+    /// The page's canvas color.
+    pub fn page_background(&self, page: NodeIdx) -> crate::model::Color {
+        self.props(page)
+            .background_color
+            .unwrap_or(crate::model::Color {
+                r: 0.96,
+                g: 0.96,
+                b: 0.96,
+                a: 1.0,
+            })
+    }
+}
+
+/// The nodes of a file as its node changes stream in, so each decoded node is
+/// moved once rather than staged in a second list of the whole file.
+#[derive(Default)]
+struct NodeTable {
+    nodes: Vec<Node>,
+    by_guid: HashMap<Guid, NodeIdx>,
+    by_override_key: HashMap<Guid, Guid>,
+}
+
+impl NodeTable {
+    fn reserve(&mut self, count: usize) {
+        self.nodes.reserve(count);
+        self.by_guid.reserve(count);
+    }
+
+    fn add(&mut self, p: Props) {
+        let Some(guid) = p.guid else { return };
+        if let Some(key) = p.override_key {
+            self.by_override_key.insert(key, guid);
+        }
+        match self.by_guid.get(&guid) {
+            // A later change to the same node (clipboard data) updates it.
+            Some(&existing) => self.nodes[existing as usize].props.merge(&p),
+            None => {
+                self.by_guid.insert(guid, self.nodes.len() as NodeIdx);
+                self.nodes.push(Node {
+                    props: p,
+                    parent: None,
+                    children: Vec::new(),
+                });
+            }
+        }
+    }
+}
+
+/// Reads the top-level `Message`, converting node changes one at a time so
+/// the generic decoded form of the whole file never exists at once. Returns
+/// the blobs as ranges of `data`.
+fn read_message(schema: &Schema, data: &[u8], table: &mut NodeTable) -> Result<Vec<(u32, u32)>> {
+    let root = schema
+        .def_index("Message")
+        .ok_or_else(|| corrupt("the schema has no Message type"))?;
+    let decoder = Decoder::new(schema);
+    let mut r = Reader::new(data);
+    let mut ranges = Vec::new();
+    let def = schema.def(root);
+    loop {
+        let id = r.var_uint()?;
+        if id == 0 {
+            break;
+        }
+        let field = def
+            .field_by_id(id)
+            .ok_or_else(|| corrupt(format!("kiwi: Message has no field {id}")))?;
+        match (field.name.as_str(), field.ty) {
+            ("nodeChanges", crate::kiwi::Ty::Def(node_def)) if field.array => {
+                let count = r.var_uint()? as usize;
+                table.reserve(count.min(1 << 20));
+                for _ in 0..count {
+                    let msg = decoder.decode(&mut r, node_def)?;
+                    let m = MsgRef::new(schema, &msg);
+                    if !decode::is_removed(&m) {
+                        table.add(decode::props(m));
+                    }
+                }
+            }
+            ("blobs", crate::kiwi::Ty::Def(blob_def)) if field.array => {
+                let count = r.var_uint()? as usize;
+                ranges.reserve(count.min(1 << 20));
+                for _ in 0..count {
+                    ranges.push(read_blob(schema, &decoder, &mut r, blob_def)?);
+                }
+            }
+            _ => decoder.skip_field(&mut r, field, 0)?,
+        }
+    }
+    Ok(ranges)
+}
+
+fn read_blob(
+    schema: &Schema,
+    decoder: &Decoder,
+    r: &mut Reader,
+    blob_def: u32,
+) -> Result<(u32, u32)> {
+    let def = schema.def(blob_def);
+    let mut range = (0, 0);
+    let mut read_field = |r: &mut Reader, field: &crate::kiwi::Field| -> Result<()> {
+        if field.name == "bytes" && field.array && field.ty == crate::kiwi::Ty::Byte {
+            let len = r.var_uint()?;
+            let start = r.at as u32;
+            r.take(len as usize)?;
+            range = (start, len);
+            Ok(())
+        } else {
+            decoder.skip_field(r, field, 0)
+        }
+    };
+    match def.kind {
+        Kind::Struct => {
+            for field in &def.fields {
+                read_field(r, field)?;
+            }
+        }
+        Kind::Message => loop {
+            let id = r.var_uint()?;
+            if id == 0 {
+                break;
+            }
+            let field = def
+                .field_by_id(id)
+                .ok_or_else(|| corrupt(format!("kiwi: Blob has no field {id}")))?;
+            read_field(r, field)?;
+        },
+        Kind::Enum => return Err(corrupt("kiwi: Blob is an enum")),
+    }
+    Ok(range)
+}
+
+#[cfg(test)]
+mod test;

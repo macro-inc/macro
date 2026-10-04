@@ -1,0 +1,436 @@
+/**
+ * The right panel: the selected layer's properties as Figma's design panel
+ * shows them (read-only), CSS as Dev Mode writes it, and export.
+ * Presentational: data and actions come in as props.
+ */
+
+import type {
+  EffectInfo,
+  NodeInfo,
+  PageSummary,
+  PaintInfo,
+} from '@core/fig-engine/types';
+import Copy from '@phosphor/copy.svg';
+import DownloadSimple from '@phosphor/download-simple.svg';
+import { Button } from '@ui/components/Button';
+import { createSignal, For, type JSX, Show } from 'solid-js';
+import { cssColor, cssFor } from '../core/css';
+import { formatMeasure } from '../core/measure';
+
+function Section(props: { title: string; children: JSX.Element }) {
+  return (
+    <section class="border-edge-muted border-b px-3 py-3">
+      <h3 class="mb-2 font-semibold text-ink text-xs">{props.title}</h3>
+      <div class="flex flex-col gap-1.5">{props.children}</div>
+    </section>
+  );
+}
+
+function Field(props: { label: string; value: string | number }) {
+  return (
+    <div class="flex min-w-0 items-center gap-2 rounded-md bg-inset px-2 py-1">
+      <span class="shrink-0 text-ink-muted">{props.label}</span>
+      <span
+        class="min-w-0 truncate text-ink tabular-nums"
+        title={String(props.value)}
+      >
+        {props.value}
+      </span>
+    </div>
+  );
+}
+
+const fmt = (v: number) => formatMeasure(v);
+const percent = (v: number) => `${Math.round(v * 100)}%`;
+const title = (s: string) =>
+  s
+    .toLowerCase()
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+function swatchBackground(p: PaintInfo): string {
+  if (p.type === 'SOLID' && p.color) return cssColor(p.color, p.alpha ?? 1);
+  if (p.stops) {
+    const stops = p.stops
+      .map((s) => `${cssColor(s.color, s.alpha)} ${s.position * 100}%`)
+      .join(', ');
+    return `linear-gradient(90deg, ${stops})`;
+  }
+  return 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 8px 8px';
+}
+
+function paintLabel(p: PaintInfo): string {
+  if (p.type === 'SOLID' && p.color) return p.color;
+  if (p.type === 'IMAGE') return `Image · ${title(p.scaleMode ?? 'FILL')}`;
+  return (
+    title(p.type.replace('GRADIENT_', '')) +
+    (p.type.startsWith('GRADIENT') ? ' gradient' : '')
+  );
+}
+
+function PaintRow(props: { paint: PaintInfo }) {
+  const p = () => props.paint;
+  return (
+    <div
+      class="flex items-center gap-2 rounded-md bg-inset px-2 py-1"
+      classList={{ 'opacity-50': !p().visible }}
+    >
+      <span
+        class="size-4 shrink-0 rounded-sm border border-edge-muted"
+        style={{ background: swatchBackground(p()) }}
+      />
+      <span class="min-w-0 flex-1 truncate font-mono text-ink">
+        {paintLabel(p())}
+      </span>
+      <Show when={p().type === 'SOLID' && (p().alpha ?? 1) < 1}>
+        <span class="text-ink-muted tabular-nums">
+          {percent(p().alpha ?? 1)}
+        </span>
+      </Show>
+      <Show when={p().opacity < 1}>
+        <span class="text-ink-muted tabular-nums">{percent(p().opacity)}</span>
+      </Show>
+    </div>
+  );
+}
+
+function EffectRow(props: { effect: EffectInfo }) {
+  const e = () => props.effect;
+  const shadow = () =>
+    e().type === 'DROP_SHADOW' || e().type === 'INNER_SHADOW';
+  return (
+    <div
+      class="flex flex-col gap-1 rounded-md bg-inset px-2 py-1"
+      classList={{ 'opacity-50': !e().visible }}
+    >
+      <span class="text-ink">{title(e().type)}</span>
+      <Show
+        when={shadow()}
+        fallback={<span class="text-ink-muted">Blur {fmt(e().radius)}</span>}
+      >
+        <span class="text-ink-muted tabular-nums">
+          X {fmt(e().x)} · Y {fmt(e().y)} · Blur {fmt(e().radius)} · Spread{' '}
+          {fmt(e().spread)} · #{e().color} {percent(e().alpha)}
+        </span>
+      </Show>
+    </div>
+  );
+}
+
+export function DesignPanel(props: {
+  info: NodeInfo | undefined;
+  selectionCount: number;
+  page: PageSummary | undefined;
+  onExport: (scale: number) => void;
+  onCopyPng: () => void;
+  onCopyText: (text: string) => void;
+}) {
+  const [tab, setTab] = createSignal<'design' | 'code'>('design');
+  return (
+    <div
+      class="flex size-full min-h-0 flex-col text-ink text-xs"
+      data-testid="fig-design-panel"
+    >
+      <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2">
+        <For each={['design', 'code'] as const}>
+          {(t) => (
+            <button
+              type="button"
+              class="rounded-md px-2 py-1 font-medium"
+              classList={{
+                'bg-hover text-ink': tab() === t,
+                'text-ink-muted': tab() !== t,
+              }}
+              onClick={() => setTab(t)}
+            >
+              {t === 'design' ? 'Design' : 'Code'}
+            </button>
+          )}
+        </For>
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <Show
+          when={props.info}
+          fallback={
+            <Show when={props.page}>
+              {(page) => (
+                <Section title="Page">
+                  <Field label="Name" value={page().name} />
+                  <div class="flex items-center gap-2 rounded-md bg-inset px-2 py-1">
+                    <span
+                      class="size-4 rounded-sm border border-edge-muted"
+                      style={{
+                        background: `rgb(${page()
+                          .background.slice(0, 3)
+                          .map((v) => Math.round(v * 255))
+                          .join(',')})`,
+                      }}
+                    />
+                    <span class="text-ink-muted">Canvas color</span>
+                  </div>
+                  <Show when={props.selectionCount > 1}>
+                    <span class="text-ink-muted">
+                      {props.selectionCount} layers selected
+                    </span>
+                  </Show>
+                </Section>
+              )}
+            </Show>
+          }
+        >
+          {(info) => (
+            <Show
+              when={tab() === 'design'}
+              fallback={<CodeTab info={info()} onCopy={props.onCopyText} />}
+            >
+              <div class="border-edge-muted border-b px-3 py-3">
+                <div class="truncate font-semibold text-sm" title={info().name}>
+                  {info().name}
+                </div>
+                <div class="text-ink-muted">
+                  {info().typeLabel}
+                  <Show when={info().mainComponent}>
+                    {(main) => <> of {main()}</>}
+                  </Show>
+                </div>
+                <Show when={info().description}>
+                  {(d) => <p class="mt-1 text-ink-muted">{d()}</p>}
+                </Show>
+              </div>
+              <Section title="Layout">
+                <div class="grid grid-cols-2 gap-1.5">
+                  <Field label="X" value={fmt(info().x)} />
+                  <Field label="Y" value={fmt(info().y)} />
+                  <Field label="W" value={fmt(info().width)} />
+                  <Field label="H" value={fmt(info().height)} />
+                  <Show when={Math.abs(info().rotation) > 0.01}>
+                    <Field label="↻" value={`${fmt(info().rotation)}°`} />
+                  </Show>
+                  <Show when={info().cornerRadius}>
+                    {(r) => (
+                      <Field
+                        label="Radius"
+                        value={
+                          r().top_left === r().top_right &&
+                          r().top_left === r().bottom_left &&
+                          r().top_left === r().bottom_right
+                            ? fmt(r().top_left)
+                            : [
+                                r().top_left,
+                                r().top_right,
+                                r().bottom_right,
+                                r().bottom_left,
+                              ]
+                                .map(fmt)
+                                .join(', ')
+                        }
+                      />
+                    )}
+                  </Show>
+                </div>
+                <Show when={info().clipsContent && info().childCount > 0}>
+                  <span class="text-ink-muted">Clips content</span>
+                </Show>
+                <Show when={info().constraints}>
+                  {(c) => (
+                    <span class="text-ink-muted">
+                      Constraints: {title(c()[0])} · {title(c()[1])}
+                    </span>
+                  )}
+                </Show>
+              </Section>
+              <Show when={info().autoLayout}>
+                {(al) => (
+                  <Section title="Auto layout">
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <Field label="Direction" value={title(al().mode)} />
+                      <Field label="Gap" value={fmt(al().spacing)} />
+                      <Field
+                        label="Padding"
+                        value={[
+                          al().paddingTop,
+                          al().paddingRight,
+                          al().paddingBottom,
+                          al().paddingLeft,
+                        ]
+                          .map(fmt)
+                          .join(' ')}
+                      />
+                      <Show when={al().primaryAlign}>
+                        {(a) => <Field label="Align" value={title(a())} />}
+                      </Show>
+                    </div>
+                  </Section>
+                )}
+              </Show>
+              <Section title="Appearance">
+                <div class="grid grid-cols-2 gap-1.5">
+                  <Field label="Opacity" value={percent(info().opacity)} />
+                  <Field label="Blend" value={title(info().blendMode)} />
+                </div>
+              </Section>
+              <Show when={info().text}>
+                {(t) => (
+                  <Section title="Text">
+                    <Field
+                      label="Font"
+                      value={[t().fontFamily, t().fontStyle]
+                        .filter(Boolean)
+                        .join(' ')}
+                    />
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <Show when={t().fontSize}>
+                        {(s) => <Field label="Size" value={fmt(s())} />}
+                      </Show>
+                      <Show when={t().lineHeight}>
+                        {(lh) => (
+                          <Field
+                            label="Line"
+                            value={
+                              lh()[1] === 'PERCENT'
+                                ? `${fmt(lh()[0])}%`
+                                : lh()[1] === 'RAW'
+                                  ? 'Auto'
+                                  : fmt(lh()[0])
+                            }
+                          />
+                        )}
+                      </Show>
+                      <Show when={t().letterSpacing}>
+                        {(ls) => (
+                          <Field
+                            label="Letter"
+                            value={
+                              ls()[1] === 'PERCENT'
+                                ? `${fmt(ls()[0])}%`
+                                : fmt(ls()[0])
+                            }
+                          />
+                        )}
+                      </Show>
+                      <Show when={t().alignHorizontal}>
+                        {(a) => <Field label="Align" value={title(a())} />}
+                      </Show>
+                    </div>
+                    <Show when={t().fonts.length > 0}>
+                      <span class="text-ink-muted">
+                        Also uses {t().fonts.join(', ')}
+                      </span>
+                    </Show>
+                    <div class="relative">
+                      <p
+                        class="max-h-40 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-inset px-2 py-1.5 text-ink"
+                        data-testid="fig-text-content"
+                      >
+                        {t().characters}
+                        {t().truncated ? '…' : ''}
+                      </p>
+                      <button
+                        type="button"
+                        aria-label="Copy text"
+                        class="absolute top-1 right-1 rounded p-0.5 text-ink-muted hover:text-ink"
+                        onClick={() => props.onCopyText(t().characters)}
+                      >
+                        <Copy class="size-3" />
+                      </button>
+                    </div>
+                  </Section>
+                )}
+              </Show>
+              <Show when={info().fills.length > 0}>
+                <Section title="Fill">
+                  <For each={[...info().fills].reverse()}>
+                    {(p) => <PaintRow paint={p} />}
+                  </For>
+                </Section>
+              </Show>
+              <Show when={info().strokes.length > 0}>
+                <Section title="Stroke">
+                  <For each={[...info().strokes].reverse()}>
+                    {(p) => <PaintRow paint={p} />}
+                  </For>
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <Show when={info().strokeWeight !== null}>
+                      <Field
+                        label="Weight"
+                        value={fmt(info().strokeWeight ?? 0)}
+                      />
+                    </Show>
+                    <Show when={info().strokeAlign}>
+                      {(a) => <Field label="Position" value={title(a())} />}
+                    </Show>
+                    <Show when={info().dashPattern}>
+                      {(d) => (
+                        <Field label="Dash" value={d().map(fmt).join(', ')} />
+                      )}
+                    </Show>
+                  </div>
+                </Section>
+              </Show>
+              <Show when={info().effects.length > 0}>
+                <Section title="Effects">
+                  <For each={info().effects}>
+                    {(e) => <EffectRow effect={e} />}
+                  </For>
+                </Section>
+              </Show>
+              <Show when={info().componentProperties.length > 0}>
+                <Section title="Properties">
+                  <For each={info().componentProperties}>
+                    {(p) => <Field label={title(p.kind)} value={p.name} />}
+                  </For>
+                </Section>
+              </Show>
+              <Section title="Export">
+                <div class="flex flex-wrap gap-1.5">
+                  <For each={[1, 2, 3]}>
+                    {(scale) => (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid={`fig-export-${scale}x`}
+                        onClick={() => props.onExport(scale)}
+                      >
+                        <DownloadSimple />
+                        PNG {scale}x
+                      </Button>
+                    )}
+                  </For>
+                  <Button variant="outline" size="sm" onClick={props.onCopyPng}>
+                    <Copy />
+                    Copy
+                  </Button>
+                </div>
+              </Section>
+            </Show>
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function CodeTab(props: { info: NodeInfo; onCopy: (text: string) => void }) {
+  const css = () => cssFor(props.info).join('\n');
+  return (
+    <Section title="CSS">
+      <div class="relative">
+        <pre
+          class="select-text overflow-x-auto whitespace-pre rounded-md bg-inset p-2 font-mono text-ink"
+          data-testid="fig-css"
+        >
+          {css()}
+        </pre>
+        <button
+          type="button"
+          aria-label="Copy CSS"
+          class="absolute top-1 right-1 rounded p-0.5 text-ink-muted hover:text-ink"
+          onClick={() => props.onCopy(css())}
+        >
+          <Copy class="size-3" />
+        </button>
+      </div>
+    </Section>
+  );
+}

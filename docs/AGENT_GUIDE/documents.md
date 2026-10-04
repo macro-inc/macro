@@ -442,6 +442,64 @@ entries. Its Playwright suites run with
 installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
 `/app/pptx` route itself needs a backend with an uploaded deck.
 
+## Designs (Figma)
+
+Uploaded `.fig` files open in the `fig` block (`/app/fig/<documentId>`), a
+read-only Figma viewer. With the `enable-fig-viewer` PostHog flag (on by
+default in development builds; `ENABLE_FIG_VIEWER` overrides it) the block shows
+the design; with the flag off it offers the file for download. The file is
+decoded and rasterized by the Rust `fig_engine` compiled to WebAssembly, in a
+primary worker (queries and tiles) plus up to three tile-raster helpers. The
+canvas composites 512 px tiles; while zooming it shows the nearest cached
+scale, then sharpens when the view settles.
+
+Layout and test hooks:
+
+- **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
+  (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
+  (`fig-page` buttons; pages named only with dashes are dividers), and the
+  layer tree (`fig-layer-row`, `data-layer-id` is the Figma node id such as
+  `12:34`, or `I12:34;56:78` inside instances). Rows list top-most first, as
+  Figma does; instance and component rows are purple.
+- **Canvas** (`fig-canvas`): click selects with Figma's rules (inside a
+  top-level frame the click selects the frame's child; sections are
+  transparent; ⌘/Ctrl-click selects the deepest layer; double-click goes one
+  level deeper; Shift-click adds). Dragging draws a selection marquee. Hover
+  outlines what a click would select; holding ⌥ measures from the selection to
+  the hovered layer. Scroll pans, ⌘/Ctrl+scroll or pinch zooms, Space-drag or
+  middle-drag pans.
+- **Design panel** (`fig-design-panel`, toggled with ⌥8): position, size,
+  rotation, radius, opacity and blend, fills, strokes, effects, typography,
+  auto layout, and export buttons (`fig-export-1x|2x|3x`, PNG of the
+  selection). The Code tab shows CSS (`fig-css`). With nothing selected it
+  shows the page name and canvas color.
+- **Toolbar** (`fig-toolbar`): Move (V), Hand (H), the zoom menu
+  (`fig-zoom-menu`, showing the zoom, with zoom, pixel grid, rulers, outline
+  view, and show-UI items), and the shortcuts dialog (`fig-shortcuts`,
+  Ctrl+⇧+?).
+- **Keyboard**, as in Figma: ⇧0 100%, ⇧1 fit, ⇧2 selection, ⌘/Ctrl +/−, N and
+  ⇧N next/previous frame, PageDown/PageUp pages, Enter children, ⇧Enter and
+  Esc parent, Tab/⇧Tab siblings, ⌘/Ctrl+A select all, ⇧R rulers, ⇧' pixel
+  grid, ⌘/Ctrl+Y outline view, ⌘/Ctrl+\ hide UI, ⌘/Ctrl+⇧C copy as PNG,
+  ⌘/Ctrl+⇧E export.
+
+The viewer has a browser fixture that needs no backend. From `apps/web`
+(build the engine first with `just ensure-fig-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-fig/browser-test/vite.config.ts
+# http://127.0.0.1:3019/?file=showcase.fig
+```
+
+It opens files from `crates/fig_engine/tests/fixtures` (the synthetic
+`showcase.fig`), or from any directory named by `FIG_CORPUS_DIR`; the header
+also opens a local `.fig`. `window.figFixture` exposes `engine()`,
+`errors()`, `notices()`, and `downloads()`. The Playwright suite runs with
+`bunx playwright test --config src/features/block-fig/browser-test/playwright.config.ts`
+(set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed). The sections above were verified on this fixture; the `/app/fig`
+route itself needs a backend with an uploaded `.fig`.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
