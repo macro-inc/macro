@@ -4,7 +4,7 @@
 use super::super::super::{Item, StoryRef};
 use super::super::offset_items;
 use super::super::stack::{Stack, StackCtx, stack_story};
-use super::Flow;
+use super::{Flow, MODERN_COMPAT};
 
 /// The story id of the footnote separator.
 const SEPARATOR: i64 = -1;
@@ -34,13 +34,19 @@ impl Flow<'_, '_> {
     }
 
     /// The room Word keeps below a page's footnotes for the notice that a
-    /// note goes on overleaf, when the document has one.
+    /// note goes on overleaf, when the document has one. Only documents
+    /// laid out like Word 2010 and earlier keep it on every page; from Word
+    /// 2013 on the notes reach down to the bottom margin.
     fn notice_height(&mut self) -> f32 {
         if self.notice.is_none() {
             let story = StoryRef::Footnote(CONTINUATION_NOTICE);
-            let height = self
-                .special_note("continuationNotice", story)
-                .map_or(0.0, |s| s.height);
+            let modern = self.env.doc.parts().settings.compat_mode >= MODERN_COMPAT;
+            let height = if modern {
+                0.0
+            } else {
+                self.special_note("continuationNotice", story)
+                    .map_or(0.0, |s| s.height)
+            };
             self.notice = Some(height);
         }
         self.notice.unwrap_or(0.0)
