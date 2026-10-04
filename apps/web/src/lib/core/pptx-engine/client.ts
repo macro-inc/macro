@@ -8,6 +8,7 @@
 
 import type { HistoryState, PptxRequest, PptxResponse } from './protocol';
 import type {
+  CellRef,
   CollabEntries,
   DeckOutline,
   EditOp,
@@ -198,14 +199,22 @@ export async function renderSlideLayer(
   return r.bitmap;
 }
 
-/** Caret stops and lines of a shape's text, or `null` when it holds none. */
+/**
+ * Caret stops and lines of a shape's text, or with `cell` of that table
+ * cell's text (a merged cell's, for a cell it covers), placed where the
+ * renderer draws it. `null` when the shape holds no text.
+ */
 export async function getTextLayout(
   docKey: string,
   index: number,
-  shape: number
+  shape: number,
+  cell?: CellRef
 ): Promise<TextLayoutInfo | null> {
   return (
-    await request({ kind: 'textLayout', docKey, index, shape }, 'textLayout')
+    await request(
+      { kind: 'textLayout', docKey, index, shape, cell },
+      'textLayout'
+    )
   ).layout;
 }
 

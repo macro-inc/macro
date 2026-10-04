@@ -7,6 +7,7 @@ const deck = {
   height: 540,
   layouts: [],
   themeColors: [],
+  tableStyles: [],
   slides: [
     {
       id: 256,
@@ -46,6 +47,25 @@ const deck = {
             rows: [['Q1', 'Revenue\nNet revenue']],
             columnWidths: [1, 1],
             rowHeights: [1],
+            laidOutRowHeights: [1],
+            cells: [
+              [
+                {
+                  rowSpan: 1,
+                  colSpan: 1,
+                  merged: false,
+                  anchor: 'top',
+                  margins: [7.2, 3.6, 7.2, 3.6],
+                },
+                {
+                  rowSpan: 1,
+                  colSpan: 1,
+                  merged: false,
+                  anchor: 'top',
+                  margins: [7.2, 3.6, 7.2, 3.6],
+                },
+              ],
+            ],
           },
         },
       ],

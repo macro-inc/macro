@@ -23,18 +23,44 @@ export interface ParagraphOutline {
   level: number;
 }
 
-/** One grid cell of a table. */
-export interface CellOutline {
-  rowSpan: number;
-  colSpan: number;
-  /** Covered by another cell's merge. */
-  merged: boolean;
-  /** Resolved fill as `#RRGGBB`. */
-  fill?: string;
-  anchor: 'top' | 'middle' | 'bottom';
+export interface TableOutline {
+  /** Cell text by row (`\n` between paragraphs; merged-over cells are empty). */
+  rows: string[][];
+  columnWidths: number[];
+  /** Minimum row heights as stored (rows grow to fit their text). */
+  rowHeights: number[];
+  /** Cells by row and grid column. */
+  cells: CellOutline[][];
+  /**
+   * Row heights as drawn, after rows grew to fit their text. Cell `(r, c)`
+   * starts at the frame's top-left corner plus the sums of the first `c`
+   * column widths and the first `r` of these heights.
+   */
+  laidOutRowHeights: number[];
+  /** The table style, when one is set. */
+  style?: TableStyleOutline;
 }
 
+export type CellAnchor = 'top' | 'middle' | 'bottom';
+
+/** One grid cell of a table. Mirrors `inspect::CellOutline`. */
+export interface CellOutline {
+  /** Rows the cell spans (1 unless merged). */
+  rowSpan: number;
+  /** Grid columns the cell spans (1 unless merged). */
+  colSpan: number;
+  /** Covered by another cell's span: not drawn, and edits go to that cell. */
+  merged: boolean;
+  /** Solid fill as `#RRGGBB`, from the cell or its table style. */
+  fill?: string;
+  anchor: CellAnchor;
+  /** `[left, top, right, bottom]` margins. */
+  margins: [number, number, number, number];
+}
+
+/** A table's style and the parts it emphasizes. */
 export interface TableStyleOutline {
+  /** Style id (a GUID). */
   id: string;
   name: string;
   firstRow: boolean;
@@ -45,16 +71,12 @@ export interface TableStyleOutline {
   bandCol: boolean;
 }
 
-export interface TableOutline {
-  rows: string[][];
-  columnWidths: number[];
-  rowHeights: number[];
-  /** Cell spans and formatting, by row and grid column. */
-  cells?: CellOutline[][];
-  /** Row heights as rendered (rows grow to fit their text). */
-  laidOutRowHeights?: number[];
-  /** The table style and which of its parts apply. */
-  style?: TableStyleOutline;
+/** A table style the deck's tables can use (`DeckOutline.tableStyles`). */
+export interface TableStyleInfo {
+  id: string;
+  name: string;
+  /** `custom` styles are defined by the deck; the rest are PowerPoint's built-in ones. */
+  category: 'custom' | 'light' | 'medium' | 'dark';
 }
 
 export type ChartKind =
@@ -178,13 +200,8 @@ export interface DeckOutline {
   themeColors: [string, string][];
   /** The theme's heading (major) and body (minor) Latin fonts. */
   themeFonts?: { major: string; minor: string };
-  /** Table styles a table can use. */
-  tableStyles?: TableStyleInfo[];
-}
-
-export interface TableStyleInfo {
-  id: string;
-  name: string;
+  /** Table styles to offer: the deck's own, then the built-in ones in gallery order. */
+  tableStyles: TableStyleInfo[];
 }
 
 export interface CaretStop {
@@ -318,6 +335,35 @@ export type NewShape =
 
 export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
 
+/** Which borders of a cell range `formatCells` changes. */
+export type BorderEdges =
+  | 'all'
+  | 'outside'
+  | 'inside'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'insideHorizontal'
+  | 'insideVertical';
+
+/**
+ * A table border change (omitted = unchanged). A border that did not exist
+ * becomes a solid 1 pt `tx1` line unless the change says otherwise.
+ */
+export interface BorderLine {
+  /** Remove the border. */
+  none?: boolean;
+  color?: string;
+  width?: number;
+  dash?: string;
+}
+
+export interface CellBorders {
+  edges: BorderEdges;
+  line: BorderLine;
+}
+
 interface ShapeTarget {
   slide: number;
   shape: number;
@@ -382,6 +428,42 @@ export type EditOp =
   | ({ op: 'deleteTableRow'; row: number } & ShapeTarget)
   | ({ op: 'insertTableColumn'; at: number } & ShapeTarget)
   | ({ op: 'deleteTableColumn'; col: number } & ShapeTarget)
+  /** Merges the rectangle between two corner cells (text joins the top-left cell). */
+  | ({ op: 'mergeCells'; from: CellRef; to: CellRef } & ShapeTarget)
+  /** Splits the merged cell covering `cell` back into grid cells. */
+  | ({ op: 'splitCell'; cell: CellRef } & ShapeTarget)
+  /** Formats the cells between two corners (widened to whole merged cells). */
+  | ({
+      op: 'formatCells';
+      from: CellRef;
+      to: CellRef;
+      /** `{ kind: 'none' }` = no fill (the table background shows). */
+      fill?: FillSpec;
+      borders?: CellBorders;
+      anchor?: CellAnchor;
+      /** `[left, top, right, bottom]` margins. */
+      margins?: [number, number, number, number];
+    } & ShapeTarget)
+  /**
+   * Sets the style (`''` = none) and emphasized parts; omitted fields stay.
+   * A different style clears fills and borders set directly on cells.
+   */
+  | ({
+      op: 'setTableStyle';
+      style?: string;
+      firstRow?: boolean;
+      lastRow?: boolean;
+      firstCol?: boolean;
+      lastCol?: boolean;
+      bandRow?: boolean;
+      bandCol?: boolean;
+    } & ShapeTarget)
+  /** Column widths and minimum row heights (one per column/row); the frame follows. */
+  | ({
+      op: 'setTableGrid';
+      columnWidths?: number[];
+      rowHeights?: number[];
+    } & ShapeTarget)
   | {
       op: 'addSlide';
       layout?: string;

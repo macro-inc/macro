@@ -41,7 +41,10 @@ export interface PresentationEngine {
     mode: 'without' | 'only',
     shape: number
   ) => Promise<ImageBitmap>;
-  /** Lays out a shape's text, or a table cell's. */
+  /**
+   * A shape's text laid out for carets, or with `cell` a table cell's (a
+   * merged cell's, for a cell it covers); `null` when it holds no text.
+   */
   textLayout: (
     index: number,
     shape: number,

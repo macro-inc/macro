@@ -280,9 +280,9 @@ async function serve(
         Transferable[],
       ];
     })
-    .with({ kind: 'textLayout' }, ({ docKey, index, shape }) => {
+    .with({ kind: 'textLayout' }, ({ docKey, index, shape, cell }) => {
       const layout = JSON.parse(
-        documentFor(docKey).textLayout(index, shape)
+        documentFor(docKey).textLayout(index, shape, cell?.row, cell?.col)
       ) as TextLayoutInfo | null;
       return [{ id, ok: true, kind: 'textLayout', layout }, []] as [
         PptxResponse,

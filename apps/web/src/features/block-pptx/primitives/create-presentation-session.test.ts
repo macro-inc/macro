@@ -13,6 +13,7 @@ function deck(title: string, ids = [256, 257]): DeckOutline {
     height: 540,
     layouts: [],
     themeColors: [],
+    tableStyles: [],
     slides: ids.map((id, index) => ({
       id,
       index,

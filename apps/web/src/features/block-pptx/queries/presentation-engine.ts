@@ -22,6 +22,7 @@ import {
   undoEdit,
 } from '@core/pptx-engine/client';
 import type {
+  CellRef,
   CollabEntries,
   EditResult,
   EntryChange,
@@ -58,8 +59,8 @@ function readers(key: string) {
       mode: 'without' | 'only',
       shape: number
     ) => renderSlideLayer(key, index, width, mode, shape),
-    textLayout: (index: number, shape: number) =>
-      getTextLayout(key, index, shape),
+    textLayout: (index: number, shape: number, cell?: CellRef) =>
+      getTextLayout(key, index, shape, cell),
     presetPaths: getPresetPaths,
     save: () => savePresentation(key),
     close: () => closePresentation(key),

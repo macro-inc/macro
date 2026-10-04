@@ -5,7 +5,7 @@
 //! `ImageData`.
 
 use crate::collab::{Entries, EntryChange};
-use crate::edit::{EditOp, Editor};
+use crate::edit::{CellRef, EditOp, Editor};
 use crate::font::FontDb;
 use crate::model::presentation::Presentation;
 use crate::render::Layer;
@@ -119,14 +119,18 @@ impl PptxDocument {
 
     /// The deck outline as JSON (`DeckOutline`).
     pub fn outline(&mut self) -> Result<String, JsError> {
-        let o = self.pres().outline().map_err(js_err)?;
+        let o = FONTS
+            .with(|f| self.pres().outline_with_fonts(&f.borrow()))
+            .map_err(js_err)?;
         to_json(&o)
     }
 
     /// One slide's outline as JSON (`SlideOutline`).
     #[wasm_bindgen(js_name = slideOutline)]
     pub fn slide_outline(&mut self, index: usize) -> Result<String, JsError> {
-        let o = self.pres().slide_outline(index).map_err(js_err)?;
+        let o = FONTS
+            .with(|f| self.pres().slide_outline_with_fonts(index, &f.borrow()))
+            .map_err(js_err)?;
         to_json(&o)
     }
 
@@ -161,11 +165,23 @@ impl PptxDocument {
         Ok(raster.to_straight_rgba())
     }
 
-    /// Lays out a shape's text for carets as JSON (`TextLayoutInfo`, or `null`).
+    /// Lays out a shape's text for carets as JSON (`TextLayoutInfo`, or `null`);
+    /// with `row` and `col`, the text of that table cell.
     #[wasm_bindgen(js_name = textLayout)]
-    pub fn text_layout(&mut self, index: usize, shape: u32) -> Result<String, JsError> {
+    pub fn text_layout(
+        &mut self,
+        index: usize,
+        shape: u32,
+        row: Option<usize>,
+        col: Option<usize>,
+    ) -> Result<String, JsError> {
+        let cell = match (row, col) {
+            (Some(row), Some(col)) => Some(CellRef { row, col }),
+            (None, None) => None,
+            _ => return Err(JsError::new("give both `row` and `col` for a table cell")),
+        };
         let lay = FONTS
-            .with(|f| self.pres().text_layout(index, shape, None, &f.borrow()))
+            .with(|f| self.pres().text_layout(index, shape, cell, &f.borrow()))
             .map_err(js_err)?;
         to_json(&lay)
     }

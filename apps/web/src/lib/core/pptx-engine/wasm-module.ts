@@ -30,8 +30,13 @@ export interface WasmPptxDocument {
     mode: 'without' | 'only',
     shape: number
   ) => Uint8Array;
-  /** `TextLayoutInfo` JSON, or `null`. */
-  textLayout: (index: number, shape: number) => string;
+  /** `TextLayoutInfo` JSON, or `null`; with `row` and `col`, a table cell's. */
+  textLayout: (
+    index: number,
+    shape: number,
+    row?: number,
+    col?: number
+  ) => string;
   /** Applies an `EditOp[]` JSON batch; returns `EditResult` JSON. */
   apply: (ops: string, group?: string) => string;
   breakGroup: () => void;

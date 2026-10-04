@@ -7,6 +7,7 @@
  */
 
 import type {
+  CellRef,
   DeckOutline,
   EditResult,
   EntryChange,
@@ -39,7 +40,13 @@ export type PptxRequest =
       mode: 'without' | 'only';
       shape: number;
     })
-  | (Base & { kind: 'textLayout'; index: number; shape: number })
+  /** A shape's text, or with `cell` the text of that table cell. */
+  | (Base & {
+      kind: 'textLayout';
+      index: number;
+      shape: number;
+      cell?: CellRef;
+    })
   | (Base & { kind: 'apply'; ops: string; group?: string })
   | (Base & { kind: 'breakGroup' })
   | (Base & { kind: 'undo' })
