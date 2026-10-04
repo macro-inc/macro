@@ -87,6 +87,8 @@ export type CollabMarkdownEditorProps = {
   resolveAppLink?: MentionLinkResolver;
   /** Optional status UI rendered by the collab provider. */
   statusChrome?: JSX.Element;
+  /** Loading content shown until the editor has applied its initial state. */
+  loadingFallback?: JSX.Element;
 };
 
 false && fileFolderDrop;
@@ -235,10 +237,18 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
             }}
           />
 
-          <Show when={!editorReady()}>
+          <Show
+            when={
+              !editorReady() && !editorError() && !session.connectionError()
+            }
+          >
             <div class="absolute inset-0 flex flex-col gap-2 pointer-events-none">
-              <div class="h-4 w-2/3 animate-pulse rounded bg-ink/10" />
-              <div class="h-4 w-1/2 animate-pulse rounded bg-ink/10" />
+              {props.loadingFallback ?? (
+                <>
+                  <div class="h-4 w-2/3 animate-pulse rounded bg-ink/10" />
+                  <div class="h-4 w-1/2 animate-pulse rounded bg-ink/10" />
+                </>
+              )}
             </div>
           </Show>
 

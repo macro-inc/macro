@@ -1,20 +1,5 @@
+import type { DocxPackageState } from '@macro-inc/collaboration/docx/schema';
 import { strFromU8, strToU8, unzipSync, type Zippable, zipSync } from 'fflate';
-
-/**
- * A DOCX package as the collaboration layer stores it: the body's top-level
- * elements as addressable blocks, and every other part verbatim.
- *
- * Blocks are keyed by the engine's persisted anchor id (`PtOpenXml:Unid`), so
- * the same paragraph has the same id on every client and survives a reopen.
- */
-export type DocxPackageState = {
-  /** Top-level body elements in document order. */
-  order: string[];
-  /** Block id → standalone element XML. */
-  blocks: ReadonlyMap<string, string>;
-  /** Part name → content. XML parts are text; binary parts are base64 with a `b64:` prefix. `word/document.xml` is the body shell. */
-  parts: ReadonlyMap<string, string>;
-};
 
 export const DOCUMENT_PART = 'word/document.xml';
 const CONTENT_TYPES_PART = '[Content_Types].xml';

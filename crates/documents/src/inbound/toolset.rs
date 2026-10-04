@@ -10,6 +10,7 @@ mod rename_document;
 mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
+mod word_document;
 
 #[cfg(test)]
 mod comment_test;
@@ -35,6 +36,7 @@ use crate::{
         resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
+        word_document::{EditWordDocument, ReadWordDocument},
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -95,6 +97,9 @@ pub struct DocumentToolContext<
     /// Permission-scoped deterministic spreadsheet workflows.
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
+    /// Reading and editing uploaded Word documents through their live copy.
+    pub word_documents: Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc>>,
+
     /// Reading and editing PowerPoint presentations. Hosts without a file
     /// store keep the default, whose calls fail with a clear message; wire
     /// one with [`Self::with_presentation_files`].
@@ -139,6 +144,7 @@ impl<
             comments: self.comments.clone(),
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
+            word_documents: self.word_documents.clone(),
             presentations: self.presentations.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             admission: self.admission.clone(),
@@ -187,6 +193,11 @@ impl<
             editing.clone(),
             document_permission_jwt_secret.clone(),
         ));
+        let word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            service.clone(),
+            editing.clone(),
+            document_permission_jwt_secret.clone(),
+        ));
 
         Self {
             service,
@@ -198,6 +209,7 @@ impl<
             comments,
             messages,
             spreadsheet,
+            word_documents,
             presentations: Arc::new(PresentationService::new(Arc::new(NoPresentationFiles))),
             document_permission_jwt_secret,
             admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
@@ -309,6 +321,8 @@ where
         .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }
 
 fn comment_access_error(err: AccessError) -> ToolCallError {

@@ -1,5 +1,5 @@
+import { DOCX_LORO_CONTAINERS } from '@macro-inc/collaboration/docx/schema';
 import type { LoroDoc } from 'loro-crdt';
-import { DOCX_LORO_CONTAINERS } from './docx-loro';
 
 /**
  * Where a comment thread is anchored in a DOCX: a span of one paragraph's

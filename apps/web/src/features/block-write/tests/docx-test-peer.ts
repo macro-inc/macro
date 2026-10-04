@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
+import {
+  readDocxState,
+  seedDocxState,
+} from '@macro-inc/collaboration/docx/schema';
 import { getWasmExports, initialize } from 'docxodus/core';
 import { LoroDoc } from 'loro-crdt';
 import { bridgeEngine, type DocxEngine } from '../core/docx-engine';
-import { readDocxState, seedDocxState } from '../core/docx-loro';
 import { assemblePackage } from '../core/docx-package';
 import { DocxSyncController } from '../core/docx-sync';
 

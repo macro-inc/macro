@@ -27,7 +27,7 @@ export function usePropertySelection(
         // Tag definitions are managed through the dedicated Tags UI, never the
         // generic property pickers.
         property.valueType !== 'TAG' &&
-        // A task's project is set from its own Project row and pickers.
+        // A task always lists Project, and nothing else can carry it.
         property.id !== SYSTEM_PROPERTY_IDS.PROJECT
     );
 

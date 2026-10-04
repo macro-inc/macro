@@ -106,6 +106,10 @@ type ToolParserMap = {
     response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  EditWordDocument: {
+    call: types.EditWordDocument;
+    response: types.WordDocumentResponse;
+  };
   GenerateImage: {
     call: types.GenerateImage;
     response: types.GenerateImageResponse;
@@ -245,6 +249,10 @@ type ToolParserMap = {
     response: types.SpreadsheetResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  ReadWordDocument: {
+    call: types.ReadWordDocument;
+    response: types.WordDocumentResponse;
+  };
   RenameChannel: {
     call: types.RenameChannel;
     response: types.RenameChannelResponse;
@@ -423,6 +431,10 @@ const toolParserMap = {
     response: schemas.SpreadsheetResponse,
   },
   EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
+  EditWordDocument: {
+    call: schemas.EditWordDocument,
+    response: schemas.WordDocumentResponse,
+  },
   GenerateImage: {
     call: schemas.GenerateImage,
     response: schemas.GenerateImageResponse,
@@ -586,6 +598,10 @@ const toolParserMap = {
     response: schemas.SpreadsheetResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  ReadWordDocument: {
+    call: schemas.ReadWordDocument,
+    response: schemas.WordDocumentResponse,
+  },
   RenameChannel: {
     call: schemas.RenameChannel,
     response: schemas.RenameChannelResponse,
@@ -778,6 +794,10 @@ type ToolDataMap = {
     response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  EditWordDocument: {
+    call: types.EditWordDocument;
+    response: types.WordDocumentResponse;
+  };
   GenerateImage: {
     call: types.GenerateImage;
     response: types.GenerateImageResponse;
@@ -917,6 +937,10 @@ type ToolDataMap = {
     response: types.SpreadsheetResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  ReadWordDocument: {
+    call: types.ReadWordDocument;
+    response: types.WordDocumentResponse;
+  };
   RenameChannel: {
     call: types.RenameChannel;
     response: types.RenameChannelResponse;

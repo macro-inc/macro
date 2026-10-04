@@ -203,3 +203,20 @@ export function blockSpanOfRange(
   if (end <= start) return null;
   return { block, start, length: end - start };
 }
+
+/**
+ * Where the caret belongs after `before` became `after`, as undo and redo
+ * place it: the end of the text that changed, in `after`'s offsets.
+ */
+export function changedTextEnd(before: string, after: string): number {
+  const limit = Math.min(before.length, after.length);
+  let start = 0;
+  while (start < limit && before[start] === after[start]) start++;
+  let end = 0;
+  while (
+    end < limit - start &&
+    before[before.length - 1 - end] === after[after.length - 1 - end]
+  )
+    end++;
+  return after.length - end;
+}

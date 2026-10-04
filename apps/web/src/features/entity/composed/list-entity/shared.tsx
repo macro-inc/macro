@@ -85,6 +85,8 @@ export interface LayoutProps {
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
+  /** Show a task's Project with its other properties (Projects enabled). */
+  showProject?: boolean;
 }
 
 export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';

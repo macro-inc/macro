@@ -1,3 +1,4 @@
+import { DOCX_LORO_CONTAINERS } from '@macro-inc/collaboration/docx/schema';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -17,7 +18,6 @@ import {
   resolveMark,
   writeCommentMark,
 } from '../core/comment-marks';
-import { DOCX_LORO_CONTAINERS } from '../core/docx-loro';
 import {
   blockSpanOfRange,
   contentRange,

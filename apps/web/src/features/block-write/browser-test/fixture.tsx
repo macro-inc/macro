@@ -3,6 +3,12 @@ import '../../../index.css';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
+import {
+  type DocxAgentRequest,
+  type DocxAgentResult,
+  runDocxAgentRequest,
+} from '@macro-inc/collaboration/docx/agent';
+import { readDocxState } from '@macro-inc/collaboration/docx/schema';
 import { InitializeFromSnapshotRequest } from '@macro-inc/collaboration/sync-service/generated/schema';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -15,7 +21,6 @@ import type { LoroDoc } from 'loro-crdt';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { readCommentMarks } from '../core/comment-marks';
-import { readDocxState } from '../core/docx-loro';
 import { buildSeedSnapshot } from '../core/docx-seed';
 import ComplexMsa from '../core/fixtures/complex-msa.docx?url';
 import MutualNda from '../core/fixtures/mutual-nda.docx?url';
@@ -39,6 +44,9 @@ declare global {
       ready: () => boolean;
       paragraphs: () => string[];
       sharedOrder: () => string[];
+      sharedBlocks: () => Array<[string, string]>;
+      /** Run an AI tool request as the editing worker does: its own peer. */
+      agent: (request: DocxAgentRequest) => Promise<DocxAgentResult>;
       marks: () => Record<string, unknown>;
       handle: () => Handle | undefined;
     };
@@ -287,6 +295,23 @@ function Fixture() {
     sharedOrder: () => {
       const state = session.state();
       return state.t === 'ready' ? readDocxState(state.doc).order : [];
+    },
+    sharedBlocks: () => {
+      const state = session.state();
+      if (state.t !== 'ready') return [];
+      const shared = readDocxState(state.doc);
+      return shared.order.map((id) => [id, shared.blocks.get(id) ?? '']);
+    },
+    agent: async (request) => {
+      const source = new SyncServiceSource(
+        createSyncSocket(socketUrl),
+        documentId
+      );
+      try {
+        return await runDocxAgentRequest(source, request);
+      } finally {
+        source.cleanup();
+      }
     },
     marks: () => {
       const state = session.state();

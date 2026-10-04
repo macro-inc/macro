@@ -21,15 +21,15 @@ import {
   type WALStore,
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
-import type { LoroDoc } from 'loro-crdt';
-import { errAsync, type ResultAsync } from 'neverthrow';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
-import { match } from 'ts-pattern';
 import {
   DOCX_FORMAT_VERSION,
   docxFormatVersion,
   isDocxSeeded,
-} from '../core/docx-loro';
+} from '@macro-inc/collaboration/docx/schema';
+import type { LoroDoc } from 'loro-crdt';
+import { errAsync, type ResultAsync } from 'neverthrow';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { match } from 'ts-pattern';
 import { DOCX_LORO_SCHEMA } from '../core/docx-loro-schema';
 
 /** Where a collaborator's caret is: a paragraph and an offset in its text. */

@@ -1,4 +1,5 @@
-import { type DocxPackageState, splitPackage } from './docx-package';
+import type { DocxPackageState } from '@macro-inc/collaboration/docx/schema';
+import { splitPackage } from './docx-package';
 
 /** The Docxodus session bridge calls the collaboration layer uses. */
 export type DocxSyncBridge = {

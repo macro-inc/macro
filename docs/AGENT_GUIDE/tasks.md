@@ -17,8 +17,25 @@ off-topic text) keep the typed text and show a red error there instead. The box 
 focus while you type even if the pointer drifts over the rows; ArrowDown moves into
 the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
 AI box.
-Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
-sidebar has a collapsible `Tags` section listing every personal and team tag, with a
+Task creation is available from the `New` button in the Tasks sidebar. With Projects
+enabled, `My projects` appears below the tabs and favorites, above Tags. It lists
+accessible projects by most recently updated, with a capped height and its own scroll
+area. Click a project to open its overview within the current Tasks view, keeping
+the sidebar mounted, or Shift-click to open it in a new split.
+The current project is highlighted. Collapse the heading to hide the list; this
+preference persists. `Load more projects` fetches the next page when available.
+The plus button beside `My projects` opens the project composer, even while the
+section is collapsed or loading. Its rows use the shared project query/cache and
+load inside a local Suspense boundary, leaving sidebar controls available.
+Opening a project shows a content-shaped skeleton while its data loads: title,
+wrapping property pills, description, and discussion for Overview; toolbar and
+rows for Tasks. The mobile skeleton uses the same compact insets as the content.
+The description has its own subtle three-line skeleton while its collaborative
+editor initializes; the project title, properties, and discussion stay visible.
+Project task lists automatically fetch all matching pages in every group, without
+per-group `Load More` rows. A failed continuation stops automatic requests and shows
+`Try again` above the list; already fetched group rows remain available.
+The sidebar also has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
 carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again
 clears it, and switching tabs clears it like any other filter. On mobile, the tabs
@@ -33,6 +50,13 @@ does nothing. Typing H in a text field remains ordinary input.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
+
+The Project column shows the linked project's name when one project is assigned,
+and `Project` when empty. Multiple linked projects show an item count.
+Long assignee and project names truncate within their columns; hover the cell
+to read the full value.
+The project pill beneath a task title shows the project icon and name without
+a `Project:` prefix.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
@@ -125,8 +149,10 @@ filter sheets. Desktop uses the centered composer dialog.
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
-   chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
-   a `Create More` switch, and `Create Task Ctrl ↵`.
+   chip (defaults to you), `Due Date`, `Project` (when Projects is enabled; the standard
+   property dropdown, listing projects), `Change or select tags`, `Attach image or video`,
+   a `Create More` switch, and `Create Task Ctrl ↵`. If the chosen project can't be
+   set, the task is still created and a toast says it wasn't added to the project.
    The `Shared with Team` row defaults to on and remembers your choice in local
    storage across composer openings and page reloads. Its hint explains whether
    the task will be visible to your whole team or only to you and the people you
@@ -268,27 +294,32 @@ tasks whose Project property names the project.
 
 The project's Tasks tab starts with the task search, controls, and unified list;
 the project title and property pills appear only on Overview. Use
-`New task` to create a task in the project: the create request carries the
-Project property, so there is no separate assignment step. The new row appears
+`New task` to create a task in the project: the composer opens with its Project
+set to this project (change or clear it like any property), and the create
+request carries it, so there is no separate assignment step. The new row appears
 once the task is created. Verify this with GraphQL Soup both enabled and
 disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
-`New task`, search for tasks, select several, and confirm `Add N tasks`. Tasks
+`New task`; both actions use bordered buttons with a background. `Add existing
+tasks` opens an anchored task-selector dropdown: search, select several, and
+confirm `Add N tasks`. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
-project; the dialog explains this before saving. A partial failure keeps only
+project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
 
-The regular Tasks list includes a Project column; clicking its cell opens the
-project picker. Right-click a task and choose `Add to project…` to choose or clear
+The regular Tasks list includes a Project column. Its cell is a regular property
+cell: clicking it opens the same entity dropdown as the other property columns,
+listing projects. Narrow lists show Project as a compact pill after the row's
+Status, Priority and Assignees pills. Right-click a task and choose `Add to project…` to choose or clear
 its project. On mobile the same action is in the long-press menu. For a selection,
 choose `Actions → Add to project…`; there is no separate assignment button in the
 selection toolbar. A context action on a selected row applies to the selection.
-Inside an open task, use the Project pill below the title, the Project row in
-the Properties side panel, or `Add to project…` in the title's actions menu.
-The property shows `No project` until assigned and stays read-only without edit
-access. Choose `No project` in the assignment dialog to remove the association.
-The Project property does not appear in the generic Properties list or the
-`Add property` picker; these project controls set it.
+Inside an open task, Project is a regular property: a pill beside Status,
+Priority and Assignees below the title, and a row in the Properties side panel.
+Both open the standard property dropdown, which searches projects; clear the
+value there to remove the task from its project. `Add to project…` in the
+title's actions menu does the same. Tasks show Project even before it's set,
+and the `Add property` picker doesn't list it.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion

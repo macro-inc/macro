@@ -30,6 +30,7 @@ import {
 import {
   getSortedKeyProperties,
   soupPropertyToProperty,
+  withTaskProject,
 } from './property-helpers';
 
 function getEntityType(entity: EntityData): EntityType {
@@ -81,6 +82,8 @@ interface EntityKeyPropertiesProps {
   maxUserStackUsers?: number;
   /** Whether to show the edit affordance caret. */
   showCaret?: boolean;
+  /** Append a task's Project, set or not (Projects enabled). */
+  includeProject?: boolean;
 }
 
 /**
@@ -94,16 +97,18 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
   const keyProperties = createMemo((): PropertyT[] => {
     const soupProperties = props.entity.properties ?? [];
-    return getSortedKeyProperties(
-      soupProperties.flatMap((soupProperty) => {
-        try {
-          return [soupPropertyToProperty(soupProperty)];
-        } catch (error) {
-          console.warn('Skipping property with unsupported type', error);
-          return [];
-        }
-      })
-    );
+    const properties = soupProperties.flatMap((soupProperty) => {
+      try {
+        return [soupPropertyToProperty(soupProperty)];
+      } catch (error) {
+        console.warn('Skipping property with unsupported type', error);
+        return [];
+      }
+    });
+    const key = getSortedKeyProperties(properties);
+    return props.includeProject && entityType() === EntityType.TASK
+      ? withTaskProject(key, properties)
+      : key;
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
