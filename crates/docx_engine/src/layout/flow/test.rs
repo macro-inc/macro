@@ -459,3 +459,16 @@ fn frames_in_the_margin_leave_the_text_beside_them() {
     // The frame is right of the text area: the text stays at the top.
     assert!((rest.y - 36.0).abs() < 0.01, "{}", rest.y);
 }
+
+#[test]
+fn keeping_with_the_next_paragraph_stops_at_a_page_break() {
+    let filler: String = (0..55)
+        .map(|i| format!("<w:p><w:r><w:t>Filler {i}</w:t></w:r></w:p>"))
+        .collect();
+    let body = format!(
+        r#"{filler}<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:br w:type="page"/><w:t>Heading</w:t></w:r></w:p><w:p><w:r><w:t>Text</w:t></w:r></w:p>{LETTER}"#
+    );
+    let l = layout(&body, &arial_10());
+    assert_eq!(l.pages.len(), 2);
+    assert!(page_texts(&l, 1).iter().any(|t| t == "Heading"));
+}

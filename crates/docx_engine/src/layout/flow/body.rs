@@ -666,6 +666,14 @@ impl<'e, 'a> Flow<'e, 'a> {
             let join = self.border_join(blocks, k, props, prev.as_ref());
             let (bt, bb) = border_space(props, join);
             let lines = &pb.lines.lines;
+            if let Some(b) = lines
+                .iter()
+                .position(|l| matches!(l.ends, LineEnd::PageBreak | LineEnd::ColumnBreak))
+            {
+                // The chain ends at a page break.
+                need += bt + lines[..=b].iter().map(|l| l.height).sum::<f32>();
+                break;
+            }
             if props.keep_next && k + 1 < blocks.len() && k - i < 32 {
                 need += bt + pb.lines.height + bb;
                 prev = Some(prev_record(props));
@@ -759,7 +767,9 @@ impl<'e, 'a> Flow<'e, 'a> {
             let sect = self.cur.as_ref().map_or(0, |c| c.sect);
             self.start_page(sect, true);
             self.prev = None;
-        } else if props.keep_next && !at_top {
+        } else if props.keep_next && !at_top && !hard_break(&pb) {
+            // (A paragraph with a page break in it goes on after the break
+            // anyway: what comes before it stays.)
             let need = self.keep_chain(blocks, i, width);
             let (y, top) = self.cur.as_ref().map_or((0.0, 0.0), |c| (c.y, c.top));
             let before = space_before(&props, self.prev.as_ref(), false, self.sum_spacing());
@@ -1130,6 +1140,14 @@ impl<'e, 'a> Flow<'e, 'a> {
         self.finish_page();
         self.pages
     }
+}
+
+/// Whether a page or column break ends one of the paragraph's lines.
+fn hard_break(pb: &ParaBox) -> bool {
+    pb.lines
+        .lines
+        .iter()
+        .any(|l| matches!(l.ends, LineEnd::PageBreak | LineEnd::ColumnBreak))
 }
 
 /// Places a header's or footer's text frames, given where its stack went.
