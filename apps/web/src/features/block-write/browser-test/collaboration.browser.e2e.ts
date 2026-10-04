@@ -222,6 +222,87 @@ test('two people edit the same DOCX live through the sync service', async ({
   }
 });
 
+test('random concurrent edits converge for everyone', async ({ browser }) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob, carol] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  try {
+    await open(alice, documentId, ALICE, { fixture: 'complex-msa.docx' });
+    await open(bob, documentId, BOB, { fixture: 'complex-msa.docx' });
+    /** Sixty edits at random places (typing, Enter, deleting, bold),
+     * some in quick succession, from a seeded generator. */
+    const randomEdits = (page: Page, seed: number) =>
+      page.evaluate(async (seed) => {
+        let state = seed;
+        const rand = (n: number) => {
+          state = (state * 1103515245 + 12345) % 2147483648;
+          return state % n;
+        };
+        const editor = window.docxFixture?.editor();
+        if (!editor) throw new Error('no editor');
+        for (let i = 0; i < 60; i++) {
+          const paras = (await editor.paragraphs()).filter((p) => p.text);
+          const p = paras[rand(paras.length)];
+          const offset = rand(p.text.length + 1);
+          const at = { block: p.id, offset };
+          const kind = rand(10);
+          if (kind < 5)
+            editor.run([
+              { op: 'select', anchor: at, focus: at },
+              { op: 'insertText', text: `<${seed}.${i}>` },
+            ]);
+          else if (kind < 6)
+            editor.run([
+              { op: 'select', anchor: at, focus: at },
+              { op: 'insertParagraph' },
+            ]);
+          else if (kind < 8)
+            editor.run([
+              { op: 'select', anchor: at, focus: at },
+              { op: 'delete', forward: rand(2) === 0 },
+            ]);
+          else {
+            const end = Math.min(p.text.length, offset + 1 + rand(8));
+            editor.run([
+              { op: 'select', anchor: at, focus: { block: p.id, offset: end } },
+              { op: 'toggleFormat', format: 'bold' },
+            ]);
+          }
+          if (rand(3) === 0)
+            await new Promise((resolve) => setTimeout(resolve, rand(40)));
+        }
+        await editor.idle();
+      }, seed);
+    await Promise.all([randomEdits(alice, 7), randomEdits(bob, 11)]);
+    // Both end with the same paragraphs, every insertion kept once.
+    await expect
+      .poll(
+        async () =>
+          JSON.stringify(await paragraphs(alice)) ===
+          JSON.stringify(await paragraphs(bob)),
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+    const text = await joined(alice);
+    for (const seed of [7, 11])
+      for (const match of text.matchAll(new RegExp(`<${seed}\\.(\\d+)>`, 'g')))
+        expect(text.split(match[0]).length - 1, match[0]).toBe(1);
+    // Someone opening it now reads the same document.
+    await open(carol, documentId, BOB, { fixture: 'complex-msa.docx' });
+    expect(await paragraphs(carol)).toEqual(await paragraphs(alice));
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('undo and redo cover this person’s own edits', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([

@@ -17,6 +17,8 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
     carets, bold and lists as shared marks and properties;
   - comments with highlights, kept on their text through edits;
   - the downloaded `.docx` and reloading the merged document;
+  - sixty random edits each from two people at once (typing, Enter,
+    deleting, bold), converging for both and for someone opening it after;
   - undo and redo of one person's own edits;
   - header and footer editing in place;
   - footnote editing in place and a new footnote (Ctrl+Alt+F) in a memo
