@@ -4,7 +4,6 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   For,
   type JSX,
   onCleanup,
@@ -12,26 +11,25 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { layoutMarginCards } from '../core/comment-layout';
-import { blockOf } from '../core/text-offsets';
 import type {
   DocxComments,
   LocatedThread,
 } from '../primitives/create-docx-comments';
+import { type PageGeometry, toColumn } from './DocxPages';
 
 const CARD_WIDTH = 280;
 
 /**
  * The comment margin beside a DOCX: one card per placed thread, stacked next
- * to its text, a floating comment button beside any selection, and clicks on
- * highlighted text open their thread. The card itself is supplied.
+ * to its text, and a floating comment button beside any selection. The card
+ * itself is supplied. The margin shares its top edge with the pages column,
+ * so anchors are page geometry in column coordinates.
  */
 export function DocxMarginLayout(props: {
   comments: DocxComments;
-  /** The editor element; selection and clicks are read from it. */
-  editorRoot: HTMLElement | undefined;
-  /** Positioning parent: the margin scrolls with the document. */
-  margin: HTMLElement | undefined;
-  revision: Accessor<number>;
+  geometry: Accessor<PageGeometry>;
+  /** Top of the selected text, when there is a selection to comment on. */
+  selectionTop: Accessor<number | null>;
   canComment: Accessor<boolean>;
   renderCard: (
     thread: LocatedThread,
@@ -39,36 +37,17 @@ export function DocxMarginLayout(props: {
   ) => JSX.Element;
 }) {
   const [heights, setHeights] = createStore<Record<string, number>>({});
-  const [layoutTick, setLayoutTick] = createSignal(0);
-  const relayout = () => setLayoutTick((tick) => tick + 1);
 
-  createEffect(() => {
-    const margin = props.margin;
-    const root = props.editorRoot;
-    if (!margin || !root) return;
-    const observer = new ResizeObserver(relayout);
-    observer.observe(margin);
-    observer.observe(root);
-    onCleanup(() => observer.disconnect());
-  });
-
-  const anchorTop = (thread: LocatedThread, marginTop: number) => {
-    const rects = thread.range.getClientRects();
-    const first = rects.length
-      ? rects[0]
-      : thread.range.getBoundingClientRect();
-    return first.top - marginTop;
+  const anchorTop = (thread: LocatedThread) => {
+    const first = thread.rects[0];
+    const box = first ? toColumn(props.geometry(), first) : undefined;
+    return box?.top ?? 0;
   };
 
   const positions = createMemo(() => {
-    layoutTick();
-    props.revision();
-    const margin = props.margin;
-    if (!margin) return new Map<string, number>();
-    const marginTop = margin.getBoundingClientRect().top;
     const items = props.comments
       .located()
-      .map((thread) => ({ id: thread.id, top: anchorTop(thread, marginTop) }));
+      .map((thread) => ({ id: thread.id, top: anchorTop(thread) }));
     return layoutMarginCards(
       items,
       new Map(Object.entries(heights)),
@@ -76,64 +55,25 @@ export function DocxMarginLayout(props: {
     );
   });
 
-  // Clicking highlighted text opens its thread.
-  createEffect(() => {
-    const root = props.editorRoot;
-    if (!root) return;
-    const onClick = () => {
-      const selection = window.getSelection();
-      if (!selection?.isCollapsed || !selection.anchorNode) return;
-      if (!blockOf(selection.anchorNode, root)) return;
-      const hit = props.comments.threadAt(
-        selection.anchorNode,
-        selection.anchorOffset
-      );
-      if (hit) props.comments.setActive(hit);
-      else if (!props.comments.draft()) props.comments.setActive(null);
-    };
-    root.addEventListener('click', onClick);
-    onCleanup(() => root.removeEventListener('click', onClick));
-  });
-
-  // A floating "comment" affordance beside any selected text.
-  const [selectionTop, setSelectionTop] = createSignal<number | null>(null);
-  createEffect(() => {
-    const root = props.editorRoot;
-    const margin = props.margin;
-    if (!root || !margin) return;
-    const update = () => {
-      const selection = window.getSelection();
-      if (
-        !props.canComment() ||
-        !selection ||
-        selection.isCollapsed ||
-        selection.rangeCount === 0 ||
-        !blockOf(selection.getRangeAt(0).startContainer, root)
-      ) {
-        setSelectionTop(null);
-        return;
-      }
-      const rect = selection.getRangeAt(0).getClientRects()[0];
-      setSelectionTop(
-        rect ? rect.top - margin.getBoundingClientRect().top : null
-      );
-    };
-    document.addEventListener('selectionchange', update);
-    onCleanup(() => document.removeEventListener('selectionchange', update));
-  });
-
   return (
     <>
-      <Show when={selectionTop() !== null && !props.comments.draft()}>
+      <Show
+        when={
+          props.canComment() &&
+          props.selectionTop() !== null &&
+          !props.comments.draft()
+        }
+      >
         <div
           class="absolute left-2 z-10"
-          style={{ top: `${selectionTop()}px` }}
+          style={{ top: `${props.selectionTop()}px` }}
         >
           <Button
             size="icon-md"
             variant="cta"
             label="Comment"
             data-docx-comment-button
+            onPointerDown={(event: PointerEvent) => event.preventDefault()}
             onMouseDown={(event: MouseEvent) => event.preventDefault()}
             onClick={() => props.comments.beginDraft()}
           >

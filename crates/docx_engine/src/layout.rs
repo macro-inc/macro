@@ -157,6 +157,21 @@ pub struct Page {
     pub front: Vec<Item>,
     /// The body text area (for editors).
     pub body: Rect,
+    /// The header area, above the body.
+    pub header: Option<Chrome>,
+    /// The footer area, below the body.
+    pub footer: Option<Chrome>,
+}
+
+/// A page's header or footer area, for editors.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Chrome {
+    /// The part shown there (`None` when the section has none for the page).
+    pub part: Option<String>,
+    /// Top (points).
+    pub top: f32,
+    /// Bottom (points).
+    pub bottom: f32,
 }
 
 impl Page {
@@ -209,6 +224,10 @@ struct Cached {
 #[derive(Debug, Default)]
 pub struct LayoutCache {
     paras: Mutex<(u64, HashMap<(StoryRef, BlockId), Cached>)>,
+    /// Resolved formats of one style sheet generation.
+    formats: Mutex<Option<(u64, Arc<format::FormatCache>)>>,
+    /// Page count of the last layout (the first guess for page-count fields).
+    pages: Mutex<Option<usize>>,
 }
 
 impl LayoutCache {
@@ -217,7 +236,12 @@ impl LayoutCache {
         Self::default()
     }
 
-    pub(crate) fn get(&self, story: &StoryRef, block: &BlockId, key: &ParaKey) -> Option<Arc<ParaBox>> {
+    pub(crate) fn get(
+        &self,
+        story: &StoryRef,
+        block: &BlockId,
+        key: &ParaKey,
+    ) -> Option<Arc<ParaBox>> {
         let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = guard.0;
         let hit = guard.1.get_mut(&(story.clone(), block.clone()))?;
@@ -249,6 +273,28 @@ impl LayoutCache {
         guard.1.retain(|_, c| c.epoch == epoch);
     }
 
+    /// The format cache for a style sheet generation.
+    pub(crate) fn formats(&self, generation: u64) -> Arc<format::FormatCache> {
+        let mut guard = self.formats.lock().unwrap_or_else(|e| e.into_inner());
+        match &*guard {
+            Some((g, cache)) if *g == generation => Arc::clone(cache),
+            _ => {
+                let cache = Arc::new(format::FormatCache::default());
+                *guard = Some((generation, Arc::clone(&cache)));
+                cache
+            }
+        }
+    }
+
+    /// The last layout's page count.
+    pub(crate) fn last_pages(&self) -> Option<usize> {
+        *self.pages.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(crate) fn set_last_pages(&self, pages: usize) {
+        *self.pages.lock().unwrap_or_else(|e| e.into_inner()) = Some(pages);
+    }
+
     /// Number of cached paragraphs.
     pub fn len(&self) -> usize {
         self.paras.lock().map_or(0, |g| g.1.len())
@@ -273,7 +319,12 @@ impl Document {
 
     /// Lays the document out, reusing paragraph measurements from `cache`
     /// (and leaving this layout's in it).
-    pub fn layout_cached(&self, fonts: &FontDb, options: &LayoutOptions, cache: &LayoutCache) -> Layout {
+    pub fn layout_cached(
+        &self,
+        fonts: &FontDb,
+        options: &LayoutOptions,
+        cache: &LayoutCache,
+    ) -> Layout {
         cache.begin();
         let layout = flow::layout(self, fonts, options, Some(cache));
         cache.end();

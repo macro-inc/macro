@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && vite -c vite.config.ts",
+    "dev": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && vite -c vite.config.ts",
     "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
@@ -135,7 +135,6 @@
     "detect-browser": "^5.3.0",
     "diff": "^9.0.0",
     "dinero.js": "2.0.0-alpha.8",
-    "docxodus": "12.6.5",
     "effect": "^4.0.0-rc.111",
     "email-validator": "^2.0.4",
     "emojibase-data": "^17.0.0",

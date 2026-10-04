@@ -12,37 +12,101 @@ import {
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { readCommentMarks } from '../core/comment-marks';
-import { readDocxState } from '../core/docx-loro';
+import { readCollabState, sharedParagraphTexts } from '../core/docx-loro';
 import { buildSeedSnapshot } from '../core/docx-seed';
 import ComplexMsa from '../core/fixtures/complex-msa.docx?url';
 import MutualNda from '../core/fixtures/mutual-nda.docx?url';
-import { contentText } from '../core/text-offsets';
 import type { LocatedThread } from '../primitives/create-docx-comments';
-import type { createDocxEditor } from '../primitives/create-docx-editor';
+import type { DocxEditor } from '../primitives/create-docx-editor';
 import { createDocxSession } from '../queries/docx-session';
-import {
-  type DocxodusRuntime,
-  loadDocxodus,
-} from '../queries/docxodus-runtime';
 import { DocxEditorView } from '../views/DocxEditorView';
 import { DocxMarginLayout } from '../views/DocxMarginLayout';
-
-type Handle = ReturnType<typeof createDocxEditor>;
 
 declare global {
   interface Window {
     docxFixture?: {
       status: () => string;
       ready: () => boolean;
-      paragraphs: () => string[];
-      sharedOrder: () => string[];
+      /** Paragraph texts as this editor's engine has them. */
+      paragraphs: () => Promise<string[]>;
+      /** Paragraph texts as the shared document has them. */
+      sharedParagraphs: () => string[];
       marks: () => Record<string, unknown>;
-      handle: () => Handle | undefined;
+      editor: () => DocxEditor | undefined;
+      /** Puts the caret in (or selects) the paragraph starting with `prefix`. */
+      place: (
+        prefix: string,
+        where: 'start' | 'end' | 'all'
+      ) => Promise<boolean>;
+      /** Shared formatting of the paragraph starting with `prefix`. */
+      sharedBlock: (
+        prefix: string
+      ) => { props: string; attrs: Record<string, string>[] } | null;
+      /** XML of the shared part whose name ends with `suffix`. */
+      sharedPart: (suffix: string) => string | null;
     };
   }
+}
+
+/** Fixture helpers that read the engine and the shared document. */
+function helpers(
+  editor: () => DocxEditor | undefined,
+  doc: () => LoroDoc | undefined
+) {
+  return {
+    place: async (prefix: string, where: 'start' | 'end' | 'all') => {
+      const current = editor();
+      if (!current) return false;
+      const found = (await current.paragraphs()).find((p) =>
+        p.text.replace(/\uFFFC/g, '').startsWith(prefix)
+      );
+      if (!found) return false;
+      const end = { block: found.id, offset: found.text.length };
+      const start = { block: found.id, offset: 0 };
+      current.run([
+        where === 'all'
+          ? { op: 'select', anchor: start, focus: end }
+          : {
+              op: 'select',
+              anchor: where === 'end' ? end : start,
+              focus: where === 'end' ? end : start,
+            },
+      ]);
+      await current.idle();
+      document.querySelector<HTMLTextAreaElement>('[data-docx-input]')?.focus();
+      return true;
+    },
+    sharedBlock: (prefix: string) => {
+      const shared = doc();
+      if (!shared) return null;
+      const block = readCollabState(shared).blocks.find(
+        (b) =>
+          b.k === 'p' &&
+          (b.t ?? [])
+            .map((op) => ('insert' in op ? op.insert : ''))
+            .join('')
+            .replace(/\uFFFC/g, '')
+            .startsWith(prefix)
+      );
+      if (!block) return null;
+      return {
+        props: block.x,
+        attrs: (block.t ?? []).map((op) =>
+          'insert' in op ? (op.attributes ?? {}) : {}
+        ),
+      };
+    },
+    sharedPart: (suffix: string) => {
+      const shared = doc();
+      if (!shared) return null;
+      const parts = readCollabState(shared).parts;
+      const name = Object.keys(parts).find((key) => key.endsWith(suffix));
+      return name ? (parts[name] ?? null) : null;
+    },
+  };
 }
 
 const FIXTURES: Record<string, string> = {
@@ -70,8 +134,11 @@ const socketUrl = params.get('socket') ?? '';
 const token = params.get('token') ?? '';
 const user = params.get('user') ?? 'macro|alice@example.com';
 const readonly = params.has('readonly');
+/** A bundled fixture by name, or any document URL (`src`). */
 const fixture =
-  FIXTURES[params.get('fixture') ?? 'mutual-nda.docx'] ?? MutualNda;
+  params.get('src') ??
+  FIXTURES[params.get('fixture') ?? 'mutual-nda.docx'] ??
+  MutualNda;
 
 const shortName = (id: string | undefined) =>
   (id ?? '')
@@ -221,10 +288,8 @@ function FixtureThreadCard(props: {
 }
 
 function Fixture() {
-  const [runtime, setRuntime] = createSignal<DocxodusRuntime>();
-  const [handle, setHandle] = createSignal<Handle>();
+  const [editor, setEditor] = createSignal<DocxEditor>();
   const [roots, setRoots] = createSignal<MessageListItem[]>([]);
-  void loadDocxodus().then(setRuntime);
 
   const session = createDocxSession({
     documentId,
@@ -239,11 +304,7 @@ function Fixture() {
       ).ok,
     fetchOriginal: async () =>
       new Uint8Array(await (await fetch(fixture)).arrayBuffer()),
-    buildSeed: async (original) =>
-      buildSeedSnapshot(
-        (await loadDocxodus()).exports.DocxSessionBridge,
-        original
-      ),
+    buildSeed: buildSeedSnapshot,
     initialize: async (snapshot) => {
       const response = await fetch(
         `${worker}document/${documentId}/initialize`,
@@ -277,16 +338,16 @@ function Fixture() {
 
   window.docxFixture = {
     status: session.status,
-    ready: () => !!handle(),
-    paragraphs: () =>
-      Array.from(
-        document.querySelectorAll<HTMLElement>('.docx-body-flow [data-anchor]')
-      )
-        .filter((element) => !element.querySelector('[data-anchor]'))
-        .map(contentText),
-    sharedOrder: () => {
+    ready: () => !!editor(),
+    paragraphs: async () =>
+      (await editor()?.paragraphs())?.map((p) =>
+        p.text.replace(/\uFFFC/g, '')
+      ) ?? [],
+    sharedParagraphs: () => {
       const state = session.state();
-      return state.t === 'ready' ? readDocxState(state.doc).order : [];
+      return state.t === 'ready'
+        ? sharedParagraphTexts(state.doc).map((t) => t.replace(/\uFFFC/g, ''))
+        : [];
     },
     marks: () => {
       const state = session.state();
@@ -294,7 +355,11 @@ function Fixture() {
         ? Object.fromEntries(readCommentMarks(state.doc))
         : {};
     },
-    handle,
+    editor,
+    ...helpers(editor, () => {
+      const state = session.state();
+      return state.t === 'ready' ? state.doc : undefined;
+    }),
   };
   onCleanup(() => Reflect.deleteProperty(window, 'docxFixture'));
 
@@ -303,15 +368,15 @@ function Fixture() {
       <Show
         when={(() => {
           const state = session.state();
-          const engine = runtime();
-          return engine && state.t === 'ready'
-            ? { engine, doc: state.doc }
-            : undefined;
+          return state.t === 'ready' ? { doc: state.doc } : undefined;
         })()}
         keyed
         fallback={
           <div class="p-6 text-sm text-ink-muted" data-fixture-state>
-            {session.state().t}
+            {(() => {
+              const state = session.state();
+              return state.t === 'error' ? `error: ${state.message}` : state.t;
+            })()}
           </div>
         }
       >
@@ -319,18 +384,16 @@ function Fixture() {
           watchFixtureThreads(ready.doc, setRoots);
           return (
             <DocxEditorView
-              runtime={ready.engine}
               doc={ready.doc}
               canEdit={!readonly}
               canComment={() => true}
-              author={shortName(user)}
               fileName="fixture.docx"
               peers={session.peers}
               displayName={shortName}
+              author={shortName(user)}
               onSelection={session.setSelection}
-              subscribeRemote={session.onRemoteChange}
               commentRoots={roots}
-              onReady={setHandle}
+              onReady={setEditor}
               onDownload={(bytes) => {
                 const url = URL.createObjectURL(
                   new Blob([bytes.slice().buffer], {
@@ -347,9 +410,8 @@ function Fixture() {
               margin={(context) => (
                 <DocxMarginLayout
                   comments={context.comments}
-                  editorRoot={context.editorRoot}
-                  margin={context.margin}
-                  revision={context.revision}
+                  geometry={context.geometry}
+                  selectionTop={context.selectionTop}
                   canComment={() => true}
                   renderCard={(thread, isActive) => (
                     <FixtureThreadCard
@@ -381,7 +443,82 @@ function Fixture() {
   );
 }
 
+/**
+ * Local mode (`?local`): no sync service. The fixture document is seeded into
+ * an in-page Loro document; `?local=pair` shows two editors whose documents
+ * exchange updates directly, for trying collaboration without a server.
+ */
+function LocalFixture() {
+  const pair = params.get('local') === 'pair';
+  const [docs, setDocs] = createSignal<LoroDoc[]>();
+  const [editor, setEditor] = createSignal<DocxEditor>();
+  void (async () => {
+    const original = new Uint8Array(await (await fetch(fixture)).arrayBuffer());
+    const snapshot = await buildSeedSnapshot(original);
+    const { LoroDoc } = await import('loro-crdt');
+    const a = new LoroDoc();
+    a.import(snapshot);
+    if (!pair) {
+      setDocs([a]);
+      return;
+    }
+    const b = new LoroDoc();
+    b.import(snapshot);
+    a.subscribeLocalUpdates((u) => queueMicrotask(() => b.import(u)));
+    b.subscribeLocalUpdates((u) => queueMicrotask(() => a.import(u)));
+    setDocs([a, b]);
+  })();
+  window.docxFixture = {
+    status: () => 'connected',
+    ready: () => !!editor(),
+    paragraphs: async () =>
+      (await editor()?.paragraphs())?.map((p) =>
+        p.text.replace(/\uFFFC/g, '')
+      ) ?? [],
+    sharedParagraphs: () => {
+      const doc = docs()?.[0];
+      return doc
+        ? sharedParagraphTexts(doc).map((t) => t.replace(/\uFFFC/g, ''))
+        : [];
+    },
+    marks: () => {
+      const doc = docs()?.[0];
+      return doc ? Object.fromEntries(readCommentMarks(doc)) : {};
+    },
+    editor,
+    ...helpers(editor, () => docs()?.[0]),
+  };
+  return (
+    <main class="flex h-screen w-screen overflow-hidden bg-page font-sans text-ink">
+      <Show when={docs()} fallback={<div class="p-6">seeding…</div>}>
+        {(list) => (
+          <For each={list()}>
+            {(doc, index) => (
+              <div class="h-full min-w-0 flex-1 border-r border-edge">
+                <DocxEditorView
+                  doc={doc}
+                  canEdit={!readonly}
+                  canComment={() => true}
+                  fileName="fixture.docx"
+                  peers={() => []}
+                  displayName={shortName}
+                  onReady={index() === 0 ? setEditor : undefined}
+                  onDownload={() => {}}
+                  onError={(error) => console.error('[docx-fixture]', error)}
+                />
+              </div>
+            )}
+          </For>
+        )}
+      </Show>
+    </main>
+  );
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('DOCX fixture root is missing.');
-const dispose = render(() => <Fixture />, root);
+const dispose = render(
+  () => (params.has('local') ? <LocalFixture /> : <Fixture />),
+  root
+);
 import.meta.hot?.dispose(dispose);

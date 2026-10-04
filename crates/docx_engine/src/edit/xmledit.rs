@@ -408,7 +408,10 @@ mod test {
         let mut e = Element::open("", "pPr", "w", &d, PPR_ORDER);
         assert!(e.is_empty());
         e.set_val("pStyle", Some("Heading1"));
-        assert_eq!(e.finish(true), r#"<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>"#);
+        assert_eq!(
+            e.finish(true),
+            r#"<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>"#
+        );
         let e = Element::open(r#"<w:tcPr/>"#, "tcPr", "w", &d, TCPR_ORDER);
         assert!(e.children.is_empty());
         assert_eq!(e.finish(false), "<w:tcPr/>");

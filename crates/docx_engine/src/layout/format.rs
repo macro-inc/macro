@@ -7,9 +7,9 @@ use crate::model::section::Section;
 use crate::model::settings::Settings;
 use crate::model::styles::Styles;
 use crate::xml::{Decl, SnippetContext};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 /// The table context of a paragraph: which table style and conditional
 /// formats apply to the cell it is in.
@@ -57,9 +57,19 @@ pub struct Formats<'d> {
     /// Theme.
     pub theme: &'d ThemeInfo,
     snippets: SnippetContext,
-    paras: RefCell<HashMap<(String, TableCtx), Arc<ParaFormat>>>,
-    runs: RefCell<HashMap<(Attrs, usize), Arc<RunProps>>>,
-    run_snippets: RefCell<HashMap<(Box<str>, Box<str>), RPr>>,
+    cache: Arc<FormatCache>,
+}
+
+/// Resolved formats, kept between layouts of the same style sheet.
+#[derive(Debug, Default)]
+pub struct FormatCache {
+    paras: Mutex<HashMap<(String, TableCtx), Arc<ParaFormat>>>,
+    runs: Mutex<HashMap<(Attrs, usize), Arc<RunProps>>>,
+    run_snippets: Mutex<HashMap<(Box<str>, Box<str>), RPr>>,
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl<'d> Formats<'d> {
@@ -77,10 +87,15 @@ impl<'d> Formats<'d> {
             settings,
             theme,
             snippets: SnippetContext::new(decls),
-            paras: RefCell::new(HashMap::new()),
-            runs: RefCell::new(HashMap::new()),
-            run_snippets: RefCell::new(HashMap::new()),
+            cache: Arc::new(FormatCache::default()),
         }
+    }
+
+    /// A resolver that keeps its results in `cache` (which must belong to
+    /// the same style sheet).
+    pub fn with_cache(mut self, cache: Arc<FormatCache>) -> Self {
+        self.cache = cache;
+        self
     }
 
     /// The snippet context of the main part.
@@ -142,7 +157,7 @@ impl<'d> Formats<'d> {
     /// A paragraph's formatting from its `w:pPr` snippet.
     pub fn paragraph(&self, ppr_xml: &str, table: &TableCtx) -> Arc<ParaFormat> {
         let cache_key = (ppr_xml.to_owned(), table.clone());
-        if let Some(f) = self.paras.borrow().get(&cache_key) {
+        if let Some(f) = lock(&self.cache.paras).get(&cache_key) {
             return Arc::clone(f);
         }
         let (direct, section) = if ppr_xml.is_empty() {
@@ -209,22 +224,20 @@ impl<'d> Formats<'d> {
             mark: Arc::new(mark.resolve()),
             section,
         });
-        self.paras
-            .borrow_mut()
-            .insert(cache_key, Arc::clone(&format));
+        lock(&self.cache.paras).insert(cache_key, Arc::clone(&format));
         format
     }
 
     fn snippet_rpr(&self, qname: &str, xml: &str) -> RPr {
         let cache_key: (Box<str>, Box<str>) = (qname.into(), xml.into());
-        if let Some(r) = self.run_snippets.borrow().get(&cache_key) {
+        if let Some(r) = lock(&self.cache.run_snippets).get(&cache_key) {
             return r.clone();
         }
         let mut r = RPr::default();
         if let Ok(t) = self.snippets.parse(xml) {
             r.read_child(&t, t.root(), self.theme);
         }
-        self.run_snippets.borrow_mut().insert(cache_key, r.clone());
+        lock(&self.cache.run_snippets).insert(cache_key, r.clone());
         r
     }
 
@@ -243,7 +256,7 @@ impl<'d> Formats<'d> {
         // Spans differ only in their run-property keys for formatting purposes.
         let fmt_attrs = attrs.without(|k| !k.starts_with(key::RUN_PROP));
         let cache_key = (fmt_attrs, Arc::as_ptr(para) as usize);
-        if let Some(r) = self.runs.borrow().get(&cache_key) {
+        if let Some(r) = lock(&self.cache.runs).get(&cache_key) {
             return Arc::clone(r);
         }
         let direct = self.direct_rpr(attrs);
@@ -264,9 +277,7 @@ impl<'d> Formats<'d> {
         }
         r.apply(&direct, false);
         let resolved = Arc::new(r.resolve());
-        self.runs
-            .borrow_mut()
-            .insert(cache_key, Arc::clone(&resolved));
+        lock(&self.cache.runs).insert(cache_key, Arc::clone(&resolved));
         resolved
     }
 

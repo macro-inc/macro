@@ -187,6 +187,26 @@ impl Numbering {
         n
     }
 
+    /// Ids of every list instance.
+    pub fn num_ids(&self) -> impl Iterator<Item = i64> + '_ {
+        self.nums.keys().copied()
+    }
+
+    /// Ids of every abstract definition.
+    pub fn abstract_ids(&self) -> impl Iterator<Item = i64> + '_ {
+        self.abstracts.keys().copied()
+    }
+
+    /// The abstract definition a list instance names directly.
+    pub fn abstract_of(&self, num_id: i64) -> Option<i64> {
+        self.nums.get(&num_id).map(|n| n.abstract_id)
+    }
+
+    /// An abstract definition.
+    pub fn abstract_num(&self, id: i64) -> Option<&AbstractNum> {
+        self.abstracts.get(&id)
+    }
+
     /// Whether the instance exists.
     pub fn has_num(&self, num_id: i64) -> bool {
         self.nums.contains_key(&num_id)

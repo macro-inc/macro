@@ -368,6 +368,23 @@ impl Story {
         order::key_between(low, high)
     }
 
+    /// The position key for a new child of `parent` placed just before
+    /// `before`.
+    pub fn key_before(&self, parent: Option<&BlockId>, before: &BlockId) -> String {
+        let kids = self.children(parent);
+        let index = kids.iter().position(|k| k == before).unwrap_or(0);
+        let low = index
+            .checked_sub(1)
+            .and_then(|i| kids.get(i))
+            .and_then(|k| self.blocks.get(k))
+            .map(|b| b.order.as_str());
+        let high = kids
+            .get(index)
+            .and_then(|k| self.blocks.get(k))
+            .map(|b| b.order.as_str());
+        order::key_between(low, high)
+    }
+
     /// Re-sorts every children list (after bulk changes to order keys).
     pub fn resort(&mut self) {
         let parents: Vec<Option<BlockId>> = self.children.keys().cloned().collect();
@@ -396,6 +413,8 @@ impl Story {
 pub struct IdGen {
     next: u64,
     random: Option<Arc<pptx_engine::opc::IdSource>>,
+    /// Put before sequential ids (stories outside the body).
+    prefix: Option<Box<str>>,
 }
 
 impl IdGen {
@@ -404,6 +423,17 @@ impl IdGen {
         Self {
             next: 1,
             random: None,
+            prefix: None,
+        }
+    }
+
+    /// Sequential ids after a prefix: stable for a story read from the same
+    /// XML, and distinct from every other story's.
+    pub fn prefixed(prefix: &str) -> Self {
+        Self {
+            next: 1,
+            random: None,
+            prefix: Some(prefix.into()),
         }
     }
 
@@ -412,6 +442,7 @@ impl IdGen {
         Self {
             next: 1,
             random: Some(Arc::new(pptx_engine::opc::IdSource::new(seed))),
+            prefix: None,
         }
     }
 
@@ -432,7 +463,10 @@ impl IdGen {
             None => {
                 let n = self.next;
                 self.next += 1;
-                BlockId::new(&radix36(n))
+                match &self.prefix {
+                    Some(p) => BlockId::new(&format!("{p}{}", radix36(n))),
+                    None => BlockId::new(&radix36(n)),
+                }
             }
         }
     }

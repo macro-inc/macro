@@ -1,7 +1,10 @@
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
-import { LoroManager } from '@macro-inc/collaboration/collab/manager';
+import {
+  LoroManager,
+  LoroManagerError,
+} from '@macro-inc/collaboration/collab/manager';
 import {
   IDBSnapshotStore,
   LORO_SNAPSHOT_DB_NAME,
@@ -104,6 +107,9 @@ function isSelection(value: unknown): value is DocxSelection {
 export function createDocxSession(options: DocxSessionOptions): DocxSession {
   const manager = new LoroManager(DOCX_LORO_SCHEMA, {
     documentId: options.documentId,
+    // The editor reads the document directly; a JSON mirror of it would be
+    // rebuilt on every keystroke.
+    mirror: false,
   });
   const snapshots =
     options.persistence?.snapshots ??
@@ -228,7 +234,18 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
       ? manager.importUpdate(initial.snapshot)
       : await manager.initializeFromSnapshot(initial.snapshot);
     if (disposed) return;
-    if (result.isErr()) {
+    // Changes that arrive ahead of their history wait in the document until
+    // the sync engine's catch-up request brings the rest; only a copy with
+    // nothing to show yet cannot go on without them.
+    const failed = result.isErr()
+      ? result.error.filter(
+          (error) =>
+            !manager.initialized ||
+            error.code !== LoroManagerError.ImportPending
+        )
+      : [];
+    if (failed.length) {
+      console.error('DOCX snapshot import failed', failed);
       setState({ t: 'error', message: 'This document could not be opened.' });
       return;
     }
