@@ -9,6 +9,7 @@
 //! [`Presentation`] clones, which are cheap because parsed parts and package
 //! bytes are reference-counted and only copied when an edit touches them.
 
+pub(crate) mod animation;
 mod autofit;
 pub(crate) mod chart;
 mod chart_data;
@@ -35,6 +36,7 @@ mod theme;
 pub(crate) mod transition;
 
 pub use notes::notes_text;
+pub use ops::{AnimationClass, AnimationRepeat, AnimationSpec, AnimationStart, RepeatUntil};
 pub use ops::{
     BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
     FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
@@ -105,7 +107,10 @@ impl EditOp {
             | O::SetAltText { slide, .. }
             | O::SetShapeName { slide, .. }
             | O::SetShapeHidden { slide, .. }
-            | O::PasteFormat { slide, .. } => Some(*slide),
+            | O::PasteFormat { slide, .. }
+            | O::SetAnimations { slide, .. }
+            | O::AddAnimation { slide, .. }
+            | O::RemoveAnimations { slide, .. } => Some(*slide),
             O::PasteSlides { .. } | O::SetThemeColors { .. } | O::SetThemeFonts { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
@@ -171,6 +176,17 @@ impl Presentation {
         let mut refit = Vec::new();
         for op in ops {
             self.apply_op(op, &mut refit, &mut out)?;
+        }
+        // Animations name shapes and paragraphs by id and index: drop the
+        // ones the batch left without a target, which PowerPoint repairs.
+        let touched: Vec<String> = self
+            .slides
+            .iter()
+            .filter(|s| self.dirty_xml.contains(&s.part))
+            .map(|s| s.part.clone())
+            .collect();
+        for part in touched {
+            animation::scrub(self, &part)?;
         }
         autofit::refit(self, &refit, fonts)?;
         parts::prune_rels(self)?;
@@ -666,6 +682,24 @@ impl Presentation {
                 };
                 transition::set_transition(self, *slide, &patch, *apply_to_all)?;
             }
+            O::SetAnimations { slide, animations } => {
+                animation::set_animations(self, *slide, animations)?;
+            }
+            O::AddAnimation {
+                slide,
+                animation: spec,
+                index,
+            } => animation::add_animation(self, *slide, spec, *index)?,
+            O::RemoveAnimations {
+                slide,
+                shape_ids,
+                indexes,
+            } => animation::remove_animations(
+                self,
+                *slide,
+                shape_ids.as_deref(),
+                indexes.as_deref(),
+            )?,
             O::ReplaceText {
                 find: query,
                 replace,

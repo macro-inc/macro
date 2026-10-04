@@ -326,7 +326,7 @@ fn transition_xml(t: &TransitionOutline) -> Option<String> {
 }
 
 /// The local name of a root child, looking inside `mc:AlternateContent`.
-fn wrapped_local(doc: &XmlDoc, child: NodeId) -> &str {
+pub(super) fn wrapped_local(doc: &XmlDoc, child: NodeId) -> &str {
     if doc.is(child, Ns::MC, "AlternateContent") {
         return doc
             .first_child(child)

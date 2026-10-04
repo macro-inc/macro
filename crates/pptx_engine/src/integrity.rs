@@ -1,6 +1,7 @@
 //! Package integrity checks used after edits: every relationship target and
 //! `r:` reference resolves, every part has a content type, slide ids are
-//! unique, and slides keep the schema order of their top-level elements.
+//! unique, slides keep the schema order of their top-level elements, and
+//! animations name only shapes (and paragraphs) the slide has.
 //! Files that fail these checks make PowerPoint offer a "repair".
 
 use crate::error::Result;
@@ -42,10 +43,13 @@ impl Presentation {
                 problems.push(format!("{name}: not well-formed XML"));
                 continue;
             };
-            if self.pkg.content_type(name) == Some(content_type::SLIDE)
-                && let Some(problem) = slide_order_problem(&doc)
-            {
-                problems.push(format!("{name}: {problem}"));
+            if self.pkg.content_type(name) == Some(content_type::SLIDE) {
+                if let Some(problem) = slide_order_problem(&doc) {
+                    problems.push(format!("{name}: {problem}"));
+                }
+                for problem in crate::edit::animation::dangling_targets(&doc) {
+                    problems.push(format!("{name}: {problem}"));
+                }
             }
             for n in doc.descendants(doc.root()) {
                 for a in doc.attrs(n) {

@@ -44,8 +44,9 @@ into one undo step per group. Slides are addressed by their stable
 text (set, insert, delete, run and paragraph formatting, body properties),
 shapes (transform, fill, outline, geometry, add, delete, duplicate, z-order,
 picture replacement), tables (cell text, rows, columns), slides (add from a
-layout, duplicate, delete, move, hide, notes, background), and charts (data,
-type, title, legend, data labels, series colors, new charts). The same JSON
+layout, duplicate, delete, move, hide, notes, background), charts (data,
+type, title, legend, data labels, series colors, new charts), and animations.
+The same JSON
 vocabulary is used by the browser editor and by the `EditPresentation` AI
 tool; with the `schema` feature the operations derive JSON Schemas.
 
@@ -73,6 +74,33 @@ destination theme. Slides can change layout (placeholders rebind by type and
 index), carry transitions (including the `p14` and `p159` morph forms), and
 `find_text` / `ReplaceText` search and replace across shapes, groups, and
 table cells.
+
+### Animations
+
+A slide's main animation sequence (`p:timing`) reads as a flat list in
+playback order (`SlideOutline.animations`): shape, class, effect name,
+PowerPoint preset id and subtype, start (`onClick`, `withPrevious`,
+`afterPrevious`), duration, delay, option (`direction`), paragraph, repeat,
+and the path of motion paths. `SetAnimations` replaces the list,
+`AddAnimation` inserts one, `RemoveAnimations` drops some; the sequence's
+click and time groups are laid out again as PowerPoint lays them out.
+Entries that match an existing animation keep its markup (sounds,
+smoothing, presets the engine does not write) and only change its timing;
+new ones get the behaviors PowerPoint writes for their preset and a build
+entry for text shapes. Trigger sequences and media nodes are kept. After
+every batch, animations of shapes or paragraphs the batch removed are
+dropped, so a saved file never names a missing shape.
+
+| Class | Effects (default duration in ms) | Options (`direction`, default first) |
+| --- | --- | --- |
+| entrance | `appear` (0), `fade`, `split`, `wipe`, `randomBars`, `growTurn`, `zoom`, `flyIn` (500), `floatIn` (1000), `shape`, `wheel`, `swivel`, `bounce` (2000) | `flyIn`: `bottom`, `left`, `right`, `top`, `bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `floatIn`: `up`, `down`; `split`: `verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn`; `wipe`: `bottom`, `left`, `right`, `top`; `shape`: `circleOut`, `circleIn`, `boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`; `wheel`: `spokes1`, `spokes2`, `spokes3`, `spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`: `objectCenter`, `slideCenter` |
+| emphasis | `pulse`, `colorPulse` (500), `teeter`, `boldFlash`, `wave` (1000), `spin`, `growShrink`, `desaturate`, `darken`, `lighten`, `transparency` (2000) | `spin`: `clockwise`, `counterclockwise` |
+| exit | `disappear` (0), `fadeOut`, `flyOut`, `split`, `wipe`, `randomBars`, `shrinkTurn`, `zoom` (500), `floatOut` (1000), `shape`, `wheel`, `swivel`, `bounce` (2000) | as entrance; `floatOut`: `down`, `up`; `split` and `shape` default to `verticalIn` and `circleIn` |
+| path | `path` (2000) | `down`, `left`, `right`, `up` (a line a quarter of the slide long), or a `path` of its own |
+
+Other PowerPoint presets read under their names (`blinds`, `basicZoom`,
+`boomerang`, `fontColor`, media `play`...) or as `custom`; those, and media
+and OLE-verb actions, can be kept but not created.
 
 ### Collaboration
 
@@ -151,6 +179,12 @@ one that differs from PowerPoint (pattern fills, for example).
 - SmartArt is drawn from the drawing PowerPoint caches with it; the rare
   diagram saved without one (1 of 16 in the corpus) is left empty, since the
   SmartArt layout algorithms are not implemented.
-- Editing does not create SmartArt or animations; it keeps the ones a deck
-  has. Combination, scatter, bubble, stock, surface, and radar charts take
+- Editing does not create SmartArt; it keeps the diagrams a deck has.
+  Combination, scatter, bubble, stock, surface, and radar charts take
   formatting edits but not data or type edits.
+- Animations: rendering shows every shape, as PowerPoint's editing view
+  does (the web slide show plays the builds); new effects take PowerPoint's gallery
+  options only (no sounds, smoothing, or text-by-letter settings), and
+  paragraph animations keep their indexes when paragraphs are inserted
+  above them. Effects without a shape target (sounds alone) are dropped
+  when a slide's sequence is rewritten.

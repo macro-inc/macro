@@ -278,6 +278,127 @@ pub struct ThemeColor {
     pub color: String,
 }
 
+/// An animation's effect group (PowerPoint's Entrance, Emphasis, Exit, and
+/// Motion Paths galleries).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum AnimationClass {
+    /// Makes the shape appear (it is hidden until the effect plays).
+    Entrance,
+    /// Draws attention to a shape that is already visible.
+    Emphasis,
+    /// Makes the shape disappear.
+    Exit,
+    /// Moves the shape along a motion path.
+    Path,
+    /// Plays, pauses, or stops a video or sound (only kept, never created).
+    Media,
+    /// Anything else, such as an embedded object's verb (only kept, never created).
+    Other,
+}
+
+/// When an animation starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum AnimationStart {
+    /// When the presenter clicks (or presses the next key).
+    OnClick,
+    /// At the same time as the previous animation.
+    WithPrevious,
+    /// When the previous animation has finished.
+    AfterPrevious,
+}
+
+/// How often an animation plays.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(untagged)]
+pub enum AnimationRepeat {
+    /// Plays this many times in all (`1` = once, no repeat; fractions such as 2.5 are allowed).
+    Times(f32),
+    /// Repeats until an event.
+    Until(RepeatUntil),
+}
+
+/// The event that ends a repeating animation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum RepeatUntil {
+    /// Until the presenter clicks again.
+    UntilNextClick,
+    /// Until the slide ends.
+    UntilEndOfSlide,
+}
+
+/// One animation of a slide, for [`EditOp::SetAnimations`] and
+/// [`EditOp::AddAnimation`]. Omitted (or null) fields take the effect's
+/// defaults, or keep the values of the existing animation it matches.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AnimationSpec {
+    /// Id of the shape to animate. A group member's id animates only that member.
+    pub shape_id: u32,
+    /// Effect group: `entrance`, `emphasis`, `exit`, or `path` (`media` and
+    /// `other` can only keep animations the slide already has).
+    pub class: AnimationClass,
+    /// Effect name. Entrance: `appear`, `fade`, `flyIn`, `floatIn`, `split`,
+    /// `wipe`, `shape`, `wheel`, `randomBars`, `growTurn`, `zoom`, `swivel`,
+    /// `bounce`. Emphasis: `pulse`, `colorPulse`, `teeter`, `spin`,
+    /// `growShrink`, `desaturate`, `darken`, `lighten`, `transparency`,
+    /// `boldFlash`, `wave`. Exit: `disappear`, `fadeOut`, `flyOut`,
+    /// `floatOut`, `split`, `wipe`, `shape`, `wheel`, `randomBars`,
+    /// `shrinkTurn`, `zoom`, `swivel`, `bounce`. Path: `path`. Other names
+    /// the slide's outline reports (and `custom`) only keep an existing
+    /// animation of that name on the same shape.
+    pub effect: String,
+    /// `onClick` (the default for a new animation), `withPrevious`, or `afterPrevious`.
+    #[serde(default)]
+    pub start: Option<AnimationStart>,
+    /// Duration of one play in milliseconds, 10-60000 (default: the
+    /// effect's, e.g. 500 for fade, flyIn, wipe, and zoom, 1000 for floatIn
+    /// and teeter, 2000 for spin, growShrink, shape, wheel, and paths).
+    /// `appear` and `disappear` are instant and ignore it.
+    #[serde(default)]
+    pub duration_ms: Option<u32>,
+    /// Wait in milliseconds after the animation's start (click, previous
+    /// animation's start, or its end) before it plays, 0-60000 (default 0).
+    #[serde(default)]
+    pub delay_ms: Option<u32>,
+    /// Effect option (default: the first listed). `flyIn`, `flyOut` (edge it
+    /// flies in from or out to): `bottom`, `left`, `right`, `top`,
+    /// `bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `wipe` (edge it
+    /// starts from): `bottom`, `left`, `right`, `top`; `split` (entrance):
+    /// `verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn` (exit:
+    /// the `In` ones first); `shape` (entrance): `circleOut`, `circleIn`,
+    /// `boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`
+    /// (exit: `circleIn` first); `wheel`: `spokes1`, `spokes2`, `spokes3`,
+    /// `spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`:
+    /// `objectCenter`, `slideCenter`; `floatIn`: `up`, `down`; `floatOut`:
+    /// `down`, `up`; `spin`: `clockwise`, `counterclockwise`; `path`: `down`,
+    /// `left`, `right`, `up` (a straight line a quarter of the slide long).
+    #[serde(default)]
+    pub direction: Option<String>,
+    /// Animate only this paragraph of the shape's text (0-based); omit to
+    /// animate the whole shape. One animation per paragraph builds a list
+    /// paragraph by paragraph.
+    #[serde(default)]
+    pub paragraph: Option<u32>,
+    /// How often it plays: a count (`2`, `3`...; `1` = no repeat),
+    /// `untilNextClick`, or `untilEndOfSlide`.
+    #[serde(default)]
+    pub repeat: Option<AnimationRepeat>,
+    /// `path` class only: a motion path of its own instead of a direction,
+    /// in PowerPoint's syntax with coordinates as fractions of the slide's
+    /// width and height relative to the shape's position (`M 0 0 L 0.25 0.1 E`;
+    /// commands `M`, `L`, `C`, `Z`, and `E` for the end).
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
 /// Z-order moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -838,6 +959,42 @@ pub enum EditOp {
         /// Give every slide of the deck the resulting transition.
         #[serde(default, deserialize_with = "nullable")]
         apply_to_all: bool,
+    },
+    /// Replaces a slide's animations (its main sequence, which plays as the
+    /// presenter clicks through the slide) with these, in playback order;
+    /// `[]` removes them all. An entry matching an animation the slide has
+    /// (same shape, class, effect, and paragraph, and direction when given)
+    /// keeps it, with its other settings unless the entry gives them, so
+    /// listing the current animations in a new order reorders them.
+    /// Animations started by clicking a shape (triggers) are kept.
+    SetAnimations {
+        /// Slide id.
+        slide: u32,
+        /// Animations in playback order.
+        animations: Vec<AnimationSpec>,
+    },
+    /// Adds a new animation to a slide's sequence.
+    AddAnimation {
+        /// Slide id.
+        slide: u32,
+        /// The animation.
+        animation: AnimationSpec,
+        /// 0-based position in playback order (the end when omitted).
+        #[serde(default)]
+        index: Option<usize>,
+    },
+    /// Removes animations from a slide's sequence: every animation of the
+    /// listed shapes and the animations at the listed playback positions.
+    /// Give at least one of the lists (`setAnimations` with `[]` removes all).
+    RemoveAnimations {
+        /// Slide id.
+        slide: u32,
+        /// Shapes whose animations to remove.
+        #[serde(default)]
+        shape_ids: Option<Vec<u32>>,
+        /// 0-based playback positions to remove.
+        #[serde(default)]
+        indexes: Option<Vec<usize>>,
     },
     /// Replaces text in shapes, group members, and table cells, on one slide
     /// or on every slide. A match may span differently formatted runs but not

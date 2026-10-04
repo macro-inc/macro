@@ -27,6 +27,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 pub use crate::edit::LayoutInfo;
+pub use animation::AnimationOutline;
+
+mod animation;
 
 /// What kind of object a shape is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -259,6 +262,9 @@ pub struct SlideOutline {
     /// The transition into the slide.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transition: Option<TransitionOutline>,
+    /// Animations of the main sequence, in playback order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub animations: Vec<AnimationOutline>,
 }
 
 /// A slide transition.
@@ -622,6 +628,7 @@ impl Presentation {
             shapes: outlines,
             notes: notes_text(self, entry.id)?,
             transition: crate::edit::transition::read(&ctx.slide.doc),
+            animations: crate::edit::animation::read(&ctx.slide.doc),
         })
     }
 
