@@ -39,6 +39,13 @@ pub fn register_font(bytes: Vec<u8>) -> usize {
     FONTS.with(|f| f.borrow_mut().register(bytes).len())
 }
 
+/// A preset shape's outline at `w`×`h` points as JSON `[{d, fill, stroke}]`
+/// (SVG path data), or `null` for an unknown preset. For shape galleries.
+#[wasm_bindgen(js_name = presetPaths)]
+pub fn preset_paths(name: &str, w: f64, h: f64) -> Result<String, JsError> {
+    to_json(&crate::geometry::preset_svg(name, w, h))
+}
+
 /// An open presentation with undo history.
 #[wasm_bindgen]
 pub struct PptxDocument {

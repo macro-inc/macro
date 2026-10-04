@@ -10,6 +10,7 @@ import type {
   DeckOutline,
   EditResult,
   EntryChange,
+  PresetPath,
   SlideOutline,
   TextLayoutInfo,
 } from './types';
@@ -43,7 +44,14 @@ export type PptxRequest =
   | (Base & { kind: 'breakGroup' })
   | (Base & { kind: 'undo' })
   | (Base & { kind: 'redo' })
-  | (Base & { kind: 'save' });
+  | (Base & { kind: 'save' })
+  /** Preset shape outlines for galleries (no document needed). */
+  | (Base & {
+      kind: 'presetPaths';
+      names: string[];
+      width: number;
+      height: number;
+    });
 
 /** History availability, reported after every state change. */
 export interface HistoryState {
@@ -81,4 +89,10 @@ export type PptxResponse =
     }
   | { id: number; ok: true; kind: 'collab'; changes: EntryChange[] }
   | { id: number; ok: true; kind: 'save'; bytes: ArrayBuffer }
+  | {
+      id: number;
+      ok: true;
+      kind: 'presetPaths';
+      paths: Record<string, PresetPath[]>;
+    }
   | { id: number; ok: false; error: string };

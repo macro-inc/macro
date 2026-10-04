@@ -1,7 +1,7 @@
 /**
- * Selection chrome drawn over the slide in slide coordinates: the selected
- * shape's outline, resize and rotation handles, a drag preview, and the text
- * caret and selection while editing.
+ * Selection chrome drawn over the slide in slide coordinates: selected
+ * shapes' outlines, resize and rotation handles, drag previews, the marquee,
+ * a table cell range, and the text caret and selection while editing.
  */
 
 import { For, Show } from 'solid-js';
@@ -14,6 +14,7 @@ import {
   type Point,
   rotationHandlePosition,
 } from '../core/geometry';
+import type { Rect } from '../core/selection';
 
 const points = (pts: Point[]) => pts.map((p) => `${p.x},${p.y}`).join(' ');
 
@@ -22,9 +23,18 @@ export function SelectionOverlay(props: {
   height: number;
   /** Points per CSS pixel, so chrome keeps a constant on-screen size. */
   unit: number;
+  /** The box handles are drawn on (one shape, or several shapes' bounds). */
   selection?: Box;
+  /** Outlines of each selected shape when several are selected. */
+  outlines?: Box[];
   showHandles: boolean;
-  preview?: Box;
+  rotatable: boolean;
+  previews?: Box[];
+  marquee?: Rect;
+  /** Highlighted table cells. */
+  cellRange?: Box;
+  /** A table border being dragged. */
+  guide?: { x1: number; y1: number; x2: number; y2: number };
   caret?: [Point, Point];
   textSelection?: Point[][];
   editing: boolean;
@@ -41,6 +51,19 @@ export function SelectionOverlay(props: {
       viewBox={`0 0 ${props.width} ${props.height}`}
       aria-hidden="true"
     >
+      <Show when={props.cellRange}>
+        {(box) => (
+          <rect
+            data-testid="pptx-cell-range"
+            x={box().x}
+            y={box().y}
+            width={box().w}
+            height={box().h}
+            class="fill-accent/20 stroke-accent"
+            stroke-width={props.unit * 1.5}
+          />
+        )}
+      </Show>
       <For each={props.textSelection ?? []}>
         {(quad) => <polygon points={points(quad)} class="fill-accent/30" />}
       </For>
@@ -57,6 +80,16 @@ export function SelectionOverlay(props: {
           />
         )}
       </Show>
+      <For each={props.outlines ?? []}>
+        {(box) => (
+          <polygon
+            data-testid="pptx-selection-outline"
+            points={points(corners(box))}
+            class="fill-none stroke-accent"
+            stroke-width={props.unit}
+          />
+        )}
+      </For>
       <Show when={props.selection}>
         {(box) => (
           <>
@@ -66,31 +99,33 @@ export function SelectionOverlay(props: {
               class="fill-none stroke-accent"
               stroke-width={props.unit * (props.editing ? 1 : 1.5)}
               stroke-dasharray={
-                props.editing
+                props.editing || (props.outlines?.length ?? 0) > 0
                   ? `${4 * props.unit} ${3 * props.unit}`
                   : undefined
               }
             />
             <Show when={props.showHandles && !props.editing}>
-              <line
-                x1={handlePosition(box(), 'n').x}
-                y1={handlePosition(box(), 'n').y}
-                x2={rotationHandlePosition(box(), 20 * props.unit).x}
-                y2={rotationHandlePosition(box(), 20 * props.unit).y}
-                class="stroke-accent"
-                stroke-width={props.unit}
-              />
-              <circle
-                data-testid="pptx-rotate-handle"
-                cx={rotationHandlePosition(box(), 20 * props.unit).x}
-                cy={rotationHandlePosition(box(), 20 * props.unit).y}
-                r={handleSize() / 2 + props.unit}
-                class="pointer-events-auto cursor-grab fill-surface stroke-accent"
-                stroke-width={props.unit * 1.5}
-                onPointerDown={(e) =>
-                  props.onHandleDown('rotate', undefined, e)
-                }
-              />
+              <Show when={props.rotatable}>
+                <line
+                  x1={handlePosition(box(), 'n').x}
+                  y1={handlePosition(box(), 'n').y}
+                  x2={rotationHandlePosition(box(), 20 * props.unit).x}
+                  y2={rotationHandlePosition(box(), 20 * props.unit).y}
+                  class="stroke-accent"
+                  stroke-width={props.unit}
+                />
+                <circle
+                  data-testid="pptx-rotate-handle"
+                  cx={rotationHandlePosition(box(), 20 * props.unit).x}
+                  cy={rotationHandlePosition(box(), 20 * props.unit).y}
+                  r={handleSize() / 2 + props.unit}
+                  class="pointer-events-auto cursor-grab fill-surface stroke-accent"
+                  stroke-width={props.unit * 1.5}
+                  onPointerDown={(e) =>
+                    props.onHandleDown('rotate', undefined, e)
+                  }
+                />
+              </Show>
               <For each={HANDLES}>
                 {(handle) => {
                   const p = () => handlePosition(box(), handle);
@@ -116,14 +151,41 @@ export function SelectionOverlay(props: {
           </>
         )}
       </Show>
-      <Show when={props.preview}>
+      <For each={props.previews ?? []}>
         {(box) => (
           <polygon
             data-testid="pptx-drag-preview"
-            points={points(corners(box()))}
+            points={points(corners(box))}
             class="fill-accent/10 stroke-accent"
             stroke-width={props.unit}
             stroke-dasharray={`${4 * props.unit} ${3 * props.unit}`}
+          />
+        )}
+      </For>
+      <Show when={props.marquee}>
+        {(r) => (
+          <rect
+            data-testid="pptx-marquee"
+            x={r().x}
+            y={r().y}
+            width={r().w}
+            height={r().h}
+            class="fill-accent/10 stroke-accent"
+            stroke-width={props.unit}
+            stroke-dasharray={`${3 * props.unit} ${2 * props.unit}`}
+          />
+        )}
+      </Show>
+      <Show when={props.guide}>
+        {(g) => (
+          <line
+            x1={g().x1}
+            y1={g().y1}
+            x2={g().x2}
+            y2={g().y2}
+            class="stroke-accent"
+            stroke-width={props.unit * 1.5}
+            stroke-dasharray={`${4 * props.unit} ${2 * props.unit}`}
           />
         )}
       </Show>

@@ -15,6 +15,7 @@ import type {
   DeckOutline,
   EditResult,
   EntryChange,
+  PresetPath,
   SlideOutline,
   TextLayoutInfo,
 } from './types';
@@ -266,6 +267,19 @@ async function serve(
         ];
       }
     )
+    .with({ kind: 'presetPaths' }, ({ names, width, height }) => {
+      const paths: Record<string, PresetPath[]> = {};
+      for (const name of names) {
+        const json = JSON.parse(wasm.presetPaths(name, width, height)) as
+          | PresetPath[]
+          | null;
+        if (json) paths[name] = json;
+      }
+      return [{ id, ok: true, kind: 'presetPaths', paths }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
     .with({ kind: 'textLayout' }, ({ docKey, index, shape }) => {
       const layout = JSON.parse(
         documentFor(docKey).textLayout(index, shape)

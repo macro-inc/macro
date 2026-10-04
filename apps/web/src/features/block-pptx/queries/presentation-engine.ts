@@ -10,6 +10,7 @@ import {
   closePresentation,
   enableCollab,
   getOutline,
+  getPresetPaths,
   getSlideOutline,
   getTextLayout,
   openPresentation,
@@ -59,6 +60,7 @@ function readers(key: string) {
     ) => renderSlideLayer(key, index, width, mode, shape),
     textLayout: (index: number, shape: number) =>
       getTextLayout(key, index, shape),
+    presetPaths: getPresetPaths,
     save: () => savePresentation(key),
     close: () => closePresentation(key),
   };

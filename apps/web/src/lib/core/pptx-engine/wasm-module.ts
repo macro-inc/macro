@@ -59,6 +59,8 @@ interface PptxEngineWasmModule {
     fromEntries: (entries: string, seed: number) => WasmPptxDocument;
   };
   registerFont: (bytes: Uint8Array) => number;
+  /** `PresetPath[]` JSON for a preset at `w`×`h` points, or `null`. */
+  presetPaths: (name: string, w: number, h: number) => string;
 }
 
 let modulePromise: Promise<PptxEngineWasmModule> | undefined;

@@ -18,6 +18,9 @@ export interface TextFormatState {
   size?: number;
   color?: string;
   font?: string;
+  /** Baseline shift in percent (positive = superscript). */
+  baseline?: number;
+  highlight?: string;
   align?: string;
   bullet: boolean;
 }
@@ -80,6 +83,8 @@ export function formatState(
     size: runs[0].size,
     color: runs[0].color,
     font: runs[0].font,
+    baseline: runs[0].baseline,
+    highlight: runs[0].highlight,
     align: paras[0]?.align,
     bullet: paras.length > 0 && paras.every((p) => p.bullet),
   };

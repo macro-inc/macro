@@ -13,6 +13,7 @@ import type {
   EditOp,
   EditResult,
   EntryChange,
+  PresetPath,
   SlideOutline,
   TextLayoutInfo,
 } from './types';
@@ -254,4 +255,18 @@ export async function redoEdit(docKey: string): Promise<EditOutcome> {
 export async function savePresentation(docKey: string): Promise<Uint8Array> {
   const r = await request({ kind: 'save', docKey }, 'save');
   return new Uint8Array(r.bytes);
+}
+
+/** Outlines of preset shapes at `width`×`height` points, for galleries. */
+export async function getPresetPaths(
+  names: string[],
+  width: number,
+  height: number
+): Promise<Record<string, PresetPath[]>> {
+  return (
+    await request(
+      { kind: 'presetPaths', docKey: '', names, width, height },
+      'presetPaths'
+    )
+  ).paths;
 }

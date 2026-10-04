@@ -6,9 +6,11 @@
  */
 
 import type {
+  CellRef,
   DeckOutline,
   EditOp,
   EditResult,
+  PresetPath,
   SlideOutline,
   TextLayoutInfo,
 } from '@core/pptx-engine/types';
@@ -39,7 +41,12 @@ export interface PresentationEngine {
     mode: 'without' | 'only',
     shape: number
   ) => Promise<ImageBitmap>;
-  textLayout: (index: number, shape: number) => Promise<TextLayoutInfo | null>;
+  /** Lays out a shape's text, or a table cell's. */
+  textLayout: (
+    index: number,
+    shape: number,
+    cell?: CellRef
+  ) => Promise<TextLayoutInfo | null>;
   /** Applies a batch atomically; batches sharing `group` merge into one undo step. */
   apply: (ops: EditOp[], group?: string) => Promise<EditOutcome>;
   breakGroup: () => Promise<EditOutcome>;
@@ -56,6 +63,16 @@ export interface PresentationEngine {
   reopen: (bytes: ArrayBuffer) => Promise<void>;
   /** Releases the engine's memory. */
   close: () => void;
+  /** Serializes shapes of slide `index` for pasting (`pasteShapes`). */
+  copyShapes?: (index: number, shapes: number[]) => Promise<string>;
+  /** Serializes slides for pasting (`pasteSlides`). */
+  copySlides?: (slides: number[]) => Promise<string>;
+  /** Outlines of preset shapes at `width`×`height` points, for galleries. */
+  presetPaths?: (
+    names: string[],
+    width: number,
+    height: number
+  ) => Promise<Record<string, PresetPath[]>>;
   /** Whether other people edit the same presentation live. */
   collaborative?: boolean;
   /**

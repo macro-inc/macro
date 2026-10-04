@@ -1,30 +1,98 @@
 /**
- * The presentation editor: slide rail, toolbar, the slide stage with
- * selection and in-place text editing, and speaker notes.
+ * The presentation editor: ribbon, slide rail, the slide stage with
+ * selection, in-place text and table editing, right-click menus, the format
+ * pane, speaker notes, find and replace, and the slide show.
  */
 
-import type { ShapeOutline, SlideOutline } from '@core/pptx-engine/types';
+import {
+  ContextMenuContent,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
+import type {
+  CellRef,
+  ShapeOutline,
+  SlideOutline,
+} from '@core/pptx-engine/types';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
+import ClipboardIcon from '@phosphor/clipboard.svg';
+import CloudCheck from '@phosphor/cloud-check.svg';
+import CopyIcon from '@phosphor/copy.svg';
+import CopySimple from '@phosphor/copy-simple.svg';
+import DownloadSimple from '@phosphor/download-simple.svg';
+import EyeSlash from '@phosphor/eye-slash.svg';
+import PaintBucket from '@phosphor/paint-bucket.svg';
+import Play from '@phosphor/play.svg';
+import Plus from '@phosphor/plus.svg';
+import Scissors from '@phosphor/scissors.svg';
+import Trash from '@phosphor/trash.svg';
+import WarningIcon from '@phosphor/warning.svg';
+import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { EditorToolbar } from '../components/editor-toolbar';
+import {
+  ChartDataEditor,
+  ChartDesignTab,
+  ChartGallery,
+  sampleChartData,
+} from '../components/chart-controls';
+import { FindReplace } from '../components/find-replace';
+import { FormatPane, type PaneSection } from '../components/format-pane';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
+import { RibbonButton } from '../components/ribbon/controls';
+import { HomeTab } from '../components/ribbon/home-tab';
+import { InsertTab } from '../components/ribbon/insert-tab';
+import {
+  DesignTab,
+  ShapeFormatTab,
+  SlideShowTab,
+  ViewTab,
+} from '../components/ribbon/other-tabs';
+import {
+  Ribbon,
+  type RibbonEnv,
+  type RibbonTab,
+} from '../components/ribbon/ribbon';
+import {
+  TableDesignTab,
+  TableLayoutTab,
+} from '../components/ribbon/table-tabs';
 import { SelectionOverlay } from '../components/selection-overlay';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
+import { SlideShow } from '../components/slideshow';
+import {
+  type MenuTarget,
+  StageMenuItems,
+} from '../components/stage-context-menu';
 import { usePptxEditorContext } from '../context/pptx-editor-context';
 import { caretSegment, selectionQuads } from '../core/caret';
-import { formatState, stepFontSize } from '../core/formatting';
-import { boxOf, hitTest, type Point } from '../core/geometry';
-import { STANDARD_SWATCHES, themeSwatches } from '../core/palette';
-import { formatCommand, paragraphCommand } from '../core/text-commands';
+import { type Box, boxOf, hitTest, type Point } from '../core/geometry';
+import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
+import { unionBounds } from '../core/selection';
+import {
+  anchorOf,
+  boundaryAt,
+  cellAt,
+  cellBox,
+  nextCell,
+  rangeBox,
+  tableGeometry,
+} from '../core/table';
+import { paragraphCommand } from '../core/text-commands';
+import { createClipboard } from '../primitives/create-clipboard';
+import { createEditorCommands } from '../primitives/create-editor-commands';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
@@ -36,15 +104,10 @@ const STAGE_MARGIN = 32;
 const quantize = (px: number) =>
   Math.min(4096, Math.max(256, Math.ceil(px / 64) * 64));
 
-async function fileToBase64(file: Blob): Promise<string> {
-  const buffer = new Uint8Array(await file.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < buffer.length; i += 0x8000) {
-    binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
+/** CSS pixels per point at 100% zoom (96 dpi). */
+const PX_PER_PT = 96 / 72;
 
+/** A cell being edited in a plain text field (when the engine can't lay it out). */
 interface CellEdit {
   shape: ShapeOutline;
   row: number;
@@ -53,33 +116,24 @@ interface CellEdit {
   rect: { x: number; y: number; w: number; h: number };
 }
 
-/** The cell of a table frame under `p` (slide coordinates). */
-function tableCellAt(
-  shape: ShapeOutline,
-  p: Point
-): Omit<CellEdit, 'text' | 'shape'> | null {
-  const table = shape.table;
-  if (!table) return null;
-  const totalW = table.columnWidths.reduce((a, b) => a + b, 0) || shape.w;
-  const totalH = table.rowHeights.reduce((a, b) => a + b, 0) || shape.h;
-  // Rows grow with their text; spread the frame's height proportionally.
-  const sy = shape.h / totalH;
-  const sx = shape.w / totalW;
-  let y = shape.y;
-  for (let r = 0; r < table.rowHeights.length; r++) {
-    const h = table.rowHeights[r] * sy;
-    let x = shape.x;
-    for (let c = 0; c < table.columnWidths.length; c++) {
-      const w = table.columnWidths[c] * sx;
-      if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h) {
-        return { row: r, col: c, rect: { x, y, w, h } };
-      }
-      x += w;
-    }
-    y += h;
-  }
-  return null;
+/** A cell range selected in a table. */
+interface TableRange {
+  shape: number;
+  from: CellRef;
+  to: CellRef;
 }
+
+/** A pointer gesture inside a table. */
+type TableGesture =
+  | { kind: 'cells'; shape: number; from: CellRef; at: Point; moved: boolean }
+  | {
+      kind: 'border';
+      shape: number;
+      axis: 'col' | 'row';
+      index: number;
+      start: Point;
+      current: Point;
+    };
 
 export function PptxEditor() {
   const context = usePptxEditorContext();
@@ -105,7 +159,7 @@ export function PptxEditor() {
   const dpr = () =>
     typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
 
-  // ---- stage geometry --------------------------------------------------
+  // ---- stage geometry and zoom ---------------------------------------------
 
   let stageHost!: HTMLDivElement;
   const [hostSize, setHostSize] = createSignal({ w: 0, h: 0 });
@@ -120,8 +174,8 @@ export function PptxEditor() {
 
   const slideW = () => session.outline()?.width ?? 960;
   const slideH = () => session.outline()?.height ?? 540;
-  /** CSS pixels per point. */
-  const scale = () => {
+  const [zoom, setZoomRaw] = createSignal<number | 'fit'>('fit');
+  const fitScale = () => {
     const { w, h } = hostSize();
     if (w <= 0 || h <= 0) return 0;
     return Math.max(
@@ -132,9 +186,22 @@ export function PptxEditor() {
       )
     );
   };
+  /** CSS pixels per point. */
+  const scale = () => {
+    const z = zoom();
+    if (hostSize().w <= 0) return 0;
+    return z === 'fit' ? fitScale() : z * PX_PER_PT;
+  };
+  const setZoom = (z: number | 'fit') =>
+    setZoomRaw(z === 'fit' ? 'fit' : Math.min(4, Math.max(0.1, z)));
+  const zoomBy = (factor: number) => {
+    const current = scale() / PX_PER_PT || 1;
+    setZoom(current * factor);
+  };
   const renderWidth = createMemo(() =>
     scale() > 0 ? quantize(slideW() * scale() * dpr()) : 0
   );
+  const unit = () => 1 / Math.max(scale(), 0.01);
 
   const editor = createSlideEditor({
     engine,
@@ -142,8 +209,72 @@ export function PptxEditor() {
     queue,
     canEdit: context.canEdit,
     renderWidth,
-    pointsPerPixel: () => 1 / Math.max(scale(), 0.01),
+    pointsPerPixel: unit,
   });
+
+  // ---- tables ----------------------------------------------------------------
+
+  const [tableRange, setTableRange] = createSignal<TableRange | null>(null);
+  let tableGesture: TableGesture | null = null;
+  const [borderGuide, setBorderGuide] = createSignal<TableGesture | null>(null);
+  /** The table the selection is in (one selected table shape). */
+  const selectedTable = () => {
+    const edit = editor.editing();
+    const shape = edit ? editor.findShape(edit.shape) : editor.selectedShape();
+    return shape?.kind === 'table' && shape.table ? shape : undefined;
+  };
+  /** The cells table commands act on: a range, the edited cell, or all. */
+  const tableTarget = () => {
+    const shape = selectedTable();
+    if (!shape) return undefined;
+    const range = tableRange();
+    if (range && range.shape === shape.id)
+      return { shape, from: range.from, to: range.to };
+    const cell = editor.editing()?.cell;
+    if (cell) return { shape, from: cell, to: cell };
+    const rows = shape.table?.rowHeights.length ?? 1;
+    const cols = shape.table?.columnWidths.length ?? 1;
+    return {
+      shape,
+      from: { row: 0, col: 0 },
+      to: { row: rows - 1, col: cols - 1 },
+    };
+  };
+  const selectWholeRows = () => {
+    const t = tableTarget();
+    if (!t) return;
+    const cols = t.shape.table?.columnWidths.length ?? 1;
+    editor.stopEditing();
+    setTableRange({
+      shape: t.shape.id,
+      from: { row: Math.min(t.from.row, t.to.row), col: 0 },
+      to: { row: Math.max(t.from.row, t.to.row), col: cols - 1 },
+    });
+  };
+  const selectWholeColumns = () => {
+    const t = tableTarget();
+    if (!t) return;
+    const rows = t.shape.table?.rowHeights.length ?? 1;
+    editor.stopEditing();
+    setTableRange({
+      shape: t.shape.id,
+      from: { row: 0, col: Math.min(t.from.col, t.to.col) },
+      to: { row: rows - 1, col: Math.max(t.from.col, t.to.col) },
+    });
+  };
+  const selectWholeTable = () => {
+    const shape = selectedTable();
+    if (!shape) return;
+    editor.stopEditing();
+    setTableRange({
+      shape: shape.id,
+      from: { row: 0, col: 0 },
+      to: {
+        row: (shape.table?.rowHeights.length ?? 1) - 1,
+        col: (shape.table?.columnWidths.length ?? 1) - 1,
+      },
+    });
+  };
 
   // ---- presence (collaborative presentations) -----------------------------
 
@@ -151,21 +282,21 @@ export function PptxEditor() {
   /** Where this person is, as a stable key (keystrokes do not change it). */
   const whereabouts = createMemo(() => {
     const slide = session.currentSlide();
-    const shape = editor.selectedShape();
+    const ids = editor.selectedIds();
     return slide
-      ? `${slide.id}:${shape?.id ?? ''}:${editor.editing() ? 1 : 0}`
+      ? `${slide.id}:${ids.join(',')}:${editor.editing() ? 1 : 0}`
       : '';
   });
   // Sharing it with the presence channel syncs an external system.
   createEffect(
     on(whereabouts, (key) => {
       if (!collaboration) return;
-      const [slide, shape, editing] = key.split(':');
+      const [slide, shapes, editing] = key.split(':');
       collaboration.setSelection(
         key
           ? {
               slide: Number(slide),
-              shapes: shape ? [Number(shape)] : [],
+              shapes: shapes ? shapes.split(',').map(Number) : [],
               editing: editing === '1',
             }
           : undefined
@@ -183,14 +314,16 @@ export function PptxEditor() {
     width: () => Math.round(150 * dpr()),
   });
 
-  // ---- text input ------------------------------------------------------
+  // ---- focus ---------------------------------------------------------------
 
   let input!: HTMLTextAreaElement;
   let stage!: HTMLDivElement;
   const focusInput = () => input?.focus({ preventScroll: true });
   const focusStage = () => stage?.focus({ preventScroll: true });
+  const refocus = () => (editor.editing() ? focusInput() : focusStage());
 
   const startEditing = async (shape: number, at?: Point) => {
+    setTableRange(null);
     await editor.startEditing(shape, at);
     focusInput();
   };
@@ -205,7 +338,32 @@ export function PptxEditor() {
     return { x: (e.clientX - rect.left) / s, y: (e.clientY - rect.top) / s };
   };
 
-  // ---- table cells -----------------------------------------------------
+  // ---- commands -------------------------------------------------------------
+
+  const commands = createEditorCommands({
+    session,
+    editor,
+    context,
+    slideSize: () => ({ w: slideW(), h: slideH() }),
+    refocus,
+    startEditing: (id) => void startEditing(id),
+    tableTarget,
+  });
+
+  const [railFocused, setRailFocused] = createSignal(false);
+  const clipboard = createClipboard({
+    engine,
+    session,
+    editor,
+    commands,
+    notifyError: context.notifyError,
+    railSelection: () => {
+      const s = session.currentSlide();
+      return railFocused() && s ? [s.id] : undefined;
+    },
+  });
+
+  // ---- table cell editing ---------------------------------------------------
 
   const [cellEdit, setCellEdit] = createSignal<CellEdit | null>(null);
   const commitCell = async (value: string) => {
@@ -225,7 +383,73 @@ export function PptxEditor() {
     ]);
   };
 
-  // ---- pointer ---------------------------------------------------------
+  /** Puts the caret in a cell (in place when the engine lays cells out). */
+  const editCell = async (shape: ShapeOutline, ref: CellRef, at?: Point) => {
+    const g = tableGeometry(shape);
+    if (!g || readonly()) return;
+    const anchor = anchorOf(shape, ref);
+    const bounds = cellBox(shape, g, anchor);
+    setTableRange(null);
+    await editor.startEditing(shape.id, at, { ref: anchor, bounds });
+    if (editor.editing()?.layout) {
+      focusInput();
+      return;
+    }
+    // No cell layout from the engine: edit the cell's text in a field.
+    editor.stopEditing();
+    editor.select(shape.id);
+    setCellEdit({
+      shape,
+      row: anchor.row,
+      col: anchor.col,
+      text: shape.table?.rows[anchor.row]?.[anchor.col] ?? '',
+      rect: bounds,
+    });
+  };
+
+  /** Tab/Shift+Tab between cells; Tab past the last cell adds a row. */
+  const tabCell = async (direction: 1 | -1) => {
+    const edit = editor.editing();
+    const shape = edit && editor.findShape(edit.shape);
+    if (!edit?.cell || !shape) return;
+    const next = nextCell(shape, edit.cell, direction);
+    if (next) {
+      await editCell(shape, next);
+      editor.selectAllText();
+      return;
+    }
+    if (direction < 0) return;
+    const slide = session.currentSlide();
+    if (!slide) return;
+    const rows = shape.table?.rowHeights.length ?? 0;
+    editor.stopEditing();
+    await session.apply([
+      { op: 'insertTableRow', slide: slide.id, shape: shape.id, at: rows },
+    ]);
+    const updated = editor.findShape(shape.id);
+    if (updated) await editCell(updated, { row: rows, col: 0 });
+  };
+
+  /** The table (and cell) under a point, when a click should go to its cells. */
+  const tableHit = (at: Point) => {
+    const slide = session.currentSlide();
+    const hit = slide ? hitTest(slide.shapes, at) : undefined;
+    if (hit?.kind !== 'table' || !hit.table || hit.rotation) return undefined;
+    const g = tableGeometry(hit);
+    if (!g) return undefined;
+    // The frame's edge moves the table; inside, clicks go to cells.
+    const edge = 4 * unit();
+    const nearEdge =
+      at.x - g.xs[0] < edge ||
+      g.xs[g.xs.length - 1] - at.x < edge ||
+      at.y - g.ys[0] < edge ||
+      g.ys[g.ys.length - 1] - at.y < edge;
+    const cell = cellAt(g, at);
+    if (!cell || nearEdge) return undefined;
+    return { shape: hit, g, cell };
+  };
+
+  // ---- pointer ---------------------------------------------------------------
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
@@ -234,8 +458,65 @@ export function PptxEditor() {
         (document.getElementById('pptx-cell-input') as HTMLTextAreaElement)
           ?.value ?? ''
       );
-    editor.pointerDown(toSlide(e), { shift: e.shiftKey, detail: e.detail });
+    const at = toSlide(e);
     stage.setPointerCapture(e.pointerId);
+    const toggle = e.metaKey || e.ctrlKey;
+    const t = !e.shiftKey && !toggle && !readonly() ? tableHit(at) : undefined;
+    if (t) {
+      const edit = editor.editing();
+      const sameCell =
+        edit?.shape === t.shape.id &&
+        edit.cell &&
+        anchorOf(t.shape, edit.cell).row === anchorOf(t.shape, t.cell).row &&
+        anchorOf(t.shape, edit.cell).col === anchorOf(t.shape, t.cell).col;
+      // A column or row border of the selected table resizes it.
+      const border =
+        editor.selectedShape()?.id === t.shape.id && commands.resizeGrid
+          ? boundaryAt(t.g, at, 3 * unit())
+          : undefined;
+      if (border) {
+        tableGesture = {
+          kind: 'border',
+          shape: t.shape.id,
+          axis: border.kind,
+          index: border.index,
+          start: at,
+          current: at,
+        };
+        setBorderGuide(tableGesture);
+        e.preventDefault();
+        return;
+      }
+      if (sameCell) {
+        editor.pointerDown(at, { shift: false, detail: e.detail });
+        e.preventDefault();
+        focusInput();
+        tableGesture = {
+          kind: 'cells',
+          shape: t.shape.id,
+          from: t.cell,
+          at,
+          moved: false,
+        };
+        return;
+      }
+      if (edit) editor.stopEditing();
+      editor.select(t.shape.id);
+      setTableRange(null);
+      tableGesture = {
+        kind: 'cells',
+        shape: t.shape.id,
+        from: t.cell,
+        at,
+        moved: false,
+      };
+      e.preventDefault();
+      focusStage();
+      return;
+    }
+    tableGesture = null;
+    setTableRange(null);
+    editor.pointerDown(at, { shift: e.shiftKey, toggle, detail: e.detail });
     if (editor.editing()) {
       e.preventDefault();
       focusInput();
@@ -246,12 +527,51 @@ export function PptxEditor() {
 
   const onPointerMove = (e: PointerEvent) => {
     if (!stage.hasPointerCapture(e.pointerId)) return;
-    editor.pointerMove(toSlide(e), { shift: e.shiftKey });
+    const at = toSlide(e);
+    const g = tableGesture;
+    if (g?.kind === 'border') {
+      g.current = at;
+      setBorderGuide({ ...g });
+      return;
+    }
+    if (g?.kind === 'cells') {
+      const shape = editor.findShape(g.shape);
+      const geometry = shape && tableGeometry(shape);
+      const cell = geometry && cellAt(geometry, at);
+      if (!cell) return;
+      if (cell.row !== g.from.row || cell.col !== g.from.col || g.moved) {
+        if (!g.moved && editor.editing()) editor.stopEditing();
+        g.moved = true;
+        setTableRange({ shape: g.shape, from: g.from, to: cell });
+      } else if (editor.editing()) {
+        editor.pointerMove(at, { shift: e.shiftKey });
+      }
+      return;
+    }
+    editor.pointerMove(at, { shift: e.shiftKey });
   };
 
   const onPointerUp = (e: PointerEvent) => {
     if (stage.hasPointerCapture(e.pointerId))
       stage.releasePointerCapture(e.pointerId);
+    const g = tableGesture;
+    tableGesture = null;
+    if (g?.kind === 'border') {
+      setBorderGuide(null);
+      const delta =
+        g.axis === 'col' ? g.current.x - g.start.x : g.current.y - g.start.y;
+      if (Math.abs(delta) > 0.5)
+        void commands.resizeGrid?.(g.shape, g.axis, g.index, delta);
+      return;
+    }
+    if (g?.kind === 'cells') {
+      void editor.pointerUp();
+      if (!g.moved && !editor.editing()?.cell) {
+        const shape = editor.findShape(g.shape);
+        if (shape) void editCell(shape, g.from, g.at);
+      }
+      return;
+    }
     void editor.pointerUp();
   };
 
@@ -261,20 +581,73 @@ export function PptxEditor() {
     const slide = session.currentSlide();
     const hit = slide ? hitTest(slide.shapes, at) : undefined;
     if (!hit || editor.editing()) return;
-    if (hit.kind === 'table' && hit.table) {
-      const cell = tableCellAt(hit, at);
-      if (cell)
-        setCellEdit({
-          ...cell,
-          shape: hit,
-          text: hit.table.rows[cell.row]?.[cell.col] ?? '',
-        });
+    if (hit.kind === 'table') return;
+    if (hit.kind === 'chart') {
+      chartEditor(hit);
       return;
     }
     if (hit.textEditable) void startEditing(hit.id, at);
   };
 
-  // ---- keyboard --------------------------------------------------------
+  // ---- right-click -------------------------------------------------------
+
+  const [menuTarget, setMenuTarget] = createSignal<MenuTarget>({
+    kind: 'canvas',
+  });
+  /** Selects what was right-clicked (keeping a selection it is part of). */
+  const onContextMenu = (e: MouseEvent) => {
+    const at = toSlide(e);
+    const edit = editor.editing();
+    if (edit) {
+      const shape = editor.findShape(edit.shape);
+      const box = edit.bounds ?? (shape && boxOf(shape));
+      if (
+        box &&
+        at.x >= box.x &&
+        at.x <= box.x + box.w &&
+        at.y >= box.y &&
+        at.y <= box.y + box.h
+      ) {
+        setMenuTarget({ kind: edit.cell ? 'table' : 'text' });
+        return;
+      }
+      editor.stopEditing();
+    }
+    const t = tableHit(at);
+    if (t) {
+      const range = tableRange();
+      const inRange =
+        range?.shape === t.shape.id &&
+        t.cell.row >= Math.min(range.from.row, range.to.row) &&
+        t.cell.row <= Math.max(range.from.row, range.to.row) &&
+        t.cell.col >= Math.min(range.from.col, range.to.col) &&
+        t.cell.col <= Math.max(range.from.col, range.to.col);
+      editor.select(t.shape.id);
+      if (!inRange)
+        setTableRange({ shape: t.shape.id, from: t.cell, to: t.cell });
+      setMenuTarget({ kind: 'table' });
+      return;
+    }
+    const slide = session.currentSlide();
+    const hit = slide ? hitTest(slide.shapes, at) : undefined;
+    if (!hit) {
+      editor.setSelection([]);
+      setMenuTarget({ kind: 'canvas' });
+      return;
+    }
+    if (!editor.selectedIds().includes(hit.id)) editor.select(hit.id);
+    setTableRange(null);
+    setMenuTarget({
+      kind:
+        hit.kind === 'chart' && editor.selection().length === 1
+          ? 'chart'
+          : hit.kind === 'table' && editor.selection().length === 1
+            ? 'table'
+            : 'shapes',
+    });
+  };
+
+  // ---- keyboard ----------------------------------------------------------
 
   const isMod = (e: KeyboardEvent) => e.metaKey || e.ctrlKey;
 
@@ -287,22 +660,76 @@ export function PptxEditor() {
     await session.redo();
   };
 
+  /** Shortcuts shared by the stage and the text being edited. */
+  const sharedShortcut = (e: KeyboardEvent): boolean => {
+    const key = e.key.toLowerCase();
+    const mod = isMod(e);
+    if (e.key === 'F5') {
+      present(e.shiftKey);
+      return true;
+    }
+    if (!mod) return false;
+    if (key === 'z') void (e.shiftKey ? redo() : undo());
+    else if (key === 'y') void redo();
+    else if (key === 's') void session.save().catch(() => {});
+    else if (key === 'f') setFind({ replace: false });
+    else if (key === 'h') setFind({ replace: true });
+    else if (key === 'm' && !readonly()) void commands.addSlide();
+    else if (key === 'e' && !readonly()) void commands.align('center');
+    else if (key === 'l' && !readonly()) void commands.align('left');
+    else if (key === 'r' && !readonly()) void commands.align('right');
+    else if (key === 'j' && !readonly()) void commands.align('justify');
+    else if ((e.key === '>' || e.key === '.') && e.shiftKey && !readonly())
+      void commands.stepSize(1);
+    else if ((e.key === '<' || e.key === ',') && e.shiftKey && !readonly())
+      void commands.stepSize(-1);
+    else if ((e.key === '=' || e.key === '+') && e.shiftKey && !readonly())
+      void commands.toggleBaseline('super');
+    else if (e.key === '=' && !readonly()) void commands.toggleBaseline('sub');
+    else if (['b', 'i', 'u'].includes(key) && !readonly())
+      void commands.toggle(
+        ({ b: 'bold', i: 'italic', u: 'underline' } as const)[
+          key as 'b' | 'i' | 'u'
+        ]
+      );
+    else return false;
+    return true;
+  };
+
   const onStageKeyDown = (e: KeyboardEvent) => {
     if (e.target === input) return;
     const key = e.key;
-    if (isMod(e) && key.toLowerCase() === 'z') {
+    if (sharedShortcut(e)) {
       e.preventDefault();
-      void (e.shiftKey ? redo() : undo());
       return;
     }
-    if (isMod(e) && key.toLowerCase() === 'y') {
-      e.preventDefault();
-      void redo();
-      return;
-    }
-    if (isMod(e) && key.toLowerCase() === 's') {
-      e.preventDefault();
-      void session.save().catch(() => {});
+    if (isMod(e)) {
+      const lower = key.toLowerCase();
+      if (lower === 'a') {
+        e.preventDefault();
+        editor.selectAll();
+      } else if (lower === 'g' && !readonly()) {
+        e.preventDefault();
+        void (e.shiftKey ? commands.ungroup?.() : commands.group?.());
+      } else if (lower === 'd' && !readonly()) {
+        e.preventDefault();
+        void editor.duplicateSelected();
+      } else if ((key === ']' || key === '}') && !readonly()) {
+        e.preventDefault();
+        commands.arrange(e.shiftKey ? 'front' : 'forward');
+      } else if ((key === '[' || key === '{') && !readonly()) {
+        e.preventDefault();
+        commands.arrange(e.shiftKey ? 'back' : 'backward');
+      } else if (key === '=' || key === '+') {
+        e.preventDefault();
+        zoomBy(1.25);
+      } else if (key === '-') {
+        e.preventDefault();
+        zoomBy(1 / 1.25);
+      } else if (key === '0') {
+        e.preventDefault();
+        setZoom('fit');
+      }
       return;
     }
     if (key === 'PageDown' || key === 'PageUp') {
@@ -310,30 +737,103 @@ export function PptxEditor() {
       editor.goToSlide(session.slideIndex() + (key === 'PageDown' ? 1 : -1));
       return;
     }
-    const shape = editor.selectedShape();
-    if (!shape) return;
+    if (key === 'Tab') {
+      // Tab walks through the shapes on the slide, as in PowerPoint.
+      const shapes = session.currentSlide()?.shapes ?? [];
+      if (shapes.length === 0) return;
+      e.preventDefault();
+      const at = shapes.findIndex((s) => s.id === editor.selected());
+      const next = (at + (e.shiftKey ? -1 : 1) + shapes.length) % shapes.length;
+      editor.select(shapes[at < 0 && e.shiftKey ? shapes.length - 1 : next].id);
+      return;
+    }
+    if (key === 'Escape' && find()) {
+      e.preventDefault();
+      setFind(null);
+      return;
+    }
+    const list = editor.selection();
+    if (list.length === 0 && !tableRange()) return;
     if (key === 'Escape') {
       e.preventDefault();
-      editor.select(null);
+      if (tableRange()) setTableRange(null);
+      else editor.setSelection([]);
     } else if (readonly()) {
       return;
     } else if (key === 'Delete' || key === 'Backspace') {
       e.preventDefault();
-      void editor.deleteSelected();
+      const range = tableRange();
+      const t = tableTarget();
+      if (range && t) {
+        // Clears the selected cells' text, as PowerPoint does.
+        void commands.tableOp((slideId, target) =>
+          commands.cellsOf(target).map((cell) => ({
+            op: 'setText' as const,
+            slide: slideId,
+            shape: target.shape.id,
+            cell,
+            text: '',
+          }))
+        );
+      } else {
+        void editor.deleteSelected();
+      }
     } else if (key.startsWith('Arrow')) {
       e.preventDefault();
-      const step = e.shiftKey ? 10 : 1;
+      const step = e.shiftKey ? 10 : e.altKey ? 0.5 : 1;
       const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
       const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
       void editor.nudge(dx, dy);
-    } else if (isMod(e) && key.toLowerCase() === 'd') {
+    } else if (key === 'Enter' || key === 'F2') {
+      const shape = editor.selectedShape();
+      if (shape?.kind === 'table') {
+        e.preventDefault();
+        void editCell(shape, tableRange()?.from ?? { row: 0, col: 0 });
+      } else if (shape?.textEditable) {
+        e.preventDefault();
+        void startEditing(shape.id);
+      }
+    } else if (
+      key.length === 1 &&
+      !e.altKey &&
+      list.length === 1 &&
+      list[0].textEditable
+    ) {
+      // Typing on a selected shape replaces its text, as in PowerPoint.
       e.preventDefault();
-      void editor.duplicateSelected();
-    } else if ((key === 'Enter' || key === 'F2') && shape.textEditable) {
-      e.preventDefault();
-      void startEditing(shape.id);
+      const id = list[0].id;
+      void (async () => {
+        await startEditing(id);
+        await editor.typeText(key);
+      })();
     }
   };
+
+  let root!: HTMLDivElement;
+  // Shortcuts work wherever focus is in the editor (a ribbon button, the
+  // page itself after a menu closed), not only on the slide.
+  onMount(() => {
+    const onDocumentKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || presenting() !== null) return;
+      const active = document.activeElement as HTMLElement | null;
+      const inField =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        !!active?.isContentEditable;
+      if (inField) return;
+      const inEditor =
+        !active || active === document.body || root.contains(active);
+      if (!inEditor || active === stage) return;
+      if (active?.closest('[role="menu"],[role="dialog"]')) return;
+      // Buttons keep their own Enter, Space, and Tab behavior.
+      const onControl = active && active !== document.body;
+      if (onControl && ['Enter', ' ', 'Tab'].includes(e.key)) return;
+      onStageKeyDown(e);
+    };
+    document.addEventListener('keydown', onDocumentKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', onDocumentKeyDown));
+  });
 
   const onInputKeyDown = (e: KeyboardEvent) => {
     if (e.isComposing) return;
@@ -345,7 +845,12 @@ export function PptxEditor() {
     };
     if (key === 'Escape') {
       handled();
+      const edit = editor.editing();
       stopEditing();
+      if (edit) editor.select(edit.shape);
+    } else if (key === 'Tab' && editor.editing()?.cell) {
+      handled();
+      void tabCell(e.shiftKey ? -1 : 1);
     } else if (key === 'Enter') {
       handled();
       void editor.typeText(e.shiftKey ? '\u000b' : '\n');
@@ -370,7 +875,7 @@ export function PptxEditor() {
       });
     } else if (key === 'Tab') {
       handled();
-      const level = textFormatLevel();
+      const level = commands.paragraphStyle()?.level ?? 0;
       void editor.formatWith((t, range) =>
         paragraphCommand(t, range ?? null, {
           level: Math.max(0, Math.min(8, level + (e.shiftKey ? -1 : 1))),
@@ -379,22 +884,12 @@ export function PptxEditor() {
     } else if (mod && key.toLowerCase() === 'a') {
       handled();
       editor.selectAllText();
-    } else if (mod && ['b', 'i', 'u'].includes(key.toLowerCase())) {
+    } else if (mod && key.toLowerCase() === 'k') {
       handled();
-      toggle(
-        ({ b: 'bold', i: 'italic', u: 'underline' } as const)[
-          key.toLowerCase() as 'b' | 'i' | 'u'
-        ]
-      );
-    } else if (mod && key.toLowerCase() === 'z') {
+      const url = window.prompt('Link to (URL)', 'https://');
+      if (url) void commands.setLink(url.trim());
+    } else if (sharedShortcut(e)) {
       handled();
-      void (e.shiftKey ? redo() : undo());
-    } else if (mod && key.toLowerCase() === 'y') {
-      handled();
-      void redo();
-    } else if (mod && key.toLowerCase() === 's') {
-      handled();
-      void session.save().catch(() => {});
     }
   };
 
@@ -410,189 +905,79 @@ export function PptxEditor() {
     input.value = '';
   };
 
-  const onCopy = (e: ClipboardEvent) => {
+  // Text clipboard while typing.
+  const onTextCopy = (e: ClipboardEvent) => {
     e.preventDefault();
     e.clipboardData?.setData('text/plain', editor.selectedText());
   };
-  const onCut = (e: ClipboardEvent) => {
-    onCopy(e);
+  const onTextCut = (e: ClipboardEvent) => {
+    onTextCopy(e);
     // A collapsed caret has nothing to cut; deleting would eat a character.
     if (editor.selectedText()) void editor.deleteText(-1);
   };
-  const onPaste = (e: ClipboardEvent) => {
+  const onTextPaste = (e: ClipboardEvent) => {
     e.preventDefault();
     const text = e.clipboardData?.getData('text/plain');
     if (text) void editor.typeText(text);
   };
 
-  // ---- formatting ------------------------------------------------------
-
-  const format = () => {
-    const src = editor.formatSource();
-    return formatState(src.layout, src.range);
+  // Shape and slide clipboard.
+  const onStageCopy = (e: ClipboardEvent) => {
+    if (e.target === input) return;
+    if (clipboard.copy(e.clipboardData)) e.preventDefault();
   };
-  const textFormatLevel = () => {
-    const src = editor.formatSource();
-    const p = src.range?.[0].paragraph ?? 0;
-    return src.layout?.styles[p]?.level ?? 0;
+  const onStageCut = (e: ClipboardEvent) => {
+    if (e.target === input || readonly()) return;
+    e.preventDefault();
+    void clipboard.cut(e.clipboardData);
   };
-  const textActive = () =>
-    !!editor.editing() || !!editor.selectedShape()?.textEditable;
-  const afterFormat = () => {
-    if (editor.editing()) focusInput();
+  const onStagePaste = (e: ClipboardEvent) => {
+    if (e.target === input || readonly()) return;
+    e.preventDefault();
+    void clipboard.pasteEvent(e.clipboardData);
   };
-  function toggle(key: 'bold' | 'italic' | 'underline') {
-    const current = format()[key];
-    void editor
-      .formatWith((t, range) => formatCommand(t, range, { [key]: !current }))
-      .then(afterFormat);
-  }
-  const fontSize = (dir: 1 | -1) => {
-    const size = stepFontSize(format().size ?? 18, dir);
-    void editor
-      .formatWith((t, range) => formatCommand(t, range, { size }))
-      .then(afterFormat);
-  };
-  const textColor = (color: string) =>
-    void editor
-      .formatWith((t, range) => formatCommand(t, range, { color }))
-      .then(afterFormat);
-  const align = (value: 'left' | 'center' | 'right') =>
-    void editor
-      .formatWith((t, range) => paragraphCommand(t, range, { align: value }))
-      .then(afterFormat);
-  const toggleBullets = () => {
-    const on = format().bullet;
-    void editor
-      .formatWith((t, range) =>
-        paragraphCommand(t, range, {
-          bullet: on ? { kind: 'none' } : { kind: 'char', char: '•' },
-        })
-      )
-      .then(afterFormat);
-  };
-  const fill = (color: string | null) => {
-    const shape = editor.selectedShape();
-    const slide = session.currentSlide();
-    if (!shape || !slide) return;
-    void session.apply([
-      {
-        op: 'setFill',
-        slide: slide.id,
-        shape: shape.id,
-        fill: color ? { kind: 'solid', color } : { kind: 'none' },
-      },
-    ]);
-  };
-
-  // ---- insertion -------------------------------------------------------
-
-  const insert = async (shape: Parameters<typeof session.apply>[0][number]) => {
-    const result = await session.apply([shape]);
-    return result?.created[0]?.shape;
-  };
-  const centered = (w: number, h: number) => ({
-    x: (slideW() - w) / 2,
-    y: (slideH() - h) / 2,
-    w,
-    h,
-  });
-
-  const insertTextBox = async () => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    const id = await insert({
-      op: 'addShape',
-      slide: slide.id,
-      shape: { kind: 'textBox', text: '' },
-      ...centered(300, 40),
-    });
-    if (id !== undefined) void startEditing(id);
-  };
-  const insertShape = async (preset: string) => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    const id = await insert({
-      op: 'addShape',
-      slide: slide.id,
-      shape: { kind: 'shape', preset },
-      ...centered(200, 120),
-    });
-    if (id !== undefined) editor.select(id);
-    focusStage();
-  };
-  const insertImage = async (file: File) => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    try {
-      const bitmap = await createImageBitmap(file);
-      const natural = { w: bitmap.width * 0.75, h: bitmap.height * 0.75 };
-      bitmap.close();
-      const fit = Math.min(
-        1,
-        (slideW() * 0.6) / natural.w,
-        (slideH() * 0.6) / natural.h
-      );
-      const data = await fileToBase64(file);
-      const id = await insert({
-        op: 'addShape',
-        slide: slide.id,
-        shape: { kind: 'image', data, description: file.name },
-        ...centered(natural.w * fit, natural.h * fit),
-      });
-      if (id !== undefined) editor.select(id);
-    } catch {
-      context.notifyError('That picture could not be inserted.');
+  const copyCommand = () => {
+    if (editor.editing()) {
+      document.execCommand('copy');
+      return;
     }
+    clipboard.copy();
   };
-  const insertTable = async () => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    const cells = [
-      ['Item', 'Q1', 'Q2'],
-      ['', '', ''],
-      ['', '', ''],
-    ];
-    const id = await insert({
-      op: 'addShape',
-      slide: slide.id,
-      shape: { kind: 'table', cells },
-      ...centered(slideW() * 0.6, 90),
-    });
-    if (id !== undefined) editor.select(id);
+  const cutCommand = () => {
+    if (editor.editing()) {
+      document.execCommand('cut');
+      return;
+    }
+    void clipboard.cut();
+  };
+  const pasteCommand = () => void clipboard.pasteCommand();
+
+  // ---- panes, find, slide show -----------------------------------------------
+
+  const [notesVisible, setNotesVisible] = createSignal(true);
+  const [pane, setPane] = createSignal<PaneSection | null>(null);
+  const [find, setFind] = createSignal<{ replace: boolean } | null>(null);
+  const [presenting, setPresenting] = createSignal<number | null>(null);
+  const present = (fromCurrent: boolean) => {
+    editor.stopEditing();
+    setPresenting(fromCurrent ? session.slideIndex() : 0);
+  };
+  const [recentFonts, setRecentFonts] = createSignal<string[]>([]);
+  const setFont = commands.setFont;
+  commands.setFont = (font: string) => {
+    if (!font.startsWith('+'))
+      setRecentFonts((list) =>
+        [font, ...list.filter((f) => f !== font)].slice(0, 5)
+      );
+    return setFont(font);
   };
 
-  // ---- slides ----------------------------------------------------------
+  /** The chart whose data editor is open. */
+  const [chartDataShape, setChartDataShape] = createSignal<number | null>(null);
+  const chartEditor = (shape: ShapeOutline) => setChartDataShape(shape.id);
 
-  const goToSlideId = (id: number) => {
-    const index = session.outline()?.slides.findIndex((s) => s.id === id) ?? -1;
-    if (index >= 0) editor.goToSlide(index);
-  };
-  const addSlide = async () => {
-    const current = session.currentSlide();
-    const result = await session.apply([
-      { op: 'addSlide', after: current?.id },
-    ]);
-    const id = result?.created[0]?.slide;
-    if (id !== undefined) goToSlideId(id);
-  };
-  const duplicateSlide = async (id: number) => {
-    const result = await session.apply([{ op: 'duplicateSlide', slide: id }]);
-    const created = result?.created[0]?.slide;
-    if (created !== undefined) goToSlideId(created);
-  };
-  const deleteSlide = async (id: number) => {
-    editor.goToSlide(session.slideIndex());
-    await session.apply([{ op: 'deleteSlide', slide: id }]);
-  };
-  const toggleHidden = (slide: SlideOutline) =>
-    void session.apply([
-      { op: 'setSlideHidden', slide: slide.id, hidden: !slide.hidden },
-    ]);
-  const moveSlide = async (id: number, to: number) => {
-    await session.apply([{ op: 'moveSlide', slide: id, to }]);
-    goToSlideId(id);
-  };
+  let replacePictureInput!: HTMLInputElement;
+  const replacePicture = (file: File) => commands.replaceImage(file);
 
   const download = async () => {
     try {
@@ -607,15 +992,64 @@ export function PptxEditor() {
   const overlay = () => {
     const edit = editor.editing();
     const d = editor.drag();
-    const shape = editor.selectedShape();
+    const list = editor.selection();
+    const multiple = list.length > 1;
+    const bounds = multiple ? unionBounds(list.map(boxOf)) : undefined;
+    const range = tableRange();
+    const rangeShape = range && editor.findShape(range.shape);
+    const g = rangeShape && tableGeometry(rangeShape);
+    const guide = borderGuide();
+    const guideShape = guide && editor.findShape(guide.shape);
+    const guideGeometry = guideShape && tableGeometry(guideShape);
     return {
-      selection: shape ? boxOf(shape) : undefined,
-      preview:
-        d?.active && d.kind !== 'move'
-          ? editor.dragPreview(d)
-          : d?.active && !editor.images().layer
-            ? editor.dragPreview(d)
+      selection: edit?.bounds
+        ? edit.bounds
+        : multiple && bounds
+          ? ({ ...bounds, rotation: 0 } as Box)
+          : list[0]
+            ? boxOf(list[0])
             : undefined,
+      outlines: multiple ? list.map(boxOf) : undefined,
+      rotatable: list.length === 1,
+      previews:
+        d?.active && d.kind !== 'marquee'
+          ? d.kind === 'move' && d.shape !== undefined && editor.images().layer
+            ? []
+            : editor.dragBoxes(d).map((b) => b.box)
+          : [],
+      marquee: editor.marquee(),
+      cellRange:
+        range && rangeShape && g
+          ? rangeBox(rangeShape, g, range.from, range.to)
+          : undefined,
+      guide:
+        guide?.kind === 'border' && guideGeometry
+          ? guide.axis === 'col'
+            ? {
+                x1:
+                  guideGeometry.xs[guide.index + 1] +
+                  guide.current.x -
+                  guide.start.x,
+                x2:
+                  guideGeometry.xs[guide.index + 1] +
+                  guide.current.x -
+                  guide.start.x,
+                y1: guideGeometry.ys[0],
+                y2: guideGeometry.ys[guideGeometry.ys.length - 1],
+              }
+            : {
+                x1: guideGeometry.xs[0],
+                x2: guideGeometry.xs[guideGeometry.xs.length - 1],
+                y1:
+                  guideGeometry.ys[guide.index + 1] +
+                  guide.current.y -
+                  guide.start.y,
+                y2:
+                  guideGeometry.ys[guide.index + 1] +
+                  guide.current.y -
+                  guide.start.y,
+              }
+          : undefined,
       caret:
         edit?.layout &&
         edit.selection.anchor.paragraph === edit.selection.focus.paragraph &&
@@ -641,45 +1075,339 @@ export function PptxEditor() {
       : { left: '0px', top: '0px' };
   };
 
-  // Leaving a slide ends text editing and closes the cell editor.
+  // Leaving a slide ends text editing, cell ranges, and the cell editor.
   createEffect(
-    on(session.slideIndex, () => setCellEdit(null), { defer: true })
+    on(
+      session.slideIndex,
+      () => {
+        setCellEdit(null);
+        setTableRange(null);
+      },
+      { defer: true }
+    )
   );
 
+  const themeColors = () => session.outline()?.themeColors ?? [];
   const swatches = () => [
-    ...themeSwatches(session.outline()?.themeColors ?? []),
+    ...themeSwatches(themeColors()),
     ...STANDARD_SWATCHES,
   ];
 
+  // ---- ribbon --------------------------------------------------------------
+
+  const ribbonSelection = () => {
+    const edit = editor.editing();
+    const shape = edit && editor.findShape(edit.shape);
+    return shape ? [shape] : editor.selection();
+  };
+  const env: RibbonEnv = {
+    commands,
+    readonly,
+    deck: session.outline,
+    slide: session.currentSlide,
+    selection: ribbonSelection,
+    editingText: () => !!editor.editing(),
+    themeGrid: () => themeGrid(themeColors()),
+    standardColors: STANDARD_SWATCHES,
+    presetPaths: engine.presetPaths,
+    history: session.history,
+    undo: () => void undo(),
+    redo: () => void redo(),
+    copy: copyCommand,
+    cut: cutCommand,
+    paste: pasteCommand,
+    openFormatPane: (section) => setPane(section ?? 'shape'),
+    present,
+    find: (replace) => setFind({ replace }),
+    zoom,
+    setZoom,
+    notesVisible,
+    toggleNotes: () => setNotesVisible((v) => !v),
+    download: () => void download(),
+    recentFonts,
+  };
+
+  const tableTabProps = () => {
+    const table = selectedTable();
+    return table
+      ? {
+          table,
+          styles: session.outline()?.tableStyles ?? [],
+          selectRows: selectWholeRows,
+          selectColumns: selectWholeColumns,
+          selectTable: selectWholeTable,
+        }
+      : undefined;
+  };
+
+  const chartInsertMenu = (close: () => void) => (
+    <ChartGallery
+      onPick={(choice) => {
+        close();
+        void (async () => {
+          const id = await commands.insertChart(
+            choice.kind,
+            choice.grouping,
+            sampleChartData()
+          );
+          if (id !== undefined) setChartDataShape(id);
+        })();
+      }}
+    />
+  );
+  const chartTab: RibbonTab = {
+    id: 'chart-design',
+    label: 'Chart Design',
+    contextual: true,
+    content: () => (
+      <Show
+        when={
+          editor.selectedShape()?.kind === 'chart'
+            ? editor.selectedShape()
+            : undefined
+        }
+      >
+        {(shape) => (
+          <ChartDesignTab
+            shape={shape()}
+            onEditData={() => setChartDataShape(shape().id)}
+          />
+        )}
+      </Show>
+    ),
+  };
+  const transitionsTab: RibbonTab | undefined = undefined;
+
+  const tabs = createMemo((): RibbonTab[] => {
+    const list = ribbonSelection();
+    const table = !!selectedTable();
+    const drawable = list.some((s) => s.kind !== 'table' && s.kind !== 'chart');
+    return [
+      { id: 'home', label: 'Home', content: () => <HomeTab /> },
+      {
+        id: 'insert',
+        label: 'Insert',
+        content: () => <InsertTab chartMenu={chartInsertMenu} />,
+      },
+      { id: 'design', label: 'Design', content: () => <DesignTab /> },
+      ...(transitionsTab ? [transitionsTab] : []),
+      { id: 'slideshow', label: 'Slide Show', content: () => <SlideShowTab /> },
+      { id: 'view', label: 'View', content: () => <ViewTab /> },
+      ...(drawable && !readonly()
+        ? [
+            {
+              id: 'shape-format',
+              label: 'Shape Format',
+              contextual: true,
+              content: () => <ShapeFormatTab />,
+            },
+          ]
+        : []),
+      ...(table && !readonly()
+        ? [
+            {
+              id: 'table-design',
+              label: 'Table Design',
+              contextual: true,
+              content: () => (
+                <Show when={tableTabProps()}>
+                  {(p) => <TableDesignTab {...p()} />}
+                </Show>
+              ),
+            },
+            {
+              id: 'table-layout',
+              label: 'Layout',
+              contextual: true,
+              content: () => (
+                <Show when={tableTabProps()}>
+                  {(p) => <TableLayoutTab {...p()} />}
+                </Show>
+              ),
+            },
+          ]
+        : []),
+      ...(list.length === 1 && list[0].kind === 'chart' && !readonly()
+        ? [chartTab]
+        : []),
+    ];
+  });
+
+  const saveLabel = () =>
+    ({
+      saved: 'Saved',
+      dirty: 'Unsaved changes',
+      saving: 'Saving…',
+      error: 'Save failed',
+    })[session.saveState()];
+
+  // ---- slide rail menu -----------------------------------------------------
+
+  const railMenu = (slide: SlideOutline | undefined) => (
+    <>
+      <Show when={slide}>
+        <MenuItem
+          text="Cut"
+          icon={Scissors}
+          shortcut="cmd+x"
+          disabled={readonly() || (session.outline()?.slides.length ?? 0) <= 1}
+          onClick={() => {
+            setRailFocused(true);
+            cutCommand();
+          }}
+        />
+        <MenuItem
+          text="Copy"
+          icon={CopyIcon}
+          shortcut="cmd+c"
+          onClick={() => {
+            setRailFocused(true);
+            copyCommand();
+          }}
+        />
+      </Show>
+      <MenuItem
+        text="Paste"
+        icon={ClipboardIcon}
+        shortcut="cmd+v"
+        disabled={readonly()}
+        onClick={pasteCommand}
+      />
+      <MenuSeparator />
+      <MenuItem
+        text="New slide"
+        icon={Plus}
+        shortcut="cmd+m"
+        disabled={readonly()}
+        onClick={() => void commands.addSlide(undefined, slide?.id)}
+      />
+      <Show when={slide}>
+        {(s) => (
+          <>
+            <MenuItem
+              text="Duplicate slide"
+              icon={CopySimple}
+              disabled={readonly()}
+              onClick={() => void commands.duplicateSlide(s().id)}
+            />
+            <MenuItem
+              text="Delete slide"
+              icon={Trash}
+              disabled={
+                readonly() || (session.outline()?.slides.length ?? 0) <= 1
+              }
+              onClick={() => void commands.deleteSlides([s().id])}
+            />
+            <MenuSeparator />
+            <Show when={commands.setLayout}>
+              <ContextMenu.Sub overlap gutter={2}>
+                <ContextMenu.SubTrigger class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-ink text-sm outline-none data-[highlighted]:bg-ink/5">
+                  Layout
+                </ContextMenu.SubTrigger>
+                <ContextMenu.Portal>
+                  <ContextMenuContent submenu class="w-56">
+                    <For each={session.outline()?.layouts ?? []}>
+                      {(layout) => (
+                        <MenuItem
+                          text={layout.name}
+                          disabled={readonly()}
+                          onClick={() => void commands.setLayout?.(layout.name)}
+                        />
+                      )}
+                    </For>
+                  </ContextMenuContent>
+                </ContextMenu.Portal>
+              </ContextMenu.Sub>
+            </Show>
+            <MenuItem
+              text="Format background…"
+              icon={PaintBucket}
+              disabled={readonly()}
+              onClick={() => setPane('background')}
+            />
+            <MenuItem
+              text={s().hidden ? 'Unhide slide' : 'Hide slide'}
+              icon={EyeSlash}
+              disabled={readonly()}
+              onClick={() => void commands.toggleHidden(s())}
+            />
+          </>
+        )}
+      </Show>
+    </>
+  );
+
   return (
     <div
+      ref={root}
       class="flex size-full min-h-0 flex-col bg-page"
       data-testid="pptx-editor"
     >
-      <EditorToolbar
-        readonly={readonly()}
-        canUndo={session.history().canUndo}
-        canRedo={session.history().canRedo}
-        onUndo={() => void undo()}
-        onRedo={() => void redo()}
-        onInsertTextBox={() => void insertTextBox()}
-        onInsertShape={(p) => void insertShape(p)}
-        onInsertImage={(f) => void insertImage(f)}
-        onInsertTable={() => void insertTable()}
-        textActive={textActive()}
-        format={format()}
-        onToggle={toggle}
-        onFontSize={fontSize}
-        onTextColor={textColor}
-        onAlign={align}
-        onToggleBullets={toggleBullets}
-        shapeActive={!!editor.selectedShape() && !editor.editing()}
-        onFill={fill}
-        swatches={swatches()}
-        saveState={session.saveState()}
-        onSave={() => void session.save().catch(() => {})}
-        onDownload={() => void download()}
+      <Ribbon
+        env={env}
+        tabs={tabs()}
         keepFocus={!!editor.editing()}
+        start={
+          <Show when={!readonly()}>
+            <RibbonButton
+              label="Undo"
+              tooltip="Undo (⌘Z)"
+              disabled={!session.history().canUndo}
+              onClick={() => void undo()}
+            >
+              <ArrowCounterClockwise />
+            </RibbonButton>
+            <RibbonButton
+              label="Redo"
+              tooltip="Redo (⇧⌘Z)"
+              disabled={!session.history().canRedo}
+              onClick={() => void redo()}
+            >
+              <ArrowClockwise />
+            </RibbonButton>
+            <div class="mx-1 h-4 w-px bg-edge-muted" />
+          </Show>
+        }
+        end={
+          <div class="flex items-center gap-1">
+            <Show when={!readonly()}>
+              <button
+                type="button"
+                class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-muted text-xs hover:bg-ink/5"
+                data-testid="pptx-save-state"
+                title="Save (⌘S)"
+                onClick={() => void session.save().catch(() => {})}
+              >
+                <Show
+                  when={session.saveState() === 'error'}
+                  fallback={<CloudCheck class="size-3.5" />}
+                >
+                  <WarningIcon class="size-3.5 text-failure" />
+                </Show>
+                {saveLabel()}
+              </button>
+            </Show>
+            <RibbonButton
+              label="Download"
+              tooltip="Download .pptx"
+              onClick={() => void download()}
+            >
+              <DownloadSimple />
+            </RibbonButton>
+            <Button
+              size="sm"
+              variant="accent"
+              class="h-6 gap-1 px-2 text-xs"
+              label="Present"
+              tooltip="Present from current slide (⇧F5)"
+              data-testid="pptx-present"
+              onClick={() => present(true)}
+            >
+              <Play class="size-3" />
+              Present
+            </Button>
+          </div>
+        }
       />
       <div class="flex min-h-0 flex-1">
         <Show when={session.outline()}>
@@ -692,131 +1420,273 @@ export function PptxEditor() {
               thumbnailPixels={Math.round(150 * dpr())}
               readonly={readonly()}
               onSelect={(i) => editor.goToSlide(i)}
-              onMove={(id, to) => void moveSlide(id, to)}
-              onAdd={() => void addSlide()}
-              onDuplicate={(id) => void duplicateSlide(id)}
-              onDelete={(id) => void deleteSlide(id)}
-              onToggleHidden={toggleHidden}
+              onMove={(id, to) => void commands.moveSlide(id, to)}
+              onAdd={() => void commands.addSlide()}
+              onDuplicate={(id) => void commands.duplicateSlide(id)}
+              onDelete={(id) => void commands.deleteSlides([id])}
+              onToggleHidden={(s) => void commands.toggleHidden(s)}
               peersOn={collaboration ? peersOn : undefined}
+              menu={railMenu}
+              onCopy={(e) => {
+                if (clipboard.copy(e.clipboardData)) e.preventDefault();
+              }}
+              onCut={(e) => {
+                if (readonly()) return;
+                e.preventDefault();
+                void clipboard.cut(e.clipboardData);
+              }}
+              onPaste={(e) => {
+                if (readonly()) return;
+                e.preventDefault();
+                void clipboard.pasteEvent(e.clipboardData);
+              }}
+              onFocusChange={setRailFocused}
             />
           )}
         </Show>
         <div class="flex min-w-0 flex-1 flex-col">
-          <div
-            ref={stageHost}
-            class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-inset"
-          >
-            <Show when={collaboration}>
-              {(c) => (
-                <Collaborators peers={c().peers()} status={c().status()} />
-              )}
-            </Show>
-            <Show
-              when={session.outline() && scale() > 0}
-              fallback={
-                <div class="text-ink-muted text-sm" data-testid="pptx-loading">
-                  {loadError()
-                    ? `This presentation could not be opened: ${loadError()}`
-                    : 'Opening presentation…'}
-                </div>
-              }
+          <div class="relative flex min-h-0 flex-1">
+            <div
+              ref={stageHost}
+              class="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
+              onWheel={(e) => {
+                if (!e.ctrlKey && !e.metaKey) return;
+                e.preventDefault();
+                zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+              }}
             >
-              <SlideStage
-                images={editor.images()}
-                cssWidth={slideW() * scale()}
-                cssHeight={slideH() * scale()}
-                pixelWidth={renderWidth()}
-                pixelsPerPoint={renderWidth() / slideW()}
-              >
-                <div
-                  ref={stage}
-                  tabIndex={0}
-                  data-testid="pptx-stage"
-                  class="absolute inset-0 outline-none"
-                  classList={{ 'cursor-text': !!editor.editing() }}
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={() => editor.cancelDrag()}
-                  onDblClick={onDoubleClick}
-                  onKeyDown={onStageKeyDown}
-                >
-                  <Show when={collaboration && session.currentSlide()}>
-                    {(slide) => (
-                      <PeerSelections
-                        peers={collaboration?.peers() ?? []}
-                        slide={slide()}
-                        width={slideW()}
-                        height={slideH()}
-                        unit={1 / Math.max(scale(), 0.01)}
-                      />
-                    )}
-                  </Show>
-                  <SelectionOverlay
-                    width={slideW()}
-                    height={slideH()}
-                    unit={1 / Math.max(scale(), 0.01)}
-                    selection={overlay().selection}
-                    showHandles={!readonly()}
-                    preview={overlay().preview}
-                    caret={overlay().caret}
-                    textSelection={overlay().textSelection}
-                    editing={!!editor.editing()}
-                    onHandleDown={(kind, handle, e) => {
-                      e.stopPropagation();
-                      stage.setPointerCapture(e.pointerId);
-                      editor.handleDown(kind, handle, toSlide(e));
+              <Show when={collaboration}>
+                {(c) => (
+                  <Collaborators peers={c().peers()} status={c().status()} />
+                )}
+              </Show>
+              <Show when={find()}>
+                {(f) => (
+                  <FindReplace
+                    replace={f().replace}
+                    readonly={readonly()}
+                    session={session}
+                    editor={editor}
+                    commands={commands}
+                    onReplaceMode={(replace) => setFind({ replace })}
+                    onClose={() => {
+                      setFind(null);
+                      refocus();
                     }}
                   />
-                  <textarea
-                    ref={input}
-                    data-testid="pptx-text-input"
-                    aria-label="Slide text"
-                    class="pointer-events-none absolute h-4 w-px resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent opacity-0 outline-none"
-                    style={inputPosition()}
-                    autocomplete="off"
-                    spellcheck={false}
-                    onKeyDown={onInputKeyDown}
-                    onBeforeInput={onBeforeInput}
-                    onCompositionEnd={onCompositionEnd}
-                    onCopy={onCopy}
-                    onCut={onCut}
-                    onPaste={onPaste}
-                  />
-                  <Show when={cellEdit()}>
-                    {(cell) => (
-                      <textarea
-                        id="pptx-cell-input"
-                        data-testid="pptx-cell-input"
-                        class="absolute z-10 resize-none rounded-sm border-2 border-accent bg-surface p-1 text-ink text-sm shadow-lg outline-none"
-                        style={{
-                          left: `${cell().rect.x * scale()}px`,
-                          top: `${cell().rect.y * scale()}px`,
-                          width: `${Math.max(80, cell().rect.w * scale())}px`,
-                          height: `${Math.max(32, cell().rect.h * scale())}px`,
+                )}
+              </Show>
+              <div
+                class="flex min-h-full min-w-full items-center justify-center"
+                style={{
+                  width:
+                    zoom() === 'fit'
+                      ? undefined
+                      : `${slideW() * scale() + 2 * STAGE_MARGIN}px`,
+                  height:
+                    zoom() === 'fit'
+                      ? undefined
+                      : `${slideH() * scale() + 2 * STAGE_MARGIN}px`,
+                }}
+              >
+                <Show
+                  when={session.outline() && scale() > 0}
+                  fallback={
+                    <div
+                      class="text-ink-muted text-sm"
+                      data-testid="pptx-loading"
+                    >
+                      {loadError()
+                        ? `This presentation could not be opened: ${loadError()}`
+                        : 'Opening presentation…'}
+                    </div>
+                  }
+                >
+                  <SlideStage
+                    images={editor.images()}
+                    cssWidth={slideW() * scale()}
+                    cssHeight={slideH() * scale()}
+                    pixelWidth={renderWidth()}
+                    pixelsPerPoint={renderWidth() / slideW()}
+                  >
+                    <ContextMenu
+                      onOpenChange={(open) => {
+                        if (!open) queueMicrotask(refocus);
+                      }}
+                    >
+                      <ContextMenu.Trigger
+                        as="div"
+                        ref={stage}
+                        tabIndex={0}
+                        data-testid="pptx-stage"
+                        class="absolute inset-0 outline-none"
+                        classList={{ 'cursor-text': !!editor.editing() }}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={() => {
+                          tableGesture = null;
+                          setBorderGuide(null);
+                          editor.cancelDrag();
                         }}
-                        value={cell().text}
-                        ref={(el) => queueMicrotask(() => el.focus())}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            void commitCell(e.currentTarget.value);
-                          } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            setCellEdit(null);
-                          }
-                        }}
-                        onBlur={(e) => void commitCell(e.currentTarget.value)}
-                      />
-                    )}
-                  </Show>
-                </div>
-              </SlideStage>
+                        onDblClick={onDoubleClick}
+                        onKeyDown={onStageKeyDown}
+                        // Kobalte's trigger does not call onContextMenu; capture runs first.
+                        oncapture:contextmenu={onContextMenu}
+                        onCopy={onStageCopy}
+                        onCut={onStageCut}
+                        onPaste={onStagePaste}
+                      >
+                        <Show when={collaboration && session.currentSlide()}>
+                          {(slide) => (
+                            <PeerSelections
+                              peers={collaboration?.peers() ?? []}
+                              slide={slide()}
+                              width={slideW()}
+                              height={slideH()}
+                              unit={unit()}
+                            />
+                          )}
+                        </Show>
+                        <SelectionOverlay
+                          width={slideW()}
+                          height={slideH()}
+                          unit={unit()}
+                          selection={overlay().selection}
+                          outlines={overlay().outlines}
+                          showHandles={!readonly()}
+                          rotatable={overlay().rotatable}
+                          previews={overlay().previews}
+                          marquee={overlay().marquee}
+                          cellRange={overlay().cellRange}
+                          guide={overlay().guide}
+                          caret={overlay().caret}
+                          textSelection={overlay().textSelection}
+                          editing={!!editor.editing()}
+                          onHandleDown={(kind, handle, e) => {
+                            e.stopPropagation();
+                            stage.setPointerCapture(e.pointerId);
+                            editor.handleDown(kind, handle, toSlide(e));
+                          }}
+                        />
+                        <textarea
+                          ref={input}
+                          data-testid="pptx-text-input"
+                          aria-label="Slide text"
+                          class="pointer-events-none absolute h-4 w-px resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent opacity-0 outline-none"
+                          style={inputPosition()}
+                          autocomplete="off"
+                          spellcheck={false}
+                          onKeyDown={onInputKeyDown}
+                          onBeforeInput={onBeforeInput}
+                          onCompositionEnd={onCompositionEnd}
+                          onCopy={onTextCopy}
+                          onCut={onTextCut}
+                          onPaste={onTextPaste}
+                        />
+                        <Show when={cellEdit()}>
+                          {(cell) => (
+                            <textarea
+                              id="pptx-cell-input"
+                              data-testid="pptx-cell-input"
+                              class="absolute z-10 resize-none rounded-sm border-2 border-accent bg-surface p-1 text-ink text-sm shadow-lg outline-none"
+                              style={{
+                                left: `${cell().rect.x * scale()}px`,
+                                top: `${cell().rect.y * scale()}px`,
+                                width: `${Math.max(80, cell().rect.w * scale())}px`,
+                                height: `${Math.max(32, cell().rect.h * scale())}px`,
+                              }}
+                              value={cell().text}
+                              ref={(el) => queueMicrotask(() => el.focus())}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  void commitCell(e.currentTarget.value);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setCellEdit(null);
+                                }
+                              }}
+                              onBlur={(e) =>
+                                void commitCell(e.currentTarget.value)
+                              }
+                            />
+                          )}
+                        </Show>
+                      </ContextMenu.Trigger>
+                      <ContextMenu.Portal>
+                        <ContextMenuContent class="w-64">
+                          <StageMenuItems
+                            target={menuTarget()}
+                            a={{
+                              commands,
+                              readonly: readonly(),
+                              copy: copyCommand,
+                              cut: cutCommand,
+                              paste: pasteCommand,
+                              canPaste: true,
+                              editText: () => {
+                                const s = editor.selectedShape();
+                                if (s) void startEditing(s.id);
+                              },
+                              openFormatPane: (section) =>
+                                setPane(section ?? 'shape'),
+                              replacePicture: () => replacePictureInput.click(),
+                              editChartData: () => {
+                                const s = editor.selectedShape();
+                                if (s) chartEditor(s);
+                              },
+                              changeChartType: () => {
+                                const s = editor.selectedShape();
+                                if (s) chartEditor(s);
+                              },
+                              selectRows: selectWholeRows,
+                              selectColumns: selectWholeColumns,
+                              selectTable: selectWholeTable,
+                              layouts: (session.outline()?.layouts ?? []).map(
+                                (l) => l.name
+                              ),
+                              currentLayout: session.currentSlide()?.layout,
+                              swatches: swatches(),
+                              newSlide: () => void commands.addSlide(),
+                              hideSlide: () => {
+                                const s = session.currentSlide();
+                                if (s) void commands.toggleHidden(s);
+                              },
+                              slideHidden: !!session.currentSlide()?.hidden,
+                              isPicture:
+                                editor.selectedShape()?.kind === 'picture',
+                              isGroup: editor
+                                .selection()
+                                .some((s) => s.kind === 'group'),
+                              selectionCount: editor.selection().length,
+                              textShape: !!editor.selectedShape()?.textEditable,
+                            }}
+                          />
+                        </ContextMenuContent>
+                      </ContextMenu.Portal>
+                    </ContextMenu>
+                  </SlideStage>
+                </Show>
+              </div>
+            </div>
+            <Show when={pane()}>
+              {(section) => (
+                <FormatPane
+                  section={section()}
+                  onSection={setPane}
+                  onClose={() => {
+                    setPane(null);
+                    refocus();
+                  }}
+                  env={env}
+                />
+              )}
             </Show>
           </div>
-          <Show when={session.currentSlide()}>
+          <Show when={notesVisible() && session.currentSlide()}>
             {(slide) => (
               <NotesPanel
                 slideId={slide().id}
@@ -834,8 +1704,100 @@ export function PptxEditor() {
               />
             )}
           </Show>
+          <div class="flex h-6 shrink-0 items-center gap-3 border-edge-muted border-t bg-panel px-3 text-ink-muted text-xs">
+            <span data-testid="pptx-status-slide">
+              Slide {session.slideIndex() + 1} of{' '}
+              {session.outline()?.slides.length ?? 0}
+            </span>
+            <span class="flex-1" />
+            <button
+              type="button"
+              class="hover:text-ink"
+              onClick={() => setNotesVisible((v) => !v)}
+            >
+              Notes
+            </button>
+            <button
+              type="button"
+              class="hover:text-ink"
+              aria-label="Zoom out"
+              onClick={() => zoomBy(1 / 1.25)}
+            >
+              −
+            </button>
+            <input
+              type="range"
+              aria-label="Zoom"
+              min={10}
+              max={400}
+              value={Math.round((scale() / PX_PER_PT) * 100)}
+              class="w-24 accent-accent"
+              onInput={(e) => setZoom(Number(e.currentTarget.value) / 100)}
+            />
+            <button
+              type="button"
+              class="hover:text-ink"
+              aria-label="Zoom in"
+              onClick={() => zoomBy(1.25)}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              class="w-10 text-right tabular-nums hover:text-ink"
+              title="Fit slide to window"
+              data-testid="pptx-zoom"
+              onClick={() => setZoom('fit')}
+            >
+              {Math.round((scale() / PX_PER_PT) * 100)}%
+            </button>
+          </div>
         </div>
       </div>
+      <input
+        ref={replacePictureInput}
+        type="file"
+        accept="image/png,image/jpeg,image/gif"
+        class="hidden"
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          if (file) void replacePicture(file);
+        }}
+      />
+      <Show
+        when={
+          chartDataShape() !== null
+            ? editor.findShape(chartDataShape()!)
+            : undefined
+        }
+      >
+        {(shape) => (
+          <ChartDataEditor
+            shape={shape()}
+            readonly={readonly()}
+            onApply={(data) => commands.setChartData(shape().id, data)}
+            onClose={() => {
+              setChartDataShape(null);
+              queueMicrotask(focusStage);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={presenting() !== null && session.outline()}>
+        {(deck) => (
+          <SlideShow
+            engine={engine}
+            deck={deck()}
+            start={presenting()!}
+            onExit={(index) => {
+              setPresenting(null);
+              editor.goToSlide(index);
+              queueMicrotask(focusStage);
+            }}
+          />
+        )}
+      </Show>
     </div>
   );
 }

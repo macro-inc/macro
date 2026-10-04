@@ -23,10 +23,95 @@ export interface ParagraphOutline {
   level: number;
 }
 
+/** One grid cell of a table. */
+export interface CellOutline {
+  rowSpan: number;
+  colSpan: number;
+  /** Covered by another cell's merge. */
+  merged: boolean;
+  /** Resolved fill as `#RRGGBB`. */
+  fill?: string;
+  anchor: 'top' | 'middle' | 'bottom';
+}
+
+export interface TableStyleOutline {
+  id: string;
+  name: string;
+  firstRow: boolean;
+  lastRow: boolean;
+  firstCol: boolean;
+  lastCol: boolean;
+  bandRow: boolean;
+  bandCol: boolean;
+}
+
 export interface TableOutline {
   rows: string[][];
   columnWidths: number[];
   rowHeights: number[];
+  /** Cell spans and formatting, by row and grid column. */
+  cells?: CellOutline[][];
+  /** Row heights as rendered (rows grow to fit their text). */
+  laidOutRowHeights?: number[];
+  /** The table style and which of its parts apply. */
+  style?: TableStyleOutline;
+}
+
+export type ChartKind =
+  | 'bar'
+  | 'column'
+  | 'line'
+  | 'pie'
+  | 'doughnut'
+  | 'area'
+  | 'scatter'
+  | 'radar'
+  | 'bubble'
+  | 'stock'
+  | 'surface'
+  | 'other';
+
+export type ChartGrouping =
+  | 'clustered'
+  | 'stacked'
+  | 'percentStacked'
+  | 'standard';
+
+export type LegendPosition = 'right' | 'left' | 'top' | 'bottom' | 'topRight';
+
+export interface ChartSeriesOutline {
+  name: string;
+  /** Values per category (`null` for blanks). */
+  values: (number | null)[];
+  /** Explicit series color as `#RRGGBB`. */
+  color?: string;
+}
+
+export interface ChartOutline {
+  kind: ChartKind;
+  grouping?: ChartGrouping;
+  title?: string;
+  /** Legend position; absent when there is no legend. */
+  legend?: LegendPosition;
+  dataLabels: boolean;
+  categories: string[];
+  series: ChartSeriesOutline[];
+  /** Whether setChartData/setChartType can rewrite it. */
+  editable: boolean;
+}
+
+/** A chart type new charts and setChartType accept. */
+export type EditableChartKind =
+  | 'bar'
+  | 'column'
+  | 'line'
+  | 'pie'
+  | 'doughnut'
+  | 'area';
+
+export interface ChartSeriesData {
+  name: string;
+  values: (number | null)[];
 }
 
 export interface ShapeOutline {
@@ -50,7 +135,18 @@ export interface ShapeOutline {
   textEditable: boolean;
   paragraphs?: ParagraphOutline[];
   table?: TableOutline;
+  /** Chart content, for charts. */
+  chart?: ChartOutline;
   children?: ShapeOutline[];
+}
+
+/** How a slide enters in a slide show. */
+export interface TransitionOutline {
+  kind: string;
+  durationMs: number;
+  direction?: string;
+  advanceOnClick: boolean;
+  advanceAfterMs?: number;
 }
 
 export interface SlideOutline {
@@ -62,6 +158,8 @@ export interface SlideOutline {
   title?: string;
   shapes: ShapeOutline[];
   notes?: string;
+  /** The transition into this slide. */
+  transition?: TransitionOutline;
 }
 
 export interface LayoutInfo {
@@ -78,6 +176,15 @@ export interface DeckOutline {
   layouts: LayoutInfo[];
   /** `[slot, '#RRGGBB']` pairs of the first master's theme (`dk1`, `accent1`...). */
   themeColors: [string, string][];
+  /** The theme's heading (major) and body (minor) Latin fonts. */
+  themeFonts?: { major: string; minor: string };
+  /** Table styles a table can use. */
+  tableStyles?: TableStyleInfo[];
+}
+
+export interface TableStyleInfo {
+  id: string;
+  name: string;
 }
 
 export interface CaretStop {
@@ -105,6 +212,10 @@ export interface RunStyle {
   /** `#RRGGBB` for solid text fills. */
   color?: string;
   font: string;
+  /** Baseline shift in percent (positive = superscript). */
+  baseline?: number;
+  /** Highlight color as `#RRGGBB`. */
+  highlight?: string;
 }
 
 export interface ParagraphStyle {
@@ -195,7 +306,15 @@ export type NewShape =
   | { kind: 'shape'; preset: string; text?: string }
   | { kind: 'line'; arrow?: boolean }
   | { kind: 'image'; data: string; description?: string }
-  | { kind: 'table'; cells: string[][] };
+  | { kind: 'table'; cells: string[][] }
+  | {
+      kind: 'chart';
+      chartType: EditableChartKind;
+      grouping?: ChartGrouping;
+      categories: string[];
+      series: ChartSeriesData[];
+      title?: string;
+    };
 
 export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
 
@@ -275,7 +394,25 @@ export type EditOp =
   | { op: 'moveSlide'; slide: number; to: number }
   | { op: 'setSlideHidden'; slide: number; hidden: boolean }
   | { op: 'setNotes'; slide: number; text: string }
-  | { op: 'setBackground'; slide: number; fill?: FillSpec };
+  | { op: 'setBackground'; slide: number; fill?: FillSpec }
+  | ({
+      op: 'setChartData';
+      categories: string[];
+      series: ChartSeriesData[];
+    } & ShapeTarget)
+  | ({
+      op: 'setChartType';
+      kind: EditableChartKind;
+      grouping?: ChartGrouping;
+    } & ShapeTarget)
+  | ({
+      op: 'formatChart';
+      /** `""` removes the title. */
+      title?: string;
+      legend?: LegendPosition | 'none';
+      dataLabels?: boolean;
+      seriesColors?: { series: number; color: string }[];
+    } & ShapeTarget);
 
 export interface Created {
   slide: number;
@@ -302,4 +439,11 @@ export interface EntryChange {
   container: string;
   key: string;
   value?: string | null;
+}
+
+/** One sub-path of a preset shape outline (SVG path data in points). */
+export interface PresetPath {
+  d: string;
+  fill: boolean;
+  stroke: boolean;
 }

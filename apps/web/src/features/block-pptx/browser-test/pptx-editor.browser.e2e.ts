@@ -147,6 +147,7 @@ test('moves a shape by dragging and resizes it with a handle', async ({
 test('inserts a text box and types into it', async ({ page }) => {
   await open(page);
   const before = (await outline(page)).slides[0]?.shapes.length ?? 0;
+  await page.getByTestId('pptx-tab-insert').click();
   await page.getByTestId('pptx-insert-textbox').click();
   // The caret is a zero-width line, which Playwright never calls visible.
   await expect(page.getByTestId('pptx-caret')).toBeAttached();
@@ -163,7 +164,10 @@ test('inserts a text box and types into it', async ({ page }) => {
 
 test('adds and deletes slides from the rail', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'New slide' }).click();
+  await page
+    .getByTestId('pptx-slide-rail')
+    .getByRole('button', { name: 'New slide' })
+    .click();
   await expect(page.getByTestId('pptx-thumbnail')).toHaveCount(9);
   const thumbnail = page.getByTestId('pptx-thumbnail').nth(1);
   await thumbnail.hover();
