@@ -69,15 +69,10 @@ describe('routines list', () => {
     expect(props.onToggle).toHaveBeenCalledWith(rows[0]);
     expect(within(shared).queryByRole('button', { name: 'Enable' })).toBeNull();
   });
-  it('opens an integration template as an editable creation draft', () => {
+  it('opens a blank routine without a templates section', () => {
     const props = setup();
-    fireEvent.click(screen.getByRole('button', { name: /Explore templates/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Integrations$/ }));
-    fireEvent.click(
-      screen.getByRole('button', { name: /Spot revenue signals/ })
-    );
-    expect(props.onCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'stripe-pulse', category: 'Integrations' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'New Routine' }));
+    expect(props.onCreate).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/templates/i)).toBeNull();
   });
 });

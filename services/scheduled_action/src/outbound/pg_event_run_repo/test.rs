@@ -875,3 +875,30 @@ async fn delayed_bookkeeping_can_finish_before_reconciliation(pool: PgPool) {
     assert_eq!(finished.1, Some(json!({"type": "failed"})));
     assert!(finished.2.is_some());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mixed_routine_admits_events_without_consuming_its_schedule(pool: PgPool) {
+    let (repo, id, event) = setup(&pool).await;
+    let filters = json!([{"events":["document.updated"]}]);
+    let config = json!({"type":"multiple", "triggers":[
+        {"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"},
+        {"type":"events", "filters":filters}
+    ]});
+    let next = Utc::now() + chrono::Duration::hours(3);
+    sqlx::query!("UPDATE scheduled_action SET trigger_type = 'multiple', trigger_config = $2, next_run_at = $3 WHERE id = $1", id, config, next).execute(&pool).await.unwrap();
+    let candidates = repo
+        .candidate_actions(&event, None, page(10))
+        .await
+        .unwrap();
+    assert_eq!(candidates.configurations.len(), 1);
+    admit(&repo, id, &event).await;
+    assert!(repo.current_configuration(id).await.unwrap().is_some());
+    // Reconciliation must retain queued events for a mixed trigger too.
+    repo.reconcile(Utc::now(), page(10)).await.unwrap();
+    assert_eq!(repo.pending_runs(page(10)).await.unwrap().len(), 1);
+    let actual = sqlx::query_scalar!("SELECT next_run_at FROM scheduled_action WHERE id = $1", id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(actual.unwrap().timestamp_micros(), next.timestamp_micros());
+}

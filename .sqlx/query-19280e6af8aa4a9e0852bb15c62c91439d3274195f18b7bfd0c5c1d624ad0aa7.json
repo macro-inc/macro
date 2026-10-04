@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_messages (\n            id, provider_id, thread_id, link_id, from_contact_id, internal_date_ts\n        )\n        VALUES (\n            $1,\n            'other-msg-202',\n            '00000000-0000-0000-0000-000000000102',\n            '00000000-0000-0000-0000-00000000001a',\n            '00000000-0000-0000-0000-0000000c0002',\n            NOW()\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "19280e6af8aa4a9e0852bb15c62c91439d3274195f18b7bfd0c5c1d624ad0aa7"
+}

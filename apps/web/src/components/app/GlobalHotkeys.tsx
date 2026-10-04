@@ -15,10 +15,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import {
-  automationComposerOpen,
-  setAutomationComposerOpen,
-} from '@block-automation/component';
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
@@ -148,10 +144,6 @@ export default function GlobalShortcuts() {
     const willOpen = !CommandState.isOpen();
 
     if (willOpen) {
-      if (automationComposerOpen()) {
-        setAutomationComposerOpen(false, false);
-      }
-
       analytics.track('command_menu_open', { from: 'global_hotkey' });
     }
 
@@ -164,10 +156,6 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
-      if (automationComposerOpen()) {
-        return true;
-      }
-
       const willOpen = !createMenuOpen();
 
       if (willOpen) {

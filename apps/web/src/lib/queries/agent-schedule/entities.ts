@@ -19,7 +19,7 @@ export function scheduleToEntity(
   schedule: ScheduledAction
 ): AutomationEntity | undefined {
   const trigger = getCronTrigger(schedule);
-  if (!schedule.id || !trigger) return undefined;
+  if (!schedule.id) return undefined;
   return {
     id: schedule.id,
     type: 'automation',
@@ -27,7 +27,7 @@ export function scheduleToEntity(
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     updatedAt: schedule.updated_at,
-    cron: trigger.schedule,
+    cron: trigger?.schedule,
     status: routineStatus({
       enabled: schedule.enabled,
       isRunning: isClaimActive(schedule.claimed),

@@ -282,8 +282,8 @@ export function EmptyState(props: {
       >
         <EmptyStatePanel
           graphic={EmptyStateAutomationsGraphic}
-          title="No automations to show"
-          description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
+          title="No routines to show"
+          description="Routines run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
             label: 'New automation',
             icon: PlusIcon,

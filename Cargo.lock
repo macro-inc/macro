@@ -15847,6 +15847,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "memory",
+ "messages",
  "model",
  "model-entity",
  "model_notifications",

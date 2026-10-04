@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Project\" (id, name, \"userId\") VALUES ($1, 'Test Project', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "12a538f1e5c54792adf165f01d04030ab15ed9cb66f97766320be11097ad98ce"
+}

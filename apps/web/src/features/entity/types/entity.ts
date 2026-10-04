@@ -345,8 +345,8 @@ export function routineStatus(facts: {
 
 export type AutomationEntity = EntityBase & {
   type: 'automation';
-  /** Cron expression controlling when the automation runs. */
-  cron: string;
+  /** Legacy single schedule, when the routine has exactly one cron trigger. */
+  cron?: string;
   /** Running is derived from the server claim and the backend's stale-claim
    *  window; claims update live via the connection-gateway websocket. */
   status: RoutineStatus;

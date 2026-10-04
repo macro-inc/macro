@@ -73,7 +73,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
     }
 
     fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
-        if matches!(trigger, ActionTrigger::Events { .. }) && !self.event_management_enabled {
+        if trigger.event_filters().is_some() && !self.event_management_enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
         }
         Ok(())
@@ -111,14 +111,14 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
                 action.next_run_at = next_run(&input.trigger)?;
             }
         }
-        action.event_activated_at = match &input.trigger {
-            ActionTrigger::Cron { .. } => None,
-            ActionTrigger::Events { .. }
-                if trigger_changed || (!action.enabled && input.enabled) =>
-            {
+        action.event_activated_at = if input.trigger.event_filters().is_some() {
+            if trigger_changed || (!action.enabled && input.enabled) {
                 Some(now)
+            } else {
+                action.event_activated_at
             }
-            ActionTrigger::Events { .. } => action.event_activated_at,
+        } else {
+            None
         };
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
@@ -138,15 +138,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
 }
 
 fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
-    match trigger {
-        ActionTrigger::Cron { schedule, timezone } => schedule
-            .next_run_after_now(*timezone)
-            .map(Some)
-            .ok_or_else(|| ActionPolicyError::NoFutureFirings.into()),
-        // Filters are validated value objects: neither deserialization nor Rust
-        // constructors can supply unbounded, empty or unsupported selectors.
-        ActionTrigger::Events { .. } => Ok(None),
+    let next = trigger.next_run_after(Utc::now());
+    if trigger.has_schedule() && next.is_none() && trigger.event_filters().is_none() {
+        return Err(ActionPolicyError::NoFutureFirings.into());
     }
+    Ok(next)
 }
 
 pub(crate) async fn list_owned_actions<R: ScheduledActionRepo>(
@@ -174,20 +170,7 @@ fn claim_blocks_replacement(action: &ScheduledAction, now: DateTime<Utc>) -> boo
 }
 
 fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
-    match (left, right) {
-        (
-            ActionTrigger::Cron {
-                schedule: a,
-                timezone: at,
-            },
-            ActionTrigger::Cron {
-                schedule: b,
-                timezone: bt,
-            },
-        ) => a.as_str() == b.as_str() && at == bt,
-        (ActionTrigger::Events { filters: a }, ActionTrigger::Events { filters: b }) => a == b,
-        _ => false,
-    }
+    left == right
 }
 
 impl<Rpo, Exe, Targets> ScheduledActionService for ScheduledActionServiceImpl<Rpo, Exe, Targets>
@@ -225,10 +208,7 @@ where
         self.targets.validate_task(&input.task, &user_id).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
-        let event_activated_at = match &input.trigger {
-            ActionTrigger::Events { .. } => Some(now),
-            ActionTrigger::Cron { .. } => None,
-        };
+        let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
         let created = self
             .repo
             .create_action(ScheduledAction {

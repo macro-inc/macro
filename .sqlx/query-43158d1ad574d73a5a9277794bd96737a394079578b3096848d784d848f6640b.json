@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Other Bot Team', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "43158d1ad574d73a5a9277794bd96737a394079578b3096848d784d848f6640b"
+}

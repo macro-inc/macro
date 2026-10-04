@@ -122,7 +122,7 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT id AS action_id, owner, enabled, configuration_revision,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
-            WHERE enabled AND trigger_type = 'events'
+            WHERE enabled AND event_filters IS NOT NULL
               AND ($1::uuid IS NULL OR id > $1)
               AND event_activated_at <= $2
               AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))
@@ -168,7 +168,7 @@ impl EventRunRepository for PgEventRunRepo {
             r#"
             SELECT id AS action_id, owner, enabled, configuration_revision,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
-            FROM scheduled_action WHERE id = $1 AND trigger_type = 'events'
+            FROM scheduled_action WHERE id = $1 AND event_filters IS NOT NULL
             "#,
             action_id,
         )
@@ -190,7 +190,7 @@ impl EventRunRepository for PgEventRunRepo {
         let eligible = sqlx::query_scalar!(
             r#"
             SELECT id FROM scheduled_action
-            WHERE id = $1 AND enabled AND trigger_type = 'events'
+            WHERE id = $1 AND enabled AND event_filters IS NOT NULL
               AND configuration_revision = $2 AND event_activated_at <= $3
               AND jsonb_path_exists(event_filters,
                   '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
@@ -247,7 +247,7 @@ impl EventRunRepository for PgEventRunRepo {
                 WHERE action_id = a.id AND state = 'pending'
                 ORDER BY admission_order LIMIT 1
             ) r
-            WHERE a.enabled AND a.trigger_type = 'events'
+            WHERE a.enabled AND a.event_filters IS NOT NULL
               AND a.configuration_revision = r.configuration_revision
               AND (a.claimed IS NULL OR a.claimed < $1)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run s WHERE s.action_id = a.id AND s.state = 'started')
@@ -287,7 +287,7 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT id, owner, name, kind, task, created_at, updated_at, enabled,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
-            WHERE id = $1 AND enabled AND trigger_type = 'events' AND configuration_revision = $2
+            WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2
               AND (claimed IS NULL OR claimed < $3)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run WHERE action_id = $1 AND state = 'started')
             "#,
@@ -504,7 +504,7 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT r.action_id, r.event_id FROM scheduled_action_event_run r
             JOIN scheduled_action a ON a.id = r.action_id
             WHERE (r.state = 'started' AND r.deadline <= $1)
-               OR (r.state = 'pending' AND (NOT a.enabled OR a.trigger_type <> 'events'
+               OR (r.state = 'pending' AND (NOT a.enabled OR a.event_filters IS NULL
                    OR a.configuration_revision <> r.configuration_revision))
             ORDER BY r.admission_order LIMIT $2 FOR UPDATE OF a SKIP LOCKED
             "#,
@@ -530,7 +530,7 @@ impl EventRunRepository for PgEventRunRepo {
                 FROM scheduled_action a
                 WHERE r.action_id = $1 AND r.event_id = $2 AND a.id = r.action_id
                   AND ((r.state = 'started' AND r.deadline <= $3)
-                    OR (r.state = 'pending' AND (NOT a.enabled OR a.trigger_type <> 'events'
+                    OR (r.state = 'pending' AND (NOT a.enabled OR a.event_filters IS NULL
                         OR a.configuration_revision <> r.configuration_revision)))
                 RETURNING r.claim_token
                 "#,

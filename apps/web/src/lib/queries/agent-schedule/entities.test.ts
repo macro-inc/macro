@@ -79,7 +79,7 @@ describe('routine status', () => {
   });
 });
 
-describe('cron-only automation entities', () => {
+describe('routine entities', () => {
   it('converts canonical cron actions', () => {
     expect(scheduleToEntity(cron)).toEqual({
       id: 'cron-id',
@@ -93,8 +93,11 @@ describe('cron-only automation entities', () => {
     });
   });
 
-  it('omits events and actions without an id', () => {
-    expect(scheduleToEntity(events)).toBeUndefined();
+  it('includes event routines without inventing a cron and omits drafts without an id', () => {
+    expect(scheduleToEntity(events)).toMatchObject({
+      id: 'event-id',
+      cron: undefined,
+    });
     expect(scheduleToEntity({ ...cron, id: null })).toBeUndefined();
     expect(
       scheduleToEntity({
@@ -102,7 +105,7 @@ describe('cron-only automation entities', () => {
         schedule: '0 0 9 * * 2',
         timezone: 'UTC',
       } as ScheduledAction)
-    ).toBeUndefined();
+    ).toMatchObject({ id: 'event-id', cron: undefined });
   });
 
   it('accepts legacy cached cron actions through the compatibility helper', () => {
@@ -117,11 +120,12 @@ describe('cron-only automation entities', () => {
     expect(getCronTrigger({ schedule: null, timezone: null })).toBeUndefined();
   });
 
-  it('filters events from mixed API/cache lists', () => {
+  it('includes all routine trigger types in mixed lists', () => {
     query.isSuccess = true;
     query.items = [events, cron];
     createRoot((dispose) => {
       expect(useAutomationEntities()().map((entity) => entity.id)).toEqual([
+        'event-id',
         'cron-id',
       ]);
       dispose();
@@ -143,11 +147,12 @@ describe('cron-only automation entities', () => {
     query.isPending = false;
   });
 
-  it('retains cached cron entities after a refetch error, excluding event routines', () => {
+  it('retains cached routines after a refetch error', () => {
     query.isSuccess = false;
     query.items = [events, cron];
     createRoot((dispose) => {
       expect(useAutomationEntities()().map((entity) => entity.id)).toEqual([
+        'event-id',
         'cron-id',
       ]);
       dispose();

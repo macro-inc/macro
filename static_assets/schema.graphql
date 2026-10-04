@@ -4446,9 +4446,23 @@ type GraphqlScheduledActionEventsTrigger {
 }
 
 """
+Any of several schedules and optional Macro event filters.
+"""
+type GraphqlScheduledActionMultipleTrigger {
+	"""
+	Each schedule retains its own timezone and next firing.
+	"""
+	schedules: [GraphqlScheduledActionCronTrigger!]!
+	"""
+	Events that can also trigger this routine.
+	"""
+	events: GraphqlScheduledActionEventsTrigger
+}
+
+"""
 The way a routine starts.
 """
-union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
 A select-option property value.

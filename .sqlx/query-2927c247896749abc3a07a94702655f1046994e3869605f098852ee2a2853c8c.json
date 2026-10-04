@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE memory\n        SET created_at = NOW() - INTERVAL '10 days',\n            updated_at = NOW() - INTERVAL '10 days'\n        WHERE user_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2927c247896749abc3a07a94702655f1046994e3869605f098852ee2a2853c8c"
+}

@@ -50,7 +50,8 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/automation/<uuid>` | Routine settings and run history; event triggers are read-only |
+| `/app/automation/new` | Legacy link that opens the routine creation modal |
+| `/app/automation/<uuid>` | Routine settings, triggers, and run history |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
@@ -442,27 +443,57 @@ Release, cancellation, or dragging outside
 restores the surface. Disabled controls stay still; reduced motion keeps only
 the static highlight.
 
-## Routines (automations)
+## Routines
 
 Open **Agents → Routines** for the **Mine** and **Team** lists. On the legacy
 or touch Agents screen, use the **Routines** button above the list. Search by
 routine name, creator, or agent. **History** opens that routine's Run History
 tab, including when its Settings tab is already open.
 
-**Create → Routine** (U) and **New Routine** open the creation dialog. Set a name,
-instructions, and the **Execution target** model/agent picker, which uses the
-same runtime models and agents as the composer. Choose **Once**, **Every week**, or **Every month**. Select all seven weekdays
-for a daily routine. Once uses your local date/time; repeating schedules
-have an editable IANA timezone. **Explore templates** offers editable Macro and
-integration starters. Referenced channels, projects, and integrations must be
-available to the selected agent.
+**Create → Routine** (U) and **New Routine** open the same popover host as task
+and project creation. Enter a name and instructions, then choose a model or agent
+with the first property chip below the prompt. **Add trigger** follows it; each
+saved trigger becomes a chip, with another **Add trigger** always at the end.
+**Start enabled** controls whether the saved routine starts listening immediately. **Create routine** opens
+its details inside the Agents pane, retaining the sidebar. Creation has no history
+tab or templates. Unsaved drafts are retained for three minutes.
 
-The **Active** switch pauses or resumes immediately, independently of draft
-validation. Settings autosave in order without changing activation. **Run Now**
-waits for the latest valid edit to save; it also works while paused. A failed
-save keeps the draft and offers **Retry save**. While running, configuration is
-locked; the routine can be paused but cannot resume until the run ends.
-Completed one-offs remain visible with their history and do not repeat.
+**Add trigger → Scheduled** offers Hourly, Daily, Weekly, Monthly, and Custom
+(cron) in a single anchored panel. Choose the frequency and type a time, or type
+**every weekday at 9am** or **every Monday at 3:30pm**. **Run once** offers Macro’s
+natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar with
+time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
+**Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
+the composer without moving it. Recurring schedules retain their time zones;
+one-off times use the browser’s local time.
+
+**Documents** contains **Document created** (including tasks) and **Document
+details changed** (name, location, or sharing changes, not editor keystrokes).
+**Channels** contains **Message sent**, **Mention added**, **Message edited**,
+**Attachment added**, and **Channel created**. These groups appear directly in
+the trigger menu. Choosing an event shows the channel/document search inside the
+same panel; select specific accessible items or any accessible item, then confirm.
+A mention trigger matches mentions in that channel, not only mentions of the
+routine owner.
+These are Macro activity events, not incoming HTTP webhooks. Hutch’s current
+allowlist does not distinguish task creation from document creation and does not
+include project creation. Bots’ or delegated actions do not retrigger routines.
+
+A routine can combine up to sixteen trigger groups: each schedule is a group,
+and up to thirty-two activity filters share one event group;
+matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
+to remove it. Saved settings and **Run History** appear beneath the routine’s top
+bar; **Back to routines** returns
+to the list in the same pane. Team routines use the same detail view.
+
+The **Active / Inactive** switch pauses immediately, including with invalid
+unsaved edits. Resuming waits for valid settings to save. Settings autosave in
+order without changing activation. **Run Now** waits for the latest valid edit
+to save; it also works while paused. A failed save keeps the draft and offers
+**Retry save**. If another editor changed the configuration, **Reload latest**
+loads those settings before further edits. While running, configuration is locked; the routine can be paused
+but cannot resume until the run ends. Completed one-offs remain visible with
+their history and do not repeat.
 
 Under **Sharing**, choose a team to let its current members view the routine's
 instructions and run history. **Only me** revokes sharing. Personal routines do
@@ -472,9 +503,8 @@ remove another person's routine. Run conversations keep their own permissions.
 **Run History** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows
 open the chat or agent session created by that run. Unavailable conversations
-remain non-clickable. Event-triggered routines also expose history and the
-owner's activation control; their event configuration remains API-managed.
-There is no event-filter composer.
+remain non-clickable. Macro event routines also support editing, history, and
+activation.
 
 MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 **ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the

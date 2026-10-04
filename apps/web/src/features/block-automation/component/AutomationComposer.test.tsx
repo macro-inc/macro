@@ -15,22 +15,26 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster } from '../../agents-view/core/roster';
 import { loadAutomationComposerDraft } from '../util/automationComposerStorage';
-import {
-  AutomationComposer,
-  automationComposerOpen,
-  setAutomationComposerOpen,
-} from './AutomationComposer';
+import { RoutineCreator } from './AutomationComposer';
 import { getDefaultTimezone } from './automationUtils';
 
 const host = vi.hoisted(() => ({
   create: vi.fn<(body: CreateScheduledAction) => Promise<ScheduledAction>>(),
   openWithSplit: vi.fn(),
+  created: vi.fn(),
   success: vi.fn(),
   alert: vi.fn(),
   editorMount: vi.fn(),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: host.openWithSplit }),
+}));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanelOrThrow: () => ({ handle: { close: vi.fn() } }),
+}));
+vi.mock('../views/routine-event-scope', () => ({
+  RoutineEventScope: () => <span>Any document</span>,
+  RoutineEventScopeLabel: () => <span>Any document</span>,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: host.success, alert: host.alert },
@@ -58,7 +62,7 @@ vi.mock('@queries/agent-schedule/schedules', async () => {
   };
 });
 
-// Keep the real dialog, picker, model discovery adapter, storage, and mutation
+// Keep the real trigger menu, picker, model discovery adapter, storage, and mutation
 // lifecycle. The editor double exposes initialValue and detects any remount.
 vi.mock('./AutomationPromptEditor', () => ({
   AutomationPromptEditor: (props: {
@@ -75,18 +79,6 @@ vi.mock('./AutomationPromptEditor', () => ({
       />
     );
   },
-}));
-vi.mock('./AutomationTimePicker', () => ({
-  AutomationTimePicker: (props: {
-    value: string;
-    onChange: (value: string) => void;
-  }): JSX.Element => (
-    <input
-      aria-label="Time"
-      value={props.value}
-      onInput={(event) => props.onChange(event.currentTarget.value)}
-    />
-  ),
 }));
 
 const agentId = '12345678-1234-1234-1234-123456789abc';
@@ -144,7 +136,6 @@ let styles: HTMLStyleElement;
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  setAutomationComposerOpen(false, false);
   setCatalogState('success');
   styles = document.createElement('style');
   styles.textContent = '* { animation-name: none; transition-duration: 0s; }';
@@ -153,7 +144,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  setAutomationComposerOpen(false, false);
   styles.remove();
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -165,14 +155,10 @@ async function mount(): Promise<void> {
   });
   render(() => (
     <QueryClientProvider client={client}>
-      <button onClick={() => setAutomationComposerOpen(true)}>
-        New routine
-      </button>
-      <AutomationComposer />
+      <RoutineCreator onCreated={host.created} />
     </QueryClientProvider>
   ));
-  fireEvent.click(screen.getByRole('button', { name: 'New routine' }));
-  await screen.findByRole('dialog');
+  await screen.findByRole('textbox', { name: 'Routine name' });
 }
 
 function inputPrompt(value = 'Summarize updates'): HTMLTextAreaElement {
@@ -221,7 +207,34 @@ async function selectTarget(
 }
 
 function create(): void {
-  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create routine' }));
+}
+async function addScheduled(name = 'Daily') {
+  const add = screen.getByRole('button', { name: 'Add trigger' });
+  fireEvent.click(add);
+  fireEvent.click(await screen.findByRole('button', { name: 'Scheduled' }));
+  fireEvent.click(await screen.findByRole('button', { name }));
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
+      'button',
+      { name: 'Add trigger' }
+    )
+  );
+  await waitFor(() => expect(add.getAttribute('aria-expanded')).toBe('false'));
+}
+async function addDocumentEvent() {
+  const add = screen.getByRole('button', { name: 'Add trigger' });
+  fireEvent.click(add);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Document created' })
+  );
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
+      'button',
+      { name: 'Add trigger' }
+    )
+  );
+  await waitFor(() => expect(add.getAttribute('aria-expanded')).toBe('false'));
 }
 
 function created(body: CreateScheduledAction): ScheduledAction {
@@ -236,13 +249,14 @@ function created(body: CreateScheduledAction): ScheduledAction {
   };
 }
 
-describe('automation composer execution selection', () => {
+describe('routine composer execution selection', () => {
   it.each(['model', 'agent', 'override'] as const)(
     'submits a %s target with unchanged cron and timezone behavior',
     async (target) => {
       host.create.mockImplementation(async (body) => created(body));
       await mount();
       inputPrompt('  Summarize updates  ');
+      await addScheduled();
       await selectTarget(target);
       create();
       await waitFor(() => expect(host.create).toHaveBeenCalledOnce());
@@ -258,15 +272,14 @@ describe('automation composer execution selection', () => {
       expect(body).toMatchObject({
         trigger: {
           type: 'cron',
-          schedule: '0 0 9 * * 2,3,4,5,6',
+          schedule: '0 0 9 * * *',
           timezone: getDefaultTimezone(),
         },
       });
-      await waitFor(() => expect(automationComposerOpen()).toBe(false));
-      expect(host.openWithSplit).toHaveBeenCalledWith(
-        { type: 'automation', id: 'new-routine' },
-        { referredFrom: 'launcher' }
+      await waitFor(() =>
+        expect(host.created).toHaveBeenCalledWith('new-routine')
       );
+      expect(body.enabled).toBe(true);
     }
   );
 
@@ -276,12 +289,12 @@ describe('automation composer execution selection', () => {
     await selectTarget('override');
     vi.useFakeTimers();
     inputPrompt('Last keystroke');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    cleanup();
     expect(loadAutomationComposerDraft()).toMatchObject({
       prompt: 'Last keystroke',
       target: { kind: 'agent', agentId, modelOverride: 'vendor/custom-model' },
     });
-    setAutomationComposerOpen(true);
+    await mount();
     expect(
       screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
         .value
@@ -304,24 +317,27 @@ describe('automation composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     const editor = inputPrompt();
+    await addScheduled();
     await selectTarget('agent');
     create();
     expect((await screen.findByRole('alert')).textContent).toBe(
       'The selected agent is unavailable.'
     );
-    expect(automationComposerOpen()).toBe(true);
-    await screen.findByRole('button', { name: 'Create' });
+    expect(host.created).not.toHaveBeenCalled();
+    await screen.findByRole('button', { name: 'Create routine' });
     expect(screen.getByRole('textbox', { name: 'Instructions' })).toBe(editor);
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    cleanup();
     expect(loadAutomationComposerDraft()?.target).toEqual({
       kind: 'agent',
       agentId,
     });
-    setAutomationComposerOpen(true);
+    await mount();
     create();
     await waitFor(() => expect(host.create).toHaveBeenCalledTimes(2));
     expect(host.create.mock.calls[1][0]).toEqual(host.create.mock.calls[0][0]);
-    await waitFor(() => expect(automationComposerOpen()).toBe(false));
+    await waitFor(() =>
+      expect(host.created).toHaveBeenCalledWith('new-routine')
+    );
   });
 
   it('locks selection and submission while creating and cancels queued saves on success', async () => {
@@ -334,6 +350,7 @@ describe('automation composer execution selection', () => {
     );
     await mount();
     await selectTarget('agent');
+    await addScheduled();
     vi.useFakeTimers();
     inputPrompt();
     create();
@@ -348,11 +365,12 @@ describe('automation composer execution selection', () => {
     expect(host.create).toHaveBeenCalledOnce();
     resolveCreate(created(host.create.mock.calls[0][0]));
     await vi.advanceTimersByTimeAsync(0);
-    expect(automationComposerOpen()).toBe(false);
+    expect(host.created).toHaveBeenCalledWith('new-routine');
     expect(loadAutomationComposerDraft()).toBeNull();
     await vi.advanceTimersByTimeAsync(1000);
     expect(loadAutomationComposerDraft()).toBeNull();
-    setAutomationComposerOpen(true);
+    cleanup();
+    await mount();
     expect(
       screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
         .value
@@ -375,43 +393,128 @@ describe('automation composer execution selection', () => {
     expect(host.editorMount).toHaveBeenCalledOnce();
   });
 
-  it('preserves validation for empty instructions, invalid time, weekdays, and monthly day', async () => {
+  it('requires instructions and at least one trigger, with no history in creation', async () => {
     await mount();
     create();
     expect(screen.getByText('Instructions are required.')).toBeTruthy();
     inputPrompt();
-    fireEvent.input(screen.getByRole('textbox', { name: 'Time' }), {
-      target: { value: '25:00' },
-    });
     create();
-    expect(screen.getByText('Choose a valid time.')).toBeTruthy();
-    fireEvent.input(screen.getByRole('textbox', { name: 'Time' }), {
-      target: { value: '09:00' },
-    });
-    for (const name of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) {
-      fireEvent.click(screen.getByRole('button', { name }));
-    }
-    create();
-    expect(screen.getByText('Select at least one day.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Every month' }));
-    fireEvent.input(screen.getByRole('spinbutton'), {
-      target: { value: '32' },
-    });
-    create();
-    expect(screen.getByText('Pick a day between 1 and 31.')).toBeTruthy();
+    expect(
+      screen.getByText('Add a trigger to tell this routine when to run.')
+    ).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Run History' })).toBeNull();
     expect(host.create).not.toHaveBeenCalled();
   });
-
-  it('keeps default dialog autofocus on opening and reopening', async () => {
+  it('creates recurring schedules and Macro events together', async () => {
+    host.create.mockImplementation(async (body) => created(body));
     await mount();
-    const firstControl = screen.getByRole('button', { name: 'Dismiss' });
-    await waitFor(() => expect(document.activeElement).toBe(firstControl));
+    inputPrompt();
+    await addScheduled('Daily');
+    await addScheduled('Weekly');
+    await addDocumentEvent();
+    create();
+    await waitFor(() => expect(host.create).toHaveBeenCalledOnce());
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      enabled: true,
+      trigger: {
+        type: 'multiple',
+        triggers: [
+          {
+            type: 'cron',
+            schedule: '0 0 9 * * *',
+            timezone: getDefaultTimezone(),
+          },
+          {
+            type: 'cron',
+            schedule: '0 0 9 * * 2',
+            timezone: getDefaultTimezone(),
+          },
+          { type: 'events', filters: [{ events: ['document.created'] }] },
+        ],
+      },
+    });
+  });
+  it('keeps trigger edits local until confirmed and leaves an add chip', async () => {
+    await mount();
+    const editor = inputPrompt();
+    await addScheduled();
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
+      target: { value: '3:30pm' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    setAutomationComposerOpen(true);
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Dismiss' })
-      )
+    expect(
+      screen.getByRole('button', { name: 'Edit Every day, 9:00 AM trigger' })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Run time' }), {
+      target: { value: '3:30pm' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(
+      screen.getByRole('button', { name: 'Edit Every day, 3:30 PM trigger' })
+    ).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Add trigger' })).toHaveLength(
+      1
     );
+    expect(screen.getByRole('textbox', { name: 'Instructions' })).toBe(editor);
+    expect(host.editorMount).toHaveBeenCalledOnce();
+  });
+
+  it('configures one-off dates and the calendar in the same panel', async () => {
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    const confirm = () =>
+      within(panel).getByRole('button', { name: 'Add trigger' });
+    fireEvent.click(confirm());
+    expect(within(panel).getByRole('alert').textContent).toMatch(
+      /Choose a date/
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Custom date and time…' })
+    );
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: 'Add trigger' })).toBe(panel);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Type a date instead' })
+    );
+    fireEvent.input(screen.getByRole('textbox', { name: 'Run once date' }), {
+      target: { value: 'tomorrow 10am' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Tomorrow/ }));
+    fireEvent.click(confirm());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /Edit .*10:00 AM trigger/ })
+    ).toBeTruthy();
+    cleanup();
+    expect(loadAutomationComposerDraft()?.triggers).toMatchObject([
+      { kind: 'schedule', frequency: 'once', onceAt: expect.any(String) },
+    ]);
+    const trigger = loadAutomationComposerDraft()?.triggers?.[0];
+    if (trigger?.kind !== 'schedule') throw new Error('Expected one-off');
+    const date = new Date(trigger.onceAt);
+    expect(date.getTime()).toBeGreaterThan(Date.now());
+    expect(date.getHours()).toBe(10);
+  });
+
+  it('removes one trigger and restores the others after closing', async () => {
+    await mount();
+    inputPrompt();
+    await addScheduled('Daily');
+    await addDocumentEvent();
+    fireEvent.click(screen.getByRole('button', { name: /^Edit Every day,/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove trigger' }));
+    cleanup();
+    await mount();
+    expect(
+      screen.getByRole('button', { name: 'Edit Document created trigger' })
+    ).toBeTruthy();
+    expect(loadAutomationComposerDraft()?.triggers).toMatchObject([
+      { kind: 'event', events: ['document.created'] },
+    ]);
   });
 });

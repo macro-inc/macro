@@ -50,7 +50,7 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     fn from(action: ScheduledAction) -> Self {
         let (schedule, timezone) = match &action.trigger {
             ActionTrigger::Cron { schedule, timezone } => (Some(schedule.clone()), Some(*timezone)),
-            ActionTrigger::Events { .. } => (None, None),
+            _ => (None, None),
         };
         Self {
             action,

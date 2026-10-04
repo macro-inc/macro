@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_backfill_jobs (id, fusionauth_user_id, status, created_at)\n           VALUES ($1, $2, $3::email_backfill_job_status, NOW() - ($4::int * INTERVAL '1 hour'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "email_backfill_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Cancelled",
+                "Failed"
+              ]
+            }
+          }
+        },
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e96b8c3a1660153a356001480bb4a75dd1a37e21a7e0a58f51427892095d292f"
+}

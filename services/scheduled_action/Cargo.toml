@@ -34,6 +34,7 @@ entity_access = { path = "../../crates/entity_access", default-features = false,
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
+messages = { path = "../../crates/messages", features = ["broker"] }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

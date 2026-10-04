@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE initiative SET description_document_id = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ffe376e355e0045404cd3e0cd17f0ecb86bb6724f7f4199f17a2a475bc20889"
+}

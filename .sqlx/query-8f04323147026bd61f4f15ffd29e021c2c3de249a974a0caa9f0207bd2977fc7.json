@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"Document\" (id, name, owner)\n        VALUES ($1, 'Test initiative description', $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f04323147026bd61f4f15ffd29e021c2c3de249a974a0caa9f0207bd2977fc7"
+}

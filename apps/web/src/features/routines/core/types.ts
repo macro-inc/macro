@@ -9,13 +9,3 @@ export type RoutineRow = {
   editable: boolean;
   enabled: boolean;
 };
-export type RoutineTemplate = {
-  id: string;
-  name: string;
-  description: string;
-  category: 'Macro' | 'Integrations';
-  integration: string;
-  prompt: string;
-  days: string[];
-  time: string;
-};

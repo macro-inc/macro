@@ -1,3 +1,12 @@
+import { describeTriggers, validateTriggers } from '../core/routine-triggers';
+import {
+  onceFromCron,
+  parseRoutineTriggers,
+  serializeTriggers,
+} from '../queries/routine-trigger-mapping';
+
+export { onceFromCron } from '../queries/routine-trigger-mapping';
+
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import {
@@ -11,7 +20,6 @@ import {
   parseCron as parseCronParts,
 } from '@core/util/cron';
 import { ThrownResultError } from '@core/util/result';
-import { TZDate } from '@date-fns/tz';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import type {
   CreateScheduledAction,
@@ -26,7 +34,7 @@ import {
   routineTargetSchema,
   routineTargetsEqual,
 } from '../core/routine-target';
-import type { ScheduleDraft, ScheduleFrequency } from './types';
+import type { ScheduleDraft } from './types';
 
 export {
   DEFAULT_TIME,
@@ -34,18 +42,6 @@ export {
   isValidTime,
   WEEKDAY_OPTIONS,
 } from '@core/util/cron';
-
-export const INPUT_CLASS =
-  'w-full border border-edge-muted rounded-sm bg-surface px-2 py-1.5 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent/20 cursor-default';
-
-export const FREQUENCY_OPTIONS: Array<{
-  value: ScheduleFrequency;
-  label: string;
-}> = [
-  { value: 'week', label: 'Every week' },
-  { value: 'month', label: 'Every month' },
-  { value: 'once', label: 'Once' },
-];
 
 function normalizePrompt(value: string) {
   return value
@@ -73,6 +69,7 @@ function cronParts(draft: ScheduleDraft): CronParts {
 }
 
 export function describeSchedule(draft: ScheduleDraft, timezone: string) {
+  if (draft.triggers) return describeTriggers(draft.triggers);
   if (draft.frequency === 'once') {
     return draft.onceAt && !Number.isNaN(new Date(draft.onceAt).getTime())
       ? `Once on ${formatDateTime(new Date(draft.onceAt).toISOString())}`
@@ -148,8 +145,12 @@ export function draftFromSchedule(
   schedule: ScheduledAction
 ): ScheduleDraft | undefined {
   const trigger = getCronTrigger(schedule);
-  if (!trigger) return undefined;
-  const parsed = parseCron(trigger.schedule);
+  const sourceTrigger = schedule.trigger ?? trigger;
+  const triggers = sourceTrigger
+    ? parseRoutineTriggers(sourceTrigger)
+    : undefined;
+  if (!trigger && !triggers) return undefined;
+  const parsed = trigger ? parseCron(trigger.schedule) : createEmptyDraft();
   const task = getAgentTask(schedule);
   if (!task) return undefined;
 
@@ -162,8 +163,9 @@ export function draftFromSchedule(
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
-    timezone: trigger.timezone,
-    ...onceFromCron(trigger.schedule, trigger.timezone),
+    timezone: trigger?.timezone,
+    triggers,
+    ...(trigger ? onceFromCron(trigger.schedule, trigger.timezone) : {}),
   };
 }
 
@@ -196,7 +198,7 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
     trigger: triggerFromDraft(draft),
     kind: 'Agent',
     task: buildAgentTask(draft),
-    enabled: true,
+    enabled: draft.enabled ?? true,
   };
 }
 
@@ -207,7 +209,8 @@ export function draftToUpdateBody(
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
   const target = routineTargetSchema.safeParse(draft.target);
-  if (!trigger || !previousTask || !target.success) return undefined;
+  if ((!trigger && !draft.triggers) || !previousTask || !target.success)
+    return undefined;
 
   const targetChanged = !routineTargetsEqual(
     target.data,
@@ -223,6 +226,24 @@ export function draftToUpdateBody(
   }
 
   // Preserve API-written cron expressions and raw task data when not edited.
+  if (draft.triggers)
+    return {
+      name:
+        draft.name === previous.name
+          ? previous.name
+          : draft.name.trim() || 'Untitled',
+      trigger:
+        previous.trigger &&
+        JSON.stringify(serializeTriggers(draft.triggers)) ===
+          JSON.stringify(
+            serializeTriggers(parseRoutineTriggers(previous.trigger) ?? [])
+          )
+          ? previous.trigger
+          : serializeTriggers(draft.triggers),
+      kind: previous.kind,
+      task,
+    };
+  if (!trigger) return;
   const parsed = parseCron(trigger.schedule);
   const scheduleChanged =
     draft.frequency !==
@@ -249,7 +270,7 @@ export function draftToUpdateBody(
 export function scheduleToDuplicateBody(
   schedule: ScheduledAction
 ): CreateScheduledAction | undefined {
-  const trigger = getCronTrigger(schedule);
+  const trigger = schedule.trigger ?? getCronTrigger(schedule);
   if (!trigger) return undefined;
   return {
     enabled: schedule.enabled,
@@ -284,31 +305,11 @@ export function getErrorMessage(error: unknown) {
   return 'Please try again.';
 }
 
-export function onceFromCron(
-  cron: string,
-  timezone = 'UTC'
-): { frequency: 'once'; onceAt: string } | undefined {
-  const parts = cron.trim().split(/\s+/);
-  if (
-    parts.length !== 7 ||
-    !/^\d{4}$/.test(parts[6]) ||
-    !parts.slice(0, 5).every((part) => /^\d+$/.test(part))
-  )
-    return;
-  const [second, minute, hour, day, month, , year] = parts.map(Number);
-  const date = new TZDate(year, month - 1, day, hour, minute, second, timezone);
-  if (Number.isNaN(date.getTime())) return;
-  const instant = new Date(date.getTime());
-  const local = new Date(
-    instant.getTime() - instant.getTimezoneOffset() * 60000
-  );
-  return { frequency: 'once', onceAt: local.toISOString().slice(0, 19) };
-}
-
 function triggerFromDraft(
   draft: ScheduleDraft,
   timezone = getDefaultTimezone()
 ) {
+  if (draft.triggers) return serializeTriggers(draft.triggers);
   if (draft.frequency === 'once') {
     const date = new Date(draft.onceAt ?? '');
     if (Number.isNaN(date.getTime()))
@@ -333,6 +334,7 @@ export function validateRoutineDraft(
   if (!draft.prompt.trim()) return 'Instructions are required.';
   if (!routineTargetSchema.safeParse(draft.target).success)
     return 'Choose a valid model or agent.';
+  if (draft.triggers) return validateTriggers(draft.triggers, creating);
   if (draft.frequency === 'once') {
     const at = new Date(draft.onceAt ?? '').getTime();
     if (!Number.isFinite(at)) return 'Choose a date and time.';

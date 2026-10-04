@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO document_sub_type (document_id, sub_type)\n        VALUES ($1, 'initiative_description')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a6f1ed824cda27ccd2f0d155056bfb86d6fdbf0f7f737e65f13dfc3899a5c872"
+}

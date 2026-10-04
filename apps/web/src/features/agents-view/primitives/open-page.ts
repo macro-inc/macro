@@ -4,13 +4,18 @@ import type { AgentsPage } from '../core/pages';
 /** Open a workspace page, also when an Agents split is already mounted. */
 export function openAgentsPage(
   layout: Pick<SplitManager, 'openWithSplit'>,
-  page: AgentsPage
+  page: AgentsPage,
+  params: Record<string, unknown> = {}
 ) {
   const content = {
     type: 'component' as const,
     id: 'agents',
     preserveParams: true,
-    params: { agentPage: page, agentPageRequest: crypto.randomUUID() },
+    params: {
+      ...params,
+      agentPage: page,
+      agentPageRequest: crypto.randomUUID(),
+    },
   };
   const split = layout.openWithSplit(content, { activate: true }).split;
   if (!split) return;

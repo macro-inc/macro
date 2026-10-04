@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Comment\"(id, \"threadId\", owner, text)\n           SELECT id, id, $1, 'Batch comment' FROM generate_series(100, $2::bigint) id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "825f6c87d5a4c3c9f77603ab0748f9ccf3c72776ccf4fc974b8da677ea0210f5"
+}

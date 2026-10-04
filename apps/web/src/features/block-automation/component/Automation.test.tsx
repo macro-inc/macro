@@ -66,6 +66,9 @@ vi.mock('@queries/agent-schedule/routines', () => ({
   }),
 }));
 vi.mock('../routine-sharing', () => ({ RoutineSharing: () => null }));
+vi.mock('../routine-triggers', () => ({
+  RoutineTriggers: () => <div>Triggers</div>,
+}));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({
   DEFAULT_MODEL: 'claude-sonnet-4-6',
@@ -119,12 +122,6 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
     );
   },
 }));
-vi.mock('./AutomationRenameModal', () => ({
-  AutomationRenameModal: (props: { onRename: (value: string) => void }) => {
-    mocks.rename = props.onRename;
-    return null;
-  },
-}));
 vi.mock('./AutomationPromptEditor', () => ({
   AutomationPromptEditor: (props: {
     initialValue: string;
@@ -153,8 +150,8 @@ vi.mock('../routine-execution-picker', () => ({
     );
   },
 }));
-vi.mock('./AutomationTimePicker', () => ({ AutomationTimePicker: () => null }));
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
+  ...(await vi.importActual('@ui')),
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -304,12 +301,18 @@ const agentTarget: RoutineTarget = {
   modelOverride: 'runtime-model',
 };
 
+function openActions() {
+  const trigger = screen.getByRole('button', { name: 'Routine actions' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+}
+
 function runButton(): HTMLButtonElement {
-  return screen.getByRole('button', { name: 'Run Now' });
+  return screen.getByRole('button', { name: 'Run now' });
 }
 
 function activeSwitch(): HTMLButtonElement {
-  return screen.getByRole('switch', { name: 'Active' });
+  return screen.getByRole('switch');
 }
 
 function selectedTarget(): RoutineTarget {
@@ -345,13 +348,16 @@ describe('automation execution target autosave', () => {
     setSchedules([saved]);
     render(() => <Automation />);
     expect(selectedTarget()).toEqual(agentTarget);
-    fireEvent.click(screen.getByText('Duplicate'));
+    openActions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Duplicate' }), {
+      key: 'Enter',
+    });
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({ task: saved.task })
     );
   });
 
-  it('disables immediate Run Now until the latest target has saved', async () => {
+  it('disables immediate Run now until the latest target has saved', async () => {
     const save = deferredSave();
     mocks.update.mockReturnValueOnce(save.promise);
     render(() => <Automation />);
@@ -418,7 +424,7 @@ describe('automation execution target autosave', () => {
     expect(runButton().disabled).toBe(false);
   });
 
-  it('keeps a failed target visibly unsaved and blocks Run Now until retry succeeds', async () => {
+  it('keeps a failed target visibly unsaved and blocks Run now until retry succeeds', async () => {
     mocks.update.mockRejectedValueOnce(new Error('Agent unavailable'));
     render(() => <Automation />);
     mocks.changeTarget(agentTarget);
@@ -436,7 +442,7 @@ describe('automation execution target autosave', () => {
     expect(runButton().disabled).toBe(false);
   });
 
-  it('invalid edits cancel a queued valid save and keep Run Now disabled', async () => {
+  it('invalid edits cancel a queued valid save and keep Run now disabled', async () => {
     render(() => <Automation />);
     mocks.changeTarget(agentTarget);
     mocks.changePrompt('');
@@ -495,7 +501,7 @@ describe('automation execution target autosave', () => {
   it('shows a paused routine switched off and still runs it on demand', () => {
     render(() => <Automation />);
     expect(activeSwitch().getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByText('Next run 2026-09-28T09:00:00Z')).toBeTruthy();
+    expect(screen.getByText(/Next run/)).toBeTruthy();
     setSchedules([{ ...cron, enabled: false }]);
     expect(activeSwitch().getAttribute('aria-checked')).toBe('false');
     expect(screen.queryByText(/Next run/)).toBeNull();
@@ -512,17 +518,16 @@ describe('automation execution target autosave', () => {
     expect(activeSwitch().disabled).toBe(true);
   });
 
-  it.each(['events', 'unmount'])(
+  it.each(['unmount'])(
     'drops queued target changes on %s even during an in-flight save',
-    async (transition) => {
+    async () => {
       const first = deferredSave();
       mocks.update.mockReturnValueOnce(first.promise);
       const { unmount } = render(() => <Automation />);
       mocks.changeTarget(agentTarget);
       await vi.advanceTimersByTimeAsync(300);
       mocks.changeTarget({ kind: 'model', model: 'queued' });
-      if (transition === 'events') setSchedules([events]);
-      else unmount();
+      unmount();
       first.resolve(cron);
       await vi.advanceTimersByTimeAsync(500);
       expect(mocks.update).toHaveBeenCalledTimes(1);
@@ -615,30 +620,72 @@ describe('automation history integration', () => {
   });
 });
 
-describe('automation editor trigger guards', () => {
-  it('shows an explicit backend-managed state on a direct event route', async () => {
-    setSchedules([events]);
+describe('routine editor triggers', () => {
+  it('refreshes clean settings when a cached cron is replaced by an event configuration', async () => {
     render(() => <Automation />);
-    expect(
-      screen.getByText(
-        /Event triggers and instructions are managed through the API/
-      )
-    ).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Run History' })).toBeTruthy();
-    expect(screen.queryByText('Loading…')).toBeNull();
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByText('Duplicate')).toBeNull();
-    expect(screen.queryByText('Run Now')).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
-    expect(screen.getByText('Run transcript')).toBeTruthy();
-    await vi.advanceTimersByTimeAsync(500);
-    expect(mocks.update).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
+    setSchedules([{ ...events, configuration_revision: 2 }]);
+    mocks.changePrompt('Keep the newer events');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({ trigger: events.trigger }),
+    });
   });
 
+  it('does not overwrite a newer remote trigger while a local edit is queued', async () => {
+    render(() => <Automation />);
+    mocks.changePrompt('Unsaved local instructions');
+    setSchedules([{ ...events, configuration_revision: 2 }]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'changed elsewhere'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Reload latest' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    mocks.changePrompt('Fresh event instructions');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({ trigger: events.trigger }),
+    });
+  });
+
+  it('supports keyboard switching between settings and run history', async () => {
+    render(() => <Automation />);
+    const settings = screen.getByRole('tab', { name: 'Settings' });
+    settings.focus();
+    fireEvent.keyDown(settings, { key: 'ArrowRight' });
+    await vi.advanceTimersByTimeAsync(300);
+    const history = screen.getByRole('tab', { name: 'Run History' });
+    expect(history.getAttribute('aria-selected')).toBe('true');
+    expect(history.getAttribute('aria-controls')).toBe(
+      screen.getByRole('tabpanel', { name: 'Run History' }).id
+    );
+    expect(screen.getByText('Run transcript')).toBeTruthy();
+  });
+
+  it('edits an event routine and retains its filters through autosave and refetch errors', async () => {
+    setSchedules([events]);
+    setStatus('error');
+    render(() => <Automation />);
+    const editor = screen.getByRole('textbox', { name: 'Instructions' });
+    fireEvent.input(editor, { target: { value: 'New event instructions' } });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        trigger: events.trigger,
+        task: expect.objectContaining({
+          user_prompt: 'New event instructions',
+        }),
+      }),
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Run History' }));
+    expect(screen.getByText('Run transcript')).toBeTruthy();
+  });
   it('retains cron editing, duplication, run-now, and history navigation', async () => {
     render(() => <Automation />);
-    expect(screen.getByText(/America\/New_York/)).toBeTruthy();
     fireEvent.input(screen.getByRole('textbox', { name: 'Instructions' }), {
       target: { value: 'New instructions' },
     });
@@ -656,7 +703,10 @@ describe('automation editor trigger guards', () => {
         },
       },
     });
-    fireEvent.click(screen.getByText('Duplicate'));
+    openActions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Duplicate' }), {
+      key: 'Enter',
+    });
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
       name: 'Summary copy',
       kind: 'Agent',
@@ -664,7 +714,8 @@ describe('automation editor trigger guards', () => {
       task: cron.task,
       trigger: cron.trigger,
     });
-    fireEvent.click(screen.getByText('Run Now'));
+    await vi.advanceTimersByTimeAsync(300);
+    fireEvent.click(screen.getByText('Run now'));
     expect(mocks.run).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
@@ -674,37 +725,6 @@ describe('automation editor trigger guards', () => {
       { type: 'chat', id: 'chat-id' },
       { activate: true, preferNewSplit: false }
     );
-  });
-
-  it('blocks queued autosave and stale edit/duplicate callbacks after a trigger changes to events', async () => {
-    render(() => <Automation />);
-    mocks.changePrompt('Queued edit');
-    setSchedules([events]);
-    expect(
-      screen.getByText(
-        /Event triggers and instructions are managed through the API/
-      )
-    ).toBeTruthy();
-    mocks.rename('Stale rename');
-    mocks.changePrompt('Stale prompt');
-    mocks.duplicate();
-    await vi.advanceTimersByTimeAsync(500);
-    expect(mocks.update).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.setDisplayName).not.toHaveBeenCalledWith('Stale rename');
-  });
-
-  it('does not resurrect queued saves when returning from an event to a cron action', async () => {
-    render(() => <Automation />);
-    mocks.changeTarget(agentTarget);
-    setSchedules([events]);
-    setSchedules([cron]);
-    expect(selectedTarget()).toEqual({
-      kind: 'model',
-      model: 'claude-sonnet-4-6',
-    });
-    await vi.advanceTimersByTimeAsync(500);
-    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it('cancels pending saves when the editor unmounts', async () => {
@@ -729,7 +749,7 @@ describe('automation editor trigger guards', () => {
     setSchedules([]);
     render(() => <Automation />);
     expect(
-      screen.getByText('Unable to load automation. Please try again.')
+      screen.getByText('Unable to load routine. Please try again.')
     ).toBeTruthy();
   });
 
@@ -739,7 +759,7 @@ describe('automation editor trigger guards', () => {
     fireEvent.input(editor, { target: { value: 'Queued during refetch' } });
     setStatus('error');
     expect(screen.getByRole('textbox', { name: 'Instructions' })).toBe(editor);
-    expect(screen.queryByText(/Unable to load automation/)).toBeNull();
+    expect(screen.queryByText(/Unable to load routine/)).toBeNull();
     await vi.advanceTimersByTimeAsync(300);
     expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
@@ -756,27 +776,9 @@ describe('automation editor trigger guards', () => {
     expect(screen.getByRole('textbox', { name: 'Instructions' })).toBeTruthy();
   });
 
-  it('keeps cached event routines backend-managed after a refetch error', async () => {
-    render(() => <Automation />);
-    mocks.changePrompt('Queued edit');
-    setSchedules([events]);
-    setStatus('error');
-    expect(
-      screen.getByText(
-        /Event triggers and instructions are managed through the API/
-      )
-    ).toBeTruthy();
-    expect(screen.queryByRole('textbox')).toBeNull();
-    mocks.rename('Stale rename');
-    mocks.duplicate();
-    await vi.advanceTimersByTimeAsync(500);
-    expect(mocks.update).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
-  });
-
   it('distinguishes a missing action from a backend-managed event', () => {
     setSchedules([]);
     render(() => <Automation />);
-    expect(screen.getByText('Automation not found.')).toBeTruthy();
+    expect(screen.getByText('Routine not found.')).toBeTruthy();
   });
 });

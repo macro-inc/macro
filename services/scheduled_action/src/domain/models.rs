@@ -19,7 +19,7 @@ mod test;
 
 pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
 
-#[derive(Serialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, ToSchema)]
 pub struct Schedule(String);
 
 impl Schedule {

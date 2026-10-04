@@ -278,6 +278,34 @@ describe('cron automation payloads', () => {
     }
   );
 
+  it('retains a legacy cached schedule when adding a channel event', () => {
+    const loaded = draftFromSchedule(legacy)!;
+    expect(loaded.triggers).toHaveLength(1);
+    const body = draftToUpdateBody(
+      {
+        ...loaded,
+        triggers: [
+          ...loaded.triggers!,
+          { kind: 'event', id: 'new', events: ['channel.message_posted'] },
+        ],
+      },
+      legacy
+    );
+    expect(body).toMatchObject({
+      trigger: {
+        type: 'multiple',
+        triggers: [
+          {
+            type: 'cron',
+            schedule: '0 30 10 * * 2,4',
+            timezone: 'America/New_York',
+          },
+          { type: 'events', filters: [{ events: ['channel.message_posted'] }] },
+        ],
+      },
+    });
+  });
+
   it.each([cron, legacy])(
     'duplicates cron without changing its expression or task',
     (action) => {
@@ -313,11 +341,18 @@ describe('cron automation payloads', () => {
   });
 
   it.each([events, { ...events, schedule: '0 0 9 * * 2', timezone: 'UTC' }])(
-    'never parses, updates, or duplicates an event trigger, even with stale legacy fields',
+    'edits and duplicates canonical event triggers without using stale legacy cron fields',
     (action) => {
-      expect(draftFromSchedule(action)).toBeUndefined();
-      expect(draftToUpdateBody(draft(), action)).toBeUndefined();
-      expect(scheduleToDuplicateBody(action)).toBeUndefined();
+      const loaded = draftFromSchedule(action)!;
+      expect(loaded.triggers).toMatchObject([
+        { kind: 'event', events: ['document.updated'] },
+      ]);
+      expect(draftToUpdateBody(loaded, action)).toMatchObject({
+        trigger: action.trigger,
+      });
+      expect(scheduleToDuplicateBody(action)).toMatchObject({
+        trigger: action.trigger,
+      });
     }
   );
 

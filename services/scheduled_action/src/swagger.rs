@@ -48,6 +48,8 @@ use model::response::EmptyResponse;
             ActionConfigurationUpdate,
             LegacyActionConfiguration,
             ActionTrigger,
+            crate::domain::event_trigger::RoutineTrigger,
+            crate::domain::event_trigger::RoutineTriggers,
             EventFilter,
             EventFilters,
             EventName,

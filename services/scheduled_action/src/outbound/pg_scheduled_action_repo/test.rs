@@ -787,6 +787,37 @@ async fn database_rejects_invalid_trigger_shapes(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn database_rejects_external_webhooks_and_unknown_mixed_trigger_kinds(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    for config in [
+        json!({ "type": "webhook" }),
+        json!({ "type": "multiple", "triggers": [{ "type": "webhook" }] }),
+        json!({ "type": "multiple", "triggers": [{ "type": "unknown" }] }),
+        json!({ "type": "multiple", "triggers": [] }),
+    ] {
+        let id = macro_uuid::generate_uuid_v7();
+        let kind = config["type"].as_str().unwrap().to_owned();
+        let error = sqlx::query!(
+            r#"
+            INSERT INTO scheduled_action (id, owner, name, kind, task, trigger_type, trigger_config, next_run_at, enabled)
+            VALUES ($1, $2, 'invalid', 'Agent', '{}', $3, $4, NULL, false)
+            "#,
+            id,
+            USER_A,
+            kind,
+            config,
+        )
+        .execute(&pool)
+        .await
+        .expect_err("unsupported trigger must fail before it can break list reads");
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23514")
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn exhausted_one_off_clears_firing_and_is_not_dispatched_again(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = PgScheduledActionRepo::new(pool);

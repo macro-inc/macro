@@ -300,7 +300,9 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                     keyed
                     fallback={
                       <>
-                        <Topbar title={pageTitle()} />
+                        <Show when={page() !== 'routines'}>
+                          <Topbar title={pageTitle()} />
+                        </Show>
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>

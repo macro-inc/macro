@@ -1,3 +1,4 @@
+import { badgeTriggerClasses } from '@ui';
 import {
   type Accessor,
   ErrorBoundary,
@@ -116,8 +117,17 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
   }
 
   return (
-    <div role="group" aria-label="Routine model or agent" class="min-w-0">
+    <div
+      role="group"
+      aria-label="Routine model or agent"
+      class="min-w-0 max-w-full"
+    >
       <AgentPicker
+        triggerClass={badgeTriggerClasses({
+          variant: 'outline',
+          size: 'sm',
+          class: 'max-w-full text-ink-muted',
+        })}
         agents={props.roster}
         selected={selected()}
         modelOverride={model()}
@@ -129,11 +139,6 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       <Show when={!selected()}>
         <p class="break-words text-xs text-ink-muted">
           {savedSelection(props.target)}
-        </p>
-      </Show>
-      <Show when={props.target.kind === 'agent' && !model()}>
-        <p class="text-xs text-ink-muted">
-          Uses the agent's configured default model.
         </p>
       </Show>
       <Show when={warning()}>

@@ -223,9 +223,7 @@ describe('routine execution picker', () => {
         kind: 'agent',
         agentId: name === 'Researcher' ? managedId : externalId,
       });
-      expect(
-        screen.getByText("Uses the agent's configured default model.")
-      ).toBeTruthy();
+      expect(trigger.textContent).toContain(name);
       await expectClosed(trigger);
     }
   );

@@ -15,13 +15,13 @@ export function AutomationPromptEditor(props: {
     .onChange(props.onChange);
 
   return (
-    <div class="min-h-45 border border-edge-muted rounded-sm bg-surface **:[[contenteditable]]:px-2 **:[[contenteditable]]:py-1.5 **:[[contenteditable]]:text-sm **:[[contenteditable]]:outline-none cursor-default">
+    <div class="min-h-28 **:[[contenteditable]]:text-sm **:[[contenteditable]]:outline-none cursor-default">
       <MarkdownShell
         config={editor}
         initialValue={props.initialValue}
-        placeholder="Describe what should happen. Use @ to reference people, channels, or documents…"
+        placeholder="What should this routine do? Type @ to add context…"
         portalScope="local"
-        class="min-h-45"
+        class="min-h-28"
       />
     </div>
   );

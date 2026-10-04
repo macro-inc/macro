@@ -5,8 +5,8 @@ import { Automation } from './component/Automation';
 
 export const definition = defineBlock({
   name: 'automation',
-  description: 'view and edit a single automation',
-  defaultFilename: 'Untitled automation',
+  description: 'view and edit a single routine',
+  defaultFilename: 'Untitled routine',
   component: Automation,
   accepted: {},
   async load(source, intent) {

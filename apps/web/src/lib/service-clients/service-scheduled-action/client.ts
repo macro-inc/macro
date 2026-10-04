@@ -47,8 +47,7 @@ export const scheduledActionClient = {
       method: 'PUT',
       body: JSON.stringify({ team_id: teamId }),
     }),
-  // Include backend-managed routines so direct routes can identify them.
-  // Cron-only entity lists filter these out before rendering.
+  // Include every trigger type in the routine list.
   listSchedules: async () =>
     scheduledActionFetch<ScheduledAction[]>(
       '/scheduled-actions?include_events=true',

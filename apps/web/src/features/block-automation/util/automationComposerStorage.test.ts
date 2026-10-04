@@ -52,9 +52,9 @@ describe('automation composer storage', () => {
     expect(loadAutomationComposerDraft()).toEqual(saved);
   });
 
-  it('drops activation saved by older clients', () => {
+  it('retains the draft activation choice', () => {
     store({ draft: { ...draft, enabled: false }, timestamp: Date.now() });
-    expect(loadAutomationComposerDraft()).toEqual(draft);
+    expect(loadAutomationComposerDraft()).toEqual({ ...draft, enabled: false });
   });
 
   it('migrates an unexpired legacy model without refreshing its expiry', () => {
@@ -66,6 +66,7 @@ describe('automation composer storage', () => {
     vi.advanceTimersByTime(expiry);
     expect(loadAutomationComposerDraft()).toEqual({
       ...fields,
+      enabled: true,
       target: { kind: 'model', model: 'removed-from-catalog' },
     });
     vi.advanceTimersByTime(1);

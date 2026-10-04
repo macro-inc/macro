@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"PdfPlaceableCommentAnchor\" (\n                uuid, \"documentId\", owner, root_id, page, \"originalPage\", \"originalIndex\",\n                \"xPct\", \"yPct\", \"widthPct\", \"heightPct\", rotation,\n                \"wasEdited\", \"wasDeleted\", \"shouldLockOnSave\"\n            ) VALUES ($1, 'document-with-comments', 'macro|user@user.com', $2, 1, 1, -1, 0.1, 0.2, 0.3, 0.4, 0, false, false, false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a29366f9af114484d160b250640ad586caa419c78c4875faf7d7fea533dedb2d"
+}

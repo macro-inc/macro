@@ -4,12 +4,14 @@ import {
   routineModelSchema,
   routineTargetSchema,
 } from '../core/routine-target';
+import { routineTriggerSchema } from '../core/routine-triggers';
 
 const STORAGE_KEY = 'automation-composer-draft';
 const EXPIRY_TIME_MS = 3 * 60 * 1000;
 
 const draftFields = {
   id: z.string().optional(),
+  triggers: z.array(routineTriggerSchema).max(16).optional(),
   name: z.string(),
   prompt: z.string(),
   frequency: z.enum(['week', 'month', 'once']),
@@ -33,7 +35,7 @@ const draftSchema = z
         target: { kind: 'model' as const, model },
       })),
   ])
-  .transform(({ enabled: _enabled, ...draft }): ScheduleDraft => draft);
+  .transform((draft): ScheduleDraft => draft);
 
 const storedDraftSchema = z.object({
   draft: draftSchema,

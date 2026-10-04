@@ -28,16 +28,66 @@ fn incoming(name: &str, mut metadata: Value) -> IncomingEvent {
     if name == "document.updated" {
         metadata["file_type"] = Value::Null;
     }
-    let value = json!({"event_type": name, "metadata": metadata});
     let payload = if name.starts_with("document.") {
+        let value = json!({"event_type": name, "metadata": metadata});
         EventPayload::Document(serde_json::from_value(value).unwrap())
+    } else if let Some(message_name) = message_event_name(name) {
+        EventPayload::Message(message_fact(message_name, metadata))
     } else {
+        let value = json!({"event_type": name, "metadata": metadata});
         EventPayload::Channel(serde_json::from_value(value).unwrap())
     };
     IncomingEvent {
         event_id: Uuid::parse_str(EVENT_ID).unwrap(),
         schema_version: 1,
         payload,
+    }
+}
+
+/// Channel message triggers arrive on `macro.messages` under these names.
+fn message_event_name(trigger: &str) -> Option<&'static str> {
+    match trigger {
+        "channel.message_posted" => Some("message.posted"),
+        "channel.mentioned" => Some("message.mentioned"),
+        "channel.message_patched" => Some("message.patched"),
+        "channel.message_attachment_created" => Some("message.attachment_created"),
+        _ => None,
+    }
+}
+
+fn message_fact(name: &str, mut metadata: Value) -> MessageFact {
+    if metadata.get("parent").is_none() {
+        metadata["parent"] = json!({"type": "channel", "id": metadata["channel_id"]});
+    }
+    metadata["root_id"] = metadata["message_id"].clone();
+    let value = json!({"event_type": name, "metadata": metadata});
+    match serde_json::from_value(value).unwrap() {
+        messages::outbound::broker::MessageTopicEvent::Posted(data) => MessageFact::Posted(data),
+        messages::outbound::broker::MessageTopicEvent::Mentioned(data) => {
+            MessageFact::Mentioned(data)
+        }
+        messages::outbound::broker::MessageTopicEvent::Patched(data) => MessageFact::Patched(data),
+        messages::outbound::broker::MessageTopicEvent::AttachmentCreated(data) => {
+            MessageFact::AttachmentCreated(data)
+        }
+        _ => MessageFact::Other,
+    }
+}
+
+#[test]
+fn message_facts_on_other_parents_never_trigger() {
+    for name in [
+        "channel.message_posted",
+        "channel.mentioned",
+        "channel.message_patched",
+        "channel.message_attachment_created",
+    ] {
+        let mut data = metadata();
+        data["parent"] = json!({"type": "document", "id": "document-1"});
+        assert_eq!(
+            incoming(name, data).normalize(),
+            Err(EventRejection::UnsupportedEvent)
+        );
     }
 }
 
@@ -323,4 +373,43 @@ fn tagged_trigger_round_trips_and_rejects_conflicting_fields() {
         assert_eq!(serde_json::to_value(trigger).unwrap(), value);
     }
     assert!(serde_json::from_value::<ActionTrigger>(json!({"type": "events", "filters": [{"events": ["document.created"]}], "schedule": "0 0 9 * * *"})).is_err());
+}
+
+#[test]
+fn multiple_triggers_preserve_event_filters_and_choose_the_next_schedule() {
+    let trigger: ActionTrigger = serde_json::from_value(serde_json::json!({
+        "type": "multiple",
+        "triggers": [
+            {"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"},
+            {"type":"cron", "schedule":"0 0 17 * * *", "timezone":"UTC"},
+            {"type":"events", "filters":[{"events":["channel.message_posted"]}]}
+        ]
+    }))
+    .unwrap();
+    let after = chrono::DateTime::parse_from_rfc3339("2040-01-01T10:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    assert_eq!(
+        trigger.next_run_after(after).unwrap().to_rfc3339(),
+        "2040-01-01T17:00:00+00:00"
+    );
+    assert_eq!(
+        trigger.event_filters().unwrap().as_slice()[0].events(),
+        &[EventName::ChannelMessagePosted]
+    );
+    assert!(trigger.has_schedule());
+}
+
+#[test]
+fn event_groups_must_be_combined_and_external_webhooks_are_rejected() {
+    let events = serde_json::json!({"type":"events", "filters":[{"events":["document.created"]}]});
+    assert!(
+        serde_json::from_value::<ActionTrigger>(
+            serde_json::json!({"type":"multiple", "triggers":[events.clone(),events]})
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ActionTrigger>(serde_json::json!({"type":"webhook"})).is_err()
+    );
 }

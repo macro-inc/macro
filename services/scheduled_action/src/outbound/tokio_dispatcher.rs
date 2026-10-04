@@ -7,7 +7,6 @@ use futures::stream::FuturesUnordered;
 use macro_uuid::Uuid;
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{DispatchEvent, InProgressExecution, ScheduledAction};
 use crate::domain::ports::{ScheduledActionDispatcher, ScheduledActionExecutor};
 
@@ -38,12 +37,8 @@ fn action_sleep(id: Uuid, action: &ScheduledAction, generation: u64) -> Option<S
         return None;
     }
 
-    let ActionTrigger::Cron { schedule, timezone } = &action.trigger else {
-        return None;
-    };
-    let cron = schedule.as_cron();
-    let next = cron.upcoming(*timezone).next()?;
-    let now = Utc::now().with_timezone(timezone);
+    let now = Utc::now();
+    let next = action.trigger.next_run_after(now)?;
     let duration = (next - now).to_std().unwrap_or(std::time::Duration::ZERO);
 
     Some(Box::pin(async move {

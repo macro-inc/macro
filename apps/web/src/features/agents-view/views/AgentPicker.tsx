@@ -7,7 +7,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CodeIcon from '@phosphor/code.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Dropdown } from '@ui';
+import { cn, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentModelMenuItem } from '../../block-agent/component/AgentModelMenuItem';
 import type {
@@ -28,6 +28,7 @@ export function AgentPicker(props: {
   selected?: RosterAgent;
   modelOverride?: string;
   loading: boolean;
+  triggerClass?: string;
   effortLabel?: string;
   effortSelection?: EffortSelection;
   onSelect: (agent: RosterAgent, model?: string) => void;
@@ -80,7 +81,10 @@ export function AgentPicker(props: {
             ? label()
             : `${props.selected?.name ?? 'Choose agent'} · ${label()}`
         }
-        class="h-[33.75px] min-w-0 max-w-full gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
+        class={cn(
+          'h-[33.75px] min-w-0 max-w-full gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder',
+          props.triggerClass
+        )}
       >
         <Show
           when={rawModel()}

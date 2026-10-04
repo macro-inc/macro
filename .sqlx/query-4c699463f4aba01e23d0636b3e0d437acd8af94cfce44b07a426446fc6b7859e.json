@@ -1,0 +1,132 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action\n            SET name = $1,\n                schedule = $2,\n                kind = $3,\n                timezone = $4,\n                task = $5,\n                next_run_at = $6,\n                enabled = $7,\n                trigger_type = $8,\n                event_filters = $9,\n                configuration_revision = $10,\n                event_activated_at = $11,\n                trigger_config = $15,\n                updated_at = now()\n            WHERE id = $12 AND owner = $13\n              AND configuration_revision = $10::bigint - 1\n              AND (\n                  claimed IS NULL OR claimed < $14\n                  OR (\n                      NOT $7 AND name = $1 AND kind = $3 AND task = $5\n                      AND trigger_type = $8\n                      AND schedule IS NOT DISTINCT FROM $2\n                      AND timezone IS NOT DISTINCT FROM $4\n                      AND event_filters IS NOT DISTINCT FROM $9\n                      AND trigger_config IS NOT DISTINCT FROM $15\n                  )\n              )\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "schedule",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "task",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "claimed",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "trigger_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "event_filters",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "event_activated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "Bool",
+        "Text",
+        "Jsonb",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "4c699463f4aba01e23d0636b3e0d437acd8af94cfce44b07a426446fc6b7859e"
+}

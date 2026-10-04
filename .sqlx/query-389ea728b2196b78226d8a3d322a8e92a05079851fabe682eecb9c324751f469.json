@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO task_duplicate_match (\n            id,\n            task_id,\n            duplicate_task_id,\n            status,\n            vector_score,\n            judge_model,\n            judge_reason\n        )\n        VALUES ($1, $2, $3, 'active', 0.95, 'test', 'same implementation work')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "389ea728b2196b78226d8a3d322a8e92a05079851fabe682eecb9c324751f469"
+}

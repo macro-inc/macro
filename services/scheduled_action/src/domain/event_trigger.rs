@@ -10,6 +10,13 @@ use chrono_tz::Tz;
 use documents::domain::events::DocumentTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::{
+    events::{
+        MessageAttachmentCreatedMetadata, MessageMentionedMetadata, MessagePatchedMetadata,
+        MessagePostedMetadata,
+    },
+    models::MessageParent,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -23,8 +30,8 @@ pub const MAX_FILTERS: usize = 32;
 pub const MAX_EVENTS_PER_FILTER: usize = 7;
 pub const MAX_IDS_PER_FILTER: usize = 100;
 
-/// Exactly one trigger per action. Existing cron validation is reused.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+/// A routine may run on one trigger or any of several schedules and Macro events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ActionTrigger {
     Cron {
@@ -35,6 +42,106 @@ pub enum ActionTrigger {
     Events {
         filters: EventFilters,
     },
+    Multiple {
+        triggers: RoutineTriggers,
+    },
+}
+
+/// An individual trigger in a routine's trigger list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RoutineTrigger {
+    Cron {
+        schedule: Schedule,
+        #[schema(value_type = String)]
+        timezone: Tz,
+    },
+    Events {
+        filters: EventFilters,
+    },
+}
+
+/// Bounded schedules and one combined set of event filters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(try_from = "Vec<RoutineTrigger>", into = "Vec<RoutineTrigger>")]
+pub struct RoutineTriggers(Vec<RoutineTrigger>);
+
+impl TryFrom<Vec<RoutineTrigger>> for RoutineTriggers {
+    type Error = &'static str;
+
+    fn try_from(triggers: Vec<RoutineTrigger>) -> Result<Self, Self::Error> {
+        if triggers.is_empty() || triggers.len() > 16 {
+            return Err("a routine needs between 1 and 16 triggers");
+        }
+        if triggers
+            .iter()
+            .filter(|t| matches!(t, RoutineTrigger::Events { .. }))
+            .count()
+            > 1
+        {
+            return Err("combine event selectors in one event trigger");
+        }
+        Ok(Self(triggers))
+    }
+}
+
+impl RoutineTriggers {
+    pub fn as_slice(&self) -> &[RoutineTrigger] {
+        &self.0
+    }
+}
+
+impl From<RoutineTriggers> for Vec<RoutineTrigger> {
+    fn from(triggers: RoutineTriggers) -> Self {
+        triggers.0
+    }
+}
+
+impl ActionTrigger {
+    pub fn event_filters(&self) -> Option<&EventFilters> {
+        match self {
+            Self::Events { filters } => Some(filters),
+            Self::Multiple { triggers } => triggers.0.iter().find_map(|trigger| match trigger {
+                RoutineTrigger::Events { filters } => Some(filters),
+                _ => None,
+            }),
+            _ => None,
+        }
+    }
+
+    pub fn has_schedule(&self) -> bool {
+        match self {
+            Self::Cron { .. } => true,
+            Self::Multiple { triggers } => triggers
+                .0
+                .iter()
+                .any(|t| matches!(t, RoutineTrigger::Cron { .. })),
+            _ => false,
+        }
+    }
+
+    /// The first upcoming firing across all schedules. Simultaneous firings run once.
+    pub fn next_run_after(&self, after: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        let next = |schedule: &Schedule, timezone: Tz| {
+            schedule
+                .as_cron()
+                .after(&after.with_timezone(&timezone))
+                .next()
+                .map(|time| time.with_timezone(&Utc))
+        };
+        match self {
+            Self::Cron { schedule, timezone } => next(schedule, *timezone),
+            Self::Multiple { triggers } => triggers
+                .0
+                .iter()
+                .filter_map(|trigger| match trigger {
+                    RoutineTrigger::Cron { schedule, timezone } => next(schedule, *timezone),
+                    RoutineTrigger::Events { .. } => None,
+                })
+                .min(),
+            _ => None,
+        }
+    }
 }
 
 /// Closed allowlist: unknown names, deletions and ambiguous attribution are not
@@ -305,6 +412,26 @@ impl EventReference {
 pub enum EventPayload {
     Document(DocumentTopicEvent),
     Channel(ChannelTopicEvent),
+    Message(MessageFact),
+}
+
+/// The message facts routines can trigger on, from `macro.messages`. Anything
+/// else on that topic arrives as [`MessageFact::Other`] and never triggers.
+#[derive(Debug, Clone)]
+pub enum MessageFact {
+    Posted(MessagePostedMetadata),
+    Mentioned(MessageMentionedMetadata),
+    Patched(MessagePatchedMetadata),
+    AttachmentCreated(MessageAttachmentCreatedMetadata),
+    Other,
+}
+
+/// Routines trigger on channel conversations only; other parents never match.
+fn channel_parent(parent: &MessageParent) -> Result<Uuid, EventRejection> {
+    match parent {
+        MessageParent::Channel(id) => Ok(*id),
+        _ => Err(EventRejection::UnsupportedEvent),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -388,39 +515,46 @@ impl IncomingEvent {
                     require_human(Some(&data.actor), data.on_behalf_of.is_some())?;
                     (EventName::ChannelCreated, data.channel_id, None)
                 }
-                ChannelTopicEvent::MessagePosted(data) => {
+                _ => return Err(EventRejection::UnsupportedEvent),
+            },
+            EventPayload::Message(fact) => match fact {
+                MessageFact::Posted(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), data.triggered_by.is_some())?;
                     (
                         EventName::ChannelMessagePosted,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                ChannelTopicEvent::Mentioned(data) => {
+                MessageFact::Mentioned(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), false)?;
                     (
                         EventName::ChannelMentioned,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                ChannelTopicEvent::MessagePatched(data) => {
+                MessageFact::Patched(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.actor), false)?;
                     (
                         EventName::ChannelMessagePatched,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                ChannelTopicEvent::MessageAttachmentCreated(data) => {
+                MessageFact::AttachmentCreated(data) => {
+                    let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.actor), false)?;
                     (
                         EventName::ChannelMessageAttachmentCreated,
-                        data.channel_id,
+                        channel_id,
                         Some(data.message_id),
                     )
                 }
-                _ => return Err(EventRejection::UnsupportedEvent),
+                MessageFact::Other => return Err(EventRejection::UnsupportedEvent),
             },
         };
         Ok(EventReference {

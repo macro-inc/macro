@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO activity_events\n                (id, actor_id, subject_id, action, action_payload,\n                 entity_type, entity_id, occurred_at)\n            VALUES ($1, 'macro|actor@example.com', $2, 'edited', NULL,\n                    'future_entity', 'future-top', $3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d0dd887049a6225e389751b7acbfe73d46e449fc71eee77cc564dcd898fbbbee"
+}

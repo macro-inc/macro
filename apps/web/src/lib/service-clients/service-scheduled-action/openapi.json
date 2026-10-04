@@ -765,9 +765,22 @@
                 "enum": ["events"]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": ["triggers", "type"],
+            "properties": {
+              "triggers": {
+                "$ref": "#/components/schemas/RoutineTriggers"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["multiple"]
+              }
+            }
           }
         ],
-        "description": "Exactly one trigger per action. Existing cron validation is reused."
+        "description": "A routine may run on one trigger or any of several schedules and Macro events."
       },
       "AgentTask": {
         "type": "object",
@@ -964,6 +977,47 @@
       "RoutineModelId": {
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
+      },
+      "RoutineTrigger": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["schedule", "timezone", "type"],
+            "properties": {
+              "schedule": {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["cron"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["filters", "type"],
+            "properties": {
+              "filters": {
+                "$ref": "#/components/schemas/EventFilters"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["events"]
+              }
+            }
+          }
+        ],
+        "description": "An individual trigger in a routine's trigger list."
+      },
+      "RoutineTriggers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RoutineTrigger"
+        },
+        "description": "Bounded schedules and one combined set of event filters."
       },
       "Schedule": {
         "type": "string"

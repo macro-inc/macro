@@ -1,6 +1,7 @@
 import { ActivityRouteView } from '@app/features/activity/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { AgentsRouteView } from '@app/features/agents-view/route';
+import { RoutineCreator } from '@app/features/block-automation/component/AutomationComposer';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -307,6 +308,15 @@ registerComponent('email-compose', (params) => {
     />
   );
 });
+registerComponent('routine-compose', (params) => (
+  <RoutineCreator
+    onCreated={
+      typeof params.onCreated === 'function'
+        ? (params.onCreated as (id: string) => void)
+        : undefined
+    }
+  />
+));
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;

@@ -1,22 +1,14 @@
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
-import { createSearchParams } from '@app/lib/split-router';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  returnSplitToRecentListView,
-  useSplitPanelOrThrow,
-} from '@components/app/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
-import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
-import { formatDateAndTime } from '@entity';
+import { getDisplayName, tryMacroId } from '@core/user';
+import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
+import DotsIcon from '@phosphor/dots-three.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import {
   isClaimActive,
@@ -32,10 +24,10 @@ import {
   useSetScheduleEnabledMutation,
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
-import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useChatQuery } from '@queries/chat';
-import { Button, cn, ToggleSwitch } from '@ui';
+import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import { Button, Dropdown } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -47,23 +39,41 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
+import { RoutineEditor } from '../components/routine-editor';
+import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from '../primitives/routine-autosave';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
-import { routineSearch } from '../routine-search';
 import { RoutineSharing } from '../routine-sharing';
+import { RoutineTriggers } from '../routine-triggers';
 import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
-import { AutomationRenameModal } from './AutomationRenameModal';
 import {
+  createEmptyDraft,
   draftFromSchedule,
   draftToUpdateBody,
+  formatDateTime,
   getErrorMessage,
   scheduleToDuplicateBody,
   validateRoutineDraft,
 } from './automationUtils';
-import { RoutineScheduleFields } from './RoutineScheduleFields';
 import type { ScheduleDraft } from './types';
+
+class RoutineConflictError extends Error {
+  constructor() {
+    super(
+      'This routine changed elsewhere. Reload the latest settings before editing.'
+    );
+  }
+}
+
+function configurationKey(routine: ScheduledAction): string {
+  return JSON.stringify([
+    routine.name,
+    routine.kind,
+    routine.trigger,
+    routine.task,
+  ]);
+}
 
 function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
   const query = useChatQuery(() => id);
@@ -91,9 +101,31 @@ function createAgentHistoryMetadata(id: string): Accessor<HistoryMetadata> {
 
 export function Automation() {
   const scheduleId = useBlockId();
+  const layout = useSplitLayout();
+  onMount(() => {
+    if (scheduleId === 'new') {
+      layout.popoverSplit({ type: 'component', id: 'routine-compose' });
+      openAgentsPage(layout, 'routines');
+    }
+  });
+  return (
+    <Show when={scheduleId !== 'new'}>
+      <RoutineDetail scheduleId={scheduleId} />
+    </Show>
+  );
+}
+
+export function RoutineDetail(props: {
+  scheduleId: string;
+  initialTab?: 'settings' | 'history';
+  onBack?: () => void;
+  onOpen?: (id: string) => void;
+}) {
+  const scheduleId = props.scheduleId;
   const userId = useUserId();
   const panel = useSplitPanelOrThrow();
-  const { openWithSplit, replaceOrInsertSplit } = useSplitLayout();
+  const layout = useSplitLayout();
+  const { openWithSplit } = layout;
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const routineQuery = useRoutineQuery(() => scheduleId);
@@ -107,25 +139,32 @@ export function Automation() {
       ? routineQuery.data
       : undefined) ?? ownedSchedule();
   const isOwned = () => schedule()?.owner === userId();
-  const [search, setSearch] = createSearchParams(routineSearch);
-  const tab = () => search.tab;
-  const setTab = (tab: 'settings' | 'history') => setSearch({ tab });
-  const cronTrigger = () => {
-    const current = schedule();
-    return current ? getCronTrigger(current) : undefined;
-  };
+  const [tab, setTab] = createSignal<'settings' | 'history'>(
+    props.initialTab ?? 'settings'
+  );
+  const editableTrigger = () => Boolean(schedule());
+  const back = () =>
+    props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
+  const open = (id: string) =>
+    props.onOpen
+      ? props.onOpen(id)
+      : openAgentsPage(layout, 'routines', { routineId: id });
   const scheduleEntity = () => {
     const current = schedule();
     return current ? scheduleToEntity(current) : undefined;
   };
-  const status = () => scheduleEntity()?.status;
   const isRunning = () => isClaimActive(schedule()?.claimed);
   const isActive = () => schedule()?.enabled ?? false;
 
   const [state, setRawState] = createSignal<ScheduleDraft | undefined>();
+  const [editorVersion, setEditorVersion] = createSignal(0);
+  let baselineRevision = 0;
+  let baselineKey = '';
 
   const isCompleted = () =>
-    state()?.frequency === 'once' && !schedule()?.next_run_at && !isRunning();
+    hasOnlyScheduledTriggers(state()?.triggers) &&
+    !schedule()?.next_run_at &&
+    !isRunning();
 
   const formError = () => {
     const draft = state();
@@ -135,21 +174,29 @@ export function Automation() {
   const updateMutation = useUpdateScheduleMutation();
   const autosave = createRoutineAutosave<ScheduleDraft>(async (draft) => {
     const previous = schedule();
-    if (!previous || !getCronTrigger(previous)) {
+    if (!previous || !editableTrigger()) {
       throw new Error('This routine is no longer editable.');
     }
+    if (
+      previous.configuration_revision > baselineRevision &&
+      configurationKey(previous) !== baselineKey
+    )
+      throw new RoutineConflictError();
     const body = draftToUpdateBody(draft, previous);
     if (!body) throw new Error('Choose a valid execution target.');
-    await updateMutation.mutateAsync({ scheduleId, body });
+    const saved = await updateMutation.mutateAsync({ scheduleId, body });
+    baselineRevision = saved.configuration_revision;
+    baselineKey = configurationKey(saved);
   });
 
   function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();
-    if (!isOwned() || !current || !cronTrigger() || isRunning()) return;
+    if (!isOwned() || !current || !editableTrigger() || isRunning()) return;
     const next = update(current);
+    if (next === current) return;
     setRawState(next);
     if (next.name !== current.name) {
-      panel.handle.setDisplayName(next.name);
+      if (!props.onBack) panel.handle.setDisplayName(next.name);
     }
     autosave.queue(formError() ? undefined : next);
   }
@@ -157,7 +204,7 @@ export function Automation() {
   function runNow(): void {
     if (
       !isOwned() ||
-      !cronTrigger() ||
+      !editableTrigger() ||
       !state() ||
       formError() ||
       autosave.dirty() ||
@@ -172,18 +219,29 @@ export function Automation() {
   function initializeDraft(): void {
     const current = schedule();
     if (!current) return;
+    baselineRevision = current.configuration_revision;
+    baselineKey = configurationKey(current);
     setRawState(draftFromSchedule(current));
-    panel.handle.setDisplayName(current.name);
+    setEditorVersion((version) => version + 1);
+    if (!props.onBack) panel.handle.setDisplayName(current.name);
   }
 
-  // Only entering/leaving cron editing resets the draft, never save responses.
-  const cronEditable = createMemo(() => Boolean(cronTrigger()));
+  // A server revision refreshes clean settings, while a pending edit keeps its
+  // original revision so a conflicting remote change cannot be overwritten.
   createEffect(
-    on(cronEditable, (editable) => {
-      autosave.cancel();
-      if (editable) initializeDraft();
-      else setRawState(undefined);
-    })
+    on(
+      () => schedule()?.configuration_revision,
+      (revision) => {
+        if (revision === undefined) return;
+        if (
+          !state() ||
+          (revision > baselineRevision &&
+            !autosave.dirty() &&
+            !autosave.saving())
+        )
+          initializeDraft();
+      }
+    )
   );
 
   const historyQuery = useScheduleHistoryQuery(
@@ -193,8 +251,6 @@ export function Automation() {
   const history = createMemo(() =>
     historyQuery.isSuccess ? (historyQuery.data ?? []) : []
   );
-
-  const [renameOpen, setRenameOpen] = createSignal(false);
 
   const runNowMutation = useRunScheduleNowMutation({
     onError: (error) =>
@@ -212,21 +268,18 @@ export function Automation() {
     onSuccess: (created) => {
       toast.success('Duplicated');
       if (created.id) {
-        replaceOrInsertSplit(
-          { type: 'automation', id: created.id },
-          'entity-actions-menu'
-        );
+        open(created.id);
       }
     },
     onError: (error) =>
-      toast.alert('Failed to duplicate automation', {
+      toast.alert('Failed to duplicate routine', {
         subtext: getErrorMessage(error),
       }),
   });
 
   const duplicateAutomation = () => {
     const current = schedule();
-    if (!current || duplicateMutation.isPending) return;
+    if (!current || !editableTrigger() || duplicateMutation.isPending) return;
     const body = scheduleToDuplicateBody(current);
     if (!body) return;
     duplicateMutation.mutate(body);
@@ -242,7 +295,7 @@ export function Automation() {
       entities: [entity],
       onFinish: () => {
         toast.success('Deleted');
-        returnSplitToRecentListView(panel.handle);
+        back();
       },
       onError: () => toast.failure('Failed to delete'),
     });
@@ -257,9 +310,9 @@ export function Automation() {
       when={schedule()}
       fallback={
         <div class="flex size-full flex-col items-center justify-center gap-2 p-3 text-center text-sm text-ink-muted">
-          <Switch fallback={<>Automation not found.</>}>
+          <Switch fallback={<>Routine not found.</>}>
             <Match when={routineQuery.isError && !schedule()}>
-              Unable to load automation. Please try again.
+              Unable to load routine. Please try again.
             </Match>
             <Match when={routineQuery.isPending}>Loading…</Match>
           </Switch>
@@ -267,292 +320,95 @@ export function Automation() {
       }
     >
       {(d) => (
-        <>
-          <SplitHeaderLeft>
-            <HeaderIsland class="shrink">
-              <div class="z-split-header-content relative flex h-full w-screen max-w-full shrink items-center gap-2">
-                <EntityIcon
-                  class="shrink-0"
-                  targetType="automation"
-                  size="xs"
-                />
-                <span
-                  class="inline-block min-w-0 flex-1 truncate text-sm"
-                  onDblClick={() => {
-                    if (isOwned() && cronTrigger()) setRenameOpen(true);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    if (isOwned() && cronTrigger()) setRenameOpen(true);
-                  }}
-                >
-                  {d().name || blockNameToDefaultFile('automation')}
-                </span>
-                <div
-                  class="shrink-0 flex items-center h-full"
-                  ref={(ref) => panel.setTitleFileMenuRef(ref)}
-                />
-              </div>
-            </HeaderIsland>
-          </SplitHeaderLeft>
-          <SplitTitleFileMenu>
-            <BlockSplitFileMenu
-              id={scheduleId}
-              itemType="automation"
-              name={d().name || blockNameToDefaultFile('automation')}
-              ops={[]}
-              // Generic chrome can't reconstruct an AutomationEntity (it
-              // lacks the cron), so supply it for entity-gated menu items.
-              entity={scheduleEntity()}
-              tools={[
-                ...(isOwned() && cronTrigger()
-                  ? [
-                      {
-                        group: 'file' as const,
-                        label: 'Rename',
-                        icon: RenameIcon,
-                        action: () => setRenameOpen(true),
-                      },
-                    ]
-                  : []),
-                ...(cronTrigger()
-                  ? [
-                      {
-                        group: 'file' as const,
-                        label: 'Duplicate',
-                        icon: CopyIcon,
-                        action: duplicateAutomation,
-                      },
-                    ]
-                  : []),
-                ...(isOwned() && cronTrigger()
-                  ? [
-                      {
-                        group: 'delete' as const,
-                        label: 'Delete',
-                        icon: TrashIcon,
-                        action: deleteAutomation,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </SplitTitleFileMenu>
-          <AutomationRenameModal
-            isOpen={renameOpen}
-            setIsOpen={setRenameOpen}
-            name={d().name}
-            onRename={(newName) =>
-              setState((current) => ({ ...current, name: newName }))
-            }
-          />
-
-          <div class="size-full overflow-y-auto text-ink">
-            <div class="mx-auto flex w-full max-w-4xl flex-col gap-7 px-5 py-6 sm:px-8 sm:py-9 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)]">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <h1 class="text-xl font-medium">
-                    <button
-                      type="button"
-                      disabled={!isOwned() || !cronTrigger()}
-                      class="max-w-full truncate text-left"
-                      title={cronTrigger() ? 'Rename routine' : undefined}
-                      onClick={() => setRenameOpen(true)}
-                    >
-                      {d().name || 'Untitled routine'}
-                    </button>
-                  </h1>
-                  <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-ink-muted">
-                    <ToggleSwitch
-                      label="Active"
-                      labelClass="text-xs text-ink-muted"
-                      checked={isActive()}
-                      disabled={
-                        !isOwned() ||
-                        isCompleted() ||
-                        setEnabledMutation.isPending ||
-                        (isRunning() && !isActive())
-                      }
-                      onChange={(active) =>
-                        setEnabledMutation.mutate({
-                          scheduleId,
-                          enabled: active,
-                        })
-                      }
-                    />
-                    <Show when={isCompleted()}>
-                      <span>Completed</span>
-                    </Show>
-                    <Show when={!isOwned()}>
-                      <span>Shared with your team · View only</span>
-                    </Show>
-                    {match(status())
-                      .with({ kind: 'running' }, () => (
-                        <span class="text-accent">Running</span>
-                      ))
-                      .with({ kind: 'scheduled' }, ({ nextRunAt }) => (
-                        <span>Next run {formatDateAndTime(nextRunAt)}</span>
-                      ))
-                      .otherwise(() => undefined)}
-                  </div>
-                </div>
-                <Show when={isOwned() && cronTrigger()}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      runNowMutation.isPending ||
-                      isRunning() ||
-                      autosave.dirty() ||
-                      autosave.saving() ||
-                      Boolean(formError())
-                    }
-                    onClick={runNow}
-                  >
-                    Run Now
-                  </Button>
-                </Show>
-              </div>
-              <div
-                class="flex items-center gap-1 border-b border-edge-muted pb-3"
-                role="tablist"
-                aria-label="Routine details"
+        <div class="flex h-full min-h-0 flex-col">
+          <header
+            class="flex h-12 shrink-0 items-center gap-2 border-b border-edge-muted px-4"
+            aria-label="Routine toolbar"
+          >
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Back to routines"
+              onClick={back}
+            >
+              <ArrowLeftIcon class="size-4" />
+            </Button>
+            <button
+              type="button"
+              class="text-xs text-ink-muted hover:text-ink"
+              onClick={back}
+            >
+              Routines
+            </button>
+            <span class="text-xs text-ink-extra-muted">/</span>
+            <span class="min-w-0 flex-1 truncate text-sm text-ink">
+              {state()?.name || d().name || 'Untitled routine'}
+            </span>
+            <Show when={isOwned()}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  runNowMutation.isPending ||
+                  isRunning() ||
+                  autosave.dirty() ||
+                  autosave.saving() ||
+                  Boolean(formError()) ||
+                  !state()
+                }
+                onClick={runNow}
               >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab() === 'settings'}
-                  class={cn(
-                    'rounded-md px-3 py-1.5 text-sm',
-                    tab() === 'settings'
-                      ? 'bg-hover text-ink'
-                      : 'text-ink-muted hover:bg-hover'
-                  )}
-                  onClick={() => setTab('settings')}
-                >
-                  Settings
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab() === 'history'}
-                  class={cn(
-                    'rounded-md px-3 py-1.5 text-sm',
-                    tab() === 'history'
-                      ? 'bg-hover text-ink'
-                      : 'text-ink-muted hover:bg-hover'
-                  )}
-                  onClick={() => setTab('history')}
-                >
-                  Run History
-                </button>
-                <Show when={tab() === 'settings' && isOwned() && cronTrigger()}>
-                  <span
-                    role="status"
-                    class="ml-auto text-xs text-ink-extra-muted"
-                  >
-                    {autosave.saving()
-                      ? 'Saving…'
-                      : autosave.dirty()
-                        ? 'Unsaved changes'
-                        : 'All changes saved'}
-                  </span>
+                Run now
+              </Button>
+            </Show>
+            <Dropdown placement="bottom-end">
+              <Dropdown.Trigger
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Routine actions"
+              >
+                <DotsIcon class="size-5" />
+              </Dropdown.Trigger>
+              <Dropdown.Content portalScope="local">
+                <Dropdown.Item onSelect={duplicateAutomation}>
+                  <CopyIcon class="size-4" />
+                  Duplicate
+                </Dropdown.Item>
+                <Show when={isOwned()}>
+                  <Dropdown.Item onSelect={deleteAutomation}>
+                    <TrashIcon class="size-4" />
+                    Delete
+                  </Dropdown.Item>
                 </Show>
-              </div>
-              <Show when={tab() === 'settings'}>
-                <div role="tabpanel" aria-label="Settings" class="grid gap-7">
-                  <Show
-                    when={state()}
-                    fallback={
-                      <p class="text-sm text-ink-muted">
-                        This routine runs when its configured events occur.
-                        Event triggers and instructions are managed through the
-                        API.
-                      </p>
-                    }
-                  >
-                    {(draft) => (
-                      <fieldset
-                        disabled={!isOwned() || isRunning()}
-                        inert={!isOwned() || isRunning()}
-                        class="grid min-w-0 gap-7"
-                      >
-                        <section class="grid gap-3">
-                          <h2 class="text-sm font-medium">Schedule</h2>
-                          <div class="rounded-lg border border-edge-muted p-4">
-                            <RoutineScheduleFields
-                              draft={draft()}
-                              onChange={setState}
-                            />
-                          </div>
-                        </section>
-                        <section class="grid gap-3">
-                          <h2 class="text-sm font-medium">
-                            Agent instructions
-                          </h2>
-                          <AutomationPromptEditor
-                            initialValue={draft().prompt}
-                            onChange={(prompt) => {
-                              if (prompt === state()?.prompt) return;
-                              setState((current) => ({ ...current, prompt }));
-                            }}
-                          />
-                          <RoutineExecutionPicker
-                            target={draft().target}
-                            onChange={(target) =>
-                              setState((current) => ({ ...current, target }))
-                            }
-                          />
-                        </section>
-                      </fieldset>
-                    )}
-                  </Show>
-                  <Show when={isRunning()}>
-                    <p class="text-xs text-ink-muted">
-                      Configuration cannot be changed while running.
-                    </p>
-                  </Show>
-                  <Show when={autosave.error()}>
-                    <div role="alert" class="text-xs text-failure">
-                      Changes not saved. {getErrorMessage(autosave.error())}
-                      <button
-                        type="button"
-                        class="ml-2 underline"
-                        onClick={autosave.retry}
-                      >
-                        Retry save
-                      </button>
-                    </div>
-                  </Show>
-                  <Show when={formError()}>
-                    {(message) => (
-                      <p class="text-xs text-failure">{message()}</p>
-                    )}
-                  </Show>
-                  <Show when={isOwned()}>
-                    <section class="border-t border-edge-muted pt-5">
-                      <RoutineSharing id={scheduleId} />
-                    </section>
-                  </Show>
-                </div>
-              </Show>
-              <Show when={tab() === 'history'}>
-                <div
-                  role="tabpanel"
-                  aria-label="Run History"
-                  class="overflow-hidden rounded-lg border border-edge-muted"
-                >
-                  <Show when={historyQuery.isError}>
-                    <div role="alert" class="p-4 text-sm text-failure">
-                      Could not load run history.{' '}
-                      <button
-                        class="underline"
-                        onClick={() => void historyQuery.refetch()}
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  </Show>
+              </Dropdown.Content>
+            </Dropdown>
+          </header>
+          <Show
+            when={state()}
+            fallback={
+              <RoutineEditor
+                draft={{ ...createEmptyDraft(), name: d().name }}
+                onChange={() => {}}
+                enabled={isActive()}
+                disabled
+                activationDisabled={
+                  !isOwned() ||
+                  setEnabledMutation.isPending ||
+                  (isRunning() && !isActive())
+                }
+                onEnabled={(enabled) =>
+                  setEnabledMutation.mutate({ scheduleId, enabled })
+                }
+                tab={tab()}
+                onTab={setTab}
+                instructions={null}
+                executionPicker={null}
+                triggerContent={
+                  <p class="text-sm text-ink-muted">
+                    This routine has an unsupported task configuration.
+                  </p>
+                }
+                history={
                   <RoutineHistory
                     records={history()}
                     isPending={historyQuery.isPending}
@@ -565,11 +421,160 @@ export function Automation() {
                       })
                     }
                   />
-                </div>
-              </Show>
-            </div>
-          </div>
-        </>
+                }
+              />
+            }
+          >
+            {(draft) => (
+              <RoutineEditor
+                draft={draft()}
+                onChange={setState}
+                enabled={isActive()}
+                disabled={!isOwned() || isRunning()}
+                activationDisabled={
+                  !isOwned() ||
+                  isCompleted() ||
+                  setEnabledMutation.isPending ||
+                  (!isActive() &&
+                    (autosave.dirty() ||
+                      autosave.saving() ||
+                      Boolean(formError()) ||
+                      isRunning()))
+                }
+                onEnabled={(enabled) =>
+                  setEnabledMutation.mutate({ scheduleId, enabled })
+                }
+                tab={tab()}
+                onTab={setTab}
+                metadata={
+                  <>
+                    <span class="border-l border-edge-muted pl-4">
+                      By{' '}
+                      {isOwned()
+                        ? 'you'
+                        : getDisplayName(tryMacroId(d().owner))}
+                    </span>
+                    <Show when={!isOwned()}>
+                      <span>Shared · View only</span>
+                    </Show>
+                    <Show when={isRunning()}>
+                      <span class="text-accent">Running</span>
+                    </Show>
+                    <Show when={isActive() && d().next_run_at}>
+                      <span>Next run {formatDateTime(d().next_run_at)}</span>
+                    </Show>
+                  </>
+                }
+                status={
+                  isOwned() && tab() === 'settings'
+                    ? autosave.saving()
+                      ? 'Saving…'
+                      : autosave.dirty()
+                        ? 'Unsaved changes'
+                        : 'All changes saved'
+                    : undefined
+                }
+                instructions={
+                  <Show when={{ version: editorVersion() }} keyed>
+                    <AutomationPromptEditor
+                      initialValue={draft().prompt}
+                      onChange={(prompt) =>
+                        setState((d) =>
+                          d.prompt === prompt ? d : { ...d, prompt }
+                        )
+                      }
+                    />
+                  </Show>
+                }
+                executionPicker={
+                  <RoutineExecutionPicker
+                    target={draft().target}
+                    onChange={(target) =>
+                      setState((current) => ({ ...current, target }))
+                    }
+                  />
+                }
+                triggerContent={
+                  <RoutineTriggers
+                    triggers={draft().triggers ?? []}
+                    onChange={(triggers) =>
+                      setState((current) => ({ ...current, triggers }))
+                    }
+                  />
+                }
+                feedback={
+                  <>
+                    <Show when={autosave.error()}>
+                      <p role="alert" class="text-sm text-failure">
+                        Changes not saved. {getErrorMessage(autosave.error())}
+                        <button
+                          type="button"
+                          class="ml-2 underline"
+                          onClick={() => {
+                            if (
+                              autosave.error() instanceof RoutineConflictError
+                            ) {
+                              autosave.cancel();
+                              initializeDraft();
+                            } else autosave.retry();
+                          }}
+                        >
+                          {autosave.error() instanceof RoutineConflictError
+                            ? 'Reload latest'
+                            : 'Retry save'}
+                        </button>
+                      </p>
+                    </Show>
+                    <Show when={formError()}>
+                      {(message) => (
+                        <p role="alert" class="text-sm text-failure">
+                          {message()}
+                        </p>
+                      )}
+                    </Show>
+                    <Show when={isRunning()}>
+                      <p class="text-xs text-ink-muted">
+                        Configuration cannot be changed while running.
+                      </p>
+                    </Show>
+                  </>
+                }
+                sharing={
+                  <Show when={isOwned()}>
+                    <RoutineSharing id={scheduleId} />
+                  </Show>
+                }
+                history={
+                  <div class="overflow-hidden rounded-xl border border-edge-muted">
+                    <Show when={historyQuery.isError}>
+                      <p role="alert" class="p-4 text-sm text-failure">
+                        Could not load run history.{' '}
+                        <button
+                          class="underline"
+                          onClick={() => void historyQuery.refetch()}
+                        >
+                          Retry
+                        </button>
+                      </p>
+                    </Show>
+                    <RoutineHistory
+                      records={history()}
+                      isPending={historyQuery.isPending}
+                      createChatMetadata={createChatHistoryMetadata}
+                      createAgentMetadata={createAgentHistoryMetadata}
+                      onOpen={(resource, newSplit) =>
+                        openWithSplit(resource, {
+                          activate: true,
+                          preferNewSplit: newSplit,
+                        })
+                      }
+                    />
+                  </div>
+                }
+              />
+            )}
+          </Show>
+        </div>
       )}
     </Show>
   );

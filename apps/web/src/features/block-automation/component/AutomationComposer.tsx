@@ -1,18 +1,14 @@
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { toast } from '@core/component/Toast/Toast';
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import ClockIcon from '@phosphor/clock.svg';
+import XIcon from '@phosphor/x.svg';
 import { useCreateScheduleMutation } from '@queries/agent-schedule/schedules';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, Dialog, Surface } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  type JSX,
-  on,
-  Show,
-} from 'solid-js';
+import { Button, EntityComposer, ToggleSwitch } from '@ui';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
+import { RoutineTriggers } from '../routine-triggers';
 import {
   clearAutomationComposerDraft,
   loadAutomationComposerDraft,
@@ -23,206 +19,158 @@ import {
   createEmptyDraft,
   draftToCreateBody,
   getErrorMessage,
-  INPUT_CLASS,
   validateRoutineDraft,
 } from './automationUtils';
-import { RoutineScheduleFields } from './RoutineScheduleFields';
 import type { ScheduleDraft } from './types';
 
-/**
- * Open/close signal for the automation composer modal. Flip to `true` from
- * anywhere (e.g. launcher / unified-list create button) to pop the dialog.
- */
-export const [automationComposerOpen, setAutomationComposerOpen] =
-  createControlledOpenSignal(false, { id: 'automation-composer' });
-
-/**
- * Create-only automation composer modal. Mount once (see Layout.tsx) — the
- * dialog is driven by the `automationComposerOpen` signal.
- */
-export function AutomationComposer(): JSX.Element {
-  const { openWithSplit } = useSplitLayout();
-
-  const [draft, setRawDraft] = createSignal<ScheduleDraft>(createEmptyDraft());
-  const [submitAttempted, setSubmitAttempted] = createSignal(false);
-  const [submitError, setSubmitError] = createSignal<string | null>(null);
-  // Snapshots the prompt value at dialog-open time so the editor gets a
-  // stable initialValue per open (the editor only reads it on mount).
-  const [initialPrompt, setInitialPrompt] = createSignal('');
-
-  let draftChanged = false;
-  const debouncedSave = debounce(saveAutomationComposerDraft, 300);
-
-  function setDraft(update: (prev: ScheduleDraft) => ScheduleDraft): void {
-    if (createMutation.isPending) return;
-    const next = setRawDraft(update);
-    draftChanged = true;
-    setSubmitError(null);
-    debouncedSave(next);
-  }
-
-  createEffect(
-    on(automationComposerOpen, (open) => {
-      debouncedSave.clear();
-      if (!open) {
-        // Closing before the debounce fires must still preserve the latest edit.
-        if (draftChanged) saveAutomationComposerDraft(draft());
-        draftChanged = false;
-        return;
-      }
-      const next = loadAutomationComposerDraft() ?? createEmptyDraft();
-      draftChanged = false;
-      setRawDraft(next);
-      setInitialPrompt(next.prompt);
-      setSubmitAttempted(false);
-      setSubmitError(null);
-    })
+/** The shared task/project popover hosts the routine composer too. */
+export function RoutineCreator(
+  props: { onCreated?: (id: string) => void } = {}
+) {
+  const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
+  const onCreated = (id: string) => {
+    panel.handle.close();
+    if (props.onCreated) props.onCreated(id);
+    else openAgentsPage(layout, 'routines', { routineId: id });
+  };
+  const restored = loadAutomationComposerDraft();
+  const [draft, setRawDraft] = createSignal<ScheduleDraft>(
+    restored
+      ? {
+          ...restored,
+          triggers: restored.triggers ?? [],
+          enabled: restored.enabled ?? true,
+        }
+      : { ...createEmptyDraft(), triggers: [], enabled: true }
   );
-
-  const formError = createMemo(() => validateRoutineDraft(draft(), true));
-
-  const createMutation = useCreateScheduleMutation({
-    onSuccess: async (schedule) => {
-      debouncedSave.clear();
-      draftChanged = false;
+  const [attempted, setAttempted] = createSignal(false);
+  const [submitError, setSubmitError] = createSignal<string>();
+  const save = debounce(saveAutomationComposerDraft, 300);
+  let dirty = false;
+  const mutation = useCreateScheduleMutation({
+    onSuccess: (routine) => {
+      save.clear();
+      dirty = false;
       clearAutomationComposerDraft();
-      setAutomationComposerOpen(false, false);
-      if (schedule.id) {
-        openWithSplit(
-          { type: 'automation', id: schedule.id },
-          { referredFrom: 'launcher' }
-        );
-      }
-      toast.success('Routine created', {
-        subtext: 'Your routine is scheduled.',
-      });
+      if (routine.id) onCreated(routine.id);
     },
-    onError: (error) => {
-      setSubmitError(getErrorMessage(error));
-      toast.alert('Failed to create routine', {
-        subtext: getErrorMessage(error),
-      });
-    },
+    onError: (error) => setSubmitError(getErrorMessage(error)),
   });
-
-  function handleCreate(): void {
-    if (createMutation.isPending) return;
-    setSubmitError(null);
-    const error = formError();
-    if (error) {
-      setSubmitAttempted(true);
+  function change(update: (draft: ScheduleDraft) => ScheduleDraft) {
+    if (mutation.isPending) return;
+    const next = update(draft());
+    if (next === draft()) return;
+    setRawDraft(next);
+    dirty = true;
+    setSubmitError(undefined);
+    save(next);
+  }
+  onCleanup(() => {
+    save.clear();
+    if (dirty) saveAutomationComposerDraft(draft());
+  });
+  function create() {
+    if (mutation.isPending) return;
+    setAttempted(true);
+    if (validateRoutineDraft(draft(), true)) {
       return;
     }
-    createMutation.mutate(draftToCreateBody(draft()));
+    mutation.mutate(draftToCreateBody(draft()));
   }
-
   return (
-    <Dialog
-      open={automationComposerOpen()}
-      onOpenChange={(open) => setAutomationComposerOpen(open, false)}
+    <EntityComposer.Root
+      class="w-full h-auto max-h-[75vh]"
+      onKeyDown={(event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+          event.preventDefault();
+          create();
+        }
+      }}
     >
-      <Surface depth={2} class="rounded-xl">
-        <div class="*:max-h-[75vh]">
-          <div class="flex cursor-default flex-col text-ink">
-            <div class="flex items-center justify-between border-b border-edge-muted px-3 py-2">
-              <Dialog.Title class="m-0 p-0 text-sm font-semibold">
-                New Routine
-              </Dialog.Title>
-              <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                &times;
-              </Dialog.CloseButton>
-            </div>
-
-            <fieldset
-              disabled={createMutation.isPending}
-              inert={createMutation.isPending}
-              class="grid min-w-0 max-h-[70vh] gap-3 overflow-y-auto p-3"
-            >
-              <div class="grid gap-1.5">
-                <label class="text-xs font-medium text-ink-muted cursor-default">
-                  Name
-                </label>
-                <input
-                  class={INPUT_CLASS}
-                  placeholder="e.g. Morning briefing"
-                  value={draft().name}
-                  onInput={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      name: event.currentTarget.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div class="grid gap-1.5">
-                <label class="text-xs font-medium text-ink-muted cursor-default">
-                  Instructions
-                </label>
-                <AutomationPromptEditor
-                  initialValue={initialPrompt()}
-                  onChange={(markdown) =>
-                    setDraft((current) => ({
-                      ...current,
-                      prompt: markdown,
-                    }))
-                  }
-                />
-              </div>
-
-              <RoutineExecutionPicker
-                target={draft().target}
-                onChange={(target) =>
-                  setDraft((current) => ({ ...current, target }))
-                }
-              />
-
-              <div class="grid gap-3 border border-edge-muted rounded-sm p-3">
-                <div>
-                  <p class="text-sm font-semibold">Schedule</p>
-                </div>
-
-                <RoutineScheduleFields draft={draft()} onChange={setDraft} />
-              </div>
-
-              <Show when={submitAttempted() && formError()}>
-                {(message) => (
-                  <div class="border border-failure/20 bg-failure/5 rounded-sm px-2 py-1.5 text-xs text-failure">
-                    {message()}
-                  </div>
-                )}
-              </Show>
-              <Show when={submitError()}>
-                {(message) => (
-                  <div role="alert" class="text-xs text-failure">
-                    {message()}
-                  </div>
-                )}
-              </Show>
-            </fieldset>
-
-            <div class="flex items-center justify-end gap-2 border-t border-edge-muted px-3 py-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="cursor-default"
-                onClick={() => setAutomationComposerOpen(false, false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="strong"
-                size="sm"
-                class="cursor-default"
-                disabled={createMutation.isPending}
-                onClick={handleCreate}
-              >
-                {createMutation.isPending ? 'Creating…' : 'Create'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Surface>
-    </Dialog>
+      <EntityComposer.Header>
+        <ClockIcon class="ml-2 size-4 text-ink-muted" />
+        <span class="flex-1 px-1 text-sm text-ink-muted">New routine</span>
+        <Button
+          size="icon-composer"
+          variant="ghost"
+          aria-label="Close routine composer"
+          onClick={() => panel.handle.close()}
+        >
+          <XIcon />
+        </Button>
+      </EntityComposer.Header>
+      <div class="min-h-0 overflow-y-auto px-2">
+        <input
+          aria-label="Routine name"
+          placeholder="Routine name"
+          value={draft().name}
+          disabled={mutation.isPending}
+          onInput={(e) =>
+            change((draft) => ({ ...draft, name: e.currentTarget.value }))
+          }
+          class="mb-4 w-full bg-transparent text-xl font-medium leading-7 text-ink outline-none placeholder:text-ink-placeholder"
+        />
+        <fieldset
+          disabled={mutation.isPending}
+          inert={mutation.isPending}
+          class="grid min-w-0 gap-4"
+        >
+          <section class="min-h-32" aria-label="Instructions">
+            <AutomationPromptEditor
+              initialValue={draft().prompt}
+              onChange={(prompt) =>
+                change((draft) =>
+                  draft.prompt === prompt ? draft : { ...draft, prompt }
+                )
+              }
+            />
+          </section>
+          <EntityComposer.Properties aria-label="Routine properties">
+            <RoutineExecutionPicker
+              target={draft().target}
+              onChange={(target) => change((draft) => ({ ...draft, target }))}
+            />
+            <RoutineTriggers
+              triggers={draft().triggers ?? []}
+              onChange={(triggers) =>
+                change((draft) => ({ ...draft, triggers }))
+              }
+            />
+          </EntityComposer.Properties>
+        </fieldset>
+        <Show when={attempted() && validateRoutineDraft(draft(), true)}>
+          {(message) => (
+            <p role="alert" class="mt-3 text-xs text-failure">
+              {message()}
+            </p>
+          )}
+        </Show>
+        <Show when={submitError()}>
+          {(message) => (
+            <p role="alert" class="mt-3 text-xs text-failure">
+              {message()}
+            </p>
+          )}
+        </Show>
+      </div>
+      <EntityComposer.Footer class="border-t border-edge-muted px-2 pt-4 items-center">
+        <ToggleSwitch
+          label="Start enabled"
+          labelClass="text-xs text-ink-muted"
+          checked={draft().enabled ?? true}
+          disabled={mutation.isPending}
+          onChange={(enabled) => change((draft) => ({ ...draft, enabled }))}
+        />
+        <EntityComposer.Submit
+          aria-label={mutation.isPending ? 'Creating…' : 'Create routine'}
+          hasContent={Boolean(draft().prompt.trim())}
+          disabled={mutation.isPending}
+          onClick={create}
+        >
+          {mutation.isPending ? 'Creating…' : 'Create routine'}
+        </EntityComposer.Submit>
+      </EntityComposer.Footer>
+    </EntityComposer.Root>
   );
 }

@@ -31,7 +31,6 @@ import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Fla
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { AutomationComposer } from '@block-automation/component';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
@@ -297,7 +296,6 @@ function LayoutInner(props: RouteSectionProps) {
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
         >
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-          <AutomationComposer />
         </Show>
       </Suspense>
       <DevStatusBar />

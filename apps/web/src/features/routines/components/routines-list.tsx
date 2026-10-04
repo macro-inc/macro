@@ -1,10 +1,8 @@
-import ArrowIcon from '@phosphor/arrow-up-right.svg';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { routineTemplates } from '../core/templates';
-import type { RoutineRow, RoutineTemplate } from '../core/types';
+import type { RoutineRow } from '../core/types';
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
@@ -13,16 +11,12 @@ export function RoutinesList(props: {
   error: boolean;
   pendingId?: string;
   onScope: (scope: 'mine' | 'team') => void;
-  onCreate: (template?: RoutineTemplate) => void;
+  onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   onRetry: () => void;
 }) {
   const [search, setSearch] = createSignal('');
-  const [templatesOpen, setTemplatesOpen] = createSignal(false);
-  const [category, setCategory] = createSignal<'Macro' | 'Integrations'>(
-    'Macro'
-  );
   const filtered = () =>
     props.rows.filter((row) =>
       `${row.name} ${row.creator} ${row.target}`
@@ -35,7 +29,7 @@ export function RoutinesList(props: {
         <div>
           <h1 class="text-xl font-medium text-ink">Routines</h1>
           <p class="mt-1.5 max-w-xl text-sm text-ink-muted">
-            Give recurring work a time and an agent. Come back to the results.
+            Run agents on a schedule or when an event arrives.
           </p>
         </div>
         <Button variant="strong" size="sm" onClick={() => props.onCreate()}>
@@ -43,90 +37,6 @@ export function RoutinesList(props: {
           New Routine
         </Button>
       </div>
-      <section class="rounded-lg border border-edge-muted">
-        <button
-          type="button"
-          class="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-hover"
-          aria-expanded={templatesOpen()}
-          onClick={() => setTemplatesOpen(!templatesOpen())}
-        >
-          <div class="flex items-center gap-3">
-            <ClockIcon class="size-5 text-accent" />
-            <div>
-              <p class="text-sm font-medium text-ink">
-                Make room for the work that matters
-              </p>
-              <p class="mt-1 text-xs text-ink-muted">
-                Start with a routine for Macro or your connected tools.
-              </p>
-            </div>
-          </div>
-          <span class="shrink-0 text-xs text-ink-muted">
-            {templatesOpen() ? 'Hide templates' : 'Explore templates'}
-          </span>
-        </button>
-        <Show when={templatesOpen()}>
-          <div class="border-t border-edge-muted p-4">
-            <div
-              class="mb-4 flex gap-1"
-              role="group"
-              aria-label="Template category"
-            >
-              <For each={['Macro', 'Integrations'] as const}>
-                {(value) => (
-                  <button
-                    type="button"
-                    aria-pressed={category() === value}
-                    class={cn(
-                      'rounded-md px-3 py-1.5 text-xs',
-                      category() === value
-                        ? 'bg-hover text-ink'
-                        : 'text-ink-muted hover:bg-hover'
-                    )}
-                    onClick={() => setCategory(value)}
-                  >
-                    {value}
-                  </button>
-                )}
-              </For>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <For
-                each={routineTemplates.filter(
-                  (template) => template.category === category()
-                )}
-              >
-                {(template) => (
-                  <button
-                    type="button"
-                    class="group grid gap-2 rounded-lg border border-edge-muted p-4 text-left transition-colors hover:bg-hover"
-                    onClick={() => props.onCreate(template)}
-                  >
-                    <div class="flex justify-between gap-3">
-                      <span class="text-sm font-medium text-ink">
-                        {template.name}
-                      </span>
-                      <ArrowIcon class="size-4 shrink-0 text-ink-muted" />
-                    </div>
-                    <p class="text-xs leading-relaxed text-ink-muted">
-                      {template.description}
-                    </p>
-                    <span class="mt-2 text-xs text-ink-extra-muted">
-                      {template.integration}
-                    </span>
-                  </button>
-                )}
-              </For>
-            </div>
-            <Show when={category() === 'Integrations'}>
-              <p class="mt-3 text-xs text-ink-muted">
-                Choose an agent with the relevant connection, or reference the
-                channels where your integration bot posts.
-              </p>
-            </Show>
-          </div>
-        </Show>
-      </section>
       <section>
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div class="flex gap-1" role="group" aria-label="Routine ownership">
