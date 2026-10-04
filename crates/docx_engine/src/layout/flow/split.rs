@@ -199,6 +199,30 @@ pub fn split_row(tb: &TableBox, r: usize, room: f32) -> Option<(RowBox, RowBox)>
     if !fits_some || !continues {
         return None;
     }
+    // Like a paragraph under widow control, a row leaves no single line
+    // behind or alone at the top of the next page.
+    let lines = |row: &RowBox| {
+        row.cells
+            .iter()
+            .map(|c| {
+                c.content
+                    .items
+                    .iter()
+                    .filter(|i| matches!(i, Item::Line(_)))
+                    .count()
+            })
+            .max()
+            .unwrap_or(0)
+    };
+    let widow_control = row.cells.iter().any(|c| {
+        c.content
+            .items
+            .iter()
+            .any(|i| matches!(i, Item::Line(l) if l.para.format.props.widow_control))
+    });
+    if widow_control && (lines(&first) < 2 || lines(&rest) < 2) {
+        return None;
+    }
     // The first part ends at the page; the rest makes room for its top
     // border again, and keeps the bottom one.
     first.height = (h1 + row.border_top).min(room);

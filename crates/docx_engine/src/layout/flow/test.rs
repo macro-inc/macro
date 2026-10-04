@@ -329,6 +329,18 @@ fn rows_break_between_lines_as_widow_control_allows() {
     };
     assert_eq!(cells(0), ["L1", "L2"]);
     assert_eq!(cells(1), ["L3", "L4"]);
+    // Two one-line paragraphs with room for one: the row leaves no single
+    // line behind and goes over whole.
+    let cell = r#"<w:p><w:r><w:t>L1</w:t></w:r></w:p><w:p><w:r><w:t>L2</w:t></w:r></w:p>"#;
+    let l = layout(&table_after(55, &[("", cell)]), &arial_10());
+    assert!(!page_texts(&l, 0).iter().any(|t| t.starts_with('L')));
+    assert_eq!(
+        page_texts(&l, 1)
+            .into_iter()
+            .filter(|t| t.starts_with('L'))
+            .collect::<Vec<_>>(),
+        ["L1", "L2"]
+    );
 }
 
 #[test]
