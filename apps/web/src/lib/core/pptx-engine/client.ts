@@ -19,6 +19,9 @@ import type {
   LinkRegion,
   PresetPath,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
+  SmartArtPreviewSpec,
   TextLayoutInfo,
   TextMatch,
 } from './types';
@@ -327,6 +330,25 @@ export async function getPresetPaths(
       'presetPaths'
     )
   ).paths;
+}
+
+/** SmartArt gallery previews (SVG paths), one per spec (`null` when unknown). */
+export async function getSmartArtPreviews(
+  specs: SmartArtPreviewSpec[]
+): Promise<(SmartArtPreviewPath[] | null)[]> {
+  return (
+    await request(
+      { kind: 'smartArtPreviews', docKey: '', specs },
+      'smartArtPreviews'
+    )
+  ).previews;
+}
+
+/** The SmartArt layouts, color variations, and styles the galleries list. */
+export async function getSmartArtCatalog(): Promise<SmartArtCatalog> {
+  return (
+    await request({ kind: 'smartArtCatalog', docKey: '' }, 'smartArtCatalog')
+  ).catalog;
 }
 
 /**

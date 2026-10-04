@@ -17,6 +17,8 @@ import {
   getOutline,
   getPresetPaths,
   getSlideOutline,
+  getSmartArtCatalog,
+  getSmartArtPreviews,
   getTextLayout,
   openPresentation,
   openPresentationEntries,
@@ -78,6 +80,8 @@ function readers(key: string) {
     linkRegions: (index: number) => getLinkRegions(key, index),
     mediaBytes: (part: string) => getMediaBytes(key, part),
     presetPaths: getPresetPaths,
+    smartArtPreviews: getSmartArtPreviews,
+    smartArtCatalog: getSmartArtCatalog,
     save: () => savePresentation(key),
     close: () => closePresentation(key),
     copyShapes: (index: number, shapes: number[]) =>

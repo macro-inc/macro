@@ -1,6 +1,7 @@
 /**
  * Right-click menus on the slide: what they offer depends on what was
- * clicked (empty slide, shapes, text being edited, a table, a chart).
+ * clicked (empty slide, shapes, text being edited, a table, a chart, a
+ * SmartArt graphic).
  */
 
 import {
@@ -54,7 +55,8 @@ export type MenuTarget =
   | { kind: 'shapes' }
   | { kind: 'text' }
   | { kind: 'table' }
-  | { kind: 'chart' };
+  | { kind: 'chart' }
+  | { kind: 'smartArt' };
 
 export interface StageMenuActions {
   commands: EditorCommands;
@@ -72,6 +74,8 @@ export interface StageMenuActions {
   crop?: () => void;
   editChartData?: () => void;
   changeChartType?: () => void;
+  /** The SmartArt items (Add Shape, Change Layout, Convert…). */
+  smartArt?: () => JSX.Element;
   selectRows?: () => void;
   selectColumns?: () => void;
   selectTable?: () => void;
@@ -631,6 +635,26 @@ export function StageMenuItems(props: {
           icon={SlidersHorizontal}
           disabled={ro()}
           onClick={() => a().openFormatPane('shape')}
+        />
+        <MenuSeparator />
+        <MenuItem
+          text="Delete"
+          icon={Trash}
+          shortcut="delete"
+          disabled={ro()}
+          onClick={() => void a().commands.deleteSelection()}
+        />
+      </Match>
+      <Match when={props.target.kind === 'smartArt'}>
+        <ClipboardItems a={a()} />
+        <MenuSeparator />
+        {a().smartArt?.()}
+        <MenuSeparator />
+        <ArrangeItems a={a()} />
+        <MenuItem
+          text="Size and position…"
+          disabled={ro()}
+          onClick={() => a().openFormatPane('size')}
         />
         <MenuSeparator />
         <MenuItem

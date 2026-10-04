@@ -83,6 +83,10 @@ interface PptxEngineWasmModule {
   registerFont: (bytes: Uint8Array) => number;
   /** `PresetPath[]` JSON for a preset at `w`×`h` points, or `null`. */
   presetPaths: (name: string, w: number, h: number) => string;
+  /** `SmartArtCatalog` JSON. */
+  smartArtCatalog: () => string;
+  /** `SmartArtPreviewPath[]` JSON (or `null`) for `SmartArtPreviewSpec` JSON. */
+  smartArtPreview: (spec: string) => string;
 }
 
 let modulePromise: Promise<PptxEngineWasmModule> | undefined;

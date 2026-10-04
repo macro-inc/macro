@@ -16,6 +16,9 @@ import type {
   LinkRegion,
   PresetPath,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
+  SmartArtPreviewSpec,
   TextLayoutInfo,
   TextMatch,
 } from './types';
@@ -76,6 +79,10 @@ export type PptxRequest =
       width: number;
       height: number;
     })
+  /** SmartArt gallery previews (no document needed). */
+  | (Base & { kind: 'smartArtPreviews'; specs: SmartArtPreviewSpec[] })
+  /** The SmartArt layouts, colors, and styles (no document needed). */
+  | (Base & { kind: 'smartArtCatalog' })
   /** Copies shapes of slide `index` (by id); answers `clipboard`. */
   | (Base & { kind: 'copyShapes'; index: number; shapes: number[] })
   /** Copies slides (by id) with their notes; answers `clipboard`. */
@@ -127,6 +134,13 @@ export type PptxResponse =
       kind: 'presetPaths';
       paths: Record<string, PresetPath[]>;
     }
+  | {
+      id: number;
+      ok: true;
+      kind: 'smartArtPreviews';
+      previews: (SmartArtPreviewPath[] | null)[];
+    }
+  | { id: number; ok: true; kind: 'smartArtCatalog'; catalog: SmartArtCatalog }
   | { id: number; ok: true; kind: 'clipboard'; payload: ClipboardPayload }
   | { id: number; ok: true; kind: 'matches'; matches: TextMatch[] }
   | { id: number; ok: false; error: string };
