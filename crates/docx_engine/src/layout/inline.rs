@@ -356,19 +356,64 @@ struct Builder<'a, 'b> {
     ctx: &'b InlineCtx<'a>,
     para: &'b Arc<ParaFormat>,
     out: Inline,
-    run_index: HashMap<(usize, Revision, bool), u16>,
+    /// Style index by (properties, revision, link, complex script).
+    run_index: HashMap<(usize, Revision, bool, bool), u16>,
+    /// Each style's properties as given (before condensing).
+    run_props: Vec<Arc<RunProps>>,
 }
 
 impl Builder<'_, '_> {
     fn run_style(&mut self, props: &Arc<RunProps>, revision: Revision, link: bool) -> u16 {
-        let key = (Arc::as_ptr(props) as usize, revision, link);
+        self.style_for(props, revision, link, false)
+    }
+
+    /// The style of the complex-script text (Arabic, Hebrew, or any text of
+    /// a right-to-left run) of style `run`: its own font and size also give
+    /// its lines their height.
+    fn complex_style(&mut self, run: u16) -> u16 {
+        let style = &self.out.runs[run as usize];
+        let p = &style.props;
+        if p.cs == p.ascii && p.size_cs == p.size && p.bold_cs == p.bold && p.italic_cs == p.italic
+        {
+            return run;
+        }
+        let (revision, link) = (style.revision, style.link);
+        let props = Arc::clone(&self.run_props[run as usize]);
+        self.style_for(&props, revision, link, true)
+    }
+
+    fn style_for(
+        &mut self,
+        props: &Arc<RunProps>,
+        revision: Revision,
+        link: bool,
+        complex: bool,
+    ) -> u16 {
+        let key = (Arc::as_ptr(props) as usize, revision, link, complex);
         if let Some(&i) = self.run_index.get(&key) {
             return i;
         }
+        let given = Arc::clone(props);
         let fonts = self.ctx.fonts;
-        let font = fonts.select(&props.ascii, props.bold, props.italic);
+        let (family, base) = if complex {
+            (&props.cs, props.size_cs)
+        } else {
+            (&props.ascii, props.size)
+        };
+        let font = if complex {
+            fonts.select(family, props.bold_cs, props.italic_cs)
+        } else {
+            fonts.select(family, props.bold, props.italic)
+        };
         // A condensed family drawn with a regular-width face is squeezed.
-        let factor = font.map_or(1.0, |f| fonts.width_factor(&props.ascii, f.face));
+        let factor = font.map_or(1.0, |f| fonts.width_factor(family, f.face));
+        let (ascent, descent, leading) = match font {
+            Some(f) => {
+                let m = fonts.vmetrics_for(family, f.face);
+                (m.ascent * base, m.descent * base, m.leading * base)
+            }
+            None => (base * 0.9, base * 0.25, 0.0),
+        };
         let props = &if (factor - 1.0).abs() > f32::EPSILON {
             Arc::new(RunProps {
                 scale: props.scale * factor,
@@ -377,21 +422,10 @@ impl Builder<'_, '_> {
         } else {
             Arc::clone(props)
         };
-        let (ascent, descent, leading) = match font {
-            Some(f) => {
-                let m = fonts.vmetrics_for(&props.ascii, f.face);
-                (
-                    m.ascent * props.size,
-                    m.descent * props.size,
-                    m.leading * props.size,
-                )
-            }
-            None => (props.size * 0.9, props.size * 0.25, 0.0),
-        };
         let (size, shift) = match props.vert_align {
-            VertAlign::Super => (props.size * SCRIPT_SIZE, props.size * SUPER_RAISE),
-            VertAlign::Sub => (props.size * SCRIPT_SIZE, -props.size * SUB_DROP),
-            VertAlign::Baseline => (props.size, 0.0),
+            VertAlign::Super => (base * SCRIPT_SIZE, base * SUPER_RAISE),
+            VertAlign::Sub => (base * SCRIPT_SIZE, -base * SUB_DROP),
+            VertAlign::Baseline => (base, 0.0),
         };
         // Links take their color from their formatting (usually the
         // Hyperlink character style), like any other text.
@@ -414,6 +448,7 @@ impl Builder<'_, '_> {
         };
         let i = self.out.runs.len() as u16;
         self.out.runs.push(style);
+        self.run_props.push(given);
         self.run_index.insert(key, i);
         i
     }
@@ -440,10 +475,15 @@ impl Builder<'_, '_> {
 
     /// Measures and pushes one visible character.
     fn text_char(&mut self, ch: char, next: Option<char>, offset: usize, len: usize, run: u16) {
-        let style = &self.out.runs[run as usize];
-        let props = Arc::clone(&style.props);
+        let given = &self.out.runs[run as usize].props;
+        let complex = given.cs_flag || given.rtl || is_complex(ch);
+        let run = if complex {
+            self.complex_style(run)
+        } else {
+            run
+        };
+        let props = Arc::clone(&self.out.runs[run as usize].props);
         let fonts = self.ctx.fonts;
-        let complex = props.cs_flag || props.rtl || is_complex(ch);
         let (family, bold, italic, mut size) = if complex {
             (&props.cs, props.bold_cs, props.italic_cs, props.size_cs)
         } else if is_cjk(ch) || (props.hint.as_deref() == Some("eastAsia") && !ch.is_ascii()) {
@@ -599,10 +639,17 @@ pub fn build(
         para,
         out: Inline::default(),
         run_index: HashMap::new(),
+        run_props: Vec::new(),
     };
     let mark_run = {
         let mark = Arc::clone(&para.mark);
-        b.run_style(&mark, Revision::None, false)
+        let run = b.run_style(&mark, Revision::None, false);
+        // A right-to-left mark is sized like complex-script text.
+        if mark.rtl || mark.cs_flag {
+            b.complex_style(run)
+        } else {
+            run
+        }
     };
     // List label.
     if let Some((label, props)) = label {

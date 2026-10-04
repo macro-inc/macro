@@ -312,3 +312,26 @@ fn rows_taller_than_a_page_split_instead_of_overflowing() {
         }
     }
 }
+
+const LETTER: &str = r#"<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>"#;
+
+fn arial_10() -> Parts<'static> {
+    Parts {
+        styles: Some(ARIAL_10),
+        ..Parts::default()
+    }
+}
+
+#[test]
+fn right_to_left_runs_size_lines_by_their_complex_script_size() {
+    let para = |rpr: &str| {
+        format!(
+            r#"<w:p><w:r><w:rPr>{rpr}<w:sz w:val="40"/><w:szCs w:val="20"/></w:rPr><w:t>abc</w:t></w:r></w:p>"#
+        )
+    };
+    let body = format!("{}{}{LETTER}", para("<w:rtl/>"), para(""));
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let (rtl, ltr) = (ls[0].line().height, ls[1].line().height);
+    assert!((ltr / rtl - 2.0).abs() < 0.01, "{rtl} {ltr}");
+}
