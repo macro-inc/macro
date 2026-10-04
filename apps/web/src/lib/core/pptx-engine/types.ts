@@ -177,6 +177,8 @@ export interface SlideOutline {
   notes?: string;
   /** The transition into the slide. */
   transition?: TransitionOutline;
+  /** Animations of the main sequence, in playback order (index = playback position). */
+  animations?: AnimationOutline[];
 }
 
 export interface LayoutInfo {
@@ -507,6 +509,28 @@ export type EditOp =
   /** Changes a slide's layout (by name, as in `DeckOutline.layouts`). */
   | { op: 'setSlideLayout'; slide: number; layout: string }
   | ({ op: 'setTransition' } & TransitionPatch)
+  /**
+   * Replaces the slide's animations (its main sequence), in playback order;
+   * `[]` removes them all. An entry matching an existing animation (same
+   * shape, class, effect, and paragraph, and direction when given) keeps it
+   * and its other settings unless given, so reordering is listing them anew.
+   * Trigger (click-a-shape) sequences are kept.
+   */
+  | { op: 'setAnimations'; slide: number; animations: AnimationSpec[] }
+  /** Adds a new animation at a playback position (the end when omitted). */
+  | {
+      op: 'addAnimation';
+      slide: number;
+      animation: AnimationSpec;
+      index?: number;
+    }
+  /** Removes the listed shapes' animations and those at the listed positions (give one). */
+  | {
+      op: 'removeAnimations';
+      slide: number;
+      shapeIds?: number[];
+      indexes?: number[];
+    }
   /** Replaces text everywhere (or on one slide); the count is `replaced`. */
   | {
       op: 'replaceText';
@@ -623,6 +647,133 @@ export interface TransitionPatch {
   advanceAfterMs?: number;
   /** Give every slide the resulting transition. */
   applyToAll?: boolean;
+}
+
+/** An animation's effect group (`edit::AnimationClass`); `media` and `other` are only kept, never created. */
+export type AnimationClass =
+  | 'entrance'
+  | 'emphasis'
+  | 'exit'
+  | 'path'
+  | 'media'
+  | 'other';
+
+/** When an animation starts. */
+export type AnimationStart = 'onClick' | 'withPrevious' | 'afterPrevious';
+
+/** How often an animation plays: a count (`1` = once; fractions allowed) or until an event. */
+export type AnimationRepeat = number | 'untilNextClick' | 'untilEndOfSlide';
+
+/** Entrance effects `setAnimations` creates (PowerPoint's gallery). */
+export type EntranceEffect =
+  | 'appear'
+  | 'fade'
+  | 'flyIn'
+  | 'floatIn'
+  | 'split'
+  | 'wipe'
+  | 'shape'
+  | 'wheel'
+  | 'randomBars'
+  | 'growTurn'
+  | 'zoom'
+  | 'swivel'
+  | 'bounce';
+
+/** Emphasis effects `setAnimations` creates. */
+export type EmphasisEffect =
+  | 'pulse'
+  | 'colorPulse'
+  | 'teeter'
+  | 'spin'
+  | 'growShrink'
+  | 'desaturate'
+  | 'darken'
+  | 'lighten'
+  | 'transparency'
+  | 'boldFlash'
+  | 'wave';
+
+/** Exit effects `setAnimations` creates. */
+export type ExitEffect =
+  | 'disappear'
+  | 'fadeOut'
+  | 'flyOut'
+  | 'floatOut'
+  | 'split'
+  | 'wipe'
+  | 'shape'
+  | 'wheel'
+  | 'randomBars'
+  | 'shrinkTurn'
+  | 'zoom'
+  | 'swivel'
+  | 'bounce';
+
+/** One animation of a slide's main sequence (`inspect::AnimationOutline`). */
+export interface AnimationOutline {
+  /** The animated shape (a group member's own id when it targets a member). */
+  shapeId: number;
+  class: AnimationClass;
+  /**
+   * An effect `setAnimations` creates, a preset the engine only names
+   * (`blinds`, `boomerang`, `basicZoom`, `play`...), or `custom`.
+   */
+  effect: EntranceEffect | EmphasisEffect | ExitEffect | 'path' | (string & {});
+  /** PowerPoint's `presetID`. */
+  presetId: number;
+  /** PowerPoint's `presetSubtype`. */
+  presetSubtype: number;
+  start: AnimationStart;
+  /** One play, in milliseconds; 0 for instant effects (`appear`, `disappear`). */
+  durationMs: number;
+  /** Wait after its start (click, previous start, or previous end) before it plays. */
+  delayMs: number;
+  /** Effect option (see `AnimationSpec.direction`), when it has one. */
+  direction?: string;
+  /** The paragraph it animates (0-based), for paragraph builds. */
+  paragraph?: number;
+  repeat?: AnimationRepeat;
+  /**
+   * Motion paths: PowerPoint's path syntax (`M 0 0 L 0 0.25 E`), with
+   * coordinates as fractions of the slide's width and height, relative to
+   * the shape's position.
+   */
+  path?: string;
+}
+
+/**
+ * One animation for `setAnimations` and `addAnimation`. Omitted fields take
+ * the effect's defaults, or keep those of the existing animation it matches.
+ */
+export interface AnimationSpec {
+  shapeId: number;
+  class: AnimationClass;
+  /** Names only kept (read-only presets, `custom`) must match an existing animation. */
+  effect: EntranceEffect | EmphasisEffect | ExitEffect | 'path' | (string & {});
+  /** Default `onClick`. */
+  start?: AnimationStart;
+  /** 10-60000; default per effect (fade/fly/wipe/zoom 500, float/teeter 1000, spin/shape/wheel/paths 2000). */
+  durationMs?: number;
+  /** 0-60000; default 0. */
+  delayMs?: number;
+  /**
+   * Effect option (default: the first listed). flyIn/flyOut (edge it flies
+   * from/to): bottom|left|right|top|bottomLeft|bottomRight|topLeft|topRight;
+   * wipe (edge it starts from): bottom|left|right|top; split:
+   * verticalOut|horizontalOut|verticalIn|horizontalIn (exit: the In ones
+   * first); shape: circleOut|circleIn|boxOut|boxIn|diamondOut|diamondIn|
+   * plusOut|plusIn (exit: circleIn first); wheel: spokes1|spokes2|spokes3|
+   * spokes4|spokes8; randomBars: horizontal|vertical; zoom:
+   * objectCenter|slideCenter; floatIn: up|down; floatOut: down|up; spin:
+   * clockwise|counterclockwise; path: down|left|right|up.
+   */
+  direction?: string;
+  /** Animate one paragraph (0-based) instead of the whole shape. */
+  paragraph?: number;
+  repeat?: AnimationRepeat;
+  /** `path` class only: a motion path of its own (see `AnimationOutline.path`). */
+  path?: string;
 }
 
 /** How `findText` and `replaceText` match. */
