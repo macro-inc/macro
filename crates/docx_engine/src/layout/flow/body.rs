@@ -456,6 +456,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 fields: &self.fields(),
                 note_number: None,
                 grid: self.grid(),
+                origin: Some(self.col_geom().0),
             },
         );
         self.boxes.insert(b.id.clone(), Arc::clone(&pb));

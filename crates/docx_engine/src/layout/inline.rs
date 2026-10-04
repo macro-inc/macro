@@ -37,7 +37,7 @@ const DEVICE_DPI: f32 = 600.0;
 /// Whether Word measures a run with a device font: runs with character
 /// scaling or kerning come out as wide as a font of a whole number of
 /// pixels at 600 dpi (10pt text measures as 9.96pt).
-fn device_metrics(props: &RunProps, size: f32) -> bool {
+pub(super) fn device_metrics(props: &RunProps, size: f32) -> bool {
     (props.scale - 1.0).abs() > 0.001 || (props.kern > 0.0 && size >= props.kern)
 }
 

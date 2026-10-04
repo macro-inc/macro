@@ -326,7 +326,7 @@ impl Flow<'_, '_> {
         }
         p.width = w;
         if let Some(line) = p.pb.lines.lines.get(p.li) {
-            p.pb = rebreak(self.env, &p.pb, w, line.start, self.grid());
+            p.pb = rebreak(self.env, &p.pb, (w, Some(left)), line.start, self.grid());
             p.li = 0;
         }
     }

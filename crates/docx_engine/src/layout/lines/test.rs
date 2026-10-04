@@ -140,8 +140,19 @@ const COMPAT_15: &str = r#"<w:compat><w:compatSetting w:name="compatibilityMode"
 /// Line texts of a justified paragraph of `words` with a right indent that
 /// makes the last of its first `fit` words cross the edge by `over` points.
 fn justified_lines(words: &[&str], fit: usize, over: f32, settings: Option<&str>) -> Vec<String> {
+    justified_lines_in(ARIAL_10, words, fit, over, settings)
+}
+
+/// [`justified_lines`] with the styles `styles`.
+fn justified_lines_in(
+    styles: &str,
+    words: &[&str],
+    fit: usize,
+    over: f32,
+    settings: Option<&str>,
+) -> Vec<String> {
     let parts = Parts {
-        styles: Some(ARIAL_10),
+        styles: Some(styles),
         settings,
         ..Parts::default()
     };
@@ -169,6 +180,19 @@ fn justified_lines_shrink_spaces_for_a_word_that_barely_overflows() {
     assert_eq!(old[0].split_whitespace().count(), 9, "{old:?}");
     let far = justified_lines(&words, 10, 7.0, Some(COMPAT_15));
     assert_eq!(far[0].split_whitespace().count(), 9, "{far:?}");
+}
+
+#[test]
+fn spaces_shrink_by_a_quarter_of_their_glyph_unless_measured_on_a_device() {
+    let words = ["aaaa"; 14];
+    // Nine 2.78pt spaces may give a quarter of their width: 6.25pt.
+    let plain = justified_lines(&words, 10, 5.8, Some(COMPAT_15));
+    assert_eq!(plain[0].split_whitespace().count(), 10, "{plain:?}");
+    // Kerned text, which Word measures with a device font, gives only 21%
+    // of each space (5.2pt): the word wraps.
+    let kerned = ARIAL_10.replace("<w:sz ", r#"<w:kern w:val="2"/><w:sz "#);
+    let device = justified_lines_in(&kerned, &words, 10, 5.8, Some(COMPAT_15));
+    assert_eq!(device[0].split_whitespace().count(), 9, "{device:?}");
 }
 
 #[test]
@@ -387,4 +411,38 @@ fn tabs_to_stops_past_the_right_edge_go_to_the_next_line() {
         "{}",
         p.para.lines.x[e]
     );
+}
+
+/// Where the text after two leading tabs starts (points from the margin),
+/// on a page with left margin `margin`, the paragraph indented `indent`,
+/// with default stops every `stop` (all twips).
+fn after_two_tabs(margin: u32, indent: u32, stop: u32) -> f32 {
+    let body = format!(
+        r#"<w:p><w:pPr><w:ind w:left="{indent}"/></w:pPr><w:r><w:tab/><w:tab/><w:t>Text</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="{margin}" w:bottom="1440" w:left="{margin}" w:header="720" w:footer="720"/></w:sectPr>"#
+    );
+    let settings = format!(r#"<w:defaultTabStop w:val="{stop}"/>"#);
+    let (_, l) = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            settings: Some(&settings),
+            ..Parts::default()
+        },
+    );
+    let p = lines(&l, 0)[0];
+    let t = p.para.inline.clusters.iter().position(|c| c.ch == 'T');
+    p.para.lines.x[t.expect("the text")]
+}
+
+#[test]
+fn a_line_word_starts_just_before_a_default_stop_tabs_to_it() {
+    // 2 cm margin and indent, 1 cm stops: Word starts the line a device
+    // unit before the 2 cm stop, so the first tab stops there and only the
+    // second reaches 3 cm.
+    let x = after_two_tabs(1134, 1134, 567);
+    assert!((x - 85.05).abs() < 0.01, "{x}");
+    // 1 inch margin, half-inch indent and stops: nothing rounds, and each
+    // tab goes a stop further.
+    let x = after_two_tabs(1440, 720, 720);
+    assert!((x - 108.0).abs() < 0.01, "{x}");
 }

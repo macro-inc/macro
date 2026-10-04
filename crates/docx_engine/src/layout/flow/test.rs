@@ -875,11 +875,12 @@ fn footnotes_leave_room_for_the_continuation_notice() {
     let body = format!(
         r#"<w:p><w:r><w:t>Text</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p>{LETTER}"#
     );
-    let note_bottom = |footnotes: &str| {
+    let note_bottom = |footnotes: &str, settings: Option<&str>| {
         let l = layout(
             &body,
             &Parts {
                 footnotes: Some(footnotes),
+                settings,
                 ..arial_10()
             },
         );
@@ -889,13 +890,17 @@ fn footnotes_leave_room_for_the_continuation_notice() {
             .expect("the note");
         line.y + line.line().height
     };
-    let plain = note_bottom(&format!("{separator}{note}"));
+    let plain = note_bottom(&format!("{separator}{note}"), None);
     assert!((plain - 720.0).abs() < 0.01, "{plain}");
-    let with_notice = note_bottom(&format!("{separator}{notice}{note}"));
+    let with_notice = note_bottom(&format!("{separator}{notice}{note}"), None);
     assert!(
         (with_notice - (720.0 - 20.0 * 1.1499)).abs() < 0.01,
         "{with_notice}"
     );
+    // From Word 2013 on, the notes reach down to the margin.
+    let word_2013 = r#"<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>"#;
+    let modern = note_bottom(&format!("{separator}{notice}{note}"), Some(word_2013));
+    assert!((modern - 720.0).abs() < 0.01, "{modern}");
 }
 
 #[test]
