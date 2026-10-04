@@ -1,6 +1,18 @@
-import type { ShapeOutline, SlideOutline } from '@core/pptx-engine/types';
+import type {
+  ShapeOutline,
+  SlideOutline,
+  TextLayoutInfo,
+} from '@core/pptx-engine/types';
 import { describe, expect, it } from 'vitest';
-import { morphFrames, morphPlan, spriteRect, textOnly, turn } from './morph';
+import {
+  matchUnits,
+  morphFrames,
+  morphPlan,
+  spriteRect,
+  textOnly,
+  textUnits,
+  turn,
+} from './morph';
 
 let nextId = 1;
 function shape(over: Partial<ShapeOutline>): ShapeOutline {
@@ -168,5 +180,55 @@ describe('morphFrames', () => {
       true
     );
     expect(end).toContain('scale(1, 1)');
+  });
+});
+
+describe('text units', () => {
+  /** One paragraph per line, 10 points per character, 20-point lines. */
+  function layout(lines: string[], dx = 100, dy = 50): TextLayoutInfo {
+    return {
+      transform: [1, 0, 0, 1, dx, dy],
+      size: [400, 200],
+      paragraphs: lines,
+      styles: [],
+      lines: lines.map((text, paragraph) => ({
+        paragraph,
+        top: paragraph * 20,
+        baseline: paragraph * 20 + 16,
+        bottom: paragraph * 20 + 20,
+        stops: [...text, ''].map((_, index) => ({ index, x: index * 10 })),
+      })),
+    };
+  }
+
+  it('splits laid-out text into words or letters with their boxes', () => {
+    const words = textUnits(layout(['Hello  big', 'world']), 'word');
+    expect(words).toEqual([
+      { text: 'Hello', rect: { x: 100, y: 50, w: 50, h: 20 } },
+      { text: 'big', rect: { x: 170, y: 50, w: 30, h: 20 } },
+      { text: 'world', rect: { x: 100, y: 70, w: 50, h: 20 } },
+    ]);
+    const letters = textUnits(layout(['a b']), 'char');
+    expect(letters.map((u) => [u.text, u.rect.x])).toEqual([
+      ['a', 100],
+      ['b', 120],
+    ]);
+  });
+
+  it('pairs equal words in reading order', () => {
+    const a = textUnits(layout(['the cat and the dog']), 'word');
+    const b = textUnits(layout(['the dog and a cat the']), 'word');
+    expect(matchUnits(a, b)).toEqual({
+      // the, dog, and, cat, the (second); "a" is new.
+      pairs: [
+        [0, 0],
+        [4, 1],
+        [2, 2],
+        [1, 4],
+        [3, 5],
+      ],
+      leaving: [],
+      entering: [3],
+    });
   });
 });

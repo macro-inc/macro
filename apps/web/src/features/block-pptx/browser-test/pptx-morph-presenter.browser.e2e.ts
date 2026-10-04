@@ -118,6 +118,81 @@ test('Morph glides objects shared by two slides in the show', async ({
   await page.keyboard.press('Escape');
 });
 
+test('Morph by Words carries each word to its new place', async ({ page }) => {
+  await open(page);
+  const first = (await outline(page)).slides[0];
+  const title = first.shapes[0];
+  await page.evaluate(
+    (slide) =>
+      window.pptxFixture.externalEdit([{ op: 'duplicateSlide', slide }]),
+    first.id
+  );
+  await expect(page.getByTestId('pptx-thumbnail')).toHaveCount(9);
+  const copyId = (await outline(page)).slides[1].id;
+  // The same words, reordered, lower on the slide.
+  await page.evaluate(
+    ({ slide, shape }) =>
+      window.pptxFixture.externalEdit([
+        { op: 'setText', slide, shape, text: 'Earnings Review Q3 FY2024' },
+        { op: 'setTransform', slide, shape, y: 380 },
+      ]),
+    { slide: copyId, shape: title.id }
+  );
+  await expect
+    .poll(async () => (await outline(page)).slides[1].title)
+    .toBe('Earnings Review Q3 FY2024');
+  await page.getByTestId('pptx-thumbnail').nth(1).click();
+  await page.getByTestId('pptx-tab-transitions').click();
+  await page.getByTestId('pptx-transition-morph').click();
+  await page.getByRole('button', { name: 'Effect options' }).click();
+  await page.getByRole('button', { name: 'Words' }).click();
+  const duration = page.getByTestId('pptx-transition-duration');
+  await duration.fill('4');
+  await duration.press('Enter');
+  await expect
+    .poll(async () => (await outline(page)).slides[1].transition)
+    .toMatchObject({ kind: 'morph', direction: 'byWord', durationMs: 4000 });
+
+  await page.getByTestId('pptx-tab-slideshow').click();
+  await page.getByTestId('pptx-present-start').click();
+  await expect(page.getByTestId('pptx-slideshow-counter')).toHaveText('1 / 9');
+  await page.keyboard.press('ArrowRight');
+  const scene = page.getByTestId('pptx-morph');
+  await expect(scene).toBeVisible();
+  // The title's four words, and those the subtitle and footers keep.
+  await expect(scene).toHaveAttribute('data-units', '18');
+  const seek = (t: number) =>
+    page.evaluate((t) => {
+      for (const a of document.getAnimations()) {
+        a.pause();
+        a.currentTime = t;
+      }
+    }, t);
+  const word = `canvas[data-shape="${title.id}"]`;
+  const middle = async (selector: string) => {
+    const box = (await scene.locator(selector).boundingBox())!;
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  // Each word starts where it was and ends where the new slide has it.
+  await seek(0);
+  const q3 = await middle(`${word}[data-unit="Q3"][data-morph="from"]`);
+  await seek(4000);
+  const q3End = await middle(`${word}[data-unit="Q3"][data-morph="from"]`);
+  const q3Target = await middle(`${word}[data-unit="Q3"][data-morph="to"]`);
+  expect(q3End.x).toBeCloseTo(q3Target.x, -1);
+  expect(q3End.y).toBeCloseTo(q3Target.y, -1);
+  expect(q3End.y - q3.y).toBeGreaterThan(50);
+  const review = await middle(`${word}[data-unit="Review"][data-morph="to"]`);
+  // "Q3" moved from before "Review" to after it.
+  expect(q3.x).toBeLessThan(review.x);
+  expect(q3Target.x).toBeGreaterThan(review.x);
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) a.play();
+  });
+  await expect(scene).toHaveCount(0, { timeout: 10_000 });
+  await page.keyboard.press('Escape');
+});
+
 test('Presenter View plays a video on the audience screen', async ({
   page,
 }) => {

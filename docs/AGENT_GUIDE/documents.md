@@ -603,7 +603,11 @@ Layout and test hooks:
   glide, resize, and turn to their new place (matched by a `!!` name, then
   the same name and kind, as a duplicated slide keeps them, then the same
   text, then the same placeholder); text-only boxes move without stretching;
-  the rest fade out or in. A click finishes it.
+  the rest fade out or in. With Effect options ▸ Words or Characters,
+  text-only boxes morph word by word or letter by letter: each one travels
+  to where the same word sits on the next slide (`data-units` = words
+  matched; sprites carry `data-shape`, `data-unit`, and `data-morph` =
+  `from`/`to`). A click finishes it.
 - **Presenter View** (Slide Show ▸ Presenter view `pptx-present-presenter`,
   Alt+F5): opens the audience show in a pop-up window (`pptx-audience-canvas`;
   double-click it for full screen) and turns the tab into the speaker

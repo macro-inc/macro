@@ -4,10 +4,18 @@
  * second. Matching follows PowerPoint's rules: names starting with `!!`
  * pair exactly, then objects of the same kind with the same name (what
  * duplicating a slide keeps), then the same text, then the same
- * placeholder.
+ * placeholder. With the Words or Characters option, text-only boxes morph
+ * word by word (or letter by letter): each one travels to where the same
+ * word sits on the next slide.
  */
 
-import type { ShapeOutline, SlideOutline } from '@core/pptx-engine/types';
+import type {
+  LineBox,
+  ShapeOutline,
+  SlideOutline,
+  TextLayoutInfo,
+} from '@core/pptx-engine/types';
+import { applyAffine } from './geometry';
 import type { Rect } from './selection';
 
 export interface MorphPair {
@@ -166,4 +174,98 @@ export function morphFrames(
     transform(0, 0, a.rotation, 1, 1, a.rotation),
     transform(dx, dy, end, sx, sy, a.rotation),
   ];
+}
+
+/** A word or character of laid-out text and its box on the slide. */
+export interface TextUnit {
+  text: string;
+  rect: Rect;
+}
+
+/** Where on `line` the caret before character `index` sits. */
+function xAt(line: LineBox, index: number, after: boolean): number {
+  let best: number | undefined;
+  for (const s of line.stops) {
+    if (s.index === index) return s.x;
+    // A cluster drawn as one glyph has a stop only at its start.
+    if (!after && s.index < index) best = s.x;
+    if (after && s.index > index && best === undefined) best = s.x;
+  }
+  return best ?? line.stops[after ? line.stops.length - 1 : 0]?.x ?? 0;
+}
+
+/**
+ * The words (`by: 'word'`) or characters of a text layout, each with its
+ * box in slide space, in reading order. Spaces are left out.
+ */
+export function textUnits(
+  layout: TextLayoutInfo,
+  by: 'word' | 'char'
+): TextUnit[] {
+  const units: TextUnit[] = [];
+  for (const line of layout.lines) {
+    if (line.stops.length < 2) continue;
+    const chars = [...(layout.paragraphs[line.paragraph] ?? '')];
+    const first = line.stops[0].index;
+    const last = line.stops[line.stops.length - 1].index;
+    const spans: [number, number][] = [];
+    let start = -1;
+    for (let i = first; i <= last; i++) {
+      const blank = i === last || /\s/.test(chars[i] ?? ' ');
+      if (by === 'char') {
+        if (!blank) spans.push([i, i + 1]);
+      } else if (blank && start >= 0) {
+        spans.push([start, i]);
+        start = -1;
+      } else if (!blank && start < 0) start = i;
+    }
+    for (const [s, e] of spans) {
+      const x0 = xAt(line, s, false);
+      const x1 = xAt(line, e, true);
+      const corners = [
+        applyAffine(layout.transform, { x: x0, y: line.top }),
+        applyAffine(layout.transform, { x: x1, y: line.top }),
+        applyAffine(layout.transform, { x: x0, y: line.bottom }),
+        applyAffine(layout.transform, { x: x1, y: line.bottom }),
+      ];
+      const xs = corners.map((c) => c.x);
+      const ys = corners.map((c) => c.y);
+      const x = Math.min(...xs);
+      const y = Math.min(...ys);
+      units.push({
+        text: chars.slice(s, e).join(''),
+        rect: { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y },
+      });
+    }
+  }
+  return units;
+}
+
+/**
+ * Pairs equal words (or characters) of two texts in reading order: the
+ * first unpaired match on the first slide goes with each one on the second.
+ */
+export function matchUnits(
+  a: TextUnit[],
+  b: TextUnit[]
+): { pairs: [number, number][]; leaving: number[]; entering: number[] } {
+  const queues = new Map<string, number[]>();
+  a.forEach((u, i) => {
+    const q = queues.get(u.text);
+    if (q) q.push(i);
+    else queues.set(u.text, [i]);
+  });
+  const pairs: [number, number][] = [];
+  const entering: number[] = [];
+  b.forEach((u, j) => {
+    const i = queues.get(u.text)?.shift();
+    if (i === undefined) entering.push(j);
+    else pairs.push([i, j]);
+  });
+  const taken = new Set(pairs.map(([i]) => i));
+  return {
+    pairs,
+    leaving: a.map((_, i) => i).filter((i) => !taken.has(i)),
+    entering,
+  };
 }

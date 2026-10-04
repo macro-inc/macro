@@ -3,20 +3,44 @@
  * each object shared by the two slides glides, grows, and turns from its
  * old place to its new one, objects only on the first slide fade out, and
  * objects only on the second fade in. Every object is a separately
- * rendered sprite (`renderLayer(…, 'only', id)`) cropped to its box.
+ * rendered sprite (`renderLayer(…, 'only', id)`) cropped to its box; with
+ * the Words or Characters option, text-only boxes are cut into one sprite
+ * per word or letter, cropped along their caret stops.
  */
 
-import type { DeckOutline, ShapeOutline } from '@core/pptx-engine/types';
+import type {
+  DeckOutline,
+  ShapeOutline,
+  SlideOutline,
+} from '@core/pptx-engine/types';
 import type { PresentationEngine } from '../context/pptx-editor-context';
-import { morphFrames, morphPlan, spriteRect, textOnly } from '../core/morph';
+import type { Point } from '../core/geometry';
+import {
+  matchUnits,
+  morphFrames,
+  morphPlan,
+  spriteRect,
+  type TextUnit,
+  textOnly,
+  textUnits,
+} from '../core/morph';
 import type { Rect } from '../core/selection';
 
-/** One object drawn on its own, cropped to `rect` (slide points). */
+/** Part of a slide drawn on its own, cropped to `rect` (slide points). */
 interface Sprite {
-  shape: ShapeOutline;
   bitmap: ImageBitmap;
   rect: Rect;
+  /** What it turns and scales about, in slide points. */
+  origin: Point;
+  /** The shape it shows, and the word or letter of its text (for tests). */
+  label: { shape: number; unit?: string };
 }
+
+/** A place, size, and turn a sprite travels from or to. */
+type Place = Pick<
+  ShapeOutline,
+  'x' | 'y' | 'w' | 'h' | 'rotation' | 'flipH' | 'flipV'
+>;
 
 /** What one layer of the scene does, back to front. */
 type Item =
@@ -24,8 +48,10 @@ type Item =
   | { kind: 'enter'; sprite: Sprite }
   | {
       kind: 'pair';
-      from: ShapeOutline;
-      to: ShapeOutline;
+      from: Place;
+      to: Place;
+      /** Moves and turns without stretching (text keeps its size). */
+      keepSize: boolean;
       a?: Sprite;
       b?: Sprite;
     };
@@ -34,11 +60,16 @@ export interface MorphScene {
   /** The two slides' backgrounds and inherited (master and layout) shapes. */
   backdrops: [ImageBitmap, ImageBitmap];
   items: Item[];
+  /** Objects matched across the slides. */
   pairs: number;
+  /** Words or letters matched across the slides. */
+  units: number;
 }
 
 /** Above this many objects Morph falls back to a fade. */
 const MAX_SPRITES = 80;
+/** Above this many words or letters a text box morphs as one object. */
+const MAX_UNITS = 400;
 
 /** Shapes an animation hides when a slide is left (exits) or entered (entrances). */
 function heldBack(
@@ -54,6 +85,25 @@ function heldBack(
   }
   return out;
 }
+
+/** How the Morph into `slide` treats text (`byObject` = as whole objects). */
+function unitsOf(slide: SlideOutline): 'word' | 'char' | undefined {
+  const option = slide.transition?.direction;
+  return option === 'byWord'
+    ? 'word'
+    : option === 'byChar'
+      ? 'char'
+      : undefined;
+}
+
+const upright = (s: Place) => s.rotation === 0 && !s.flipH && !s.flipV;
+const center = (r: Rect): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+const placeOf = (r: Rect): Place => ({
+  ...r,
+  rotation: 0,
+  flipH: false,
+  flipV: false,
+});
 
 /**
  * Renders what Morph needs to go from slide `from` to slide `to` at `width`
@@ -82,31 +132,108 @@ export async function prepareMorph(
   if (count > MAX_SPRITES) return null;
   const slide = { w: deck.width, h: deck.height };
   const scale = width / deck.width;
+  const by = unitsOf(b);
 
-  const sprite = async (
-    index: number,
-    shape: ShapeOutline
+  /** Crops `rect` (slide points) out of a slide-sized render. */
+  const crop = async (
+    full: ImageBitmap,
+    rect: Rect,
+    origin: Point,
+    label: Sprite['label']
   ): Promise<Sprite | undefined> => {
-    const rect = spriteRect(shape, slide);
-    if (!rect) return undefined;
+    const sx = Math.max(0, Math.floor(rect.x * scale));
+    const sy = Math.max(0, Math.floor(rect.y * scale));
+    const sw = Math.min(full.width, Math.ceil((rect.x + rect.w) * scale)) - sx;
+    const sh = Math.min(full.height, Math.ceil((rect.y + rect.h) * scale)) - sy;
+    if (sw <= 0 || sh <= 0) return undefined;
+    return {
+      bitmap: await createImageBitmap(full, sx, sy, sw, sh),
+      rect: { x: sx / scale, y: sy / scale, w: sw / scale, h: sh / scale },
+      origin,
+      label,
+    };
+  };
+  /** Draws `shape` alone and lets `use` crop it. */
+  const withRender = async <T>(
+    index: number,
+    shape: ShapeOutline,
+    use: (full: ImageBitmap) => Promise<T>
+  ): Promise<T> => {
     const full = await engine.renderLayer(index, width, 'only', shape.id);
     try {
-      const sx = Math.floor(rect.x * scale);
-      const sy = Math.floor(rect.y * scale);
-      const sw =
-        Math.min(full.width, Math.ceil((rect.x + rect.w) * scale)) - sx;
-      const sh =
-        Math.min(full.height, Math.ceil((rect.y + rect.h) * scale)) - sy;
-      if (sw <= 0 || sh <= 0) return undefined;
-      const bitmap = await createImageBitmap(full, sx, sy, sw, sh);
-      return {
-        shape,
-        bitmap,
-        rect: { x: sx / scale, y: sy / scale, w: sw / scale, h: sh / scale },
-      };
+      return await use(full);
     } finally {
       full.close();
     }
+  };
+  const sprite = (index: number, shape: ShapeOutline) => {
+    const rect = spriteRect(shape, slide);
+    if (!rect) return Promise.resolve(undefined);
+    return withRender(index, shape, (full) =>
+      crop(full, rect, center(shape), { shape: shape.id })
+    );
+  };
+  /** A word's or letter's sprite, with room for ascenders and descenders. */
+  const unitSprite = (full: ImageBitmap, shape: number, unit: TextUnit) => {
+    const padX = by === 'word' ? unit.rect.h * 0.1 : 0;
+    const padY = unit.rect.h * 0.12;
+    const rect = {
+      x: unit.rect.x - padX,
+      y: unit.rect.y - padY,
+      w: unit.rect.w + 2 * padX,
+      h: unit.rect.h + 2 * padY,
+    };
+    return crop(full, rect, center(unit.rect), { shape, unit: unit.text });
+  };
+
+  let units = 0;
+  /** A text-only pair morphed word by word (or letter by letter), if it can be. */
+  const textItems = async (
+    pair: (typeof plan.pairs)[number]
+  ): Promise<Item[] | undefined> => {
+    if (
+      !by ||
+      !textOnly(pair.from) ||
+      !textOnly(pair.to) ||
+      !upright(pair.from) ||
+      !upright(pair.to)
+    )
+      return undefined;
+    const [la, lb] = await Promise.all([
+      engine.textLayout(from, pair.from.id).catch(() => null),
+      engine.textLayout(to, pair.to.id).catch(() => null),
+    ]);
+    if (!la || !lb) return undefined;
+    const ua = textUnits(la, by);
+    const ub = textUnits(lb, by);
+    if (ua.length + ub.length > MAX_UNITS) return undefined;
+    const match = matchUnits(ua, ub);
+    units += match.pairs.length;
+    const sa = await withRender(from, pair.from, (full) =>
+      Promise.all(ua.map((u) => unitSprite(full, pair.from.id, u)))
+    );
+    const sb = await withRender(to, pair.to, (full) =>
+      Promise.all(ub.map((u) => unitSprite(full, pair.to.id, u)))
+    );
+    const items: Item[] = [];
+    for (const i of match.leaving) {
+      const s = sa[i];
+      if (s) items.push({ kind: 'leave', sprite: s });
+    }
+    for (const [i, j] of match.pairs)
+      items.push({
+        kind: 'pair',
+        from: placeOf(ua[i].rect),
+        to: placeOf(ub[j].rect),
+        keepSize: false,
+        a: sa[i],
+        b: sb[j],
+      });
+    for (const j of match.entering) {
+      const s = sb[j];
+      if (s) items.push({ kind: 'enter', sprite: s });
+    }
+    return items;
   };
 
   const [backA, backB] = await Promise.all([
@@ -115,11 +242,20 @@ export async function prepareMorph(
   ]);
   const leaving = await Promise.all(plan.leaving.map((s) => sprite(from, s)));
   const pairs = await Promise.all(
-    plan.pairs.map(async (p) => ({
-      ...p,
-      a: await sprite(from, p.from),
-      b: await sprite(to, p.to),
-    }))
+    plan.pairs.map(async (p): Promise<Item[]> => {
+      const words = await textItems(p);
+      if (words) return words;
+      return [
+        {
+          kind: 'pair',
+          from: p.from,
+          to: p.to,
+          keepSize: textOnly(p.from) && textOnly(p.to),
+          a: await sprite(from, p.from),
+          b: await sprite(to, p.to),
+        },
+      ];
+    })
   );
   const entering = await Promise.all(plan.entering.map((s) => sprite(to, s)));
 
@@ -127,13 +263,18 @@ export async function prepareMorph(
   for (const s of leaving) if (s) items.push({ kind: 'leave', sprite: s });
   // The second slide's stacking order decides what passes over what.
   for (const shape of b.shapes) {
-    const pair = pairs.find((p) => p.to === shape);
-    if (pair) items.push({ kind: 'pair', ...pair });
+    const p = plan.pairs.findIndex((pair) => pair.to === shape);
+    if (p >= 0) items.push(...pairs[p]);
     const i = plan.entering.indexOf(shape);
     const s = i >= 0 ? entering[i] : undefined;
     if (s) items.push({ kind: 'enter', sprite: s });
   }
-  return { backdrops: [backA, backB], items, pairs: pairs.length };
+  return {
+    backdrops: [backA, backB],
+    items,
+    pairs: plan.pairs.length,
+    units,
+  };
 }
 
 /** Frees a scene's images. */
@@ -169,6 +310,7 @@ export function playMorph(
   const overlay = doc.createElement('div');
   overlay.dataset.testid = 'pptx-morph';
   overlay.dataset.pairs = String(scene.pairs);
+  overlay.dataset.units = String(scene.units);
   Object.assign(overlay.style, {
     position: 'absolute',
     inset: '0',
@@ -197,13 +339,14 @@ export function playMorph(
     overlay.append(canvas);
     return canvas;
   };
-  /** A sprite placed where its shape sits, turning about the shape's center. */
+  /** A sprite placed where it was drawn, turning about its origin. */
   const spriteOf = (s: Sprite) => {
     const el = canvasOf(s.bitmap, s.rect);
-    const cx = s.shape.x + s.shape.w / 2 - s.rect.x;
-    const cy = s.shape.y + s.shape.h / 2 - s.rect.y;
+    const cx = s.origin.x - s.rect.x;
+    const cy = s.origin.y - s.rect.y;
     el.style.transformOrigin = `${cx * k}px ${cy * k}px`;
-    el.dataset.shape = String(s.shape.id);
+    el.dataset.shape = String(s.label.shape);
+    if (s.label.unit !== undefined) el.dataset.unit = s.label.unit;
     return el;
   };
 
@@ -236,7 +379,7 @@ export function playMorph(
       // The old look stays opaque under the new one fading in, so the
       // object never thins out, then gives way at the end.
       const both = !!item.a && !!item.b;
-      const keepSize = textOnly(item.from) && textOnly(item.to);
+      const keepSize = item.keepSize;
       if (item.a) {
         const el = spriteOf(item.a);
         el.dataset.morph = 'from';
