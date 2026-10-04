@@ -1,6 +1,7 @@
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import ArrowsDownUp from '@phosphor/arrows-down-up.svg';
+import AsteriskSimple from '@phosphor/asterisk-simple.svg';
 import ChatCircleText from '@phosphor/chat-circle-text.svg';
 import Check from '@phosphor/check.svg';
 import Checks from '@phosphor/checks.svg';
@@ -160,6 +161,10 @@ export type DocxToolbarProps = {
   onUndo: () => void;
   onRedo: () => void;
   onInsertTable: () => void;
+  /** Insert a footnote (or endnote) at the caret. */
+  onInsertNote: (endnote: boolean) => void;
+  /** The selection is in the body (notes are inserted from there). */
+  inBody: boolean;
   onToggleMarkup: () => void;
   onToggleTracking: () => void;
   /** Accept the change at the selection, or every change. */
@@ -517,6 +522,21 @@ export function DocxToolbar(props: DocxToolbarProps) {
           >
             <Table />
           </Toolbar.Button>
+          <Show when={props.inBody}>
+            <ToolbarMenu
+              label="Insert footnote or endnote"
+              icon={<AsteriskSimple />}
+              testId="notes"
+              onClose={props.onRefocus}
+            >
+              <Dropdown.Item onSelect={() => props.onInsertNote(false)}>
+                <span>Footnote</span>
+              </Dropdown.Item>
+              <Dropdown.Item onSelect={() => props.onInsertNote(true)}>
+                <span>Endnote</span>
+              </Dropdown.Item>
+            </ToolbarMenu>
+          </Show>
           <Show when={props.inTable}>
             <ToolbarMenu
               label="Table rows and columns"

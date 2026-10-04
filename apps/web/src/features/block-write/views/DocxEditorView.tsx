@@ -378,6 +378,8 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           editor.run([{ op: 'insertTable', rows: 3, cols: 3 }]);
           input?.focus();
         }}
+        onInsertNote={(endnote) => command([{ op: 'insertNote', endnote }])}
+        inBody={editor.state()?.story.kind === 'body'}
         onToggleMarkup={() => void editor.setMarkup(!editor.markup())}
         onToggleTracking={() =>
           editor.run([{ op: 'setTracking', on: !format()?.tracking }])

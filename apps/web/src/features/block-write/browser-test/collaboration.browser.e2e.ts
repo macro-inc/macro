@@ -413,6 +413,20 @@ test('footnotes are edited where they are and shared', async ({ browser }) => {
     await alice.keyboard.type(' [body]');
     await expect.poll(() => joined(bob)).toContain('[body]');
 
+    // Ctrl+Alt+F adds a footnote at the caret and moves into it.
+    await alice.keyboard.press('Control+Alt+KeyF');
+    await expect.poll(() => story(alice)).toBe('footnote');
+    await alice.keyboard.type('Including counsel fees.');
+    await expect
+      .poll(() =>
+        bob.evaluate(() => window.docxFixture?.sharedPart('footnotes.xml'))
+      )
+      .toContain('Including counsel fees.');
+    if (SHOTS)
+      await alice.screenshot({ path: `${SHOTS}/05c-new-footnote.png` });
+    await alice.keyboard.press('Escape');
+    await expect.poll(() => story(alice)).toBe('body');
+
     // Bob's download carries the edited note and keeps the separators.
     const [download] = await Promise.all([
       bob.waitForEvent('download'),
@@ -425,6 +439,10 @@ test('footnotes are edited where they are and shared', async ({ browser }) => {
     expect(saved).toContain('(as amended)');
     expect(saved).toContain('w:type="separator"');
     expect(saved).toContain('In United States dollars.');
+    expect(saved).toContain('Including counsel fees.');
+    expect(
+      strFromU8(files['word/document.xml']).match(/footnoteReference/g)
+    ).toHaveLength(3);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

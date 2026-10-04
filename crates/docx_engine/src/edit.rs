@@ -11,6 +11,7 @@ mod find;
 mod format;
 mod geometry;
 mod lists;
+mod notes;
 mod revise;
 mod table;
 mod text;
@@ -189,6 +190,13 @@ pub enum EditOp {
     InsertBreak {
         /// Which.
         kind: BreakKind,
+    },
+    /// Inserts a footnote (or endnote) at the caret: its reference in the
+    /// text and a new note, which the caret moves into, as in Word.
+    InsertNote {
+        /// An endnote (else a footnote).
+        #[serde(default)]
+        endnote: bool,
     },
     /// Deletes the selection, or one unit beside the caret.
     Delete {
@@ -1308,7 +1316,7 @@ impl Session {
                 } else {
                     StoryKind::Footnote
                 },
-                page: Some(self.story_page),
+                page: self.note_page(&self.active).or(Some(self.story_page)),
             };
         }
         let StoryTarget::Part(name) = &self.active else {
@@ -2227,6 +2235,7 @@ impl Session {
             EditOp::InsertText { text } => Ok(Some(self.insert_text(text))),
             EditOp::InsertParagraph => Ok(Some(self.insert_paragraph())),
             EditOp::InsertBreak { kind } => Ok(Some(self.insert_break(*kind))),
+            EditOp::InsertNote { endnote } => self.insert_note(*endnote),
             EditOp::Delete { forward, unit } => Ok(self.delete(*forward, *unit)),
             EditOp::ToggleFormat { format } => Ok(self.toggle(*format)),
             EditOp::SetFormat { patch } => {
@@ -2701,6 +2710,85 @@ impl Session {
         let step = txn.finish();
         self.set_caret(caret);
         step
+    }
+
+    fn insert_note(&mut self, endnote: bool) -> crate::Result<Option<Step>> {
+        // Notes are referenced from the body, as in Word.
+        if self.active != StoryTarget::Body {
+            return Ok(None);
+        }
+        let note = notes::add_note(&mut self.doc, endnote)?;
+        self.stale = true;
+        let w = self.doc.w_prefix().to_owned();
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let local = if endnote {
+            "endnoteReference"
+        } else {
+            "footnoteReference"
+        };
+        let object = format!("<{} {}=\"{}\"/>", q(local), q("id"), note.id);
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        attrs = match &note.reference_style {
+            Some(id) => attrs.with(
+                &format!("{}{}", key::RUN_PROP, q("rStyle")),
+                Some(&format!("<{} {}=\"{id}\"/>", q("rStyle"), q("val"))),
+            ),
+            None => attrs.with(
+                &format!("{}{}", key::RUN_PROP, q("vertAlign")),
+                Some(&format!(
+                    "<{} {}=\"superscript\"/>",
+                    q("vertAlign"),
+                    q("val")
+                )),
+            ),
+        };
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
+        attrs = attrs.with(key::OBJ, Some(&object));
+        let mut after = at.clone();
+        if let Some(b) = txn.block_mut(&at.block) {
+            let o = at.offset.min(b.content.len());
+            b.content.insert(o, &OBJECT_CHAR.to_string(), attrs);
+            after = Pos::new(at.block.clone(), o + 1);
+        }
+        let step = txn.finish();
+        // Into the new note, after its mark and space; leaving it comes
+        // back to just after the reference.
+        let target = StoryTarget::Note {
+            endnote,
+            id: note.id,
+        };
+        let first = self.doc.story(&target).paragraphs().into_iter().next();
+        if let Some(first) = first
+            && self.doc.has_story(&target)
+        {
+            let len = self
+                .doc
+                .story(&target)
+                .get(&first)
+                .map_or(0, |b| b.content.len());
+            self.enter(target, 0);
+            self.body_sel = Some(Selection::caret(after));
+            self.sel = Selection::caret(Pos::new(first, len));
+        } else {
+            self.set_caret(after);
+        }
+        Ok(Some(step))
     }
 
     fn insert_break(&mut self, kind: BreakKind) -> Step {

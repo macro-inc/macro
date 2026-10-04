@@ -80,7 +80,11 @@ Headers, footers, footnotes and endnotes are stories of their own: their
 blocks get ids prefixed with the part (or note), transactions target the
 active story, and an edited part (`footnotes.xml` for any footnote) is
 written back as XML and shared as one entry. A click in a page's notes
-area (`PageInfo::notes`) enters the note under it.
+area (`PageInfo::notes`) enters the note under it. `insertNote` adds a
+footnote or endnote at the caret, as Word does: the reference in the text
+(Footnote Reference style), the note (Footnote Text, starting with its
+mark), the notes part with its separators and the styles when the document
+lacks them; the caret moves into the new note.
 
 ### Collaboration
 
@@ -173,9 +177,10 @@ where Word PDFs exist they decide.
   (square wrap is used), no balancing of continuous-section columns.
 - Fields are shown with their cached results, except page numbers, which
   are computed; a table of contents is not regenerated.
-- Editing changes the text of footnotes and endnotes but does not create
-  notes, text boxes or pictures, and does not edit inside text boxes (it
-  keeps them); comments are Macro threads anchored in the body.
+- Editing does not create text boxes or pictures and does not edit inside
+  text boxes (it keeps them); comments are Macro threads anchored in the
+  body. Undoing a new footnote removes its reference; the empty note stays
+  in the notes part, unreferenced.
 - Two people editing the same footnote or endnote part at once: the last
   write of the part wins, as for headers and footers.
 - Tracked changes show without balloons (formatting changes only get a

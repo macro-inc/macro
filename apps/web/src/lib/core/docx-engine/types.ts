@@ -83,6 +83,8 @@ export type EditOp =
   | { op: 'insertText'; text: string }
   | { op: 'insertParagraph' }
   | { op: 'insertBreak'; kind: BreakKind }
+  /** A footnote (or endnote) at the caret; the caret moves into it. */
+  | { op: 'insertNote'; endnote?: boolean }
   | { op: 'delete'; forward: boolean; unit?: Unit }
   | { op: 'toggleFormat'; format: Toggle }
   | ({ op: 'setFormat' } & RunPatch)
