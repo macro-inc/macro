@@ -1,7 +1,7 @@
 //! Splitting table rows across pages: each cell's content breaks between
 //! its lines, the rest continuing in the same row on the next page.
 
-use super::super::Item;
+use super::super::{Item, PlacedLine};
 use super::stack::{RowBox, Stack, TableBox};
 use crate::model::props::HeightRule;
 use pptx_engine::path::Rect;
@@ -20,13 +20,26 @@ fn line_spans(stack: &Stack) -> Vec<(f32, f32)> {
         .collect()
 }
 
-/// The lowest line bottom at or above `limit` that no line crosses (0 when
-/// not even the first line fits).
+/// Whether content may break after this line: not where widow and orphan
+/// control would leave a single line of its paragraph on either side.
+fn breaks_after(l: &PlacedLine) -> bool {
+    let n = l.para.lines.lines.len();
+    let before = l.line + 1;
+    before >= n || !l.para.format.props.widow_control || (before >= 2 && n - before >= 2)
+}
+
+/// The lowest line bottom at or above `limit` that no line crosses and
+/// that splits no paragraph against its widow control (0 when there is
+/// none).
 pub fn line_cut(stack: &Stack, limit: f32) -> f32 {
     let lines = line_spans(stack);
-    lines
+    stack
+        .items
         .iter()
-        .map(|&(_, bottom)| bottom)
+        .filter_map(|i| match i {
+            Item::Line(l) if breaks_after(l) => Some(l.y + l.line().height),
+            _ => None,
+        })
         .filter(|&cut| {
             cut <= limit + EPS && !lines.iter().any(|&(t, b)| t < cut - EPS && b > cut + EPS)
         })
@@ -156,7 +169,8 @@ pub fn split_row(tb: &TableBox, r: usize, room: f32) -> Option<(RowBox, RowBox)>
         tb.geom.rows.get(r).and_then(|g| g.tr.height),
         Some((_, HeightRule::Exact))
     );
-    if row.cant_split || exact || row.cells.iter().any(|c| c.rows != 1) {
+    // Repeated header rows never break either.
+    if row.cant_split || row.header || exact || row.cells.iter().any(|c| c.rows != 1) {
         return None;
     }
     let mut first = row.clone();

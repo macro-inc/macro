@@ -1,10 +1,10 @@
 //! Body tables: rows across columns and pages, and floating tables
 //! (`w:tblpPr`), which sit at a position of their own.
 
-use super::super::super::StoryRef;
+use super::super::super::{Item, StoryRef};
 use super::super::anchors::PageGeom;
 use super::super::split::split_row;
-use super::super::stack::{TableBox, emit_row, table_box};
+use super::super::stack::{RowBox, TableBox, emit_row, table_box};
 use super::floats::{OnPage, place_anchors};
 use super::{EPS, Flow};
 use crate::model::block::Block;
@@ -47,6 +47,30 @@ pub(in crate::layout::flow) fn float_y(
     }
 }
 
+/// Whether a row stays on the page of the row after it: rows with a
+/// paragraph kept with the next one do.
+fn keeps_with_next(row: &RowBox) -> bool {
+    row.cells.iter().any(|c| {
+        c.content
+            .items
+            .iter()
+            .any(|i| matches!(i, Item::Line(l) if l.para.format.props.keep_next))
+    })
+}
+
+/// The last row that goes to a page together with row `r`. Header rows
+/// also keep with the first row they head (when the table has one).
+fn keep_chain_end(tb: &TableBox, r: usize) -> usize {
+    let headed = tb.rows.iter().any(|row| !row.header);
+    let mut end = r;
+    while end + 1 < tb.rows.len()
+        && ((headed && tb.rows[end].header) || keeps_with_next(&tb.rows[end]))
+    {
+        end += 1;
+    }
+    end
+}
+
 impl Flow<'_, '_> {
     pub(super) fn place_table(&mut self, b: &Block) {
         let (mut col_left, width) = self.col_geom();
@@ -82,45 +106,53 @@ impl Flow<'_, '_> {
         while r < tb.rows.len() {
             self.skip_bands();
             let h = tb.rows[r].height;
-            let (y, placed_any) = self
+            let (y, top, placed_any) = self
                 .cur
                 .as_ref()
-                .map_or((0.0, false), |c| (c.y, c.placed_any));
+                .map_or((0.0, 0.0, false), |c| (c.y, c.top, c.placed_any));
             let avail = self.avail_bottom();
-            if y + h > avail + EPS {
+            // Rows kept with the next one go to the next column together
+            // when they do not fit here but would there.
+            let chain: f32 = tb.rows[r..=keep_chain_end(&tb, r)]
+                .iter()
+                .map(|row| row.height)
+                .sum();
+            let keep = placed_any && !moved && chain > h && y + chain > avail + EPS;
+            let mut next = keep && chain <= avail - top;
+            if !next && y + h > avail + EPS {
                 if self.jump_band(h) {
                     continue;
                 }
                 // A row that may break keeps the lines that fit here and
                 // goes on in the next column.
                 let split = split_row(&tb, r, avail - y);
-                let next = split.is_some() || (placed_any && !moved);
+                next = split.is_some() || (placed_any && !moved);
                 if let Some((first, rest)) = split {
                     tb.rows[r] = first;
                     self.emit_table_row(&tb, r, col_left);
                     tb.rows[r] = rest;
                 }
-                if next {
-                    self.next_column(false);
-                    moved = true;
-                    // Rows go on in the new column; a floating table keeps
-                    // its place across the page.
-                    let (left, _) = self.col_geom();
-                    if float.is_some() {
-                        tb.geom.left += col_left - left;
-                    }
-                    col_left = left;
-                    if let Some(pos) = &float {
-                        self.float_down(pos, height, false);
-                    }
-                    // Repeat header rows at the top of the new page.
-                    if r >= headers.len() && !headers.is_empty() {
-                        for &hr in &headers {
-                            self.emit_table_row(&tb, hr, col_left);
-                        }
-                    }
-                    continue;
+            }
+            if next {
+                self.next_column(false);
+                moved = true;
+                // Rows go on in the new column; a floating table keeps its
+                // place across the page.
+                let (left, _) = self.col_geom();
+                if float.is_some() {
+                    tb.geom.left += col_left - left;
                 }
+                col_left = left;
+                if let Some(pos) = &float {
+                    self.float_down(pos, height, false);
+                }
+                // Repeat header rows at the top of the new page.
+                if r >= headers.len() && !headers.is_empty() {
+                    for &hr in &headers {
+                        self.emit_table_row(&tb, hr, col_left);
+                    }
+                }
+                continue;
             }
             self.emit_table_row(&tb, r, col_left);
             moved = false;

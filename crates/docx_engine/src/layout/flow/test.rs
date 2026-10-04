@@ -296,6 +296,82 @@ fn rows_that_cannot_split_move_whole() {
     assert!(page_texts(&l, 1).iter().any(|t| t == "Cell line 0"));
 }
 
+/// `before` filler lines, then a one-column table of `rows`, each given
+/// as (row properties, cell content).
+fn table_after(before: usize, rows: &[(&str, &str)]) -> String {
+    let filler: String = (0..before)
+        .map(|i| format!("<w:p><w:r><w:t>Filler {i}</w:t></w:r></w:p>"))
+        .collect();
+    let rows: String = rows
+        .iter()
+        .map(|(tr, cell)| {
+            format!(
+                r#"<w:tr><w:trPr>{tr}</w:trPr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>{cell}</w:tc></w:tr>"#
+            )
+        })
+        .collect();
+    format!(
+        r#"{filler}<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>{rows}</w:tbl><w:p/>{LETTER}"#
+    )
+}
+
+#[test]
+fn rows_break_between_lines_as_widow_control_allows() {
+    // A four-line paragraph whose first three lines fit on the page: two
+    // stay, two go on, so neither page has a single line of it.
+    let cell = r#"<w:p><w:r><w:t>L1</w:t><w:br/><w:t>L2</w:t><w:br/><w:t>L3</w:t><w:br/><w:t>L4</w:t></w:r></w:p>"#;
+    let l = layout(&table_after(53, &[("", cell)]), &arial_10());
+    let cells = |page| -> Vec<String> {
+        page_texts(&l, page)
+            .into_iter()
+            .filter(|t| t.starts_with('L'))
+            .collect()
+    };
+    assert_eq!(cells(0), ["L1", "L2"]);
+    assert_eq!(cells(1), ["L3", "L4"]);
+}
+
+#[test]
+fn header_rows_and_rows_kept_with_the_next_stay_together() {
+    let para =
+        |t: &str, ppr: &str| format!("<w:p><w:pPr>{ppr}</w:pPr><w:r><w:t>{t}</w:t></w:r></w:p>");
+    let header = ("<w:tblHeader/>", para("Head", ""));
+    let kept = ("", para("Kept", "<w:keepNext/>"));
+    let (row, free, last) = (para("Row", ""), para("Free", ""), para("Last", ""));
+    for (filler, rows) in [
+        // Room for one more line: not the header alone.
+        (
+            55,
+            vec![(header.0, header.1.as_str()), ("", &row), ("", &row)],
+        ),
+        // Room for three: the first row, not both kept rows without the
+        // last.
+        (
+            53,
+            vec![
+                ("", &free),
+                (kept.0, kept.1.as_str()),
+                (kept.0, kept.1.as_str()),
+                ("", &last),
+            ],
+        ),
+    ] {
+        let l = layout(&table_after(filler, &rows), &arial_10());
+        let first = page_texts(&l, 0);
+        let second = page_texts(&l, 1);
+        // A header row never ends a page alone; rows kept with the next
+        // go over with the row they keep with.
+        assert!(
+            !first.iter().any(|t| t == "Head" || t == "Kept"),
+            "{first:?}"
+        );
+        assert!(
+            second.iter().any(|t| t == "Kept" || t == "Head"),
+            "{second:?}"
+        );
+    }
+}
+
 #[test]
 fn rows_taller_than_a_page_split_instead_of_overflowing() {
     let l = layout(
