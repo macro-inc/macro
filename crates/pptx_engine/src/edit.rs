@@ -30,6 +30,7 @@ mod clipboard;
 mod find;
 pub(crate) mod group;
 mod relayout;
+mod theme;
 pub(crate) mod transition;
 
 pub use notes::notes_text;
@@ -37,7 +38,7 @@ pub use ops::{
     BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
     FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
 };
-pub use ops::{BorderEdges, BorderLine, CellBorders};
+pub use ops::{BorderEdges, BorderLine, CellBorders, ThemeColor};
 pub use slides::{LayoutInfo, layouts};
 
 pub use clipboard::{
@@ -103,7 +104,7 @@ impl EditOp {
             | O::SetAltText { slide, .. }
             | O::SetShapeName { slide, .. }
             | O::SetShapeHidden { slide, .. } => Some(*slide),
-            O::PasteSlides { .. } => None,
+            O::PasteSlides { .. } | O::SetThemeColors { .. } | O::SetThemeFonts { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
     }
@@ -638,6 +639,12 @@ impl Presentation {
             O::SetSlideLayout { slide, layout } => {
                 relayout::set_slide_layout(self, *slide, layout)?;
             }
+            O::SetThemeColors { colors, name } => {
+                theme::set_theme_colors(self, colors, name.as_deref())?
+            }
+            O::SetThemeFonts { major, minor, name } => {
+                theme::set_theme_fonts(self, major.as_deref(), minor.as_deref(), name.as_deref())?
+            }
             O::SetTransition {
                 slide,
                 kind,
@@ -725,10 +732,21 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
             .filter(|r| r.rel_type == rel_type::CHART && r.mode == TargetMode::Internal)
             .all(|r| same(&rels.resolve(r)))
     };
+    // Themes, masters, and layouts are drawn under every slide that uses
+    // them; a change to any of them redraws every slide.
+    let shared_changed = after.pkg.part_names().any(|name| {
+        (name.starts_with("/ppt/theme/")
+            || name.starts_with("/ppt/slideMasters/")
+            || name.starts_with("/ppt/slideLayouts/"))
+            && !same(name)
+    });
     let changed_slides = after
         .slides
         .iter()
         .filter(|s| {
+            if shared_changed {
+                return true;
+            }
             let unchanged = before
                 .slides
                 .iter()

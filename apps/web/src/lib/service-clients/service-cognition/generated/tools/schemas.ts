@@ -3226,6 +3226,23 @@ export const EditPresentation = z.object({
               op: z.literal('setShapeHidden'),
             })
             .strict(),
+          z
+            .object({
+              colors: z.array(
+                z.object({ slot: z.string(), color: z.string() }).strict()
+              ),
+              name: z.union([z.string(), z.null()]).optional(),
+              op: z.literal('setThemeColors'),
+            })
+            .strict(),
+          z
+            .object({
+              major: z.union([z.string(), z.null()]).optional(),
+              minor: z.union([z.string(), z.null()]).optional(),
+              name: z.union([z.string(), z.null()]).optional(),
+              op: z.literal('setThemeFonts'),
+            })
+            .strict(),
         ];
         const errors = schemas.reduce<z.ZodError[]>(
           (errors, schema) =>

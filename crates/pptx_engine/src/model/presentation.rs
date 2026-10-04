@@ -358,6 +358,11 @@ impl Presentation {
         self.rels.insert(name, Arc::new(rels));
     }
 
+    /// Drops the parsed view of an edited theme part.
+    pub(crate) fn forget_theme(&mut self, part: &str) {
+        self.themes.remove(part);
+    }
+
     /// Forgets every cached view of a removed part.
     pub(crate) fn forget(&mut self, part: &str) {
         self.xml.remove(part);

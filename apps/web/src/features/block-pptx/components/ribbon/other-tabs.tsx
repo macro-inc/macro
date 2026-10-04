@@ -20,6 +20,7 @@ import { For, Show } from 'solid-js';
 import { boxOf } from '../../core/geometry';
 import { swatchCss } from '../../core/palette';
 import { unionBounds } from '../../core/selection';
+import { COLOR_SETS, type ColorSet, FONT_PAIRS } from '../../core/themes';
 import {
   ColorPicker,
   NumberField,
@@ -70,25 +71,143 @@ export function DesignTab() {
           Format background…
         </RibbonTextButton>
       </RibbonGroup>
-      <RibbonGroup label="Theme colors">
-        <div class="flex items-center gap-0.5 px-1" title="Theme colors">
-          <For
-            each={(env.deck()?.themeColors ?? []).filter(([s]) =>
-              s.startsWith('accent')
-            )}
-          >
-            {([slot, css]) => (
-              <span
-                title={slot}
-                class="size-4 rounded-sm border border-edge-muted"
-                style={{ background: css }}
-              />
-            )}
-          </For>
-        </div>
+      <RibbonGroup label="Variants">
+        <RibbonPopover
+          label="Theme colors"
+          text="Colors"
+          icon={
+            <span class="flex gap-px">
+              <For each={accentsOf(env)}>
+                {(css) => (
+                  <span
+                    class="h-3 w-1 rounded-sm"
+                    style={{ background: css }}
+                  />
+                )}
+              </For>
+            </span>
+          }
+          disabled={ro()}
+          testId="pptx-theme-colors"
+        >
+          {(close) => (
+            <div class="flex max-h-[60vh] w-64 flex-col overflow-y-auto">
+              <For each={COLOR_SETS}>
+                {(colorSet) => (
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-ink/5"
+                    classList={{ 'bg-accent-bg': isCurrentSet(env, colorSet) }}
+                    data-testid={`pptx-theme-colors-${colorSet.name}`}
+                    onClick={() => {
+                      close();
+                      void env.commands.setThemeColors(
+                        colorSet.colors,
+                        colorSet.name
+                      );
+                    }}
+                  >
+                    <span class="flex gap-px">
+                      <For
+                        each={[
+                          'dk2',
+                          'lt2',
+                          'accent1',
+                          'accent2',
+                          'accent3',
+                          'accent4',
+                          'accent5',
+                          'accent6',
+                        ]}
+                      >
+                        {(slot) => (
+                          <span
+                            class="size-3 border border-edge-muted"
+                            style={{ background: `#${colorSet.colors[slot]}` }}
+                          />
+                        )}
+                      </For>
+                    </span>
+                    {colorSet.name}
+                  </button>
+                )}
+              </For>
+            </div>
+          )}
+        </RibbonPopover>
+        <RibbonPopover
+          label="Theme fonts"
+          text="Fonts"
+          icon={<span class="font-serif text-sm leading-none">Aa</span>}
+          disabled={ro()}
+          testId="pptx-theme-fonts"
+        >
+          {(close) => (
+            <div class="flex max-h-[60vh] w-64 flex-col overflow-y-auto">
+              <For each={FONT_PAIRS}>
+                {(pair) => (
+                  <button
+                    type="button"
+                    class="flex flex-col rounded-md px-2 py-1.5 text-left hover:bg-ink/5"
+                    classList={{
+                      'bg-accent-bg':
+                        env.deck()?.themeFonts?.major === pair.major &&
+                        env.deck()?.themeFonts?.minor === pair.minor,
+                    }}
+                    data-testid={`pptx-theme-fonts-${pair.name}`}
+                    onClick={() => {
+                      close();
+                      void env.commands.setThemeFonts(
+                        pair.major,
+                        pair.minor,
+                        pair.name
+                      );
+                    }}
+                  >
+                    <span class="text-ink-muted text-xs">{pair.name}</span>
+                    <span
+                      class="text-base"
+                      style={{ 'font-family': `"${pair.major}", serif` }}
+                    >
+                      {pair.major}
+                    </span>
+                    <span
+                      class="text-xs"
+                      style={{ 'font-family': `"${pair.minor}", sans-serif` }}
+                    >
+                      {pair.minor}
+                    </span>
+                  </button>
+                )}
+              </For>
+            </div>
+          )}
+        </RibbonPopover>
       </RibbonGroup>
     </>
   );
+}
+
+/** Whether the deck's accents are exactly `colorSet`'s. */
+function isCurrentSet(
+  env: ReturnType<typeof useRibbon>,
+  colorSet: ColorSet
+): boolean {
+  const accents = accentsOf(env);
+  return (
+    accents.length === 6 &&
+    accents.every(
+      (css, i) =>
+        css.replace('#', '').toUpperCase() === colorSet.colors[`accent${i + 1}`]
+    )
+  );
+}
+
+/** The deck's accent colors, for small previews. */
+function accentsOf(env: ReturnType<typeof useRibbon>): string[] {
+  return (env.deck()?.themeColors ?? [])
+    .filter(([slot]) => slot.startsWith('accent'))
+    .map(([, css]) => css);
 }
 
 export function SlideShowTab() {

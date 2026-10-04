@@ -916,6 +916,21 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     if (!s) return Promise.resolve(null);
     return apply([{ op: 'setTransition', slide: s.id, ...patch }]);
   };
+  /** Recolors the whole deck with a theme color set. */
+  const setThemeColors = (colors: Record<string, string>, name?: string) =>
+    apply([
+      {
+        op: 'setThemeColors',
+        colors: Object.entries(colors).map(([slot, color]) => ({
+          slot,
+          color,
+        })),
+        ...(name ? { name } : {}),
+      },
+    ]);
+  /** Sets the deck's heading and body fonts. */
+  const setThemeFonts = (major: string, minor: string, name?: string) =>
+    apply([{ op: 'setThemeFonts', major, minor, ...(name ? { name } : {}) }]);
   /** Alt text of the one selected shape. */
   const setAltText = (text: string) => {
     const s = slide();
@@ -989,6 +1004,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     setLayout,
     setTransition,
     setAltText,
+    setThemeColors,
+    setThemeFonts,
     insertTextBox,
     insertShape,
     insertImage,

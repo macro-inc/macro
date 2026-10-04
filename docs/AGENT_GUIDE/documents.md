@@ -381,7 +381,10 @@ Layout and test hooks:
   grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
   (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
   `pptx-chart-<kind>-<grouping>`), Text box (`pptx-insert-textbox`), and Link.
-  Transitions: `pptx-transition-<kind>`, Effect options, duration
+  Design: slide background, and Variants that restyle every slide through the
+  theme: Colors (`pptx-theme-colors`, then `pptx-theme-colors-<set name>`,
+  such as `Red Violet`) and Fonts (`pptx-theme-fonts`, then
+  `pptx-theme-fonts-<pair name>`, such as `Georgia`). Transitions: `pptx-transition-<kind>`, Effect options, duration
   (`pptx-transition-duration`), automatic advance, and Apply to all
   (`pptx-transition-all`). Color menus are PowerPoint's theme grid with tints.
 - **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one

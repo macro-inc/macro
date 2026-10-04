@@ -262,3 +262,28 @@ test('sets transitions and plays the slide show', async ({ page }) => {
     'true'
   );
 });
+
+test('recolors and refonts the deck from Design variants', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('pptx-tab-design').click();
+  await page.getByTestId('pptx-theme-colors').click();
+  await page.getByTestId('pptx-theme-colors-Red Violet').click();
+  await page.getByTestId('pptx-theme-fonts').click();
+  await page.getByTestId('pptx-theme-fonts-Georgia').click();
+  const theme = async () => {
+    const deck = await outline(page);
+    return {
+      accent1: deck.themeColors.find(([slot]) => slot === 'accent1')?.[1],
+      fonts: deck.themeFonts,
+    };
+  };
+  await expect.poll(theme).toEqual({
+    accent1: '#E32D91',
+    fonts: { major: 'Georgia', minor: 'Georgia' },
+  });
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(theme).toEqual({
+    accent1: '#E32D91',
+    fonts: { major: 'Calibri', minor: 'Calibri' },
+  });
+});

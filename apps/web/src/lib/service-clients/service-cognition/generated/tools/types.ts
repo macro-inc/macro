@@ -1236,6 +1236,32 @@ export type EditOp =
        */
       hidden: boolean;
       op: 'setShapeHidden';
+    }
+  | {
+      /**
+       * Slots to set.
+       */
+      colors: ThemeColor[];
+      /**
+       * New name of the color scheme.
+       */
+      name?: string | null;
+      op: 'setThemeColors';
+    }
+  | {
+      /**
+       * Heading font (kept when omitted).
+       */
+      major?: string | null;
+      /**
+       * Body font (kept when omitted).
+       */
+      minor?: string | null;
+      /**
+       * New name of the font scheme.
+       */
+      name?: string | null;
+      op: 'setThemeFonts';
     };
 /**
  * Bullet style for paragraphs.
@@ -4957,7 +4983,7 @@ export interface EditDocumentResponse {
   clarification?: string | null;
 }
 /**
- * Edit a PowerPoint (.pptx) presentation: an ordered batch of operations applied atomically and saved as a new version, so if any operation fails nothing is saved. To make a new deck from an existing one instead (a translation, a variant, a copy to rework), pass saveAs: the edited deck is created as a new presentation, whose documentId is returned for further batches, and the original is left unchanged; operations may then be empty for a plain copy. ReadPresentation first; address slides and shapes by the ids it reports (slide ids are not slide numbers). Positions and sizes are in points from the slide's top-left corner. Text offsets count characters within a paragraph; \n separates paragraphs. Colors are RRGGBB hex or theme names (accent1-accent6, tx1, tx2, bg1, bg2). Use setText to rewrite a shape's text (it keeps each paragraph's formatting), formatText/formatParagraphs for styling (the whole shape when no range is given), addSlide with a layout name for new slides (title and body fill its placeholders), addShape for text boxes, preset shapes, lines, tables, charts, or images, setChartData/setChartType/formatChart for charts the read marks editable, mergeCells/formatCells/setTableStyle/setTableGrid for tables (cell text through the text ops with cell), groupShapes/ungroupShape, setSlideLayout, setTransition, and replaceText for find-and-replace across the deck. Ids of created slides and shapes are returned with the changed slides as they now read; check them. At most 100 operations.
+ * Edit a PowerPoint (.pptx) presentation: an ordered batch of operations applied atomically and saved as a new version, so if any operation fails nothing is saved. To make a new deck from an existing one instead (a translation, a variant, a copy to rework), pass saveAs: the edited deck is created as a new presentation, whose documentId is returned for further batches, and the original is left unchanged; operations may then be empty for a plain copy. ReadPresentation first; address slides and shapes by the ids it reports (slide ids are not slide numbers). Positions and sizes are in points from the slide's top-left corner. Text offsets count characters within a paragraph; \n separates paragraphs. Colors are RRGGBB hex or theme names (accent1-accent6, tx1, tx2, bg1, bg2). Use setText to rewrite a shape's text (it keeps each paragraph's formatting), formatText/formatParagraphs for styling (the whole shape when no range is given), addSlide with a layout name for new slides (title and body fill its placeholders), addShape for text boxes, preset shapes, lines, tables, charts, or images, setChartData/setChartType/formatChart for charts the read marks editable, mergeCells/formatCells/setTableStyle/setTableGrid for tables (cell text through the text ops with cell), groupShapes/ungroupShape, setSlideLayout, setTransition, setThemeColors/setThemeFonts to restyle the whole deck through its theme (prefer them over recoloring shapes one by one), and replaceText for find-and-replace across the deck. Ids of created slides and shapes are returned with the changed slides as they now read; check them. At most 100 operations.
  */
 export interface EditPresentation {
   /**
@@ -5190,6 +5216,19 @@ export interface ChartSeriesColor {
   series: number;
   /**
    * `RRGGBB`, or a theme color name (`accent1`, `tx1`...).
+   */
+  color: string;
+}
+/**
+ * One theme color for [`EditOp::SetThemeColors`].
+ */
+export interface ThemeColor {
+  /**
+   * `dk1`, `lt1`, `dk2`, `lt2`, `accent1`-`accent6`, `hlink`, or `folHlink`.
+   */
+  slot: string;
+  /**
+   * `RRGGBB`.
    */
   color: string;
 }

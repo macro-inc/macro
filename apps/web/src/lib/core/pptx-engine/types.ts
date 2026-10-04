@@ -518,7 +518,15 @@ export type EditOp =
     }
   | ({ op: 'setAltText'; text: string } & ShapeTarget)
   | ({ op: 'setShapeName'; name: string } & ShapeTarget)
-  | ({ op: 'setShapeHidden'; hidden: boolean } & ShapeTarget);
+  | ({ op: 'setShapeHidden'; hidden: boolean } & ShapeTarget)
+  /** Recolors the deck's theme (slots: dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink). */
+  | {
+      op: 'setThemeColors';
+      colors: { slot: string; color: string }[];
+      name?: string;
+    }
+  /** Sets the theme's heading and body fonts. */
+  | { op: 'setThemeFonts'; major?: string; minor?: string; name?: string };
 
 export interface Created {
   slide: number;

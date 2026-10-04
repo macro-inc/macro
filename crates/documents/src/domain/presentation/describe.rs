@@ -265,6 +265,14 @@ pub fn describe(pres: &mut Presentation, slides: Option<&[usize]>) -> anyhow::Re
         .map(|(slot, hex)| format!("{slot} {hex}"))
         .collect();
     let _ = writeln!(out, "Theme colors: {}", colors.join(", "));
+    if let Some(fonts) = &deck.theme_fonts {
+        let _ = writeln!(
+            out,
+            "Theme fonts: headings {}, body {}",
+            quote(&fonts.major),
+            quote(&fonts.minor)
+        );
+    }
     for s in &deck.slides {
         if slides.is_some_and(|wanted| !wanted.contains(&(s.index + 1))) {
             continue;

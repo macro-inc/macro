@@ -267,6 +267,17 @@ pub struct ChartSeriesColor {
     pub color: String,
 }
 
+/// One theme color for [`EditOp::SetThemeColors`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeColor {
+    /// `dk1`, `lt1`, `dk2`, `lt2`, `accent1`-`accent6`, `hlink`, or `folHlink`.
+    pub slot: String,
+    /// `RRGGBB`.
+    pub color: String,
+}
+
 /// Z-order moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -873,6 +884,30 @@ pub enum EditOp {
         shape: u32,
         /// Hidden.
         hidden: bool,
+    },
+    // ---- theme ----
+    /// Recolors the deck: sets theme color slots in every slide master's
+    /// theme, so everything that uses theme colors (most text, shapes,
+    /// charts, and tables) follows. Omitted slots keep their color.
+    SetThemeColors {
+        /// Slots to set.
+        colors: Vec<ThemeColor>,
+        /// New name of the color scheme.
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Sets the theme's heading (`major`) and body (`minor`) Latin fonts in
+    /// every slide master's theme; text that uses theme fonts follows.
+    SetThemeFonts {
+        /// Heading font (kept when omitted).
+        #[serde(default)]
+        major: Option<String>,
+        /// Body font (kept when omitted).
+        #[serde(default)]
+        minor: Option<String>,
+        /// New name of the font scheme.
+        #[serde(default)]
+        name: Option<String>,
     },
 }
 
