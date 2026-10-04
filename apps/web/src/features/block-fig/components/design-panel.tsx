@@ -1,7 +1,7 @@
 /**
  * The right panel: the selected layer's properties as Figma's design panel
- * shows them (read-only), CSS as Dev Mode writes it, and export.
- * Presentational: data and actions come in as props.
+ * shows them (editable when `onPatch` is given), CSS as Dev Mode writes
+ * it, and export. Presentational: data and actions come in as props.
  */
 
 import type {
@@ -12,17 +12,106 @@ import type {
 } from '@core/fig-engine/types';
 import Copy from '@phosphor/copy.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
+import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { cssColor, cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
+import type { PaintSpec, Patch } from '../primitives/create-fig-editor';
+import {
+  NumberField,
+  PaintEditRow,
+  paintHex,
+  TextField,
+} from './design-fields';
 
-function Section(props: { title: string; children: JSX.Element }) {
+function Section(props: {
+  title: string;
+  children: JSX.Element;
+  /** A "+" action in the header (add a fill, say). */
+  onAdd?: () => void;
+  testId?: string;
+}) {
   return (
-    <section class="border-edge-muted border-b px-3 py-3">
-      <h3 class="mb-2 font-semibold text-ink text-xs">{props.title}</h3>
+    <section
+      class="border-edge-muted border-b px-3 py-3"
+      data-testid={props.testId}
+    >
+      <div class="mb-2 flex items-center justify-between">
+        <h3 class="font-semibold text-ink text-xs">{props.title}</h3>
+        <Show when={props.onAdd}>
+          {(add) => (
+            <button
+              type="button"
+              aria-label={`Add ${props.title.toLowerCase()}`}
+              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+              onClick={() => add()()}
+            >
+              <Plus class="size-3.5" />
+            </button>
+          )}
+        </Show>
+      </div>
       <div class="flex flex-col gap-1.5">{props.children}</div>
     </section>
+  );
+}
+
+/** Paint specs that keep every paint except `edit` applied to one. */
+function paintSpecs(
+  paints: PaintInfo[],
+  index: number,
+  edit: (spec: PaintSpec, paint: PaintInfo) => PaintSpec | null
+): PaintSpec[] {
+  const out: PaintSpec[] = [];
+  paints.forEach((p, k) => {
+    const spec: PaintSpec = { keep: k };
+    const next = k === index ? edit(spec, p) : spec;
+    if (next) out.push(next);
+  });
+  return out;
+}
+
+/** Editable paint list (fills or strokes), top paint first as in Figma. */
+function PaintList(props: {
+  paints: PaintInfo[];
+  kind: 'fill' | 'stroke';
+  onChange: (specs: PaintSpec[], live: boolean) => void;
+}) {
+  const indexed = () =>
+    props.paints.map((paint, index) => ({ paint, index })).reverse();
+  const change = (
+    index: number,
+    edit: (spec: PaintSpec, paint: PaintInfo) => PaintSpec | null,
+    live = false
+  ) => props.onChange(paintSpecs(props.paints, index, edit), live);
+  return (
+    <For each={indexed()}>
+      {({ paint, index }) => (
+        <PaintEditRow
+          paint={paint}
+          swatch={swatchBackground(paint)}
+          label={paintLabel(paint)}
+          testId={`fig-${props.kind}-${index}`}
+          onColor={(hex) =>
+            change(index, (spec, p) => ({
+              ...spec,
+              color:
+                hex.length === 6 && (p.alpha ?? 1) < 1
+                  ? (paintHex({ ...p, color: hex }) ?? hex)
+                  : hex,
+            }))
+          }
+          onOpacity={(opacity, live) =>
+            change(index, (spec) => ({ ...spec, opacity }), live)
+          }
+          onToggle={() =>
+            change(index, (spec, p) => ({ ...spec, visible: !p.visible }))
+          }
+          onRemove={() => change(index, () => null)}
+        />
+      )}
+    </For>
   );
 }
 
@@ -41,6 +130,26 @@ function Field(props: { label: string; value: string | number }) {
 }
 
 const fmt = (v: number) => formatMeasure(v);
+
+const hasCorners = (type: string) =>
+  ['FRAME', 'RECTANGLE', 'ROUNDED_RECTANGLE', 'SYMBOL', 'INSTANCE'].includes(
+    type
+  );
+
+function radiusLabel(r: {
+  top_left: number;
+  top_right: number;
+  bottom_right: number;
+  bottom_left: number;
+}): string {
+  return r.top_left === r.top_right &&
+    r.top_left === r.bottom_left &&
+    r.top_left === r.bottom_right
+    ? fmt(r.top_left)
+    : [r.top_left, r.top_right, r.bottom_right, r.bottom_left]
+        .map(fmt)
+        .join(', ');
+}
 const percent = (v: number) => `${Math.round(v * 100)}%`;
 const title = (s: string) =>
   s
@@ -121,6 +230,8 @@ function EffectRow(props: { effect: EffectInfo }) {
 export function DesignPanel(props: {
   info: NodeInfo | undefined;
   selectionCount: number;
+  /** Edits the selection; absent when the file is read-only. */
+  onPatch?: (patch: Patch, live: boolean) => void;
   page: PageSummary | undefined;
   onExport: (scale: number) => void;
   onCopyPng: () => void;
@@ -185,9 +296,26 @@ export function DesignPanel(props: {
               fallback={<CodeTab info={info()} onCopy={props.onCopyText} />}
             >
               <div class="border-edge-muted border-b px-3 py-3">
-                <div class="truncate font-semibold text-sm" title={info().name}>
-                  {info().name}
-                </div>
+                <Show
+                  when={props.onPatch}
+                  fallback={
+                    <div
+                      class="truncate font-semibold text-sm"
+                      title={info().name}
+                    >
+                      {info().name}
+                    </div>
+                  }
+                >
+                  {(patch) => (
+                    <TextField
+                      value={info().name}
+                      class="-mx-1 font-semibold text-sm"
+                      testId="fig-name"
+                      onChange={(name) => patch()({ name }, false)}
+                    />
+                  )}
+                </Show>
                 <div class="text-ink-muted">
                   {info().typeLabel}
                   <Show when={info().mainComponent}>
@@ -199,36 +327,93 @@ export function DesignPanel(props: {
                 </Show>
               </div>
               <Section title="Layout">
-                <div class="grid grid-cols-2 gap-1.5">
-                  <Field label="X" value={fmt(info().x)} />
-                  <Field label="Y" value={fmt(info().y)} />
-                  <Field label="W" value={fmt(info().width)} />
-                  <Field label="H" value={fmt(info().height)} />
-                  <Show when={Math.abs(info().rotation) > 0.01}>
-                    <Field label="↻" value={`${fmt(info().rotation)}°`} />
-                  </Show>
-                  <Show when={info().cornerRadius}>
-                    {(r) => (
-                      <Field
-                        label="Radius"
-                        value={
-                          r().top_left === r().top_right &&
-                          r().top_left === r().bottom_left &&
-                          r().top_left === r().bottom_right
-                            ? fmt(r().top_left)
-                            : [
-                                r().top_left,
-                                r().top_right,
-                                r().bottom_right,
-                                r().bottom_left,
-                              ]
-                                .map(fmt)
-                                .join(', ')
+                <Show
+                  when={props.onPatch && !info().id.startsWith('I')}
+                  fallback={
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <Field label="X" value={fmt(info().x)} />
+                      <Field label="Y" value={fmt(info().y)} />
+                      <Field label="W" value={fmt(info().width)} />
+                      <Field label="H" value={fmt(info().height)} />
+                      <Show when={Math.abs(info().rotation) > 0.01}>
+                        <Field label="↻" value={`${fmt(info().rotation)}°`} />
+                      </Show>
+                      <Show when={info().cornerRadius}>
+                        {(r) => (
+                          <Field label="Radius" value={radiusLabel(r())} />
+                        )}
+                      </Show>
+                    </div>
+                  }
+                >
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <NumberField
+                      label="X"
+                      value={info().x}
+                      testId="fig-field-x"
+                      onChange={(x, live) => props.onPatch?.({ x }, live)}
+                    />
+                    <NumberField
+                      label="Y"
+                      value={info().y}
+                      testId="fig-field-y"
+                      onChange={(y, live) => props.onPatch?.({ y }, live)}
+                    />
+                    <NumberField
+                      label="W"
+                      value={info().width}
+                      min={0.01}
+                      testId="fig-field-w"
+                      onChange={(width, live) =>
+                        props.onPatch?.({ width }, live)
+                      }
+                    />
+                    <NumberField
+                      label="H"
+                      value={info().height}
+                      min={0.01}
+                      testId="fig-field-h"
+                      onChange={(height, live) =>
+                        props.onPatch?.({ height }, live)
+                      }
+                    />
+                    <NumberField
+                      label="↻"
+                      value={info().rotation}
+                      testId="fig-field-rotation"
+                      onChange={(rotation, live) =>
+                        props.onPatch?.({ rotation }, live)
+                      }
+                    />
+                    <Show when={info().cornerRadius || hasCorners(info().type)}>
+                      <NumberField
+                        label="◜"
+                        value={info().cornerRadius?.top_left ?? 0}
+                        min={0}
+                        testId="fig-field-radius"
+                        onChange={(cornerRadius, live) =>
+                          props.onPatch?.({ cornerRadius }, live)
                         }
                       />
-                    )}
+                    </Show>
+                  </div>
+                  <Show when={info().type === 'FRAME'}>
+                    <label class="flex items-center gap-2 text-ink-muted">
+                      <input
+                        type="checkbox"
+                        checked={info().clipsContent}
+                        data-testid="fig-clip-content"
+                        onChange={(e) =>
+                          props.onPatch?.(
+                            { clipContent: e.currentTarget.checked },
+                            false
+                          )
+                        }
+                      />
+                      Clip content
+                    </label>
                   </Show>
-                </div>
+                </Show>
                 <Show when={info().clipsContent && info().childCount > 0}>
                   <span class="text-ink-muted">Clips content</span>
                 </Show>
@@ -266,7 +451,24 @@ export function DesignPanel(props: {
               </Show>
               <Section title="Appearance">
                 <div class="grid grid-cols-2 gap-1.5">
-                  <Field label="Opacity" value={percent(info().opacity)} />
+                  <Show
+                    when={props.onPatch && !info().id.startsWith('I')}
+                    fallback={
+                      <Field label="Opacity" value={percent(info().opacity)} />
+                    }
+                  >
+                    <NumberField
+                      label="◐"
+                      value={info().opacity}
+                      percent
+                      min={0}
+                      max={1}
+                      testId="fig-field-opacity"
+                      onChange={(opacity, live) =>
+                        props.onPatch?.({ opacity }, live)
+                      }
+                    />
+                  </Show>
                   <Field label="Blend" value={title(info().blendMode)} />
                 </div>
               </Section>
@@ -281,7 +483,24 @@ export function DesignPanel(props: {
                     />
                     <div class="grid grid-cols-2 gap-1.5">
                       <Show when={t().fontSize}>
-                        {(s) => <Field label="Size" value={fmt(s())} />}
+                        {(size) => (
+                          <Show
+                            when={props.onPatch && !info().id.startsWith('I')}
+                            fallback={
+                              <Field label="Size" value={fmt(size())} />
+                            }
+                          >
+                            <NumberField
+                              label="Size"
+                              value={size()}
+                              min={1}
+                              testId="fig-field-font-size"
+                              onChange={(fontSize, live) =>
+                                props.onPatch?.({ fontSize }, live)
+                              }
+                            />
+                          </Show>
+                        )}
                       </Show>
                       <Show when={t().lineHeight}>
                         {(lh) => (
@@ -338,14 +557,107 @@ export function DesignPanel(props: {
                   </Section>
                 )}
               </Show>
-              <Show when={info().fills.length > 0}>
-                <Section title="Fill">
-                  <For each={[...info().fills].reverse()}>
-                    {(p) => <PaintRow paint={p} />}
-                  </For>
+              <Show
+                when={props.onPatch && !info().id.startsWith('I')}
+                fallback={
+                  <Show when={info().fills.length > 0}>
+                    <Section title="Fill">
+                      <For each={[...info().fills].reverse()}>
+                        {(p) => <PaintRow paint={p} />}
+                      </For>
+                    </Section>
+                  </Show>
+                }
+              >
+                <Section
+                  title="Fill"
+                  testId="fig-fills"
+                  onAdd={() =>
+                    props.onPatch?.(
+                      {
+                        fills: [
+                          ...info().fills.map((_, keep) => ({ keep })),
+                          {
+                            color:
+                              info().type === 'FRAME' ? 'FFFFFF' : 'D9D9D9',
+                          },
+                        ],
+                      },
+                      false
+                    )
+                  }
+                >
+                  <PaintList
+                    paints={info().fills}
+                    kind="fill"
+                    onChange={(fills, live) => props.onPatch?.({ fills }, live)}
+                  />
                 </Section>
               </Show>
-              <Show when={info().strokes.length > 0}>
+              <Show when={props.onPatch && !info().id.startsWith('I')}>
+                <Section
+                  title="Stroke"
+                  testId="fig-strokes"
+                  onAdd={() =>
+                    props.onPatch?.(
+                      {
+                        strokes: [
+                          ...info().strokes.map((_, keep) => ({ keep })),
+                          { color: '000000' },
+                        ],
+                        ...(info().strokes.length === 0
+                          ? { strokeWeight: 1 }
+                          : {}),
+                      },
+                      false
+                    )
+                  }
+                >
+                  <PaintList
+                    paints={info().strokes}
+                    kind="stroke"
+                    onChange={(strokes, live) =>
+                      props.onPatch?.({ strokes }, live)
+                    }
+                  />
+                  <Show when={info().strokes.length > 0}>
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <NumberField
+                        label="≡"
+                        value={info().strokeWeight ?? 1}
+                        min={0}
+                        testId="fig-field-stroke-weight"
+                        onChange={(strokeWeight, live) =>
+                          props.onPatch?.({ strokeWeight }, live)
+                        }
+                      />
+                      <select
+                        class="rounded-md bg-inset px-2 py-1 text-ink outline-none"
+                        value={info().strokeAlign ?? 'CENTER'}
+                        onChange={(e) =>
+                          props.onPatch?.(
+                            {
+                              strokeAlign: e.currentTarget
+                                .value as Patch['strokeAlign'],
+                            },
+                            false
+                          )
+                        }
+                      >
+                        <option value="INSIDE">Inside</option>
+                        <option value="CENTER">Center</option>
+                        <option value="OUTSIDE">Outside</option>
+                      </select>
+                    </div>
+                  </Show>
+                </Section>
+              </Show>
+              <Show
+                when={
+                  info().strokes.length > 0 &&
+                  !(props.onPatch && !info().id.startsWith('I'))
+                }
+              >
                 <Section title="Stroke">
                   <For each={[...info().strokes].reverse()}>
                     {(p) => <PaintRow paint={p} />}

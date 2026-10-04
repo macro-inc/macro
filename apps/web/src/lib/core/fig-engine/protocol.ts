@@ -45,7 +45,19 @@ export type FigRequest =
       args: (string | number | null)[];
     }
   | { id: number; kind: 'export'; page: number; node: string; scale: number }
-  | { id: number; kind: 'thumbnail' };
+  | { id: number; kind: 'thumbnail' }
+  | {
+      id: number;
+      kind: 'edit';
+      page: number;
+      action: 'apply' | 'undo' | 'redo';
+      /** `Op[]` JSON, for `apply`. */
+      ops?: string;
+      /** Steps with the same key in a row undo as one (a drag). */
+      coalesce?: string;
+    }
+  | { id: number; kind: 'save' }
+  | { id: number; kind: 'blank'; name: string };
 
 export type FigResponse =
   | { id: number; ok: true; kind: 'open'; summary: FileSummary }
@@ -59,5 +71,7 @@ export type FigResponse =
     }
   | { id: number; ok: true; kind: 'query'; json: string }
   | { id: number; ok: true; kind: 'png'; bytes: ArrayBuffer | null }
+  | { id: number; ok: true; kind: 'edit'; json: string }
+  | { id: number; ok: true; kind: 'saved'; bytes: ArrayBuffer }
   | { id: number; ok: true; kind: 'cancelled' }
   | { id: number; ok: false; error: string; trapped: boolean };

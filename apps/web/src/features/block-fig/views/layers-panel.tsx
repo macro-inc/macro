@@ -65,11 +65,31 @@ export function LayersPanel(props: {
 
   // A new page starts with a fresh, collapsed tree.
   createEffect(
-    on(viewer.layout, () => {
+    on(viewer.page, () => {
       setChildren(new Map());
       setExpanded(new Set<string>());
       void load(ROOT);
     })
+  );
+  // After an edit, every loaded level reloads in place (expansion kept).
+  createEffect(
+    on(
+      viewer.editVersion,
+      async () => {
+        const page = viewer.page();
+        const parents = [...children().keys()];
+        const fresh = await Promise.all(
+          parents.map((p) =>
+            props.engine.layers(page, p || undefined).catch(() => [])
+          )
+        );
+        if (page !== viewer.page()) return;
+        const next = new Map<string, LayerRow[]>();
+        parents.forEach((p, i) => next.set(p, fresh[i]));
+        setChildren(next);
+      },
+      { defer: true }
+    )
   );
   createEffect(
     on(viewer.collapseSignal, () => setExpanded(new Set<string>()), {

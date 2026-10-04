@@ -217,20 +217,25 @@ impl<'a> Txn<'a> {
     }
 
     fn resolve(&self, id: &str) -> Result<NodeIdx> {
+        let i = self.resolve_any(id)?;
+        if self.doc.node(i).removed {
+            return Err(FigError::NoSuchNode(id.into()));
+        }
+        Ok(i)
+    }
+
+    /// Like [`Txn::resolve`], but deleted layers resolve too (pasting what
+    /// was cut).
+    fn resolve_any(&self, id: &str) -> Result<NodeIdx> {
         if id.starts_with('I') {
             return Err(FigError::Unsupported(
                 "layers inside an instance cannot be edited".into(),
             ));
         }
         let guid = Guid::parse(id).ok_or_else(|| FigError::NoSuchNode(id.into()))?;
-        let i = self
-            .doc
+        self.doc
             .find(guid)
-            .ok_or_else(|| FigError::NoSuchNode(id.into()))?;
-        if self.doc.node(i).removed {
-            return Err(FigError::NoSuchNode(id.into()));
-        }
-        Ok(i)
+            .ok_or_else(|| FigError::NoSuchNode(id.into()))
     }
 
     fn resolve_all(&self, ids: &[String]) -> Result<Vec<NodeIdx>> {
@@ -663,7 +668,11 @@ impl<'a> Txn<'a> {
     }
 
     fn remove_tree(&mut self, i: NodeIdx) {
-        self.detach(i);
+        // Off its parent's list, but it keeps its parent link: undo puts it
+        // back, and a cut layer can still be pasted where it was.
+        if let Some(p) = self.doc.node(i).parent {
+            self.touch(p).children.retain(|&c| c != i);
+        }
         let mut stack = vec![i];
         while let Some(n) = stack.pop() {
             stack.extend(self.doc.node(n).children.clone());
@@ -834,17 +843,31 @@ impl<'a> Txn<'a> {
                 }
             }
             Op::Duplicate { ids, dx, dy } => {
-                for i in self.layers(ids)? {
+                let mut sources = Vec::new();
+                for id in ids {
+                    let i = self.resolve_any(id)?;
+                    if !sources.contains(&i) {
+                        sources.push(i);
+                    }
+                }
+                for i in sources {
                     let Some(parent) = self.doc.node(i).parent else {
                         continue;
                     };
-                    let at = self
-                        .doc
-                        .node(parent)
-                        .children
+                    // A cut layer's parent may itself be gone.
+                    if self.doc.node(parent).removed
+                        || matches!(
+                            self.doc.props(i).node_type(),
+                            NodeType::Canvas | NodeType::Document
+                        )
+                    {
+                        continue;
+                    }
+                    let siblings = &self.doc.node(parent).children;
+                    let at = siblings
                         .iter()
                         .position(|&c| c == i)
-                        .map_or(0, |p| p + 1);
+                        .map_or(siblings.len(), |p| p + 1);
                     let copy = self.copy_tree(i, parent, at);
                     self.translate(copy, *dx, *dy);
                     let guid = self.doc.props(copy).guid.unwrap_or_default();

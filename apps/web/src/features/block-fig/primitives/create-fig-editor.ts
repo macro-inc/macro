@@ -1,0 +1,420 @@
+/**
+ * Editing on top of the viewer: the operations the canvas, panels, and
+ * shortcuts perform, undo and redo, and saving.
+ *
+ * Every change is an engine operation (`fig_engine::edit::Op`) applied in
+ * all engine workers. After each step the changed page area is re-rendered
+ * (see `TileCompositor.invalidate`) and the viewer reloads what it shows.
+ * Saving writes the whole `.fig` (the engine patches only what changed)
+ * after a short pause in editing, when the tab is hidden, and on close.
+ */
+
+import type { EditResult, FigEngine } from '@core/fig-engine/client';
+import type { NodeInfo, Rect } from '@core/fig-engine/types';
+import { createSignal, onCleanup } from 'solid-js';
+import type { FigViewer, Selected } from './create-fig-viewer';
+
+export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
+
+/** Properties to set (`fig_engine::edit::Patch`). */
+export interface Patch {
+  name?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  opacity?: number;
+  visible?: boolean;
+  locked?: boolean;
+  fills?: PaintSpec[];
+  strokes?: PaintSpec[];
+  strokeWeight?: number;
+  strokeAlign?: 'INSIDE' | 'OUTSIDE' | 'CENTER';
+  cornerRadius?: number;
+  clipContent?: boolean;
+  blendMode?: string;
+  characters?: string;
+  fontSize?: number;
+}
+
+/** A paint as the editor sends it: an existing one kept, or a solid. */
+export interface PaintSpec {
+  keep?: number;
+  /** `RRGGBB` or `RRGGBBAA`. */
+  color?: string;
+  opacity?: number;
+  visible?: boolean;
+}
+
+export type Arrangement = 'forward' | 'backward' | 'front' | 'back';
+export type ShapeTool = 'frame' | 'rectangle' | 'ellipse' | 'text';
+
+export type Op =
+  | { op: 'set'; ids: string[]; props: Patch }
+  | { op: 'translate'; ids: string[]; dx: number; dy: number }
+  | {
+      op: 'create';
+      parent: string;
+      index?: number;
+      node: {
+        type: string;
+        name?: string;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        props?: Patch;
+      };
+    }
+  | { op: 'delete'; ids: string[] }
+  | { op: 'reorder'; ids: string[]; parent: string; index: number }
+  | { op: 'arrange'; ids: string[]; how: Arrangement }
+  | { op: 'duplicate'; ids: string[]; dx?: number; dy?: number }
+  | { op: 'group'; ids: string[]; frame?: boolean }
+  | { op: 'ungroup'; ids: string[] };
+
+export interface FigEditorOptions {
+  engine: FigEngine;
+  viewer: FigViewer;
+  /** Whether this person may edit (viewers get a read-only canvas). */
+  canEdit: () => boolean;
+  /** Stores the edited file; absent when nothing can be saved. */
+  save?: (bytes: Uint8Array) => Promise<void>;
+  /** Called with each changed page area, to re-render it. */
+  onDirty: (rect: Rect) => void;
+  notifyError: (message: string) => void;
+}
+
+/** Quiet time after the last edit before saving. */
+const SAVE_DELAY_MS = 1500;
+
+const TYPE_FOR_TOOL: Record<ShapeTool, string> = {
+  frame: 'FRAME',
+  rectangle: 'RECTANGLE',
+  ellipse: 'ELLIPSE',
+  text: 'TEXT',
+};
+
+export function createFigEditor(options: FigEditorOptions) {
+  const { engine, viewer } = options;
+  const [canUndo, setCanUndo] = createSignal(false);
+  const [canRedo, setCanRedo] = createSignal(false);
+  const [saveState, setSaveState] = createSignal<SaveState>('saved');
+  /** The text layer being typed into, if any. */
+  const [editingText, setEditingText] = createSignal<string>();
+  let clipboard: string[] = [];
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let saving: Promise<void> | undefined;
+  let dirtySinceSave = false;
+  let dragKey = 0;
+
+  const enabled = () => options.canEdit();
+  const ids = () => viewer.selected().map((s) => s.id);
+  // Instance sublayers are edited in the main component, as in Figma.
+  const editableIds = () => ids().filter((id) => !id.startsWith('I'));
+
+  // ---- saving ----------------------------------------------------------
+
+  const saveNow = async (): Promise<void> => {
+    clearTimeout(saveTimer);
+    if (!options.save || !dirtySinceSave) return;
+    if (saving) {
+      await saving;
+      if (!dirtySinceSave) return;
+    }
+    dirtySinceSave = false;
+    setSaveState('saving');
+    const run = (async () => {
+      try {
+        const bytes = await engine.save();
+        await options.save?.(bytes);
+        setSaveState(dirtySinceSave ? 'unsaved' : 'saved');
+      } catch (e) {
+        dirtySinceSave = true;
+        setSaveState('error');
+        options.notifyError(
+          e instanceof Error ? e.message : 'The design could not be saved'
+        );
+      }
+    })();
+    saving = run;
+    await run;
+    saving = undefined;
+  };
+
+  const scheduleSave = () => {
+    dirtySinceSave = true;
+    setSaveState('unsaved');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void saveNow(), SAVE_DELAY_MS);
+  };
+
+  const onHidden = () => {
+    if (document.visibilityState === 'hidden') void saveNow();
+  };
+  document.addEventListener('visibilitychange', onHidden);
+  onCleanup(() => {
+    document.removeEventListener('visibilitychange', onHidden);
+    void saveNow();
+  });
+
+  // ---- applying ----------------------------------------------------------
+
+  let queue: Promise<unknown> = Promise.resolve();
+
+  const settle = async (result: EditResult) => {
+    setCanUndo(result.canUndo);
+    setCanRedo(result.canRedo);
+    if (result.dirty) options.onDirty(result.dirty);
+    scheduleSave();
+    await viewer.afterEdit();
+  };
+
+  /**
+   * Applies operations as one undo step, in order with other edits.
+   * Resolves to the engine's result (undefined when not allowed or failed).
+   */
+  const apply = (ops: Op[], coalesce?: string) => {
+    if (!enabled() || ops.length === 0) return Promise.resolve(undefined);
+    const run = queue.then(async () => {
+      try {
+        const result = await engine.apply(viewer.page(), ops, coalesce);
+        await settle(result);
+        return result;
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    });
+    queue = run;
+    return run;
+  };
+
+  const history = (action: 'undo' | 'redo') => {
+    if (!enabled()) return;
+    queue = queue.then(async () => {
+      try {
+        const result =
+          action === 'undo'
+            ? await engine.undo(viewer.page())
+            : await engine.redo(viewer.page());
+        await settle(result);
+        await viewer.pruneSelection();
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  };
+
+  /** Selects the layers a step created. */
+  const selectCreated = async (result: EditResult | undefined) => {
+    if (result && result.created.length > 0)
+      await viewer.selectIds(result.created);
+  };
+
+  // ---- selection operations ---------------------------------------------
+
+  const setProps = (patch: Patch, coalesce?: string) => {
+    const targets = editableIds();
+    if (targets.length === 0) return Promise.resolve(undefined);
+    return apply([{ op: 'set', ids: targets, props: patch }], coalesce);
+  };
+
+  const deleteSelection = async () => {
+    const targets = editableIds();
+    if (targets.length === 0) return;
+    await apply([{ op: 'delete', ids: targets }]);
+    viewer.select([]);
+  };
+
+  const duplicateSelection = async () => {
+    const result = await apply([
+      { op: 'duplicate', ids: editableIds(), dx: 0, dy: 0 },
+    ]);
+    await selectCreated(result);
+  };
+
+  const group = async (frame = false) => {
+    const targets = editableIds();
+    if (targets.length === 0) return;
+    const result = await apply([{ op: 'group', ids: targets, frame }]);
+    await selectCreated(result);
+  };
+
+  const ungroup = async () => {
+    const result = await apply([{ op: 'ungroup', ids: editableIds() }]);
+    await selectCreated(result);
+  };
+
+  const arrange = (how: Arrangement) =>
+    apply([{ op: 'arrange', ids: editableIds(), how }]);
+
+  /** Arrow-key nudges; consecutive ones undo together. */
+  let nudgeTimer: ReturnType<typeof setTimeout> | undefined;
+  let nudgeKey = 0;
+  const nudge = (dx: number, dy: number) => {
+    clearTimeout(nudgeTimer);
+    nudgeTimer = setTimeout(() => nudgeKey++, 800);
+    return apply(
+      [{ op: 'translate', ids: editableIds(), dx, dy }],
+      `nudge-${nudgeKey}`
+    );
+  };
+
+  const copy = () => {
+    clipboard = editableIds();
+  };
+
+  const paste = async () => {
+    if (clipboard.length === 0) return;
+    const result = await apply([
+      { op: 'duplicate', ids: clipboard, dx: 0, dy: 0 },
+    ]);
+    await selectCreated(result);
+  };
+
+  /** Cut layers stay pasteable: the engine can copy a deleted layer. */
+  const cut = async () => {
+    copy();
+    if (clipboard.length === 0) return;
+    await apply([{ op: 'delete', ids: clipboard }]);
+    viewer.select([]);
+  };
+
+  // ---- drags ---------------------------------------------------------------
+
+  /** A move drag: offsets accumulate; one engine step at a time. */
+  const startMove = (targets: string[]) => {
+    const key = `drag-${++dragKey}`;
+    let applied = { x: 0, y: 0 };
+    let wanted = { x: 0, y: 0 };
+    let running = false;
+    const pump = async () => {
+      if (running) return;
+      running = true;
+      while (wanted.x !== applied.x || wanted.y !== applied.y) {
+        const dx = wanted.x - applied.x;
+        const dy = wanted.y - applied.y;
+        applied = { ...wanted };
+        await apply([{ op: 'translate', ids: targets, dx, dy }], key);
+      }
+      running = false;
+    };
+    return {
+      /** Total page-space offset from the drag's start. */
+      to(dx: number, dy: number) {
+        wanted = { x: dx, y: dy };
+        void pump();
+      },
+      async end() {
+        await pump();
+        await queue;
+      },
+    };
+  };
+
+  /** A resize drag on one layer: new page bounds → position and size. */
+  const startResize = (info: NodeInfo, start: Rect) => {
+    const key = `resize-${++dragKey}`;
+    let wanted: Rect | undefined;
+    let running = false;
+    const pump = async () => {
+      if (running) return;
+      running = true;
+      while (wanted) {
+        const r = wanted;
+        wanted = undefined;
+        await apply(
+          [
+            {
+              op: 'set',
+              ids: [info.id],
+              props: {
+                x: info.x + (r.x - start.x),
+                y: info.y + (r.y - start.y),
+                width: Math.max(1, r.w),
+                height: Math.max(1, r.h),
+              },
+            },
+          ],
+          key
+        );
+      }
+      running = false;
+    };
+    return {
+      to(rect: Rect) {
+        wanted = rect;
+        void pump();
+      },
+      async end() {
+        await pump();
+        await queue;
+      },
+    };
+  };
+
+  // ---- creation ------------------------------------------------------------
+
+  /**
+   * Creates a layer of `tool`'s kind over a page rectangle, inside the
+   * frame under its start when there is one (as Figma does), and selects
+   * it. Returns the new layer's id.
+   */
+  const create = async (
+    tool: ShapeTool,
+    rect: Rect,
+    parent: string
+  ): Promise<string | undefined> => {
+    const isText = tool === 'text';
+    const result = await apply([
+      {
+        op: 'create',
+        parent,
+        node: {
+          type: TYPE_FOR_TOOL[tool],
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.max(1, Math.round(rect.w)),
+          height: Math.max(1, Math.round(rect.h)),
+          props: isText ? { characters: '', fontSize: 12 } : undefined,
+        },
+      },
+    ]);
+    await selectCreated(result);
+    return result?.created[0];
+  };
+
+  return {
+    enabled,
+    canUndo,
+    canRedo,
+    saveState,
+    editingText,
+    setEditingText,
+    apply,
+    undo: () => history('undo'),
+    redo: () => history('redo'),
+    setProps,
+    deleteSelection,
+    duplicateSelection,
+    group,
+    ungroup,
+    arrange,
+    nudge,
+    copy,
+    paste,
+    cut,
+    startMove,
+    startResize,
+    create,
+    saveNow,
+    /** The editable subset of the selection. */
+    editableIds,
+    isSelected: (id: string) => viewer.selected().some((s) => s.id === id),
+    selected: (): Selected[] => viewer.selected(),
+  };
+}
+
+export type FigEditor = ReturnType<typeof createFigEditor>;

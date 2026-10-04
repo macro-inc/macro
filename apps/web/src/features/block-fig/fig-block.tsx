@@ -26,7 +26,7 @@ import { useShareModal } from '@core/component/TopBar/shareModal';
 import { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { blockMetadataSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
+import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -46,10 +46,16 @@ import {
 } from 'solid-js';
 import { FigViewerProvider } from './context/fig-viewer-context';
 import type { FigData } from './definition';
+import { saveFigFile } from './queries/fig-file';
 import { FigViewer } from './views/fig-viewer';
 
 /** Opens the file in the engine and mounts the viewer once ready. */
-function FigHost(props: { bytes: ArrayBuffer; fileName: () => string }) {
+function FigHost(props: {
+  bytes: ArrayBuffer;
+  fileName: () => string;
+  documentId: string;
+  canEdit: () => boolean;
+}) {
   const [engine, setEngine] = createSignal<FigEngine>();
   const [failure, setFailure] = createSignal<string>();
   onMount(() => {
@@ -102,6 +108,8 @@ function FigHost(props: { bytes: ArrayBuffer; fileName: () => string }) {
               download: (blob, name) => void downloadFile(blob, name),
               notifyError: (message) => toast.failure(message),
               notifyInfo: (message) => toast.success(message),
+              canEdit: props.canEdit,
+              save: (bytes) => saveFigFile(props.documentId, bytes),
             }}
           >
             <FigViewer />
@@ -130,6 +138,7 @@ export default function FigBlock(props: { share?: string }) {
   const name = useBlockDocumentName('Design');
   const downloadName = useBlockDocumentDownloadName();
   const permissions = useGetPermissions();
+  const canEdit = useCanEdit();
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'fig',
@@ -208,6 +217,8 @@ export default function FigBlock(props: { share?: string }) {
                   <FigHost
                     bytes={bytes()}
                     fileName={() => name() ?? 'Design'}
+                    documentId={documentId}
+                    canEdit={canEdit}
                   />
                 )}
               </Show>

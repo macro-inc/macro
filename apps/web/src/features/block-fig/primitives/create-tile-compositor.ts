@@ -15,6 +15,8 @@
  *   during long gestures, and exact-scale tiles are fetched once the view
  *   settles.
  * - Requests that fall out of view before they start are cancelled.
+ * - After an edit, tiles in the changed area are re-rendered while the old
+ *   ones stay on screen, so editing never flashes.
  */
 
 import type {
@@ -38,6 +40,8 @@ interface Entry {
   key: TileKey;
   bitmap?: ImageBitmap;
   pending?: PendingTile;
+  /** The bitmap predates an edit in its area: shown until replaced. */
+  stale?: boolean;
   lastUsed: number;
   pinned: boolean;
 }
@@ -96,6 +100,58 @@ export function createTileCompositor(options: TileCompositorOptions) {
     }
   };
 
+  const render = (entry: Entry, priority: number) => {
+    if (!page) return;
+    const rect = tileRect(entry.key);
+    const pending = engine.render({
+      page: page.page,
+      x: rect.x,
+      y: rect.y,
+      scale: entry.key.scale,
+      width: TILE,
+      height: TILE,
+      outline: page.outline,
+      priority,
+    });
+    entry.pending = pending;
+    const id = tileId(entry.key);
+    const forGeneration = generation;
+    pending.promise
+      .then((result: TileResult | null) => {
+        // Superseded (an edit re-requested it) or cancelled.
+        const current = entry.pending?.id === pending.id;
+        if (!result) {
+          if (current) {
+            entry.pending = undefined;
+            if (!entry.bitmap && cache.get(id) === entry) cache.delete(id);
+          }
+          return;
+        }
+        if (
+          disposed ||
+          !current ||
+          forGeneration !== generation ||
+          cache.get(id) !== entry
+        ) {
+          result.bitmap.close();
+          return;
+        }
+        entry.bitmap?.close();
+        entry.bitmap = result.bitmap;
+        entry.pending = undefined;
+        entry.stale = false;
+        stats.rendered++;
+        stats.millis += result.millis;
+        evict();
+        options.onTile();
+      })
+      .catch(() => {
+        if (entry.pending?.id !== pending.id) return;
+        entry.pending = undefined;
+        if (!entry.bitmap && cache.get(id) === entry) cache.delete(id);
+      });
+  };
+
   const request = (key: TileKey, priority: number, pinned = false) => {
     if (!page) return;
     const id = tileId(key);
@@ -103,48 +159,13 @@ export function createTileCompositor(options: TileCompositorOptions) {
     if (existing) {
       existing.lastUsed = ++clock;
       existing.pinned ||= pinned;
+      if (existing.stale && !existing.pending) render(existing, priority);
       return;
     }
     if (page.content && !tileTouches(key, page.content)) return;
-    const rect = tileRect(key);
-    const pending = engine.render({
-      page: page.page,
-      x: rect.x,
-      y: rect.y,
-      scale: key.scale,
-      width: TILE,
-      height: TILE,
-      outline: page.outline,
-      priority,
-    });
-    const entry: Entry = { key, pending, lastUsed: ++clock, pinned };
+    const entry: Entry = { key, lastUsed: ++clock, pinned };
     cache.set(id, entry);
-    const forGeneration = generation;
-    pending.promise
-      .then((result: TileResult | null) => {
-        if (!result) {
-          // Cancelled before it started.
-          if (cache.get(id) === entry) cache.delete(id);
-          return;
-        }
-        if (
-          disposed ||
-          forGeneration !== generation ||
-          cache.get(id) !== entry
-        ) {
-          result.bitmap.close();
-          return;
-        }
-        entry.bitmap = result.bitmap;
-        entry.pending = undefined;
-        stats.rendered++;
-        stats.millis += result.millis;
-        evict();
-        options.onTile();
-      })
-      .catch(() => {
-        if (cache.get(id) === entry) cache.delete(id);
-      });
+    render(entry, priority);
   };
 
   const overviewScale = () => {
@@ -171,7 +192,12 @@ export function createTileCompositor(options: TileCompositorOptions) {
     for (const [id, e] of cache) {
       if (e.pending && !e.pinned && !wanted.has(id)) {
         cancel.push(e.pending.id);
-        cache.delete(id);
+        e.pending = undefined;
+        // A stale tile out of view is dropped rather than kept wrong.
+        if (!e.bitmap || e.stale) {
+          e.bitmap?.close();
+          cache.delete(id);
+        }
       }
     }
     engine.cancel(cancel);
@@ -217,6 +243,37 @@ export function createTileCompositor(options: TileCompositorOptions) {
       cache.clear();
       generation++;
       page = next;
+      requestOverview();
+      if (lastView) schedule(lastView, true);
+    },
+
+    /**
+     * Marks tiles touching a page rectangle as changed: visible ones are
+     * re-rendered (the old pixels stay up meanwhile), others dropped.
+     */
+    invalidate(rect: Rect) {
+      const cancel: number[] = [];
+      for (const [id, e] of cache) {
+        if (!tileTouches(e.key, rect)) continue;
+        if (e.pending) {
+          cancel.push(e.pending.id);
+          e.pending = undefined;
+        }
+        if (e.bitmap) e.stale = true;
+        else cache.delete(id);
+      }
+      engine.cancel(cancel);
+      if (page && page.content) {
+        // Edits can grow the page's content beyond its old bounds.
+        page = { ...page, content: unionContent(page.content, rect) };
+      }
+      requestOverview();
+      if (lastView) schedule(lastView, true);
+    },
+
+    /** New content bounds for the same page (after edits). */
+    setContent(content: Rect | undefined) {
+      if (page) page = { ...page, content };
       requestOverview();
       if (lastView) schedule(lastView, true);
     },
@@ -303,6 +360,17 @@ export function createTileCompositor(options: TileCompositorOptions) {
       }
       cache.clear();
     },
+  };
+}
+
+function unionContent(a: Rect, b: Rect): Rect {
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  return {
+    x,
+    y,
+    w: Math.max(a.x + a.w, b.x + b.w) - x,
+    h: Math.max(a.y + a.h, b.y + b.h) - y,
   };
 }
 

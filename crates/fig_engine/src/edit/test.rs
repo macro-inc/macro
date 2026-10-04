@@ -331,3 +331,20 @@ fn fractional_positions_sort_between() {
         assert_eq!(between(lo, Some(hi)), None, "{lo:?} {hi:?}");
     }
 }
+
+#[test]
+fn pastes_cut_layers_where_they_were() {
+    let (mut doc, mut h) = open();
+    h.apply(&mut doc, &ops(r#"[{"op":"delete","ids":["1:3"]}]"#), None)
+        .unwrap();
+    assert!(names(&doc, "1:2").is_empty());
+    let pasted = h
+        .apply(
+            &mut doc,
+            &ops(r#"[{"op":"duplicate","ids":["1:3"]}]"#),
+            None,
+        )
+        .unwrap();
+    assert_eq!(names(&doc, "1:2"), ["Red"]);
+    assert_eq!(origin(&doc, &pasted.created[0]), Vec2::new(10.0, 20.0));
+}

@@ -4,7 +4,7 @@
  */
 
 import { IS_MAC } from '@core/constant/isMac';
-import type { NodeInfo } from '@core/fig-engine/types';
+import type { NodeInfo, Rect } from '@core/fig-engine/types';
 import {
   createEffect,
   createSignal,
@@ -20,9 +20,15 @@ import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
 import { zoomLabel } from '../core/camera';
 import { stepPage } from '../core/pages';
-import { shortcutAction, type ViewerAction } from '../core/shortcuts';
+import {
+  EDIT_ACTIONS,
+  shortcutAction,
+  type ViewerAction,
+} from '../core/shortcuts';
+import { createFigEditor } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { LayersPanel } from './layers-panel';
+import { TextEditor } from './text-editor';
 import { ViewerCanvas } from './viewer-canvas';
 
 const safeName = (name: string) =>
@@ -33,6 +39,15 @@ export function FigViewer() {
   const { engine } = context;
   const viewer = createFigViewer({
     engine,
+    notifyError: context.notifyError,
+  });
+  let invalidate: ((rect: Rect) => void) | undefined;
+  const editor = createFigEditor({
+    engine,
+    viewer,
+    canEdit: () => context.canEdit?.() ?? false,
+    save: context.save,
+    onDirty: (rect) => invalidate?.(rect),
     notifyError: context.notifyError,
   });
 
@@ -50,10 +65,10 @@ export function FigViewer() {
       root.focus({ preventScroll: true });
   });
 
-  // The design panel follows a single selection.
+  // The design panel follows a single selection (and edits to it).
   let infoRequest = 0;
   createEffect(
-    on(viewer.selected, (selected) => {
+    on([viewer.selected, viewer.editVersion], ([selected]) => {
       const request = ++infoRequest;
       if (selected.length !== 1) {
         setInfo(undefined);
@@ -171,7 +186,58 @@ export function FigViewer() {
         queueMicrotask(() => searchInput?.focus());
       })
       .with('show-shortcuts', () => setShowShortcuts((s) => !s))
+      .with('tool-frame', () => viewer.setTool('frame'))
+      .with('tool-rectangle', () => viewer.setTool('rectangle'))
+      .with('tool-ellipse', () => viewer.setTool('ellipse'))
+      .with('tool-text', () => viewer.setTool('text'))
+      .with('undo', () => editor.undo())
+      .with('redo', () => editor.redo())
+      .with('delete', () => void editor.deleteSelection())
+      .with('duplicate', () => void editor.duplicateSelection())
+      .with('copy', () => editor.copy())
+      .with('cut', () => void editor.cut())
+      .with('paste', () => void editor.paste())
+      .with('group', () => void editor.group())
+      .with('ungroup', () => void editor.ungroup())
+      .with('frame-selection', () => void editor.group(true))
+      .with('bring-forward', () => void editor.arrange('forward'))
+      .with('send-backward', () => void editor.arrange('backward'))
+      .with('bring-to-front', () => void editor.arrange('front'))
+      .with('send-to-back', () => void editor.arrange('back'))
+      .with('toggle-visible', () => {
+        const visible = info()?.visible ?? true;
+        void editor.setProps({ visible: !visible });
+      })
+      .with('toggle-locked', () => {
+        const locked = info()?.locked ?? false;
+        void editor.setProps({ locked: !locked });
+      })
+      .with('rename', () => viewer.requestRename())
+      .with('nudge-left', () => void editor.nudge(-1, 0))
+      .with('nudge-right', () => void editor.nudge(1, 0))
+      .with('nudge-up', () => void editor.nudge(0, -1))
+      .with('nudge-down', () => void editor.nudge(0, 1))
+      .with('nudge-left-10', () => void editor.nudge(-10, 0))
+      .with('nudge-right-10', () => void editor.nudge(10, 0))
+      .with('nudge-up-10', () => void editor.nudge(0, -10))
+      .with('nudge-down-10', () => void editor.nudge(0, 10))
       .exhaustive();
+
+  /** Enter on a lone text layer types into it, as in Figma. */
+  const enterAction = (action: ViewerAction): ViewerAction | 'edit-text' => {
+    const i = info();
+    if (
+      action === 'select-children' &&
+      editor.enabled() &&
+      viewer.selected().length === 1 &&
+      i?.type === 'TEXT' &&
+      !i.id.startsWith('I')
+    )
+      return 'edit-text';
+    return action;
+  };
+
+  const [textEditing, setTextEditing] = createSignal<string>();
 
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
@@ -185,9 +251,12 @@ export function FigViewer() {
     if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(true);
     const action = shortcutAction(e, IS_MAC);
     if (!action) return;
+    if (EDIT_ACTIONS.has(action) && !editor.enabled()) return;
     e.preventDefault();
     e.stopPropagation();
-    run(action);
+    const resolved = enterAction(action);
+    if (resolved === 'edit-text') setTextEditing(info()?.id);
+    else run(resolved);
   };
 
   const onKeyUp = (e: KeyboardEvent) => {
@@ -292,7 +361,27 @@ export function FigViewer() {
           spaceHeld={spaceHeld}
           altHeld={altHeld}
           deepHeld={deepHeld}
+          editor={editor}
+          info={info}
+          onEditText={(id) => setTextEditing(id)}
+          onInvalidator={(fn) => {
+            invalidate = fn;
+          }}
         >
+          <Show when={textEditing()}>
+            {(id) => (
+              <TextEditor
+                id={id()}
+                viewer={viewer}
+                editor={editor}
+                engine={engine}
+                onDone={() => {
+                  setTextEditing(undefined);
+                  root.focus({ preventScroll: true });
+                }}
+              />
+            )}
+          </Show>
           <Show when={viewer.loadingPage()}>
             <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-muted text-sm">
               Loading page…
@@ -302,6 +391,12 @@ export function FigViewer() {
             <ViewerToolbar
               tool={viewer.tool()}
               onTool={viewer.setTool}
+              editable={editor.enabled()}
+              saveState={editor.saveState()}
+              canUndo={editor.canUndo()}
+              canRedo={editor.canRedo()}
+              onUndo={() => editor.undo()}
+              onRedo={() => editor.redo()}
               zoomLabel={zoomLabel(viewer.camera().zoom)}
               zoomItems={zoomItems()}
               onShortcuts={() => setShowShortcuts((s) => !s)}
@@ -319,6 +414,15 @@ export function FigViewer() {
         <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
           <DesignPanel
             info={info()}
+            onPatch={
+              editor.enabled()
+                ? (patch, live) =>
+                    void editor.setProps(
+                      patch,
+                      live ? `panel-${Object.keys(patch).join(',')}` : undefined
+                    )
+                : undefined
+            }
             selectionCount={viewer.selected().length}
             page={viewer.pages[viewer.page()]}
             onExport={(scale) => void exportSelection(scale)}

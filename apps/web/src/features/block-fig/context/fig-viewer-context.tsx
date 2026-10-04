@@ -12,6 +12,10 @@ export interface FigViewerContext {
   download: (blob: Blob, name: string) => void;
   notifyError: (message: string) => void;
   notifyInfo: (message: string) => void;
+  /** Whether the person may edit the file. */
+  canEdit?: () => boolean;
+  /** Stores the edited `.fig` as a new version. */
+  save?: (bytes: Uint8Array) => Promise<void>;
 }
 
 const Context = createContext<FigViewerContext>();

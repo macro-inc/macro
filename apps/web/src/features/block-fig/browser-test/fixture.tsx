@@ -1,8 +1,10 @@
 /**
  * Mounts the real `.fig` viewer (wasm engine in its workers) without the
  * app: no authentication, routes, or document storage. `?file=<name>` opens
- * a file from the fixture corpus; the header also opens a local file.
- * `window.figFixture` exposes the engine and reported messages to tests.
+ * a file from the fixture corpus, `?new` a blank design; the header also
+ * opens a local file. `?edit` makes it editable, with saves kept in memory
+ * (`?reload` reopens each save, checking it round-trips).
+ * `window.figFixture` exposes the engine, saves, and reported messages.
  */
 
 import '@fontsource-variable/inter';
@@ -22,6 +24,8 @@ declare global {
       errors: () => string[];
       notices: () => string[];
       downloads: () => { name: string; size: number }[];
+      /** Every saved file, oldest first. */
+      saves: () => Uint8Array[];
     };
   }
 }
@@ -36,12 +40,15 @@ function Fixture() {
   const [downloads, setDownloads] = createSignal<
     { name: string; size: number }[]
   >([]);
+  const [saves, setSaves] = createSignal<Uint8Array[]>([]);
+  const editable = params.has('edit') || params.has('new');
 
   window.figFixture = {
     engine,
     errors,
     notices,
     downloads,
+    saves,
   };
 
   const open = async (bytes: ArrayBuffer, fileName: string) => {
@@ -62,7 +69,11 @@ function Fixture() {
   };
 
   const file = params.get('file');
-  if (file) {
+  if (params.has('new')) {
+    void FigEngine.blank('Untitled')
+      .then((bytes) => open(bytes.slice().buffer, 'Untitled'))
+      .catch((e: unknown) => setError(String(e)));
+  } else if (file) {
     void fetch(`${__FIG_CORPUS_URL__}${file}`)
       .then((r) => {
         if (!r.ok) throw new Error(`${file}: ${r.status}`);
@@ -107,6 +118,14 @@ function Fixture() {
                   setDownloads((d) => [...d, { name: n, size: blob.size }]),
                 notifyError: (m) => setErrors((x) => [...x, m]),
                 notifyInfo: (m) => setNotices((x) => [...x, m]),
+                canEdit: () => editable,
+                save: async (bytes) => {
+                  if (params.has('reload'))
+                    await FigEngine.open(bytes.slice().buffer).then((e) =>
+                      e.close()
+                    );
+                  setSaves((x) => [...x, bytes]);
+                },
               }}
             >
               <FigViewer />

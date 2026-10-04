@@ -1,12 +1,14 @@
 /**
  * The canvas: rendered tiles underneath, the canvas UI on top, and Figma's
  * pointer gestures (scroll to pan, ⌘/Ctrl+scroll or pinch to zoom, Space or
- * middle-drag to pan, click and marquee to select).
+ * middle-drag to pan, click and marquee to select). When the file is
+ * editable: drag to move (⌥ to copy, ⇧ to constrain), the selection's
+ * handles to resize, and the shape tools to draw.
  */
 
 import { IS_MAC } from '@core/constant/isMac';
 import type { FigEngine } from '@core/fig-engine/client';
-import type { Rect } from '@core/fig-engine/types';
+import type { LayerRow, NodeInfo, Rect } from '@core/fig-engine/types';
 import {
   createEffect,
   createMemo,
@@ -18,6 +20,7 @@ import {
 import { drawOverlay, type OverlayModel } from '../components/overlay';
 import { type Point, screenToPage } from '../core/camera';
 import { measure } from '../core/measure';
+import type { FigEditor, ShapeTool } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 import { createTileCompositor } from '../primitives/create-tile-compositor';
 
@@ -33,14 +36,89 @@ function luminance(rgba: [number, number, number, number]) {
   return 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2];
 }
 
+type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+const HANDLE_CURSORS: Record<Handle, string> = {
+  nw: 'nwse-resize',
+  se: 'nwse-resize',
+  ne: 'nesw-resize',
+  sw: 'nesw-resize',
+  n: 'ns-resize',
+  s: 'ns-resize',
+  e: 'ew-resize',
+  w: 'ew-resize',
+};
+
+/** Distance (CSS px) within which a handle (or edge) takes a press. */
+const HANDLE_SLOP = 6;
+
+type Pressed = { row: LayerRow; wasSelected: boolean } | undefined;
+
 type Drag =
   | { kind: 'pan'; last: Point }
-  | { kind: 'select'; start: Point; current: Point; active: boolean }
+  | {
+      kind: 'press';
+      start: Point;
+      current: Point;
+      active: boolean;
+      /** The pressed layer, once the hit test answers. */
+      pressed: Promise<Pressed>;
+      resolved?: Pressed;
+      mover?: ReturnType<FigEditor['startMove']>;
+      marquee: boolean;
+      additive: boolean;
+    }
+  | { kind: 'create'; tool: ShapeTool; start: Point; current: Point }
+  | {
+      kind: 'resize';
+      handle: Handle;
+      start: Rect;
+      resizer: ReturnType<FigEditor['startResize']>;
+    }
   | {
       kind: 'pinch';
       distance: number;
       center: Point;
     };
+
+const isShapeTool = (tool: string): tool is ShapeTool =>
+  tool === 'frame' ||
+  tool === 'rectangle' ||
+  tool === 'ellipse' ||
+  tool === 'text';
+
+/** New bounds for dragging `handle` of `start` to page point `p`. */
+export function resizeRect(
+  start: Rect,
+  handle: Handle,
+  p: Point,
+  keepAspect: boolean
+): Rect {
+  let x0 = start.x;
+  let y0 = start.y;
+  let x1 = start.x + start.w;
+  let y1 = start.y + start.h;
+  if (handle.includes('w')) x0 = Math.min(p.x, x1 - 1);
+  if (handle.includes('e')) x1 = Math.max(p.x, x0 + 1);
+  if (handle.includes('n')) y0 = Math.min(p.y, y1 - 1);
+  if (handle.includes('s')) y1 = Math.max(p.y, y0 + 1);
+  if (keepAspect && start.w > 0 && start.h > 0 && handle.length === 2) {
+    const ratio = start.w / start.h;
+    const w = x1 - x0;
+    const h = y1 - y0;
+    if (w / h > ratio) {
+      const nh = w / ratio;
+      if (handle.includes('n')) y0 = y1 - nh;
+      else y1 = y0 + nh;
+    } else {
+      const nw = h * ratio;
+      if (handle.includes('w')) x0 = x1 - nw;
+      else x1 = x0 + nw;
+    }
+  }
+  const r = (v: number) => Math.round(v);
+  return { x: r(x0), y: r(y0), w: r(x1) - r(x0), h: r(y1) - r(y0) };
+}
 
 export function ViewerCanvas(props: {
   viewer: FigViewer;
@@ -51,6 +129,14 @@ export function ViewerCanvas(props: {
   altHeld: () => boolean;
   /** ⌘/Ctrl is held (deep select). */
   deepHeld: () => boolean;
+  /** Editing, when the file is editable. */
+  editor?: FigEditor;
+  /** The single selected layer's properties (for resizing). */
+  info?: () => NodeInfo | undefined;
+  /** Start typing into a text layer. */
+  onEditText?: (id: string) => void;
+  /** Called by the canvas with its invalidation hook. */
+  onInvalidator?: (invalidate: (rect: Rect) => void) => void;
   children?: JSX.Element;
 }) {
   const viewer = props.viewer;
@@ -83,7 +169,10 @@ export function ViewerCanvas(props: {
     engine: props.engine,
     onTile: requestDraw,
   });
-  // TEMP debug
+  props.onInvalidator?.((rect) => {
+    compositor.invalidate(rect);
+    requestDraw();
+  });
   onCleanup(() => {
     compositor.dispose();
     if (frame !== undefined) cancelAnimationFrame(frame);
@@ -99,17 +188,25 @@ export function ViewerCanvas(props: {
   });
 
   // The compositor and canvases are external systems synced from state.
+  let shownPage: { page: number; outline: boolean } | undefined;
   createEffect(
     on(
       () => [viewer.layout(), viewer.outlineView()] as const,
       ([layout, outline]) => {
         if (!layout) return;
-        compositor.setPage({
-          page: viewer.page(),
-          outline,
-          content: viewer.contentBounds(),
-          background: cssColor(background()),
-        });
+        const page = viewer.page();
+        if (shownPage?.page === page && shownPage.outline === outline) {
+          // Same page after an edit: keep the tiles, update the bounds.
+          compositor.setContent(viewer.contentBounds());
+        } else {
+          shownPage = { page, outline };
+          compositor.setPage({
+            page,
+            outline,
+            content: viewer.contentBounds(),
+            background: cssColor(background()),
+          });
+        }
         requestDraw();
       }
     )
@@ -233,6 +330,52 @@ export function ViewerCanvas(props: {
   };
 
   const panning = () => viewer.tool() === 'hand' || props.spaceHeld();
+  const editing = () => !!props.editor?.enabled();
+
+  const pageAt = (p: Point) => screenToPage(viewer.camera(), p);
+
+  /** The resize handle (or edge) of a single selection under a point. */
+  const handleAt = (p: Point): Handle | undefined => {
+    if (!editing() || viewer.selected().length !== 1) return undefined;
+    const info = props.info?.();
+    const b = viewer.selectionBounds();
+    if (!info || !b || Math.abs(info.rotation) > 0.01) return undefined;
+    if (info.id.startsWith('I') || info.locked) return undefined;
+    const c = viewer.camera();
+    const x0 = (b.x - c.x) * c.zoom;
+    const y0 = (b.y - c.y) * c.zoom;
+    const x1 = x0 + b.w * c.zoom;
+    const y1 = y0 + b.h * c.zoom;
+    const near = (a: number, v: number) => Math.abs(a - v) <= HANDLE_SLOP;
+    const inX = p.x >= x0 - HANDLE_SLOP && p.x <= x1 + HANDLE_SLOP;
+    const inY = p.y >= y0 - HANDLE_SLOP && p.y <= y1 + HANDLE_SLOP;
+    const w = near(p.x, x0) && inY;
+    const e = near(p.x, x1) && inY;
+    const n = near(p.y, y0) && inX;
+    const s = near(p.y, y1) && inX;
+    if (n && w) return 'nw';
+    if (n && e) return 'ne';
+    if (s && w) return 'sw';
+    if (s && e) return 'se';
+    // Edges only when the box is big enough to grab inside it.
+    if (b.w * c.zoom < 12 || b.h * c.zoom < 12) return undefined;
+    if (n) return 'n';
+    if (s) return 's';
+    if (w) return 'w';
+    if (e) return 'e';
+    return undefined;
+  };
+
+  const [cursorOverride, setCursorOverride] = (() => {
+    let value: string | undefined;
+    return [
+      () => value,
+      (v: string | undefined) => {
+        value = v;
+        if (host) host.style.cursor = cursor();
+      },
+    ] as const;
+  })();
 
   const onPointerDown = (e: PointerEvent) => {
     host.focus({ preventScroll: true });
@@ -254,14 +397,83 @@ export function ViewerCanvas(props: {
       return;
     }
     if (e.button !== 0) return;
-    drag = { kind: 'select', start: p, current: p, active: false };
+    const tool = viewer.tool();
+    if (editing() && isShapeTool(tool)) {
+      drag = { kind: 'create', tool, start: p, current: p };
+      return;
+    }
+    const handle = handleAt(p);
+    const info = props.info?.();
+    const bounds = viewer.selectionBounds();
+    if (handle && info && bounds && props.editor) {
+      drag = {
+        kind: 'resize',
+        handle,
+        start: bounds,
+        resizer: props.editor.startResize(info, bounds),
+      };
+      return;
+    }
+    const additive = e.shiftKey;
+    const pressed = viewer.pressAt(p, {
+      deep: IS_MAC ? e.metaKey : e.ctrlKey,
+      additive,
+    });
+    const press: Extract<Drag, { kind: 'press' }> = {
+      kind: 'press',
+      start: p,
+      current: p,
+      active: false,
+      pressed,
+      marquee: false,
+      additive,
+    };
+    drag = press;
+    void pressed.then((r) => {
+      press.resolved = r;
+    });
+  };
+
+  /** Starts moving the selection (⌥: a copy of it). */
+  const beginMove = async (
+    press: Extract<Drag, { kind: 'press' }>,
+    copy: boolean
+  ) => {
+    const editor = props.editor;
+    if (!editor) return;
+    if (copy) await editor.duplicateSelection();
+    const ids = editor.editableIds();
+    if (ids.length === 0) return;
+    press.mover = editor.startMove(ids);
+    movePress(press, press.current, false);
+  };
+
+  const movePress = (
+    press: Extract<Drag, { kind: 'press' }>,
+    p: Point,
+    constrain: boolean
+  ) => {
+    if (!press.mover) return;
+    const z = viewer.camera().zoom;
+    let dx = (p.x - press.start.x) / z;
+    let dy = (p.y - press.start.y) / z;
+    if (constrain) {
+      if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
+    // Whole pixels, as with Figma's pixel snapping.
+    press.mover.to(Math.round(dx), Math.round(dy));
   };
 
   const onPointerMove = (e: PointerEvent) => {
     const p = local(e);
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
     if (!drag) {
-      if (e.pointerType !== 'touch' && !panning()) hoverAt(p);
+      if (e.pointerType !== 'touch' && !panning()) {
+        const handle = handleAt(p);
+        setCursorOverride(handle ? HANDLE_CURSORS[handle] : undefined);
+        if (!isShapeTool(viewer.tool())) hoverAt(p);
+      }
       return;
     }
     if (drag.kind === 'pinch' && pointers.size >= 2) {
@@ -274,20 +486,80 @@ export function ViewerCanvas(props: {
     } else if (drag.kind === 'pan') {
       viewer.pan(p.x - drag.last.x, p.y - drag.last.y);
       drag = { kind: 'pan', last: p };
-    } else if (drag.kind === 'select') {
+    } else if (drag.kind === 'create') {
+      drag.current = p;
+      marquee = shapeRect(drag.start, p, e.shiftKey);
+      requestDraw();
+    } else if (drag.kind === 'resize') {
+      const rect = resizeRect(drag.start, drag.handle, pageAt(p), e.shiftKey);
+      drag.resizer.to(rect);
+    } else if (drag.kind === 'press') {
+      const press = drag;
+      press.current = p;
       const moved =
-        Math.hypot(p.x - drag.start.x, p.y - drag.start.y) > DRAG_THRESHOLD;
-      drag = { ...drag, current: p, active: drag.active || moved };
-      if (drag.active) {
+        Math.hypot(p.x - press.start.x, p.y - press.start.y) > DRAG_THRESHOLD;
+      if (!press.active && moved) {
+        press.active = true;
+        const decide = (r: Pressed) => {
+          // A press on a layer drags it (when editable and unlocked);
+          // anywhere else draws a marquee.
+          if (r && editing() && !r.row.locked && !press.additive)
+            void beginMove(press, e.altKey);
+          else press.marquee = true;
+        };
+        if ('resolved' in press) decide(press.resolved);
+        else void press.pressed.then(decide);
+      }
+      if (press.marquee) {
         marquee = {
-          x: Math.min(drag.start.x, p.x),
-          y: Math.min(drag.start.y, p.y),
-          w: Math.abs(p.x - drag.start.x),
-          h: Math.abs(p.y - drag.start.y),
+          x: Math.min(press.start.x, p.x),
+          y: Math.min(press.start.y, p.y),
+          w: Math.abs(p.x - press.start.x),
+          h: Math.abs(p.y - press.start.y),
         };
         requestDraw();
-      }
+      } else movePress(press, p, e.shiftKey);
     }
+  };
+
+  /** The page rectangle a shape drag covers (⇧: square). */
+  const shapeRect = (a: Point, b: Point, square: boolean): Rect => {
+    let w = b.x - a.x;
+    let h = b.y - a.y;
+    if (square) {
+      const side = Math.max(Math.abs(w), Math.abs(h));
+      w = Math.sign(w || 1) * side;
+      h = Math.sign(h || 1) * side;
+    }
+    return {
+      x: Math.min(a.x, a.x + w),
+      y: Math.min(a.y, a.y + h),
+      w: Math.abs(w),
+      h: Math.abs(h),
+    };
+  };
+
+  const finishCreate = async (
+    d: Extract<Drag, { kind: 'create' }>,
+    shift: boolean
+  ) => {
+    const editor = props.editor;
+    if (!editor) return;
+    const c = viewer.camera();
+    const moved =
+      Math.hypot(d.current.x - d.start.x, d.current.y - d.start.y) >
+      DRAG_THRESHOLD;
+    const screen = shapeRect(d.start, d.current, shift);
+    const a = screenToPage(c, { x: screen.x, y: screen.y });
+    // A click places Figma's default size (text grows as it is typed).
+    const size = d.tool === 'text' ? 1 : 100;
+    const rect = moved
+      ? { x: a.x, y: a.y, w: screen.w / c.zoom, h: screen.h / c.zoom }
+      : { x: a.x, y: a.y, w: size, h: size };
+    const parent = await viewer.containerAt(pageAt(d.start));
+    viewer.setTool('move');
+    const id = await editor.create(d.tool, rect, parent);
+    if (id && d.tool === 'text') props.onEditText?.(id);
   };
 
   const onPointerUp = (e: PointerEvent) => {
@@ -299,8 +571,16 @@ export function ViewerCanvas(props: {
     }
     drag = undefined;
     if (!ended) return;
-    if (ended.kind === 'select') {
-      if (ended.active && marquee) {
+    if (ended.kind === 'create') {
+      marquee = undefined;
+      requestDraw();
+      void finishCreate(ended, e.shiftKey);
+    } else if (ended.kind === 'resize') {
+      void ended.resizer.end();
+    } else if (ended.kind === 'press') {
+      if (ended.mover) {
+        void ended.mover.end();
+      } else if (ended.marquee && marquee) {
         const c = viewer.camera();
         const a = screenToPage(c, { x: marquee.x, y: marquee.y });
         void viewer.marqueeSelect(
@@ -309,23 +589,30 @@ export function ViewerCanvas(props: {
         );
         marquee = undefined;
         requestDraw();
-      } else {
-        void viewer.clickAt(ended.start, {
-          deep: IS_MAC ? e.metaKey : e.ctrlKey,
-          additive: e.shiftKey,
-          double: false,
+      } else if (!ended.active) {
+        // A click on one layer of a multi-selection selects just it.
+        void ended.pressed.then((r) => {
+          if (r?.wasSelected && !ended.additive && viewer.selected().length > 1)
+            void viewer.selectIds([r.row.id]);
         });
       }
     }
   };
 
-  const onDoubleClick = (e: MouseEvent) => {
-    if (panning()) return;
-    void viewer.clickAt(local(e), {
+  const onDoubleClick = async (e: MouseEvent) => {
+    if (panning() || isShapeTool(viewer.tool())) return;
+    await viewer.clickAt(local(e), {
       deep: false,
       additive: false,
       double: true,
     });
+    const sel = viewer.selected();
+    if (editing() && sel.length === 1 && props.info?.()?.id === sel[0].id) {
+      // Double-click on a text layer types into it.
+      const info = props.info?.();
+      if (info?.type === 'TEXT' && !info.id.startsWith('I'))
+        props.onEditText?.(info.id);
+    }
   };
 
   // Wheel must be non-passive to stop the page (and browser zoom) moving.
@@ -375,7 +662,9 @@ export function ViewerCanvas(props: {
   const cursor = () => {
     if (drag?.kind === 'pan') return 'grabbing';
     if (panning()) return 'grab';
-    return 'default';
+    if (editing() && viewer.tool() === 'text') return 'text';
+    if (editing() && isShapeTool(viewer.tool())) return 'crosshair';
+    return cursorOverride() ?? 'default';
   };
 
   return (
@@ -394,7 +683,7 @@ export function ViewerCanvas(props: {
       onPointerLeave={() => {
         if (!drag) hoverAt(undefined);
       }}
-      onDblClick={onDoubleClick}
+      onDblClick={(e) => void onDoubleClick(e)}
       onContextMenu={(e) => e.preventDefault()}
     >
       <canvas ref={tileCanvas} class="absolute inset-0 size-full" />

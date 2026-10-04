@@ -26,7 +26,7 @@ import {
 } from '../core/camera';
 import { clickTarget, doubleClickTarget } from '../core/selection';
 
-export type Tool = 'move' | 'hand';
+export type Tool = 'move' | 'hand' | 'frame' | 'rectangle' | 'ellipse' | 'text';
 
 export interface Selected {
   id: string;
@@ -69,6 +69,10 @@ export function createFigViewer(options: FigViewerOptions) {
   const [collapseSignal, setCollapseSignal] = createSignal(0);
   /** Bumped when the layers panel should reveal the selection. */
   const [revealSignal, setRevealSignal] = createSignal(0);
+  /** Bumped after every edit (layers, properties, and geometry reload). */
+  const [editVersion, setEditVersion] = createSignal(0);
+  /** Bumped to start renaming the selected layer in the layers panel. */
+  const [renameSignal, setRenameSignal] = createSignal(0);
 
   const cameras = new Map<number, Camera>();
   const outlines = new Map<string, { path: string; bounds: Rect }>();
@@ -230,6 +234,50 @@ export function createFigViewer(options: FigViewerOptions) {
     } else select([entry]);
   };
 
+  /**
+   * A press on the canvas, as Figma handles it: an already selected layer
+   * keeps the selection (so a drag moves all of it); anything else selects
+   * as a click would. Returns the pressed layer and whether it was selected
+   * before, or nothing for empty canvas.
+   */
+  const pressAt = async (
+    screen: Point,
+    mods: { deep: boolean; additive: boolean }
+  ): Promise<{ row: LayerRow; wasSelected: boolean } | undefined> => {
+    const chain = await hitChain(screen);
+    const context = { selected: selected() };
+    const target = clickTarget(chain, context, mods.deep);
+    if (!target) {
+      if (!mods.additive) select([]);
+      return undefined;
+    }
+    const wasSelected = selected().some((s) => s.id === target.id);
+    if (wasSelected && !mods.additive) return { row: target, wasSelected };
+    const at = chain.indexOf(target);
+    const entry = { id: target.id, parent: at > 0 ? chain[at - 1].id : null };
+    if (mods.additive) {
+      const current = selected();
+      select(
+        wasSelected
+          ? current.filter((s) => s.id !== entry.id)
+          : [...current, entry]
+      );
+    } else select([entry]);
+    return { row: target, wasSelected };
+  };
+
+  /** The deepest frame-like layer under a page point (new layers go in). */
+  const containerAt = async (pagePoint: Point): Promise<string> => {
+    const chain = await engine.hitTest(page(), pagePoint.x, pagePoint.y, 0);
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const t = chain[i];
+      if (t.id.startsWith('I')) continue;
+      if (t.type === 'FRAME' || t.type === 'SYMBOL' || t.type === 'SECTION')
+        return t.id;
+    }
+    return pages[page()].id;
+  };
+
   let hoverRequest = 0;
   /** Hover feedback: what a click would select. */
   const hoverAt = async (screen: Point | undefined, deep: boolean) => {
@@ -351,6 +399,42 @@ export function createFigViewer(options: FigViewerOptions) {
     selectParent();
   };
 
+  /**
+   * Picks up an edit: the page's frames and bounds, selection geometry,
+   * and hover outlines are reloaded without moving the camera.
+   */
+  const afterEdit = async () => {
+    outlines.clear();
+    setHoverOutline(undefined);
+    const index = page();
+    try {
+      const [next] = await Promise.all([
+        engine.openPage(index),
+        refreshGeometry(selected().map((s) => s.id)),
+      ]);
+      if (index !== page()) return;
+      batch(() => {
+        setLayout(next);
+        setEditVersion((n) => n + 1);
+      });
+    } catch (e) {
+      options.notifyError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  /** Drops selected ids that no longer exist (after undo, say). */
+  const pruneSelection = async () => {
+    const current = selected();
+    if (current.length === 0) return;
+    const rows = await engine.rows(
+      page(),
+      current.map((s) => s.id)
+    );
+    const alive = new Set(rows.map((r) => r.id));
+    if (alive.size !== current.length)
+      select(current.filter((s) => alive.has(s.id)));
+  };
+
   // ---- frames ---------------------------------------------------------
 
   const frameIndex = () => {
@@ -434,6 +518,11 @@ export function createFigViewer(options: FigViewerOptions) {
     collapseSignal,
     collapseLayers: () => setCollapseSignal((n) => n + 1),
     revealSignal,
+    editVersion,
+    renameSignal,
+    requestRename: () => setRenameSignal((n) => n + 1),
+    afterEdit,
+    pruneSelection,
     frameIndex,
     openPage,
     zoomTo,
@@ -447,6 +536,8 @@ export function createFigViewer(options: FigViewerOptions) {
     select,
     selectIds,
     clickAt,
+    pressAt,
+    containerAt,
     hoverAt,
     hoverLayer,
     marqueeSelect,

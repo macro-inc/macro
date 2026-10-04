@@ -40,6 +40,17 @@ export interface TileRequest {
   priority: number;
 }
 
+/** What an edit changed (`EditResult` in the engine). */
+export interface EditResult {
+  created: string[];
+  /** Page area whose pixels may have changed. */
+  dirty: Rect | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  /** Layers were added, removed, or moved between parents. */
+  structure: boolean;
+}
+
 export interface TileResult {
   bitmap: ImageBitmap;
   millis: number;
@@ -132,6 +143,7 @@ export class FigEngine {
   private readonly primary: EngineWorker;
   private readonly helpers: EngineWorker[] = [];
   private readonly placed = new Map<number, EngineWorker>();
+  private readonly starting = new Set<EngineWorker>();
   private closed = false;
   private onFailure?: (error: Error) => void;
 
@@ -140,6 +152,18 @@ export class FigEngine {
     readonly summary: FileSummary
   ) {
     this.primary = primary;
+  }
+
+  /** The bytes of a new, empty design (one page). */
+  static async blank(name: string): Promise<Uint8Array> {
+    const worker = new EngineWorker(() => {});
+    try {
+      const r = await worker.request({ kind: 'blank', name });
+      if (r.kind !== 'saved') throw new Error('unexpected response');
+      return new Uint8Array(r.bytes);
+    } finally {
+      worker.terminate();
+    }
   }
 
   /** Opens a file. `bytes` is copied to each worker; the caller keeps it. */
@@ -170,15 +194,23 @@ export class FigEngine {
     const helper = new EngineWorker(() => {
       const at = this.helpers.indexOf(helper);
       if (at >= 0) this.helpers.splice(at, 1);
+      this.starting.delete(helper);
     });
+    // Edits reach a helper that is still opening through its queue, after
+    // the open, so it never misses one.
+    this.starting.add(helper);
     const copy = bytes.slice(0);
     helper
       .request({ kind: 'open', bytes: copy }, [copy])
       .then(() => {
+        this.starting.delete(helper);
         if (this.closed) helper.terminate();
         else this.helpers.push(helper);
       })
-      .catch(() => helper.terminate());
+      .catch(() => {
+        this.starting.delete(helper);
+        helper.terminate();
+      });
   }
 
   private async query<T>(
@@ -294,6 +326,51 @@ export class FigEngine {
     return new Blob([r.bytes], { type: 'image/png' });
   }
 
+  /**
+   * Applies an edit step on every worker (each holds the document); the
+   * primary's answer is returned. A helper that disagrees is dropped.
+   */
+  private async edit(
+    body: Extract<Body, { kind: 'edit' }>
+  ): Promise<EditResult> {
+    for (const h of [...this.helpers, ...this.starting]) {
+      h.request(body).catch(() => {
+        const at = this.helpers.indexOf(h);
+        if (at >= 0) this.helpers.splice(at, 1);
+        h.terminate();
+      });
+    }
+    const r = await this.primary.request(body);
+    if (r.kind !== 'edit') throw new Error('unexpected response');
+    return JSON.parse(r.json) as EditResult;
+  }
+
+  /** Applies edit operations (see `fig_engine::edit::Op`) as one step. */
+  apply(page: number, ops: unknown[], coalesce?: string): Promise<EditResult> {
+    return this.edit({
+      kind: 'edit',
+      page,
+      action: 'apply',
+      ops: JSON.stringify(ops),
+      coalesce,
+    });
+  }
+
+  undo(page: number): Promise<EditResult> {
+    return this.edit({ kind: 'edit', page, action: 'undo' });
+  }
+
+  redo(page: number): Promise<EditResult> {
+    return this.edit({ kind: 'edit', page, action: 'redo' });
+  }
+
+  /** The edited file as `.fig` bytes. */
+  async save(): Promise<Uint8Array> {
+    const r = await this.primary.request({ kind: 'save' });
+    if (r.kind !== 'saved') throw new Error('unexpected response');
+    return new Uint8Array(r.bytes);
+  }
+
   /** Figma's own thumbnail of the file, when it has one. */
   async thumbnail(): Promise<Blob | null> {
     const r = await this.primary.request({ kind: 'thumbnail' });
@@ -309,6 +386,8 @@ export class FigEngine {
     this.closed = true;
     this.primary.terminate();
     for (const h of this.helpers) h.terminate();
+    for (const h of this.starting) h.terminate();
     this.helpers.length = 0;
+    this.starting.clear();
   }
 }

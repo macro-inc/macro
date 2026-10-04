@@ -176,6 +176,28 @@ async function serve(request: FigRequest) {
       );
       return;
     }
+    case 'edit': {
+      const f = openFile();
+      const json =
+        request.action === 'undo'
+          ? f.undo(request.page)
+          : request.action === 'redo'
+            ? f.redo(request.page)
+            : f.apply(request.page, request.ops ?? '[]', request.coalesce);
+      post({ id: request.id, ok: true, kind: 'edit', json });
+      return;
+    }
+    case 'blank': {
+      const wasm = await loadFigEngineWasm();
+      const bytes = wasm.FigFile.blank(request.name).slice().buffer;
+      post({ id: request.id, ok: true, kind: 'saved', bytes }, [bytes]);
+      return;
+    }
+    case 'save': {
+      const bytes = openFile().save().slice().buffer;
+      post({ id: request.id, ok: true, kind: 'saved', bytes }, [bytes]);
+      return;
+    }
     case 'cancel':
       return;
   }

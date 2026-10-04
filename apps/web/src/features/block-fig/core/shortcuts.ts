@@ -1,5 +1,5 @@
 /**
- * Figma's keyboard shortcuts for viewing a file, as viewer actions.
+ * Figma's keyboard shortcuts for viewing and editing a file, as actions.
  *
  * Digits are matched by physical key (`Digit1`) so ⇧1 works whatever the
  * shifted character is on the keyboard layout.
@@ -33,7 +33,36 @@ export type ViewerAction =
   | 'copy-png'
   | 'export'
   | 'find'
-  | 'show-shortcuts';
+  | 'show-shortcuts'
+  | 'tool-frame'
+  | 'tool-rectangle'
+  | 'tool-ellipse'
+  | 'tool-text'
+  | 'undo'
+  | 'redo'
+  | 'delete'
+  | 'duplicate'
+  | 'copy'
+  | 'cut'
+  | 'paste'
+  | 'group'
+  | 'ungroup'
+  | 'frame-selection'
+  | 'bring-forward'
+  | 'send-backward'
+  | 'bring-to-front'
+  | 'send-to-back'
+  | 'toggle-visible'
+  | 'toggle-locked'
+  | 'rename'
+  | 'nudge-left'
+  | 'nudge-right'
+  | 'nudge-up'
+  | 'nudge-down'
+  | 'nudge-left-10'
+  | 'nudge-right-10'
+  | 'nudge-up-10'
+  | 'nudge-down-10';
 
 export interface KeyInput {
   key: string;
@@ -66,12 +95,32 @@ export function shortcutAction(
     return undefined;
   }
 
+  if (mod && e.altKey) {
+    if (e.code === 'KeyG') return 'frame-selection';
+    if (e.code === 'BracketRight') return 'bring-to-front';
+    if (e.code === 'BracketLeft') return 'send-to-back';
+    return undefined;
+  }
+
   if (mod && !e.altKey) {
     if (e.shiftKey) {
       if (e.code === 'KeyC') return 'copy-png';
       if (e.code === 'KeyE') return 'export';
+      if (e.code === 'KeyZ') return 'redo';
+      if (e.code === 'KeyG') return 'ungroup';
+      if (e.code === 'KeyH') return 'toggle-visible';
+      if (e.code === 'KeyL') return 'toggle-locked';
       return undefined;
     }
+    if (e.code === 'KeyZ') return 'undo';
+    if (e.code === 'KeyD') return 'duplicate';
+    if (e.code === 'KeyC') return 'copy';
+    if (e.code === 'KeyX') return 'cut';
+    if (e.code === 'KeyV') return 'paste';
+    if (e.code === 'KeyG') return 'group';
+    if (e.code === 'KeyR') return 'rename';
+    if (e.code === 'BracketRight') return 'bring-forward';
+    if (e.code === 'BracketLeft') return 'send-backward';
     if (e.code === 'Equal' || e.code === 'NumpadAdd' || key === '+')
       return 'zoom-in';
     if (e.code === 'Minus' || e.code === 'NumpadSubtract') return 'zoom-out';
@@ -107,6 +156,14 @@ export function shortcutAction(
         return 'zoom-in';
       case 'Slash':
         return 'show-shortcuts';
+      case 'ArrowLeft':
+        return 'nudge-left-10';
+      case 'ArrowRight':
+        return 'nudge-right-10';
+      case 'ArrowUp':
+        return 'nudge-up-10';
+      case 'ArrowDown':
+        return 'nudge-down-10';
     }
     if (key === '?') return 'show-shortcuts';
     if (key === '+') return 'zoom-in';
@@ -137,9 +194,61 @@ export function shortcutAction(
       return 'next-page';
     case 'PageUp':
       return 'previous-page';
+    case 'f':
+    case 'a':
+      return 'tool-frame';
+    case 'r':
+      return 'tool-rectangle';
+    case 'o':
+      return 'tool-ellipse';
+    case 't':
+      return 'tool-text';
+    case 'Delete':
+    case 'Backspace':
+      return 'delete';
+    case 'ArrowLeft':
+      return 'nudge-left';
+    case 'ArrowRight':
+      return 'nudge-right';
+    case 'ArrowUp':
+      return 'nudge-up';
+    case 'ArrowDown':
+      return 'nudge-down';
   }
   return undefined;
 }
+
+/** Actions that change the file (ignored when it is read-only). */
+export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
+  'tool-frame',
+  'tool-rectangle',
+  'tool-ellipse',
+  'tool-text',
+  'undo',
+  'redo',
+  'delete',
+  'duplicate',
+  'cut',
+  'paste',
+  'group',
+  'ungroup',
+  'frame-selection',
+  'bring-forward',
+  'send-backward',
+  'bring-to-front',
+  'send-to-back',
+  'toggle-visible',
+  'toggle-locked',
+  'rename',
+  'nudge-left',
+  'nudge-right',
+  'nudge-up',
+  'nudge-down',
+  'nudge-left-10',
+  'nudge-right-10',
+  'nudge-up-10',
+  'nudge-down-10',
+]);
 
 export interface ShortcutHelp {
   action: string;
@@ -153,8 +262,39 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
     title: 'Tools',
     items: [
       { action: 'Move', keys: ['V'] },
+      { action: 'Frame', keys: ['F'] },
+      { action: 'Rectangle', keys: ['R'] },
+      { action: 'Ellipse', keys: ['O'] },
+      { action: 'Text', keys: ['T'] },
       { action: 'Hand (pan)', keys: ['H'] },
       { action: 'Pan while held', keys: ['Space'] },
+    ],
+  },
+  {
+    title: 'Edit',
+    items: [
+      { action: 'Undo', keys: ['mod', 'Z'] },
+      { action: 'Redo', keys: ['mod', '⇧', 'Z'] },
+      { action: 'Duplicate', keys: ['mod', 'D'] },
+      { action: 'Copy / paste', keys: ['mod', 'C / V'] },
+      { action: 'Delete', keys: ['⌫'] },
+      { action: 'Nudge', keys: ['←↑→↓'] },
+      { action: 'Nudge 10', keys: ['⇧', '←↑→↓'] },
+      { action: 'Rename', keys: ['mod', 'R'] },
+    ],
+  },
+  {
+    title: 'Arrange',
+    items: [
+      { action: 'Group', keys: ['mod', 'G'] },
+      { action: 'Ungroup', keys: ['mod', '⇧', 'G'] },
+      { action: 'Frame selection', keys: ['mod', '⌥', 'G'] },
+      { action: 'Bring forward', keys: ['mod', ']'] },
+      { action: 'Send backward', keys: ['mod', '['] },
+      { action: 'Bring to front', keys: ['mod', '⌥', ']'] },
+      { action: 'Send to back', keys: ['mod', '⌥', '['] },
+      { action: 'Show/hide', keys: ['mod', '⇧', 'H'] },
+      { action: 'Lock/unlock', keys: ['mod', '⇧', 'L'] },
     ],
   },
   {

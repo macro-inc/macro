@@ -99,3 +99,53 @@ describe('viewer shortcuts', () => {
     );
   });
 });
+
+describe('editing shortcuts', () => {
+  it('maps Figma’s tools', () => {
+    expect(shortcutAction(key('r', 'KeyR'), true)).toBe('tool-rectangle');
+    expect(shortcutAction(key('f', 'KeyF'), true)).toBe('tool-frame');
+    expect(shortcutAction(key('a', 'KeyA'), true)).toBe('tool-frame');
+    expect(shortcutAction(key('o', 'KeyO'), true)).toBe('tool-ellipse');
+    expect(shortcutAction(key('t', 'KeyT'), true)).toBe('tool-text');
+  });
+
+  it('maps edit commands with ⌘ (Ctrl elsewhere)', () => {
+    expect(shortcutAction(key('z', 'KeyZ', { metaKey: true }), true)).toBe(
+      'undo'
+    );
+    expect(
+      shortcutAction(key('z', 'KeyZ', { metaKey: true, shiftKey: true }), true)
+    ).toBe('redo');
+    expect(shortcutAction(key('d', 'KeyD', { ctrlKey: true }), false)).toBe(
+      'duplicate'
+    );
+    expect(shortcutAction(key('g', 'KeyG', { metaKey: true }), true)).toBe(
+      'group'
+    );
+    expect(
+      shortcutAction(key('g', 'KeyG', { metaKey: true, shiftKey: true }), true)
+    ).toBe('ungroup');
+    expect(
+      shortcutAction(key('©', 'KeyG', { metaKey: true, altKey: true }), true)
+    ).toBe('frame-selection');
+    expect(
+      shortcutAction(key(']', 'BracketRight', { metaKey: true }), true)
+    ).toBe('bring-forward');
+    expect(
+      shortcutAction(
+        key('‘', 'BracketRight', { metaKey: true, altKey: true }),
+        true
+      )
+    ).toBe('bring-to-front');
+  });
+
+  it('nudges with the arrows', () => {
+    expect(shortcutAction(key('ArrowLeft', 'ArrowLeft'), true)).toBe(
+      'nudge-left'
+    );
+    expect(
+      shortcutAction(key('ArrowDown', 'ArrowDown', { shiftKey: true }), true)
+    ).toBe('nudge-down-10');
+    expect(shortcutAction(key('Backspace', 'Backspace'), true)).toBe('delete');
+  });
+});

@@ -52,12 +52,23 @@ export interface WasmFigFile {
   /** PNG bytes. */
   exportPng: (page: number, id: string, scale: number) => Uint8Array;
   thumbnail: () => Uint8Array | undefined;
+  /** `EditResult` JSON. */
+  apply: (page: number, ops: string, coalesce?: string | null) => string;
+  undo: (page: number) => string;
+  redo: (page: number) => string;
+  /** The edited file as `.fig` bytes. */
+  save: () => Uint8Array;
+  isEdited: () => boolean;
   free: () => void;
 }
 
 interface FigEngineWasmModule {
   default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
-  FigFile: new (bytes: Uint8Array) => WasmFigFile;
+  FigFile: {
+    new (bytes: Uint8Array): WasmFigFile;
+    /** A new design with one empty page. */
+    blank: (name: string) => Uint8Array;
+  };
 }
 
 let modulePromise: Promise<FigEngineWasmModule> | undefined;
