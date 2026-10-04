@@ -20,7 +20,8 @@ AI box.
 Task creation is available from the `New` button in the Tasks sidebar. With Projects
 enabled, `My projects` appears below the tabs and favorites, above Tags. It lists
 accessible projects by most recently updated, with a capped height and its own scroll
-area. Click a project to open its overview, or Shift-click to open it in a new split.
+area. Click a project to open its overview within the current Tasks view, keeping
+the sidebar mounted, or Shift-click to open it in a new split.
 The current project is highlighted. Collapse the heading to hide the list; this
 preference persists. `Load more projects` fetches the next page when available.
 The plus button beside `My projects` opens the project composer, even while the

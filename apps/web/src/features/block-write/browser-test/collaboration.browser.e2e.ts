@@ -988,6 +988,39 @@ test('on a touch screen, a swipe scrolls and taps place the caret', async ({
   }
 });
 
+test('comment cards leave a narrow pane a legible page', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 480, height: 800 },
+  });
+  const page = await context.newPage();
+  try {
+    await open(page, crypto.randomUUID(), ALICE);
+    await selectParagraph(page, 'Each party shall use');
+    await page.getByRole('button', { name: 'Comment on selection' }).click();
+    await page.getByRole('textbox', { name: 'Comment text' }).fill('Why?');
+    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+    await expect(page.locator('[data-docx-thread]')).toContainText('Why?');
+    const layout = () =>
+      page.evaluate(() => {
+        const sheet = document.querySelector('[data-docx-page]')!;
+        const scroller = document.querySelector('[data-docx-scroller]')!;
+        return {
+          page: sheet.getBoundingClientRect().width,
+          scrolls: scroller.scrollWidth > scroller.clientWidth,
+        };
+      });
+    // The page keeps a legible width and the pane scrolls sideways to the card.
+    await expect
+      .poll(async () => (await layout()).page)
+      .toBeGreaterThanOrEqual(479);
+    expect((await layout()).scrolls).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
 test('viewers follow along read-only', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([

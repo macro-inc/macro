@@ -42,6 +42,8 @@ import {
 const MARGIN_WIDTH = 296;
 /** Horizontal padding around the pages. */
 const SIDE_PADDING = 32;
+/** The narrowest the page gets beside comment cards; narrower panes scroll. */
+const PAGE_MIN_WIDTH = 480;
 
 export type DocxMarginContext = {
   comments: DocxComments;
@@ -158,16 +160,27 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     input?.focus();
   };
 
-  // Fit the pages to the width available, never above 100%.
+  // The right gutter holds the comment margin: with cards or a draft showing
+  // it keeps their width, otherwise only room for the comment button.
+  const showsCards = () =>
+    !!props.margin && (comments.located().length > 0 || !!comments.draft());
+  const gutter = () => (showsCards() ? MARGIN_WIDTH : 48);
+
+  // Fit the pages to the width available, never above 100%. Beside comment
+  // cards the page keeps a legible width and the pane scrolls sideways.
   createEffect(() => {
     const element = scroller();
     if (!element) return;
+    const floor = showsCards() ? PAGE_MIN_WIDTH : 0;
+    const right = gutter();
     const fit = () => {
       const pages = editor.pages();
       if (!pages.length) return;
       const widest = Math.max(...pages.map((p) => p.width)) * PX_PER_PT;
-      const gutter = props.margin ? MARGIN_WIDTH : 48;
-      const available = element.clientWidth - SIDE_PADDING * 2 - gutter;
+      const available = Math.max(
+        floor,
+        element.clientWidth - SIDE_PADDING * 2 - right
+      );
       editor.setZoom(Math.min(1, Math.max(0.3, available / widest)));
     };
     const observer = new ResizeObserver(fit);
@@ -406,9 +419,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           <div
             class="relative grid gap-x-2 pt-6 pb-24"
             style={{
-              'grid-template-columns': `minmax(${SIDE_PADDING}px, 1fr) ${geometry().width}px minmax(${
-                props.margin ? MARGIN_WIDTH : 48
-              }px, 1fr)`,
+              'grid-template-columns': `minmax(${SIDE_PADDING}px, 1fr) ${geometry().width}px minmax(${gutter()}px, 1fr)`,
             }}
           >
             <div class="relative col-start-2 min-w-0">

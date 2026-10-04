@@ -30,7 +30,11 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
   - toolbar formatting (highlight, color, line spacing) and table rows;
   - touch input (swipe, tap, double tap, held press);
   - read-only viewers following along;
-  - an offline merge.
+  - an offline merge;
+  - comment cards leaving a narrow pane a legible page.
+- `agent.browser.e2e.ts` runs the AI tools' `runDocxAgentRequest` as its own
+  sync peer, exactly as the editing worker does, and checks that reads see
+  the live document and that edits reach an open editor and survive a reopen.
 
 ```sh
 (\cd services/sync-service && just worker-build)   # once, builds build/worker/shim.mjs

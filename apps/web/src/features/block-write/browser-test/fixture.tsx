@@ -3,6 +3,11 @@ import '../../../index.css';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
+import {
+  type DocxAgentRequest,
+  type DocxAgentResult,
+  runDocxAgentRequest,
+} from '@macro-inc/collaboration/docx/agent';
 import { InitializeFromSnapshotRequest } from '@macro-inc/collaboration/sync-service/generated/schema';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -34,6 +39,8 @@ declare global {
       paragraphs: () => Promise<string[]>;
       /** Paragraph texts as the shared document has them. */
       sharedParagraphs: () => string[];
+      /** Run an AI tool request as the editing worker does: its own peer. */
+      agent: (request: DocxAgentRequest) => Promise<DocxAgentResult>;
       marks: () => Record<string, unknown>;
       editor: () => DocxEditor | undefined;
       /** Puts the caret in (or selects) the paragraph starting with `prefix`. */
@@ -364,6 +371,17 @@ function Fixture() {
         ? sharedParagraphTexts(state.doc).map((t) => t.replace(/\uFFFC/g, ''))
         : [];
     },
+    agent: async (request) => {
+      const source = new SyncServiceSource(
+        createSyncSocket(socketUrl),
+        documentId
+      );
+      try {
+        return await runDocxAgentRequest(source, request);
+      } finally {
+        source.cleanup();
+      }
+    },
     marks: () => {
       const state = session.state();
       return state.t === 'ready'
@@ -497,6 +515,7 @@ function LocalFixture() {
         ? sharedParagraphTexts(doc).map((t) => t.replace(/\uFFFC/g, ''))
         : [];
     },
+    agent: () => Promise.reject(new Error('no sync service in local mode')),
     marks: () => {
       const doc = docs()?.[0];
       return doc ? Object.fromEntries(readCommentMarks(doc)) : {};
