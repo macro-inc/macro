@@ -37,6 +37,11 @@ async function open(page: Page, documentId: string, user: string, extra = {}) {
   await expect
     .poll(() => page.evaluate(() => window.docxFixture?.status()))
     .toBe('connected');
+  // The document's own stylesheet ("body { margin: 20px }") must stay inside
+  // the editor; leaking it shifts the whole app.
+  expect(
+    await page.evaluate(() => getComputedStyle(document.body).margin)
+  ).toBe('0px');
 }
 
 const paragraphs = (page: Page) =>
@@ -247,6 +252,52 @@ test('two people edit the same DOCX live through the sync service', async ({
       .toBe(true);
     await expect.poll(() => paragraphs(bob)).toEqual(merged);
     if (SHOTS) await alice.screenshot({ path: `${SHOTS}/04-final.png` });
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+test('undo and redo cover typing the editor has not committed yet', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  const shared = async () => (await paragraphs(bob)).join('\n');
+  try {
+    await open(alice, documentId, ALICE);
+    await open(bob, documentId, BOB);
+
+    // Undo straight after typing, before the idle commit, and keep going.
+    const clause = paragraph(alice, 'This Agreement shall remain');
+    await caretAtEnd(alice, 'This Agreement shall remain');
+    await alice.keyboard.type(' [first]');
+    await alice.keyboard.press('ControlOrMeta+z');
+    await expect(clause).not.toContainText('[first]');
+    await alice.keyboard.press('ControlOrMeta+Shift+z');
+    await expect(clause).toContainText('[first]');
+    await expect.poll(shared).toContain('[first]');
+    // The caret lands after the redone text, so typing continues there.
+    await alice.keyboard.type(' [second]');
+    await expect(clause).toContainText('[first] [second]');
+    await alice.keyboard.press('ControlOrMeta+z');
+    await alice.keyboard.press('ControlOrMeta+z');
+    await expect(clause).not.toContainText('[first]');
+    await expect.poll(shared).not.toContain('[first]');
+    expect(await shared()).not.toContain('[second]');
+
+    // The toolbar commits pending typing the same way.
+    await alice.keyboard.type(' [third]');
+    await alice.getByRole('button', { name: 'Undo' }).click();
+    await expect(clause).not.toContainText('[third]');
+    await alice.getByRole('button', { name: 'Redo' }).click();
+    await expect(clause).toContainText('[third]');
+    await expect.poll(shared).toContain('[third]');
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

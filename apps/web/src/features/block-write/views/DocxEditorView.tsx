@@ -27,6 +27,11 @@ import type { DocxPeer, DocxSelection } from '../queries/docx-session';
 import type { DocxodusRuntime } from '../queries/docxodus-runtime';
 import { DocxCollaboratorCarets } from './DocxCollaborators';
 
+/** A US Letter sheet at 96 dpi. */
+const PAGE_WIDTH = 816;
+/** Room for a comment card (280px) and its inset beside the page. */
+const MARGIN_WIDTH = 296;
+
 /** Paragraph styles offered in the toolbar, when the document defines them. */
 const PREFERRED_STYLES = [
   'Normal',
@@ -102,6 +107,17 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     revision: handle.revision,
     canEdit: () => props.canEdit,
   });
+  // The right gutter holds the comment margin. With cards or a draft showing
+  // it keeps their width and the page gives way; otherwise it only needs room
+  // for the comment button beside a selection, so the page stays centered.
+  const pageColumns = () => {
+    const gutter = !props.margin
+      ? 0
+      : comments.located().length > 0 || comments.draft()
+        ? MARGIN_WIDTH
+        : 48;
+    return `minmax(0, 1fr) minmax(0, ${PAGE_WIDTH}px) minmax(${gutter}px, 1fr)`;
+  };
 
   const highlightStyles = createCommentHighlights(
     comments,
@@ -241,8 +257,8 @@ ${highlightStyles}`}</style>
         onAlign={(alignment: DocxAlignment) =>
           run((instance) => instance.setAlignment(alignment))
         }
-        onUndo={() => run((instance) => instance.undo())}
-        onRedo={() => run((instance) => instance.redo())}
+        onUndo={() => run(() => handle.undo())}
+        onRedo={() => run(() => handle.redo())}
         onInsertTable={() => run((instance) => instance.insertTable(3, 3))}
         onToggleTrackChanges={() =>
           run((instance) => {
@@ -267,14 +283,14 @@ ${highlightStyles}`}</style>
         class="relative min-h-0 flex-1 overflow-auto bg-panel"
         data-docx-scroller
       >
-        {/* The page column shrinks so Docxodus zooms the sheet to fit a
-            narrow split instead of scrolling it sideways. */}
-        <div class="relative mx-auto flex max-w-[1160px] justify-center gap-2 px-4 pt-6 pb-24">
-          <div
-            ref={page}
-            class="relative min-w-0 max-w-[816px] flex-1"
-            data-docx-page
-          >
+        {/* The page sits centered between equal gutters. The page column
+            shrinks so Docxodus zooms the sheet to fit a narrow split instead
+            of scrolling it sideways. */}
+        <div
+          class="relative grid gap-x-2 px-4 pt-6 pb-24"
+          style={{ 'grid-template-columns': pageColumns() }}
+        >
+          <div ref={page} class="relative col-start-2 min-w-0" data-docx-page>
             <div ref={setEditorRoot} class="docx-paper rounded-sm shadow-md" />
             <DocxCollaboratorCarets
               peers={props.peers()}
@@ -293,7 +309,7 @@ ${highlightStyles}`}</style>
             {(renderMargin) => (
               <div
                 ref={setMargin}
-                class="relative w-[296px] shrink-0"
+                class="relative col-start-3 min-w-0"
                 data-docx-margin
               >
                 {renderMargin()({

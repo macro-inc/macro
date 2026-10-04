@@ -7,13 +7,20 @@ import { assemblePackage } from '../core/docx-package';
 import { DOCX_SYNC_SESSION_SETTINGS } from '../core/docx-seed';
 import { DocxSyncController } from '../core/docx-sync';
 import { editorBridge } from '../core/editor-bridge';
-import { caretRange, contentOffset, contentText } from '../core/text-offsets';
+import {
+  caretRange,
+  changedTextEnd,
+  contentOffset,
+  contentText,
+} from '../core/text-offsets';
 import type { DocxodusRuntime } from '../queries/docxodus-runtime';
 
 /** Commit typing this long after the last keystroke so peers see it live. */
 const IDLE_COMMIT_MS = 1_200;
 /** Coalesce bursts of engine mutations into one publish. */
 const PUBLISH_DELAY_MS = 80;
+/** A rendered block the user can type in. */
+const EDITABLE_BLOCK = '[data-anchor][contenteditable="true"]';
 
 export type DocxEditorOptions = {
   runtime: DocxodusRuntime;
@@ -37,6 +44,10 @@ export type DocxEditorHandle = {
   mount: (element: HTMLElement) => Promise<void>;
   /** Publish committed local edits now (e.g. before leaving). */
   flush: () => void;
+  /** Undo the last edit, including typing not yet committed. */
+  undo: () => void;
+  /** Redo the last undone edit. */
+  redo: () => void;
   /** The editor's live document bytes, without engine bookkeeping. */
   save: () => Uint8Array | undefined;
 };
@@ -120,7 +131,7 @@ export function createDocxEditor(options: DocxEditorOptions): DocxEditorHandle {
     const active = document.activeElement;
     if (!(active instanceof HTMLElement) || !container?.contains(active))
       return null;
-    return active.closest<HTMLElement>('[data-anchor][contenteditable="true"]');
+    return active.closest<HTMLElement>(EDITABLE_BLOCK);
   };
   const isDirty = (block: HTMLElement) =>
     block.dataset.committedText !== undefined &&
@@ -137,47 +148,115 @@ export function createDocxEditor(options: DocxEditorOptions): DocxEditorHandle {
     return !!owner?.contains(block);
   };
 
+  const editableBlocks = () =>
+    Array.from(container?.querySelectorAll<HTMLElement>(EDITABLE_BLOCK) ?? []);
+
+  const scrollTop = () => options.scroller?.()?.scrollTop;
+
+  /** Focus `block` with the caret at a content offset and the scroll at `top`. */
+  const placeCaret = (block: HTMLElement, offset: number, top?: number) => {
+    block.focus({ preventScroll: true });
+    const caret = caretRange(block, offset);
+    const selection = window.getSelection();
+    if (caret && selection) {
+      selection.removeAllRanges();
+      selection.addRange(caret);
+    }
+    const scrollParent = options.scroller?.();
+    if (scrollParent && top !== undefined) scrollParent.scrollTop = top;
+  };
+
+  /** The focused block and the content offset of the selection's focus end. */
+  const caretPosition = () => {
+    const block = activeBlock();
+    if (!block) return null;
+    const selection = window.getSelection();
+    const node = selection?.focusNode;
+    const inside = !!node && block.contains(node);
+    return {
+      block,
+      collapsed: inside && selection!.isCollapsed,
+      offset: inside ? contentOffset(block, node, selection!.focusOffset) : 0,
+    };
+  };
+
   /**
    * Commit the block the user is typing in without moving their caret: the
-   * editor commits on blur, so blur and restore focus at the same offset.
+   * editor commits on blur, so blur and restore focus at the same offset. The
+   * idle commit leaves a selection in progress alone; `force` commits anyway.
    */
-  const commitTyping = () => {
+  const commitTyping = (force = false) => {
+    clearTimeout(idleTimer);
     idleTimer = undefined;
-    const block = activeBlock();
-    if (!block || !isDirty(block)) return;
-    const selection = window.getSelection();
-    if (!selection?.isCollapsed || !selection.anchorNode) return;
-    if (!block.contains(selection.anchorNode)) return;
-    const offset = contentOffset(
-      block,
-      selection.anchorNode,
-      selection.anchorOffset
-    );
-    const id = block.getAttribute('data-anchor');
-    const scrollParent = options.scroller?.();
-    const scrollTop = scrollParent?.scrollTop;
-    block.blur();
+    const position = caretPosition();
+    if (!position || !isDirty(position.block)) return;
+    if (!force && !position.collapsed) return;
+    const id = position.block.getAttribute('data-anchor');
+    const top = scrollTop();
+    position.block.blur();
     const fresh =
       (id &&
         container?.querySelector<HTMLElement>(
           `[data-anchor="${CSS.escape(id)}"][contenteditable="true"]`
         )) ||
       null;
-    if (!fresh) return;
-    fresh.focus({ preventScroll: true });
-    const caret = caretRange(fresh, offset);
-    if (caret) {
-      selection.removeAllRanges();
-      selection.addRange(caret);
+    if (fresh) placeCaret(fresh, position.offset, top);
+  };
+
+  /**
+   * Step through the session's history. Typing reaches the session only when
+   * committed, so commit it first; otherwise undo skips past it.
+   */
+  const step = (direction: 'undo' | 'redo') => {
+    const current = editor();
+    if (!current || !options.editable) return;
+    commitTyping(true);
+    const position = caretPosition();
+    const index = position ? editableBlocks().indexOf(position.block) : -1;
+    const before = editableBlocks().map(contentText);
+    const top = scrollTop();
+    current[direction]();
+    // Repainting drops the caret. Put it at the end of the change, as word
+    // processors do, so typing continues there and the next shortcut lands.
+    const blocks = editableBlocks();
+    const changed = blocks.findIndex(
+      (block, i) => contentText(block) !== before[i]
+    );
+    if (changed >= 0) {
+      const block = blocks[changed];
+      placeCaret(
+        block,
+        changedTextEnd(before[changed] ?? '', contentText(block)),
+        top
+      );
+      block.scrollIntoView({ block: 'nearest' });
+      return;
     }
-    if (scrollParent && scrollTop !== undefined)
-      scrollParent.scrollTop = scrollTop;
+    if (!position || container?.contains(document.activeElement)) return;
+    const block = blocks[Math.min(index, blocks.length - 1)];
+    if (block) placeCaret(block, position.offset, top);
+  };
+
+  /** Own the history shortcuts so they commit pending typing first. */
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!options.editable || event.isComposing || event.altKey) return;
+    if (!(event.metaKey || event.ctrlKey)) return;
+    const key = event.key.toLowerCase();
+    if (key !== 'z' && key !== 'y') return;
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.closest(EDITABLE_BLOCK)
+    )
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    step(key === 'z' && !event.shiftKey ? 'undo' : 'redo');
   };
 
   const onInput = (event: Event) => {
     if ((event as InputEvent).isComposing) return;
     clearTimeout(idleTimer);
-    idleTimer = setTimeout(commitTyping, IDLE_COMMIT_MS);
+    idleTimer = setTimeout(() => commitTyping(), IDLE_COMMIT_MS);
   };
 
   const rebuild = (bytes: Uint8Array) => {
@@ -212,6 +291,8 @@ export function createDocxEditor(options: DocxEditorOptions): DocxEditorHandle {
     container = element;
     container.setAttribute('data-docx-editor', rootId);
     container.addEventListener('input', onInput);
+    // Capture, so this runs before the block's own shortcut handling.
+    container.addEventListener('keydown', onKeyDown, true);
     const bytes = options.doc
       ? assemblePackage(readDocxState(options.doc))
       : options.original;
@@ -253,6 +334,7 @@ export function createDocxEditor(options: DocxEditorOptions): DocxEditorHandle {
     clearTimeout(idleTimer);
     document.removeEventListener('visibilitychange', onHide);
     container?.removeEventListener('input', onInput);
+    container?.removeEventListener('keydown', onKeyDown, true);
     editor()?.close();
   });
 
@@ -261,6 +343,8 @@ export function createDocxEditor(options: DocxEditorOptions): DocxEditorHandle {
     revision,
     mount,
     flush: publish,
+    undo: () => step('undo'),
+    redo: () => step('redo'),
     save: () => editor()?.save(),
   };
 }

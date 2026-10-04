@@ -48,7 +48,13 @@ const DOCUMENT_RENDERS = [
   'RenderHtml',
   'RenderHtmlForReview',
   'RenderEditorHtml',
+  // The windowed mount injects this document's <style> into the page.
+  'RenderEditorChromeHtml',
 ] as const;
+
+/** A whole HTML document, as opposed to JSON or a fragment. */
+const isHtmlDocument = (value: unknown): value is string =>
+  typeof value === 'string' && /^\s*<(?:!doctype|html)/i.test(value);
 
 export type EditorBridgeOptions = {
   /** Selector of the editor's mount; document CSS is confined to it. */
@@ -95,7 +101,13 @@ export function editorBridge(
       bridge[name] = (...args: never[]) =>
         scopeDocumentStyles(call(...args) as string, options.rootSelector);
     } else if (isRead(name)) {
-      bridge[name] = call;
+      // A render added in a later release must not leak its stylesheet either.
+      bridge[name] = (...args: never[]) => {
+        const result = call(...args);
+        return isHtmlDocument(result)
+          ? scopeDocumentStyles(result, options.rootSelector)
+          : result;
+      };
     } else {
       bridge[name] = (...args: never[]) => {
         const result = call(...args);

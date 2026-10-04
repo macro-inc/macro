@@ -727,6 +727,10 @@ updates live and shows each collaborator's caret with their name.
   buttons, `Insert table` and `Track changes`.
 - Typing is committed after about a second of idle time, or on blur. Wait
   roughly 1.5 s before checking another tab for the text.
+- Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo. They
+  commit pending typing first, so an undo straight after typing removes it,
+  and leave the caret at the end of the change.
+- Clicking a DOCX in the Home list opens the editor in the Home preview pane.
 - Editors see editable `Header` and `Footer` bands. Viewers and commenters get
   a read-only paginated rendering instead.
 - To comment on any text, including table cells: select it, then click the
@@ -744,6 +748,7 @@ updates live and shows each collaborator's caret with their name.
   Comments stay in Macro threads and are not written into the file.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
+- AI `EditDocument` edits Markdown documents only and rejects DOCX files.
 
 ## Document history
 

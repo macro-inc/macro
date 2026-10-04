@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   blockOf,
   blockSpanOfRange,
+  changedTextEnd,
   contentOffset,
   contentRange,
   contentText,
@@ -65,5 +66,18 @@ describe('content offsets', () => {
   it('finds the block that owns a node', () => {
     expect(blockOf(block('p2').firstChild, root)).toBe(block('p2'));
     expect(blockOf(root, root)).toBeNull();
+  });
+});
+
+describe('changed text end', () => {
+  it('lands after reinserted text and where removed text was', () => {
+    expect(changedTextEnd('notice.', 'notice. More.')).toBe(13);
+    expect(changedTextEnd('notice. More.', 'notice.')).toBe(7);
+  });
+
+  it('handles a change in the middle and repeated characters', () => {
+    expect(changedTextEnd('abcdef', 'abcXYZdef')).toBe(6);
+    expect(changedTextEnd('aaa', 'aaaa')).toBe(4);
+    expect(changedTextEnd('same', 'same')).toBe(4);
   });
 });
