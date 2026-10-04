@@ -200,11 +200,11 @@ describe('workbook import and export actions', () => {
     const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
     await actions.importExcel({
       ...file,
-      size: 5 * 1024 * 1024 + 1,
+      size: 50 * 1024 * 1024 + 1,
       arrayBuffer,
     });
     expect(arrayBuffer).not.toHaveBeenCalled();
-    expect(actions.notice()).toContain('5 MB');
+    expect(actions.notice()).toContain('50 MB');
   });
 
   it('replaces an old preview immediately and ignores stale decoder results from superseded requests', async () => {
@@ -280,9 +280,13 @@ describe('workbook import and export actions', () => {
     const { store, actions, onExport, setCanEdit } = setup();
     store.setCells({ A1: { value: '=3+4' } });
     const encoding = deferred<WorkbookFileExport>();
-    vi.mocked(exportWorkbookFile).mockReturnValueOnce(encoding.promise);
+    // Like the worker transport, take the snapshot when the export starts.
+    let request!: Parameters<typeof exportWorkbookFile>[0];
+    vi.mocked(exportWorkbookFile).mockImplementationOnce((workbook) => {
+      request = structuredClone(workbook);
+      return encoding.promise;
+    });
     const run = actions.exportExcel();
-    const request = vi.mocked(exportWorkbookFile).mock.calls[0][0];
     store.setCells({ A1: { value: '99' } });
     setCanEdit(false);
     await actions.exportExcel();

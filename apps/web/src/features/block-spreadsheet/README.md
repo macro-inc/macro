@@ -1,7 +1,7 @@
 # Macro spreadsheet block
 
-A native Macro document with multiple worksheets, a 200 × 26 grid, Excel-style
-formulas, keyboard navigation, rectangular selection, formula-aware copying and
+A native Macro document with multiple worksheets of up to 100,000 rows and
+16,384 columns (A–XFD), Excel-style formulas, keyboard navigation, rectangular selection, formula-aware copying and
 fill, resizable columns, added rows, rich cell formatting, Excel workbook
 import/export, CSV import/value export, find and replace, range sorting, local
 undo/redo, and live collaboration. Existing uploaded `.xlsx` files are not
@@ -32,7 +32,7 @@ frontend feature layers:
 | `context/spreadsheet-source.ts` | Narrow document, connection, and presence source contract. |
 | `queries/spreadsheet-session.ts` | Connect the shared collaboration engine, snapshots, WAL, and transport. |
 | `primitives/` | Reactive document state, local history, and grid interaction. |
-| `components/` | Presentational grid, formula bar, and toolbar. |
+| `components/` | Presentational grid, formula bar, toolbar, and the cell-grid loading skeleton. |
 | `views/SpreadsheetEditor.tsx` | Compose the editor and load the calculation engine. |
 
 The editor fills its split beneath the shared document title bar. Saved documents
@@ -147,9 +147,9 @@ with cell/layout edits or direct formula references. If a creator undoes adding
 or importing a sheet, another peer's surviving record preserves its original
 name, position, and remaining content. Unused creation still disappears on undo.
 An explicit deletion clears the observed records and remains authoritative.
-The editor permits at most ten sheets per local add/import. Concurrent additions
-can exceed that limit: all merged sheets remain available, and further additions
-are blocked. Each sheet supports up to 1,000 rows and 26 columns.
+A workbook holds at most 300 sheets. Concurrent additions can exceed that limit:
+all merged sheets remain available, and further additions are blocked. Each sheet
+supports up to 100,000 rows and 16,384 columns.
 
 Names are unique ignoring case and follow Excel's 31-character naming bounds.
 Concurrent name collisions receive deterministic display suffixes, preserving
@@ -165,28 +165,56 @@ block it when a surviving formula would lose its referenced sheet name. The
 history step remains available, and the editor explains the conflict. Formulas
 removed by that same inverse do not block it; peer formula edits are preserved
 in the preview. The check emits no operations to the live shared document.
+Recording a structural change needs each changed key's earlier value. The small
+sheet-registry maps answer from a copy refreshed after every change to them, cells
+of sheets the change created had none, and anything else comes from a reverse
+diff of that commit alone, so recording an import never forks the document.
 
 Workbook imports validate all names, cells, and layouts before the first write.
 Appending rejects name conflicts instead of silently changing formula targets.
 Replacing creates fresh sheet IDs and tombstones the previous sheets in one
 undoable commit. The import preview blocks replacement after the current workbook
-changes, so collaborators' newly received edits must be reviewed again.
+changes, so collaborators' newly received edits must be reviewed again. The
+store builds the new sheets' cells from the validated input
+(`freshSpreadsheetCells`) instead of decoding them back out of Loro; a test keeps
+both readings identical. A 50,000-row, 450,000-cell import shows its data about
+12 seconds after confirming in Chromium, and its formulas finish in the worker
+while the grid stays responsive.
 
 ## Calculation
 
 `createCalculation()` runs evaluation and formula copying in separate lazy module
 workers, keeping the editor responsive. Each calculation has a three-second
-budget; exceeding it terminates the worker. Retry creates a fresh worker. Engine
-download/initialization has a separate 15-second timeout. New revisions supersede
-pending work, and stale results cannot replace the current revision. Error states
-keep source editing and undo available.
+budget, extended by up to a minute in proportion to the workbook's size; exceeding
+it terminates the worker. Retry creates a fresh worker. Engine
+download/initialization has a separate 15-second timeout. Runs never overlap: an
+edit made during a run is calculated next, and stale results cannot replace the
+current revision. Error states keep source editing and undo available.
+
+The worker keeps the workbook's calculation inputs and last results. The editor
+sends only the cells changed since the previous run (formatting-only edits send
+nothing) and patches only the results that changed, so large workbooks do not
+cross the worker boundary on every keystroke. A restarted worker receives the full
+workbook again.
 
 Inside the worker, `createSpreadsheetCalculator()` lazily initializes the pinned `@ironcalc/wasm`
-engine. Loading failures can be retried. `calculate(cells)` builds a fresh model
-from the current sparse cell sources, evaluates the workbook, reads results, and
-frees the model. Rebuilding is deliberate for this bounded MVP: edit arrival order
-cannot leave stale dependencies, deleted cells, or a second undo history behind.
-Calculated values never enter the shared document.
+engine. Loading failures can be retried. A calculation session keeps one model per
+workbook: an edit re-enters only the changed cells, evaluates, and re-reads the
+changed cells, every formula, and every spill, returning just the results that
+changed. Entering a 450,000-cell workbook takes seconds; updating it takes about a
+second. A new or renamed sheet, a row-count or metadata change, a restarted worker,
+or a failed update rebuilds the model from the sparse cell sources instead.
+`calculation-session.test.ts` checks random edit sequences against a full
+recalculation. Calculated values never enter the shared document.
+
+Before entering a formula, the adapter adapts Excel constructs that IronCalc does
+not evaluate directly. Excel names defined by formulas (`Payment_Number =
+ROW()-Header_Row`) are expanded where they are used, with relative references
+shifted from A1 as Excel stores them. Whole-column lookup tables in `VLOOKUP`,
+`MATCH` and `COUNTA` are bounded to the sheet's rows, because IronCalc scans all
+1,048,576 rows on every call. An `@` on a range in another sheet reads the cell in
+the formula's row or column through `INDEX`, which IronCalc otherwise reports as
+`#VALUE!`. The stored formula text never changes.
 
 Formula assistance uses a separate lazy worker and IronCalc's own incomplete
 formula parser. Keystrokes coalesce while it starts, and stale responses cannot
@@ -241,8 +269,9 @@ and compare formula, error, and formatting behavior before updating the pin.
 
 ## MVP boundaries and next steps
 
-- Each sheet starts with 200 rows and 26 columns; append rows up to 1,000.
-  Column widths range from 64–640 pixels, with drag, keyboard resize, and auto-fit.
+- Each sheet starts with 200 rows and 26 columns; append rows up to 100,000 and
+  columns up to 16,384. The grid renders only the visible rows and columns.
+  Column widths range from 8–640 pixels, with drag, keyboard resize, and auto-fit.
   Cells accept up to 10,000 characters. Plain-text paste accepts at most 1 MB;
   internal clipboard metadata accepts at most 4 MB. Overflow rejects before writes.
 - Array results are shown within the visible grid. There is no grid expansion for
@@ -263,13 +292,52 @@ and compare formula, error, and formatting behavior before updating the pin.
   source range in one direction; Cmd/Ctrl+D fills from the top row and Cmd/Ctrl+R
   from the left column. Fill repeats values; it does not infer numeric series.
   Plain-text clipboard data and cut preserve raw formulas verbatim.
-- Structural insertion/deletion, filters, charts, named ranges,
-  automatic spill expansion, and drag auto-scroll remain future work.
+- Filters, charts, editing named ranges, automatic spill expansion, and drag
+  auto-scroll remain future work.
 - CSV import writes a validated rectangle at the active cell, appending rows when
   needed. It preserves existing cell styles and supports quoted multiline fields.
   CSV exports values and drops formatting. XLSX import/export converts supported
   workbook cells, formulas, styles, and column widths to the native shared model;
   unsupported workbook features produce warnings in the import preview.
+
+## Excel workbooks
+
+`core/xlsx-reader.ts` streams worksheet XML with SAX parsing and inflates only
+the ZIP entries the workbook references, so a 50 MB file (400 MB expanded, up to
+2,000,000 filled cells and 300 sheets) imports without an intermediate object
+model. `core/xlsx-writer.ts` writes SpreadsheetML directly. Both run in the
+workbook-file worker.
+
+Import keeps what Excel calculates and shows:
+
+- Shared formulas, legacy Ctrl+Shift+Enter arrays and dynamic arrays (`cm` cells
+  with `XLDAPR` metadata). Formulas saved without array evaluation get Excel's
+  implicit intersection (`=B2:B9` in row 4 reads B4), recorded as `@` like
+  current Excel shows it.
+- Structured table references become A1 ranges; 3-D references such as
+  `SUM('Jan:Dec'!B2)` list each sheet. `_xlfn.` prefixes are removed and restored
+  on export. External-workbook formulas and what-if data tables keep their
+  cached values with a warning.
+- Theme and indexed colors with tints, built-in and custom number formats, the
+  workbook's default font (cells store only differences from it), borders, fills,
+  alignment, column widths, row heights, hidden rows/columns/sheets, merges,
+  frozen panes, gridlines, tab colors and autofilters.
+- 1904-based dates are converted. Unknown error literals, rich text, phonetic
+  runs, and invalid cell or merge references degrade to text or warnings rather
+  than failing the import.
+
+Export writes `fullCalcOnLoad`, cached results for every formula and spilled
+cell, `_xlfn` prefixes, dynamic-array metadata for formulas that need array
+evaluation, `@` as Excel stores it, and the same column default as Macro so that
+Excel → Macro → Excel round trips are stable.
+
+`core/xlsx-corpus.test.ts` imports, recalculates, exports and reimports the
+real-world workbooks in `core/xlsx-fixtures/real-world/` (finance models,
+government statistics and open-source test suites; provenance and licenses are in
+its `manifest.json`). Its snapshot records counts, warnings, how many formulas
+recalculate to Excel's cached results, and the first round-trip difference, so a
+change in fidelity shows up in review. Set `XLSX_CORPUS_VERBOSE=1` to print
+mismatch examples.
 
 ## Verification
 
@@ -281,6 +349,7 @@ bun run test --config src/features/block-spreadsheet/vitest.config.ts
 
 Calculation tests initialize the actual WASM engine and cover formulas, precision,
 errors, cycles, source ordering, deletion, array spills, and volatile functions.
+The real-world XLSX corpus test takes about two minutes.
 Controller tests exercise keyboard selection, draft commit/cancel, atomic paste
 validation, clipboard round trips, formatting, and read-only behavior. Document
 and store tests cover CRDT merging, persistence, and local history. Exercise the

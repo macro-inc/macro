@@ -26,6 +26,8 @@ function client() {
         })
     ),
     dispose: vi.fn(),
+    epoch: () => 0,
+    busy: () => requests.length > 0,
   };
 }
 
@@ -67,13 +69,13 @@ function setupWorkbook() {
         id: 'sheet1',
         name: 'Inputs',
         cells: { A1: { value: '5' } },
-        layout: { rowCount: 200, columnWidths: {} },
+        layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
       },
       {
         id: 'stable-second',
         name: 'Summary',
         cells: { A1: { value: '=Inputs!A1*2' } },
-        layout: { rowCount: 300, columnWidths: {} },
+        layout: { rowCount: 300, columnCount: 26, columnWidths: {} },
       },
     ]);
     const [activeSheetId, setActiveSheetId] = createSignal('sheet1');

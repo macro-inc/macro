@@ -22,7 +22,7 @@ const workbook = (): SpreadsheetWorkbookSheet[] => [
       B2: { value: '=SUM($A$1:A2)' },
       C1: { value: '=A1', format: 'text' },
     },
-    layout: { rowCount: 200, columnWidths: { 0: 180, 1: 90 } },
+    layout: { rowCount: 200, columnCount: 26, columnWidths: { 0: 180, 1: 90 } },
     metadata: {
       hiddenRows: [1],
       hiddenColumns: [1],
@@ -37,7 +37,7 @@ const workbook = (): SpreadsheetWorkbookSheet[] => [
     id: 'two',
     name: 'Model',
     cells: { A1: { value: '=Inputs!A2+Inputs!$A$1' }, A2: { value: '="A2"' } },
-    layout: { rowCount: 200, columnWidths: {} },
+    layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
   },
 ];
 describe('row and column structure', () => {
@@ -103,7 +103,7 @@ describe('row and column structure', () => {
   });
   it('refuses to push occupied trailing cells beyond limits without modifying input', () => {
     const sheets = workbook();
-    sheets[0].cells.Z1 = { value: 'Keep me' };
+    sheets[0].cells.XFD1 = { value: 'Keep me' };
     const before = JSON.stringify(sheets);
     expect(() =>
       changeWorkbookAxis(sheets, {

@@ -2,7 +2,7 @@ import { getTokens, Model } from '@ironcalc/wasm';
 import {
   formatCellAddress,
   parseCellAddress,
-  SPREADSHEET_COLUMNS,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
   type SpreadsheetCells,
 } from './spreadsheet-document';
@@ -95,7 +95,13 @@ export function changeWorkbookAxis(
 ): SpreadsheetWorkbookSheet[] {
   const target = sheets.findIndex((sheet) => sheet.id === change.sheetId);
   const limit =
-    change.axis === 'row' ? SPREADSHEET_MAX_ROWS : SPREADSHEET_COLUMNS;
+    change.axis === 'row' ? SPREADSHEET_MAX_ROWS : SPREADSHEET_MAX_COLUMNS;
+  // Name definitions are moved through out-of-grid formulas below the last
+  // row, in a column that a column deletion cannot remove.
+  const helperColumn =
+    change.axis === 'column' && change.kind === 'delete' && change.index === 0
+      ? change.count
+      : 0;
   if (
     target < 0 ||
     !Number.isInteger(change.index) ||
@@ -153,7 +159,7 @@ export function changeWorkbookAxis(
         model.setUserInput(
           index,
           SPREADSHEET_MAX_ROWS + 1 + nameIndex,
-          SPREADSHEET_COLUMNS + 2,
+          helperColumn + 1,
           prepareDeletion(
             `=${name.formula.replace(/^=/, '')}`,
             sheet.name,
@@ -229,7 +235,7 @@ export function changeWorkbookAxis(
             // IronCalc moves formula references but not its named-range definitions.
             // Read each definition from an out-of-grid formula after the same move.
             let row = SPREADSHEET_MAX_ROWS + nameIndex;
-            let column = SPREADSHEET_COLUMNS + 1;
+            let column = helperColumn;
             if (index === target) {
               if (change.axis === 'row') row = move(row)!;
               else column = move(column)!;
@@ -268,24 +274,26 @@ export function changeWorkbookAxis(
                 : Math.min(limit, move(edge) ?? change.index),
           };
         }
+        // Inserting extends the sheet; deleting keeps its size, as in Excel.
+        let used = 0;
+        for (const key of Object.keys(cells))
+          used = Math.max(used, parseCellAddress(key)![change.axis] + 1);
+        const grown = (count: number) =>
+          Math.min(
+            limit,
+            Math.max(
+              count + (change.kind === 'insert' ? change.count : 0),
+              used
+            )
+          );
         if (change.axis === 'row') {
           if (metadata.rowHeights)
             metadata.rowHeights = movedRecord(metadata.rowHeights);
-          layout = {
-            ...layout,
-            rowCount: Math.min(
-              SPREADSHEET_MAX_ROWS,
-              Math.max(
-                layout.rowCount + (change.kind === 'insert' ? change.count : 0),
-                ...Object.keys(cells).map(
-                  (key) => parseCellAddress(key)!.row + 1
-                )
-              )
-            ),
-          };
+          layout = { ...layout, rowCount: grown(layout.rowCount) };
         } else
           layout = {
             ...layout,
+            columnCount: grown(layout.columnCount),
             columnWidths: movedRecord(layout.columnWidths),
           };
       }

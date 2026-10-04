@@ -13,7 +13,8 @@ bunx vite --config src/features/block-spreadsheet/browser-test/vite.config.ts
 ```
 
 Open `http://127.0.0.1:3017/`. The seeded `B4` should calculate to `30`.
-Use `?readonly` for a viewer. Test-only `window.spreadsheetFixture.snapshot()`
+Use `?readonly` for a viewer and `?load=1500` to hold the workbook back for 1.5
+seconds and show the loading skeleton. Test-only `window.spreadsheetFixture.snapshot()`
 returns the current workbook and `setReadonly(boolean)` simulates permission
 changes without replacing the editor.
 The fixture applies the app's coarse-pointer touch attribute and keyboard viewport

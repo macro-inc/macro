@@ -16,6 +16,7 @@ import {
   readSpreadsheetLayout,
   resizeSpreadsheetColumn,
   SPREADSHEET_COLUMNS,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
   SPREADSHEET_ROWS,
   type SpreadsheetCells,
@@ -41,7 +42,7 @@ export {
   validateSpreadsheetSheetName,
 } from './spreadsheet-sheet-registry';
 
-export const SPREADSHEET_MAX_SHEETS = 10;
+export const SPREADSHEET_MAX_SHEETS = 300;
 export type SpreadsheetWorkbookSheet = SpreadsheetSheet & {
   cells: SpreadsheetCells;
   layout: SpreadsheetLayout;
@@ -51,6 +52,8 @@ export type SpreadsheetSheetInput = {
   name: string;
   cells: SpreadsheetCells;
   rowCount: number;
+  /** Defaults to the columns that the cells and widths occupy. */
+  columnCount?: number;
   columnWidths: Record<number, number>;
   metadata?: WorkbookSheetMetadata;
 };
@@ -172,9 +175,11 @@ function validateSheetInputs(
       `A workbook can contain up to ${SPREADSHEET_MAX_SHEETS} sheets.`
     );
   const names = new Set(existing.map((sheet) => sheet.name.toLowerCase()));
+  // Only names matter here; reading every cell of a large workbook would not.
+  const metadata = doc.getMap('spreadsheetSheetMetadata');
   const globalNames = new Set(
-    (replace ? [] : readSpreadsheetWorkbook(doc)).flatMap((sheet) =>
-      (sheet.metadata?.definedNames ?? [])
+    existing.flatMap((sheet) =>
+      (parseWorkbookMetadata(metadata.get(sheet.id))?.definedNames ?? [])
         .filter((entry) => !entry.local)
         .map((entry) => entry.name.toLowerCase())
     )
@@ -207,9 +212,19 @@ function validateSheetInputs(
       sheet.rowCount > SPREADSHEET_MAX_ROWS
     )
       throw new Error(
-        `Sheets must contain between 1 and ${SPREADSHEET_MAX_ROWS} rows.`
+        `Sheets must contain between 1 and ${SPREADSHEET_MAX_ROWS.toLocaleString('en-US')} rows.`
       );
-    for (const [address, cell] of Object.entries(sheet.cells)) {
+    if (
+      sheet.columnCount !== undefined &&
+      (!Number.isInteger(sheet.columnCount) ||
+        sheet.columnCount < 1 ||
+        sheet.columnCount > SPREADSHEET_MAX_COLUMNS)
+    )
+      throw new Error(
+        `Sheets must contain between 1 and ${SPREADSHEET_MAX_COLUMNS.toLocaleString('en-US')} columns.`
+      );
+    for (const address in sheet.cells) {
+      const cell = sheet.cells[address];
       if (!parseCellAddress(address))
         throw new Error(`Cell ${address} is outside the supported sheet size.`);
       if (!cell || typeof cell.value !== 'string')
@@ -221,7 +236,7 @@ function validateSheetInputs(
       if (
         !Number.isInteger(column) ||
         column < 0 ||
-        column >= SPREADSHEET_COLUMNS ||
+        column >= SPREADSHEET_MAX_COLUMNS ||
         !Number.isFinite(width) ||
         width < MIN_COLUMN_WIDTH ||
         width > MAX_COLUMN_WIDTH
@@ -262,13 +277,21 @@ export function importSpreadsheetSheets(
         .set(id, JSON.stringify(sheet.metadata));
     doc.getMap('spreadsheetSheetNames').set(id, sheet.name);
     doc.getMap('spreadsheetSheetOrder').set(id, order + index + 1);
-    writeSpreadsheetCells(doc, sheet.cells, id, false);
+    writeSpreadsheetCells(doc, sheet.cells, id, false, true);
     if (sheet.rowCount > SPREADSHEET_ROWS) {
       doc
         .getMap('spreadsheetRowAdditions')
         .set(
           spreadsheetSheetKey(crypto.randomUUID(), id),
           sheet.rowCount - SPREADSHEET_ROWS
+        );
+    }
+    if ((sheet.columnCount ?? 0) > SPREADSHEET_COLUMNS) {
+      doc
+        .getMap('spreadsheetColumnAdditions')
+        .set(
+          spreadsheetSheetKey(crypto.randomUUID(), id),
+          (sheet.columnCount ?? 0) - SPREADSHEET_COLUMNS
         );
     }
     for (const [column, width] of Object.entries(sheet.columnWidths))

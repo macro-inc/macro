@@ -7,11 +7,16 @@ import {
 
 export { DEFAULT_SHEET_ID } from './spreadsheet-sheet-registry';
 
+/** Rows and columns a new sheet starts with. */
 export const SPREADSHEET_ROWS = 200;
-export const SPREADSHEET_MAX_ROWS = 1_000;
 export const SPREADSHEET_COLUMNS = 26;
+/** Imported and appended rows can grow a sheet to this size. */
+export const SPREADSHEET_MAX_ROWS = 100_000;
+/** Excel's own column limit, XFD. */
+export const SPREADSHEET_MAX_COLUMNS = 16_384;
 export const DEFAULT_COLUMN_WIDTH = 100;
-export const MIN_COLUMN_WIDTH = 64;
+/** Excel spacer columns are often narrower than a typed value. */
+export const MIN_COLUMN_WIDTH = 8;
 export const MAX_COLUMN_WIDTH = 640;
 export const SPREADSHEET_FORMAT_VERSION = 1;
 export const SPREADSHEET_MAX_CELL_LENGTH = 10_000;
@@ -206,14 +211,63 @@ export function isSpreadsheetStyleEntry(map: string, value: unknown): boolean {
   return styleFieldsByMap.get(map)?.valid(value) ?? false;
 }
 
+const styleKeysByMap = new Map(
+  (Object.keys(styleFields) as (keyof SpreadsheetCellStyle)[]).map((key) => [
+    styleFields[key].map,
+    key,
+  ])
+);
+
+/** Apply one changed property map entry to a cell, as `readSpreadsheetCells`
+ * would read it. Returns undefined once the cell has no value or style. */
+export function applySpreadsheetCellEntry(
+  cell: SpreadsheetCell | undefined,
+  map: string,
+  value: unknown
+): SpreadsheetCell | undefined {
+  const next: SpreadsheetCell = { value: '', ...cell };
+  if (map === 'spreadsheetValues')
+    next.value = typeof value === 'string' ? value : '';
+  else {
+    const key = styleKeysByMap.get(map);
+    if (!key) return cell;
+    if (
+      styleFields[key].valid(value) &&
+      value !== SPREADSHEET_DEFAULT_STYLE[key]
+    )
+      Object.assign(next, { [key]: value });
+    else delete next[key];
+  }
+  return next.value || Object.keys(next).length > 1 ? next : undefined;
+}
+
+/** The sheet and A1 address a persisted cell key refers to. */
+export function splitSpreadsheetSheetKey(key: string): {
+  sheetId: string;
+  field: string;
+} {
+  const separator = key.indexOf('!');
+  return separator === -1
+    ? { sheetId: DEFAULT_SHEET_ID, field: key }
+    : { sheetId: key.slice(0, separator), field: key.slice(separator + 1) };
+}
+
 /** Clipboard styles and local patches use the same validation as remote data. */
 export function isSpreadsheetCellStyle(
   value: unknown
 ): value is SpreadsheetCellStyle {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  return styleKeys.every(
-    (key) => !(key in value) || styleFields[key].valid(Reflect.get(value, key))
-  );
+  // Visit the properties a cell has (usually a few), not every style field.
+  for (const key in value) {
+    if (!Object.hasOwn(styleFields, key)) continue;
+    if (
+      !styleFields[key as keyof SpreadsheetCellStyle].valid(
+        Reflect.get(value, key)
+      )
+    )
+      return false;
+  }
+  return true;
 }
 export type SpreadsheetCellEdits = Record<
   string,
@@ -227,27 +281,71 @@ export type SpreadsheetSelection = {
 };
 export type SpreadsheetLayout = {
   rowCount: number;
+  columnCount: number;
   columnWidths: Record<number, number>;
 };
 
-/** Convert an A1 address to zero-based coordinates within the MVP grid. */
+/** Zero-based column index for Excel letters (A → 0, AA → 26), if supported. */
+export function parseColumnName(name: string): number | undefined {
+  if (!/^[A-Z]{1,3}$/.test(name)) return;
+  let column = 0;
+  for (let index = 0; index < name.length; index++)
+    column = column * 26 + name.charCodeAt(index) - 64;
+  return column <= SPREADSHEET_MAX_COLUMNS ? column - 1 : undefined;
+}
+
+const columnNames: string[] = [];
+/** Excel letters for a zero-based column index. */
+export function columnName(column: number): string {
+  let name = columnNames[column];
+  if (name !== undefined) return name;
+  name = '';
+  for (let index = column + 1; index > 0; index = Math.floor((index - 1) / 26))
+    name = String.fromCharCode(65 + ((index - 1) % 26)) + name;
+  if (column >= 0 && column < SPREADSHEET_MAX_COLUMNS)
+    columnNames[column] = name;
+  return name;
+}
+
+/** Convert an A1 address to zero-based coordinates within the supported grid.
+ * Parsed by character: this runs for every cell of large workbooks. */
 export function parseCellAddress(
   address: string
 ): { row: number; column: number } | undefined {
-  const match = /^([A-Z])([1-9]\d*)$/.exec(address);
-  if (!match) return;
-  const row = Number(match[2]) - 1;
-  const column = match[1].charCodeAt(0) - 65;
-  if (row >= SPREADSHEET_MAX_ROWS || column >= SPREADSHEET_COLUMNS) return;
-  return { row, column };
+  let index = 0;
+  let column = 0;
+  for (; index < address.length && index < 4; index++) {
+    const code = address.charCodeAt(index);
+    if (code < 65 || code > 90) break;
+    column = column * 26 + code - 64;
+  }
+  // One to three letters, then 1-7 digits without a leading zero.
+  if (index === 0 || index > 3 || address.length - index > 7) return;
+  let row = 0;
+  for (let digit = index; digit < address.length; digit++) {
+    const code = address.charCodeAt(digit);
+    if (code < 48 || code > 57 || (digit === index && code === 48)) return;
+    row = row * 10 + code - 48;
+  }
+  if (
+    row === 0 ||
+    column > SPREADSHEET_MAX_COLUMNS ||
+    row > SPREADSHEET_MAX_ROWS
+  )
+    return;
+  return { row: row - 1, column: column - 1 };
 }
 
 export function spreadsheetSheetKey(key: string, sheetId = DEFAULT_SHEET_ID) {
   return sheetId === DEFAULT_SHEET_ID ? key : `${sheetId}!${key}`;
 }
 
+function rootMapValues(doc: LoroDoc, name: string): Record<string, unknown> {
+  return doc.getMap(name).toJSON();
+}
+
 function sheetEntries(doc: LoroDoc, name: string, sheetId: string) {
-  const entries = Object.entries(doc.getMap(name).toJSON());
+  const entries = Object.entries(rootMapValues(doc, name));
   if (sheetId === DEFAULT_SHEET_ID)
     return entries.filter(([key]) => !key.includes('!'));
   const prefix = `${sheetId}!`;
@@ -256,7 +354,7 @@ function sheetEntries(doc: LoroDoc, name: string, sheetId: string) {
     .map(([key, value]) => [key.slice(prefix.length), value] as const);
 }
 
-type SpreadsheetEntryReader = (
+export type SpreadsheetEntryReader = (
   name: string,
   sheetId: string
 ) => ReadonlyArray<readonly [string, unknown]>;
@@ -270,19 +368,62 @@ export function createSpreadsheetEntryReader(
     let sheets = maps.get(name);
     if (!sheets) {
       sheets = new Map();
-      for (const [key, value] of Object.entries(doc.getMap(name).toJSON())) {
+      const values = rootMapValues(doc, name);
+      let current: [string, unknown][] | undefined;
+      let currentId: string | undefined;
+      for (const key in values) {
         const separator = key.indexOf('!');
         const id =
           separator === -1 ? DEFAULT_SHEET_ID : key.slice(0, separator);
-        const address = separator === -1 ? key : key.slice(separator + 1);
-        const entries = sheets.get(id) ?? [];
-        entries.push([address, value]);
-        sheets.set(id, entries);
+        // Keys of one sheet are usually adjacent; skip the lookup for them.
+        if (id !== currentId) {
+          currentId = id;
+          current = sheets.get(id);
+          if (!current) {
+            current = [];
+            sheets.set(id, current);
+          }
+        }
+        current!.push([
+          separator === -1 ? key : key.slice(separator + 1),
+          values[key],
+        ]);
       }
       maps.set(name, sheets);
     }
     return sheets.get(sheetId) ?? [];
   };
+}
+
+/** Every persisted cell property map, for layout and change tracking. */
+export const SPREADSHEET_CELL_MAPS = [
+  'spreadsheetValues',
+  ...styleKeys.map((key) => styleFields[key].map),
+];
+
+const additions = {
+  row: {
+    map: 'spreadsheetRowAdditions',
+    initial: SPREADSHEET_ROWS,
+    limit: SPREADSHEET_MAX_ROWS,
+  },
+  column: {
+    map: 'spreadsheetColumnAdditions',
+    initial: SPREADSHEET_COLUMNS,
+    limit: SPREADSHEET_MAX_COLUMNS,
+  },
+} as const;
+
+/** Allocated rows or columns before occupied cells extend the sheet. */
+function allocated(
+  entries: ReadonlyArray<readonly [string, unknown]>,
+  axis: 'row' | 'column'
+) {
+  let count = additions[axis].initial;
+  for (const [, value] of entries)
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0)
+      count += Math.min(value, additions[axis].limit);
+  return count;
 }
 
 export function readSpreadsheetLayout(
@@ -292,12 +433,19 @@ export function readSpreadsheetLayout(
     sheetEntries(doc, name, id)
 ): SpreadsheetLayout {
   const columnWidths: Record<number, number> = {};
+  // Independent append operations merge additively. Appending never shifts A1
+  // identities, so concurrent formulas and edits retain their references.
+  let rowCount = allocated(readEntries(additions.row.map, sheetId), 'row');
+  let columnCount = allocated(
+    readEntries(additions.column.map, sheetId),
+    'column'
+  );
   for (const [key, value] of readEntries('spreadsheetColumnWidths', sheetId)) {
     const column = Number(key);
     if (
       Number.isInteger(column) &&
       column >= 0 &&
-      column < SPREADSHEET_COLUMNS &&
+      column < SPREADSHEET_MAX_COLUMNS &&
       typeof value === 'number' &&
       Number.isFinite(value)
     ) {
@@ -307,24 +455,20 @@ export function readSpreadsheetLayout(
       );
     }
   }
-  // Independent append operations merge additively. Appending never shifts A1
-  // identities, so concurrent formulas and edits retain their references.
-  let rowCount = SPREADSHEET_ROWS;
-  for (const [, value] of readEntries('spreadsheetRowAdditions', sheetId)) {
-    if (typeof value === 'number' && Number.isInteger(value) && value > 0)
-      rowCount += Math.min(value, SPREADSHEET_MAX_ROWS);
-  }
   // Undoing an append must not hide a collaborator's subsequent cell edits.
-  for (const name of [
-    'spreadsheetValues',
-    ...styleKeys.map((key) => styleFields[key].map),
-  ]) {
+  for (const name of SPREADSHEET_CELL_MAPS) {
     for (const [address] of readEntries(name, sheetId)) {
       const position = parseCellAddress(address);
-      if (position) rowCount = Math.max(rowCount, position.row + 1);
+      if (!position) continue;
+      if (position.row >= rowCount) rowCount = position.row + 1;
+      if (position.column >= columnCount) columnCount = position.column + 1;
     }
   }
-  return { rowCount: Math.min(rowCount, SPREADSHEET_MAX_ROWS), columnWidths };
+  return {
+    rowCount: Math.min(rowCount, SPREADSHEET_MAX_ROWS),
+    columnCount: Math.min(columnCount, SPREADSHEET_MAX_COLUMNS),
+    columnWidths,
+  };
 }
 
 export function resizeSpreadsheetColumn(
@@ -337,7 +481,7 @@ export function resizeSpreadsheetColumn(
   if (
     !Number.isInteger(column) ||
     column < 0 ||
-    column >= SPREADSHEET_COLUMNS ||
+    column >= SPREADSHEET_MAX_COLUMNS ||
     !Number.isFinite(width)
   )
     return;
@@ -352,40 +496,43 @@ export function resizeSpreadsheetColumn(
   if (commit) doc.commit({ origin: 'spreadsheet-resize' });
 }
 
+/** Grow a sheet's rows or columns without shifting any A1 identity. */
+export function appendSpreadsheetAxis(
+  doc: LoroDoc,
+  axis: 'row' | 'column',
+  count: number,
+  sheetId = DEFAULT_SHEET_ID,
+  commit = true
+) {
+  if (!Number.isInteger(count) || count <= 0) return;
+  const { map, limit } = additions[axis];
+  const layout = readSpreadsheetLayout(doc, sheetId);
+  const current = axis === 'row' ? layout.rowCount : layout.columnCount;
+  if (current >= limit) return;
+  // Occupied cells may keep rows visible after an append was undone. Include
+  // that gap so the next append still adds rows below the visible sheet.
+  const amount =
+    Math.min(limit, current + count) -
+    allocated(sheetEntries(doc, map, sheetId), axis);
+  reviveSpreadsheetFallback(doc, sheetId);
+  doc
+    .getMap(map)
+    .set(spreadsheetSheetKey(crypto.randomUUID(), sheetId), amount);
+  retainSpreadsheetSheets(doc, sheetId);
+  if (commit) doc.commit({ origin: 'spreadsheet-append' });
+}
+
 export function appendSpreadsheetRows(
   doc: LoroDoc,
   count: number,
   sheetId = DEFAULT_SHEET_ID,
   commit = true
 ) {
-  if (!Number.isInteger(count) || count <= 0) return;
-  const current = readSpreadsheetLayout(doc, sheetId).rowCount;
-  if (current >= SPREADSHEET_MAX_ROWS) return;
-  const allocated = sheetEntries(
-    doc,
-    'spreadsheetRowAdditions',
-    sheetId
-  ).reduce<number>(
-    (rows, [, value]) =>
-      rows +
-      (typeof value === 'number' && Number.isInteger(value) && value > 0
-        ? Math.min(value, SPREADSHEET_MAX_ROWS)
-        : 0),
-    SPREADSHEET_ROWS
-  );
-  // Occupied cells may keep rows visible after an append was undone. Include
-  // that gap so the next append still adds rows below the visible sheet.
-  const amount = Math.min(SPREADSHEET_MAX_ROWS, current + count) - allocated;
-  reviveSpreadsheetFallback(doc, sheetId);
-  doc
-    .getMap('spreadsheetRowAdditions')
-    .set(spreadsheetSheetKey(crypto.randomUUID(), sheetId), amount);
-  retainSpreadsheetSheets(doc, sheetId);
-  if (commit) doc.commit({ origin: 'spreadsheet-append' });
+  appendSpreadsheetAxis(doc, 'row', count, sheetId, commit);
 }
 
 export function formatCellAddress(row: number, column: number): string {
-  return `${String.fromCharCode(65 + column)}${row + 1}`;
+  return `${columnName(column)}${row + 1}`;
 }
 
 export function isSpreadsheetFormat(
@@ -410,29 +557,48 @@ export function readSpreadsheetCells(
   readEntries: SpreadsheetEntryReader = (name, id) =>
     sheetEntries(doc, name, id)
 ): SpreadsheetCells {
-  const values = Object.fromEntries(readEntries('spreadsheetValues', sheetId));
-  const styles = styleKeys.map((key) => ({
-    key,
-    values: Object.fromEntries(readEntries(styleFields[key].map, sheetId)),
-    valid: styleFields[key].valid,
-  }));
+  // Visit only the entries each map holds: most cells set few properties.
   const cells: SpreadsheetCells = {};
-  const addresses = new Set([
-    ...Object.keys(values),
-    ...styles.flatMap((style) => Object.keys(style.values)),
-  ]);
-  for (const address of addresses) {
+  for (const [address, value] of readEntries('spreadsheetValues', sheetId)) {
     if (!parseCellAddress(address)) continue;
-    const value = values[address];
-    const cell: SpreadsheetCell = {
-      value: typeof value === 'string' ? value : '',
-    };
-    for (const style of styles) {
-      const value = style.values[address];
-      if (style.valid(value) && value !== SPREADSHEET_DEFAULT_STYLE[style.key])
-        Object.assign(cell, { [style.key]: value });
+    cells[address] = { value: typeof value === 'string' ? value : '' };
+  }
+  for (const key of styleKeys) {
+    const { map, valid } = styleFields[key];
+    for (const [address, value] of readEntries(map, sheetId)) {
+      let cell = cells[address];
+      if (!cell) {
+        if (!parseCellAddress(address)) continue;
+        cells[address] = cell = { value: '' };
+      }
+      if (valid(value) && value !== SPREADSHEET_DEFAULT_STYLE[key])
+        Object.assign(cell, { [key]: value });
     }
-    cells[address] = cell;
+  }
+  return cells;
+}
+
+/** What `readSpreadsheetCells` returns for a sheet that `writeSpreadsheetCells`
+ * just created from these validated edits, without decoding every cell back
+ * out of the document. */
+export function freshSpreadsheetCells(
+  edits: SpreadsheetCellEdits
+): SpreadsheetCells {
+  const cells: SpreadsheetCells = {};
+  for (const address in edits) {
+    const edit = edits[address];
+    if (!edit || !parseCellAddress(address)) continue;
+    let cell: SpreadsheetCell | undefined = edit.value
+      ? { value: edit.value }
+      : undefined;
+    for (const key of styleKeys) {
+      const value = edit[key];
+      if (value === undefined || value === SPREADSHEET_DEFAULT_STYLE[key])
+        continue;
+      cell ??= { value: '' };
+      Object.assign(cell, { [key]: value });
+    }
+    if (cell) cells[address] = cell;
   }
   return cells;
 }
@@ -441,8 +607,9 @@ export function readSpreadsheetCells(
 export function validateSpreadsheetCellEdits(
   edits: SpreadsheetCellEdits
 ): void {
-  for (const [address, edit] of Object.entries(edits)) {
-    if (!parseCellAddress(address) || edit === null) continue;
+  for (const address in edits) {
+    const edit = edits[address];
+    if (edit === null || !parseCellAddress(address)) continue;
     if (
       edit.value !== undefined &&
       edit.value.length > SPREADSHEET_MAX_CELL_LENGTH
@@ -457,9 +624,12 @@ export function writeSpreadsheetCells(
   doc: LoroDoc,
   edits: SpreadsheetCellEdits,
   sheetId = DEFAULT_SHEET_ID,
-  commit = true
+  commit = true,
+  /** The sheet was created in this transaction and its cells validated, so
+   * there is nothing to clear and no earlier value to read. */
+  fresh = false
 ): void {
-  validateSpreadsheetCellEdits(edits);
+  if (!fresh) validateSpreadsheetCellEdits(edits);
   const hasEdits = Object.entries(edits).some(
     ([address, edit]) =>
       parseCellAddress(address) &&
@@ -469,11 +639,16 @@ export function writeSpreadsheetCells(
   );
   if (hasEdits) reviveSpreadsheetFallback(doc, sheetId);
   const values = doc.getMap('spreadsheetValues');
+  const formats = doc.getMap('spreadsheetFormats');
+  const fontNames = doc.getMap('spreadsheetFontNames');
+  const numberFormats = doc.getMap('spreadsheetNumberFormats');
   const styles = styleKeys.map((key) => ({
     key,
     map: doc.getMap(styleFields[key].map),
   }));
-  for (const [address, edit] of Object.entries(edits)) {
+  const formulas: string[] = [];
+  for (const address in edits) {
+    const edit = edits[address];
     if (!parseCellAddress(address)) continue;
     const key = spreadsheetSheetKey(address, sheetId);
     if (edit === null) {
@@ -483,35 +658,31 @@ export function writeSpreadsheetCells(
     }
     if (edit.value !== undefined) {
       if (edit.value) values.set(key, edit.value);
-      else values.delete(key);
+      else if (!fresh) values.delete(key);
     }
-    // Choosing a built-in format/precision explicitly replaces the imported format.
-    if (edit.fontFamily !== undefined && edit.fontName === undefined)
-      doc.getMap('spreadsheetFontNames').delete(key);
-    if (
-      edit.numberFormat === undefined &&
-      (edit.format !== undefined || edit.decimals !== undefined)
-    )
-      doc.getMap('spreadsheetNumberFormats').delete(key);
+    if (!fresh) {
+      // Choosing a built-in format/precision explicitly replaces the imported format.
+      if (edit.fontFamily !== undefined && edit.fontName === undefined)
+        fontNames.delete(key);
+      if (
+        edit.numberFormat === undefined &&
+        (edit.format !== undefined || edit.decimals !== undefined)
+      )
+        numberFormats.delete(key);
+    }
     for (const { key: styleKey, map } of styles) {
       const value = edit[styleKey];
       if (value === undefined) continue;
-      if (value === SPREADSHEET_DEFAULT_STYLE[styleKey]) map.delete(key);
-      else map.set(key, value);
+      if (value !== SPREADSHEET_DEFAULT_STYLE[styleKey]) map.set(key, value);
+      else if (!fresh) map.delete(key);
     }
+    if (!hasEdits) continue;
+    // Sheets this formula names stay retained for collaborators.
+    const value = edit.value ?? (fresh ? undefined : values.get(key));
+    if (typeof value !== 'string' || !value.startsWith('=')) continue;
+    const format = edit.format ?? (fresh ? undefined : formats.get(key));
+    if (format !== 'text') formulas.push(value);
   }
-  if (hasEdits) {
-    const formats = doc.getMap('spreadsheetFormats');
-    const formulas = Object.keys(edits).flatMap((address) => {
-      const key = spreadsheetSheetKey(address, sheetId);
-      const value = values.get(key);
-      return typeof value === 'string' &&
-        value.startsWith('=') &&
-        formats.get(key) !== 'text'
-        ? [value]
-        : [];
-    });
-    retainSpreadsheetSheets(doc, sheetId, formulas);
-  }
+  if (hasEdits) retainSpreadsheetSheets(doc, sheetId, formulas);
   if (commit) doc.commit({ origin: 'spreadsheet-edit' });
 }

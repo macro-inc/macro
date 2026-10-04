@@ -1,6 +1,6 @@
 import {
   parseCellAddress,
-  SPREADSHEET_COLUMNS,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
 } from './spreadsheet-document';
 
@@ -14,6 +14,14 @@ export type WorkbookSheetMetadata = {
   freeze?: { rows: number; columns: number };
   autoFilter?: string;
   definedNames?: { name: string; formula: string; local?: boolean }[];
+  /** Legacy (Ctrl+Shift+Enter) array formulas: anchor address → fixed range. */
+  arrayFormulas?: Record<string, string>;
+  /** False when Excel hid this sheet's gridlines. */
+  gridlines?: boolean;
+  /** Sheet tab color as #RRGGBB. */
+  tabColor?: string;
+  /** The imported workbook's default font, for cells without their own. */
+  defaultFont?: { name: string; size: number };
 };
 
 export function validWorkbookRange(range: unknown): range is string {
@@ -33,7 +41,7 @@ export function validWorkbookRange(range: unknown): range is string {
 export function parseWorkbookMetadata(
   encoded: unknown
 ): WorkbookSheetMetadata | undefined {
-  if (typeof encoded !== 'string' || encoded.length > 100_000) return;
+  if (typeof encoded !== 'string' || encoded.length > 1_000_000) return;
   try {
     const value = JSON.parse(encoded);
     if (!value || typeof value !== 'object' || Array.isArray(value)) return;
@@ -49,6 +57,10 @@ export function parseWorkbookMetadata(
             'freeze',
             'autoFilter',
             'definedNames',
+            'arrayFormulas',
+            'gridlines',
+            'tabColor',
+            'defaultFont',
           ].includes(key)
       )
     )
@@ -61,13 +73,13 @@ export function parseWorkbookMetadata(
     if (
       value.merges !== undefined &&
       (!Array.isArray(value.merges) ||
-        value.merges.length > 1000 ||
+        value.merges.length > 100_000 ||
         !value.merges.every(validWorkbookRange))
     )
       return;
     if (
       !indices(value.hiddenRows, SPREADSHEET_MAX_ROWS) ||
-      !indices(value.hiddenColumns, SPREADSHEET_COLUMNS)
+      !indices(value.hiddenColumns, SPREADSHEET_MAX_COLUMNS)
     )
       return;
     if (
@@ -87,6 +99,32 @@ export function parseWorkbookMetadata(
     )
       return;
     if (value.hidden !== undefined && typeof value.hidden !== 'boolean') return;
+    if (value.gridlines !== undefined && typeof value.gridlines !== 'boolean')
+      return;
+    if (
+      value.defaultFont !== undefined &&
+      (!value.defaultFont ||
+        typeof value.defaultFont !== 'object' ||
+        Object.keys(value.defaultFont).some(
+          (key) => key !== 'name' && key !== 'size'
+        ) ||
+        typeof value.defaultFont.name !== 'string' ||
+        !value.defaultFont.name ||
+        value.defaultFont.name.length > 128 ||
+        Array.from(value.defaultFont.name as string).some(
+          (character) => character.charCodeAt(0) < 32
+        ) ||
+        !Number.isInteger(value.defaultFont.size) ||
+        value.defaultFont.size < 8 ||
+        value.defaultFont.size > 36)
+    )
+      return;
+    if (
+      value.tabColor !== undefined &&
+      (typeof value.tabColor !== 'string' ||
+        !/^#[0-9a-f]{6}$/i.test(value.tabColor))
+    )
+      return;
     if (
       value.freeze !== undefined &&
       (!value.freeze ||
@@ -96,7 +134,7 @@ export function parseWorkbookMetadata(
         value.freeze.rows > SPREADSHEET_MAX_ROWS ||
         !Number.isInteger(value.freeze.columns) ||
         value.freeze.columns < 0 ||
-        value.freeze.columns > SPREADSHEET_COLUMNS)
+        value.freeze.columns > SPREADSHEET_MAX_COLUMNS)
     )
       return;
     if (value.autoFilter !== undefined && !validWorkbookRange(value.autoFilter))
@@ -104,7 +142,7 @@ export function parseWorkbookMetadata(
     if (
       value.definedNames !== undefined &&
       (!Array.isArray(value.definedNames) ||
-        value.definedNames.length > 256 ||
+        value.definedNames.length > 10_000 ||
         !value.definedNames.every((entry: unknown) => {
           if (
             !entry ||
@@ -124,6 +162,20 @@ export function parseWorkbookMetadata(
             (local === undefined || typeof local === 'boolean')
           );
         }))
+    )
+      return;
+    if (
+      value.arrayFormulas !== undefined &&
+      (!value.arrayFormulas ||
+        typeof value.arrayFormulas !== 'object' ||
+        Array.isArray(value.arrayFormulas) ||
+        Object.keys(value.arrayFormulas).length > 100_000 ||
+        !Object.entries(value.arrayFormulas).every(
+          ([anchor, range]) =>
+            !!parseCellAddress(anchor) &&
+            validWorkbookRange(range) &&
+            (range as string).split(':')[0] === anchor
+        ))
     )
       return;
     return value;

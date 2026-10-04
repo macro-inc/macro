@@ -1,4 +1,10 @@
-import { type LoroDoc, UndoManager, type Value } from 'loro-crdt';
+import {
+  type Frontiers,
+  type LoroDoc,
+  type LoroEventBatch,
+  UndoManager,
+  type Value,
+} from 'loro-crdt';
 import { formulaReferencesSheet } from './sheet-references';
 import { readSpreadsheetSheets } from './spreadsheet-sheet-registry';
 import { readSpreadsheetWorkbook } from './workbook-document';
@@ -11,6 +17,9 @@ const structuralMaps = new Set([
   'spreadsheetSheetRetentions',
 ]);
 type Scalar = string | number | boolean | null;
+type MapValues = Map<string, Record<string, unknown>>;
+/** The small structural maps as they were at `version`. */
+type Structure = { version: Frontiers; maps: MapValues };
 type HistoryChange = {
   map: string;
   key: string;
@@ -31,8 +40,7 @@ function metadata(value: Value | undefined): HistoryMetadata | undefined {
   return value as HistoryMetadata;
 }
 
-function scalar(doc: LoroDoc, map: string, key: string): Scalar {
-  const value = doc.getMap(map).get(key);
+function scalarValue(value: unknown): Scalar {
   return typeof value === 'string' ||
     typeof value === 'number' ||
     typeof value === 'boolean'
@@ -40,15 +48,63 @@ function scalar(doc: LoroDoc, map: string, key: string): Scalar {
     : null;
 }
 
+function scalar(doc: LoroDoc, map: string, key: string): Scalar {
+  return scalarValue(doc.getMap(map).get(key));
+}
+
+function readStructure(doc: LoroDoc): Structure {
+  return {
+    version: doc.frontiers(),
+    maps: new Map(
+      [...structuralMaps].map((map) => [map, doc.getMap(map).toJSON()])
+    ),
+  };
+}
+
+/** The copy holds at `from` unless it was read after `from`. */
+function structureAt(
+  doc: LoroDoc,
+  structure: Structure | undefined,
+  from: Frontiers
+): MapValues | undefined {
+  try {
+    const order = structure && doc.cmpFrontiers(structure.version, from);
+    return order === -1 || order === 0 ? structure?.maps : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Earlier values of the keys a commit changed, at a cost of that commit. */
+function diffEarlierValues(doc: LoroDoc, event: LoroEventBatch): MapValues {
+  const values: MapValues = new Map();
+  for (const [container, diff] of doc.diff(event.to, event.from, false)) {
+    const root = /^cid:root-(.*):Map$/.exec(container)?.[1];
+    if (root && diff.type === 'map') values.set(root, diff.updated);
+  }
+  return values;
+}
+
 /** Protect peer edits; preflight structural history before emitting any ops. */
 export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
   let reversing: HistoryMetadata | undefined;
+  // Forking or diffing a large import to find earlier values takes seconds.
+  // The structural maps stay small, so a copy refreshed after each change to
+  // them answers those keys; anything it cannot answer is diffed instead.
+  let structure: Structure | undefined = readStructure(doc);
+  const subscriptions = [...structuralMaps].map((map) =>
+    doc.getMap(map).subscribe((batch) => {
+      // Local changes refresh the copy once their own history entry exists.
+      if (batch.by !== 'local') structure = readStructure(doc);
+    })
+  );
   const history = new UndoManager(doc, {
     mergeInterval: 0,
     maxUndoSteps: 100,
     onPush: (_isUndo, _range, event) => {
       onChange();
       if (!event) {
+        structure = readStructure(doc);
         const popped = reversing;
         reversing = undefined;
         // Redo metadata describes the actual inverse after Loro has reconciled
@@ -75,21 +131,50 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
       const structural = event.events.some((change) =>
         structuralMaps.has(String(change.path[0]))
       );
-      let before: LoroDoc | undefined;
+      const known = structural
+        ? structureAt(doc, structure, event.from)
+        : undefined;
+      if (structural) structure = readStructure(doc);
       try {
-        if (structural) before = doc.forkAt(event.from);
+        // Keys of sheets this change created had no earlier value.
+        const names = known?.get('spreadsheetSheetNames');
+        const created = new Set(
+          event.events.flatMap((change) =>
+            names &&
+            String(change.path[0]) === 'spreadsheetSheetNames' &&
+            change.diff.type === 'map'
+              ? Object.keys(change.diff.updated).filter(
+                  (id) => !Object.hasOwn(names, id)
+                )
+              : []
+          )
+        );
+        let diffed: MapValues | undefined;
+        const earlier = (map: string, key: string, after: Scalar): Scalar => {
+          // Ordinary history only needs the saved result for its conflict
+          // check; it never constructs an inverse preview.
+          if (!structural) return null;
+          const values = known?.get(map);
+          if (values) return scalarValue(values[key]);
+          const separator = key.indexOf('!');
+          if (created.has(separator > 0 ? key.slice(0, separator) : key))
+            return null;
+          diffed ??= diffEarlierValues(doc, event);
+          const earlierValues = diffed.get(map);
+          // A key absent from the reverse diff held the same value before.
+          return earlierValues && Object.hasOwn(earlierValues, key)
+            ? scalarValue(earlierValues[key])
+            : after;
+        };
         const changes = event.events.flatMap((change) => {
           const map = String(change.path[0]);
           if (change.diff.type !== 'map' || !map.startsWith('spreadsheet'))
             return [];
-          return Object.keys(change.diff.updated).map((key) => ({
-            map,
-            key,
-            // Ordinary history only needs the saved result for its conflict
-            // check; it never constructs an inverse preview or forks the doc.
-            before: before ? scalar(before, map, key) : null,
-            after: scalar(doc, map, key),
-          }));
+          const updated = change.diff.updated;
+          return Object.keys(updated).map((key) => {
+            const after = scalarValue(updated[key]);
+            return { map, key, before: earlier(map, key, after), after };
+          });
         });
         return {
           value: {
@@ -103,8 +188,6 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
         };
       } catch {
         return { value: { kind: 'unavailable' }, cursors: [] };
-      } finally {
-        before?.free();
       }
     },
   });
@@ -186,6 +269,9 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     canRedo: () => history.canRedo(),
     undo: () => apply('undo'),
     redo: () => apply('redo'),
-    free: () => history.free(),
+    free: () => {
+      for (const unsubscribe of subscriptions) unsubscribe();
+      history.free();
+    },
   };
 }

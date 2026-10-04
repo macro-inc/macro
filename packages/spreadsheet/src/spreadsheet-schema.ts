@@ -112,4 +112,7 @@ export const SPREADSHEET_LORO_SCHEMA = schema({
   spreadsheetRowAdditions: schema.LoroMap(
     {} as Record<string, ReturnType<typeof schema.Number>>
   ),
+  spreadsheetColumnAdditions: schema.LoroMap(
+    {} as Record<string, ReturnType<typeof schema.Number>>
+  ),
 });

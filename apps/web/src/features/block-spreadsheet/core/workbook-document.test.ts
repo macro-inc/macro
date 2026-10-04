@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   appendSpreadsheetRows,
   DEFAULT_SHEET_ID,
+  freshSpreadsheetCells,
   readSpreadsheetCells,
   readSpreadsheetLayout,
   resizeSpreadsheetColumn,
+  SPREADSHEET_DEFAULT_STYLE,
+  type SpreadsheetCells,
   writeSpreadsheetCells,
 } from './spreadsheet-document';
 import {
@@ -58,7 +61,7 @@ describe('collaborative workbook', () => {
         id: DEFAULT_SHEET_ID,
         name: 'Sheet1',
         cells: { A1: { value: 'legacy', italic: true } },
-        layout: { rowCount: 300, columnWidths: { 0: 180 } },
+        layout: { rowCount: 300, columnCount: 26, columnWidths: { 0: 180 } },
       },
     ]);
     expect(doc.version().toJSON()).toEqual(version);
@@ -80,6 +83,7 @@ describe('collaborative workbook', () => {
     expect(readSpreadsheetLayout(doc).rowCount).toBe(200);
     expect(readSpreadsheetLayout(doc, id)).toEqual({
       rowCount: 250,
+      columnCount: 26,
       columnWidths: { 0: 320 },
     });
     renameSpreadsheetSheet(doc, id, 'Forecast');
@@ -727,10 +731,11 @@ describe('collaborative workbook', () => {
       [],
       [blank('dup'), blank('DUP')],
       [blank('bad/name')],
-      [{ ...blank('bad cell'), cells: { AA1: { value: 'outside' } } }],
+      [{ ...blank('bad cell'), cells: { XFE1: { value: 'outside' } } }],
       [{ ...blank('bad width'), columnWidths: { 0: 999 } }],
-      [{ ...blank('bad height'), rowCount: 1001 }],
-      Array.from({ length: 11 }, (_, index) => blank(`Sheet${index}`)),
+      [{ ...blank('bad height'), rowCount: 100_001 }],
+      [{ ...blank('bad columns'), columnCount: 16_385 }],
+      Array.from({ length: 301 }, (_, index) => blank(`Sheet${index}`)),
     ])
       expect(() => importSpreadsheetSheets(doc, inputs, true)).toThrow();
     expect(doc.version().toJSON()).toEqual(before);
@@ -743,14 +748,14 @@ describe('collaborative workbook', () => {
     const right = new LoroDoc();
     importSpreadsheetSheets(
       left,
-      Array.from({ length: 8 }, (_, index) => blank(`Tab${index}`))
+      Array.from({ length: 298 }, (_, index) => blank(`Tab${index}`))
     );
     synchronize(left, right);
     addSpreadsheetSheet(left, 'Alice');
     addSpreadsheetSheet(right, 'Bob');
     synchronize(left, right);
-    expect(readSpreadsheetSheets(left)).toHaveLength(11);
-    expect(() => addSpreadsheetSheet(left)).toThrow('up to 10');
+    expect(readSpreadsheetSheets(left)).toHaveLength(301);
+    expect(() => addSpreadsheetSheet(left)).toThrow('up to 300');
     left.free();
     right.free();
   });
@@ -820,6 +825,67 @@ it('duplicates local definitions without duplicating global names and rejects co
       )
     ).toThrow(/name/i);
     expect(doc.version().encode()).toEqual(before);
+  } finally {
+    doc.free();
+  }
+});
+
+it('describes freshly imported cells exactly as the document reads them back', () => {
+  const styled = {
+    bold: true,
+    italic: true,
+    underline: true,
+    strikethrough: true,
+    fontFamily: 'mono',
+    fontSize: 14,
+    textColor: '#112233',
+    fillColor: '#ffeedd',
+    horizontalAlign: 'right',
+    verticalAlign: 'top',
+    wrap: true,
+    borderTop: true,
+    borderRight: true,
+    borderBottom: true,
+    borderLeft: true,
+    decimals: 2,
+    format: 'currency',
+    numberFormat: '#,##0.00;(#,##0.00)',
+    fontName: 'Arial',
+    borderTopStyle: 'thin',
+    borderTopColor: '#000000',
+    borderRightStyle: 'double',
+    borderRightColor: '#123456',
+    borderBottomStyle: 'thick',
+    borderBottomColor: '#abcdef',
+    borderLeftStyle: 'dotted',
+    borderLeftColor: '#fedcba',
+  } as const;
+  const cells: SpreadsheetCells = {
+    A1: { value: '1' },
+    A2: { value: '' },
+    A3: { value: '', bold: true },
+    A4: { value: 'x', bold: false, fontSize: 10, format: 'general' },
+    A5: { value: '=A1*2', ...SPREADSHEET_DEFAULT_STYLE },
+    B7: { value: 'styled', ...styled },
+    XFD100000: { value: '', fillColor: '#00ff00', decimals: -1 },
+  };
+  const doc = new LoroDoc();
+  try {
+    const [id] = importSpreadsheetSheets(
+      doc,
+      [{ name: 'Data', cells, rowCount: 100_000, columnWidths: {} }],
+      true
+    );
+    const fresh = freshSpreadsheetCells(cells);
+    expect(fresh).toEqual(readSpreadsheetCells(doc, id));
+    expect(Object.keys(fresh)).toEqual([
+      'A1',
+      'A3',
+      'A4',
+      'A5',
+      'B7',
+      'XFD100000',
+    ]);
   } finally {
     doc.free();
   }

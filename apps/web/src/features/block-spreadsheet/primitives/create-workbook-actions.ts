@@ -77,7 +77,9 @@ export function createWorkbookActions(options: {
       return;
     }
     if (file.size > XLSX_MAX_BYTES) {
-      setNotice('Choose an Excel workbook up to 5 MB.');
+      setNotice(
+        `Choose an Excel workbook up to ${XLSX_MAX_BYTES / 1024 / 1024} MB.`
+      );
       return;
     }
     pending?.abort();

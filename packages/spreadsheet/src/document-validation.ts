@@ -5,9 +5,9 @@ import {
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
   parseCellAddress,
-  SPREADSHEET_COLUMNS,
   SPREADSHEET_FORMAT_VERSION,
   SPREADSHEET_MAX_CELL_LENGTH,
+  SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
 } from './spreadsheet-document';
 import { SPREADSHEET_LORO_SCHEMA } from './spreadsheet-schema';
@@ -17,7 +17,7 @@ import {
 } from './spreadsheet-sheet-registry';
 import { parseWorkbookMetadata } from './workbook-metadata';
 
-const MAX_DOCUMENT_ENTRIES = 1_000_000;
+const MAX_DOCUMENT_ENTRIES = 5_000_000;
 const textEncoder = new TextEncoder();
 const knownRoots = new Set([
   'spreadsheetMeta',
@@ -109,14 +109,23 @@ function validCellEntry(root: string, key: string, value: unknown): boolean {
   if (root === 'spreadsheetColumnWidths')
     return (
       /^\d+$/.test(field) &&
-      Number(field) < SPREADSHEET_COLUMNS &&
+      Number(field) < SPREADSHEET_MAX_COLUMNS &&
       integer(value, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH)
     );
-  if (root === 'spreadsheetRowAdditions')
+  if (
+    root === 'spreadsheetRowAdditions' ||
+    root === 'spreadsheetColumnAdditions'
+  )
     return (
       field.length > 0 &&
       textEncoder.encode(field).length <= 64 &&
-      integer(value, 1, SPREADSHEET_MAX_ROWS)
+      integer(
+        value,
+        1,
+        root === 'spreadsheetRowAdditions'
+          ? SPREADSHEET_MAX_ROWS
+          : SPREADSHEET_MAX_COLUMNS
+      )
     );
   if (!parseCellAddress(field)) return false;
   if (root === 'spreadsheetValues')

@@ -7,6 +7,7 @@ import { downloadFile } from '@filesystem/download';
 import { createQuery } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
+import { SpreadsheetSkeleton } from '../components/SpreadsheetSkeleton';
 import { importSpreadsheetSheets } from '../core/workbook-document';
 import type { WorkbookFileData } from '../core/workbook-file-types';
 import { createDraftActions } from '../primitives/create-draft-actions';
@@ -37,23 +38,21 @@ export default function UploadedWorkbook() {
       when={query.isSuccess ? query.data : undefined}
       keyed
       fallback={
-        <div
-          class="flex size-full flex-col items-center justify-center gap-3 p-6 text-sm text-ink-muted"
-          role="status"
-        >
-          <span>
-            {query.isError
-              ? query.error instanceof Error
+        <Show when={query.isError} fallback={<SpreadsheetSkeleton />}>
+          <div
+            class="flex size-full flex-col items-center justify-center gap-3 p-6 text-sm text-ink-muted"
+            role="status"
+          >
+            <span>
+              {query.error instanceof Error
                 ? query.error.message
-                : 'Unable to open this workbook.'
-              : 'Opening spreadsheet…'}
-          </span>
-          <Show when={query.isError}>
+                : 'Unable to open this workbook.'}
+            </span>
             <Button size="sm" onClick={() => void query.refetch()}>
               Try again
             </Button>
-          </Show>
-        </div>
+          </div>
+        </Show>
       }
     >
       {(workbook) => <UploadedWorkbookPreview workbook={workbook} />}

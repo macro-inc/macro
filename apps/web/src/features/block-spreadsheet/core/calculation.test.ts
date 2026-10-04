@@ -312,7 +312,7 @@ describe('spreadsheet calculation with IronCalc', () => {
 
   it('ignores source addresses outside the supported grid', () => {
     const result = calculator.calculate(
-      cells({ A0: '1', A201: '2', AA1: '3' })
+      cells({ A0: '1', A201: '2', XFE1: '3' })
     );
     expect(result).toEqual({});
   });

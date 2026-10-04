@@ -67,7 +67,10 @@ title bar with **Ask Macro** and **Share** at the top right. The **File actions*
 ellipsis beside the title uses the same menu as documents, including rename,
 favorite, move, copy, and permission-appropriate file actions. Native spreadsheets
 use a green grid icon in file lists and search. The grid fills
-the panel beneath the formatting and formula bars. They have the `.spreadsheet` file type; uploading an
+the panel beneath the formatting and formula bars. While a workbook opens, a
+shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
+formula cells show a short shimmer bar until their first results arrive; wait for
+real cell text before reading values. They have the `.spreadsheet` file type; uploading an
 Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
@@ -201,18 +204,20 @@ Excel export writes a dated number rather than the label. Typed dates such as
 dates without choosing the Date number format. A difference of two dates stays a
 plain day count, and an explicit number format from the toolbar always wins.
 
-CSV imports a file up to 1 MB into the selection, adding rows if needed within the
-1,000 × 26 limit. Existing cells in that rectangle
-are replaced, with undo available. Excel imports accept up to 5 MB, 10 sheets, and
-1,000 rows × 26 columns per sheet. An import preview lists each sheet and warns about
-unsupported content (for example charts, validation rules, and rich text). Choose
+CSV imports a file up to 20 MB into the selection, adding rows if needed within the
+100,000 × 16,384 limit. Existing cells in that rectangle
+are replaced, with undo available. Excel imports accept up to 50 MB, 300 sheets,
+2,000,000 filled cells, and 100,000 rows × 16,384 columns (A–XFD) per sheet. The footer
+shows the sheet's size, and **+ Add columns** appends 26 more. An import preview lists
+each sheet and warns about unsupported content (for example charts, validation rules,
+and rich text). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
 while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
-current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges and named constants are retained; unsupported named expressions show explicit calculation errors. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
 CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
 calculated values. Clipboard menu actions use the browser clipboard; if access is

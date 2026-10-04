@@ -38,23 +38,25 @@ describe('spreadsheet store', () => {
       });
     });
     await Promise.resolve();
-    const before = store.workbook();
+    // Live cells change in place; structural edits compare by revision.
+    const before = structuredClone(store.workbook());
     const next = before.map((sheet) => ({
       ...sheet,
       cells: { A2: sheet.cells.A1, A3: sheet.cells.A2 },
       metadata: { hiddenRows: [1] },
     }));
-    store.applyStructure(before, next);
+    store.applyStructure(before, next, store.revision());
     expect(store.cells().A1).toBeUndefined();
     expect(store.cells().A2).toEqual({ value: '10', bold: true });
     store.undo();
     expect(store.cells()).toEqual(before[0].cells);
     expect(store.activeSheet().metadata?.hiddenRows).toBeUndefined();
+    const revision = store.revision();
     const peer = new LoroDoc();
     peer.import(doc.export({ mode: 'snapshot' }));
     writeSpreadsheetCells(peer, { B1: { value: 'New collaborator edit' } });
     doc.import(peer.export({ mode: 'update' }));
-    expect(() => store.applyStructure(before, next)).toThrow(
+    expect(() => store.applyStructure(before, next, revision)).toThrow(
       'workbook changed'
     );
     expect(readSpreadsheetCells(doc).B1.value).toBe('New collaborator edit');
@@ -87,9 +89,9 @@ describe('spreadsheet store', () => {
       const before = store.workbook(),
         version = doc.version().toJSON();
       expect(store.canChangeStructure()).toBe(false);
-      expect(() => store.applyStructure(before, before)).toThrow(
-        'shared workbooks'
-      );
+      expect(() =>
+        store.applyStructure(before, before, store.revision())
+      ).toThrow('shared workbooks');
       expect(doc.version().toJSON()).toEqual(version);
       dispose();
       doc.free();
@@ -440,6 +442,7 @@ describe('spreadsheet store', () => {
     store.resizeColumn(0, 240);
     expect(readSpreadsheetLayout(doc)).toEqual({
       rowCount: 200,
+      columnCount: 26,
       columnWidths: {},
     });
     expect(readSpreadsheetCells(doc)).toEqual({});
@@ -453,6 +456,7 @@ describe('spreadsheet store', () => {
     store.resizeColumn(0, 240);
     expect(readSpreadsheetLayout(doc)).toEqual({
       rowCount: 200,
+      columnCount: 26,
       columnWidths: {},
     });
     store.undo();

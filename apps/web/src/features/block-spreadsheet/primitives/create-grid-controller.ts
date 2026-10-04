@@ -48,6 +48,7 @@ type GridSource = {
   setSheetCells?: (id: string, edits: SpreadsheetCellEdits) => void;
   canEdit: Accessor<boolean>;
   rowCount?: Accessor<number>;
+  columnCount?: Accessor<number>;
   hiddenRows?: Accessor<number[]>;
   hiddenColumns?: Accessor<number[]>;
   copyCells?: (copies: CellCopy[]) => Promise<SpreadsheetCellEdits>;
@@ -59,9 +60,10 @@ type GridSource = {
 
 export function createGridController(source: GridSource) {
   const rowCount = () => source.rowCount?.() ?? GRID_ROWS;
+  const columnCount = () => source.columnCount?.() ?? GRID_COLUMNS;
   const boundPosition = (position: CellPosition): CellPosition => ({
     row: Math.max(0, Math.min(rowCount() - 1, position.row)),
-    column: Math.max(0, Math.min(GRID_COLUMNS - 1, position.column)),
+    column: Math.max(0, Math.min(columnCount() - 1, position.column)),
   });
   let operation = 0;
   onCleanup(() => {
@@ -81,7 +83,7 @@ export function createGridController(source: GridSource) {
       row: visible(bounded.row, rowCount(), source.hiddenRows?.() ?? []),
       column: visible(
         bounded.column,
-        GRID_COLUMNS,
+        columnCount(),
         source.hiddenColumns?.() ?? []
       ),
     };
@@ -369,7 +371,7 @@ export function createGridController(source: GridSource) {
     }
     while (column && source.hiddenColumns?.().includes(next.column)) {
       const candidate = next.column + Math.sign(column);
-      if (candidate < 0 || candidate >= GRID_COLUMNS) {
+      if (candidate < 0 || candidate >= columnCount()) {
         next.column = from.column;
         break;
       }
@@ -429,7 +431,12 @@ export function createGridController(source: GridSource) {
     );
     if (hasFormulas && !source.copyCells) return;
     const current = ++operation;
-    const before = source.cells();
+    // Cells change in place, so keep the targets' current contents.
+    const snapshot = (address: string) =>
+      JSON.stringify(source.cells()[address] ?? null);
+    const before = new Map(
+      copies.map(({ to }) => [cellAddress(to), snapshot(cellAddress(to))])
+    );
     setNotice('Copying cells…');
     try {
       // Literal/series fills are synchronous, avoiding an old-value flash while
@@ -452,8 +459,7 @@ export function createGridController(source: GridSource) {
       if (
         Object.keys(edits).some(
           (address) =>
-            JSON.stringify(before[address]) !==
-            JSON.stringify(source.cells()[address])
+            (before.get(address) ?? snapshot(address)) !== snapshot(address)
         )
       ) {
         setNotice('These cells changed while copying. Try again.');
@@ -513,7 +519,7 @@ export function createGridController(source: GridSource) {
           row: start.row + range.cells.length - 1,
           column: start.column + range.cells[0].length - 1,
         };
-        if (focus.row >= rowCount() || focus.column >= GRID_COLUMNS)
+        if (focus.row >= rowCount() || focus.column >= columnCount())
           throw new Error('Add rows or choose a smaller range before pasting.');
         if (range.cut) {
           const edits = Object.fromEntries(
@@ -541,10 +547,10 @@ export function createGridController(source: GridSource) {
       const start = selection().anchor;
       if (
         start.row + rows.length > rowCount() ||
-        start.column + width > GRID_COLUMNS
+        start.column + width > columnCount()
       ) {
         throw new Error(
-          `This sheet has ${rowCount()} rows and ${GRID_COLUMNS} columns. Paste a smaller range or start closer to A1.`
+          `This sheet has ${rowCount()} rows and ${columnCount()} columns. Paste a smaller range or start closer to A1.`
         );
       }
       const edits: Record<string, Partial<SpreadsheetCell>> = {};
@@ -582,7 +588,10 @@ export function createGridController(source: GridSource) {
     const command = event.metaKey || event.ctrlKey;
     if (command && event.key.toLowerCase() === 'a') {
       event.preventDefault();
-      selectRange(origin, { row: rowCount() - 1, column: GRID_COLUMNS - 1 });
+      selectRange(origin, {
+        row: rowCount() - 1,
+        column: columnCount() - 1,
+      });
     } else if (command && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       (event.shiftKey ? redo : undo)();

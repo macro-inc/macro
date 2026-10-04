@@ -26,6 +26,7 @@ import {
   selectionBounds,
 } from '../core/grid-selection';
 import {
+  columnName,
   DEFAULT_COLUMN_WIDTH,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
@@ -83,8 +84,20 @@ export function renderedSelectionCell(
   );
 }
 
-function fontPixels(cell?: SpreadsheetCell) {
-  return ((cell?.fontSize ?? 10) * 4) / 3;
+function fontPixels(cell?: SpreadsheetCell, defaultSize = 10) {
+  return ((cell?.fontSize ?? defaultSize) * 4) / 3;
+}
+
+/** Index of the last offset at or before `position` (offsets ascend). */
+function offsetIndex(offsets: number[], position: number) {
+  let low = 0;
+  let high = offsets.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if (offsets[middle] <= position) low = middle;
+    else high = middle - 1;
+  }
+  return low;
 }
 
 /** Bound measuring work as well as the maximum automatic row height. */
@@ -131,6 +144,9 @@ export function SpreadsheetGrid(props: {
   sheetId?: string;
   complete?: CompleteFormula;
   rowCount?: number;
+  columnCount?: number;
+  /** The imported workbook's font for cells without their own. */
+  defaultFont?: { name: string; size: number };
   columnWidths?: Record<number, number>;
   rowHeights?: Record<number, number>;
   hiddenRows?: number[];
@@ -149,6 +165,8 @@ export function SpreadsheetGrid(props: {
   ) => void | Promise<void>;
   onCopyMetadata?: (cut?: boolean) => string;
   values: Record<string, GridValue>;
+  /** The first calculation is running; formulas without results shimmer. */
+  pendingFormulas?: boolean;
   remoteCursors: SpreadsheetCursor[];
   selection: CellSelection;
   editing: boolean;
@@ -179,14 +197,16 @@ export function SpreadsheetGrid(props: {
   const [scrollElement, setScrollElement] = createSignal<HTMLDivElement>();
   const viewport = createElementSize(scrollElement);
   const [scrollTop, setScrollTop] = createSignal(0);
+  const [scrollLeft, setScrollLeft] = createSignal(0);
   const [touchMode, setTouchMode] = createSignal(isTouchDevice());
   const scale = () => Math.max(0.5, Math.min(2, (props.zoom ?? 100) / 100));
   const headerHeight = () => COLUMN_HEADER_HEIGHT * scale();
   const headerWidth = () => ROW_HEADER_WIDTH * scale();
   const rowCount = () => props.rowCount ?? GRID_ROWS;
-  const allColumns = Array.from({ length: GRID_COLUMNS }, (_, index) => index);
-  const columns = () =>
-    allColumns.filter((column) => !props.hiddenColumns?.includes(column));
+  const columnCount = () => props.columnCount ?? GRID_COLUMNS;
+  const hiddenColumns = createMemo(() => new Set(props.hiddenColumns));
+  const hiddenRows = createMemo(() => new Set(props.hiddenRows));
+  const defaultFontSize = () => props.defaultFont?.size ?? 10;
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
   const [resizing, setResizing] = createSignal<{
     column: number;
@@ -246,10 +266,14 @@ export function SpreadsheetGrid(props: {
     serif: rootStyle.getPropertyValue('--font-serif') || 'serif',
     mono: rootStyle.getPropertyValue('--font-mono') || 'monospace',
   };
-  const fontFamily = (cell?: SpreadsheetCell) =>
-    cell?.fontName
-      ? `${JSON.stringify(cell.fontName)}, ${fontFamilies[cell.fontFamily ?? 'sans']}`
+  const fontFamily = (cell?: SpreadsheetCell) => {
+    const name =
+      cell?.fontName ??
+      (cell?.fontFamily ? undefined : props.defaultFont?.name);
+    return name
+      ? `${JSON.stringify(name)}, ${fontFamilies[cell?.fontFamily ?? 'sans']}`
       : fontFamilies[cell?.fontFamily ?? 'sans'];
+  };
   // No cell measurement runs on pointer movement: only document, calculation,
   // column width, and zoom changes invalidate row geometry.
   const context =
@@ -257,14 +281,31 @@ export function SpreadsheetGrid(props: {
       ? null
       : document.createElement('canvas').getContext('2d');
   const rowHeights = createMemo(() => {
-    const heights = Array.from({ length: rowCount() }, (_, row) =>
-      resizingRow()?.row === row
-        ? resizingRow()!.height
-        : Math.max(ROW_HEIGHT, ((props.rowHeights?.[row] ?? 0) * 4) / 3)
-    );
     // Gridlines stay one CSS pixel wide when the workbook is zoomed.
     const borderInset = 1 / scale();
-    for (const [address, cell] of Object.entries(props.cells)) {
+    const verticalInset = CELL_PADDING_Y * 2 + borderInset;
+    const baseHeight = Math.max(
+      ROW_HEIGHT,
+      Math.ceil(
+        fontPixels(undefined, defaultFontSize()) * CELL_LINE_HEIGHT +
+          verticalInset
+      )
+    );
+    const heights = new Array<number>(rowCount()).fill(baseHeight);
+    for (const [row, height] of Object.entries(props.rowHeights ?? {}))
+      if (Number(row) < heights.length)
+        heights[Number(row)] = Math.max(ROW_HEIGHT, (height * 4) / 3);
+    const resized = resizingRow();
+    if (resized && resized.row < heights.length)
+      heights[resized.row] = resized.height;
+    for (const address in props.cells) {
+      const cell = props.cells[address];
+      // Only wrapped text and larger fonts can grow a row.
+      if (
+        !cell.wrap &&
+        (cell.fontSize === undefined || cell.fontSize <= defaultFontSize())
+      )
+        continue;
       const position = parseCellAddress(address);
       if (!position || position.row >= heights.length) continue;
       if (
@@ -272,9 +313,8 @@ export function SpreadsheetGrid(props: {
         resizingRow()?.row === position.row
       )
         continue;
-      const pixels = fontPixels(cell);
+      const pixels = fontPixels(cell, defaultFontSize());
       const lineHeight = pixels * CELL_LINE_HEIGHT;
-      const verticalInset = CELL_PADDING_Y * 2 + borderInset;
       let lines = 1;
       if (cell.wrap) {
         if (context)
@@ -292,9 +332,11 @@ export function SpreadsheetGrid(props: {
         Math.min(MAX_ROW_HEIGHT, Math.ceil(lines * lineHeight + verticalInset))
       );
     }
-    return heights.map((height, row) =>
-      props.hiddenRows?.includes(row) ? 0 : height * scale()
-    );
+    const hidden = hiddenRows();
+    const zoom = scale();
+    for (let row = 0; row < heights.length; row++)
+      heights[row] = hidden.has(row) ? 0 : heights[row] * zoom;
+    return heights;
   });
   const rowOffsets = createMemo(() => {
     const offsets = [headerHeight()];
@@ -307,9 +349,15 @@ export function SpreadsheetGrid(props: {
     const top = scrollTop() - 160;
     const bottom = scrollTop() + (viewport.height ?? 600) + 160;
     const visible: number[] = [];
-    for (let row = 0; row < rowCount(); row++) {
-      if (offsets[row + 1] >= top && offsets[row] <= bottom) visible.push(row);
-    }
+    for (
+      let row = Math.min(
+        rowCount() - 1,
+        offsetIndex(offsets, Math.max(0, top))
+      );
+      row < rowCount() && offsets[row] <= bottom;
+      row++
+    )
+      if (offsets[row + 1] >= top) visible.push(row);
     return visible;
   });
   const visibleRows = createMemo(() =>
@@ -320,7 +368,7 @@ export function SpreadsheetGrid(props: {
         props.selection.focus.row,
       ]),
     ]
-      .filter((row) => !props.hiddenRows?.includes(row))
+      .filter((row) => !hiddenRows().has(row))
       .sort((a, b) => a - b)
   );
   const bounds = createMemo(() =>
@@ -339,15 +387,37 @@ export function SpreadsheetGrid(props: {
   const activeCell = createSelector(() => cellAddress(props.selection.anchor));
   const columnOffsets = createMemo(() => {
     const offsets = [headerWidth()];
-    for (const column of allColumns)
+    const hidden = hiddenColumns();
+    for (let column = 0; column < columnCount(); column++)
       offsets.push(
         offsets[column] +
-          (props.hiddenColumns?.includes(column)
-            ? 0
-            : Number.parseFloat(width(column)))
+          (hidden.has(column) ? 0 : columnWidth(column) * scale())
       );
     return offsets;
   });
+  // Only columns in view (plus the selection) are rendered, like rows.
+  const visibleColumns = createMemo(() => {
+    const offsets = columnOffsets();
+    const left = scrollLeft() - 200;
+    const right = scrollLeft() + (viewport.width ?? 1200) + 200;
+    const visible = new Set<number>();
+    for (
+      let column = Math.min(
+        columnCount() - 1,
+        offsetIndex(offsets, Math.max(0, left))
+      );
+      column < columnCount() && offsets[column] <= right;
+      column++
+    )
+      if (offsets[column + 1] >= left) visible.add(column);
+    visible.add(Math.min(columnCount() - 1, props.selection.anchor.column));
+    visible.add(Math.min(columnCount() - 1, props.selection.focus.column));
+    const hidden = hiddenColumns();
+    return [...visible]
+      .filter((column) => !hidden.has(column))
+      .sort((a, b) => a - b);
+  });
+  const totalWidth = () => columnOffsets()[columnCount()];
   const rangeStyle = (area = bounds()) => {
     const offsets = columnOffsets();
     return {
@@ -498,11 +568,15 @@ export function SpreadsheetGrid(props: {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return;
-    let measured = MIN_COLUMN_WIDTH;
-    for (let row = 0; row < rowCount(); row++) {
-      const address = cellAddress({ row, column });
+    let measured = Math.max(MIN_COLUMN_WIDTH, 24);
+    const addresses = new Set<string>();
+    for (const source of [props.cells, props.values])
+      for (const address in source)
+        if (parseCellAddress(address)?.column === column)
+          addresses.add(address);
+    for (const address of addresses) {
       const cell = props.cells[address];
-      context.font = `${cell?.italic ? 'italic ' : ''}${cell?.bold ? 600 : 400} ${fontPixels(cell)}px ${fontFamily(cell)}`;
+      context.font = `${cell?.italic ? 'italic ' : ''}${cell?.bold ? 600 : 400} ${fontPixels(cell, defaultFontSize())}px ${fontFamily(cell)}`;
       const text = display(address);
       for (const line of text.split('\n'))
         measured = Math.max(
@@ -531,7 +605,7 @@ export function SpreadsheetGrid(props: {
     if (axis === 'row')
       props.onSelectRange(
         { row: anchor, column: 0 },
-        { row: index, column: GRID_COLUMNS - 1 }
+        { row: index, column: columnCount() - 1 }
       );
     else
       props.onSelectRange(
@@ -554,15 +628,15 @@ export function SpreadsheetGrid(props: {
 
   function positionAtPoint(x: number, y: number): CellPosition {
     const rect = grid.getBoundingClientRect();
-    const column = columnOffsets().findIndex(
-      (offset) => offset > x - rect.left + grid.scrollLeft
+    const column = offsetIndex(
+      columnOffsets(),
+      x - rect.left + grid.scrollLeft
     );
-    const row = rowOffsets().findIndex(
-      (offset) => offset > y - rect.top + grid.scrollTop
-    );
+    const row = offsetIndex(rowOffsets(), y - rect.top + grid.scrollTop);
+    // Offsets start at the first cell after the headers.
     return {
-      row: Math.max(0, row < 0 ? rowCount() - 1 : row - 1),
-      column: Math.max(0, column < 0 ? GRID_COLUMNS - 1 : column - 1),
+      row: Math.min(rowCount() - 1, row),
+      column: Math.min(columnCount() - 1, column),
     };
   }
 
@@ -752,7 +826,7 @@ export function SpreadsheetGrid(props: {
       preserve &&
       (axis === 'row'
         ? area.left === 0 &&
-          area.right === GRID_COLUMNS - 1 &&
+          area.right === columnCount() - 1 &&
           index >= area.top &&
           index <= area.bottom
         : area.top === 0 &&
@@ -764,7 +838,7 @@ export function SpreadsheetGrid(props: {
     props.onSelectRange(
       axis === 'row' ? { row: index, column: 0 } : { row: 0, column: index },
       axis === 'row'
-        ? { row: index, column: GRID_COLUMNS - 1 }
+        ? { row: index, column: columnCount() - 1 }
         : { row: rowCount() - 1, column: index }
     );
   }
@@ -834,7 +908,7 @@ export function SpreadsheetGrid(props: {
           data-keyboard-input
           aria-label="Spreadsheet"
           aria-rowcount={rowCount() + 1}
-          aria-colcount={GRID_COLUMNS + 1}
+          aria-colcount={columnCount() + 1}
           aria-multiselectable="true"
           aria-readonly={props.readonly}
           aria-activedescendant={`${id}-${cellAddress(props.selection.anchor)}`}
@@ -846,6 +920,7 @@ export function SpreadsheetGrid(props: {
           }}
           onScroll={(event) => {
             setScrollTop(event.currentTarget.scrollTop);
+            setScrollLeft(event.currentTarget.scrollLeft);
             if (touchGesture?.kind === 'tap') touchGesture.moved = true;
           }}
           onMouseDown={(event) => {
@@ -939,8 +1014,11 @@ export function SpreadsheetGrid(props: {
           }}
         >
           <div
-            class="relative w-max min-w-full"
-            style={{ height: `${rowOffsets()[rowCount()]}px` }}
+            class="relative min-w-full"
+            style={{
+              height: `${rowOffsets()[rowCount()]}px`,
+              width: `${totalWidth()}px`,
+            }}
           >
             <div
               role="row"
@@ -948,6 +1026,7 @@ export function SpreadsheetGrid(props: {
               class="sticky top-0 z-20 flex bg-panel text-ink-muted font-medium select-none"
               style={{
                 height: `${headerHeight()}px`,
+                width: `${totalWidth()}px`,
                 'font-size': `${11 * scale()}px`,
               }}
             >
@@ -964,7 +1043,7 @@ export function SpreadsheetGrid(props: {
                   onClick={() => {
                     props.onSelectRange(
                       { row: 0, column: 0 },
-                      { row: rowCount() - 1, column: GRID_COLUMNS - 1 }
+                      { row: rowCount() - 1, column: columnCount() - 1 }
                     );
                     focusGrid();
                   }}
@@ -972,13 +1051,16 @@ export function SpreadsheetGrid(props: {
                   ▦
                 </button>
               </div>
-              <For each={columns()}>
+              <For each={visibleColumns()}>
                 {(column) => (
                   <div
                     role="columnheader"
                     aria-colindex={column + 2}
-                    style={{ width: width(column) }}
-                    class="relative shrink-0 border-b border-r border-edge-muted"
+                    style={{
+                      width: width(column),
+                      left: `${columnOffsets()[column]}px`,
+                    }}
+                    class="absolute top-0 bottom-0 border-b border-r border-edge-muted"
                     classList={{
                       'bg-accent-bg text-accent':
                         column >= bounds().left && column <= bounds().right,
@@ -1001,7 +1083,7 @@ export function SpreadsheetGrid(props: {
                       <button
                         type="button"
                         tabIndex={-1}
-                        aria-label={`Select column ${String.fromCharCode(65 + column)}`}
+                        aria-label={`Select column ${columnName(column)}`}
                         class="size-full hover:bg-hover"
                         onPointerDown={(event) =>
                           startHeader(event, 'column', column)
@@ -1017,13 +1099,13 @@ export function SpreadsheetGrid(props: {
                             );
                         }}
                       >
-                        {String.fromCharCode(65 + column)}
+                        {columnName(column)}
                       </button>
                     </SpreadsheetHeaderMenu>
                     <Show when={!props.readonly && props.onResizeColumn}>
                       <div
                         role="separator"
-                        aria-label={`Resize column ${String.fromCharCode(65 + column)}`}
+                        aria-label={`Resize column ${columnName(column)}`}
                         aria-orientation="vertical"
                         aria-valuenow={
                           props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH
@@ -1094,10 +1176,11 @@ export function SpreadsheetGrid(props: {
                 <div
                   role="row"
                   aria-rowindex={row + 2}
-                  class="absolute left-0 flex w-max min-w-full"
+                  class="absolute left-0 flex"
                   style={{
                     top: `${rowOffsets()[row]}px`,
                     height: `${rowHeights()[row]}px`,
+                    width: `${totalWidth()}px`,
                   }}
                 >
                   <div
@@ -1210,7 +1293,7 @@ export function SpreadsheetGrid(props: {
                       />
                     </Show>
                   </div>
-                  <For each={columns()}>
+                  <For each={visibleColumns()}>
                     {(column) => {
                       const address = cellAddress({ row, column });
                       const position = { row, column };
@@ -1251,6 +1334,12 @@ export function SpreadsheetGrid(props: {
                             ? 'right'
                             : 'left';
                       };
+                      const pending = () =>
+                        !!props.pendingFormulas &&
+                        !value() &&
+                        !props.showFormulas &&
+                        !!cell()?.value.startsWith('=') &&
+                        cell()?.format !== 'text';
                       const decorated = () =>
                         !!props.mentions &&
                         !(
@@ -1296,6 +1385,7 @@ export function SpreadsheetGrid(props: {
                           }
                           style={{
                             width: width(column),
+                            left: `${columnOffsets()[column]}px`,
                             'scroll-margin-top': `${headerHeight()}px`,
                             'scroll-margin-left': `${headerWidth()}px`,
                             'border-top': border('Top'),
@@ -1316,7 +1406,7 @@ export function SpreadsheetGrid(props: {
                               cell()?.fillColor
                             ),
                             'font-family': fontFamily(cell()),
-                            'font-size': `${fontPixels(cell()) * scale()}px`,
+                            'font-size': `${fontPixels(cell(), defaultFontSize()) * scale()}px`,
                             'font-style': cell()?.italic ? 'italic' : undefined,
                             'text-decoration-line':
                               [
@@ -1336,7 +1426,7 @@ export function SpreadsheetGrid(props: {
                               'var(--spreadsheet-cell-padding-y)',
                             'line-height': CELL_LINE_HEIGHT,
                           }}
-                          class="relative flex flex-col shrink-0 border-b border-r border-edge-muted bg-surface text-ink select-none"
+                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-surface text-ink select-none"
                           classList={{
                             'font-semibold': cell()?.bold,
                             'tabular-nums': value()?.number !== undefined,
@@ -1412,11 +1502,29 @@ export function SpreadsheetGrid(props: {
                                     : undefined,
                                 }}
                               >
-                                {decorated()
-                                  ? props.mentions!.renderText(
-                                      cell()!.value.replace(/^'/, '')
-                                    )
-                                  : display(address)}
+                                <Show
+                                  when={!pending()}
+                                  fallback={
+                                    // Results are usually figures, so default to the right.
+                                    <div
+                                      class="skeleton-shimmer h-2 w-1/2 max-w-16 rounded-full bg-skeleton"
+                                      classList={{
+                                        'ml-auto':
+                                          cell()?.horizontalAlign !== 'left',
+                                        'mr-auto':
+                                          cell()?.horizontalAlign === 'left' ||
+                                          cell()?.horizontalAlign === 'center',
+                                      }}
+                                      aria-hidden="true"
+                                    />
+                                  }
+                                >
+                                  {decorated()
+                                    ? props.mentions!.renderText(
+                                        cell()!.value.replace(/^'/, '')
+                                      )
+                                    : display(address)}
+                                </Show>
                               </div>
                             }
                           >

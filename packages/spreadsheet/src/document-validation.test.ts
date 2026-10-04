@@ -48,8 +48,8 @@ describe('spreadsheet document validation outside sync', () => {
   it.each([
     ['root', 'content', 'bad'],
     ['spreadsheetUnknown', 'A1', 'bad'],
-    ['spreadsheetValues', 'AA1', 'bad'],
-    ['spreadsheetValues', 'A1001', 'bad'],
+    ['spreadsheetValues', 'XFE1', 'bad'],
+    ['spreadsheetValues', 'A100001', 'bad'],
     ['spreadsheetValues', 'A1', 'x'.repeat(10_001)],
     ['spreadsheetValues', 'bad!sheet!A1', 'bad'],
     ['spreadsheetFontSize', 'A1', 'large'],
@@ -62,7 +62,9 @@ describe('spreadsheet document validation outside sync', () => {
       '{"name":"Sheet1","order":0,"revision":-1}',
     ],
     ['spreadsheetColumnWidths', '0', 641],
-    ['spreadsheetRowAdditions', 'peer', 1001],
+    ['spreadsheetRowAdditions', 'peer', 100_001],
+    ['spreadsheetColumnAdditions', 'peer', 16_385],
+    ['spreadsheetColumnWidths', '16384', 100],
     ['spreadsheetMeta', 'formatVersion', 2],
   ])('rejects invalid %s entries', (root, key, value) => {
     const doc = workbook();
@@ -73,10 +75,12 @@ describe('spreadsheet document validation outside sync', () => {
   });
 
   it.each([
-    '{"merges":["A1:AA1001"]}',
-    '{"rowHeights":{"1000":32}}',
-    '{"hiddenColumns":[26]}',
-    '{"freeze":{"rows":1001,"columns":1}}',
+    '{"merges":["A1:XFE1"]}',
+    '{"merges":["A1:A100001"]}',
+    '{"rowHeights":{"100000":32}}',
+    '{"hiddenColumns":[16384]}',
+    '{"freeze":{"rows":100001,"columns":1}}',
+    '{"arrayFormulas":{"A1":"B1:B3"}}',
     '{"definedNames":[{"name":"Rate","formula":false}]}',
     '{"unexpected":true}',
   ])('rejects invalid workbook metadata %s', (metadata) => {

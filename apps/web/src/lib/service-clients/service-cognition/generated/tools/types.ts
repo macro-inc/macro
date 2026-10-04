@@ -1836,7 +1836,7 @@ export interface SpreadsheetOverride {
  */
 export interface SpreadsheetCellInput {
   /**
-   * A1 address, from A1 through Z1000.
+   * A1 address, from A1 through XFD100000.
    */
   address: string;
   /**
@@ -4123,11 +4123,11 @@ export interface EditSpreadsheet {
  */
 export interface SpreadsheetColumnWidth {
   /**
-   * Column letter A through Z.
+   * Column letter A through XFD.
    */
   column: string;
   /**
-   * Width in pixels, 64 through 640.
+   * Width in pixels, 8 through 640.
    */
   width: number;
 }
