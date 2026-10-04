@@ -132,6 +132,7 @@ export const TOKENS = {
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
       companies: 'sidebar.goTo.companies',
+      support: 'sidebar.goTo.support',
       folders: 'sidebar.goTo.folders',
     },
   },

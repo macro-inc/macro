@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record FROM support_tickets WHERE team_id=$1 AND ($2::text IS NULL OR record->'customer'->>'company_id'=$2) AND ($3::text IS NULL OR record->'customer'->>'contact_id'=$3) AND ($4::timestamptz IS NULL OR (updated_at,id)<($4,$5)) ORDER BY updated_at DESC,id DESC LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "683f5f5d14f6445100bec278b480e936b9d1a625b9554e8e5da21ea7b6e49f44"
+}

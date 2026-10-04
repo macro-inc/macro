@@ -20,6 +20,55 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
+    /// Queue a Support reply once per canonical message id. A retry repairs a
+    /// failed enqueue of the existing scheduled row instead of inserting again.
+    pub async fn send_support_reply(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        request_id: uuid::Uuid,
+        mut input: CreateDraftInput,
+    ) -> Result<(), EmailErr> {
+        let link_ids = [link.id];
+        if let Some(id) = self
+            .email_repo
+            .message_id_for_client_draft_id(request_id, &link_ids)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))?
+        {
+            let message = self
+                .email_repo
+                .get_simple_message(id, &link_ids)
+                .await
+                .map_err(|e| EmailErr::RepoErr(e.into()))?
+                .ok_or(EmailErr::MessageDeliveryConflict(request_id))?;
+            if Some(message.thread_db_id) != input.thread_db_id {
+                return Err(EmailErr::MessageDeliveryConflict(request_id));
+            }
+            if message.is_sent {
+                return Ok(());
+            }
+            let scheduled = self
+                .email_repo
+                .scheduled_send_times_by_message_ids(&[id])
+                .await
+                .map_err(|e| EmailErr::RepoErr(e.into()))?;
+            let at = scheduled
+                .get(&id)
+                .ok_or(EmailErr::MessageDeliveryConflict(request_id))?;
+            let delay = (*at - chrono::Utc::now()).num_seconds().clamp(0, 900) as i32;
+            self.enqueuer
+                .enqueue_scheduled_message(link.id, id, Some(delay))
+                .await
+                .map_err(|e| EmailErr::RepoErr(e.into()))?;
+            return Ok(());
+        }
+        input.db_id = None;
+        input.draft_client_binding = Some(request_id);
+        self.send_message_impl(link, accessible_inboxes, input)
+            .await?;
+        Ok(())
+    }
     #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn send_message_impl(
         &self,

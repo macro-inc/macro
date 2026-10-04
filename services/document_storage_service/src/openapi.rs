@@ -1,6 +1,8 @@
 #![allow(unused)]
 #![recursion_limit = "256"]
 
+mod macro_support;
+
 mod api;
 mod config;
 mod model;

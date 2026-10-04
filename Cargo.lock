@@ -6051,6 +6051,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent",
  "agent_changes",
  "agent_session",
  "ai_billing",
@@ -6060,6 +6061,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-graphql-axum",
+ "async-trait",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -6143,6 +6145,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "messages",
  "mockall",
  "model",
@@ -6188,6 +6191,7 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "support",
  "sync_service_client",
  "sync_service_hex",
  "system_properties",
@@ -18303,6 +18307,29 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "support"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "symphonia"

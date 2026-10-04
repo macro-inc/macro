@@ -19,6 +19,10 @@ import {
   reminderIdFromDetailContent,
 } from '@app/features/reminders/reminder-navigation';
 import {
+  supportSearch,
+  supportSearchCodec,
+} from '@app/features/support/navigation';
+import {
   canonicalRoute,
   decodePane,
   decodeSegment,
@@ -341,6 +345,24 @@ export function resolveContentLocation(
       ...savedSearch,
       [channelsSearch.namespace]: channelSearch,
     };
+  }
+  if (
+    content.type === 'component' &&
+    content.id === 'support' &&
+    isRecord(content.params)
+  ) {
+    const params = content.params;
+    const supportParams = supportSearchCodec.serialize({
+      ticket:
+        typeof params.initialTicket === 'string' ? params.initialTicket : '',
+      companyId: typeof params.companyId === 'string' ? params.companyId : '',
+      contactId: typeof params.contactId === 'string' ? params.contactId : '',
+    });
+    if (supportParams)
+      contentSearch = {
+        ...contentSearch,
+        [supportSearch.namespace]: supportParams,
+      };
   }
   const search = filterRouteSearch(routes, route, contentSearch);
   const location: SplitLocation = { route };

@@ -8,6 +8,7 @@ import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatsCircleIcon from '@phosphor/chats-circle.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FolderSimpleIcon from '@phosphor/folder-simple.svg';
+import HeadsetIcon from '@phosphor/headset.svg';
 import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
@@ -17,6 +18,7 @@ import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
 import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import HeadsetFillIcon from '@phosphor-fill/headset-fill.svg';
 import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
 import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
@@ -125,6 +127,15 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: BuildingsFillIcon,
     hotkey: 'o',
     hotkeyToken: TOKENS.sidebar.goTo.companies,
+  },
+  {
+    id: 'support',
+    label: 'Support',
+    href: '/support',
+    icon: HeadsetIcon,
+    iconActive: HeadsetFillIcon,
+    hotkey: 'u',
+    hotkeyToken: TOKENS.sidebar.goTo.support,
   },
 ] satisfies SidebarNextNavItem[];
 

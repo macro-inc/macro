@@ -1,0 +1,24 @@
+[package]
+name = "support"
+version = "0.1.0"
+edition = "2024"
+publish = false
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", features = ["axum", "inbound", "ports"] }
+macro_authorization = { path = "../macro_authorization", features = ["axum"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE support_settings SET email_cursor_at=$2,email_cursor_id=$3 WHERE team_id=$1 AND (email_cursor_at,email_cursor_id)<($2,$3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7d25b35411d97968cd7f5ccb234ac427dabbbd116a44ccc1ff581ea1b663354"
+}

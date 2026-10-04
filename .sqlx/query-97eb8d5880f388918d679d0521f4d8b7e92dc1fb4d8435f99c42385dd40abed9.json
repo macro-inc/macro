@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE support_agent_jobs j SET lease_until=now()+interval '5 minutes',attempts=attempts+1 FROM support_tickets t WHERE t.id=j.ticket_id AND j.ticket_id IN (SELECT ticket_id FROM support_agent_jobs WHERE due_at<=now() AND (lease_until IS NULL OR lease_until<now()) AND attempts<5 ORDER BY due_at LIMIT 4 FOR UPDATE SKIP LOCKED) RETURNING j.ticket_id,j.trigger_id,t.team_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ticket_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "trigger_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "97eb8d5880f388918d679d0521f4d8b7e92dc1fb4d8435f99c42385dd40abed9"
+}

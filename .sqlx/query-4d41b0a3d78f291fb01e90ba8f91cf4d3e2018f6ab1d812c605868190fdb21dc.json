@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO support_settings(team_id,user_id,widget_key,record,email_cursor_at,email_cursor_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(team_id) DO UPDATE SET user_id=EXCLUDED.user_id,record=EXCLUDED.record,email_cursor_at=EXCLUDED.email_cursor_at,email_cursor_id=EXCLUDED.email_cursor_id WHERE support_settings.widget_key=EXCLUDED.widget_key",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Jsonb",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d41b0a3d78f291fb01e90ba8f91cf4d3e2018f6ab1d812c605868190fdb21dc"
+}

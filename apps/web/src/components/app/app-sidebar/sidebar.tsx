@@ -46,6 +46,7 @@ import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
 import GearIcon from '@phosphor/gear.svg';
+import HeadsetIcon from '@phosphor/headset.svg';
 import HomeIcon from '@phosphor/house.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import ActivityIcon from '@phosphor/pulse.svg';
@@ -623,6 +624,14 @@ const buildSidebarLinks = (
     ];
   }
 
+  links.push({
+    id: 'support',
+    label: 'Support',
+    href: '/support',
+    icon: HeadsetIcon,
+    hotkey: 'u',
+    hotkeyToken: TOKENS.sidebar.goTo.support,
+  });
   return links;
 };
 

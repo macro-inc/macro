@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO support_visitor_sessions(token_hash,ticket_id,origin,expires_at) VALUES($1,$2,$3,now()+interval '30 days')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03635a3da870e0768915649c1b7b65ae1555af586c6119b42f83fcd72f879459"
+}

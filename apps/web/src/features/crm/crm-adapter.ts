@@ -69,6 +69,10 @@ import {
 import { useTeamCrmConfig } from './queries/team-config';
 import { createAppDealStages } from './stage-adapter';
 
+const CrmRecordSupport = lazy(async () => ({
+  default: (await import('./support-integration')).CrmRecordSupport,
+}));
+
 // Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
@@ -172,6 +176,7 @@ export function createAppCrmContext(): CrmContext {
     createRecordCalls: (scope) =>
       withRowNotifications(useRecordCallsQuery(useSoupAstItemsQuery, scope)),
     RecordTasks: CrmRecordTasks,
+    RecordSupport: CrmRecordSupport,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

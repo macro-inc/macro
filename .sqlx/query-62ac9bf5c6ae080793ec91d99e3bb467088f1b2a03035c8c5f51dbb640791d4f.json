@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.record FROM support_messages m JOIN support_tickets t ON t.id=m.ticket_id WHERE t.id=$1 AND t.team_id=$2 AND (NOT $3 OR m.public) ORDER BY m.created_at DESC,m.id DESC LIMIT 200",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "62ac9bf5c6ae080793ec91d99e3bb467088f1b2a03035c8c5f51dbb640791d4f"
+}

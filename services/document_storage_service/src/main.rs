@@ -1,4 +1,6 @@
 #![recursion_limit = "256"]
+mod macro_support;
+
 use crate::{
     api::{
         MACRO_INTERNAL_USER_ID,
@@ -1789,7 +1791,74 @@ async fn run() -> anyhow::Result<()> {
         entity_access_service.clone(),
     ));
 
+    let support_creator = document_creator.clone();
+    let support_service = support::domain::service::Service {
+        repository: Arc::new(support::outbound::postgres::PgRepository { pool: db.clone() }),
+        platform: Arc::new(macro_support::MacroSupportPlatform {
+            channels: channels_service.clone(),
+            messages: message_commands.clone(),
+            access: entity_access_service.clone(),
+            crm: crm_service.clone(),
+            email: email_service.clone(),
+            email_repo: EmailPgRepo::new(db.clone()),
+            documents: document_service.clone(),
+            properties: properties_service.clone(),
+            usage: ai_usage::pg_recorder_with_enforcement(
+                db.clone(),
+                config.enable_ai_usage_enforcement,
+            ),
+            create_task: Arc::new(move |team, user, ticket, title, description| {
+                let creator = support_creator.clone();
+                Box::pin(async move {
+                    use macro_user_id::cowlike::CowLike;
+                    let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str(&user)
+                        .map(CowLike::into_owned)
+                        .map_err(|_| support::domain::model::Error::Forbidden)?;
+                    let mention = mention_utils::serialize::channel_mention(
+                        &ticket.channel_id.to_string(),
+                        &ticket.subject,
+                        Default::default(),
+                    )?;
+                    let created = creator
+                        .create_markdown_text(
+                            &model_owner::CreationPrincipal::User(user),
+                            documents_hex::domain::create::NewMarkdownTextDocument {
+                                metadata:
+                                    documents_hex::domain::create::NewDocumentMetadata::builder(
+                                        title,
+                                    )
+                                    .initial_link_share(
+                                        models_permissions::share_permission::LinkShareState::Off,
+                                    )
+                                    .build(),
+                                markdown: format!(
+                                    "{description}\n\nSupport conversation: {mention}"
+                                ),
+                                subtype: documents_hex::domain::create::MarkdownSubtype::Task {
+                                    property_values: None,
+                                    share_with_team: true,
+                                    team_id: Some(team),
+                                },
+                            },
+                        )
+                        .await
+                        .map_err(|e| {
+                            support::domain::model::Error::Internal(
+                                rootcause::report!(e.to_string()).into(),
+                            )
+                        })?;
+                    Ok(created.document_id().to_string())
+                })
+            }),
+        }),
+    };
+    tokio::spawn(support::inbound::worker::run(support_service.clone()));
     let api_context = ApiContext {
+        support_state: support::inbound::router::SupportState {
+            service: support_service,
+            access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
         dictation_state,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(

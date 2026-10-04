@@ -21,3 +21,6 @@ pub mod scheduled;
 pub mod scheduled_delivery;
 #[cfg(feature = "ports")]
 pub mod service;
+
+/// Support intake projections from the owning email domain.
+pub mod support;

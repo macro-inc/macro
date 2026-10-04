@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM support_agent_jobs WHERE ticket_id=$1 AND trigger_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e586979161aadcb296cbc1ce05673faf65e0a49ff086a5341e3838450a1b6431"
+}
