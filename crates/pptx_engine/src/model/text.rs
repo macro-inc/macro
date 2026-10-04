@@ -503,13 +503,19 @@ fn resolve_inner(
                     props.underline = Underline::Single;
                 }
             }
+            let cached = || {
+                doc.child(r, Ns::A, "t")
+                    .map(|t| doc.text(t))
+                    .unwrap_or_default()
+            };
             let text = match &kind {
                 RunKind::Break => String::new(),
                 RunKind::Field(t) if t == "slidenum" => ctx.number.to_string(),
-                _ => doc
-                    .child(r, Ns::A, "t")
-                    .map(|t| doc.text(t))
-                    .unwrap_or_default(),
+                RunKind::Field(t) => ctx
+                    .clock
+                    .and_then(|now| now.format(t))
+                    .unwrap_or_else(cached),
+                RunKind::Text => cached(),
             };
             runs.push(Run {
                 text,

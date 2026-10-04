@@ -7,6 +7,7 @@
 use crate::collab::{Entries, EntryChange};
 use crate::edit::{CellRef, EditOp, Editor, FindOptions};
 use crate::font::FontDb;
+use crate::model::field::FieldTime;
 use crate::model::presentation::Presentation;
 use crate::render::Layer;
 use std::cell::RefCell;
@@ -23,6 +24,19 @@ fn bundled_fonts() -> FontDb {
         db.register(data.to_vec());
     }
     db
+}
+
+/// The browser's local time, which automatic date fields show.
+fn local_now() -> FieldTime {
+    let d = js_sys::Date::new_0();
+    FieldTime {
+        year: d.get_full_year() as i32,
+        month: (d.get_month() + 1) as u8,
+        day: d.get_date() as u8,
+        hour: d.get_hours() as u8,
+        minute: d.get_minutes() as u8,
+        second: d.get_seconds() as u8,
+    }
 }
 
 fn js_err(e: impl std::fmt::Display) -> JsError {
@@ -58,7 +72,8 @@ impl PptxDocument {
     #[wasm_bindgen(constructor)]
     pub fn new(bytes: Vec<u8>) -> Result<PptxDocument, JsError> {
         console_error_panic_hook::set_once();
-        let pres = Presentation::open(bytes).map_err(js_err)?;
+        let mut pres = Presentation::open(bytes).map_err(js_err)?;
+        pres.set_clock(Some(local_now()));
         Ok(Self {
             editor: Editor::new(pres),
         })
@@ -70,7 +85,8 @@ impl PptxDocument {
     pub fn from_entries(entries: &str, seed: f64) -> Result<PptxDocument, JsError> {
         console_error_panic_hook::set_once();
         let entries: Entries = serde_json::from_str(entries).map_err(js_err)?;
-        let pres = Presentation::from_entries(entries, seed as u64).map_err(js_err)?;
+        let mut pres = Presentation::from_entries(entries, seed as u64).map_err(js_err)?;
+        pres.set_clock(Some(local_now()));
         Ok(Self {
             editor: Editor::new(pres),
         })
@@ -102,6 +118,12 @@ impl PptxDocument {
 
     fn pres(&mut self) -> &mut Presentation {
         self.editor.presentation_mut()
+    }
+
+    /// Brings the time automatic date fields show up to date (an undo may
+    /// have restored an older one).
+    fn tick(&mut self) {
+        self.pres().set_clock(Some(local_now()));
     }
 
     /// Number of slides.
@@ -136,6 +158,7 @@ impl PptxDocument {
 
     /// Renders a slide; returns straight-alpha RGBA rows (`width × height × 4` bytes).
     pub fn render(&mut self, index: usize, width: u32) -> Result<Vec<u8>, JsError> {
+        self.tick();
         let width = width.clamp(16, 8192);
         let raster = FONTS
             .with(|f| self.pres().render_slide(index, width, &f.borrow()))
@@ -158,6 +181,7 @@ impl PptxDocument {
             "only" => Layer::Only(shape),
             other => return Err(JsError::new(&format!("unknown layer mode `{other}`"))),
         };
+        self.tick();
         let width = width.clamp(16, 8192);
         let raster = FONTS
             .with(|f| self.pres().render_layer(index, layer, width, &f.borrow()))
@@ -191,6 +215,7 @@ impl PptxDocument {
     /// Batches with the same `group` merge into one undo step (typing).
     pub fn apply(&mut self, ops: &str, group: Option<String>) -> Result<String, JsError> {
         let ops: Vec<EditOp> = serde_json::from_str(ops).map_err(js_err)?;
+        self.tick();
         // Collaborative undo runs on the shared maps, not on local snapshots.
         let result = if self.editor.presentation().is_collaborative() {
             FONTS.with(|f| self.pres().apply(&ops, &f.borrow()))

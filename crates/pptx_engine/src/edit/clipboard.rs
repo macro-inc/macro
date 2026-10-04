@@ -395,7 +395,7 @@ impl Presentation {
             return Err(Error::InvalidEdit("no shapes to copy".into()));
         }
         let slide = self.part(&entry.part)?;
-        let ctx = self.context_for(slide.clone(), index + 1)?;
+        let ctx = self.context_for(slide.clone(), self.slide_number(index))?;
         let mut scratch = (*slide.doc).clone();
         let mut chosen: Vec<NodeId> = Vec::new();
         for &id in ids {
