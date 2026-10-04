@@ -120,3 +120,71 @@ fn notes_are_inserted_from_the_body_only() {
     assert!(!r.changed);
     assert_eq!(r.story.kind, StoryKind::Footnote);
 }
+
+const WITH_NOTE: &str = r#"<w:p><w:r><w:t>Alpha</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r><w:r><w:t xml:space="preserve"> Beta</w:t></w:r></w:p>"#;
+
+const NOTES: &str = r#"<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> Defined terms.</w:t></w:r></w:p></w:footnote>"#;
+
+fn copy_alpha_with_its_note(s: &mut Session) -> Vec<ClipParagraph> {
+    let first = para(s, 0);
+    s.apply(
+        &[EditOp::Select {
+            anchor: Pos::new(first.clone(), 0),
+            focus: Pos::new(first, 6),
+        }],
+        None,
+        fonts(),
+    )
+    .unwrap();
+    s.copy_selection().paragraphs
+}
+
+/// The ids of the notes the body refers to, in order.
+fn references(s: &Session) -> Vec<i64> {
+    let xml = s.document().document_xml();
+    xml.match_indices("<w:footnoteReference w:id=\"")
+        .map(|(i, m)| {
+            let rest = &xml[i + m.len()..];
+            rest[..rest.find('"').unwrap()].parse().unwrap()
+        })
+        .collect()
+}
+
+#[test]
+fn pasting_a_note_reference_copies_the_note() {
+    let mut s = open_with(
+        WITH_NOTE,
+        &Parts {
+            footnotes: Some(NOTES),
+            ..Parts::default()
+        },
+    );
+    let clip = copy_alpha_with_its_note(&mut s);
+    caret_at(&mut s, 0, 11);
+    run(
+        &mut s,
+        EditOp::Paste {
+            paragraphs: clip.clone(),
+            same_document: true,
+        },
+    );
+    let refs = references(&s);
+    assert_eq!(refs.len(), 2, "{refs:?}");
+    assert_eq!(refs[0], 1);
+    assert_ne!(refs[1], 1);
+    // The copy has the note's text.
+    let copy = &s.document().footnotes().by_id[&refs[1]];
+    assert_eq!(story_texts(&copy.story), vec!["^ Defined terms."]);
+    // From another document, the reference is left behind.
+    let mut other = open(&p("Gamma"));
+    caret_at(&mut other, 0, 5);
+    run(
+        &mut other,
+        EditOp::Paste {
+            paragraphs: clip,
+            same_document: false,
+        },
+    );
+    assert_eq!(texts(&other), vec!["GammaAlpha"]);
+    assert!(references(&other).is_empty());
+}

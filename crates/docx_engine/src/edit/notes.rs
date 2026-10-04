@@ -205,6 +205,70 @@ fn note_styles(doc: &mut Document, endnote: bool) -> Result<Option<(String, Stri
     Ok(Some(ids))
 }
 
+/// An id no note of a part has, and that a peer adding a note at the same
+/// time is unlikely to pick; kept small, as Word's are.
+fn fresh_id(doc: &Document, tree: &XmlTree) -> i64 {
+    let used: Vec<i64> = tree
+        .children(tree.root())
+        .filter_map(|n| tree.w_attr(n, "id").and_then(crate::xml::parse_int))
+        .collect();
+    let next = used.iter().copied().max().unwrap_or(0).max(0) + 1;
+    let random = doc.ids.lock().ok().and_then(|g| g.source().cloned());
+    match random {
+        Some(source) => (0..64)
+            .map(|_| source.next_in(1_000..30_000) as i64)
+            .find(|id| !used.contains(id))
+            .unwrap_or(next),
+        None => next,
+    }
+}
+
+/// The element and note a reference object points at (`footnoteReference`
+/// or `endnoteReference` markup): whether it is an endnote, and its id.
+pub(super) fn reference(xml: &str) -> Option<(bool, i64)> {
+    let endnote = if xml.contains("footnoteReference") {
+        false
+    } else if xml.contains("endnoteReference") {
+        true
+    } else {
+        return None;
+    };
+    let id = super::revise::attribute(xml, "id")?.parse().ok()?;
+    Some((endnote, id))
+}
+
+/// Copies a note under a new id, for a pasted reference to it (a note
+/// has one reference, so a pasted one gets a note of its own, as in
+/// Word). Returns the new id.
+pub(super) fn duplicate(doc: &mut Document, endnote: bool, id: i64) -> Result<Option<i64>> {
+    let Some(note) = doc.notes_of(endnote).note_xml(id) else {
+        return Ok(None);
+    };
+    let part = notes_part(doc, endnote)?;
+    let bytes = doc.pkg.read(&part)?.into_owned();
+    let tree = XmlTree::parse(&bytes, &part)?;
+    let copy_id = fresh_id(doc, &tree);
+    // The id in the note's start tag.
+    let start_end = note.find('>').unwrap_or(note.len());
+    let (start, rest) = note.split_at(start_end);
+    let Some(at) = start.find(" w:id=\"").or_else(|| start.find(":id=\"")) else {
+        return Ok(None);
+    };
+    let value_start = start[at..].find('"').map_or(start.len(), |q| at + q + 1);
+    let value_end = start[value_start..]
+        .find('"')
+        .map_or(start.len(), |q| value_start + q);
+    let copy = format!(
+        "{}{copy_id}{}{rest}",
+        &start[..value_start],
+        &start[value_end..]
+    );
+    let xml = append_to_root(&tree, &copy);
+    doc.pkg.write(&part, xml.into_bytes(), None);
+    doc.load_parts()?;
+    Ok(Some(copy_id))
+}
+
 /// What a new note needs from the body: the reference's character style
 /// (or `None` for direct superscript).
 pub(super) struct NewNote {
@@ -224,21 +288,7 @@ pub(super) fn add_note(doc: &mut Document, endnote: bool) -> Result<NewNote> {
     let tree = XmlTree::parse(&bytes, &part)?;
     let w = prefix_of(&tree);
     let q = |l: &str| qualify(&w, l);
-    // An id no other note has, and that a peer adding a note at the same
-    // time is unlikely to pick; kept small, as Word's are.
-    let used: Vec<i64> = tree
-        .children(tree.root())
-        .filter_map(|n| tree.w_attr(n, "id").and_then(crate::xml::parse_int))
-        .collect();
-    let next = used.iter().copied().max().unwrap_or(0).max(0) + 1;
-    let random = doc.ids.lock().ok().and_then(|g| g.source().cloned());
-    let id = match random {
-        Some(source) => (0..64)
-            .map(|_| source.next_in(1_000..30_000) as i64)
-            .find(|id| !used.contains(id))
-            .unwrap_or(next),
-        None => next,
-    };
+    let id = fresh_id(doc, &tree);
     let (ppr, mark_rpr) = match &styles {
         Some((text, reference)) => (
             format!(

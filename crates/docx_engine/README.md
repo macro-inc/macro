@@ -85,7 +85,9 @@ area (`PageInfo::notes`) enters the note under it. `insertNote` adds a
 footnote or endnote at the caret, as Word does: the reference in the text
 (Footnote Reference style), the note (Footnote Text, starting with its
 mark), the notes part with its separators and the styles when the document
-lacks them; the caret moves into the new note.
+lacks them; the caret moves into the new note. Pasting a note reference
+within the document copies its note under a new id (a note has one
+reference); pasted from another document, the reference is left out.
 
 ### Collaboration
 

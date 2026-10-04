@@ -352,6 +352,20 @@ pub(crate) fn paste(
             let Some(mut attrs) = run_attrs(run, base, same_document, &w, &styles) else {
                 continue;
             };
+            // A note reference: the note comes along as a copy of its own
+            // within the document, and is left behind from another one.
+            if let Some(object) = attrs.object().map(str::to_owned)
+                && let Some((endnote, id)) = super::notes::reference(&object)
+            {
+                if !same_document {
+                    continue;
+                }
+                let Some(copy) = super::notes::duplicate(txn.doc, endnote, id)? else {
+                    continue;
+                };
+                let renumbered = object.replacen(&format!("\"{id}\""), &format!("\"{copy}\""), 1);
+                attrs = attrs.with(key::OBJ, Some(&renumbered));
+            }
             if let Some(r) = rev {
                 attrs = revise::inserted(&attrs, previous.as_ref(), r);
             }
