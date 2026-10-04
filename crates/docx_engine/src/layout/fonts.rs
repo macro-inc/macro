@@ -32,7 +32,8 @@ impl VMetrics {
 /// hhea descender, hhea line gap) of the fonts Word documents name most,
 /// taken from the Microsoft originals. Layout uses them whenever a document
 /// asks for one of these families, so line heights match Word even where
-/// the bundled substitute's vertical metrics differ (Caladea's do).
+/// the bundled substitute's vertical metrics differ (Caladea's do, and the
+/// Unicode face that draws Symbol and Wingdings bullets).
 const TRUE_METRICS: &[(&str, [f32; 6])] = &[
     (
         "times new roman",
@@ -49,6 +50,8 @@ const TRUE_METRICS: &[(&str, [f32; 6])] = &[
     ("verdana", [2048.0, 2059.0, 430.0, 2059.0, 430.0, 0.0]),
     ("tahoma", [2048.0, 2049.0, 423.0, 2049.0, 423.0, 0.0]),
     ("georgia", [2048.0, 1878.0, 449.0, 1878.0, 449.0, 0.0]),
+    ("symbol", [2048.0, 2059.0, 443.0, 2059.0, 443.0, 0.0]),
+    ("wingdings", [2048.0, 1841.0, 420.0, 1841.0, 420.0, 0.0]),
 ];
 
 /// Families drawn by squeezing their wider substitute: Arial Narrow is
