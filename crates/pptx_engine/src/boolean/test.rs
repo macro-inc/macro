@@ -404,7 +404,7 @@ fn random_operand(rng: &mut Lcg) -> Operand {
 #[test]
 fn random_shapes_keep_the_area_identities() {
     let mut rng = Lcg(7);
-    for round in 0..80 {
+    for round in 0..300 {
         let a = random_operand(&mut rng);
         let b = random_operand(&mut rng);
         let ops = [a.clone(), b.clone()];
@@ -416,7 +416,7 @@ fn random_shapes_keep_the_area_identities() {
         let comb = total_area(&merge(&ops, MergeMode::Combine));
         let pieces = merge(&ops, MergeMode::Fragment);
         let frag = total_area(&pieces);
-        let tol = 0.01 * (aa + ab) + 0.5;
+        let tol = 0.003 * (aa + ab) + 0.1;
         assert!(
             close(union + inter, aa + ab, tol),
             "round {round}: union {union} + intersect {inter} vs {aa} + {ab}"
@@ -433,6 +433,17 @@ fn random_shapes_keep_the_area_identities() {
         assert_closed(&pieces);
         assert!(pieces.iter().all(|p| area(&p.loops[0]) > 0.0));
     }
+}
+
+#[test]
+fn many_overlapping_shapes_fragment_into_tiles() {
+    let mut rng = Lcg(11);
+    let ops: Vec<Operand> = (0..20).map(|_| random_operand(&mut rng)).collect();
+    let union = total_area(&merge(&ops, MergeMode::Union));
+    let pieces = merge(&ops, MergeMode::Fragment);
+    assert!(pieces.len() > 100);
+    assert_closed(&pieces);
+    assert!(close(total_area(&pieces), union, 0.003 * union));
 }
 
 #[test]
