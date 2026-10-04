@@ -1,5 +1,6 @@
 //! Resolved formatting of paragraphs and runs, with caches.
 
+use crate::hash::FxMap;
 use crate::model::content::{Attrs, key};
 use crate::model::numbering::{Label, Numbering};
 use crate::model::props::{PPr, ParaProps, RPr, RunProps, TblPr, TcPr, ThemeInfo, TrPr};
@@ -7,7 +8,6 @@ use crate::model::section::Section;
 use crate::model::settings::Settings;
 use crate::model::styles::Styles;
 use crate::xml::{Decl, SnippetContext};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -63,9 +63,25 @@ pub struct Formats<'d> {
 /// Resolved formats, kept between layouts of the same style sheet.
 #[derive(Debug, Default)]
 pub struct FormatCache {
-    paras: Mutex<HashMap<(String, TableCtx), Arc<ParaFormat>>>,
-    runs: Mutex<HashMap<(Attrs, usize), Arc<RunProps>>>,
-    run_snippets: Mutex<HashMap<(Box<str>, Box<str>), RPr>>,
+    paras: Mutex<FxMap<(String, TableCtx), Arc<ParaFormat>>>,
+    runs: Mutex<FxMap<(Attrs, usize), Arc<RunProps>>>,
+    run_snippets: Mutex<FxMap<(Box<str>, Box<str>), RPr>>,
+    /// Resolved runs by the identity of their attribute set (which the
+    /// entry holds, so the address stays its own) and paragraph format.
+    run_ids: Mutex<FxMap<(usize, usize), (Attrs, Arc<RunProps>)>>,
+    parsed: Mutex<Parsed>,
+}
+
+/// Property elements parsed from their XML, by kind (`tblPr`, `tcPr`...).
+#[derive(Default)]
+struct Parsed(FxMap<&'static str, FxMap<Box<str>, Arc<dyn std::any::Any + Send + Sync>>>);
+
+impl std::fmt::Debug for Parsed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entries(self.0.iter().map(|(k, v)| (k, v.len())))
+            .finish()
+    }
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -101,6 +117,31 @@ impl<'d> Formats<'d> {
     /// The snippet context of the main part.
     pub fn snippets(&self) -> &SnippetContext {
         &self.snippets
+    }
+
+    /// A property element read from its XML once per style sheet: tables
+    /// repeat the same row and cell properties, and every layout reads them.
+    pub fn parsed<T: Clone + Send + Sync + 'static>(
+        &self,
+        kind: &'static str,
+        xml: &str,
+        read: impl FnOnce() -> T,
+    ) -> T {
+        if let Some(v) = lock(&self.cache.parsed)
+            .0
+            .get(kind)
+            .and_then(|m| m.get(xml))
+            .and_then(|v| v.downcast_ref::<T>())
+        {
+            return v.clone();
+        }
+        let value = read();
+        lock(&self.cache.parsed)
+            .0
+            .entry(kind)
+            .or_default()
+            .insert(xml.into(), Arc::new(value.clone()));
+        value
     }
 
     /// Reads direct paragraph properties from a `w:pPr` snippet.
@@ -253,6 +294,24 @@ impl<'d> Formats<'d> {
 
     /// A run's resolved properties within a paragraph.
     pub fn run(&self, attrs: &Attrs, para: &Arc<ParaFormat>) -> Arc<RunProps> {
+        // Spans share attribute sets, and a laid-out paragraph keeps its
+        // format: most runs are found by identity without hashing.
+        let id_key = (attrs.ptr(), Arc::as_ptr(para) as usize);
+        if let Some((held, r)) = lock(&self.cache.run_ids).get(&id_key)
+            && held.same(attrs)
+        {
+            return Arc::clone(r);
+        }
+        let resolved = self.run_by_value(attrs, para);
+        let mut ids = lock(&self.cache.run_ids);
+        if ids.len() > 200_000 {
+            ids.clear();
+        }
+        ids.insert(id_key, (attrs.clone(), Arc::clone(&resolved)));
+        resolved
+    }
+
+    fn run_by_value(&self, attrs: &Attrs, para: &Arc<ParaFormat>) -> Arc<RunProps> {
         // Spans differ only in their run-property keys for formatting purposes.
         let fmt_attrs = attrs.without(|k| !k.starts_with(key::RUN_PROP));
         let cache_key = (fmt_attrs, Arc::as_ptr(para) as usize);

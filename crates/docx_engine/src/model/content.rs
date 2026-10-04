@@ -70,6 +70,17 @@ impl Attrs {
         self.0.get(key).map(|v| &**v)
     }
 
+    /// Whether two sets are the same shared object (cheap identity, for
+    /// caches keyed by `ptr`).
+    pub fn same(&self, other: &Attrs) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    /// The shared object's address, for caches that hold on to the set.
+    pub fn ptr(&self) -> usize {
+        Arc::as_ptr(&self.0) as *const () as usize
+    }
+
     /// Whether the set holds `key`.
     pub fn has(&self, key: &str) -> bool {
         self.0.contains_key(key)

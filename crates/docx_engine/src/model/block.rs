@@ -8,9 +8,9 @@
 //! renumbers its neighbours.
 
 use super::content::Content;
+use crate::hash::FxMap;
 use pptx_engine::collab::order;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -159,11 +159,14 @@ impl Block {
 /// A tree of blocks.
 #[derive(Clone, Debug, Default)]
 pub struct Story {
-    blocks: HashMap<BlockId, Block>,
+    blocks: FxMap<BlockId, Block>,
     /// Children of each parent (`None` = top level), sorted by (order, id).
-    children: HashMap<Option<BlockId>, Vec<BlockId>>,
+    children: FxMap<Option<BlockId>, Vec<BlockId>>,
     /// Changes on every change (a [`next_version`] value).
     revision: u64,
+    /// Changes when blocks are added, removed or moved (not when their
+    /// content or properties change).
+    structure: u64,
 }
 
 static NO_CHILDREN: Vec<BlockId> = Vec::new();
@@ -177,6 +180,12 @@ impl Story {
     /// Changes on every change to the story.
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Changes when blocks are added, removed or moved: what depends only on
+    /// the order of blocks (not their text) keys on it.
+    pub fn structure(&self) -> u64 {
+        self.structure
     }
 
     /// Number of blocks.
@@ -232,26 +241,51 @@ impl Story {
         }
     }
 
+    /// Where a block with this position key and id goes among `list`
+    /// (sorted by key, then id).
+    fn slot(blocks: &FxMap<BlockId, Block>, list: &[BlockId], order: &str, id: &BlockId) -> usize {
+        list.partition_point(|c| {
+            let key = blocks.get(c).map_or("", |x| x.order.as_str());
+            (key, c) < (order, id)
+        })
+    }
+
     /// Adds or replaces a block, keeping its parent's children ordered.
+    /// Placing it costs a binary search, so reading a long document's
+    /// blocks one by one stays linear.
     pub fn insert(&mut self, mut block: Block) {
         self.revision = next_version();
         block.version = self.revision;
-        if let Some(old) = self.blocks.get(&block.id) {
-            let old_parent = old.parent.clone();
-            if old_parent != block.parent {
-                if let Some(list) = self.children.get_mut(&old_parent) {
-                    list.retain(|c| *c != block.id);
+        let id = block.id.clone();
+        let same_place = self
+            .blocks
+            .get(&id)
+            .is_some_and(|old| old.parent == block.parent && old.order == block.order);
+        if same_place {
+            // Content or properties only: the block keeps its place.
+            self.blocks.insert(id, block);
+            return;
+        }
+        self.structure = self.revision;
+        // Take it out of the list it is in now.
+        if let Some(old) = self.blocks.get(&id) {
+            let blocks = &self.blocks;
+            if let Some(list) = self.children.get_mut(&old.parent) {
+                let at = Self::slot(blocks, list, &old.order, &id);
+                if list.get(at) == Some(&id) {
+                    list.remove(at);
+                } else {
+                    list.retain(|c| *c != id);
                 }
             }
         }
         let parent = block.parent.clone();
-        let id = block.id.clone();
+        let order = block.order.clone();
         self.blocks.insert(id.clone(), block);
-        let list = self.children.entry(parent.clone()).or_default();
-        if !list.contains(&id) {
-            list.push(id);
-        }
-        self.sort_children(parent.as_ref());
+        let blocks = &self.blocks;
+        let list = self.children.entry(parent).or_default();
+        let at = Self::slot(blocks, list, &order, &id);
+        list.insert(at, id);
     }
 
     /// Changes a block's position key (and parent).
@@ -280,6 +314,7 @@ impl Story {
             }
         }
         self.revision = next_version();
+        self.structure = self.revision;
         removed
     }
 
@@ -291,6 +326,7 @@ impl Story {
             list.retain(|c| c != id);
         }
         self.revision = next_version();
+        self.structure = self.revision;
         Some(b)
     }
 

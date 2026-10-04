@@ -646,7 +646,7 @@ fn rgba_bits(c: &pptx_engine::model::color::Rgba) -> [u32; 4] {
 }
 
 fn run_hash(r: &crate::layout::inline::RunStyle) -> u64 {
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = crate::hash::FxHasher::default();
     let p = &r.props;
     (r.size.to_bits(), r.shift.to_bits(), rgba_bits(&r.color)).hash(&mut h);
     (p.bold, p.italic, p.strike, p.dstrike, p.caps, p.small_caps).hash(&mut h);
@@ -669,7 +669,7 @@ fn para_line_hashes(pb: &ParaBox) -> Vec<u64> {
         .lines
         .iter()
         .map(|line| {
-            let mut h = std::collections::hash_map::DefaultHasher::new();
+            let mut h = crate::hash::FxHasher::default();
             (line.width.to_bits(), line.hyphen, line.height.to_bits()).hash(&mut h);
             for ci in line.start..line.end {
                 let c = &pb.inline.clusters[ci];
@@ -706,7 +706,7 @@ impl LineHashes {
 
 /// A hash of one item and the vertical extent it paints.
 fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = crate::hash::FxHasher::default();
     let (top, bottom) = match item {
         Item::Line(l) => {
             0u8.hash(&mut h);
@@ -792,7 +792,7 @@ fn page_keys(layout: &Layout, lines: &mut LineHashes) -> PageKeys {
 
 /// A page's fingerprint from its item keys.
 fn fingerprint(page: &Page, keys: &[(u64, f32, f32)]) -> u64 {
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = crate::hash::FxHasher::default();
     (page.width.to_bits(), page.height.to_bits(), page.number).hash(&mut h);
     for k in keys {
         k.0.hash(&mut h);
@@ -1259,7 +1259,8 @@ impl Session {
     }
 
     fn order(&mut self) -> Arc<ParaOrder> {
-        let rev = self.story().revision();
+        // Paragraph order changes only with the story's structure.
+        let rev = self.story().structure();
         if let Some((r, o)) = &self.order
             && *r == rev
         {
@@ -1306,7 +1307,9 @@ impl Session {
 
     /// Keeps the selection on existing paragraphs and in range.
     fn clamp_selection(&mut self) {
-        if !self.doc.has_story(&self.active) || self.story().paragraphs().is_empty() {
+        if self.active != StoryTarget::Body
+            && (!self.doc.has_story(&self.active) || self.story().paragraphs().is_empty())
+        {
             // The header or footer went away: back to the body.
             self.leave_story();
         }

@@ -284,6 +284,19 @@ pub(in crate::layout) fn para_box(
     {
         return pb;
     }
+    // Paragraphs with page fields are kept by the values they show.
+    let field_values = {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (fields.page, fields.pages, fields.section_pages).hash(&mut h);
+        format!("{:?}", fields.page_fmt).hash(&mut h);
+        h.finish()
+    };
+    if let (Some(cache), Some(key)) = (env.cache, key.as_ref())
+        && let Some(pb) = cache.get_dynamic(story, &block.id, field_values, key)
+    {
+        return pb;
+    }
     let format: Arc<ParaFormat> = env.formats.paragraph(&block.props, table);
     let ctx = InlineCtx {
         formats: &env.formats,
@@ -304,10 +317,13 @@ pub(in crate::layout) fn para_box(
     });
     // Page fields and note numbers change with what comes before.
     if let (Some(cache), Some(key)) = (env.cache, key)
-        && !pb.inline.dynamic
         && pb.inline.notes.is_empty()
     {
-        cache.put(story, &block.id, key, Arc::clone(&pb));
+        if pb.inline.dynamic {
+            cache.put_dynamic(story, &block.id, field_values, key, Arc::clone(&pb));
+        } else {
+            cache.put(story, &block.id, key, Arc::clone(&pb));
+        }
     }
     pb
 }

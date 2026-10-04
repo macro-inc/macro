@@ -37,7 +37,9 @@ fn ensure(ok: bool, what: impl FnOnce() -> String) -> Check {
 }
 
 fn apply(s: &mut Session, ops: Vec<EditOp>, fonts: &FontDb) -> Check {
-    s.apply(&ops, None, fonts).map(|_| ()).map_err(|e| e.to_string())
+    s.apply(&ops, None, fonts)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Applies an edit that must change the document.
@@ -56,7 +58,14 @@ fn maybe(s: &mut Session, op: EditOp, fonts: &FontDb) -> Result<bool, String> {
 }
 
 fn select(s: &mut Session, a: Pos, f: Pos, fonts: &FontDb) -> Check {
-    apply(s, vec![EditOp::Select { anchor: a, focus: f }], fonts)
+    apply(
+        s,
+        vec![EditOp::Select {
+            anchor: a,
+            focus: f,
+        }],
+        fonts,
+    )
 }
 
 /// Paragraphs to edit: up to `n`, spread through the document.
@@ -88,7 +97,9 @@ fn check_collab(doc: &Document, pages: usize, fonts: &FontDb) -> Check {
     let json = serde_json::to_string(&state).map_err(|e| e.to_string())?;
     let back: CollabState = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     let shared = Document::from_collab_state(&back, 7).map_err(|e| e.to_string())?;
-    ensure(texts(&shared) == texts(doc), || "shared text differs".into())?;
+    ensure(texts(&shared) == texts(doc), || {
+        "shared text differs".into()
+    })?;
     let shared_pages = shared.layout(fonts).pages.len();
     ensure(shared_pages == pages, || {
         format!("shared state lays out {shared_pages} pages, the file {pages}")
@@ -96,7 +107,9 @@ fn check_collab(doc: &Document, pages: usize, fonts: &FontDb) -> Check {
     // The shared state saves as a package that opens again.
     let saved = shared.save().map_err(|e| e.to_string())?;
     let reopened = Document::open(saved).map_err(|e| e.to_string())?;
-    ensure(texts(&reopened) == texts(doc), || "saved shared state differs".into())
+    ensure(texts(&reopened) == texts(doc), || {
+        "saved shared state differs".into()
+    })
 }
 
 fn check_edits(doc: &Document, fonts: &FontDb) -> Check {
@@ -146,14 +159,20 @@ fn check_edits(doc: &Document, fonts: &FontDb) -> Check {
     for _ in 0..steps {
         s.undo(fonts).ok_or("nothing to undo")?;
     }
-    ensure(texts(s.document()) == original, || "undo did not restore the text".into())?;
+    ensure(texts(s.document()) == original, || {
+        "undo did not restore the text".into()
+    })?;
     for _ in 0..steps {
         s.redo(fonts).ok_or("nothing to redo")?;
     }
-    ensure(texts(s.document()) == edited, || "redo did not repeat the edits".into())?;
+    ensure(texts(s.document()) == edited, || {
+        "redo did not repeat the edits".into()
+    })?;
     let saved = s.document().save().map_err(|e| e.to_string())?;
     let reopened = Document::open(saved).map_err(|e| e.to_string())?;
-    ensure(texts(&reopened) == edited, || "the saved edits differ".into())
+    ensure(texts(&reopened) == edited, || {
+        "the saved edits differ".into()
+    })
 }
 
 fn check_tracking(doc: &Document, fonts: &FontDb) -> Check {
@@ -162,12 +181,18 @@ fn check_tracking(doc: &Document, fonts: &FontDb) -> Check {
     s.set_author("Corpus");
     apply(&mut s, vec![EditOp::SetTracking { on: true }], fonts)?;
     let tracked = texts(s.document());
-    ensure(tracked == original, || "turning tracking on changed the text".into())?;
+    ensure(tracked == original, || {
+        "turning tracking on changed the text".into()
+    })?;
     let picks = targets(doc, 4);
     for (id, len) in &picks {
         let at = Pos::new(id.clone(), (*len).min(2));
         select(&mut s, at.clone(), at, fonts)?;
-        apply(&mut s, vec![EditOp::InsertText { text: "QQ".into() }], fonts)?;
+        apply(
+            &mut s,
+            vec![EditOp::InsertText { text: "QQ".into() }],
+            fonts,
+        )?;
         if *len > 4 {
             apply(
                 &mut s,
@@ -180,14 +205,23 @@ fn check_tracking(doc: &Document, fonts: &FontDb) -> Check {
         }
     }
     let mut rejected = Session::new(s.document().clone());
-    apply(&mut rejected, vec![EditOp::RejectChanges { all: true }], fonts)?;
+    apply(
+        &mut rejected,
+        vec![EditOp::RejectChanges { all: true }],
+        fonts,
+    )?;
     // Rejecting returns the text this check started from. Revisions the
     // file already had are rejected too, so compare with that state.
     let mut baseline = Session::new(doc.clone());
-    apply(&mut baseline, vec![EditOp::RejectChanges { all: true }], fonts)?;
-    ensure(texts(rejected.document()) == texts(baseline.document()), || {
-        "rejecting the tracked edits did not restore the text".into()
-    })?;
+    apply(
+        &mut baseline,
+        vec![EditOp::RejectChanges { all: true }],
+        fonts,
+    )?;
+    ensure(
+        texts(rejected.document()) == texts(baseline.document()),
+        || "rejecting the tracked edits did not restore the text".into(),
+    )?;
     apply(&mut s, vec![EditOp::AcceptChanges { all: true }], fonts)?;
     let saved = s.document().save().map_err(|e| e.to_string())?;
     Document::open(saved).map(|_| ()).map_err(|e| e.to_string())
@@ -196,7 +230,11 @@ fn check_tracking(doc: &Document, fonts: &FontDb) -> Check {
 fn check_header(doc: &Document, fonts: &FontDb) -> Check {
     let mut s = Session::new(doc.clone());
     let pages = s.pages(fonts);
-    let Some(area) = pages.first().and_then(|p| p.header.clone()).filter(|a| a.editable) else {
+    let Some(area) = pages
+        .first()
+        .and_then(|p| p.header.clone())
+        .filter(|a| a.editable)
+    else {
         return Ok(());
     };
     let width = pages[0].width;
@@ -214,7 +252,11 @@ fn check_header(doc: &Document, fonts: &FontDb) -> Check {
     if r.story.kind != docx_engine::edit::StoryKind::Header {
         return Ok(());
     }
-    apply(&mut s, vec![EditOp::InsertText { text: "HDR".into() }], fonts)?;
+    apply(
+        &mut s,
+        vec![EditOp::InsertText { text: "HDR".into() }],
+        fonts,
+    )?;
     apply(&mut s, vec![EditOp::ExitStory], fonts)?;
     let saved = s.document().save().map_err(|e| e.to_string())?;
     let reopened = Document::open(saved).map_err(|e| e.to_string())?;
@@ -226,7 +268,9 @@ fn check_header(doc: &Document, fonts: &FontDb) -> Check {
                 .is_ok_and(|b| String::from_utf8_lossy(&b).contains("HDR"))
     });
     ensure(xml_has, || "the header edit was not saved".into())?;
-    ensure(texts(&reopened) == texts(doc), || "the header edit changed the body".into())
+    ensure(texts(&reopened) == texts(doc), || {
+        "the header edit changed the body".into()
+    })
 }
 
 fn check_clipboard(doc: &Document, fonts: &FontDb) -> Check {
@@ -241,8 +285,17 @@ fn check_clipboard(doc: &Document, fonts: &FontDb) -> Check {
     select(&mut s, Pos::new(a, 0), Pos::new(b, b_len), fonts)?;
     let clip = s.copy_selection();
     let last = ids[ids.len() - 1].clone();
-    let len = s.document().body().get(&last).map_or(0, |x| x.content.len());
-    select(&mut s, Pos::new(last.clone(), len), Pos::new(last, len), fonts)?;
+    let len = s
+        .document()
+        .body()
+        .get(&last)
+        .map_or(0, |x| x.content.len());
+    select(
+        &mut s,
+        Pos::new(last.clone(), len),
+        Pos::new(last, len),
+        fonts,
+    )?;
     let before = s.document().body().paragraphs().len();
     apply(
         &mut s,
@@ -254,7 +307,11 @@ fn check_clipboard(doc: &Document, fonts: &FontDb) -> Check {
     )?;
     let after = s.document().body().paragraphs().len();
     ensure(after + 1 >= before + clip.paragraphs.len(), || {
-        format!("pasting {} paragraphs made {}", clip.paragraphs.len(), after - before)
+        format!(
+            "pasting {} paragraphs made {}",
+            clip.paragraphs.len(),
+            after - before
+        )
     })?;
     let saved = s.document().save().map_err(|e| e.to_string())?;
     Document::open(saved).map(|_| ()).map_err(|e| e.to_string())
@@ -289,7 +346,9 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
                     .unwrap_or_default();
                 Err(format!("panic: {message}"))
             });
-        let name = file.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let name = file
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let ms = started.elapsed().as_millis();
         match outcome {
             Ok(summary) => println!("ok    {name}: {summary} ({ms} ms)"),
@@ -299,6 +358,10 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
             }
         }
     }
-    println!("{} of {} documents passed", args.files.len() - failed, args.files.len());
+    println!(
+        "{} of {} documents passed",
+        args.files.len() - failed,
+        args.files.len()
+    );
     Ok(failed == 0)
 }

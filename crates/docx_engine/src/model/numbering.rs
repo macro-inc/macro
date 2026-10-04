@@ -237,18 +237,18 @@ impl Numbering {
     }
 
     /// The effective level definition of a list instance.
-    pub fn level(&self, num_id: i64, ilvl: u8, styles: &Styles) -> Option<Level> {
+    pub fn level(&self, num_id: i64, ilvl: u8, styles: &Styles) -> Option<&Level> {
         let num = self.nums.get(&num_id)?;
-        if let Some(l) = num.overrides.get(&ilvl).and_then(|o| o.level.clone()) {
+        if let Some(l) = num.overrides.get(&ilvl).and_then(|o| o.level.as_ref()) {
             return Some(l);
         }
         let (_, a) = self.abstract_for(num_id, styles)?;
-        a.levels.get(usize::from(ilvl)).cloned().flatten()
+        a.levels.get(usize::from(ilvl)).and_then(Option::as_ref)
     }
 
     /// Paragraph properties a list level contributes.
     pub fn level_ppr(&self, num_id: i64, ilvl: u8, styles: &Styles) -> Option<PPr> {
-        self.level(num_id, ilvl, styles).map(|l| l.ppr)
+        self.level(num_id, ilvl, styles).map(|l| l.ppr.clone())
     }
 }
 
@@ -330,7 +330,7 @@ impl Counters {
             }
         }
         let snapshot = *values;
-        let template = level.text.clone().unwrap_or_default();
+        let template = level.text.as_deref().unwrap_or_default();
         let mut text = String::new();
         let mut chars = template.chars().peekable();
         while let Some(c) = chars.next() {
@@ -342,12 +342,12 @@ impl Counters {
                 chars.next();
                 let li = (n - 1) as usize;
                 let lv = if li == i {
-                    Some(level.clone())
+                    Some(level)
                 } else {
                     numbering.level(num_id, li as u8, styles)
                 };
-                let value = snapshot[li].unwrap_or_else(|| lv.as_ref().map_or(1, |l| l.start));
-                let own = lv.as_ref().map_or(NumFmt::Decimal, |l| l.fmt.clone());
+                let value = snapshot[li].unwrap_or_else(|| lv.map_or(1, |l| l.start));
+                let own = lv.map_or(NumFmt::Decimal, |l| l.fmt.clone());
                 // Legal numbering shows every level's number as decimal.
                 let fmt = if level.is_legal && !matches!(own, NumFmt::Bullet | NumFmt::None) {
                     NumFmt::Decimal
@@ -366,7 +366,7 @@ impl Counters {
             text,
             suffix: level.suffix,
             jc: level.jc,
-            rpr: level.rpr,
+            rpr: level.rpr.clone(),
         })
     }
 }

@@ -13,6 +13,7 @@ pub mod collab;
 pub mod document;
 pub mod edit;
 mod error;
+pub mod hash;
 pub mod layout;
 pub mod model;
 pub mod render;

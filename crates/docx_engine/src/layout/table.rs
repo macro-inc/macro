@@ -104,10 +104,12 @@ fn grid_cols(snippets: &SnippetContext, xml: &str) -> Vec<f32> {
 pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32) -> TableGeom {
     let snippets = formats.snippets();
     let theme = formats.theme;
-    let direct = read_props(snippets, &table.props, "tblPr", |t, n| {
-        TblPr::read(t, n, theme)
-    })
-    .unwrap_or_default();
+    let direct = formats.parsed("tblPr", &table.props, || {
+        read_props(snippets, &table.props, "tblPr", |t, n| {
+            TblPr::read(t, n, theme)
+        })
+        .unwrap_or_default()
+    });
     let style = formats.styles.table_style(direct.style.as_deref());
     let mut tbl = TblPr::default();
     if let Some(s) = style {
@@ -117,7 +119,9 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
     tbl.style = style.map(|s| s.id.clone());
     let look = tbl.look.unwrap_or_default();
     let bidi = tbl.bidi == Some(true);
-    let mut cols = grid_cols(snippets, &table.props);
+    let mut cols = formats.parsed("tblGrid", &table.props, || {
+        grid_cols(snippets, &table.props)
+    });
 
     // Rows and cells.
     let row_ids: Vec<_> = story
@@ -136,18 +140,21 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
         let Some(row) = story.get(rid) else {
             continue;
         };
-        let tr =
-            read_props(snippets, &row.props, "trPr", |t, n| TrPr::read(t, n)).unwrap_or_default();
+        let tr = formats.parsed("trPr", &row.props, || {
+            read_props(snippets, &row.props, "trPr", |t, n| TrPr::read(t, n)).unwrap_or_default()
+        });
         let cells = story
             .children(Some(rid))
             .iter()
             .filter_map(|c| {
                 let cell = story.get(c)?;
                 (cell.kind == BlockKind::Cell).then(|| {
-                    let tc = read_props(snippets, &cell.props, "tcPr", |t, n| {
-                        TcPr::read(t, n, theme)
-                    })
-                    .unwrap_or_default();
+                    let tc = formats.parsed("tcPr", &cell.props, || {
+                        read_props(snippets, &cell.props, "tcPr", |t, n| {
+                            TcPr::read(t, n, theme)
+                        })
+                        .unwrap_or_default()
+                    });
                     (c.clone(), tc)
                 })
             })

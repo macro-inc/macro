@@ -6,7 +6,6 @@ use crate::layout::inline::Kind;
 use crate::layout::{Item, Layout, ParaBox, PlacedLine, StoryRef};
 use crate::model::block::BlockId;
 use serde::Serialize;
-use std::collections::HashMap;
 
 /// A caret: a vertical bar on a page (points).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -40,7 +39,7 @@ pub struct PageRect {
 #[derive(Debug, Default)]
 pub struct ViewIndex {
     /// Placed lines of each paragraph in order: (page, item index).
-    pub lines: HashMap<BlockId, Vec<(usize, usize)>>,
+    pub lines: crate::hash::FxMap<BlockId, Vec<(usize, usize)>>,
     /// The story's lines on each page: item indices.
     pub page_lines: Vec<Vec<usize>>,
 }
