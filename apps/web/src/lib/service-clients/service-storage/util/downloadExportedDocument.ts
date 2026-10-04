@@ -14,7 +14,7 @@ export async function downloadExportedDocument({
   if (exported.isErr()) throw new Error('Unable to export the document.');
   const bytes = await fetchPresigned(
     exported.value.presigned_url,
-    'arraybuffer'
+    'arrayBuffer'
   );
   if (bytes.isErr())
     throw new Error(
