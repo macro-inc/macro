@@ -620,3 +620,22 @@ fn suppressed_top_spacing_lifts_the_first_line_of_a_page() {
     assert!((top.y - (72.0 - 8.0)).abs() < 0.01, "{}", top.y);
     assert!((next.y - top.y - 18.0).abs() < 0.01, "{}", next.y);
 }
+
+#[test]
+fn multiple_spacing_below_the_last_line_may_run_into_the_margin() {
+    // Triple-spaced lines of 10pt text, 34.5pt each: the 19th line's text
+    // ends within the 648pt column, its spacing below it does not.
+    let body: String = (0..25)
+        .map(|k| {
+            format!(
+                r#"<w:p><w:pPr><w:spacing w:line="720" w:lineRule="auto"/></w:pPr><w:r><w:t>Line {k}</w:t></w:r></w:p>"#
+            )
+        })
+        .collect();
+    let l = layout(&format!("{body}{LETTER}"), &arial_10());
+    assert_eq!(page_texts(&l, 0).len(), 19);
+    let last = find(&l, 0, "Line 18");
+    let line = last.line();
+    assert!(last.y + line.height > 720.0, "{}", last.y);
+    assert!(last.y + line.height / 3.0 <= 720.0, "{}", last.y);
+}

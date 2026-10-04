@@ -897,6 +897,13 @@ impl<'e, 'a> Flow<'e, 'a> {
         let lines = &pb.lines.lines;
         let mut y = self.cur.as_ref().map_or(0.0, |c| c.y);
         let bottom = self.avail_bottom();
+        // The extra room of multiple line spacing sits below the text and may
+        // run into the bottom margin: a line fits when its text does.
+        let props = &pb.format.props;
+        let spread = match props.line {
+            LineSpacing::Auto(m) if m > 1.0 && !(props.snap_to_grid && self.grid().is_some()) => m,
+            _ => 1.0,
+        };
         let mut extra = 0.0;
         let mut count = 0;
         let mut ids: Vec<(usize, i64)> = Vec::new();
@@ -911,7 +918,7 @@ impl<'e, 'a> Flow<'e, 'a> {
             let mut pending: Vec<i64> = ids.iter().map(|(_, id)| *id).collect();
             pending.extend(&line_notes);
             let note_h = self.notes_needed(&pending);
-            if y + line.height > bottom - note_h + EPS {
+            if y + line.height / spread > bottom - note_h + EPS {
                 break;
             }
             y += line.height;
