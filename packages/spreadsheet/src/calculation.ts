@@ -420,6 +420,101 @@ function hyperlinkText(formula: string) {
   return text;
 }
 
+const tokenKind = (token: unknown) =>
+  typeof token === 'string' ? token : Object.keys(token as object)[0];
+const isMinus = (token: unknown) =>
+  typeof token === 'object' &&
+  token !== null &&
+  'Addition' in token &&
+  token.Addition === 'Minus';
+/** Tokens after which a minus subtracts instead of negating. */
+const OPERAND_ENDS = new Set([
+  'Number',
+  'String',
+  'Boolean',
+  'Error',
+  'Reference',
+  'Range',
+  'StructuredReference',
+  'Ident',
+  'RightParenthesis',
+  'RightBrace',
+  'Percent',
+]);
+const SINGLE_OPERANDS = new Set([
+  'Number',
+  'String',
+  'Boolean',
+  'Error',
+  'Reference',
+  'Range',
+  'StructuredReference',
+  'Ident',
+]);
+/** Tokens that bind to an operand before negation does (ranges, intersections). */
+const TIGHTER_THAN_NEGATION = new Set([
+  'Colon',
+  'Reference',
+  'Range',
+  'StructuredReference',
+  'Ident',
+  'LeftParenthesis',
+]);
+
+/** The first `--operand` IronCalc would misread, as character positions. */
+function doubleNegation(tokens: ReturnType<typeof getTokens>) {
+  for (let index = 0; index + 2 < tokens.length; index++) {
+    if (!isMinus(tokens[index].token) || !isMinus(tokens[index + 1].token))
+      continue;
+    const previous = tokens[index - 1];
+    if (previous && OPERAND_ENDS.has(tokenKind(previous.token))) continue;
+    const first = index + 2;
+    const kind = tokenKind(tokens[first].token);
+    let last = first;
+    if (
+      kind === 'LeftParenthesis' ||
+      (kind === 'Ident' && tokens[first + 1]?.token === 'LeftParenthesis')
+    ) {
+      let depth = 0;
+      last = kind === 'Ident' ? first + 1 : first;
+      for (; last < tokens.length; last++) {
+        const current = tokens[last].token;
+        if (current === 'LeftParenthesis' || current === 'LeftBrace') depth++;
+        else if (current === 'RightParenthesis' || current === 'RightBrace')
+          if (--depth === 0) break;
+      }
+      if (last >= tokens.length) continue;
+    } else if (!SINGLE_OPERANDS.has(kind)) continue;
+    const following = tokens[last + 1];
+    if (following && TIGHTER_THAN_NEGATION.has(tokenKind(following.token)))
+      continue;
+    return {
+      start: tokens[index].start,
+      operand: tokens[first].start,
+      end: tokens[last].end,
+    };
+  }
+}
+
+/**
+ * IronCalc drops an array under a double negation, so the common
+ * `SUMPRODUCT(--(A1:A9="x"))` is 0, while `1*` keeps it. Excel evaluates
+ * `--operand` and `(1*operand)` identically, including for text and errors.
+ */
+function doubleNegations(formula: string) {
+  let text = formula;
+  // One rewrite per pass, from fresh positions, so nested ones stay intact.
+  for (let pass = 0; pass < 20 && /-\s*-/.test(text); pass++) {
+    const site = doubleNegation(getTokens(text));
+    if (!site) break;
+    const characters = Array.from(text);
+    const operand = characters.slice(site.operand, site.end).join('');
+    characters.splice(site.start, site.end - site.start, `(1*${operand})`);
+    text = characters.join('');
+  }
+  return text;
+}
+
 /** Arguments that IronCalc reads cell by cell, including every empty row of
  * a whole column, where empty rows cannot change the result. -1 is any. */
 const SCANNED_ARGUMENTS: Record<string, number> = {
@@ -812,7 +907,10 @@ function enterCell(
     if (entered.unsupported.has(address)) input = '=NA()';
     else
       input = boundWholeColumnLookups(
-        crossSheetIntersections(hyperlinkText(input), sheet.name),
+        crossSheetIntersections(
+          doubleNegations(hyperlinkText(input)),
+          sheet.name
+        ),
         sheet.name,
         rowCounts
       );

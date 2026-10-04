@@ -214,6 +214,41 @@ describe('spreadsheet calculation with IronCalc', () => {
     expect(result.A6.number).toBe(1.15292150460685e18);
   });
 
+  it('counts with double negation over arrays, as Excel does', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: 'x',
+        A2: 'y',
+        A3: 'x',
+        B1: '5',
+        B2: '2',
+        C1: '=SUMPRODUCT(--(A1:A3="x"))',
+        C2: '=SUMPRODUCT(--(A1:A3="x"),B1:B3)',
+        C3: '=SUMPRODUCT(--(--(A1:A3="x")))',
+        C4: '=SUMPRODUCT(- -(A1:A3="y"))',
+        // Subtraction, precedence and literals keep their meaning.
+        D1: '=B1--B2',
+        D2: '=2^--B2',
+        D3: '=B1/--B2',
+        D4: '=--"5"+1',
+        D5: '="--"&A1',
+        D6: '=--B1%',
+        D7: '=--A1',
+      })
+    );
+    expect(result.C1.number).toBe(2);
+    expect(result.C2.number).toBe(5);
+    expect(result.C3.number).toBe(2);
+    expect(result.C4.number).toBe(1);
+    expect(result.D1.number).toBe(7);
+    expect(result.D2.number).toBe(4);
+    expect(result.D3.number).toBe(2.5);
+    expect(result.D4.number).toBe(6);
+    expect(result.D5.display).toBe('--x');
+    expect(result.D6.number).toBe(0.05);
+    expect(result.D7.display).toBe('#VALUE!');
+  });
+
   it('shows typed dates and date arithmetic as dates without an explicit format', () => {
     const result = calculator.calculate({
       A1: { value: '9/28/2026' },
