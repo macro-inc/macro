@@ -269,6 +269,10 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     canRedo: () => history.canRedo(),
     undo: () => apply('undo'),
     redo: () => apply('redo'),
+    /** Leave local changes out of history, such as the cell writes of an
+     * import whose final change alone makes them visible. */
+    pause: () => history.pause(),
+    resume: () => history.resume(),
     free: () => {
       for (const unsubscribe of subscriptions) unsubscribe();
       history.free();

@@ -12,6 +12,7 @@ import {
   type ConditionalAppearance,
   readConditionalAppearance,
 } from './conditional-formatting';
+import { displayNumber, numericLiteral } from './number-display';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -116,19 +117,6 @@ function calculationModel(name: string): Model {
   }
 }
 
-const numberFormatters = new Map<string, Intl.NumberFormat>();
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
-  year: 'numeric',
-  month: 'numeric',
-  day: 'numeric',
-});
-const timeFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
-  hour: 'numeric',
-  minute: '2-digit',
-  second: '2-digit',
-});
 const DAY_MILLISECONDS = 86_400_000;
 const SERIAL_EPOCH = Date.UTC(1899, 11, 30);
 /** 1 January 2000 as an Excel serial number. */
@@ -138,7 +126,6 @@ const MIN_FORMULA_DATE_SERIAL = 36_526;
 // SPREADSHEET_MAX_ROWS.
 const ENGINE_COLUMN_HEIGHT = 1_048_576;
 const ENGINE_COLUMNS = 16_384;
-const numericLiteral = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?\s*$/i;
 
 /**
  * Excel serial for the mention's local calendar day. Presets such as
@@ -181,52 +168,6 @@ function canInferFormat(
   );
 }
 
-function displayNumber(number: number, cell?: SpreadsheetCell): string {
-  const format = cell?.format ?? 'general';
-  if (format === 'date') {
-    // Excel's serial calendar contains a fictitious 29 February 1900. Keep
-    // that compatibility day while converting actual dates without a timezone shift.
-    const day = Math.floor(number);
-    if (day === 60) return '2/29/1900';
-    const date = new Date(
-      Date.UTC(1899, 11, 31) + (day - (day > 60 ? 1 : 0)) * DAY_MILLISECONDS
-    );
-    return Number.isFinite(date.getTime())
-      ? dateFormatter.format(date)
-      : '#NUM!';
-  }
-  if (format === 'time') {
-    const fraction = ((number % 1) + 1) % 1;
-    return timeFormatter.format(
-      new Date(Math.round(fraction * 86_400) * 1_000)
-    );
-  }
-  const decimals = cell?.decimals ?? -1;
-  const key = `${format}:${decimals}`;
-  let formatter = numberFormatters.get(key);
-  if (!formatter) {
-    const options: Intl.NumberFormatOptions = {};
-    if (format === 'currency') {
-      options.style = 'currency';
-      options.currency = 'USD';
-    } else if (format === 'percent') options.style = 'percent';
-    else if (format === 'scientific') options.notation = 'scientific';
-    if (format === 'general' || format === 'text') options.useGrouping = false;
-    if (decimals >= 0) {
-      options.minimumFractionDigits = decimals;
-      options.maximumFractionDigits = decimals;
-    } else if (format === 'general' || format === 'text') {
-      options.maximumSignificantDigits = 15;
-    } else {
-      options.minimumFractionDigits = format === 'percent' ? 0 : 2;
-      options.maximumFractionDigits = 2;
-    }
-    formatter = new Intl.NumberFormat('en-US', options);
-    numberFormatters.set(key, formatter);
-  }
-  return formatter.format(number);
-}
-
 const errorDescriptions: Record<string, string> = {
   '#DIV/0!': 'This formula divides by zero or an empty cell.',
   '#CIRC!': 'This formula contains a circular reference.',
@@ -256,8 +197,6 @@ function configureSheets(model: Model, names: string[]) {
 /** Fifteen significant digits, as Excel keeps. IronCalc truncates a sixteenth
  * digit instead of rounding it, which read 979 as 978.999999999999. */
 const SCIENTIFIC_FORMAT = '0.##############E+00';
-/** Output of SCIENTIFIC_FORMAT; other numeric displays carry an engine format. */
-const scientificDisplay = /^-?\d(?:\.\d*)?E[+-]\d+$/;
 const constantDefinition =
   /^(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|TRUE|FALSE|"(?:[^"\r\n]|"")*")$/i;
 
@@ -988,28 +927,33 @@ function readCell(
 ): CalculatedCell | undefined {
   const { model } = workbook;
   const entered = workbook.entered[sheetIndex];
-  let display = model.getFormattedCellValue(sheetIndex, row + 1, column + 1);
   const cell = workbook.sheets[sheetIndex].cells[address] as
     | SpreadsheetCell
     | undefined;
-  if (display === '')
-    return cell?.value
+  const empty = () =>
+    cell?.value
       ? {
           display: '',
           ...(includeTypes && { type: 'text' as const, value: '' }),
         }
       : undefined;
   const cellType = model.getCellType(sheetIndex, row + 1, column + 1);
-  if (cellType === 16)
-    return {
-      display,
-      error:
-        entered.unsupported.get(address) ??
-        errorDescriptions[display] ??
-        `Formula error: ${display}`,
-      ...(includeTypes && { type: 'error' as const, value: null }),
-    };
-  if (cellType !== 1)
+  if (cellType !== 1) {
+    const display = model.getFormattedCellValue(
+      sheetIndex,
+      row + 1,
+      column + 1
+    );
+    if (display === '') return empty();
+    if (cellType === 16)
+      return {
+        display,
+        error:
+          entered.unsupported.get(address) ??
+          errorDescriptions[display] ??
+          `Formula error: ${display}`,
+        ...(includeTypes && { type: 'error' as const, value: null }),
+      };
     return {
       display,
       ...(includeTypes && {
@@ -1017,27 +961,18 @@ function readCell(
         value: cellType === 4 ? display.toUpperCase() === 'TRUE' : display,
       }),
     };
-  let engineFormat: 'date' | 'time' | undefined;
-  if (!scientificDisplay.test(display) || !Number.isFinite(Number(display))) {
-    // The engine inferred a display format (a typed date, percentage or
-    // currency, or a formula referencing one). Record it, read the
-    // full-precision value, then restore it: formulas entered later infer
-    // their own formats from it.
-    const format = model.getCellStyle(sheetIndex, row + 1, column + 1).style
-      .num_fmt;
-    if (entered.inferable.has(address)) engineFormat = inferredFormat(format);
-    const area = {
-      sheet: sheetIndex,
-      row: row + 1,
-      column: column + 1,
-      width: 1,
-      height: 1,
-    };
-    model.updateRangeStyle(area, 'num_fmt', SCIENTIFIC_FORMAT);
-    display = model.getFormattedCellValue(sheetIndex, row + 1, column + 1);
-    model.updateRangeStyle(area, 'num_fmt', format);
   }
-  const number = Number(display);
+  // Numbers are read directly rather than formatted and parsed back, with
+  // the fifteen significant digits Excel keeps. Empty cells also report as
+  // numbers, without a value.
+  const value = model.getCellNumber(sheetIndex, row + 1, column + 1);
+  if (value === undefined) return empty();
+  const number = Number(value.toPrecision(15));
+  // The engine infers display formats for typed dates and for formulas that
+  // refer to them, as Excel does.
+  const engineFormat = entered.inferable.has(address)
+    ? inferredFormat(model.getCellNumberFormat(sheetIndex, row + 1, column + 1))
+    : undefined;
   // IronCalc also formats a difference of two dates as a date, so
   // formula results only count as dates from 2000 onwards; a day
   // count or a negative number stays a plain number.

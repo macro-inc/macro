@@ -349,7 +349,7 @@ describe('spreadsheet store', () => {
       expect(store.activeSheetId()).toBe(DEFAULT_SHEET_ID)
     );
     store.setCells({ A1: { value: 'original' } });
-    const ids = store.replaceWorkbook([
+    const ids = await store.replaceWorkbook([
       {
         name: 'Imported',
         cells: { A1: { value: 'imported' } },
@@ -373,6 +373,60 @@ describe('spreadsheet store', () => {
       'Imported',
       'Summary',
     ]);
+    dispose();
+    doc.free();
+  });
+
+  it('writes a large import in steps that undo as one', async () => {
+    const doc = new LoroDoc();
+    const source: SpreadsheetDocumentSource = {
+      doc: () => doc,
+      ready: () => true,
+      error: () => undefined,
+      status: () => 'local',
+      peers: () => [],
+      setSelection: () => {},
+    };
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({ source, canEdit: () => true });
+    });
+    await Promise.resolve();
+    store.setCells({ A1: { value: 'original' } });
+    const cells: Record<string, { value: string; numberFormat?: string }> = {};
+    for (let row = 1; row <= 6_000; row++) {
+      cells[`A${row}`] = {
+        value: String(45_000 + row),
+        numberFormat: 'm/d/yyyy',
+      };
+      cells[`B${row}`] = { value: `=A${row}+1` };
+    }
+    const progress: number[] = [];
+    const commits: string[] = [];
+    const unsubscribe = doc.subscribeLocalUpdates(() => commits.push('update'));
+    const [id] = await store.replaceWorkbook(
+      [{ name: 'Large', cells, rowCount: 6_000, columnWidths: {} }],
+      (fraction) => progress.push(fraction)
+    );
+    unsubscribe();
+    // 12,000 cells take several commits, each reported, and a registration.
+    expect(progress.length).toBeGreaterThan(1);
+    expect(progress).toEqual([...progress].sort((a, b) => a - b));
+    expect(progress.at(-1)).toBe(1);
+    expect(commits.length).toBe(progress.length + 1);
+    expect(store.activeSheetId()).toBe(id);
+    expect(Object.keys(store.cells())).toHaveLength(12_000);
+    expect(store.cells().A6000).toEqual({
+      value: '51000',
+      numberFormat: 'm/d/yyyy',
+    });
+    store.undo();
+    expect(store.workbook().map((sheet) => sheet.name)).toEqual(['Sheet1']);
+    expect(store.cells().A1.value).toBe('original');
+    store.redo();
+    expect(store.workbook().map((sheet) => sheet.name)).toEqual(['Large']);
+    expect(Object.keys(store.cells())).toHaveLength(12_000);
     dispose();
     doc.free();
   });
@@ -402,12 +456,12 @@ describe('spreadsheet store', () => {
     store.renameSheet(id, 'blocked');
     store.deleteSheet(id);
     expect(
-      store.appendSheets([
+      await store.appendSheets([
         { name: 'blocked', cells: {}, rowCount: 200, columnWidths: {} },
       ])
     ).toEqual([]);
     expect(
-      store.replaceWorkbook([
+      await store.replaceWorkbook([
         { name: 'blocked', cells: {}, rowCount: 200, columnWidths: {} },
       ])
     ).toEqual([]);

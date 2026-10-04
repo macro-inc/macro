@@ -51,14 +51,26 @@ import {
   addSpreadsheetSheet,
   deleteSpreadsheetSheet,
   duplicateSpreadsheetSheet,
-  importSpreadsheetSheets,
+  prepareSpreadsheetImport,
   readSpreadsheetWorkbook,
+  registerSpreadsheetImport,
   renameSpreadsheetSheet,
+  SPREADSHEET_IMPORT_CHUNK_CELLS,
   type SpreadsheetSheetInput,
   type SpreadsheetWorkbookSheet,
+  writeSpreadsheetImportCells,
 } from '../core/workbook-document';
+import { yieldToPage } from '../core/yield-to-page';
 
 const CELL_MAPS = new Set(SPREADSHEET_CELL_MAPS);
+
+/** How many changes collaborators have made to the document. */
+function remoteChangeCount(doc: LoroDoc) {
+  let count = 0;
+  for (const [peer, counter] of doc.oplogVersion().toJSON())
+    if (peer !== doc.peerIdStr) count += counter;
+  return count;
+}
 const LAYOUT_MAPS = new Set([
   'spreadsheetColumnWidths',
   'spreadsheetRowAdditions',
@@ -445,27 +457,62 @@ export function createSpreadsheetStore(options: {
     });
   }
 
-  function importSheets(inputs: SpreadsheetSheetInput[], replace: boolean) {
+  /**
+   * Import sheets without holding the page: cells are written in small
+   * commits under sheet ids no reader knows yet, and left out of history.
+   * The final change registers the sheets; it is the import's undo step.
+   */
+  async function importSheets(
+    inputs: SpreadsheetSheetInput[],
+    replace: boolean,
+    onProgress?: (fraction: number) => void
+  ): Promise<string[]> {
     const doc = options.source.doc();
     if (!doc || !editable()) return [];
-    // The new sheets are read whole once the import commits. Without a
-    // listener, Loro skips building a change event that lists every cell.
+    const plan = prepareSpreadsheetImport(doc, inputs, replace);
+    const check = () => {
+      if (options.source.doc() !== doc || !editable())
+        throw new Error('The spreadsheet closed or became view only.');
+    };
+    const undo = history;
+    const remote = remoteChangeCount(doc);
+    // Without a listener, Loro skips building change events that list every
+    // cell; the registration reads the new sheets whole.
     unsubscribe?.();
-    let ids: string[];
+    unsubscribe = undefined;
+    undo?.pause();
+    let paused = !!undo;
     try {
-      ids = importSpreadsheetSheets(doc, inputs, replace);
+      const formulas = await writeSpreadsheetImportCells(doc, plan, {
+        chunk: SPREADSHEET_IMPORT_CHUNK_CELLS,
+        pause: yieldToPage,
+        check,
+        onProgress,
+      });
+      undo?.resume();
+      paused = false;
+      registerSpreadsheetImport(doc, plan, formulas);
     } finally {
-      pending.registry = true;
-      unsubscribe = listen?.();
+      if (paused) undo?.resume();
+      if (options.source.doc() === doc) {
+        pending.registry = true;
+        // Collaborator changes made meanwhile were not recorded.
+        if (remoteChangeCount(doc) !== remote) pending.full = true;
+        unsubscribe = listen?.();
+      }
     }
     imported = new Map(
-      ids.map((id, index) => [id, freshSpreadsheetCells(inputs[index].cells)])
+      plan.sheets.map(({ id, input }) => [
+        id,
+        freshSpreadsheetCells(input.cells),
+      ])
     );
     try {
       refresh();
     } finally {
       imported = undefined;
     }
+    const ids = plan.sheets.map(({ id }) => id);
     setActiveSheet(ids[0]);
     return ids;
   }
@@ -509,10 +556,14 @@ export function createSpreadsheetStore(options: {
       deleteSpreadsheetSheet(doc, id);
       refresh();
     },
-    appendSheets: (inputs: SpreadsheetSheetInput[]) =>
-      importSheets(inputs, false),
-    replaceWorkbook: (inputs: SpreadsheetSheetInput[]) =>
-      importSheets(inputs, true),
+    appendSheets: (
+      inputs: SpreadsheetSheetInput[],
+      onProgress?: (fraction: number) => void
+    ) => importSheets(inputs, false, onProgress),
+    replaceWorkbook: (
+      inputs: SpreadsheetSheetInput[],
+      onProgress?: (fraction: number) => void
+    ) => importSheets(inputs, true, onProgress),
     rowCount: () => layout().rowCount,
     columnCount: () => layout().columnCount,
     appendColumns(count: number) {

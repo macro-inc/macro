@@ -352,6 +352,15 @@ Import keeps what Excel calculates and shows:
   Inserting or deleting rows and columns moves rule ranges, rule formulas and
   notes.
 
+Confirming an import writes its cells in commits of 5,000 under sheet ids no
+reader knows yet, outside undo history, and yields to the page between commits
+while the dialog shows progress. One final change registers the sheets; it is
+the import's single undo step, and a collaborator never sees a partial sheet.
+Uploaded-file previews are written the same way. Until the first calculation
+reports, literal numbers display with their formats
+(`packages/spreadsheet/src/number-display.ts`), so imported dates and currency
+do not flash as serial numbers.
+
 Export writes `fullCalcOnLoad`, cached results for every formula and spilled
 cell, `_xlfn` prefixes, dynamic-array metadata for formulas that need array
 evaluation, `@` as Excel stores it, and the same column default as Macro so that

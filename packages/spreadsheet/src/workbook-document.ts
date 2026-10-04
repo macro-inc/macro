@@ -23,7 +23,7 @@ import {
   type SpreadsheetLayout,
   spreadsheetSheetKey,
   validateSpreadsheetCellEdits,
-  writeSpreadsheetCells,
+  writeFreshSpreadsheetCells,
 } from './spreadsheet-document';
 
 import {
@@ -165,7 +165,9 @@ export function deleteSpreadsheetSheet(doc: LoroDoc, sheetId: string) {
 function validateSheetInputs(
   doc: LoroDoc,
   inputs: SpreadsheetSheetInput[],
-  replace: boolean
+  replace: boolean,
+  /** Only names and counts, which collaborators can change meanwhile. */
+  namesOnly = false
 ) {
   if (!inputs.length)
     throw new Error('A workbook must contain at least one sheet.');
@@ -206,6 +208,7 @@ function validateSheetInputs(
     if (names.has(name.toLowerCase()))
       throw new Error(`A sheet named “${name}” already exists.`);
     names.add(name.toLowerCase());
+    if (namesOnly) continue;
     if (
       !Number.isInteger(sheet.rowCount) ||
       sheet.rowCount < 1 ||
@@ -246,13 +249,40 @@ function validateSheetInputs(
   }
 }
 
-/** Validate the entire workbook before the first CRDT mutation; one undo step. */
-export function importSpreadsheetSheets(
+/** Imported sheets and the ids they will have. */
+export type SpreadsheetImport = {
+  replace: boolean;
+  sheets: { id: string; input: SpreadsheetSheetInput }[];
+};
+
+/** Validate an import before its first CRDT mutation and choose sheet ids. */
+export function prepareSpreadsheetImport(
   doc: LoroDoc,
   inputs: SpreadsheetSheetInput[],
   replace = false
-): string[] {
+): SpreadsheetImport {
   validateSheetInputs(doc, inputs, replace);
+  return {
+    replace,
+    sheets: inputs.map((input) => ({ id: crypto.randomUUID(), input })),
+  };
+}
+
+/**
+ * Make imported sheets visible, replacing the workbook's sheets if asked.
+ * Their cells must already be written: until this change no reader knows
+ * their ids, so a large import can write cells in several steps and still
+ * take effect, and undo, as one small change.
+ */
+export function registerSpreadsheetImport(
+  doc: LoroDoc,
+  plan: SpreadsheetImport,
+  /** Each sheet's formulas, as writing its cells returned them. */
+  formulas: ReadonlyMap<string, string[]>
+): void {
+  const inputs = plan.sheets.map(({ input }) => input);
+  // Collaborators may have added or renamed sheets since the import began.
+  validateSheetInputs(doc, inputs, plan.replace, true);
   const oldSheets = readSpreadsheetSheets(doc);
   const existingOrder = Object.values(
     doc.getMap('spreadsheetSheetOrder').toJSON()
@@ -264,20 +294,17 @@ export function importSpreadsheetSheets(
         : maximum,
     0
   );
-  const ids = inputs.map(() => crypto.randomUUID());
-  if (!replace) reviveSpreadsheetFallback(doc);
-  if (replace) {
+  if (!plan.replace) reviveSpreadsheetFallback(doc);
+  if (plan.replace) {
     for (const sheet of oldSheets) tombstoneSpreadsheetSheet(doc, sheet.id);
   }
-  inputs.forEach((sheet, index) => {
-    const id = ids[index];
+  plan.sheets.forEach(({ id, input: sheet }, index) => {
     if (sheet.metadata)
       doc
         .getMap('spreadsheetSheetMetadata')
         .set(id, JSON.stringify(sheet.metadata));
     doc.getMap('spreadsheetSheetNames').set(id, sheet.name);
     doc.getMap('spreadsheetSheetOrder').set(id, order + index + 1);
-    writeSpreadsheetCells(doc, sheet.cells, id, false, true);
     if (sheet.rowCount > SPREADSHEET_ROWS) {
       doc
         .getMap('spreadsheetRowAdditions')
@@ -297,10 +324,74 @@ export function importSpreadsheetSheets(
     for (const [column, width] of Object.entries(sheet.columnWidths))
       resizeSpreadsheetColumn(doc, Number(column), width, id, false);
   });
+  for (const { id } of plan.sheets)
+    retainSpreadsheetSheets(doc, id, formulas.get(id) ?? []);
   doc.commit({
-    origin: replace ? 'spreadsheet-workbook-replace' : 'spreadsheet-sheet-add',
+    origin: plan.replace
+      ? 'spreadsheet-workbook-replace'
+      : 'spreadsheet-sheet-add',
   });
-  return ids;
+}
+
+/** Cells an import writes per commit, so a page responds between them. */
+export const SPREADSHEET_IMPORT_CHUNK_CELLS = 5_000;
+
+/**
+ * Write a prepared import's cells in commits of at most `chunk` cells,
+ * awaiting `pause` after each so a page stays responsive. Returns each
+ * sheet's formulas for `registerSpreadsheetImport`. `check` runs before each
+ * commit and throws to stop the import.
+ */
+export async function writeSpreadsheetImportCells(
+  doc: LoroDoc,
+  plan: SpreadsheetImport,
+  options: {
+    chunk: number;
+    pause: () => Promise<void>;
+    check?: () => void;
+    onProgress?: (fraction: number) => void;
+  }
+): Promise<Map<string, string[]>> {
+  const total = plan.sheets.reduce(
+    (sum, { input }) => sum + Object.keys(input.cells).length,
+    0
+  );
+  const formulas = new Map<string, string[]>();
+  let written = 0;
+  for (const { id, input } of plan.sheets) {
+    const entries = Object.entries(input.cells);
+    const sheetFormulas: string[] = [];
+    for (let start = 0; start < entries.length; start += options.chunk) {
+      options.check?.();
+      const chunk = entries.slice(start, start + options.chunk);
+      for (const formula of writeFreshSpreadsheetCells(doc, chunk, id))
+        sheetFormulas.push(formula);
+      doc.commit({ origin: 'spreadsheet-import-cells' });
+      written += chunk.length;
+      options.onProgress?.(written / total);
+      await options.pause();
+    }
+    formulas.set(id, sheetFormulas);
+  }
+  options.check?.();
+  return formulas;
+}
+
+/** Validate the entire workbook before the first CRDT mutation; one undo step. */
+export function importSpreadsheetSheets(
+  doc: LoroDoc,
+  inputs: SpreadsheetSheetInput[],
+  replace = false
+): string[] {
+  const plan = prepareSpreadsheetImport(doc, inputs, replace);
+  const formulas = new Map(
+    plan.sheets.map(({ id, input }) => [
+      id,
+      writeFreshSpreadsheetCells(doc, Object.entries(input.cells), id),
+    ])
+  );
+  registerSpreadsheetImport(doc, plan, formulas);
+  return plan.sheets.map(({ id }) => id);
 }
 
 export function addSpreadsheetSheet(doc: LoroDoc, name?: string): string {

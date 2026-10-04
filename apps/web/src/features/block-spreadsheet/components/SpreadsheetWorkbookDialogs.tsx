@@ -93,6 +93,8 @@ export function SpreadsheetImportDialog(props: {
   readonly: boolean;
   /** The confirmed import is being written; the dialog stays until it ends. */
   importing?: boolean;
+  /** How much of the import is written, from 0 to 1. */
+  progress?: number;
   onConfirm: () => void;
   onClose: () => void;
   onRestoreFocus?: () => void;
@@ -177,6 +179,21 @@ export function SpreadsheetImportDialog(props: {
             </span>
           </label>
         </fieldset>
+        <Show when={props.importing}>
+          <div
+            role="progressbar"
+            aria-label="Import progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round((props.progress ?? 0) * 100)}
+            class="mt-4 h-1.5 overflow-hidden rounded-full bg-edge-muted"
+          >
+            <div
+              class="h-full rounded-full bg-accent transition-[width] duration-150"
+              style={{ width: `${Math.round((props.progress ?? 0) * 100)}%` }}
+            />
+          </div>
+        </Show>
         <Show when={props.error}>
           <p id={errorId} role="alert" class="mt-3 text-xs text-failure">
             {props.error}
@@ -197,7 +214,9 @@ export function SpreadsheetImportDialog(props: {
             disabled={props.readonly || props.importing}
             onClick={props.onConfirm}
           >
-            {props.importing ? 'Importing…' : 'Import workbook'}
+            {props.importing
+              ? `Importing… ${Math.round((props.progress ?? 0) * 100)}%`
+              : 'Import workbook'}
           </Button>
         </div>
       </div>

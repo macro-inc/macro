@@ -1,6 +1,10 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import type { ConditionalAppearance } from '@macro-inc/spreadsheet/conditional-formatting';
+import {
+  literalNumber,
+  literalNumberDisplay,
+} from '@macro-inc/spreadsheet/number-display';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -274,9 +278,12 @@ export function SpreadsheetGrid(props: {
     if (props.showFormulas && formula) return cell.value;
     // Newly filled formulas have no cached result yet. Keep them blank until
     // calculation finishes instead of briefly flashing the formula expression.
+    // Literal numbers are formatted as calculation will show them.
     return (
       props.values[address]?.display ??
-      (formula ? '' : cellPlainText(cell?.value ?? ''))
+      (formula
+        ? ''
+        : (literalNumberDisplay(cell) ?? cellPlainText(cell?.value ?? '')))
     );
   };
   const rootStyle = getComputedStyle(document.documentElement);
@@ -1369,11 +1376,17 @@ export function SpreadsheetGrid(props: {
                           ? '1px solid transparent'
                           : undefined;
                       };
+                      // Before calculation reports it, a literal number
+                      // still aligns as one.
+                      const numeric = () =>
+                        value()
+                          ? value()!.number !== undefined
+                          : literalNumber(cell()) !== undefined;
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
                         return align && align !== 'auto'
                           ? align
-                          : value()?.number !== undefined &&
+                          : numeric() &&
                               !(
                                 props.showFormulas &&
                                 cell()?.value.startsWith('=')
@@ -1484,7 +1497,7 @@ export function SpreadsheetGrid(props: {
                           class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-surface text-ink select-none"
                           classList={{
                             'font-semibold': look()?.bold ?? cell()?.bold,
-                            'tabular-nums': value()?.number !== undefined,
+                            'tabular-nums': numeric(),
                             'text-failure': !!value()?.error,
                           }}
                           onPointerDown={(event) => {

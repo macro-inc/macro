@@ -324,7 +324,11 @@ export function createSheetRulesReader(options: {
         differential = { reader: styles.inlineDifferential(), stack: ['dxf'] };
         return true;
       }
-      if (extensionRules && uri === XM && (local === 'f' || local === 'sqref')) {
+      if (
+        extensionRules &&
+        uri === XM &&
+        (local === 'f' || local === 'sqref')
+      ) {
         text = '';
         return true;
       }

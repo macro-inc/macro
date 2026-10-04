@@ -1033,6 +1033,7 @@ export function SpreadsheetEditor(props: {
         error={workbookActions.importError()}
         readonly={!editable()}
         importing={workbookActions.importing()}
+        progress={workbookActions.importProgress()}
         onConfirm={workbookActions.confirmImport}
         onClose={workbookActions.closePreview}
       />

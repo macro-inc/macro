@@ -224,7 +224,7 @@ describe('workbook dialogs', () => {
     ));
     expect(
       screen
-        .getByRole('button', { name: 'Importing…' })
+        .getByRole('button', { name: /^Importing…/ })
         .hasAttribute('disabled')
     ).toBe(true);
     expect(

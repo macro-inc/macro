@@ -17,6 +17,70 @@ use ironcalc_base::{
     BorderArea, ClipboardData, UserModel as BaseModel,
 };
 
+// MACRO: grow WebAssembly memory in large steps. V8 accounts each growth of a
+// memory as a new allocation of all of it and runs a full garbage collection,
+// while Rust's allocator grows memory 64 KiB at a time: building a model of a
+// few hundred thousand cells ran hundreds of collections, each costing time in
+// proportion to the page's JavaScript heap. When the allocator has just grown
+// memory, a spare block of a quarter of it is allocated and freed at once, so
+// it stays at the top of the heap for later allocations.
+#[cfg(target_arch = "wasm32")]
+mod allocator {
+    use core::arch::wasm32::memory_size;
+    use std::alloc::{GlobalAlloc, Layout, System};
+
+    const PAGE: usize = 65_536;
+    const MIN_STEP: usize = 4 << 20;
+
+    struct GrowInLargeSteps;
+
+    impl GrowInLargeSteps {
+        unsafe fn reserve_after(&self, pages_before: usize) {
+            let pages = memory_size(0);
+            if pages <= pages_before {
+                return;
+            }
+            let spare = (pages * PAGE / 4).max(MIN_STEP);
+            if let Ok(layout) = Layout::from_size_align(spare, 16) {
+                let block = System.alloc(layout);
+                if !block.is_null() {
+                    System.dealloc(block, layout);
+                }
+            }
+        }
+    }
+
+    unsafe impl GlobalAlloc for GrowInLargeSteps {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            let before = memory_size(0);
+            let pointer = System.alloc(layout);
+            self.reserve_after(before);
+            pointer
+        }
+
+        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+            let before = memory_size(0);
+            let pointer = System.alloc_zeroed(layout);
+            self.reserve_after(before);
+            pointer
+        }
+
+        unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+            System.dealloc(pointer, layout)
+        }
+
+        unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+            let before = memory_size(0);
+            let result = System.realloc(pointer, layout, size);
+            self.reserve_after(before);
+            result
+        }
+    }
+
+    #[global_allocator]
+    static ALLOCATOR: GrowInLargeSteps = GrowInLargeSteps;
+}
+
 fn to_js_error(error: String) -> JsError {
     JsError::new(&error.to_string())
 }
@@ -548,6 +612,32 @@ impl Model {
     ) -> Result<String, JsError> {
         self.model
             .get_formatted_cell_value(sheet, row, column)
+            .map_err(to_js_error)
+    }
+
+    // MACRO: read a number result without formatting it, and a cell's number
+    // format without serializing its whole style.
+    #[wasm_bindgen(js_name = "getCellNumber")]
+    pub fn get_cell_number(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<Option<f64>, JsError> {
+        self.model
+            .get_cell_number(sheet, row, column)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "getCellNumberFormat")]
+    pub fn get_cell_number_format(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<String, JsError> {
+        self.model
+            .get_cell_number_format(sheet, row, column)
             .map_err(to_js_error)
     }
 

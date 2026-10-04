@@ -655,6 +655,8 @@ export class Model {
      * Returns the link attached to the cell or undefined if there isn't one.
      */
     getCellLink(sheet: number, row: number, column: number): Link | undefined;
+    getCellNumber(sheet: number, row: number, column: number): number | undefined;
+    getCellNumberFormat(sheet: number, row: number, column: number): string;
     getCellStyle(sheet: number, row: number, column: number): ExtendedCellStyle;
     getCellType(sheet: number, row: number, column: number): number;
     getColumnWidth(sheet: number, column: number): number;
@@ -896,6 +898,8 @@ export interface InitOutput {
     readonly model_getCellArrayStructure: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly model_getCellContent: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly model_getCellLink: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly model_getCellNumber: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly model_getCellNumberFormat: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly model_getCellStyle: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly model_getCellType: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly model_getColumnWidth: (a: number, b: number, c: number) => [number, number, number];

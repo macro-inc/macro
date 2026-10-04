@@ -26,6 +26,7 @@ export function createWorkbookActions(options: {
   );
   const [importError, setImportError] = createSignal('');
   const [importing, setImporting] = createSignal(false);
+  const [importProgress, setImportProgress] = createSignal(0);
   const [sheetDialog, setSheetDialog] = createSignal<{
     kind: 'rename' | 'delete';
     id: string;
@@ -116,8 +117,9 @@ export function createWorkbookActions(options: {
   async function confirmImport() {
     const current = preview();
     if (!current || importing() || !options.store.canEdit()) return;
-    // Writing a large workbook holds the main thread for seconds, so show the
-    // pending dialog first. Hidden tabs never paint; the timeout covers them.
+    // Show the pending dialog before writing begins. Hidden tabs never
+    // paint; the timeout covers them.
+    setImportProgress(0);
     setImporting(true);
     await new Promise((resolve) => {
       globalThis.requestAnimationFrame?.(() => setTimeout(resolve));
@@ -132,8 +134,15 @@ export function createWorkbookActions(options: {
           );
           return;
         }
-        options.store.replaceWorkbook(current.data.sheets);
-      } else options.store.appendSheets(current.data.sheets);
+        await options.store.replaceWorkbook(
+          current.data.sheets,
+          setImportProgress
+        );
+      } else
+        await options.store.appendSheets(
+          current.data.sheets,
+          setImportProgress
+        );
       setNotice(
         `Imported ${current.data.sheets.length} ${current.data.sheets.length === 1 ? 'sheet' : 'sheets'} from ${current.name}`
       );
@@ -196,6 +205,7 @@ export function createWorkbookActions(options: {
     importError,
     confirmImport,
     importing,
+    importProgress,
     closePreview: () => setPreview(undefined),
     importExcel,
     exportExcel,

@@ -78,6 +78,21 @@ Host hooks in the WebAssembly package:
 - `setFixedTime(ms)` fixes the time NOW and TODAY read, and
   `setRandomSeed(seed)` makes RAND, RANDBETWEEN and RANDARRAY repeatable, for
   tests and reproducible imports (`model.rs`, `math_and_trigonometry/random.rs`).
+- `getIconSetIcons(name)` lists an Excel icon set's icons and colors, and
+  `getConditionalFormattingOverlay(sheet)` returns every cell's evaluated
+  conditional format in one call.
+- `getCellNumber` reads a number result without formatting it, and
+  `getCellNumberFormat` a cell's number format without serializing its whole
+  style (`user_model/common.rs`): reading a large workbook's results no longer
+  formats each number only to parse it back.
+
+Performance:
+
+- The package's global allocator grows WebAssembly memory in steps of a
+  quarter of its size (`bindings/wasm/src/lib.rs`). V8 runs a full garbage
+  collection whenever a WebAssembly memory grows, and Rust's allocator grows it
+  64 KiB at a time, so loading 500,000 cells ran hundreds of collections; the
+  first calculation of such a workbook took 31 s in Node and now takes 8 s.
 
 Known gaps: dates before 1 March 1900 are a day off (Excel's fictional 29
 February 1900), direct text and boolean arguments of STDEV, VAR and SUMSQ are

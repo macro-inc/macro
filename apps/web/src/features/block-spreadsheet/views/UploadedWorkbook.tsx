@@ -6,10 +6,16 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import { createQuery } from '@tanstack/solid-query';
 import { Button } from '@ui';
-import { For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { SpreadsheetSkeleton } from '../components/SpreadsheetSkeleton';
-import { importSpreadsheetSheets } from '../core/workbook-document';
+import {
+  prepareSpreadsheetImport,
+  registerSpreadsheetImport,
+  SPREADSHEET_IMPORT_CHUNK_CELLS,
+  writeSpreadsheetImportCells,
+} from '../core/workbook-document';
 import type { WorkbookFileData } from '../core/workbook-file-types';
+import { yieldToPage } from '../core/yield-to-page';
 import { createDraftActions } from '../primitives/create-draft-actions';
 import { createLocalSpreadsheetSource } from '../primitives/create-local-spreadsheet-source';
 import { createSpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -55,16 +61,70 @@ export default function UploadedWorkbook() {
         </Show>
       }
     >
-      {(workbook) => <UploadedWorkbookPreview workbook={workbook} />}
+      {(workbook) => <UploadedWorkbookImport workbook={workbook} />}
     </Show>
   );
 }
 
-function UploadedWorkbookPreview(props: { workbook: WorkbookFileData }) {
+/** Write the workbook into a local document in steps, so a large file
+ * leaves the page responsive, then show it. */
+function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
+  const source = createLocalSpreadsheetSource();
+  const [ready, setReady] = createSignal(false);
+  const [error, setError] = createSignal('');
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const write = async () => {
+    const doc = source.doc()!;
+    const plan = prepareSpreadsheetImport(doc, props.workbook.sheets, true);
+    const formulas = await writeSpreadsheetImportCells(doc, plan, {
+      chunk: SPREADSHEET_IMPORT_CHUNK_CELLS,
+      pause: yieldToPage,
+      check: () => {
+        if (disposed) throw new Error('The preview closed.');
+      },
+    });
+    registerSpreadsheetImport(doc, plan, formulas);
+  };
+  write().then(
+    () => setReady(true),
+    (reason: unknown) => {
+      if (!disposed)
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : 'Unable to open this workbook.'
+        );
+    }
+  );
+  return (
+    <Show
+      when={ready()}
+      fallback={
+        <Show when={error()} fallback={<SpreadsheetSkeleton />}>
+          <div
+            class="flex size-full items-center justify-center p-6 text-sm text-ink-muted"
+            role="status"
+          >
+            {error()}
+          </div>
+        </Show>
+      }
+    >
+      <UploadedWorkbookPreview source={source} workbook={props.workbook} />
+    </Show>
+  );
+}
+
+function UploadedWorkbookPreview(props: {
+  source: ReturnType<typeof createLocalSpreadsheetSource>;
+  workbook: WorkbookFileData;
+}) {
   const panel = useSplitPanelOrThrow();
   const name = useBlockDocumentName('Imported spreadsheet');
-  const source = createLocalSpreadsheetSource();
-  importSpreadsheetSheets(source.doc()!, props.workbook.sheets, true);
+  const source = props.source;
   const store = createSpreadsheetStore({ source, canEdit: () => false });
   const actions = createDraftActions({
     snapshot: () => source.doc()?.export({ mode: 'snapshot' }),

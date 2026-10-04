@@ -73,7 +73,7 @@ formula cells show a short shimmer bar until their first results arrive; wait fo
 real cell text before reading values. They have the `.spreadsheet` file type; uploading an
 Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
-You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
+You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
 
 Imported Excel workbooks keep conditional formatting, data validation and notes.
 Conditional formats recolor cells and draw data bars and icons, and they update as

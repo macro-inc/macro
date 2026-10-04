@@ -620,6 +620,36 @@ export function validateSpreadsheetCellEdits(
   }
 }
 
+/**
+ * Write validated cells of a sheet created by an import, which has no earlier
+ * values to read or clear. Returns the formulas, whose sheet references the
+ * sheet retains once it is registered.
+ */
+export function writeFreshSpreadsheetCells(
+  doc: LoroDoc,
+  cells: Iterable<[string, SpreadsheetCell]>,
+  sheetId: string
+): string[] {
+  const values = doc.getMap('spreadsheetValues');
+  const styles = styleKeys.map((key) => ({
+    key,
+    map: doc.getMap(styleFields[key].map),
+  }));
+  const formulas: string[] = [];
+  for (const [address, cell] of cells) {
+    const key = spreadsheetSheetKey(address, sheetId);
+    if (cell.value) values.set(key, cell.value);
+    for (const { key: styleKey, map } of styles) {
+      const value = cell[styleKey];
+      if (value !== undefined && value !== SPREADSHEET_DEFAULT_STYLE[styleKey])
+        map.set(key, value);
+    }
+    if (cell.value.startsWith('=') && cell.format !== 'text')
+      formulas.push(cell.value);
+  }
+  return formulas;
+}
+
 export function writeSpreadsheetCells(
   doc: LoroDoc,
   edits: SpreadsheetCellEdits,

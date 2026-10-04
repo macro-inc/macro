@@ -590,6 +590,29 @@ impl<'a> UserModel<'a> {
         self.model.get_cell_type(sheet, row, column)
     }
 
+    /// MACRO: the value of a cell holding a number, unformatted, or `None`.
+    pub fn get_cell_number(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<Option<f64>, String> {
+        match self.model.get_cell_value_by_index(sheet, row, column)? {
+            crate::cell::CellValue::Number(number) => Ok(Some(number)),
+            _ => Ok(None),
+        }
+    }
+
+    /// MACRO: a cell's number format, which the engine may have inferred.
+    pub fn get_cell_number_format(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<String, String> {
+        Ok(self.model.get_style_for_cell(sheet, row, column)?.num_fmt)
+    }
+
     /// Adds new sheet
     ///
     /// See also:
