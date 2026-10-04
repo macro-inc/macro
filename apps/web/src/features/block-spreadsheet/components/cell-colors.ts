@@ -1,3 +1,16 @@
+/** Templates paint cells white as paper, to hide gridlines. On a dark theme a
+ * literal white would show as white blocks, so white follows the grid's own
+ * background and is otherwise treated as no fill. */
+function isPaper(fill?: string): boolean {
+  return !!fill && /^#f{6}$/i.test(fill);
+}
+
+/** The CSS background of a cell fill. */
+export function cellBackground(fill?: string): string | undefined {
+  if (!fill) return undefined;
+  return isPaper(fill) ? 'var(--color-panel)' : fill;
+}
+
 /** Excel's default black follows the app foreground on an unfilled cell, and so
  * do the darker grays templates use for secondary text ("Text 1, lighter 35%"):
  * they keep their strength against the app background, which on a light theme
@@ -9,7 +22,7 @@ export function cellForeground(
   color?: string,
   fill?: string
 ): string | undefined {
-  if (!fill) {
+  if (!fill || isPaper(fill)) {
     if (!color) return undefined;
     const strength = inkStrength(color);
     if (strength === undefined) return color;

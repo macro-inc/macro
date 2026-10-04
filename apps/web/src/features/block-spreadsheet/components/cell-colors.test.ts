@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellBorderColor, cellForeground } from './cell-colors';
+import { cellBackground, cellBorderColor, cellForeground } from './cell-colors';
 
 describe('workbook display colors', () => {
   it('uses themed ink for automatic or Excel black text on unfilled cells', () => {
@@ -33,12 +33,22 @@ describe('workbook display colors', () => {
     expect(cellForeground('#ffffff', '#123456')).toBe('#ffffff');
     expect(cellForeground('#FF0000')).toBe('#FF0000');
     expect(cellBorderColor('#123456')).toBe('#123456');
-    expect(cellBorderColor('#000000', '#ffffff')).toBe('#000000');
+    expect(cellBorderColor('#000000', '#fff2cc')).toBe('#000000');
+  });
+
+  it('treats white fills as paper that follows the app background', () => {
+    expect(cellBackground('#FFFFFF')).toBe('var(--color-panel)');
+    expect(cellBackground('#fff2cc')).toBe('#fff2cc');
+    expect(cellBackground()).toBeUndefined();
+    expect(cellForeground(undefined, '#ffffff')).toBeUndefined();
+    expect(cellForeground('#000000', '#FFFFFF')).toBe('var(--color-ink)');
+    expect(cellForeground('#1f3864', '#ffffff')).toBe('#1f3864');
+    expect(cellBorderColor('#000000', '#ffffff')).toBe('var(--color-ink)');
   });
 
   it('chooses readable automatic text on literal fills in either theme', () => {
     expect(cellForeground('', '#fff2cc')).toBe('#000000');
-    expect(cellForeground(undefined, '#ffffff')).toBe('#000000');
+    expect(cellForeground(undefined, '#f2f2f2')).toBe('#000000');
     expect(cellForeground(undefined, '#000000')).toBe('#ffffff');
     expect(cellForeground(undefined, '#123456')).toBe('#ffffff');
     expect(cellBorderColor(undefined, '#fff2cc')).toBe('#000000');

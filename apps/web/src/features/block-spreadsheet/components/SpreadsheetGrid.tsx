@@ -36,7 +36,7 @@ import {
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
-import { cellBorderColor, cellForeground } from './cell-colors';
+import { cellBackground, cellBorderColor, cellForeground } from './cell-colors';
 import { FormulaInput } from './FormulaInput';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
@@ -1322,6 +1322,20 @@ export function SpreadsheetGrid(props: {
                                 : 'solid';
                         return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], cell()?.fillColor)}`;
                       };
+                      // A fill covers the gridlines around its cell, as in
+                      // Excel; the right and bottom lines are drawn here.
+                      const gridline = (edge: 'Right' | 'Bottom') =>
+                        props.showGridlines === false ||
+                        cell()?.fillColor ||
+                        props.cells[
+                          cellAddress(
+                            edge === 'Right'
+                              ? { row, column: column + 1 }
+                              : { row: row + 1, column }
+                          )
+                        ]?.fillColor
+                          ? '1px solid transparent'
+                          : undefined;
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
                         return align && align !== 'auto'
@@ -1390,17 +1404,13 @@ export function SpreadsheetGrid(props: {
                             'scroll-margin-left': `${headerWidth()}px`,
                             'border-top': border('Top'),
                             'border-right':
-                              border('Right') ??
-                              (props.showGridlines === false
-                                ? '1px solid transparent'
-                                : undefined),
+                              border('Right') ?? gridline('Right'),
                             'border-bottom':
-                              border('Bottom') ??
-                              (props.showGridlines === false
-                                ? '1px solid transparent'
-                                : undefined),
+                              border('Bottom') ?? gridline('Bottom'),
                             'border-left': border('Left'),
-                            'background-color': cell()?.fillColor || undefined,
+                            'background-color': cellBackground(
+                              cell()?.fillColor
+                            ),
                             color: cellForeground(
                               cell()?.textColor,
                               cell()?.fillColor
