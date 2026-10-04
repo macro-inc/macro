@@ -68,3 +68,19 @@ fn vml_boxes_are_drawn_but_not_word_art() {
     // WordArt fills its letters, not its box.
     assert_eq!(pixel(&page, 300, 450), [255, 255, 255]);
 }
+
+#[test]
+fn group_children_are_scaled_into_the_group() {
+    // A 200x100pt group at (100, 100) whose children span 2000x1000 units
+    // from (1000, 1000): a child at (2000, 1500) sized 1000x500 covers
+    // (200, 150) to (300, 200) on the page.
+    let child = r#"<wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="2000" y="1500"/><a:ext cx="1000" cy="500"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wps:spPr><wps:bodyPr/></wps:wsp>"#;
+    let group = format!(
+        r#"<w:p><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>1270000</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>1270000</wp:posOffset></wp:positionV><wp:extent cx="2540000" cy="1270000"/><wp:wrapNone/><wp:docPr id="1" name="Group"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2540000" cy="1270000"/><a:chOff x="1000" y="1000"/><a:chExt cx="2000" cy="1000"/></a:xfrm></wpg:grpSpPr>{child}</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>"#
+    );
+    let page = render(&group);
+    assert_eq!(pixel(&page, 250, 175), [255, 0, 0]);
+    assert_eq!(pixel(&page, 197, 175), [255, 255, 255]);
+    assert_eq!(pixel(&page, 250, 203), [255, 255, 255]);
+    assert_eq!(pixel(&page, 150, 120), [255, 255, 255]);
+}

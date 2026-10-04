@@ -1,6 +1,8 @@
 //! DrawingML and VML shapes: outlines and fills. (Their text is laid out
 //! with the page; charts and diagrams are not drawn.)
 
+mod group;
+
 use super::Renderer;
 use crate::layout::drawing::{Drawing, Graphic, css_length};
 use crate::xml::{NodeId, Ns, XmlTree};
@@ -24,22 +26,33 @@ const VML_TEXT_BOX: &str = "_x0000_t202";
 /// The VML shape type of rectangles.
 const VML_RECT: &str = "_x0000_t1";
 
-/// Draws a non-picture graphic in `rect`.
+/// Draws a non-picture graphic in `rect`; `part` resolves the pictures of
+/// groups.
 pub(super) fn graphic_nodes(
     r: &mut Renderer<'_>,
     d: &Drawing,
     rect: Rect,
-    _part: &str,
+    part: &str,
     out: &mut Vec<Node>,
 ) {
+    let t = &d.tree;
+    if d.graphic == Graphic::Group && !d.vml {
+        if let Some(g) = t
+            .descendants(d.node)
+            .into_iter()
+            .find(|&n| t.is(n, Ns::WPG, "wgp") || t.is(n, Ns::WPC, "wpc"))
+        {
+            group::group_nodes(r, t, g, rect, part, out);
+        }
+        return;
+    }
     if d.graphic != Graphic::Shape {
         return;
     }
     if d.vml {
-        vml_shape(&d.tree, d.node, rect, out);
+        vml_shape(t, d.node, rect, out);
         return;
     }
-    let t = &d.tree;
     let Some(wsp) = t
         .descendants(d.node)
         .into_iter()
