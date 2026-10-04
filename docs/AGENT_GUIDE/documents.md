@@ -444,44 +444,74 @@ installed); `collaboration.browser.e2e.ts` opens several people on one deck. The
 
 ## Designs (Figma)
 
-Uploaded `.fig` files open in the `fig` block (`/app/fig/<documentId>`), a
-read-only Figma viewer. With the `enable-fig-viewer` PostHog flag (on by
-default in development builds; `ENABLE_FIG_VIEWER` overrides it) the block shows
-the design; with the flag off it offers the file for download. The file is
-decoded and rasterized by the Rust `fig_engine` compiled to WebAssembly, in a
-primary worker (queries and tiles) plus up to three tile-raster helpers. The
-canvas composites 512 px tiles; while zooming it shows the nearest cached
-scale, then sharpens when the view settles.
+Uploaded `.fig` files open in the `fig` block (`/app/fig/<documentId>`), and
+**Design** in the create menu (key **I**, also in project create menus) makes
+a new, empty one. Both are behind the `enable-fig-viewer` PostHog flag (on by
+default in development builds; `ENABLE_FIG_VIEWER` overrides it); with the
+flag off the block offers the file for download. The file is decoded,
+rendered, and edited by the Rust `fig_engine` compiled to WebAssembly, in a
+primary worker plus up to three tile-raster helpers. The canvas composites
+512 px tiles; while zooming it shows the nearest cached scale, then sharpens.
+
+People with edit access get an editor; others get the same view read-only
+(no shape tools, no editing shortcuts). Edits save automatically 1.5 s after
+the last change, when the tab is hidden, and on close, as a new document
+version through `PUT /documents/{id}/simple_save`. Saving rewrites only the
+edited parts of the original file, so everything else in it survives. There
+is no live collaboration: the last save wins.
 
 Layout and test hooks:
 
 - **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
   (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
-  (`fig-page` buttons; pages named only with dashes are dividers), and the
-  layer tree (`fig-layer-row`, `data-layer-id` is the Figma node id such as
-  `12:34`, or `I12:34;56:78` inside instances). Rows list top-most first, as
-  Figma does; instance and component rows are purple.
+  (`fig-page` buttons; pages named only with dashes are dividers; editors
+  get `fig-page-add`, double-click to rename in `fig-page-rename`, and a hover
+  `fig-page-delete`), and the layer tree (`fig-layer-row`, `data-layer-id` is
+  the Figma node id such as `12:34`, or `I12:34;56:78` inside instances).
+  Rows list top-most first, as Figma does; instance and component rows are
+  purple. Editors can double-click a row (or ⌘R) to rename it
+  (`fig-layer-rename`), toggle visibility and lock on hover
+  (`fig-layer-visibility`), and drag rows to reorder or move them into
+  frames and groups.
 - **Canvas** (`fig-canvas`): click selects with Figma's rules (inside a
   top-level frame the click selects the frame's child; sections are
   transparent; ⌘/Ctrl-click selects the deepest layer; double-click goes one
-  level deeper; Shift-click adds). Dragging draws a selection marquee. Hover
-  outlines what a click would select; holding ⌥ measures from the selection to
-  the hovered layer. Scroll pans, ⌘/Ctrl+scroll or pinch zooms, Space-drag or
-  middle-drag pans.
-- **Design panel** (`fig-design-panel`, toggled with ⌥8): position, size,
-  rotation, radius, opacity and blend, fills, strokes, effects, typography,
-  auto layout, and export buttons (`fig-export-1x|2x|3x`, PNG of the
-  selection). The Code tab shows CSS (`fig-css`). With nothing selected it
-  shows the page name and canvas color.
-- **Toolbar** (`fig-toolbar`): Move (V), Hand (H), the zoom menu
-  (`fig-zoom-menu`, showing the zoom, with zoom, pixel grid, rulers, outline
-  view, and show-UI items), and the shortcuts dialog (`fig-shortcuts`,
-  Ctrl+⇧+?).
+  level deeper; Shift-click adds). Dragging empty canvas draws a selection
+  marquee. Hover outlines what a click would select; holding ⌥ measures from
+  the selection to the hovered layer. Scroll pans, ⌘/Ctrl+scroll or pinch
+  zooms, Space-drag or middle-drag pans. When editing: drag a layer to move it
+  (⌥ drags a copy, ⇧ constrains, edges and centers snap to siblings and the
+  parent frame with red guides), drag the selection's corners or edges to
+  resize (⇧ keeps proportions), draw with the frame, rectangle, ellipse, and
+  text tools (a click places a default size; new layers go into the frame
+  under the pointer), double-click or Enter on a text layer to type into it
+  (`fig-text-editor`; Escape ends, an emptied layer is removed), and drop or
+  paste image files to place image-filled layers. Layers inside instances are
+  not editable.
+- **Design panel** (`fig-design-panel`, toggled with ⌥8): alignment buttons
+  (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
+  position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|
+  radius|opacity|font-size|stroke-weight>`; type a value or arithmetic, or
+  drag the label to scrub), fills and strokes (`fig-fills`, `fig-strokes`,
+  rows `fig-fill-<n>` with a hex input `fig-fill-<n>-hex`, opacity,
+  visibility, and remove; "+" adds), stroke weight and position, font size,
+  clip content (`fig-clip-content`), effects, typography, auto layout, and
+  export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
+  values as text. The Code tab shows CSS (`fig-css`). With nothing selected
+  it shows the page name and canvas color.
+- **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
+  (O), Text (T), Hand (H) as `fig-tool-<name>`, undo/redo (`fig-undo`,
+  `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
+  `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
+  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?).
 - **Keyboard**, as in Figma: ⇧0 100%, ⇧1 fit, ⇧2 selection, ⌘/Ctrl +/−, N and
   ⇧N next/previous frame, PageDown/PageUp pages, Enter children, ⇧Enter and
   Esc parent, Tab/⇧Tab siblings, ⌘/Ctrl+A select all, ⇧R rulers, ⇧' pixel
-  grid, ⌘/Ctrl+Y outline view, ⌘/Ctrl+\ hide UI, ⌘/Ctrl+⇧C copy as PNG,
-  ⌘/Ctrl+⇧E export.
+  grid, ⌘/Ctrl+Y outline view, ⌘/Ctrl+\\ hide UI, ⌘/Ctrl+⇧C copy as PNG,
+  ⌘/Ctrl+⇧E export. Editing: ⌘Z/⇧⌘Z undo and redo, ⌘D duplicate, ⌘C/⌘X/⌘V,
+  Delete, arrows nudge (⇧ by 10), ⌘G group, ⇧⌘G ungroup, ⌥⌘G frame
+  selection, ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[ front/back, ⇧⌘H hide,
+  ⇧⌘L lock, ⌘R rename.
 
 The viewer has a browser fixture that needs no backend. From `apps/web`
 (build the engine first with `just ensure-fig-engine-wasm`):
@@ -493,7 +523,9 @@ bunx vite --config src/features/block-fig/browser-test/vite.config.ts
 
 It opens files from `crates/fig_engine/tests/fixtures` (the synthetic
 `showcase.fig`), or from any directory named by `FIG_CORPUS_DIR`; the header
-also opens a local `.fig`. `window.figFixture` exposes `engine()`,
+also opens a local `.fig`. `?edit` makes the file editable and `?new` opens a
+blank design (editable); saves stay in memory, and `?reload` reopens each one
+to check it round-trips. `window.figFixture` exposes `engine()`, `saves()`,
 `errors()`, `notices()`, and `downloads()`. The Playwright suite runs with
 `bunx playwright test --config src/features/block-fig/browser-test/playwright.config.ts`
 (set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not

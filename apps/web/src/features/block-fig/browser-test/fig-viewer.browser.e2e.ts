@@ -181,3 +181,111 @@ test('exports the selection and shows the shortcuts', async ({ page }) => {
     'Zoom to selection'
   );
 });
+
+// ---- editing (a new blank design; saves stay in memory and are reopened) --
+
+async function openNew(page: Page) {
+  await page.goto('/?new&reload');
+  await expect(page.getByTestId('fig-viewer')).toBeVisible();
+  await expect(page.getByTestId('fig-tool-rectangle')).toBeVisible();
+}
+
+/** A drag on the canvas between two canvas-relative points. */
+async function dragOnCanvas(
+  page: Page,
+  from: [number, number],
+  to: [number, number]
+) {
+  const box = await page.getByTestId('fig-canvas').boundingBox();
+  if (!box) throw new Error('The canvas is not visible.');
+  await page.mouse.move(box.x + from[0], box.y + from[1]);
+  await page.mouse.down();
+  await page.mouse.move(box.x + to[0], box.y + to[1], { steps: 8 });
+  await page.mouse.up();
+}
+
+const savedCount = (page: Page) =>
+  page.evaluate(() => window.figFixture.saves().length);
+
+test('draws, moves, and saves shapes', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('r');
+  // A new design opens at 100% with the page origin at the top left.
+  await dragOnCanvas(page, [100, 100], [220, 180]);
+  await expect(page.getByTestId('fig-layer-row')).toHaveText(['Rectangle 1']);
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('120');
+  await expect(page.getByTestId('fig-field-h')).toHaveValue('80');
+
+  await dragOnCanvas(page, [150, 140], [200, 170]);
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('150');
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('130');
+  await expect.poll(() => pixel(page, 0, 0)).not.toEqual([0, 0, 0, 0]);
+
+  // Saved after a pause, and each save reopens (`reload`).
+  await expect
+    .poll(() => savedCount(page), { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() => page.evaluate(() => window.figFixture.errors()))
+    .toEqual([]);
+});
+
+test('edits fills from the design panel and undoes', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [0, 0], [200, 200]);
+  await page.getByTestId('fig-fill-0-hex').fill('FF0000');
+  await page.getByTestId('fig-fill-0-hex').press('Enter');
+  // The canvas shows the rectangle red at the view's top left.
+  const red = async () => {
+    const [r, g, b] = await pixel(page, 0.05, 0.05);
+    return r > 240 && g < 20 && b < 20;
+  };
+  await expect.poll(red).toBe(true);
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('Control+z');
+  await expect.poll(red).toBe(false);
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(red).toBe(true);
+});
+
+test('types text and keeps it after saving', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('t');
+  const box = await page.getByTestId('fig-canvas').boundingBox();
+  if (!box) throw new Error('The canvas is not visible.');
+  await page.mouse.click(box.x + 120, box.y + 120);
+  await expect(page.getByTestId('fig-text-editor')).toBeFocused();
+  await page.keyboard.type('Hello Macro');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('fig-text-editor')).toBeHidden();
+  await expect(page.getByTestId('fig-layer-row')).toHaveText(['Text 1']);
+  await expect(page.getByTestId('fig-text-content')).toHaveText('Hello Macro');
+  await expect
+    .poll(() => savedCount(page), { timeout: 10_000 })
+    .toBeGreaterThan(0);
+});
+
+test('adds and renames pages', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-page-add').click();
+  await expect(page.getByTestId('fig-page-rename')).toBeFocused();
+  await page.keyboard.type('Flows');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('fig-page')).toHaveText(['Page 1', 'Flows']);
+});
+
+test('is read-only without edit access', async ({ page }) => {
+  await open(page);
+  await expect(page.getByTestId('fig-tool-rectangle')).toBeHidden();
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('r');
+  await page.keyboard.press('Delete');
+  await expect(page.getByTestId('fig-layer-row')).toHaveText([
+    'Settings',
+    'Home',
+  ]);
+});

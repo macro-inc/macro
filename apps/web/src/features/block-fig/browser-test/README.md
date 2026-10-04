@@ -13,11 +13,14 @@ bunx vite --config src/features/block-fig/browser-test/vite.config.ts
 ```
 
 Open `http://127.0.0.1:3019/?file=showcase.fig`. The header also opens a
-local `.fig`. Test-only `window.figFixture`:
+local `.fig`. `?edit` makes the file editable and `?new` opens a blank
+design; saves stay in memory, and `?reload` reopens each one. Test-only
+`window.figFixture`:
 
 - `engine()`: the open `FigEngine` (queries, renders);
 - `errors()` / `notices()`: messages the viewer reported;
-- `downloads()`: names and sizes of exported files.
+- `downloads()`: names and sizes of exported files;
+- `saves()`: every saved `.fig`, oldest first.
 
 Run the browser regressions (the configuration starts or reuses the fixture):
 
@@ -27,7 +30,9 @@ bunx playwright test --config src/features/block-fig/browser-test/playwright.con
 
 They cover rendering, the layers and pages lists, Figma's selection rules
 (top-level frames select their child, double-click into instances), Escape,
-frame and page navigation, zoom shortcuts, export, and the shortcuts dialog.
+frame and page navigation, zoom shortcuts, export, the shortcuts dialog,
+and editing: drawing, moving, and saving shapes, fills from the design panel
+with undo and redo, typing text, adding pages, and read-only access.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
 installed. Failure traces and screenshots stay in the ignored `test-results/`
 folder.

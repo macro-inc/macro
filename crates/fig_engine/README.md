@@ -1,8 +1,9 @@
 # fig_engine
 
 A from-scratch Figma (`.fig`) engine: it decodes design files, expands
-component instances, rasterizes any region at any scale, and answers the
-viewer's questions (layers, hit tests, node properties, search). The same Rust
+component instances, rasterizes any region at any scale, answers the
+editor's questions (layers, hit tests, node properties, search), applies
+edits with undo, and saves `.fig` files. The same Rust
 code runs natively (tests, the `fig_render` CLI) and as WebAssembly in the web
 app's `.fig` viewer workers (`apps/web/src/lib/core/fig-engine`).
 
@@ -42,8 +43,28 @@ scene            one page with instances expanded: overrides, component
 render           tiles: fills, strokes (inside/outside via clipping), masks,
                  blend modes, isolation, effects (shadows, blurs), images, text
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG outlines
+edit             edit operations, undo/redo, fractional-index positions
+text             text layout for edited text (bundled Inter, kerning, wrapping)
+save             writing `.fig`: patch edited records, splice the rest; blank files
 wasm             the worker API (`FigFile`)
 ```
+
+## Editing and saving
+
+Edits are operations on the document (`edit::Op`, sent as JSON by the web
+editor): set properties, move, create, delete, duplicate, reorder, group.
+Each step snapshots the nodes it touches, so undo restores them; nodes
+record which properties were edited. Saving decodes the original file again
+with its full schema, copies every unedited node record byte for byte,
+re-encodes edited ones with only the edited fields replaced, and appends new
+nodes (copies start from their source's record) and blobs. Fields the engine
+does not model therefore survive, and saving a large file takes about as
+long as compressing it. `fig_render roundtrip` checks that edited, saved,
+and reopened files render identically.
+
+Text the editor changes is laid out again with Inter (`fonts/`, SIL Open
+Font License), embedded in the build, or a font registered at run time;
+other text keeps Figma's own layout.
 
 Instances have no stored children: the scene builds their sublayers from the
 component, applying overrides keyed by GUID paths (outer instances win), and
