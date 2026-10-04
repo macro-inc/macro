@@ -12,6 +12,7 @@
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import type { NodeInfo, Rect } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
+import { type Alignment, alignOffset } from '../core/align';
 import type { FigViewer, Selected } from './create-fig-viewer';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
@@ -41,6 +42,8 @@ export interface Patch {
 /** A paint as the editor sends it: an existing one kept, or a solid. */
 export interface PaintSpec {
   keep?: number;
+  /** An image fill, by the hash `FigEngine.addImage` returned. */
+  image?: string;
   /** `RRGGBB` or `RRGGBBAA`. */
   color?: string;
   opacity?: number;
@@ -262,6 +265,34 @@ export function createFigEditor(options: FigEditorOptions) {
     );
   };
 
+  /** Aligns the selection (or one layer within its parent frame). */
+  const align = async (how: Alignment) => {
+    const geometry = viewer
+      .selectionGeometry()
+      .filter((g) => !g.id.startsWith('I'));
+    if (geometry.length === 0) return;
+    let to: Rect | undefined;
+    if (geometry.length > 1) {
+      to = viewer.selectionBounds();
+    } else {
+      const parent = viewer.selected()[0]?.parent;
+      if (!parent) return;
+      to = (await engine.geometry(viewer.page(), [parent]))[0]?.bounds;
+    }
+    if (!to) return;
+    const target = to;
+    const ops: Op[] = geometry
+      .map((g) => ({ id: g.id, ...alignOffset(g.bounds, target, how) }))
+      .filter((o) => Math.abs(o.dx) > 1e-6 || Math.abs(o.dy) > 1e-6)
+      .map((o) => ({
+        op: 'translate' as const,
+        ids: [o.id],
+        dx: Math.round(o.dx * 100) / 100,
+        dy: Math.round(o.dy * 100) / 100,
+      }));
+    await apply(ops);
+  };
+
   const copy = () => {
     clipboard = editableIds();
   };
@@ -355,6 +386,54 @@ export function createFigEditor(options: FigEditorOptions) {
     };
   };
 
+  // ---- images --------------------------------------------------------------
+
+  /**
+   * Places image files as rectangles filled with them (named after the
+   * files), centered on a page point, inside `parent`; selects them.
+   */
+  const importImages = async (
+    files: File[],
+    at: { x: number; y: number },
+    parent: string
+  ) => {
+    if (!enabled()) return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    const ops: Op[] = [];
+    let offset = 0;
+    for (const file of images) {
+      try {
+        const { hash, width, height } = await engine.addImage(
+          await file.arrayBuffer()
+        );
+        // Large images come in at most 1000 units on their long side.
+        const k = Math.min(1, 1000 / Math.max(width, height));
+        const w = Math.max(1, Math.round(width * k));
+        const h = Math.max(1, Math.round(height * k));
+        ops.push({
+          op: 'create',
+          parent,
+          node: {
+            type: 'RECTANGLE',
+            name: file.name.replace(/\.[^.]+$/, '') || 'Image',
+            x: Math.round(at.x - w / 2 + offset),
+            y: Math.round(at.y - h / 2 + offset),
+            width: w,
+            height: h,
+            props: { fills: [{ image: hash }] },
+          },
+        });
+        offset += 20;
+      } catch (e) {
+        options.notifyError(
+          e instanceof Error ? e.message : `${file.name} could not be added`
+        );
+      }
+    }
+    const result = await apply(ops);
+    await selectCreated(result);
+  };
+
   // ---- creation ------------------------------------------------------------
 
   /**
@@ -402,6 +481,7 @@ export function createFigEditor(options: FigEditorOptions) {
     group,
     ungroup,
     arrange,
+    align,
     nudge,
     copy,
     paste,
@@ -409,6 +489,7 @@ export function createFigEditor(options: FigEditorOptions) {
     startMove,
     startResize,
     create,
+    importImages,
     saveNow,
     /** The editable subset of the selection. */
     editableIds,

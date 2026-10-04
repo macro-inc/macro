@@ -36,6 +36,8 @@ struct PageSummary {
 #[serde(rename_all = "camelCase")]
 struct FileSummary {
     file_name: Option<String>,
+    /// The document node's id (pages are its children).
+    root_id: String,
     version: u32,
     node_count: usize,
     pages: Vec<PageSummary>,
@@ -181,6 +183,17 @@ impl FigFile {
         self.after_edit(page, touched, Vec::new())
     }
 
+    /// Adds an image for image fills under its SHA-1 (hex); returns
+    /// `[width, height]` JSON.
+    #[wasm_bindgen(js_name = addImage)]
+    pub fn add_image(&mut self, hash: &str, bytes: Vec<u8>) -> Result<String, JsError> {
+        let (w, h) = self
+            .doc
+            .add_image(hash, bytes)
+            .ok_or_else(|| js_err("this image format is not supported"))?;
+        to_json(&[w, h])
+    }
+
     /// The edited file, as `.fig` bytes.
     pub fn save(&self) -> Result<Vec<u8>, JsError> {
         crate::save::save(&self.doc, &self.original).map_err(js_err)
@@ -216,6 +229,12 @@ impl FigFile {
             .collect();
         to_json(&FileSummary {
             file_name: self.doc.file_name.clone(),
+            root_id: self
+                .doc
+                .props(self.doc.root)
+                .guid
+                .map(|g| g.to_string())
+                .unwrap_or_default(),
             version: self.doc.version,
             node_count: self.doc.nodes.len(),
             pages,

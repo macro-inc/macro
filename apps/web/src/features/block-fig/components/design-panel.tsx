@@ -10,11 +10,18 @@ import type {
   PageSummary,
   PaintInfo,
 } from '@core/fig-engine/types';
+import AlignBottom from '@phosphor/align-bottom.svg';
+import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
+import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
+import AlignLeft from '@phosphor/align-left.svg';
+import AlignRight from '@phosphor/align-right.svg';
+import AlignTop from '@phosphor/align-top.svg';
 import Copy from '@phosphor/copy.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
+import type { Alignment } from '../core/align';
 import { cssColor, cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
 import type { PaintSpec, Patch } from '../primitives/create-fig-editor';
@@ -232,6 +239,8 @@ export function DesignPanel(props: {
   selectionCount: number;
   /** Edits the selection; absent when the file is read-only. */
   onPatch?: (patch: Patch, live: boolean) => void;
+  /** Aligns the selection; absent when the file is read-only. */
+  onAlign?: (how: Alignment) => void;
   page: PageSummary | undefined;
   onExport: (scale: number) => void;
   onCopyPng: () => void;
@@ -261,6 +270,11 @@ export function DesignPanel(props: {
         </For>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
+        <Show
+          when={props.onAlign && props.selectionCount > 0 && tab() === 'design'}
+        >
+          <AlignRow onAlign={(how) => props.onAlign?.(how)} />
+        </Show>
         <Show
           when={props.info}
           fallback={
@@ -719,6 +733,44 @@ export function DesignPanel(props: {
           )}
         </Show>
       </div>
+    </div>
+  );
+}
+
+const ALIGN_BUTTONS: {
+  how: Alignment;
+  label: string;
+  icon: (props: { class?: string }) => JSX.Element;
+}[] = [
+  { how: 'left', label: 'Align left', icon: AlignLeft },
+  {
+    how: 'center',
+    label: 'Align horizontal centers',
+    icon: AlignCenterHorizontal,
+  },
+  { how: 'right', label: 'Align right', icon: AlignRight },
+  { how: 'top', label: 'Align top', icon: AlignTop },
+  { how: 'middle', label: 'Align vertical centers', icon: AlignCenterVertical },
+  { how: 'bottom', label: 'Align bottom', icon: AlignBottom },
+];
+
+function AlignRow(props: { onAlign: (how: Alignment) => void }) {
+  return (
+    <div class="flex items-center justify-between border-edge-muted border-b px-2 py-1.5">
+      <For each={ALIGN_BUTTONS}>
+        {(b) => (
+          <button
+            type="button"
+            aria-label={b.label}
+            title={b.label}
+            data-testid={`fig-align-${b.how}`}
+            class="rounded p-1 text-ink-muted hover:bg-hover hover:text-ink"
+            onClick={() => props.onAlign(b.how)}
+          >
+            {b.icon({ class: 'size-4' })}
+          </button>
+        )}
+      </For>
     </div>
   );
 }

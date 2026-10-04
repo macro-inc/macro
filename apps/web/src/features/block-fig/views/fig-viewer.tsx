@@ -252,6 +252,8 @@ export function FigViewer() {
     const action = shortcutAction(e, IS_MAC);
     if (!action) return;
     if (EDIT_ACTIONS.has(action) && !editor.enabled()) return;
+    // ⌘V goes through the paste event, which carries pasted image files.
+    if (action === 'paste') return;
     e.preventDefault();
     e.stopPropagation();
     const resolved = enterAction(action);
@@ -263,6 +265,28 @@ export function FigViewer() {
     if (e.key === ' ') setSpaceHeld(false);
     if (e.key === 'Alt') setAltHeld(false);
     if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(false);
+  };
+
+  // Pasting image files places them in the middle of the view.
+  const onPaste = (e: ClipboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest?.('input, textarea, [contenteditable="true"]')) return;
+    const files = [...(e.clipboardData?.files ?? [])].filter((f) =>
+      f.type.startsWith('image/')
+    );
+    if (!editor.enabled()) return;
+    e.preventDefault();
+    if (files.length === 0) {
+      // Layers copied in this file.
+      void editor.paste();
+      return;
+    }
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
+    void viewer
+      .containerAt(at)
+      .then((parent) => editor.importImages(files, at, parent));
   };
 
   const releaseModifiers = () => {
@@ -342,12 +366,14 @@ export function FigViewer() {
       data-testid="fig-viewer"
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
+      onPaste={onPaste}
     >
       <Show when={showLayers()}>
         <aside class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel">
           <LayersPanel
             viewer={viewer}
             engine={engine}
+            editor={editor}
             searchRef={(el) => {
               searchInput = el;
             }}
@@ -414,6 +440,9 @@ export function FigViewer() {
         <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
           <DesignPanel
             info={info()}
+            onAlign={
+              editor.enabled() ? (how) => void editor.align(how) : undefined
+            }
             onPatch={
               editor.enabled()
                 ? (patch, live) =>

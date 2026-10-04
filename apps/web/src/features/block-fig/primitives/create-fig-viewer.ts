@@ -12,6 +12,7 @@ import type {
   Rect,
 } from '@core/fig-engine/types';
 import { batch, createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import {
   type Camera,
   centerOn,
@@ -44,7 +45,7 @@ const HIT_SLOP = 3;
 
 export function createFigViewer(options: FigViewerOptions) {
   const { engine } = options;
-  const pages = engine.summary.pages;
+  const [pages, setPages] = createStore([...engine.summary.pages]);
 
   const [pageIndex, setPageIndex] = createSignal(0);
   const [layout, setLayout] = createSignal<PageLayout>();
@@ -406,8 +407,19 @@ export function createFigViewer(options: FigViewerOptions) {
   const afterEdit = async () => {
     outlines.clear();
     setHoverOutline(undefined);
-    const index = page();
     try {
+      const openId = pages[page()]?.id;
+      const summary = await engine.currentSummary();
+      setPages(reconcile(summary.pages, { key: 'id' }));
+      const at = summary.pages.findIndex((p) => p.id === openId);
+      if (at < 0) {
+        // The open page was deleted: go to the nearest one.
+        await openPage(Math.min(page(), summary.pages.length - 1));
+        return;
+      }
+      // Pages before it were added or removed: same page, new index.
+      if (at !== page()) setPageIndex(at);
+      const index = page();
       const [next] = await Promise.all([
         engine.openPage(index),
         refreshGeometry(selected().map((s) => s.id)),

@@ -15,13 +15,15 @@ enum BlendMode PASS_THROUGH NORMAL MULTIPLY SCREEN
 enum StrokeAlign CENTER INSIDE OUTSIDE
 enum WindingRule NONZERO ODD
 enum EffectType INNER_SHADOW DROP_SHADOW FOREGROUND_BLUR BACKGROUND_BLUR
+enum ImageScaleMode STRETCH FIT FILL TILE
 struct GUID sessionID:uint localID:uint
 struct Color r:float g:float b:float a:float
 struct Vector x:float y:float
 struct Matrix m00:float m01:float m02:float m10:float m11:float m12:float
 message ParentIndex guid:GUID position:string
 message ColorStop color:Color position:float
-message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix
+message Image hash:byte[] name:string
+message Paint type:PaintType color:Color opacity:float visible:bool blendMode:BlendMode stops:ColorStop[] transform:Matrix image:Image imageScaleMode:ImageScaleMode
 message Path windingRule:WindingRule commandsBlob:uint
 message Effect type:EffectType color:Color offset:Vector radius:float spread:float visible:bool
 message GUIDPath guids:GUID[]

@@ -20,6 +20,7 @@ import {
 import { drawOverlay, type OverlayModel } from '../components/overlay';
 import { type Point, screenToPage } from '../core/camera';
 import { measure } from '../core/measure';
+import { type Guide, snapMove } from '../core/snap';
 import type { FigEditor, ShapeTool } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 import { createTileCompositor } from '../primitives/create-tile-compositor';
@@ -65,6 +66,8 @@ type Drag =
       pressed: Promise<Pressed>;
       resolved?: Pressed;
       mover?: ReturnType<FigEditor['startMove']>;
+      /** The selection's bounds at the start, and what it snaps to. */
+      snap?: { start: Rect; targets: Rect[] };
       marquee: boolean;
       additive: boolean;
     }
@@ -231,6 +234,22 @@ export function ViewerCanvas(props: {
   });
 
   let marquee: Rect | undefined;
+  let guides: Guide[] = [];
+
+  /** Bounds of the layers a moving selection can snap to. */
+  const snapTargets = async (ids: string[]): Promise<Rect[]> => {
+    const page = viewer.page();
+    const first = viewer.selected()[0];
+    const parent = first?.parent ?? undefined;
+    const rows = await props.engine.layers(page, parent);
+    const others = rows
+      .filter((r) => r.visible && !ids.includes(r.id))
+      .map((r) => r.id)
+      .slice(0, 400);
+    const withParent = parent ? [...others, parent] : others;
+    const geometry = await props.engine.geometry(page, withParent);
+    return geometry.map((g) => g.bounds);
+  };
   const measurements = () => {
     const a = viewer.selectionBounds();
     const b = viewer.hoverBounds();
@@ -255,6 +274,7 @@ export function ViewerCanvas(props: {
       hoverComponent:
         !!hover && (hover.type === 'SYMBOL' || hover.type === 'INSTANCE'),
       marquee,
+      guides,
       measurements: measurements(),
       rulers: viewer.rulers(),
       pixelGrid: viewer.pixelGrid(),
@@ -444,8 +464,13 @@ export function ViewerCanvas(props: {
     if (copy) await editor.duplicateSelection();
     const ids = editor.editableIds();
     if (ids.length === 0) return;
+    const start = viewer.selectionBounds();
     press.mover = editor.startMove(ids);
     movePress(press, press.current, false);
+    if (start) {
+      const targets = await snapTargets(ids).catch(() => []);
+      press.snap = { start, targets };
+    }
   };
 
   const movePress = (
@@ -461,8 +486,23 @@ export function ViewerCanvas(props: {
       if (Math.abs(dx) > Math.abs(dy)) dy = 0;
       else dx = 0;
     }
-    // Whole pixels, as with Figma's pixel snapping.
-    press.mover.to(Math.round(dx), Math.round(dy));
+    // Whole pixels, as with Figma's pixel snapping; then smart guides.
+    dx = Math.round(dx);
+    dy = Math.round(dy);
+    if (press.snap) {
+      const snapped = snapMove(
+        press.snap.start,
+        dx,
+        dy,
+        press.snap.targets,
+        5 / z
+      );
+      dx = constrain && dx === 0 ? 0 : Math.round(snapped.dx);
+      dy = constrain && dy === 0 ? 0 : Math.round(snapped.dy);
+      guides = snapped.guides;
+      requestDraw();
+    }
+    press.mover.to(dx, dy);
   };
 
   const onPointerMove = (e: PointerEvent) => {
@@ -579,6 +619,8 @@ export function ViewerCanvas(props: {
       void ended.resizer.end();
     } else if (ended.kind === 'press') {
       if (ended.mover) {
+        guides = [];
+        requestDraw();
         void ended.mover.end();
       } else if (ended.marquee && marquee) {
         const c = viewer.camera();
@@ -684,6 +726,21 @@ export function ViewerCanvas(props: {
         if (!drag) hoverAt(undefined);
       }}
       onDblClick={(e) => void onDoubleClick(e)}
+      onDragOver={(e) => {
+        if (editing() && e.dataTransfer?.types.includes('Files')) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }
+      }}
+      onDrop={(e) => {
+        const files = [...(e.dataTransfer?.files ?? [])];
+        if (!editing() || files.length === 0) return;
+        e.preventDefault();
+        const at = pageAt(local(e));
+        void viewer
+          .containerAt(at)
+          .then((parent) => props.editor?.importImages(files, at, parent));
+      }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <canvas ref={tileCanvas} class="absolute inset-0 size-full" />

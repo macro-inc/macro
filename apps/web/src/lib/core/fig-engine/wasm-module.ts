@@ -59,6 +59,8 @@ export interface WasmFigFile {
   /** The edited file as `.fig` bytes. */
   save: () => Uint8Array;
   isEdited: () => boolean;
+  /** `[width, height]` JSON. */
+  addImage: (hash: string, bytes: Uint8Array) => string;
   free: () => void;
 }
 

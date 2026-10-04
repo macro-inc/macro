@@ -222,6 +222,31 @@ impl Document {
         })
     }
 
+    /// Adds an encoded image (PNG, JPEG, GIF, or WebP) for image fills,
+    /// under its SHA-1 `hash` (hex). Returns its pixel size, or `None` when
+    /// it does not decode.
+    pub fn add_image(&mut self, hash: &str, bytes: Vec<u8>) -> Option<(u32, u32)> {
+        let pixmap = crate::images::decode(&bytes)?;
+        self.images.insert(hash.to_ascii_lowercase(), bytes);
+        Some((pixmap.width(), pixmap.height()))
+    }
+
+    /// Recomputes [`Document::pages`] after edits added or removed pages.
+    pub fn refresh_pages(&mut self) {
+        let root = self.root;
+        self.pages = self.nodes[root as usize]
+            .children
+            .iter()
+            .copied()
+            .filter(|&c| {
+                let n = &self.nodes[c as usize];
+                n.props.node_type() == NodeType::Canvas
+                    && !n.removed
+                    && !n.props.internal_only.unwrap_or(false)
+            })
+            .collect();
+    }
+
     /// A fresh node id.
     pub fn new_guid(&mut self) -> Guid {
         let g = self.next_guid;

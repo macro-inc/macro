@@ -7,9 +7,13 @@ import type { FigEngine } from '@core/fig-engine/client';
 import type { LayerRow, SearchHit } from '@core/fig-engine/types';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
+import Eye from '@phosphor/eye.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import LockSimple from '@phosphor/lock-simple.svg';
+import LockSimpleOpen from '@phosphor/lock-simple-open.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
+import Plus from '@phosphor/plus.svg';
+import Trash from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
 import {
   createEffect,
@@ -22,6 +26,7 @@ import {
 import { VList, type VListHandle } from 'virtua/solid';
 import { isComponentType, LayerIcon } from '../components/layer-icon';
 import { isPageDivider } from '../core/pages';
+import type { FigEditor } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 
 const ROOT = '';
@@ -33,13 +38,22 @@ interface FlatRow {
   expanded: boolean;
   /** Inside a selected layer (Figma tints these rows). */
   inSelection: boolean;
+  /** Parent layer id (the page's id for top-level rows). */
+  parent: string;
+  /** Index among its siblings in the engine's order (bottom first). */
+  index: number;
 }
+
+/** Where a dragged row would land relative to the row under it. */
+type DropZone = 'above' | 'below' | 'inside';
 
 export function LayersPanel(props: {
   viewer: FigViewer;
   engine: FigEngine;
   /** Where ⌘F focuses. */
   searchRef?: (el: HTMLInputElement) => void;
+  /** Renaming, visibility, locking, and reordering when editable. */
+  editor?: FigEditor;
 }) {
   const viewer = props.viewer;
   const [children, setChildren] = createSignal(new Map<string, LayerRow[]>());
@@ -106,13 +120,22 @@ export function LayersPanel(props: {
     const map = children();
     const open = expanded();
     const selected = selectedIds();
+    const pageId = viewer.pages[viewer.page()]?.id ?? '';
     const walk = (parent: string, depth: number, inSelection: boolean) => {
-      for (const row of map.get(parent) ?? []) {
+      const siblings = map.get(parent) ?? [];
+      siblings.forEach((row, k) => {
         const isOpen = open.has(row.id) && row.childCount > 0;
-        out.push({ row, depth, expanded: isOpen, inSelection });
+        out.push({
+          row,
+          depth,
+          expanded: isOpen,
+          inSelection,
+          parent: parent || pageId,
+          index: siblings.length - 1 - k,
+        });
         if (isOpen)
           walk(row.id, depth + 1, inSelection || selected.has(row.id));
-      }
+      });
     };
     walk(ROOT, 0, false);
     return out;
@@ -150,6 +173,102 @@ export function LayersPanel(props: {
       { defer: true }
     )
   );
+
+  // ---- editing ---------------------------------------------------------
+
+  const [renaming, setRenaming] = createSignal<string>();
+  const [renamingPage, setRenamingPage] = createSignal<string>();
+
+  const renamePage = (id: string, old: string, name: string) => {
+    setRenamingPage(undefined);
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === old) return;
+    void props.editor?.apply([
+      { op: 'set', ids: [id], props: { name: trimmed } },
+    ]);
+  };
+
+  const addPage = async () => {
+    const result = await props.editor?.apply([
+      {
+        op: 'create',
+        parent: props.engine.summary.rootId,
+        node: { type: 'CANVAS', x: 0, y: 0, width: 0, height: 0 },
+      },
+    ]);
+    const id = result?.created[0];
+    if (!id) return;
+    const index = viewer.pages.findIndex((p) => p.id === id);
+    if (index >= 0) {
+      await viewer.openPage(index);
+      setRenamingPage(id);
+    }
+  };
+  const editable = (row: LayerRow) =>
+    !!props.editor?.enabled() && !row.id.startsWith('I');
+
+  const rename = (row: LayerRow, name: string) => {
+    setRenaming(undefined);
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === row.name) return;
+    void props.editor?.apply([
+      { op: 'set', ids: [row.id], props: { name: trimmed } },
+    ]);
+  };
+
+  createEffect(
+    on(
+      viewer.renameSignal,
+      () => {
+        const first = viewer.selected()[0];
+        if (first && props.editor?.enabled() && !first.id.startsWith('I'))
+          setRenaming(first.id);
+      },
+      { defer: true }
+    )
+  );
+
+  const toggleFlag = (row: LayerRow, flag: 'visible' | 'locked') =>
+    void props.editor?.apply([
+      {
+        op: 'set',
+        ids: [row.id],
+        props:
+          flag === 'visible'
+            ? { visible: !row.visible }
+            : { locked: !row.locked },
+      },
+    ]);
+
+  const [dragging, setDragging] = createSignal<string[]>();
+  const [drop, setDrop] = createSignal<{ id: string; zone: DropZone }>();
+
+  const zoneFor = (e: DragEvent, item: FlatRow): DropZone => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const t = (e.clientY - r.top) / r.height;
+    const container = ['FRAME', 'GROUP', 'SECTION', 'SYMBOL'].includes(
+      item.row.type
+    );
+    if (container && t > 0.3 && t < 0.7) return 'inside';
+    return t < 0.5 ? 'above' : 'below';
+  };
+
+  const onDrop = (item: FlatRow) => {
+    const ids = dragging();
+    const target = drop();
+    setDragging(undefined);
+    setDrop(undefined);
+    if (!ids || !target || ids.includes(item.row.id)) return;
+    // The list shows the top-most layer first; "above" is in front.
+    const op =
+      target.zone === 'inside'
+        ? { parent: item.row.id, index: item.row.childCount }
+        : {
+            parent: item.parent,
+            index: target.zone === 'above' ? item.index + 1 : item.index,
+          };
+    void props.editor?.apply([{ op: 'reorder', ids, ...op }]);
+  };
 
   let searchRun = 0;
   const search = async (q: string) => {
@@ -204,7 +323,7 @@ export function LayersPanel(props: {
         </Show>
       </div>
       <Show when={!query()}>
-        <div class="shrink-0 border-edge-muted border-b py-1">
+        <div class="relative shrink-0 border-edge-muted border-b py-1">
           <button
             type="button"
             class="flex h-7 w-full items-center gap-1 px-2 font-medium"
@@ -213,8 +332,19 @@ export function LayersPanel(props: {
             <Show when={pagesOpen()} fallback={<CaretRight class="size-3" />}>
               <CaretDown class="size-3" />
             </Show>
-            Pages
+            <span class="flex-1 text-left">Pages</span>
           </button>
+          <Show when={props.editor?.enabled()}>
+            <button
+              type="button"
+              aria-label="Add page"
+              data-testid="fig-page-add"
+              class="absolute top-1.5 right-2 rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+              onClick={() => void addPage()}
+            >
+              <Plus class="size-3.5" />
+            </button>
+          </Show>
           <Show when={pagesOpen()}>
             <div class="max-h-48 overflow-y-auto">
               <For each={viewer.pages}>
@@ -227,17 +357,65 @@ export function LayersPanel(props: {
                       </div>
                     }
                   >
-                    <button
-                      type="button"
-                      data-testid="fig-page"
-                      class="flex h-7 w-full items-center truncate px-6 text-left hover:bg-hover"
-                      classList={{
-                        'font-semibold bg-selected': p.index === viewer.page(),
-                      }}
-                      onClick={() => void viewer.openPage(p.index)}
+                    <Show
+                      when={renamingPage() === p.id}
+                      fallback={
+                        <div
+                          class="group flex h-7 w-full items-center pr-2 pl-6 hover:bg-hover"
+                          classList={{
+                            'font-semibold bg-selected':
+                              p.index === viewer.page(),
+                          }}
+                        >
+                          <button
+                            type="button"
+                            data-testid="fig-page"
+                            class="min-w-0 flex-1 truncate text-left"
+                            onClick={() => void viewer.openPage(p.index)}
+                            onDblClick={() => {
+                              if (props.editor?.enabled())
+                                setRenamingPage(p.id);
+                            }}
+                          >
+                            {p.name}
+                          </button>
+                          <Show
+                            when={
+                              props.editor?.enabled() && viewer.pages.length > 1
+                            }
+                          >
+                            <button
+                              type="button"
+                              aria-label={`Delete ${p.name}`}
+                              data-testid="fig-page-delete"
+                              class="invisible rounded p-0.5 text-ink-muted hover:text-ink group-hover:visible"
+                              onClick={() =>
+                                void props.editor?.apply([
+                                  { op: 'delete', ids: [p.id] },
+                                ])
+                              }
+                            >
+                              <Trash class="size-3" />
+                            </button>
+                          </Show>
+                        </div>
+                      }
                     >
-                      <span class="truncate">{p.name}</span>
-                    </button>
+                      <input
+                        ref={(el) => queueMicrotask(() => el.select())}
+                        class="mx-4 h-6 w-[calc(100%-2rem)] rounded-sm bg-input px-1 text-ink outline outline-1 outline-accent"
+                        data-testid="fig-page-rename"
+                        value={p.name}
+                        onBlur={(e) =>
+                          renamePage(p.id, p.name, e.currentTarget.value)
+                        }
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                          if (e.key === 'Escape') setRenamingPage(undefined);
+                        }}
+                      />
+                    </Show>
                   </Show>
                 )}
               </For>
@@ -302,7 +480,7 @@ export function LayersPanel(props: {
                 }
                 data-testid="fig-layer-row"
                 data-layer-id={item.row.id}
-                class="group flex items-center gap-1 pr-2"
+                class="group relative flex items-center gap-1 pr-2"
                 classList={{
                   'bg-accent/20': selectedIds().has(item.row.id),
                   'bg-accent/5':
@@ -317,11 +495,49 @@ export function LayersPanel(props: {
                   height: `${ROW_HEIGHT}px`,
                   'padding-left': `${8 + item.depth * 14}px`,
                 }}
+                draggable={editable(item.row) && renaming() !== item.row.id}
+                onDragStart={(e) => {
+                  const ids = selectedIds().has(item.row.id)
+                    ? [...selectedIds()].filter((id) => !id.startsWith('I'))
+                    : [item.row.id];
+                  setDragging(ids);
+                  e.dataTransfer?.setData('text/plain', ids.join(','));
+                  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => {
+                  if (!dragging()) return;
+                  e.preventDefault();
+                  setDrop({ id: item.row.id, zone: zoneFor(e, item) });
+                }}
+                onDragLeave={() => {
+                  if (drop()?.id === item.row.id) setDrop(undefined);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  onDrop(item);
+                }}
+                onDragEnd={() => {
+                  setDragging(undefined);
+                  setDrop(undefined);
+                }}
                 onPointerEnter={() => viewer.hoverLayer(item.row)}
                 onPointerLeave={() => viewer.hoverLayer(undefined)}
                 onClick={(e) => onRowClick(item.row, e)}
-                onDblClick={() => viewer.zoomToSelection()}
+                onDblClick={() => {
+                  if (editable(item.row)) setRenaming(item.row.id);
+                  else viewer.zoomToSelection();
+                }}
               >
+                <Show when={drop()?.id === item.row.id}>
+                  <div
+                    class="pointer-events-none absolute right-1 left-1 border-accent"
+                    classList={{
+                      'top-0 border-t-2': drop()?.zone === 'above',
+                      'bottom-0 border-b-2': drop()?.zone === 'below',
+                      'inset-y-0 rounded border-2': drop()?.zone === 'inside',
+                    }}
+                  />
+                </Show>
                 <button
                   type="button"
                   tabIndex={-1}
@@ -341,17 +557,85 @@ export function LayersPanel(props: {
                   </Show>
                 </button>
                 <LayerIcon type={item.row.type} />
-                <span
-                  class="min-w-0 flex-1 truncate"
-                  classList={{ italic: item.row.isMask }}
+                <Show
+                  when={renaming() === item.row.id}
+                  fallback={
+                    <span
+                      class="min-w-0 flex-1 truncate"
+                      classList={{ italic: item.row.isMask }}
+                    >
+                      {item.row.name}
+                    </span>
+                  }
                 >
-                  {item.row.name}
-                </span>
-                <Show when={item.row.locked}>
-                  <LockSimple class="size-3 shrink-0 text-ink-muted" />
+                  <input
+                    ref={(el) => queueMicrotask(() => el.select())}
+                    class="min-w-0 flex-1 rounded-sm bg-input px-1 text-ink outline outline-1 outline-accent"
+                    data-testid="fig-layer-rename"
+                    value={item.row.name}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => rename(item.row, e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                      if (e.key === 'Escape') setRenaming(undefined);
+                    }}
+                  />
                 </Show>
-                <Show when={!item.row.visible}>
-                  <EyeSlash class="size-3 shrink-0 text-ink-muted" />
+                <Show
+                  when={editable(item.row)}
+                  fallback={
+                    <>
+                      <Show when={item.row.locked}>
+                        <LockSimple class="size-3 shrink-0 text-ink-muted" />
+                      </Show>
+                      <Show when={!item.row.visible}>
+                        <EyeSlash class="size-3 shrink-0 text-ink-muted" />
+                      </Show>
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={item.row.locked ? 'Unlock' : 'Lock'}
+                    class="shrink-0 rounded p-0.5 text-ink-muted hover:text-ink"
+                    classList={{
+                      'invisible group-hover:visible': !item.row.locked,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFlag(item.row, 'locked');
+                    }}
+                  >
+                    <Show
+                      when={item.row.locked}
+                      fallback={<LockSimpleOpen class="size-3" />}
+                    >
+                      <LockSimple class="size-3" />
+                    </Show>
+                  </button>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={item.row.visible ? 'Hide' : 'Show'}
+                    data-testid="fig-layer-visibility"
+                    class="shrink-0 rounded p-0.5 text-ink-muted hover:text-ink"
+                    classList={{
+                      'invisible group-hover:visible': item.row.visible,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFlag(item.row, 'visible');
+                    }}
+                  >
+                    <Show
+                      when={item.row.visible}
+                      fallback={<EyeSlash class="size-3" />}
+                    >
+                      <Eye class="size-3" />
+                    </Show>
+                  </button>
                 </Show>
               </div>
             )}

@@ -119,6 +119,9 @@ async function serve(request: FigRequest) {
       const [a, b, c, d, e, g] = request.args;
       let json: string;
       switch (request.method) {
+        case 'summary':
+          json = f.summary();
+          break;
         case 'layers':
           json = f.layers(a as number, (b as string | null) ?? undefined);
           break;
@@ -185,6 +188,14 @@ async function serve(request: FigRequest) {
             ? f.redo(request.page)
             : f.apply(request.page, request.ops ?? '[]', request.coalesce);
       post({ id: request.id, ok: true, kind: 'edit', json });
+      return;
+    }
+    case 'addImage': {
+      const json = openFile().addImage(
+        request.hash,
+        new Uint8Array(request.bytes)
+      );
+      post({ id: request.id, ok: true, kind: 'query', json });
       return;
     }
     case 'blank': {

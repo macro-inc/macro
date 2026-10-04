@@ -152,3 +152,43 @@ fn saves_unedited_files_unchanged_in_content() {
         assert_eq!(a.props.fills, b.props.fills);
     }
 }
+
+#[test]
+fn saves_added_images() {
+    let original = simple_file();
+    let mut doc = Document::open(&original).unwrap();
+    let mut pixmap = tiny_skia::Pixmap::new(4, 2).unwrap();
+    pixmap.fill(tiny_skia::Color::from_rgba8(255, 0, 0, 255));
+    let png = crate::images::encode_png(&pixmap);
+    let hash = "00112233445566778899aabbccddeeff00112233";
+    assert_eq!(doc.add_image(hash, png), Some((4, 2)));
+    apply(
+        &mut doc,
+        &format!(r#"[{{"op":"set","ids":["1:3"],"props":{{"fills":[{{"image":"{hash}"}}]}}}}]"#),
+    );
+    let reopened = Document::open(&save(&doc, &original).unwrap()).unwrap();
+    assert!(reopened.images.contains_key(hash));
+    let fill = &find(&reopened, "1:3").fills()[0];
+    assert!(matches!(&fill.kind, PaintKind::Image(i) if i.hash.as_deref() == Some(hash)));
+    let scene = Scene::build(&reopened, reopened.pages[0]);
+    let pixels = render::render(
+        &reopened,
+        &scene,
+        &mut ImageStore::default(),
+        &Viewport {
+            x: 0.0,
+            y: 0.0,
+            scale: 1.0,
+            width: 200,
+            height: 200,
+        },
+        RenderOptions::default(),
+    )
+    .unwrap();
+    let c = pixels.pixel(50, 40).unwrap();
+    assert_eq!(
+        (c.red(), c.green(), c.blue()),
+        (255, 0, 0),
+        "the image fills the rectangle"
+    );
+}

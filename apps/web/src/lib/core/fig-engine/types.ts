@@ -24,6 +24,8 @@ export interface PageSummary {
 }
 
 export interface FileSummary {
+  /** The document node's id (pages are its children). */
+  rootId: string;
   fileName: string | null;
   version: number;
   nodeCount: number;

@@ -348,3 +348,35 @@ fn pastes_cut_layers_where_they_were() {
     assert_eq!(names(&doc, "1:2"), ["Red"]);
     assert_eq!(origin(&doc, &pasted.created[0]), Vec2::new(10.0, 20.0));
 }
+
+#[test]
+fn adds_renames_and_removes_pages() {
+    let (mut doc, mut h) = open();
+    let added = h
+        .apply(
+            &mut doc,
+            &ops(r#"[{"op":"create","parent":"1:0","node":{"type":"CANVAS","x":0,"y":0,"width":0,"height":0}}]"#),
+            None,
+        )
+        .unwrap();
+    assert_eq!(doc.pages.len(), 2);
+    let id = &added.created[0];
+    assert_eq!(doc.props(doc.pages[1]).name(), "Page 2");
+    h.apply(
+        &mut doc,
+        &ops(&format!(r#"[{{"op":"set","ids":["{id}"],"props":{{"name":"Flows","fills":[{{"color":"1E1E1E"}}]}}}}]"#)),
+        None,
+    )
+    .unwrap();
+    assert_eq!(doc.props(doc.pages[1]).name(), "Flows");
+    assert!(doc.page_background(doc.pages[1]).r < 0.2);
+    h.apply(
+        &mut doc,
+        &ops(&format!(r#"[{{"op":"delete","ids":["{id}","1:1"]}}]"#)),
+        None,
+    )
+    .unwrap();
+    assert_eq!(doc.pages.len(), 1, "the last page stays");
+    h.undo(&mut doc).unwrap();
+    assert_eq!(doc.pages.len(), 2);
+}

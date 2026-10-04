@@ -11,6 +11,7 @@ import type { FileSummary, PageLayout } from './types';
 
 /** Engine methods answered with JSON. */
 export type QueryMethod =
+  | 'summary'
   | 'layers'
   | 'rows'
   | 'nodeInfo'
@@ -57,7 +58,8 @@ export type FigRequest =
       coalesce?: string;
     }
   | { id: number; kind: 'save' }
-  | { id: number; kind: 'blank'; name: string };
+  | { id: number; kind: 'blank'; name: string }
+  | { id: number; kind: 'addImage'; hash: string; bytes: ArrayBuffer };
 
 export type FigResponse =
   | { id: number; ok: true; kind: 'open'; summary: FileSummary }

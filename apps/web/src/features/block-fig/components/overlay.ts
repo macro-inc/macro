@@ -8,6 +8,7 @@ import type { FrameRow, NodeGeometry, Rect } from '@core/fig-engine/types';
 import { type Camera, pageToScreen, type Size } from '../core/camera';
 import { formatMeasure, type MeasureLine } from '../core/measure';
 import { rulerStep, rulerTicks } from '../core/rulers';
+import type { Guide } from '../core/snap';
 
 export const SELECTION_BLUE = '#0d99ff';
 export const COMPONENT_PURPLE = '#9747ff';
@@ -29,6 +30,8 @@ export interface OverlayModel {
   hoverComponent: boolean;
   /** Screen rectangle. */
   marquee?: Rect;
+  /** Smart guides the moving selection snapped to (page coordinates). */
+  guides?: Guide[];
   measurements: MeasureLine[];
   rulers: boolean;
   pixelGrid: boolean;
@@ -194,6 +197,26 @@ function drawMeasurements(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   }
 }
 
+function drawGuides(ctx: CanvasRenderingContext2D, m: OverlayModel) {
+  if (!m.guides?.length) return;
+  ctx.strokeStyle = MEASURE_RED;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const g of m.guides) {
+    const a =
+      g.axis === 'x'
+        ? pageToScreen(m.camera, { x: g.at, y: g.from })
+        : pageToScreen(m.camera, { x: g.from, y: g.at });
+    const b =
+      g.axis === 'x'
+        ? pageToScreen(m.camera, { x: g.at, y: g.to })
+        : pageToScreen(m.camera, { x: g.to, y: g.at });
+    ctx.moveTo(Math.round(a.x) + 0.5, Math.round(a.y) + 0.5);
+    ctx.lineTo(Math.round(b.x) + 0.5, Math.round(b.y) + 0.5);
+  }
+  ctx.stroke();
+}
+
 function drawMarquee(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   const r = m.marquee;
   if (!r) return;
@@ -277,6 +300,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   drawHover(ctx, m);
   drawSelection(ctx, m);
   drawMeasurements(ctx, m);
+  drawGuides(ctx, m);
   drawMarquee(ctx, m);
   drawRulers(ctx, m);
 }

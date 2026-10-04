@@ -466,6 +466,11 @@ impl<'s> Build<'s> {
             );
             m.set(s, "rectangleCornerRadiiIndependent", Value::Bool(false));
         }
+        if edits & flags::BACKGROUND != 0
+            && let Some(c) = p.background_color
+        {
+            self.color(m, "backgroundColor", c);
+        }
         if edits & flags::CLIP != 0 {
             m.set(
                 s,

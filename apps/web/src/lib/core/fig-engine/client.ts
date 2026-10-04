@@ -155,7 +155,7 @@ export class FigEngine {
   }
 
   /** The bytes of a new, empty design (one page). */
-  static async blank(name: string): Promise<Uint8Array> {
+  static async blank(name: string): Promise<Uint8Array<ArrayBuffer>> {
     const worker = new EngineWorker(() => {});
     try {
       const r = await worker.request({ kind: 'blank', name });
@@ -263,6 +263,11 @@ export class FigEngine {
     for (const [w, list] of byWorker) w.cancel(list);
   }
 
+  /** The file's pages and details as they are now (after edits). */
+  currentSummary(): Promise<FileSummary> {
+    return this.query('summary');
+  }
+
   layers(page: number, parent?: string): Promise<LayerRow[]> {
     return this.query('layers', page, parent ?? null);
   }
@@ -364,8 +369,35 @@ export class FigEngine {
     return this.edit({ kind: 'edit', page, action: 'redo' });
   }
 
+  /**
+   * Adds an image file (PNG, JPEG, GIF, WebP) for image fills, in every
+   * worker; returns its SHA-1 (the paint's reference) and pixel size.
+   */
+  async addImage(
+    bytes: ArrayBuffer
+  ): Promise<{ hash: string; width: number; height: number }> {
+    const digest = await crypto.subtle.digest('SHA-1', bytes);
+    const hash = [...new Uint8Array(digest)]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    for (const h of [...this.helpers, ...this.starting]) {
+      const copy = bytes.slice(0);
+      h.request({ kind: 'addImage', hash, bytes: copy }, [copy]).catch(
+        () => {}
+      );
+    }
+    const copy = bytes.slice(0);
+    const r = await this.primary.request(
+      { kind: 'addImage', hash, bytes: copy },
+      [copy]
+    );
+    if (r.kind !== 'query') throw new Error('unexpected response');
+    const [width, height] = JSON.parse(r.json) as [number, number];
+    return { hash, width, height };
+  }
+
   /** The edited file as `.fig` bytes. */
-  async save(): Promise<Uint8Array> {
+  async save(): Promise<Uint8Array<ArrayBuffer>> {
     const r = await this.primary.request({ kind: 'save' });
     if (r.kind !== 'saved') throw new Error('unexpected response');
     return new Uint8Array(r.bytes);

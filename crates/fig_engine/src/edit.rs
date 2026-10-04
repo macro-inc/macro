@@ -44,6 +44,8 @@ pub mod flags {
     pub const EFFECTS: u32 = 1 << 16;
     /// The node did not exist in the file.
     pub const CREATED: u32 = 1 << 17;
+    /// A page's canvas color.
+    pub const BACKGROUND: u32 = 1 << 18;
 }
 
 /// A paint as the editor describes it.
@@ -55,6 +57,9 @@ pub struct PaintSpec {
     pub keep: Option<usize>,
     /// `RRGGBB` or `RRGGBBAA` for a solid paint.
     pub color: Option<String>,
+    /// An image fill: the SHA-1 (hex) of an image added with
+    /// [`Document::add_image`], filling the layer.
+    pub image: Option<String>,
     pub opacity: Option<f32>,
     pub visible: Option<bool>,
     pub blend_mode: Option<String>,
@@ -443,6 +448,17 @@ impl<'a> Txn<'a> {
                 if let Some(c) = s.color.as_deref().and_then(parse_hex) {
                     paint.kind = crate::model::PaintKind::Solid(c);
                 }
+                if let Some(hash) = &s.image {
+                    paint.kind = crate::model::PaintKind::Image(crate::model::ImagePaint {
+                        hash: Some(hash.to_ascii_lowercase().into()),
+                        scale_mode: crate::model::ImageScaleMode::Fill,
+                        transform: Affine::IDENTITY,
+                        scale: 1.0,
+                        rotation: 0.0,
+                        filters: Default::default(),
+                        original_size: None,
+                    });
+                }
                 if let Some(o) = s.opacity {
                     paint.opacity = o.clamp(0.0, 1.0);
                 }
@@ -577,6 +593,33 @@ impl<'a> Txn<'a> {
             b: 0.851,
             a: 1.0,
         };
+        if node_type == NodeType::Canvas {
+            let guid = self.doc.new_guid();
+            let count = self.live_pages();
+            let props = Props {
+                guid: Some(guid),
+                node_type: Some(NodeType::Canvas),
+                name: Some(
+                    spec.name
+                        .clone()
+                        .unwrap_or_else(|| format!("Page {}", count + 1))
+                        .into(),
+                ),
+                visible: Some(true),
+                opacity: Some(1.0),
+                background_color: Some(Color {
+                    r: 0.961,
+                    g: 0.961,
+                    b: 0.961,
+                    a: 1.0,
+                }),
+                ..Props::default()
+            };
+            let i = self.new_node(props);
+            self.attach(i, parent, index.unwrap_or(siblings), false);
+            self.created.push(guid.to_string());
+            return Ok(i);
+        }
         let (fills, strokes): (Vec<Paint>, Vec<Paint>) = match node_type {
             NodeType::Frame | NodeType::Symbol => (vec![Paint::solid(Color::WHITE)], vec![]),
             NodeType::Text => (vec![Paint::solid(Color::BLACK)], vec![]),
@@ -771,8 +814,26 @@ impl<'a> Txn<'a> {
     fn apply(&mut self, op: &Op) -> Result<()> {
         match op {
             Op::Set { ids, props } => {
-                for i in self.layers(ids)? {
-                    self.set(i, props)?;
+                for i in self.resolve_all(ids)? {
+                    match self.doc.props(i).node_type() {
+                        NodeType::Document => {}
+                        // Pages take a name (their canvas color is a fill).
+                        NodeType::Canvas => {
+                            if let Some(name) = &props.name {
+                                self.edit(i, flags::NAME).name = Some(name.as_str().into());
+                            }
+                            if let Some(c) = props
+                                .fills
+                                .as_ref()
+                                .and_then(|f| f.first())
+                                .and_then(|f| f.color.as_deref())
+                                .and_then(parse_hex)
+                            {
+                                self.edit(i, flags::BACKGROUND).background_color = Some(c);
+                            }
+                        }
+                        _ => self.set(i, props)?,
+                    }
                 }
             }
             Op::Translate { ids, dx, dy } => {
@@ -794,10 +855,16 @@ impl<'a> Txn<'a> {
                 self.create(parent, *index, node)?;
             }
             Op::Delete { ids } => {
-                for i in self.layers(ids)? {
-                    if !self.doc.node(i).removed {
-                        self.remove_tree(i);
+                for i in self.resolve_all(ids)? {
+                    let node_type = self.doc.props(i).node_type();
+                    if node_type == NodeType::Document || self.doc.node(i).removed {
+                        continue;
                     }
+                    // A file keeps at least one page.
+                    if node_type == NodeType::Canvas && self.live_pages() <= 1 {
+                        continue;
+                    }
+                    self.remove_tree(i);
                 }
             }
             Op::Reorder { ids, parent, index } => {
@@ -899,6 +966,16 @@ impl<'a> Txn<'a> {
         Ok(())
     }
 
+    fn live_pages(&self) -> usize {
+        let root = self.doc.root;
+        self.doc
+            .node(root)
+            .children
+            .iter()
+            .filter(|&&c| self.doc.props(c).node_type() == NodeType::Canvas)
+            .count()
+    }
+
     fn is_ancestor(&self, ancestor: NodeIdx, mut i: NodeIdx) -> bool {
         while let Some(p) = self.doc.node(i).parent {
             if p == ancestor {
@@ -954,6 +1031,7 @@ impl History {
             created,
             ..
         } = txn;
+        doc.refresh_pages();
         let touched: Vec<NodeIdx> = before.iter().map(|(i, _)| *i).collect();
         let after: Vec<(NodeIdx, Node)> = touched
             .iter()
@@ -998,6 +1076,7 @@ impl History {
     pub fn undo(&mut self, doc: &mut Document) -> Option<Vec<NodeIdx>> {
         let step = self.undo.pop()?;
         restore(doc, &step.before);
+        doc.refresh_pages();
         let touched = step.before.iter().map(|(i, _)| *i).collect();
         self.redo.push(step);
         Some(touched)
@@ -1006,6 +1085,7 @@ impl History {
     pub fn redo(&mut self, doc: &mut Document) -> Option<Vec<NodeIdx>> {
         let mut step = self.redo.pop()?;
         restore(doc, &step.after);
+        doc.refresh_pages();
         let touched = step.after.iter().map(|(i, _)| *i).collect();
         step.coalesce = None;
         self.undo.push(step);
