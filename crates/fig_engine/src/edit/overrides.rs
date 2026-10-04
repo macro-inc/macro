@@ -101,6 +101,10 @@ impl Txn<'_> {
             entry.strokes = Some(Self::paints(shown.strokes(), specs));
             entry.stroke_style = None;
         }
+        if let Some(specs) = &patch.effects {
+            entry.effects = Some(super::effects_from(shown.effects(), specs));
+            entry.effect_style = None;
+        }
         if let Some(w) = patch.stroke_weight {
             entry.stroke_weight = Some(w.max(0.0));
         }

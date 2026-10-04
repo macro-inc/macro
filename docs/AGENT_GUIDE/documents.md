@@ -520,7 +520,9 @@ Layout and test hooks:
   `fig-layout-align`), width and height sizing (`fig-sizing-w|h`: Fixed,
   Hug, Fill) and `fig-absolute` for layers in auto layout, constraints
   (`fig-constraint-h|v`; children follow them when their frame is resized,
-  and groups scale theirs), effects, and
+  and groups scale theirs), effects (`fig-effects`: "+" adds a drop shadow;
+  rows `fig-effect-<n>` pick the kind in `fig-effect-<n>-type` and take
+  offset, blur `fig-effect-<n>-blur`, spread, and color), and
   export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color.

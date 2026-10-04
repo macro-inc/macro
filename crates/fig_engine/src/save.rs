@@ -848,6 +848,7 @@ impl<'s> Build<'s> {
                     (o.fills.is_some(), flags::FILLS),
                     (o.strokes.is_some(), flags::STROKES),
                     (o.stroke_weight.is_some(), flags::STROKE_WEIGHT),
+                    (o.effects.is_some(), flags::EFFECTS),
                     (o.stroke_align.is_some(), flags::STROKE_ALIGN),
                     (o.corner_radius.is_some(), flags::RADIUS),
                     (o.text_content.is_some(), flags::TEXT),

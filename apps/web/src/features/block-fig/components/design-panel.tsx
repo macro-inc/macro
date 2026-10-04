@@ -39,6 +39,7 @@ import {
   paintHex,
   TextField,
 } from './design-fields';
+import { EffectList } from './effect-controls';
 import { TypeControls } from './type-controls';
 
 function Section(props: {
@@ -798,11 +799,39 @@ export function DesignPanel(props: {
                   </div>
                 </Section>
               </Show>
-              <Show when={info().effects.length > 0}>
-                <Section title="Effects">
-                  <For each={info().effects}>
-                    {(e) => <EffectRow effect={e} />}
-                  </For>
+              <Show
+                when={props.onPatch}
+                fallback={
+                  <Show when={info().effects.length > 0}>
+                    <Section title="Effects">
+                      <For each={info().effects}>
+                        {(e) => <EffectRow effect={e} />}
+                      </For>
+                    </Section>
+                  </Show>
+                }
+              >
+                <Section
+                  title="Effects"
+                  testId="fig-effects"
+                  onAdd={() =>
+                    props.onPatch?.(
+                      {
+                        effects: [
+                          ...info().effects.map((_, keep) => ({ keep })),
+                          {},
+                        ],
+                      },
+                      false
+                    )
+                  }
+                >
+                  <EffectList
+                    effects={info().effects}
+                    onChange={(effects, live) =>
+                      props.onPatch?.({ effects }, live)
+                    }
+                  />
                 </Section>
               </Show>
               <Show when={info().componentProperties.length > 0}>

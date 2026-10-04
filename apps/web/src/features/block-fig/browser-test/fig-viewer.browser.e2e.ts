@@ -345,6 +345,21 @@ test('makes components, places instances, and detaches them', async ({
   );
 });
 
+test('adds and edits shadows', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [200, 200]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
+  await page.getByRole('button', { name: 'Add effects' }).click();
+  await expect(page.getByTestId('fig-effect-0-y')).toHaveValue('4');
+  await page.getByTestId('fig-effect-0-blur').fill('20');
+  await page.getByTestId('fig-effect-0-blur').press('Enter');
+  await expect(page.getByTestId('fig-effect-0-blur')).toHaveValue('20');
+  await page.getByTestId('fig-effect-0-type').selectOption('LAYER_BLUR');
+  await expect(page.getByTestId('fig-effect-0-y')).toBeHidden();
+});
+
 test('edits fills from the design panel and undoes', async ({ page }) => {
   await openNew(page);
   await page.getByTestId('fig-canvas').focus();

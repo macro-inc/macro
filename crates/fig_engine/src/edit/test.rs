@@ -380,3 +380,34 @@ fn adds_renames_and_removes_pages() {
     h.undo(&mut doc).unwrap();
     assert_eq!(doc.pages.len(), 2);
 }
+
+#[test]
+fn edits_effects() {
+    let (mut doc, mut h) = open();
+    h.apply(
+        &mut doc,
+        &ops(r#"[{"op":"set","ids":["1:3"],"props":{"effects":[{}]}}]"#),
+        None,
+    )
+    .unwrap();
+    let rect = doc.find(Guid::parse("1:3").unwrap()).unwrap();
+    let e = doc.props(rect).effects()[0].clone();
+    assert_eq!(e.kind, EffectKind::DropShadow);
+    assert_eq!(e.offset, Vec2::new(0.0, 4.0));
+    h.apply(
+        &mut doc,
+        &ops(r#"[{"op":"set","ids":["1:3"],"props":{"effects":[{"keep":0,"y":8,"radius":12,"color":"FF000080"},{"type":"LAYER_BLUR","radius":2}]}}]"#),
+        None,
+    )
+    .unwrap();
+    let effects = doc.props(rect).effects().to_vec();
+    assert_eq!(effects.len(), 2);
+    assert_eq!(effects[0].offset.y, 8.0);
+    assert_eq!(effects[0].radius, 12.0);
+    assert!((effects[0].color.a - 0.5).abs() < 0.01);
+    assert_eq!(effects[1].kind, EffectKind::LayerBlur);
+    let saved = crate::save::save(&doc, &simple_file()).unwrap();
+    let reopened = Document::open(&saved).unwrap();
+    let r = reopened.find(Guid::parse("1:3").unwrap()).unwrap();
+    assert_eq!(reopened.props(r).effects().len(), 2);
+}

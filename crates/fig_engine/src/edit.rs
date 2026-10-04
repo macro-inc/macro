@@ -14,8 +14,8 @@ use crate::document::{Document, Node, NodeIdx};
 use crate::error::{FigError, Result};
 use crate::geometry;
 use crate::model::{
-    Affine, BlendMode, Color, CornerRadii, Guid, NodeType, Paint, PathRef, Props, Rect,
-    StrokeAlign, Vec2,
+    Affine, BlendMode, Color, CornerRadii, Effect, EffectKind, Guid, NodeType, Paint, PathRef,
+    Props, Rect, StrokeAlign, Vec2,
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -146,6 +146,80 @@ pub struct Patch {
     /// `MAX`, `CENTER`, `STRETCH` (both sides), or `SCALE`.
     pub constraint_horizontal: Option<String>,
     pub constraint_vertical: Option<String>,
+    /// Replaces the effects, bottom first.
+    pub effects: Option<Vec<EffectSpec>>,
+}
+
+/// An effect as the editor describes it: an existing one kept (and
+/// adjusted), or a new one (a drop shadow unless `type` says otherwise).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectSpec {
+    pub keep: Option<usize>,
+    /// `DROP_SHADOW`, `INNER_SHADOW`, `LAYER_BLUR`, or `BACKGROUND_BLUR`.
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
+    /// `RRGGBB` or `RRGGBBAA`.
+    pub color: Option<String>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub radius: Option<f32>,
+    pub spread: Option<f32>,
+    pub visible: Option<bool>,
+}
+
+/// The effects `specs` describe, given the layer's current ones.
+pub(crate) fn effects_from(existing: &[Effect], specs: &[EffectSpec]) -> Arc<[Effect]> {
+    specs
+        .iter()
+        .filter_map(|s| {
+            let mut e = match s.keep {
+                Some(k) => existing.get(k)?.clone(),
+                None => Effect {
+                    kind: EffectKind::DropShadow,
+                    visible: true,
+                    color: Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.25,
+                    },
+                    offset: Vec2::new(0.0, 4.0),
+                    radius: 4.0,
+                    spread: 0.0,
+                    blend_mode: BlendMode::Normal,
+                    show_behind_node: false,
+                },
+            };
+            if let Some(k) = &s.kind {
+                e.kind = match k.as_str() {
+                    "INNER_SHADOW" => EffectKind::InnerShadow,
+                    "LAYER_BLUR" | "FOREGROUND_BLUR" => EffectKind::LayerBlur,
+                    "BACKGROUND_BLUR" => EffectKind::BackgroundBlur,
+                    _ => EffectKind::DropShadow,
+                };
+            }
+            if let Some(c) = s.color.as_deref().and_then(parse_hex) {
+                e.color = c;
+            }
+            if let Some(x) = s.x {
+                e.offset.x = x;
+            }
+            if let Some(y) = s.y {
+                e.offset.y = y;
+            }
+            if let Some(r) = s.radius {
+                e.radius = r.max(0.0);
+            }
+            if let Some(sp) = s.spread {
+                e.spread = sp;
+            }
+            if let Some(v) = s.visible {
+                e.visible = v;
+            }
+            Some(e)
+        })
+        .collect()
 }
 
 /// A length as the design panel shows it: `PIXELS`, `PERCENT` (of the font
@@ -678,6 +752,12 @@ impl<'a> Txn<'a> {
                 pick(&patch.constraint_horizontal, h),
                 pick(&patch.constraint_vertical, v),
             ));
+        }
+        if let Some(specs) = &patch.effects {
+            let effects = effects_from(self.doc.props(i).effects(), specs);
+            let p = self.edit(i, flags::EFFECTS);
+            p.effects = Some(effects);
+            p.effect_style = None;
         }
         if let Some(c) = patch.clip_content {
             self.edit(i, flags::CLIP).clip_disabled = Some(!c);

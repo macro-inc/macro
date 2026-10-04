@@ -63,6 +63,21 @@ export interface Patch {
   layoutPositioning?: 'AUTO' | 'ABSOLUTE';
   constraintHorizontal?: Constraint;
   constraintVertical?: Constraint;
+  /** Replaces the effects, bottom first. */
+  effects?: EffectSpec[];
+}
+
+/** An effect as the editor sends it: an existing one kept, or a new one. */
+export interface EffectSpec {
+  keep?: number;
+  type?: 'DROP_SHADOW' | 'INNER_SHADOW' | 'LAYER_BLUR' | 'BACKGROUND_BLUR';
+  /** `RRGGBB` or `RRGGBBAA`. */
+  color?: string;
+  x?: number;
+  y?: number;
+  radius?: number;
+  spread?: number;
+  visible?: boolean;
 }
 
 /** How a layer follows its frame's resizing. */
