@@ -763,6 +763,16 @@ pub enum EditOp {
         /// Group id.
         shape: u32,
     },
+    /// Changes a slide's layout. Placeholders are matched to the new layout's
+    /// placeholders by type and index and take their position; placeholders
+    /// without a match stay where they are. Content is kept, and the new
+    /// layout's other placeholders are added empty.
+    SetSlideLayout {
+        /// Slide id.
+        slide: u32,
+        /// Layout name (e.g. "Title Only"), as listed in the deck's layouts.
+        layout: String,
+    },
     /// Sets the transition into a slide. Omitted fields keep the slide's
     /// current value, or take the effect's default for a new transition.
     SetTransition {

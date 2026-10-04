@@ -409,7 +409,7 @@ fn preset_display_name(preset: &str) -> String {
 }
 
 /// Appends a shape element to the top of the z-order of a shape tree.
-fn append_to_tree(doc: &mut XmlDoc, tree: NodeId, el: NodeId) {
+pub(super) fn append_to_tree(doc: &mut XmlDoc, tree: NodeId, el: NodeId) {
     match doc
         .children(tree)
         .last()

@@ -28,6 +28,7 @@ mod xmlutil;
 
 mod find;
 pub(crate) mod group;
+mod relayout;
 pub(crate) mod transition;
 
 pub use notes::notes_text;
@@ -91,6 +92,7 @@ impl EditOp {
             O::AddSlide { .. } => None,
             O::GroupShapes { slide, .. }
             | O::UngroupShape { slide, .. }
+            | O::SetSlideLayout { slide, .. }
             | O::SetTransition { slide, .. } => Some(*slide),
             O::ReplaceText { slide, .. } => *slide,
         }
@@ -599,6 +601,9 @@ impl Presentation {
                         shape: Some(id),
                     });
                 }
+            }
+            O::SetSlideLayout { slide, layout } => {
+                relayout::set_slide_layout(self, *slide, layout)?;
             }
             O::SetTransition {
                 slide,

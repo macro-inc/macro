@@ -105,7 +105,13 @@ pub fn layout_of(pres: &mut Presentation, slide_part: &str) -> Option<String> {
     pres.pkg.canonical_name(&target).map(str::to_owned)
 }
 
-fn find_layout(pres: &mut Presentation, name: Option<&str>, after: Option<u32>) -> Result<String> {
+/// The layout part named `name` (preferring the master of slide `after`, or
+/// of the last slide), or the layout a new slide after `after` would get.
+pub(super) fn find_layout(
+    pres: &mut Presentation,
+    name: Option<&str>,
+    after: Option<u32>,
+) -> Result<String> {
     let all = layouts(pres)?;
     if all.is_empty() {
         return Err(Error::InvalidEdit(
@@ -166,51 +172,55 @@ fn has_text_body(kind: &str) -> bool {
     matches!(kind, "title" | "ctrTitle" | "subTitle" | "body" | "obj")
 }
 
+/// Markup of an empty slide placeholder for the layout placeholder `node`
+/// (`None` for footers, dates, slide numbers, and non-placeholders).
+pub(super) fn placeholder_xml(layout: &XmlDoc, node: NodeId, id: u32) -> Option<String> {
+    let ph = placeholder_of(layout, node)?;
+    if matches!(ph.kind.as_str(), "dt" | "ftr" | "sldNum" | "hdr") {
+        return None;
+    }
+    let ph_el = layout
+        .children(node)
+        .find(|&c| layout.local(c).starts_with("nv"))
+        .and_then(|nv| layout.child(nv, Ns::P, "nvPr"))
+        .and_then(|nv| layout.child(nv, Ns::P, "ph"))?;
+    let attrs: String = ["type", "orient", "sz", "idx"]
+        .iter()
+        .filter_map(|a| {
+            layout
+                .attr(ph_el, a)
+                .map(|v| format!(" {a}=\"{}\"", esc(v)))
+        })
+        .collect();
+    let name = c_nv_pr(layout, node)
+        .and_then(|c| layout.attr(c, "name"))
+        .unwrap_or("Placeholder");
+    let locks = if ph.kind == "pic" {
+        "<a:spLocks noGrp=\"1\" noChangeAspect=\"1\"/>"
+    } else {
+        "<a:spLocks noGrp=\"1\"/>"
+    };
+    let body = if has_text_body(&ph.kind) {
+        "<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang=\"en-US\" dirty=\"0\"/></a:p></p:txBody>"
+    } else {
+        ""
+    };
+    Some(format!(
+        "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"{}\"/><p:cNvSpPr>{locks}</p:cNvSpPr><p:nvPr><p:ph{attrs}/></p:nvPr></p:nvSpPr><p:spPr/>{body}</p:sp>",
+        esc(name)
+    ))
+}
+
 /// Markup of a new slide carrying the layout's content placeholders.
 fn slide_from_layout(layout: &XmlDoc) -> String {
     let mut shapes = String::new();
     let mut id = 2;
     if let Some(tree) = sp_tree(layout) {
         for node in tree_children(layout, tree) {
-            let Some(ph) = placeholder_of(layout, node) else {
+            let Some(xml) = placeholder_xml(layout, node, id) else {
                 continue;
             };
-            if matches!(ph.kind.as_str(), "dt" | "ftr" | "sldNum" | "hdr") {
-                continue;
-            }
-            let Some(ph_el) = layout
-                .children(node)
-                .find(|&c| layout.local(c).starts_with("nv"))
-                .and_then(|nv| layout.child(nv, Ns::P, "nvPr"))
-                .and_then(|nv| layout.child(nv, Ns::P, "ph"))
-            else {
-                continue;
-            };
-            let attrs: String = ["type", "orient", "sz", "idx"]
-                .iter()
-                .filter_map(|a| {
-                    layout
-                        .attr(ph_el, a)
-                        .map(|v| format!(" {a}=\"{}\"", esc(v)))
-                })
-                .collect();
-            let name = c_nv_pr(layout, node)
-                .and_then(|c| layout.attr(c, "name"))
-                .unwrap_or("Placeholder");
-            let locks = if ph.kind == "pic" {
-                "<a:spLocks noGrp=\"1\" noChangeAspect=\"1\"/>"
-            } else {
-                "<a:spLocks noGrp=\"1\"/>"
-            };
-            let body = if has_text_body(&ph.kind) {
-                "<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang=\"en-US\" dirty=\"0\"/></a:p></p:txBody>"
-            } else {
-                ""
-            };
-            shapes.push_str(&format!(
-                "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"{}\"/><p:cNvSpPr>{locks}</p:cNvSpPr><p:nvPr><p:ph{attrs}/></p:nvPr></p:nvSpPr><p:spPr/>{body}</p:sp>",
-                esc(name)
-            ));
+            shapes.push_str(&xml);
             id += 1;
         }
     }
