@@ -31,8 +31,15 @@ bunx playwright test --config src/features/block-fig/browser-test/playwright.con
 They cover rendering, the layers and pages lists, Figma's selection rules
 (top-level frames select their child, double-click into instances), Escape,
 frame and page navigation, zoom shortcuts, export, the shortcuts dialog,
-and editing: drawing, moving, and saving shapes, fills from the design panel
-with undo and redo, typing text, adding pages, and read-only access.
+and editing: drawing, moving, and saving shapes, lines and arrows, fills
+and shadows from the design panel with undo and redo, typing and styling
+text, auto layout (adding it, gap and padding, sizing, drag to reorder),
+constraints, resizing several layers and rotating one, components
+(creating, placing instances from Assets, overriding their layers,
+detaching), adding pages, and read-only access.
+
+`FIG_CORPUS_DIR` (with a trailing slash) serves another directory of
+files; `--port` runs a second server beside the default one.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
 installed. Failure traces and screenshots stay in the ignored `test-results/`
 folder.
