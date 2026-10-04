@@ -37,6 +37,22 @@ pub struct SceneNode {
     pub bounds: Rect,
     /// For instance sublayers: the outermost instance and the guid path.
     pub path: Option<(Guid, Arc<[Guid]>)>,
+    /// For instances: what their sublayers were built from (see
+    /// [`instance_feed`]), to tell a move from a change in what they show.
+    feed: u64,
+}
+
+/// A fingerprint of what an instance's sublayers are built from: its
+/// component, overrides, derived layout, and property values (shared, so
+/// compared by address).
+fn instance_feed(p: &Props) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    p.symbol.as_ref().map(Arc::as_ptr).hash(&mut h);
+    p.derived.as_ref().map(|d| d.as_ptr()).hash(&mut h);
+    p.prop_assignments.as_ref().map(|a| a.as_ptr()).hash(&mut h);
+    p.swapped_symbol.hash(&mut h);
+    h.finish()
 }
 
 pub struct Scene {
@@ -282,13 +298,14 @@ impl Scene {
                 continue;
             };
             let sn = &self.nodes[i as usize];
-            // Instances and components feed copies made at build time.
+            // Layers in components feed copies made at build time (the
+            // component itself does not: instances keep their own root
+            // properties); an instance whose sources changed shows other
+            // layers.
             if !matches!(sn.props, PropSource::Doc(_))
                 || sn.path.is_some()
-                || matches!(
-                    node.props.node_type(),
-                    NodeType::Instance | NodeType::Symbol
-                )
+                || (node.props.node_type() == NodeType::Instance
+                    && sn.feed != instance_feed(&node.props))
                 || self.inside_component(doc, t)
             {
                 return false;
@@ -309,7 +326,8 @@ impl Scene {
                 .iter()
                 .map(|&c| self.nodes[c as usize].src)
                 .collect();
-            if live_children != scene_children {
+            // (An instance's scene children are its component's layers.)
+            if live_children != scene_children && node.props.node_type() != NodeType::Instance {
                 return false;
             }
             starts.push(i);
@@ -502,6 +520,7 @@ impl<'a> Builder<'a> {
             world: Affine::IDENTITY,
             bounds: Rect::EMPTY,
             path,
+            feed: 0,
         });
         if let Some(p) = parent {
             self.nodes[p as usize].children.push(i);
@@ -515,6 +534,7 @@ impl<'a> Builder<'a> {
         let i = self.push(idx, PropSource::Doc(idx), Some(parent), None);
         let props = doc.props(idx);
         if props.node_type() == NodeType::Instance {
+            self.nodes[i as usize].feed = instance_feed(props);
             let Some(root) = props.guid else { return };
             let mut levels = Vec::new();
             self.expand_instance(props, i, &mut levels, &[], root);

@@ -149,3 +149,68 @@ fn refreshes_in_place_after_property_edits() {
     let applied = History::default().apply(&mut doc, &ops, None).unwrap();
     assert!(!scene.refresh(&doc, &applied.touched));
 }
+
+#[test]
+fn moves_instances_and_components_in_place() {
+    use crate::edit::{History, Op};
+    use crate::save::blank;
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let apply = |doc: &mut Document, h: &mut History, json: &str| {
+        let ops: Vec<Op> = serde_json::from_str(json).unwrap();
+        h.apply(doc, &ops, None).unwrap()
+    };
+    let frame = apply(
+        &mut doc,
+        &mut h,
+        r#"[{"op":"create","parent":"0:1","node":{"type":"FRAME","x":0,"y":0,"width":50,"height":50}}]"#,
+    )
+    .created[0]
+    .clone();
+    let rect = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"create","parent":"{frame}","node":{{"type":"RECTANGLE","x":5,"y":5,"width":10,"height":10}}}},
+                {{"op":"createComponent","ids":["{frame}"]}}]"#
+        ),
+    )
+    .created[0]
+    .clone();
+    let instance = apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"instantiate","component":"{frame}","parent":"0:1","x":100,"y":0}}]"#),
+    )
+    .created[0]
+        .clone();
+    let page = doc.pages[0];
+    let mut scene = Scene::build(&doc, page);
+    // Moving the component or the instance keeps the scene.
+    let applied = apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"translate","ids":["{frame}","{instance}"],"dx":7,"dy":3}}]"#),
+    );
+    assert!(scene.refresh(&doc, &applied.touched));
+    let fresh = Scene::build(&doc, page);
+    for (a, b) in scene.nodes.iter().zip(&fresh.nodes) {
+        assert_eq!(a.world, b.world);
+        assert_eq!(a.bounds, b.bounds);
+    }
+    // Overriding a layer in the instance, or editing the component's
+    // layers, changes what the instance shows: rebuild.
+    let applied = apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"set","ids":["I{instance};{rect}"],"props":{{"opacity":0.5}}}}]"#),
+    );
+    assert!(!scene.refresh(&doc, &applied.touched));
+    let mut scene = Scene::build(&doc, page);
+    let applied = apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"set","ids":["{rect}"],"props":{{"opacity":0.5}}}}]"#),
+    );
+    assert!(!scene.refresh(&doc, &applied.touched));
+}

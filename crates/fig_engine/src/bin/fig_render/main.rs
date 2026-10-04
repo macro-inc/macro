@@ -46,6 +46,9 @@ enum Command {
     /// Override the text of a layer inside an instance, save, reopen, and
     /// check the override holds and the file renders the same.
     Override { files: Vec<PathBuf> },
+    /// Time typical edits (a drag step, a fill change) and the scene update
+    /// after each.
+    BenchEdit { files: Vec<PathBuf> },
     /// Lay out every auto layout frame again and report the frames whose
     /// children the engine places differently from Figma.
     Relayout {
@@ -83,6 +86,11 @@ fn main() {
         Command::Override { files } => {
             for path in files {
                 override_text(&path);
+            }
+        }
+        Command::BenchEdit { files } => {
+            for path in files {
+                bench_edit(&path);
             }
         }
         Command::Relayout { verbose, files } => {
@@ -572,5 +580,81 @@ fn override_text(path: &Path) {
         text_of(&doc),
         text_of(&reopened),
         if same { "identical" } else { "DIFFER" }
+    );
+}
+
+fn bench_edit(path: &Path) {
+    use fig_engine::edit::{History, Op};
+    let Some((_, mut doc)) = open(path) else {
+        return;
+    };
+    // The page with the most layers.
+    let page = doc
+        .pages
+        .iter()
+        .copied()
+        .max_by_key(|&p| Scene::build(&doc, p).nodes.len())
+        .unwrap_or(doc.pages[0]);
+    let started = Instant::now();
+    let mut scene = Scene::build(&doc, page);
+    let build = started.elapsed();
+    println!(
+        "  page {} with {} scene nodes",
+        doc.props(page).name(),
+        scene.nodes.len()
+    );
+    let Some(&first) = doc.node(page).children.first() else {
+        return;
+    };
+    let id = doc
+        .props(first)
+        .guid
+        .map(|g| g.to_string())
+        .unwrap_or_default();
+    let mut history = History::default();
+    let mut time = |ops: &str, coalesce: Option<&str>, doc: &mut Document, scene: &mut Scene| {
+        let ops: Vec<Op> = serde_json::from_str(ops).expect("ops");
+        let t = Instant::now();
+        let applied = history.apply(doc, &ops, coalesce).expect("edit");
+        let edit = t.elapsed();
+        let t = Instant::now();
+        if !scene.refresh(doc, &applied.touched) {
+            *scene = Scene::build(doc, page);
+        }
+        (edit, t.elapsed())
+    };
+    let mut drag = (std::time::Duration::ZERO, std::time::Duration::ZERO);
+    for _ in 0..20 {
+        let (e, r) = time(
+            &format!(r#"[{{"op":"translate","ids":["{id}"],"dx":3,"dy":2}}]"#),
+            Some("drag"),
+            &mut doc,
+            &mut scene,
+        );
+        drag.0 += e;
+        drag.1 += r;
+    }
+    let fill = time(
+        &format!(r#"[{{"op":"set","ids":["{id}"],"props":{{"fills":[{{"color":"FF0000"}}]}}}}]"#),
+        None,
+        &mut doc,
+        &mut scene,
+    );
+    let resize = time(
+        &format!(r#"[{{"op":"set","ids":["{id}"],"props":{{"width":1000}}}}]"#),
+        None,
+        &mut doc,
+        &mut scene,
+    );
+    println!(
+        "{}: {} nodes, scene {build:?}; drag step edit {:?} + scene {:?}; fill {:?} + {:?}; resize {:?} + {:?}",
+        stem(path),
+        doc.nodes.len(),
+        drag.0 / 20,
+        drag.1 / 20,
+        fill.0,
+        fill.1,
+        resize.0,
+        resize.1
     );
 }
