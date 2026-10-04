@@ -139,6 +139,41 @@ impl PresentationService {
             .context("saving the presentation")?;
         Ok(outcome)
     }
+
+    /// Applies `ops` (possibly none) to a copy of the deck and returns the
+    /// copy's bytes; the original is left as it is. The outcome names
+    /// `document_id`, the document the caller stores the copy as.
+    pub async fn edited_copy(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        ops: &[EditOp],
+    ) -> anyhow::Result<(Vec<u8>, PresentationEditOutcome)> {
+        if ops.len() > MAX_OPERATIONS {
+            return Err(PresentationError::BatchSize.into());
+        }
+        let bytes = self
+            .files
+            .read(&receipt.entity().entity_id)
+            .await
+            .context("reading the presentation file")?;
+        if ops.is_empty() {
+            // A plain copy: keep the original bytes exactly.
+            open(bytes.clone())?;
+            return Ok((
+                bytes,
+                PresentationEditOutcome {
+                    document_id: String::new(),
+                    created: Vec::new(),
+                    structure_changed: false,
+                    changed_slides: String::new(),
+                },
+            ));
+        }
+        let ops = ops.to_vec();
+        tokio::task::spawn_blocking(move || apply(String::new(), bytes, &ops))
+            .await
+            .context("editing the presentation")?
+    }
 }
 
 fn open(bytes: Vec<u8>) -> anyhow::Result<Presentation> {

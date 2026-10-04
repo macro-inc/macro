@@ -4567,7 +4567,7 @@ export interface EditDocumentResponse {
   clarification?: string | null;
 }
 /**
- * Edit a PowerPoint (.pptx) presentation: an ordered batch of operations applied atomically and saved as a new version, so if any operation fails nothing is saved. ReadPresentation first; address slides and shapes by the ids it reports (slide ids are not slide numbers). Positions and sizes are in points from the slide's top-left corner. Text offsets count characters within a paragraph; \n separates paragraphs. Colors are RRGGBB hex or theme names (accent1-accent6, tx1, tx2, bg1, bg2). Use setText to rewrite a shape's text (it keeps each paragraph's formatting), formatText/formatParagraphs for styling (the whole shape when no range is given), addSlide with a layout name for new slides (title and body fill its placeholders), and addShape for text boxes, preset shapes, lines, tables, or images. Ids of created slides and shapes are returned with the changed slides as they now read; check them. At most 100 operations.
+ * Edit a PowerPoint (.pptx) presentation: an ordered batch of operations applied atomically and saved as a new version, so if any operation fails nothing is saved. To make a new deck from an existing one instead (a translation, a variant, a copy to rework), pass saveAs: the edited deck is created as a new presentation, whose documentId is returned for further batches, and the original is left unchanged; operations may then be empty for a plain copy. ReadPresentation first; address slides and shapes by the ids it reports (slide ids are not slide numbers). Positions and sizes are in points from the slide's top-left corner. Text offsets count characters within a paragraph; \n separates paragraphs. Colors are RRGGBB hex or theme names (accent1-accent6, tx1, tx2, bg1, bg2). Use setText to rewrite a shape's text (it keeps each paragraph's formatting), formatText/formatParagraphs for styling (the whole shape when no range is given), addSlide with a layout name for new slides (title and body fill its placeholders), and addShape for text boxes, preset shapes, lines, tables, or images. Ids of created slides and shapes are returned with the changed slides as they now read; check them. At most 100 operations.
  */
 export interface EditPresentation {
   /**
@@ -4577,7 +4577,11 @@ export interface EditPresentation {
   /**
    * Ordered operations validated and committed together.
    */
-  operations: EditOp[];
+  operations?: EditOp[];
+  /**
+   * Create the edited deck as a new presentation instead of changing this one.
+   */
+  saveAs?: SaveAsPresentation | null;
 }
 /**
  * A table cell inside a graphic frame (0-based).
@@ -4743,6 +4747,19 @@ export interface LinePatch {
    * Arrowhead at the start.
    */
   head?: string | null;
+}
+/**
+ * Where an edited copy of a presentation is created.
+ */
+export interface SaveAsPresentation {
+  /**
+   * Name of the new presentation (without the .pptx extension).
+   */
+  name: string;
+  /**
+   * Project to create it in; defaults to the original's project when you can edit it.
+   */
+  projectId?: string | null;
 }
 /**
  * What an edit did.

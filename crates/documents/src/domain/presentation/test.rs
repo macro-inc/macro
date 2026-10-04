@@ -237,3 +237,37 @@ async fn hosts_without_storage_fail_clearly() {
         .unwrap_err();
     assert!(format!("{error:#}").contains("cannot be opened from this host"));
 }
+
+#[tokio::test]
+async fn edited_copy_leaves_the_original_alone() {
+    let files = MemoryFiles::with(DECK);
+    let service = PresentationService::new(files.clone());
+    let (slide, shape) = first_text_shape(DECK);
+    let (copy, outcome) = service
+        .edited_copy(
+            receipt(AccessLevel::View),
+            &[EditOp::SetText {
+                slide,
+                shape,
+                cell: None,
+                text: "Bonjour".into(),
+            }],
+        )
+        .await
+        .unwrap();
+    assert!(texts(&copy).contains(&"Bonjour".to_owned()));
+    assert!(
+        outcome.changed_slides.contains("Bonjour"),
+        "{}",
+        outcome.changed_slides
+    );
+    // Nothing was written over the original.
+    assert_eq!(files.count(), 1);
+    assert!(!texts(&files.latest()).contains(&"Bonjour".to_owned()));
+    // A copy without operations keeps the original bytes exactly.
+    let (plain, _) = service
+        .edited_copy(receipt(AccessLevel::View), &[])
+        .await
+        .unwrap();
+    assert_eq!(plain, DECK);
+}
