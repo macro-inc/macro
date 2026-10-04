@@ -194,7 +194,11 @@ pub fn copy_part_tree(
     }
     let new = sibling_name(pres, part);
     renamed.insert(part.to_owned(), new.clone());
-    let bytes = pres.pkg.read(part)?.into_owned();
+    // Edits earlier in the batch may not be written back to the package yet.
+    let bytes = match pres.xml.get(part).filter(|_| pres.dirty_xml.contains(part)) {
+        Some(doc) => doc.to_bytes(),
+        None => pres.pkg.read(part)?.into_owned(),
+    };
     let content_type = pres.pkg.content_type(part).map(str::to_owned);
     let ext = new.rsplit_once('.').map_or("", |(_, e)| e);
     let needs_override = content_type

@@ -186,7 +186,12 @@ pub struct LinePatch {
 /// What to add with [`EditOp::AddShape`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", tag = "kind", deny_unknown_fields)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind",
+    deny_unknown_fields
+)]
 pub enum NewShape {
     /// A text box.
     TextBox {
@@ -221,6 +226,43 @@ pub enum NewShape {
         /// Cell text, row by row.
         cells: Vec<Vec<String>>,
     },
+    /// A chart with an embedded workbook holding its data.
+    Chart {
+        /// `bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.
+        chart_type: String,
+        /// `clustered`, `stacked`, `percentStacked`, or `standard` (the type's default when omitted).
+        #[serde(default)]
+        grouping: Option<String>,
+        /// Category labels.
+        categories: Vec<String>,
+        /// Series in plot order.
+        series: Vec<ChartSeriesData>,
+        /// Chart title (no title when omitted or empty).
+        #[serde(default)]
+        title: Option<String>,
+    },
+}
+
+/// One series of chart data.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChartSeriesData {
+    /// Series name (legend text).
+    pub name: String,
+    /// One value per category (`null` for a blank).
+    pub values: Vec<Option<f64>>,
+}
+
+/// A series color for [`EditOp::FormatChart`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChartSeriesColor {
+    /// Series index in plot order (0-based).
+    pub series: u32,
+    /// `RRGGBB`, or a theme color name (`accent1`, `tx1`...).
+    pub color: String,
 }
 
 /// Z-order moves.
@@ -546,6 +588,52 @@ pub enum EditOp {
         slide: u32,
         /// The fill (`None` removes the override, inheriting the layout background).
         fill: Option<FillSpec>,
+    },
+    // ---- charts ----
+    /// Replaces a chart's categories and series (the chart must be `editable`
+    /// in the outline). Existing series keep their formatting; new series
+    /// copy the last one's with the next theme accent color. The embedded
+    /// workbook is rewritten to match.
+    SetChartData {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// Category labels.
+        categories: Vec<String>,
+        /// Series in plot order (one value per category).
+        series: Vec<ChartSeriesData>,
+    },
+    /// Changes a chart's type (the chart must be `editable` in the outline).
+    SetChartType {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// `bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.
+        kind: String,
+        /// `clustered`, `stacked`, `percentStacked`, or `standard` (kept or the type's default when omitted).
+        #[serde(default)]
+        grouping: Option<String>,
+    },
+    /// Changes a chart's title, legend, data labels, or series colors (omitted fields stay).
+    FormatChart {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// Title text (`""` removes the title).
+        #[serde(default)]
+        title: Option<String>,
+        /// Legend position: `right`, `left`, `top`, `bottom`, `topRight`, or `none`.
+        #[serde(default)]
+        legend: Option<String>,
+        /// Show or hide value data labels on every series.
+        #[serde(default)]
+        data_labels: Option<bool>,
+        /// Series colors.
+        #[serde(default)]
+        series_colors: Option<Vec<ChartSeriesColor>>,
     },
 }
 

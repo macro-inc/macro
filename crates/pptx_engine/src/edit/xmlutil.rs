@@ -252,7 +252,7 @@ pub fn set_off_ext(doc: &mut XmlDoc, xfrm: NodeId, x: f32, y: f32, w: f32, h: f3
 /// Parses an XML fragment (with the usual namespace declarations) and imports it.
 pub fn import_fragment(doc: &mut XmlDoc, xml: &str) -> Result<NodeId> {
     let wrapped = format!(
-        "<w xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">{xml}</w>"
+        "<w xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">{xml}</w>"
     );
     let frag = XmlDoc::parse(wrapped.as_bytes(), "fragment")?;
     let first = frag

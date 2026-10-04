@@ -10,6 +10,12 @@
 //! bytes are reference-counted and only copied when an edit touches them.
 
 mod autofit;
+pub(crate) mod chart;
+mod chart_data;
+mod chart_format;
+mod chart_new;
+mod chart_type;
+mod chart_workbook;
 mod notes;
 mod ops;
 mod parts;
@@ -21,8 +27,8 @@ mod xmlutil;
 
 pub use notes::notes_text;
 pub use ops::{
-    BodyPatch, BulletSpec, CellRef, Created, EditOp, EditResult, FillSpec, LinePatch, NewShape,
-    ParaPatch, RunPatch, TextPos, ZOrder,
+    BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
+    FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
 };
 pub use slides::{LayoutInfo, layouts};
 
@@ -65,7 +71,10 @@ impl EditOp {
             | O::MoveSlide { slide, .. }
             | O::SetSlideHidden { slide, .. }
             | O::SetNotes { slide, .. }
-            | O::SetBackground { slide, .. } => Some(*slide),
+            | O::SetBackground { slide, .. }
+            | O::SetChartData { slide, .. }
+            | O::SetChartType { slide, .. }
+            | O::FormatChart { slide, .. } => Some(*slide),
             O::AddSlide { .. } => None,
         }
     }
@@ -421,6 +430,41 @@ impl Presentation {
             O::SetBackground { slide, fill } => {
                 slides::set_background(self, *slide, fill.as_ref())?
             }
+            O::SetChartData {
+                slide,
+                shape,
+                categories,
+                series,
+            } => {
+                let part = self.slide_part(*slide)?;
+                chart::set_data(self, &part, *shape, categories, series)?;
+            }
+            O::SetChartType {
+                slide,
+                shape,
+                kind,
+                grouping,
+            } => {
+                let part = self.slide_part(*slide)?;
+                chart::set_type(self, &part, *shape, kind, grouping.as_deref())?;
+            }
+            O::FormatChart {
+                slide,
+                shape,
+                title,
+                legend,
+                data_labels,
+                series_colors,
+            } => {
+                let part = self.slide_part(*slide)?;
+                let format = chart_format::ChartFormat {
+                    title: title.as_deref(),
+                    legend: legend.as_deref(),
+                    data_labels: *data_labels,
+                    series_colors: series_colors.as_deref().unwrap_or_default(),
+                };
+                chart::format(self, &part, *shape, &format)?;
+            }
         }
         Ok(created)
     }
@@ -436,6 +480,19 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
             .get(slide)
             .and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
     };
+    // Charts live in parts of their own; editing one changes the slide's rendering.
+    let charts_unchanged = |slide: &str| {
+        let rels = match after.rels.get(slide) {
+            Some(r) => std::sync::Arc::clone(r),
+            None => match after.pkg.rels(slide) {
+                Ok(r) => std::sync::Arc::new(r),
+                Err(_) => return true,
+            },
+        };
+        rels.iter()
+            .filter(|r| r.rel_type == rel_type::CHART && r.mode == TargetMode::Internal)
+            .all(|r| same(&rels.resolve(r)))
+    };
     let changed_slides = after
         .slides
         .iter()
@@ -446,7 +503,8 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
                 .any(|o| o.id == s.id && o.part == s.part)
                 && same(&s.part)
                 && same(&rels_part_name(&s.part))
-                && notes_part(after, &s.part).is_none_or(|n| same(&n));
+                && notes_part(after, &s.part).is_none_or(|n| same(&n))
+                && charts_unchanged(&s.part);
             !unchanged
         })
         .map(|s| s.id)
@@ -587,5 +645,7 @@ impl Editor {
     }
 }
 
+#[cfg(test)]
+mod chart_test;
 #[cfg(test)]
 mod test;

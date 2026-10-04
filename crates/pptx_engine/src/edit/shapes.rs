@@ -1,6 +1,8 @@
 //! Shape operations: transforms, fills, outlines, geometry, insertion,
 //! duplication, deletion, z-order, and picture replacement.
 
+use super::chart;
+use super::chart_new;
 use super::ops::{FillSpec, LinePatch, NewShape, ZOrder};
 use super::parts;
 use super::xmlutil::{
@@ -491,6 +493,22 @@ pub fn add_shape(
             )
         }
         NewShape::Table { cells } => table_xml(id, n, cells, [x, y, w, h])?,
+        NewShape::Chart {
+            chart_type,
+            grouping,
+            categories,
+            series,
+            title,
+        } => {
+            let spec = chart_new::NewChart {
+                kind: chart_type,
+                grouping: grouping.as_deref(),
+                categories,
+                series,
+                title: title.as_deref(),
+            };
+            chart_new::create(pres, part, id, n, &spec, [x, y, w, h])?
+        }
     };
     let doc = pres.xml_mut(part)?;
     let el = import_fragment(doc, &fragment)?;
@@ -612,10 +630,17 @@ pub fn duplicate_shape(
     check_finite(&[Some(dx), Some(dy)])?;
     let current = effective_xfrm(pres, part, shape)?;
     let ids = pres.pkg.ids().cloned();
+    let rids = {
+        let doc = pres.xml(part)?;
+        let node = find(&doc, shape)?;
+        chart::chart_rids(&doc, tree_item(&doc, node))
+    };
+    let charts = chart::copy_charts(pres, part, &rids)?;
     let doc = pres.xml_mut(part)?;
     let node = find(doc, shape)?;
     let item = tree_item(doc, node);
     let copy = doc.deep_clone(item);
+    chart::retarget_charts(doc, copy, &charts);
     let mut next = fresh_shape_id(doc, ids.as_deref());
     let map = renumber(doc, copy, &mut next);
     let new_id = *map

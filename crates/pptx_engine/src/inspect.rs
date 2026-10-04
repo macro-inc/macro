@@ -6,7 +6,7 @@ use crate::edit::{CellRef, notes_text};
 use crate::error::{Error, Result};
 use crate::font::FontDb;
 use crate::model::fill::Fill;
-use crate::model::presentation::Presentation;
+use crate::model::presentation::{Presentation, SlideContext};
 use crate::model::shape::{
     GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, resolve_tree, sp_tree,
 };
@@ -17,6 +17,7 @@ use crate::render::text::{LayoutParams, LineBox, layout};
 use crate::units::emu_to_pt;
 use crate::xml::{NodeId, Ns, XmlDoc};
 use serde::Serialize;
+use std::collections::HashMap;
 
 pub use crate::edit::LayoutInfo;
 
@@ -68,6 +69,48 @@ pub struct TableOutline {
     pub row_heights: Vec<f32>,
 }
 
+/// A chart's type, labels, and cached data.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartOutline {
+    /// `bar` (horizontal), `column`, `line`, `pie`, `doughnut`, `area`, `scatter`,
+    /// `radar`, `bubble`, `stock`, `surface`, `other` (the first plot's type).
+    pub kind: String,
+    /// `clustered`, `stacked`, `percentStacked`, or `standard` (lines/areas), when the plot has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grouping: Option<String>,
+    /// Title text when a title is shown (auto titles: the single series' name).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Legend position `right`, `left`, `top`, `bottom`, `topRight`, or None when there is no legend.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legend: Option<String>,
+    /// Whether any series shows value data labels.
+    pub data_labels: bool,
+    /// Category labels (from the first series that has categories).
+    pub categories: Vec<String>,
+    /// Series in plot order.
+    pub series: Vec<ChartSeriesOutline>,
+    /// Whether setChartData/setChartType can rewrite this chart (single plot
+    /// of bar/column/line/pie/doughnut/area with cached or literal data).
+    /// Combo charts, scatter/bubble/stock/surface/radar, and charts without
+    /// data caches are false.
+    pub editable: bool,
+}
+
+/// One series of a chart.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartSeriesOutline {
+    /// Series name.
+    pub name: String,
+    /// Values per category (`null` for blanks).
+    pub values: Vec<Option<f64>>,
+    /// Series fill/line color as `#RRGGBB` when explicit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
 /// A shape on a slide.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -114,6 +157,9 @@ pub struct ShapeOutline {
     /// Table content.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub table: Option<TableOutline>,
+    /// Chart summary (charts only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chart: Option<ChartOutline>,
     /// Group members.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<ShapeOutline>,
@@ -302,7 +348,29 @@ fn bounds(t: &Affine, r: Rect) -> Rect {
     Rect::from_ltrb(x0, y0, x1, y1)
 }
 
-fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
+/// Chart outlines by chart part name.
+type Charts = HashMap<String, ChartOutline>;
+
+/// Outlines every chart among `shapes` (and their group members).
+fn chart_outlines(pres: &mut Presentation, ctx: &SlideContext, shapes: &[Shape], out: &mut Charts) {
+    for s in shapes {
+        match &s.kind {
+            ShapeKind::Group(members) => chart_outlines(pres, ctx, members, out),
+            ShapeKind::Frame(Graphic::Chart(name)) if !out.contains_key(name) => {
+                let Ok(part) = pres.part(name) else {
+                    continue;
+                };
+                if let Some(mut outline) = crate::render::chart::chart_outline(pres, ctx, &part) {
+                    outline.editable = crate::edit::chart::is_editable(&part.doc);
+                    out.insert(name.clone(), outline);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn shape_outline(s: &Shape, parent: &Affine, charts: &Charts) -> ShapeOutline {
     let doc = &s.part.doc;
     // Top-level shapes report their own box; group members report it mapped to the slide.
     let (x, y, w, h) = if *parent == Affine::IDENTITY {
@@ -343,10 +411,14 @@ fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
                 .pre_concat(&s.xfrm.child_to_local());
             members
                 .iter()
-                .map(|c| shape_outline(c, &child_parent))
+                .map(|c| shape_outline(c, &child_parent, charts))
                 .collect()
         }
         _ => Vec::new(),
+    };
+    let chart = match &s.kind {
+        ShapeKind::Frame(Graphic::Chart(name)) => charts.get(name).cloned(),
+        _ => None,
     };
     ShapeOutline {
         id: s.id,
@@ -374,6 +446,7 @@ fn shape_outline(s: &Shape, parent: &Affine) -> ShapeOutline {
         text_editable: doc.local(s.node) == "sp",
         paragraphs: tx_body.map(|b| paragraphs_of(doc, b)).unwrap_or_default(),
         table,
+        chart,
         children,
     }
 }
@@ -394,9 +467,11 @@ impl Presentation {
         let shapes = sp_tree(&ctx.slide.doc)
             .map(|t| resolve_tree(&walk, &ctx.slide, t))
             .unwrap_or_default();
+        let mut charts = Charts::new();
+        chart_outlines(self, &ctx, &shapes, &mut charts);
         let outlines: Vec<ShapeOutline> = shapes
             .iter()
-            .map(|s| shape_outline(s, &Affine::IDENTITY))
+            .map(|s| shape_outline(s, &Affine::IDENTITY, &charts))
             .collect();
         let title = outlines
             .iter()
