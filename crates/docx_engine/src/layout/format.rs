@@ -251,7 +251,16 @@ impl<'d> Formats<'d> {
         if let Some(cs) = direct.style.as_deref()
             && let Some(c) = self.styles.character_style(Some(cs))
         {
-            r.apply(&c.rpr, true);
+            if c.name.eq_ignore_ascii_case("hyperlink") && self.is_toc_entry(para) {
+                // Word shows table of contents links in the entry's own
+                // formatting, without the link color or underline.
+                let mut link = c.rpr.clone();
+                link.color = None;
+                link.underline = None;
+                r.apply(&link, true);
+            } else {
+                r.apply(&c.rpr, true);
+            }
         }
         r.apply(&direct, false);
         let resolved = Arc::new(r.resolve());
@@ -259,6 +268,18 @@ impl<'d> Formats<'d> {
             .borrow_mut()
             .insert(cache_key, Arc::clone(&resolved));
         resolved
+    }
+
+    /// Whether a paragraph is a table of contents entry (a built-in `toc N`
+    /// style, whatever the document's language calls it).
+    fn is_toc_entry(&self, para: &ParaFormat) -> bool {
+        self.styles
+            .paragraph_style(para.props.style.as_deref())
+            .is_some_and(|s| {
+                let name = s.name.to_ascii_lowercase();
+                name.strip_prefix("toc ")
+                    .is_some_and(|n| n.trim().parse::<u8>().is_ok())
+            })
     }
 
     /// Label run properties: the paragraph mark's, with the level's on top.

@@ -334,10 +334,9 @@ impl Builder<'_, '_> {
             VertAlign::Sub => (props.size * SCRIPT_SIZE, -props.size * SUB_DROP),
             VertAlign::Baseline => (props.size, 0.0),
         };
+        // Links take their color from their formatting (usually the
+        // Hyperlink character style), like any other text.
         let mut color = props.color.unwrap_or_else(|| auto_color(props));
-        if link && props.color.is_none() {
-            color = Rgba::from_u8(0x05, 0x63, 0xC1);
-        }
         if revision != Revision::None && self.ctx.markup {
             // Word's default "by author" revision color for one author.
             color = Rgba::from_u8(0xC0, 0x00, 0x00);

@@ -200,3 +200,41 @@ fn text_continues_below_a_band_further_down() {
     assert!((ls[0].y - 72.0).abs() < 0.01, "{}", ls[0].y);
     assert!((ls[1].y - (72.0 + 12.0 + 72.0)).abs() < 0.01, "{}", ls[1].y);
 }
+
+#[test]
+fn links_take_their_color_from_their_formatting() {
+    use pptx_engine::model::color::Rgba;
+    let styles = format!(
+        r#"{ARIAL_10}<w:style w:type="character" w:styleId="Hyperlink"><w:name w:val="Hyperlink"/><w:rPr><w:color w:val="0000FF"/><w:u w:val="single"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="TOC1"><w:name w:val="toc 1"/></w:style>"#
+    );
+    let link = |p_style: &str, r_style: &str| {
+        format!(
+            r#"<w:p><w:pPr>{p_style}</w:pPr><w:hyperlink w:anchor="x"><w:r><w:rPr>{r_style}</w:rPr><w:t>Link</w:t></w:r></w:hyperlink></w:p>"#
+        )
+    };
+    let body = [
+        link("", r#"<w:rStyle w:val="Hyperlink"/>"#),
+        link("", ""),
+        link(
+            r#"<w:pStyle w:val="TOC1"/>"#,
+            r#"<w:rStyle w:val="Hyperlink"/>"#,
+        ),
+    ]
+    .concat();
+    let l = layout(
+        &body,
+        &Parts {
+            styles: Some(&styles),
+            ..Parts::default()
+        },
+    );
+    let colors: Vec<Rgba> = lines(&l, &StoryRef::Body)
+        .iter()
+        .map(|p| p.para.inline.runs[p.para.inline.clusters[0].run as usize].color)
+        .collect();
+    // The Hyperlink style's blue; no forced blue without it; table of
+    // contents entries keep the entry's own color.
+    assert_eq!(colors[0], Rgba::from_u8(0, 0, 0xFF));
+    assert_eq!(colors[1], Rgba::BLACK);
+    assert_eq!(colors[2], Rgba::BLACK);
+}
