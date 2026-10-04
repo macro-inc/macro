@@ -152,7 +152,14 @@ fn bake_text_style(
         "body" => "bodyStyle",
         _ => "otherStyle",
     };
-    if let Some(master) = &ctx.master
+    // Shapes copied from a master take its own text styles.
+    let master = ctx.master.as_ref().or_else(|| {
+        ctx.slide
+            .doc
+            .is(ctx.slide.doc.root(), Ns::P, "sldMaster")
+            .then_some(&ctx.slide)
+    });
+    if let Some(master) = master
         && let Some(style) = master
             .doc
             .path(master.doc.root(), Ns::P, &["txStyles", style_name])

@@ -35,6 +35,7 @@ mod format_painter;
 pub(crate) mod group;
 pub(crate) mod header_footer;
 mod links;
+pub(crate) mod masters;
 pub(crate) mod picture;
 mod relayout;
 pub(crate) mod sections;
@@ -49,7 +50,7 @@ pub use ops::{
     BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
     FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
 };
-pub use ops::{BorderEdges, BorderLine, CellBorders, SlideScale, ThemeColor};
+pub use ops::{BorderEdges, BorderLine, CellBorders, PlaceholderKind, SlideScale, ThemeColor};
 pub use ops::{
     CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
 };
@@ -127,7 +128,12 @@ impl EditOp {
             | O::CropPicture { slide, .. }
             | O::FormatPicture { slide, .. }
             | O::SetShapeEffects { slide, .. } => Some(*slide),
-            O::PasteSlides { .. }
+            O::RenameLayout { layout, .. }
+            | O::DeleteLayout { layout }
+            | O::InsertPlaceholder { layout, .. }
+            | O::SetLayoutOptions { layout, .. } => Some(*layout),
+            O::AddLayout { .. }
+            | O::PasteSlides { .. }
             | O::SetThemeColors { .. }
             | O::SetThemeFonts { .. }
             | O::SetHeaderFooter { .. }
@@ -157,7 +163,28 @@ impl EditOp {
                 | EditOp::SetFill { .. }
                 | EditOp::RemoveSection { .. }
                 | EditOp::FormatPicture { .. }
+                | EditOp::DeleteLayout { .. }
         )
+    }
+
+    /// The slide id of an operation that only applies to slides (not to
+    /// slide masters and layouts).
+    fn slide_only(&self) -> Option<u32> {
+        use EditOp as O;
+        match self {
+            O::DuplicateSlide { slide }
+            | O::DeleteSlide { slide }
+            | O::MoveSlide { slide, .. }
+            | O::SetSlideHidden { slide, .. }
+            | O::SetNotes { slide, .. }
+            | O::SetSlideLayout { slide, .. }
+            | O::SetTransition { slide, .. }
+            | O::SetAnimations { slide, .. }
+            | O::AddAnimation { slide, .. }
+            | O::RemoveAnimations { slide, .. } => Some(*slide),
+            O::ReplaceText { slide, .. } => *slide,
+            _ => None,
+        }
     }
 }
 
@@ -256,7 +283,7 @@ impl Presentation {
         refit: &mut Vec<(String, u32)>,
         f: impl FnOnce(&mut XmlDoc, NodeId) -> Result<()>,
     ) -> Result<()> {
-        let part = self.slide_part(slide)?;
+        let part = self.page_part(slide)?;
         let doc = self.xml_mut(&part)?;
         let node = shapes::find(doc, shape)?;
         f(doc, node)?;
@@ -272,6 +299,14 @@ impl Presentation {
     ) -> Result<()> {
         use EditOp as O;
         let mut created = None;
+        if let Some(id) = op.slide_only()
+            && self.slide_part(id).is_err()
+            && self.master_page(id).is_ok()
+        {
+            return Err(Error::InvalidEdit(format!(
+                "{id} is a slide master or layout; this operation applies to slides"
+            )));
+        }
         match op {
             O::SetText {
                 slide,
@@ -279,7 +314,7 @@ impl Presentation {
                 cell,
                 text,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 self.edit_text(&part, *shape, *cell, |doc, body| {
                     text::set_text(doc, body, text)
                 })?;
@@ -292,7 +327,7 @@ impl Presentation {
                 at,
                 text,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 self.edit_text(&part, *shape, *cell, |doc, body| {
                     text::insert_text(doc, body, *at, text)
                 })?;
@@ -305,7 +340,7 @@ impl Presentation {
                 start,
                 end,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 self.edit_text(&part, *shape, *cell, |doc, body| {
                     text::delete_text(doc, body, *start, *end)
                 })?;
@@ -319,7 +354,7 @@ impl Presentation {
                 end,
                 props,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let link = match props.link.as_deref() {
                     Some(link) => links::link_ref(self, &part, link, props.link_tip.as_deref())?,
                     None => None,
@@ -327,6 +362,9 @@ impl Presentation {
                 self.edit_text(&part, *shape, *cell, |doc, body| {
                     text::format_text(doc, body, *start, *end, props, link.as_ref())
                 })?;
+                if cell.is_none() {
+                    masters::inherit_text_format(self, &part, *shape, *start, *end, props)?;
+                }
                 refit.push((part, *shape));
             }
             O::FormatParagraphs {
@@ -337,10 +375,13 @@ impl Presentation {
                 to,
                 props,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 self.edit_text(&part, *shape, *cell, |doc, body| {
                     text::format_paragraphs(doc, body, *from, *to, props)
                 })?;
+                if cell.is_none() {
+                    masters::inherit_paragraph_format(self, &part, *shape, *from, *to, props)?;
+                }
                 refit.push((part, *shape));
             }
             O::FormatBody {
@@ -349,7 +390,7 @@ impl Presentation {
                 cell,
                 props,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 match cell {
                     // A cell's alignment and margins live on the cell, not its text body.
                     Some(c) => {
@@ -374,7 +415,7 @@ impl Presentation {
                 flip_h,
                 flip_v,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let patch = shapes::TransformPatch {
                     x: *x,
                     y: *y,
@@ -391,13 +432,13 @@ impl Presentation {
                 }
             }
             O::SetFill { slide, shape, fill } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let doc = self.xml_mut(&part)?;
                 let node = shapes::find(doc, *shape)?;
                 shapes::set_fill(doc, node, fill)?;
             }
             O::SetLine { slide, shape, line } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let doc = self.xml_mut(&part)?;
                 let node = shapes::find(doc, *shape)?;
                 shapes::set_line(doc, node, line)?;
@@ -407,7 +448,7 @@ impl Presentation {
                 shape,
                 preset,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let doc = self.xml_mut(&part)?;
                 let node = shapes::find(doc, *shape)?;
                 shapes::set_geometry(doc, node, preset)?;
@@ -420,7 +461,7 @@ impl Presentation {
                 w,
                 h,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let id = shapes::add_shape(self, &part, shape, [*x, *y, *w, *h])?;
                 if matches!(shape, NewShape::Table { .. }) {
                     table_style::define(self, crate::model::table_style::DEFAULT_TABLE_STYLE)?;
@@ -433,7 +474,7 @@ impl Presentation {
                 refit.push((part, id));
             }
             O::DeleteShape { slide, shape } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let doc = self.xml_mut(&part)?;
                 let node = shapes::find(doc, *shape)?;
                 shapes::delete_shape(doc, node);
@@ -444,8 +485,9 @@ impl Presentation {
                 dx,
                 dy,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let id = shapes::duplicate_shape(self, &part, *shape, *dx, *dy)?;
+                masters::renumber_copy(self, &part, id)?;
                 created = Some(Created {
                     slide: *slide,
                     shape: Some(id),
@@ -453,13 +495,13 @@ impl Presentation {
                 });
             }
             O::ReorderShape { slide, shape, to } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let doc = self.xml_mut(&part)?;
                 let node = shapes::find(doc, *shape)?;
                 shapes::reorder(doc, node, *to);
             }
             O::ReplaceImage { slide, shape, data } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 shapes::replace_image(self, &part, *shape, data)?;
             }
             O::SetCellText {
@@ -469,7 +511,7 @@ impl Presentation {
                 col,
                 text,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let cell = CellRef {
                     row: *row,
                     col: *col,
@@ -611,7 +653,7 @@ impl Presentation {
                 categories,
                 series,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 chart::set_data(self, &part, *shape, categories, series)?;
             }
             O::SetChartType {
@@ -620,7 +662,7 @@ impl Presentation {
                 kind,
                 grouping,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 chart::set_type(self, &part, *shape, kind, grouping.as_deref())?;
             }
             O::FormatChart {
@@ -631,7 +673,7 @@ impl Presentation {
                 data_labels,
                 series_colors,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let format = chart_format::ChartFormat {
                     title: title.as_deref(),
                     legend: legend.as_deref(),
@@ -641,7 +683,7 @@ impl Presentation {
                 chart::format(self, &part, *shape, &format)?;
             }
             O::GroupShapes { slide, shapes } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let id = group::group_shapes(self, &part, shapes)?;
                 created = Some(Created {
                     slide: *slide,
@@ -650,7 +692,7 @@ impl Presentation {
                 });
             }
             O::UngroupShape { slide, shape } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 for id in group::ungroup(self, &part, *shape)? {
                     out.created.push(Created {
                         slide: *slide,
@@ -665,7 +707,7 @@ impl Presentation {
                 dx,
                 dy,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 for id in clipboard::paste_shapes(self, &part, payload, *dx, *dy)? {
                     out.created.push(Created {
                         slide: *slide,
@@ -744,11 +786,11 @@ impl Presentation {
                 out.replaced += find::replace_text(self, query, replace, options, *slide, refit)?;
             }
             O::SetAltText { slide, shape, text } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "descr", Some(text))?;
             }
             O::SetShapeName { slide, shape, name } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "name", Some(name))?;
             }
             O::SetShapeLink {
@@ -757,7 +799,7 @@ impl Presentation {
                 link,
                 tip,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 for &shape in shapes {
                     let link = links::link_ref(self, &part, link, tip.as_deref())?;
                     links::set_shape_link(self.xml_mut(&part)?, shape, link.as_ref())?;
@@ -768,7 +810,7 @@ impl Presentation {
                 shape,
                 hidden,
             } => {
-                let part = self.slide_part(*slide)?;
+                let part = self.page_part(*slide)?;
                 let value = hidden.then_some("1");
                 shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "hidden", value)?;
             }
@@ -778,8 +820,8 @@ impl Presentation {
                 from_slide,
                 from_shape,
             } => {
-                let part = self.slide_part(*slide)?;
-                let from_part = self.slide_part(*from_slide)?;
+                let part = self.page_part(*slide)?;
+                let from_part = self.page_part(*from_slide)?;
                 format_painter::paste_format(self, &from_part, *from_shape, &part, shapes)?;
             }
             O::SetHeaderFooter {
@@ -876,6 +918,50 @@ impl Presentation {
                 };
                 effects::set_shape_effects(self, *slide, shapes, &patch)?;
             }
+            O::AddLayout {
+                master,
+                after,
+                duplicate,
+                name,
+            } => {
+                let id = masters::add_layout(self, *master, *after, *duplicate, name.as_deref())?;
+                created = Some(Created {
+                    slide: id,
+                    shape: None,
+                    section: None,
+                });
+            }
+            O::RenameLayout { layout, name } => masters::rename(self, *layout, name)?,
+            O::DeleteLayout { layout } => masters::delete(self, *layout)?,
+            O::InsertPlaceholder {
+                layout,
+                kind,
+                x,
+                y,
+                w,
+                h,
+                vertical,
+            } => {
+                let id =
+                    masters::insert_placeholder(self, *layout, *kind, [*x, *y, *w, *h], *vertical)?;
+                created = Some(Created {
+                    slide: *layout,
+                    shape: Some(id),
+                    section: None,
+                });
+            }
+            O::SetLayoutOptions {
+                layout,
+                title,
+                footers,
+                hide_background_graphics,
+            } => masters::set_layout_options(
+                self,
+                *layout,
+                *title,
+                *footers,
+                *hide_background_graphics,
+            )?,
         }
         out.created.extend(created);
         Ok(())
@@ -932,7 +1018,9 @@ impl Editor {
         fonts: &FontDb,
     ) -> Result<EditResult> {
         let (result, before) = self.pres.apply_batch(ops, fonts)?;
-        let nothing_changed = result.changed_slides.is_empty() && !result.structure_changed;
+        let nothing_changed = result.changed_slides.is_empty()
+            && result.changed_layouts.is_empty()
+            && !result.structure_changed;
         if nothing_changed && result.created.is_empty() {
             return Ok(result);
         }

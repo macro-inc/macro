@@ -261,7 +261,7 @@ pub(super) fn set_shape_effects(
             "setShapeEffects needs at least one shape".into(),
         ));
     }
-    let part = pres.slide_part(slide)?;
+    let part = pres.page_part(slide)?;
     for &id in shapes {
         let inherited = inherited_list(pres, &part, id)?;
         let doc = pres.xml_mut(&part)?;

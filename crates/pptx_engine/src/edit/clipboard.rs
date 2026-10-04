@@ -384,18 +384,15 @@ impl Presentation {
 
     /// Copies shapes of the slide at `index` (by id; group members too) into
     /// a payload for [`EditOp::PasteShapes`](super::EditOp::PasteShapes),
-    /// back to front. See the module docs for what travels along.
+    /// back to front. See the module docs for what travels along. `index`
+    /// may instead be a slide master's or layout's id.
     pub fn copy_shapes(&mut self, index: usize, ids: &[u32]) -> Result<ClipboardPayload> {
-        let entry = self
-            .slides
-            .get(index)
-            .cloned()
-            .ok_or_else(|| Error::NotFound(format!("slide {index}")))?;
+        let page = self.page(index)?;
         if ids.is_empty() {
             return Err(Error::InvalidEdit("no shapes to copy".into()));
         }
-        let slide = self.part(&entry.part)?;
-        let ctx = self.context_for(slide.clone(), self.slide_number(index))?;
+        let slide = self.part(&page.part)?;
+        let ctx = self.context_for(slide.clone(), page.number)?;
         let mut scratch = (*slide.doc).clone();
         let mut chosen: Vec<NodeId> = Vec::new();
         for &id in ids {

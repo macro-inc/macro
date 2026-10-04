@@ -405,7 +405,15 @@ fn resolve_inner(
         })
         .collect();
     let family = placeholder.map_or("other", Placeholder::style_family);
-    let master_style = ctx.master.as_ref().and_then(|m| {
+    // A master drawn as itself (Slide Master view) styles its own placeholders.
+    let master = ctx.master.as_ref().or_else(|| {
+        let root = ctx.slide.doc.root();
+        ctx.slide
+            .doc
+            .is(root, Ns::P, "sldMaster")
+            .then_some(&ctx.slide)
+    });
+    let master_style = master.and_then(|m| {
         let style = match family {
             "title" => "titleStyle",
             "body" => "bodyStyle",
@@ -501,7 +509,11 @@ fn resolve_inner(
             };
             let text = match &kind {
                 RunKind::Break => String::new(),
-                RunKind::Field(t) if t == "slidenum" => ctx.number.to_string(),
+                // Masters and layouts show the field's placeholder text (`‹#›`).
+                RunKind::Field(t) if t == "slidenum" && !ctx.is_master_page() => {
+                    ctx.number.to_string()
+                }
+                RunKind::Field(t) if t == "slidenum" => cached(),
                 RunKind::Field(t) => ctx
                     .clock
                     .and_then(|now| now.format(t))

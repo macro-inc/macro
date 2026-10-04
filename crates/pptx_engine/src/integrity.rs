@@ -1,7 +1,8 @@
 //! Package integrity checks used after edits: every relationship target and
 //! `r:` reference resolves, every part has a content type, slide ids are
-//! unique, slides keep the schema order of their top-level elements, and
-//! animations name only shapes (and paragraphs) the slide has.
+//! unique, master and layout ids are unique and at least 2147483648, slides
+//! keep the schema order of their top-level elements, and animations name
+//! only shapes (and paragraphs) the slide has.
 //! Files that fail these checks make PowerPoint offer a "repair".
 
 use crate::error::Result;
@@ -63,6 +64,7 @@ impl Presentation {
                 }
             }
         }
+        problems.extend(crate::edit::masters::id_problems(self)?);
         let mut seen = HashSet::new();
         for s in &self.slides {
             if !seen.insert(s.id) {

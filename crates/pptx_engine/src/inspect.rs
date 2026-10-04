@@ -35,7 +35,10 @@ pub use links::LinkRegion;
 pub use media::MediaOutline;
 
 mod links;
+mod masters;
 mod media;
+
+pub use masters::{MasterLayoutOutline, MasterOutline};
 
 pub use picture::{
     CropOutline, EffectsOutline, GlowOutline, PictureOutline, ReflectionOutline, ShadowOutline,
@@ -209,6 +212,11 @@ pub struct ShapeOutline {
     /// Placeholder type (`title`, `body`, `ctrTitle`...), if a placeholder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<String>,
+    /// Placeholder index (`p:ph/@idx`, 0 when absent), if a placeholder. A
+    /// slide placeholder takes its position and text style from the layout
+    /// placeholder with the same index (else the same type).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder_index: Option<u32>,
     /// Left in slide coordinates (points).
     pub x: f32,
     /// Top.
@@ -268,16 +276,20 @@ pub struct ShapeOutline {
     pub children: Vec<ShapeOutline>,
 }
 
-/// A slide.
+/// A slide (or, read by its id, a slide master or layout: Slide Master view).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SlideOutline {
-    /// Stable slide id.
+    /// Stable slide id (a master's or layout's id for those).
     pub id: u32,
-    /// 0-based position.
+    /// 0-based position (a master's or layout's position in Slide Master
+    /// view order: each master, then its layouts).
     pub index: usize,
-    /// Layout name.
+    /// Layout name (a master's or layout's own name for those).
     pub layout: String,
+    /// The layout's id (see `DeckOutline::masters`); absent for a master.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_id: Option<u32>,
     /// Hidden from slideshows.
     pub hidden: bool,
     /// Title placeholder text.
@@ -354,6 +366,10 @@ pub struct DeckOutline {
     pub slides: Vec<SlideOutline>,
     /// Layouts available to new slides.
     pub layouts: Vec<LayoutInfo>,
+    /// Slide masters with their layouts (PowerPoint's Slide Master view), in
+    /// order. Their ids address them in edit operations and reads as slide
+    /// ids do.
+    pub masters: Vec<MasterOutline>,
     /// The first master's theme colors as `[slot, #RRGGBB]` (`dk1`, `lt1`, `accent1`...).
     pub theme_colors: Vec<(String, String)>,
     /// The first master's theme fonts (what `+mj-lt` and `+mn-lt` name).
@@ -671,6 +687,7 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], media: &Media) -> ShapeOutlin
         name: s.name.clone(),
         kind,
         placeholder: s.placeholder.as_ref().map(|p| p.kind.clone()),
+        placeholder_index: s.placeholder.as_ref().map(|p| p.idx),
         x,
         y,
         w,
@@ -708,18 +725,15 @@ impl Presentation {
     }
 
     /// The outline of the slide at `index`, with table rows measured with
-    /// `fonts` exactly as the renderer measures them.
+    /// `fonts` exactly as the renderer measures them. `index` may instead be
+    /// the id of a slide master or layout, which outlines that page.
     pub fn slide_outline_with_fonts(
         &mut self,
         index: usize,
         fonts: &FontDb,
     ) -> Result<SlideOutline> {
-        let entry = self
-            .slides
-            .get(index)
-            .cloned()
-            .ok_or_else(|| Error::NotFound(format!("slide {index}")))?;
-        let ctx = self.slide_context(index)?;
+        let page = self.page(index)?;
+        let ctx = self.page_context(index)?;
         let walk = WalkCtx {
             ctx: &ctx,
             inherit: Inherit::Slide,
@@ -751,25 +765,31 @@ impl Presentation {
                     .join(" ")
             })
             .filter(|t| !t.trim().is_empty());
-        let layout = ctx
-            .layout
-            .as_ref()
-            .and_then(|l| {
-                l.doc
-                    .child(l.doc.root(), Ns::P, "cSld")
-                    .and_then(|c| l.doc.attr(c, "name"))
-                    .map(str::to_owned)
-            })
-            .unwrap_or_default();
         let hidden = ctx.slide.doc.attr_bool(ctx.slide.doc.root(), "show") == Some(false);
+        let (index, layout, layout_id) = match page.slide {
+            Some(index) => {
+                let layout = ctx.layout.as_ref().map(|l| l.name.clone());
+                let layout_id = match &layout {
+                    Some(part) => masters::layout_id(self, part)?,
+                    None => None,
+                };
+                let name = ctx.layout.as_ref().map(masters::page_name);
+                (index, name.unwrap_or_default(), layout_id)
+            }
+            None => masters::page_position(self, &ctx, page.id)?,
+        };
         Ok(SlideOutline {
-            id: entry.id,
+            id: page.id,
             index,
             layout,
+            layout_id,
             hidden,
             title,
             shapes: outlines,
-            notes: notes_text(self, entry.id)?,
+            notes: match page.slide {
+                Some(_) => notes_text(self, page.id)?,
+                None => None,
+            },
             transition: crate::edit::transition::read(&ctx.slide.doc),
             animations: crate::edit::animation::read(&ctx.slide.doc),
             header_footer: crate::edit::header_footer::read(&ctx.slide.doc),
@@ -814,6 +834,7 @@ impl Presentation {
             height: emu_to_pt(self.size.1 as f64),
             slides,
             layouts: crate::edit::layouts(self)?,
+            masters: masters::outline(self)?,
             theme_colors,
             theme_fonts,
             table_styles: self.table_style_gallery()?,
@@ -846,6 +867,7 @@ impl Presentation {
     }
 
     /// Lays out the text of a shape (or table cell) for caret placement.
+    /// `index` is the slide's position, or a slide master's or layout's id.
     ///
     /// Returns `None` when the shape cannot hold text. Shapes inside groups
     /// are supported; their transform includes the group's.
@@ -859,7 +881,7 @@ impl Presentation {
         if let Some(cell) = cell {
             return self.cell_text_layout(index, shape, cell, fonts);
         }
-        let ctx = self.slide_context(index)?;
+        let ctx = self.page_context(index)?;
         let walk = WalkCtx {
             ctx: &ctx,
             inherit: Inherit::Slide,
@@ -918,7 +940,7 @@ impl Presentation {
         cell: CellRef,
         fonts: &FontDb,
     ) -> Result<Option<TextLayoutInfo>> {
-        let ctx = self.slide_context(index)?;
+        let ctx = self.page_context(index)?;
         let walk = WalkCtx {
             ctx: &ctx,
             inherit: Inherit::Slide,
