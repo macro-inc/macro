@@ -520,3 +520,65 @@ fn drawings_in_table_cells_are_positioned_in_the_cell() {
         rects[0].x
     );
 }
+
+const PAGE: &str = r#"<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>"#;
+
+/// A section break paragraph ending a section of `cols` columns that
+/// started `how` (`continuous` or `nextPage`).
+fn section_end(how: &str, cols: &str) -> String {
+    format!(r#"<w:p><w:pPr><w:sectPr><w:type w:val="{how}"/>{PAGE}{cols}</w:sectPr></w:pPr></w:p>"#)
+}
+
+fn para(t: &str) -> String {
+    format!("<w:p><w:r><w:t>{t}</w:t></w:r></w:p>")
+}
+
+#[test]
+fn sections_on_one_page_stack_their_columns() {
+    let two = r#"<w:cols w:num="2" w:space="720"/>"#;
+    let body = format!(
+        r#"{}{}{}<w:p><w:r><w:br w:type="column"/><w:t>Right</w:t></w:r></w:p>{}{}<w:sectPr><w:type w:val="continuous"/>{PAGE}</w:sectPr>"#,
+        para("Intro"),
+        section_end("nextPage", ""),
+        para("Left"),
+        section_end("continuous", two),
+        para("After"),
+    );
+    let l = layout(&body, &arial_10());
+    let intro = find(&l, 0, "Intro");
+    let h = intro.line().height;
+    let (left, right, after) = (
+        find(&l, 0, "Left"),
+        find(&l, 0, "Right"),
+        find(&l, 0, "After"),
+    );
+    // The two columns start below the first section (its empty section
+    // break paragraph included), the second at 72 + 216 + 36.
+    assert!((left.y - (72.0 + 2.0 * h)).abs() < 0.01, "{}", left.y);
+    assert!((right.y - left.y).abs() < 0.01, "{}", right.y);
+    assert!((right.x - 324.0).abs() < 0.01, "{}", right.x);
+    // The next section starts below both columns: the column break and the
+    // empty paragraph ending the columns take no room.
+    assert!((after.y - (left.y + h)).abs() < 0.01, "{}", after.y);
+}
+
+#[test]
+fn paragraphs_going_on_in_a_wider_column_fill_it() {
+    let cols = r#"<w:cols w:num="2" w:space="720" w:equalWidth="0"><w:col w:w="2000" w:space="720"/><w:col w:w="6640"/></w:cols>"#;
+    let words = "word ".repeat(600);
+    let body = format!("{}<w:sectPr>{PAGE}{cols}</w:sectPr>", para(words.trim()));
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let (narrow, wide): (Vec<&PlacedLine>, Vec<&PlacedLine>) =
+        ls.iter().copied().partition(|p| p.x < 150.0);
+    assert!(!narrow.is_empty() && !wide.is_empty());
+    // The second column is 332pt wide: its lines hold more than the first
+    // column's 100pt.
+    let widest = wide.iter().map(|p| p.line().width).fold(0.0f32, f32::max);
+    assert!(widest > 300.0, "{widest}");
+    assert!(
+        (wide[0].x - (72.0 + 100.0 + 36.0)).abs() < 0.01,
+        "{}",
+        wide[0].x
+    );
+}

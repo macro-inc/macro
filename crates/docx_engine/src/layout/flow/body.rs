@@ -5,13 +5,13 @@ mod notes;
 mod tables;
 
 use super::super::format::TableCtx;
-use super::super::inline::FieldValues;
+use super::super::inline::{FieldValues, Kind};
 use super::super::lines::LineEnd;
 use super::super::{Chrome, Item, Page, ParaBox, StoryRef};
 use super::anchors::PageGeom;
 use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
-    para_box, prev_record, space_before, stack_story, table_box,
+    para_box, prev_record, rebreak, space_before, stack_story, table_box,
 };
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
@@ -23,6 +23,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 const EPS: f32 = 0.01;
+
+/// Columns this close in width take the same line breaks.
+const COLUMN_SLACK: f32 = 0.5;
 
 /// Default distance of line numbers from the text.
 const LINE_NUMBER_DISTANCE: f32 = 18.0;
@@ -46,6 +49,11 @@ struct Cur {
     /// Vertical bands of the page that body text skips (frames that allow
     /// no text beside them).
     bands: Vec<(f32, f32)>,
+    /// Where the columns of the current section start on this page (below
+    /// what earlier sections left on it).
+    sect_top: f32,
+    /// The lowest point the current section's columns reached on this page.
+    sect_bottom: f32,
 }
 
 pub(in crate::layout) struct Flow<'e, 'a> {
@@ -319,6 +327,8 @@ impl<'e, 'a> Flow<'e, 'a> {
             hard,
             line_on_page: 0,
             bands: Vec::new(),
+            sect_top: top,
+            sect_bottom: top,
         });
     }
 
@@ -409,8 +419,10 @@ impl<'e, 'a> Flow<'e, 'a> {
         };
         if col + 1 < cols {
             if let Some(c) = &mut self.cur {
+                // The next column starts where the section started on the page.
+                c.sect_bottom = c.sect_bottom.max(c.y);
                 c.col += 1;
-                c.y = c.top;
+                c.y = c.sect_top;
                 c.placed_any = false;
                 c.hard = hard;
             }
@@ -434,10 +446,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 return Arc::clone(pb);
             }
         }
-        let grid = {
-            let s = self.section();
-            (s.grid.snap_lines && s.grid.line_pitch > 0.0).then_some(s.grid.line_pitch)
-        };
+        let grid = self.grid();
         let pb = para_box(
             self.env,
             b,
@@ -560,8 +569,14 @@ impl<'e, 'a> Flow<'e, 'a> {
                         if same_size {
                             self.section_started[s] = true;
                             if let Some(c) = &mut self.cur {
+                                // Below everything the previous section's
+                                // columns hold on the page.
+                                let y = c.sect_bottom.max(c.y);
                                 c.sect = s;
                                 c.col = 0;
+                                c.y = y;
+                                c.sect_top = y;
+                                c.sect_bottom = y;
                             }
                         } else {
                             self.start_page(s, true);
@@ -578,6 +593,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 }
             }
             match b.kind {
+                BlockKind::Paragraph if self.bare_section_end(blocks, i, section_of) => {}
                 BlockKind::Paragraph => match self.place_frame(blocks, i) {
                     Some(end) => skip_to = end,
                     None => self.place_paragraph(blocks, i),
@@ -594,8 +610,8 @@ impl<'e, 'a> Flow<'e, 'a> {
 
     fn place_paragraph(&mut self, blocks: &[&Block], i: usize) {
         let b = blocks[i];
-        let (col_left, width) = self.col_geom();
-        let pb = self.para(b, width);
+        let (_, width) = self.col_geom();
+        let mut pb = self.para(b, width);
         let props = pb.format.props.clone();
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         if props.page_break_before && !at_top {
@@ -614,6 +630,10 @@ impl<'e, 'a> Flow<'e, 'a> {
                 self.next_column(false);
             }
         }
+        // The paragraph goes in the column it is now in.
+        let (mut col_left, mut width) = (0.0, width);
+        let mut li = 0;
+        self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         let hard = self.cur.as_ref().is_some_and(|c| c.hard);
         let first_in_doc = self.pages.is_empty() && at_top;
@@ -633,8 +653,7 @@ impl<'e, 'a> Flow<'e, 'a> {
         // Where the paragraph's floating drawings are positioned from.
         let mut anchor_top = self.reserve_float_bands(&pb, col_left, width);
         let mut join = self.border_join(blocks, i, &props, self.prev.as_ref());
-        let lines_len = pb.lines.lines.len();
-        let mut li = 0;
+        let mut lines_len = pb.lines.lines.len();
         let mut first_fragment = true;
         while li < lines_len {
             self.skip_bands();
@@ -693,6 +712,8 @@ impl<'e, 'a> Flow<'e, 'a> {
                         continue;
                     }
                     self.next_column(false);
+                    self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
+                    lines_len = pb.lines.lines.len();
                     // A new column starts a new border box.
                     join.prev = false;
                     anchor_top = self.reserve_float_bands(&pb, col_left, width);
@@ -777,9 +798,65 @@ impl<'e, 'a> Flow<'e, 'a> {
                         }
                     }
                 }
+                self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
+                lines_len = pb.lines.lines.len();
             }
         }
         self.prev = Some(prev_record(&props));
+    }
+
+    /// Takes the current column's left edge and width for a paragraph
+    /// whose lines from `li` on are still to be placed, breaking those
+    /// lines again when the column is not as wide as they were broken for.
+    fn follow_column(
+        &mut self,
+        pb: &mut Arc<ParaBox>,
+        li: &mut usize,
+        col_left: &mut f32,
+        width: &mut f32,
+    ) {
+        let (left, w) = self.col_geom();
+        *col_left = left;
+        if (w - *width).abs() <= COLUMN_SLACK {
+            return;
+        }
+        *width = w;
+        if let Some(line) = pb.lines.lines.get(*li) {
+            *pb = rebreak(self.env, pb, w, line.start, self.grid());
+            *li = 0;
+        }
+    }
+
+    /// Whether `blocks[i]` is an empty paragraph that only ends a section of
+    /// several columns before a section going on on the same page: Word
+    /// gives it no room when it ends the columns.
+    fn bare_section_end(&mut self, blocks: &[&Block], i: usize, section_of: &[usize]) -> bool {
+        let (Some(&s), Some(&next)) = (section_of.get(i), section_of.get(i + 1)) else {
+            return false;
+        };
+        if s == next
+            || self.sections.get(s).is_none_or(|c| c.columns.len() < 2)
+            || self
+                .sections
+                .get(next)
+                .is_none_or(|n| n.start != SectionStart::Continuous)
+        {
+            return false;
+        }
+        let (_, width) = self.col_geom();
+        let pb = self.para(blocks[i], width);
+        pb.inline.label_len == 0
+            && pb
+                .inline
+                .clusters
+                .iter()
+                .all(|c| matches!(c.kind, Kind::End | Kind::Zero))
+    }
+
+    /// The pitch lines snap to in the current section, if they do.
+    fn grid(&self) -> Option<f32> {
+        let s = self.section();
+        (s.grid.snap_lines && s.grid.line_pitch > 0.0).then_some(s.grid.line_pitch)
     }
 
     /// How many lines from `li` fit in the current column, and the note

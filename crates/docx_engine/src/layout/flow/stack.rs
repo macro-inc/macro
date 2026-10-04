@@ -3,7 +3,7 @@
 
 use super::super::format::{ParaFormat, TableCtx};
 use super::super::inline::{self, FieldValues, InlineCtx, Kind};
-use super::super::lines::{LineCtx, break_lines};
+use super::super::lines::{LineCtx, break_lines, break_lines_from};
 use super::super::table::{CellGeom, TableGeom, geometry};
 use super::super::{Item, ParaBox, PlacedDrawing, PlacedLine, StoryRef};
 use super::Env;
@@ -209,6 +209,40 @@ pub fn prev_record(props: &ParaProps) -> PrevPara {
     }
 }
 
+/// How lines of a paragraph formatted `props` break in a text area `width`
+/// wide.
+fn line_ctx<'a>(env: &Env<'_>, props: &'a ParaProps, width: f32, grid: Option<f32>) -> LineCtx<'a> {
+    let settings = &env.doc.parts().settings;
+    LineCtx {
+        props,
+        width,
+        default_tab: settings.default_tab,
+        no_expand_shift_return: settings.do_not_expand_shift_return,
+        grid: grid.filter(|_| props.snap_to_grid),
+        shrink_spaces: settings.compat_mode >= 15,
+    }
+}
+
+/// The rest of a laid-out paragraph, from cluster `from` on, broken again
+/// for a text area `width` wide: a paragraph going on in a column of
+/// another width.
+pub(in crate::layout) fn rebreak(
+    env: &Env<'_>,
+    pb: &ParaBox,
+    width: f32,
+    from: usize,
+    grid: Option<f32>,
+) -> Arc<ParaBox> {
+    let ctx = line_ctx(env, &pb.format.props, width, grid);
+    Arc::new(ParaBox {
+        story: pb.story.clone(),
+        block: pb.block.clone(),
+        inline: pb.inline.clone(),
+        lines: break_lines_from(&pb.inline, &ctx, None, from),
+        format: Arc::clone(&pb.format),
+    })
+}
+
 /// Lays out one paragraph into a box.
 pub(in crate::layout) fn para_box(
     env: &Env<'_>,
@@ -260,20 +294,7 @@ pub(in crate::layout) fn para_box(
         markup: env.options.markup,
     };
     let built = inline::build(block, &format, label, &ctx);
-    let props = &format.props;
-    let grid = grid.filter(|_| props.snap_to_grid);
-    let lines = break_lines(
-        &built,
-        &LineCtx {
-            props,
-            width,
-            default_tab: env.doc.parts().settings.default_tab,
-            no_expand_shift_return: env.doc.parts().settings.do_not_expand_shift_return,
-            grid,
-            shrink_spaces: env.doc.parts().settings.compat_mode >= 15,
-        },
-        None,
-    );
+    let lines = break_lines(&built, &line_ctx(env, &format.props, width, grid), None);
     let pb = Arc::new(ParaBox {
         story: story.clone(),
         block: block.id.clone(),

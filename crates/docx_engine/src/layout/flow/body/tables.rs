@@ -49,7 +49,7 @@ pub(in crate::layout::flow) fn float_y(
 
 impl Flow<'_, '_> {
     pub(super) fn place_table(&mut self, b: &Block) {
-        let (col_left, width) = self.col_geom();
+        let (mut col_left, width) = self.col_geom();
         if let (Some(prev), Some(c)) = (self.prev.take(), &mut self.cur)
             && c.placed_any
         {
@@ -103,6 +103,13 @@ impl Flow<'_, '_> {
                 if next {
                     self.next_column(false);
                     moved = true;
+                    // Rows go on in the new column; a floating table keeps
+                    // its place across the page.
+                    let (left, _) = self.col_geom();
+                    if float.is_some() {
+                        tb.geom.left += col_left - left;
+                    }
+                    col_left = left;
                     if let Some(pos) = &float {
                         self.float_down(pos, height, false);
                     }

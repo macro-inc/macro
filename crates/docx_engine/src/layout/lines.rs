@@ -201,6 +201,18 @@ fn is_content(kind: Kind) -> bool {
 
 /// Breaks a paragraph into lines.
 pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion<'_>>) -> Lines {
+    break_lines_from(inline, ctx, exclude, 0)
+}
+
+/// Breaks the rest of a paragraph, from cluster `start` on, into lines (a
+/// paragraph going on in a column of another width). The lines' tops
+/// count from the first of them.
+pub fn break_lines_from(
+    inline: &Inline,
+    ctx: &LineCtx<'_>,
+    exclude: Option<Exclusion<'_>>,
+    start: usize,
+) -> Lines {
     let p = ctx.props;
     let n = inline.clusters.len();
     let shrink = if ctx.shrink_spaces && p.jc == Align::Justify {
@@ -222,9 +234,9 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
     let mut leaders: Vec<(usize, TabLeader)> = Vec::new();
     let mut lines: Vec<Line> = Vec::new();
     let mut top = 0.0f32;
-    let mut i = 0;
+    let mut i = start.min(n);
     while i < n {
-        let first = lines.is_empty();
+        let first = lines.is_empty() && start == 0;
         let mut left = p.ind_left + if first { p.ind_first } else { 0.0 };
         let mut right = ctx.width - p.ind_right;
         if let Some(ex) = exclude {
@@ -423,7 +435,13 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
             }
         }
         leaders.extend(line_leaders);
-        let (height, baseline) = line_height(inline, i, j, ctx, &adv);
+        let (mut height, mut baseline) = line_height(inline, i, j, ctx, &adv);
+        if matches!(ends, LineEnd::PageBreak | LineEnd::ColumnBreak) && !has_content && j < n {
+            // A paragraph that starts with a break starts after it: the
+            // break takes no room where it is.
+            height = 0.0;
+            baseline = 0.0;
+        }
         lines.push(Line {
             start: i,
             end: j,
