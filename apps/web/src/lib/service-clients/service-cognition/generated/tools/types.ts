@@ -6129,7 +6129,7 @@ export interface ProjectItem {
   updatedAt?: string | null;
 }
 /**
- * Read a routine’s saved configuration and recent run history, including status and transcript references. Accepts personal routines and routines explicitly shared with your team; reading a transcript still requires its own access.
+ * Read a routine owned by the authenticated user, including its saved configuration and recent run history. Reading a run transcript still requires its own access.
  */
 export interface ReadRoutine {
   /**

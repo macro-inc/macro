@@ -118,7 +118,7 @@ impl AsyncTool<RoutineToolContext> for ListRoutines {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadRoutine",
-    description = "Read a routine’s saved configuration and recent run history, including status and transcript references. Accepts personal routines and routines explicitly shared with your team; reading a transcript still requires its own access."
+    description = "Read a routine owned by the authenticated user, including its saved configuration and recent run history. Reading a run transcript still requires its own access."
 )]
 pub struct ReadRoutine {
     /// Routine UUID from CreateRoutine or ListRoutines.

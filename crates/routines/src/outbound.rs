@@ -143,11 +143,16 @@ impl RoutineService for RoutineClient {
     }
     async fn read(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<RoutineDetails> {
         let routine = self
-            .request::<WireRoutine>(user, Method::GET, &format!("routines/{id}"), None)
+            .request::<WireRoutine>(user, Method::GET, &format!("scheduled-actions/{id}"), None)
             .await?
             .into();
         let runs = self
-            .request::<Vec<Value>>(user, Method::GET, &format!("routines/{id}/history"), None)
+            .request::<Vec<Value>>(
+                user,
+                Method::GET,
+                &format!("scheduled-actions/{id}/history"),
+                None,
+            )
             .await?
             .into_iter()
             .take(50)
