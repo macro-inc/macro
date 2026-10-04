@@ -371,7 +371,7 @@ export function EditPointsOverlay(props: {
       <ContextMenu.Trigger
         as="div"
         ref={root}
-        data-testid="pptx-edit-points"
+        data-testid="pptx-edit-points-overlay"
         class="absolute inset-0 touch-none select-none"
         style={{ cursor: cursor() }}
         onPointerDown={onPointerDown}

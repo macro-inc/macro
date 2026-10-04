@@ -153,7 +153,7 @@ async function enterEditPoints(page: Page) {
   await page.getByTestId('pptx-tab-shape-format').click();
   await page.getByTestId('pptx-edit-shape').click();
   await page.getByTestId('pptx-edit-points').click();
-  await expect(page.getByTestId('pptx-edit-points')).toBeVisible();
+  await expect(page.getByTestId('pptx-edit-points-overlay')).toBeVisible();
 }
 
 async function dragSlide(
@@ -264,7 +264,7 @@ test('Edit Points drags vertices, adds and deletes points, and converts them', a
 
   // Esc leaves Edit Points, back to the selected shape.
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('pptx-edit-points')).toHaveCount(0);
+  await expect(page.getByTestId('pptx-edit-points-overlay')).toHaveCount(0);
   await expect(page.getByTestId('pptx-selection')).toBeVisible();
   s = (await slideShapes(page, index))[0];
   expect(s.id).toBe(id);
@@ -335,7 +335,7 @@ test('Edit Points on a rotated shape follows the pointer, and the menu exits', a
   const empty = await screen(page, 60, 480);
   await page.mouse.click(empty.x, empty.y, { button: 'right' });
   await page.getByRole('menuitem', { name: 'Exit Edit Points' }).click();
-  await expect(page.getByTestId('pptx-edit-points')).toHaveCount(0);
+  await expect(page.getByTestId('pptx-edit-points-overlay')).toHaveCount(0);
 });
 
 test('Merge Shapes: Union, Subtract, and Fragment of overlapping shapes', async ({

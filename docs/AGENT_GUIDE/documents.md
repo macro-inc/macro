@@ -524,7 +524,7 @@ Layout and test hooks:
 - **Edit Shape** (Shape Format ▸ `pptx-edit-shape`): Change Shape
   (`pptx-change-shape`, then `pptx-shape-<preset>`) and **Edit Points**
   (`pptx-edit-points`; also right-click a shape ▸ Edit Points). Edit Points
-  (`pptx-edit-points` overlay) draws the outline as a red path
+  (`pptx-edit-points-overlay`) draws the outline as a red path
   (`pptx-edit-points-path`) with black square vertices (`pptx-edit-point`,
   `data-selected` on the clicked one, whose Bézier handles show as white
   squares `pptx-edit-points-handle-in|out`; on a straight side they sit a
