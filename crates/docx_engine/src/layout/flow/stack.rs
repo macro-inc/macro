@@ -525,12 +525,12 @@ pub(in crate::layout) fn stack_blocks(
                 );
                 let props = &pb.format.props;
                 let gap_top = y;
-                y += space_before(
-                    props,
-                    prev.as_ref(),
-                    i == 0,
-                    !env.doc.parts().settings.html_auto_spacing,
-                );
+                let sum = !env.doc.parts().settings.html_auto_spacing;
+                let before = space_before(props, prev.as_ref(), i == 0, sum);
+                y += before;
+                // Floating drawings are positioned from the paragraph's top,
+                // above its own space before.
+                let para_top = y - before.min(space_before(props, None, i == 0, sum));
                 let next = blocks
                     .get(i + 1)
                     .filter(|n| n.kind == BlockKind::Paragraph)
@@ -554,7 +554,7 @@ pub(in crate::layout) fn stack_blocks(
                     &mut out.items,
                     &mut out.anchors,
                     &mut out.notes,
-                    top,
+                    para_top,
                 );
                 y += h + bb;
                 if props.shading.is_some() || props.borders.any() {

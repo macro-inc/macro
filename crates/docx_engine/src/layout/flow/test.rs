@@ -639,3 +639,29 @@ fn multiple_spacing_below_the_last_line_may_run_into_the_margin() {
     assert!(last.y + line.height > 720.0, "{}", last.y);
     assert!(last.y + line.height / 3.0 <= 720.0, "{}", last.y);
 }
+
+#[test]
+fn paragraph_positions_count_from_above_the_space_before() {
+    // A shape 10pt below the top of a paragraph with 12pt space before,
+    // after a line of text, in the body and in a table cell.
+    let shape = shape_paragraph("paragraph", 0, 10, None).replacen(
+        "<w:p>",
+        r#"<w:p><w:pPr><w:spacing w:before="240"/></w:pPr>"#,
+        1,
+    );
+    let intro = para("Intro");
+    let cell = format!(
+        r#"<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>{intro}{shape}</w:tc></w:tr></w:tbl><w:p/>"#
+    );
+    for body in [format!("{intro}{shape}"), cell] {
+        let l = layout(&format!("{body}{LETTER}"), &arial_10());
+        let h = find(&l, 0, "Intro").line().height;
+        let rects = drawing_rects(&l);
+        assert_eq!(rects.len(), 1);
+        assert!(
+            (rects[0].y - (72.0 + h + 10.0)).abs() < 0.01,
+            "{}",
+            rects[0].y
+        );
+    }
+}
