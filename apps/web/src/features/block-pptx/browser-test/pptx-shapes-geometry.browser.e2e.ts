@@ -281,7 +281,7 @@ test('Edit Points on a rotated shape follows the pointer, and the menu exits', a
   const id = ids[0];
   await page.evaluate(
     async ({ index, id }) => {
-      // Turn it through the editor's own engine and show the change.
+      // Turn and flip it (an edit made elsewhere, which the editor reloads).
       const deck = await window.pptxFixture.engine()?.outline();
       const slide = deck?.slides[index].id ?? 0;
       await window.pptxFixture.externalEdit([
@@ -295,7 +295,6 @@ test('Edit Points on a rotated shape follows the pointer, and the menu exits', a
     .toBe(30);
   await page.getByTestId('pptx-thumbnail').nth(index).click();
   await selectAt(page, 380, 215);
-  await page.getByRole('button', { name: 'Shape Format' }).count();
   // Right-click the shape ▸ Edit Points.
   const middle = await screen(page, 380, 215);
   await page.mouse.click(middle.x, middle.y, { button: 'right' });
