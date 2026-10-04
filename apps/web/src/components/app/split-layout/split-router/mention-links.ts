@@ -3,12 +3,13 @@ import {
   BlockRegistry,
 } from '@app/lib/constants/block-registry';
 import {
-  decodeRouteLayout,
-  getExternalSearchKeys,
-  parseRoutePathname,
-  SPLIT_PATH_SEPARATOR,
+  decodePane,
+  decodeSegment,
+  type Entry,
+  externalSearchKeys,
   type SplitReference,
   type SplitRoutesManifest,
+  splitPanePaths,
   useOptionalSplitRouter,
 } from '@app/lib/split-router';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -55,18 +56,18 @@ export function createMacroMentionLinkResolver(
     const link = parseInternalAppLink(url);
     if (!link) return;
 
-    const segments = parseRoutePathname(routes, link.path);
-    if (!segments) return;
-    const entries = decodeRouteLayout(routes, segments);
-    const paneCount =
-      segments.filter((segment) => segment === SPLIT_PATH_SEPARATOR).length + 1;
-    if (entries.length !== paneCount) return;
+    const panes = splitPanePaths(link.path).map((raw) =>
+      decodePane(routes, raw.map(decodeSegment))
+    );
+    const everyPaneMatched = panes.every((route) => route !== undefined);
+    if (!everyPaneMatched) return;
     // A copied layout URL lists panes from left to right without an active-pane id.
-    const entry = entries.at(-1);
-    if (!entry) return;
+    const route = panes.at(-1);
+    if (!route) return;
 
-    const leaf = entry.location.route.matches.at(-1);
+    const leaf = route.matches.at(-1);
     if (!leaf) return;
+
     const reference = routes.byId
       .get(leaf.id)
       ?.definition.toReference?.(leaf.params);
@@ -76,7 +77,8 @@ export function createMacroMentionLinkResolver(
       block: reference.type,
       params: {},
     };
-    const externalKeys = getExternalSearchKeys(routes, [entry]);
+    const entry: Entry = { id: 'mention', location: { route } };
+    const externalKeys = new Set(externalSearchKeys(routes, [entry]));
     new URLSearchParams(link.query).forEach((value, key) => {
       if (key !== 'referral_code' && externalKeys.has(key)) {
         mention.params[key] = value;

@@ -52,7 +52,7 @@ export type CommentsContextType = {
   /** Comment writes through the shared message API. */
   messageOperations: MessageCommentOperations;
   documentId: string;
-  documentType: 'md' | 'task' | 'snippet' | 'skill' | 'pdf';
+  documentType: 'md' | 'task' | 'snippet' | 'skill' | 'pdf' | 'write';
   highlightedCommentId: Accessor<CommentId | null>;
   /** Releases the comment-link highlight when the highlighted comment is clicked. */
   clearHighlightedComment?: () => void;

@@ -34,6 +34,8 @@ export const TypeIndicator = (props: { active: boolean }) => (
 export function FilterOptionItem(props: {
   label: string;
   icon?: () => JSX.Element;
+  /** Drawn in place of `label`. */
+  content?: () => JSX.Element;
   active: boolean;
   disabled?: boolean;
   closeOnSelect?: boolean;
@@ -61,7 +63,7 @@ export function FilterOptionItem(props: {
           props.active ? 'text-ink' : 'text-ink-muted'
         )}
       >
-        {props.label}
+        {props.content?.() ?? props.label}
       </span>
     </Dropdown.Item>
   );
@@ -89,6 +91,7 @@ export function FilterSubmenu<TId extends string>(props: {
     id: TId;
     label: string;
     icon?: () => JSX.Element;
+    content?: () => JSX.Element;
     disabled?: boolean;
   }[];
   isSelected: (id: TId) => boolean;
@@ -118,6 +121,7 @@ export function FilterSubmenu<TId extends string>(props: {
                   <FilterOptionItem
                     label={option.label}
                     icon={option.icon}
+                    content={option.content}
                     disabled={option.disabled}
                     active={props.isSelected(option.id)}
                     onSelect={() => props.onSelect(option.id)}
@@ -148,7 +152,9 @@ export function FilterSubmenu<TId extends string>(props: {
                         {option.icon?.()}
                       </span>
                     </Show>
-                    <span class="flex-1">{option.label}</span>
+                    <span class="flex-1">
+                      {option.content?.() ?? option.label}
+                    </span>
                     <Dropdown.ItemIndicator>
                       <CheckIcon class="size-3.5 text-accent" />
                     </Dropdown.ItemIndicator>

@@ -72,6 +72,15 @@ pub enum CollabSurfaceError {
     /// loudly instead of looking like a race to retry.
     #[error("this surface id was deleted and cannot be reused")]
     Gone,
+    /// The surface id is taken in the sync-service document namespace that
+    /// surfaces share: it names a document, or (for a new surface) already has
+    /// a session. A new surface only ever creates its own session.
+    #[error("this surface id is already in use")]
+    IdReserved,
+    /// The surface exists but has not proven its sync-service session is its
+    /// own (initialization failed or never ran), so it cannot be connected to.
+    #[error("collab surface is not ready")]
+    NotReady,
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),

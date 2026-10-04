@@ -33,6 +33,10 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use image_generation::domain::ports::{ImageGenerator, UnconfiguredImageGenerator};
 use image_generation::outbound::gemini::GeminiImageGenerator;
 use lexical_client::LexicalClient;
@@ -244,8 +248,10 @@ pub async fn build_tool_service_context_from_env(
     );
     let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
         Arc::new(email_service.clone());
-    let foreign_entity_service =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        PgGithubPullRequestRepo::new(pool.clone()),
+    );
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -255,7 +261,7 @@ pub async fn build_tool_service_context_from_env(
             call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
         ),
         crm::domain::service::NoOpCrmService,
-        foreign_entity_service,
+        github_pull_request_service,
         reminders::domain::service::NoOpRemindersService,
     ));
 

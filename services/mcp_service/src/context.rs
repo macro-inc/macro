@@ -30,6 +30,10 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
     AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
@@ -191,8 +195,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
-    let foreign_entity_service =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        PgGithubPullRequestRepo::new(db.clone()),
+    );
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
@@ -202,7 +208,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
         ),
         crm::domain::service::NoOpCrmService,
-        foreign_entity_service,
+        github_pull_request_service,
         reminders::domain::service::NoOpRemindersService,
     ));
 

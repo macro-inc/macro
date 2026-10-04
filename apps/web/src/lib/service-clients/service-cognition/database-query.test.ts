@@ -40,6 +40,11 @@ describe('database AI transport boundaries', () => {
       'google/gemini-3.8-flash'
     );
     expect(complete.mock.calls[0][0].model).toBe('google/gemini-3.8-flash');
+    const instructions = complete.mock.calls[0][0].additional_instructions;
+    expect(instructions).toContain('registered QueryDatabase tool reference');
+    expect(instructions).not.toContain('no aliases on items');
+    expect(instructions).not.toContain('GROUP BY both columns');
+    expect(instructions).not.toContain('schema changes are tools, not SQL');
     expect(complete.mock.calls[0][0].toolset).toEqual({
       type: 'databases_read_only',
     });

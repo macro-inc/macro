@@ -47,18 +47,27 @@ instead. Keyboard list navigation only moves focus; press Enter to open the focu
 
 With `enable-tasks-reviews` enabled (on by default in development), a
 `Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
-It opens a separate `/app/reviews` shell with `Involving me` first and selected
-by default, followed by `All PRs` and `Authored by me`. The selected tab is
-stored in the URL and survives opening a PR and returning through the breadcrumb.
-The list contains accessible GitHub pull requests of any status. `Involving me`
+It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
+`Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
+`Involves me` is selected by default. The selected tab is stored in the URL and
+survives opening a PR and returning through the breadcrumb.
+The list contains accessible GitHub pull requests of any status. `Involves me`
 uses the server's participant filter for your linked GitHub account: author,
 requested reviewer, assignee, commenter, or reviewer. Participant IDs are retained
 across partial GitHub refreshes, so this is not strictly a list of current
 review requests.
-`Authored by me` matches the linked GitHub login or user ID. If the link-status
-endpoint has no identity, the list explains why Authored by me is unavailable.
-Search, repository and author filters, and Updated/Created sort controls appear
-above the list. PR rows use the shared entity layout with selection checkboxes,
+`Authored by me`, `Assigned to me`, and `Review requests` match the linked
+GitHub user ID. If the link-status endpoint has no identity, the list explains
+why the tab is unavailable.
+Search, filter, and sort controls appear above the list. Filters cover
+repository, author, assignee, label, and, when a GitHub identity is linked,
+reviews (Reviewed by you, Not reviewed by you, and Awaiting review from you).
+Saved review selections stay inactive, including their filter badge and empty-state
+copy, while the GitHub identity is unavailable; they resume when it returns.
+Sort offers Recently updated, Least recently updated, Newest, and Oldest. When visible PRs
+have GitHub labels, a Labels section below Favorites lists them with their
+colors; choosing a label shows only PRs with it, and choosing it again clears
+it. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
 authors fall back to GitHub names. The virtualized list fetches more pages as
@@ -72,17 +81,38 @@ context menu can remove the favorite. PR favorites also open in Reviews from the
 global Favorites sidebar or command menu.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
+Opening a PR refreshes it from GitHub in the background for viewers with a
+linked GitHub account, so labels, reviewers, and review state catch up without
+waiting for GitHub's next webhook. A successful refresh also reloads the Changes
+summary, so new commits replace the previous diff range.
 Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
 to the Reviews detail. When the flag is off, the Reviews shortcut is hidden and
 opening `/app/reviews` redirects to `/app/tasks` after flags load. Copied PR
 detail links still work; check both URLs with the flag off.
 
-Check all three tab URLs, author avatars and display names, row selection and
+The PR header has a **Changes** toggle (`aria-pressed`) with the diff's `+N −M`
+at the PR's current base and head. It opens the same resizable Changes pane as
+an agent session (see "Reviewing a linked GitHub pull request" in
+[AI chat](ai-chat.md)) beside the PR, read-only: there is no review-note gutter,
+notes chip, or hand-off card. The PR's split stores the pane in
+`s<N>.changes.pane` and `s<N>.changes.style`, the same as a session, until you
+leave the PR or close its split. The first view of a base and head reads GitHub; later
+views, and agent sessions linked to the same PR, reuse the stored diff. An
+unavailable or oversized PR is explained in the pane.
+
+The Agent sessions side-panel section distinguishes loading PR details, loading
+sessions, failed requests, and an empty result. Failed session requests offer Retry.
+Hover a truncated session name to see its full name.
+
+Check all five tab URLs, the Labels section, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
 illustrated empty states, loading, errors, and pagination after filtering. Use
 Open in new split from a PR row's context menu; verify the Reviews list stays in
 the original split and the PR appears beside it. Open a favorite from the global
 sidebar, return through the breadcrumb, and open a copied link in a second split.
+Open a PR's Changes pane; check the file tree, a file's diff, **Unified / Split**,
+refresh after new commits, and that reloading with `s<N>.changes.pane` in the URL
+restores the pane. Check session loading/error/empty copy and full-name tooltips.
 Use existing PRs and do not modify hosted data.
 
 ## Create a task

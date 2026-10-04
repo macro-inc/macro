@@ -271,6 +271,7 @@ where
         (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
         (status = 403, description = "No access to the parent entity", body = ErrorResponse),
         (status = 404, description = "The parent entity does not exist", body = ErrorResponse),
+        (status = 409, description = "The surface id is already in use", body = ErrorResponse),
         (status = 410, description = "The surface id was deleted and cannot be reused", body = ErrorResponse),
         (status = 422, description = "Malformed request body (plain text)"),
         (status = 500, body = ErrorResponse),
@@ -356,6 +357,7 @@ where
         (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "The surface is not initialized yet, or its id is in use", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -431,6 +433,7 @@ impl IntoResponse for CollabSurfaceError {
                 StatusCode::NOT_FOUND
             }
             CollabSurfaceError::Gone => StatusCode::GONE,
+            CollabSurfaceError::IdReserved | CollabSurfaceError::NotReady => StatusCode::CONFLICT,
             CollabSurfaceError::BadRequest(_) => StatusCode::BAD_REQUEST,
             CollabSurfaceError::AccessDenied => StatusCode::FORBIDDEN,
             CollabSurfaceError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,

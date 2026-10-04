@@ -1,11 +1,11 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
   projectTaskRoute,
   tasksSplitRoute,
-} from '@app/features/tasks-view/route';
-import { useNavigate } from '@app/lib/split-router';
+} from '@app/routes/routes';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {

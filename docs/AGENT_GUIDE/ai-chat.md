@@ -901,7 +901,8 @@ Existing announcement chips remain locked to the turn they announced.
 
 Sessions with a linked GitHub pull request capture that PR's diff when each
 turn ends, regardless of the coding runtime. Unpushed workspace changes and
-branches without a PR are not included. The session header gains a **Changes**
+branches without a PR are not included. The capture is the same stored diff the
+PR's Changes pane in Reviews shows for that base and head. The session header gains a **Changes**
 toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
 Chat sessions on Macro's in-memory harness have no repository, so they show
@@ -1013,6 +1014,14 @@ Regression check: open a long session, let a reply stream while at latest, then
 scroll several screens up and confirm output does not pull you down. Scroll down
 to reveal the overlay and return to latest. Repeat with a short session and on a
 physical phone while opening/dismissing the keyboard, both at latest and in history.
+
+After a harness server crashes and its lease expires, the session stops showing
+Working and becomes disconnected without requiring a new message. Its transcript
+is preserved; recovery does not replay the prompt or retry tool calls. Open chats
+refresh the durable history while preserving live events arriving during the read,
+so a session that has already resumed stays active. Verify that a transient history
+read failure retries automatically while live messages continue, and that closing
+the chat cancels pending retries.
 
 When a session reconnects using ACP load, the last committed conversation stays
 visible while history is reconstructed. A successful load replaces the transcript

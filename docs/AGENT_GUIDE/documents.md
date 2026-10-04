@@ -801,6 +801,39 @@ highlight; deleting a placeable's discussion removes the placeable. An anchor bo
 to a legacy annotation thread that was never imported stays hidden rather than
 shown as a bare highlight.
 
+## Word (DOCX) editor
+
+When `enable-docx-editor` is on, uploaded `.docx` files open at
+`/app/write/<id>` in an editor instead of the PDF preview. The flag is a
+PostHog flag that is on by default in dev mode; set `VITE_ENABLE_DOCX_EDITOR`
+to override it locally. The header label has a **Beta** badge. The page is the
+Docxodus WASM engine. Edits sync through the sync service, so every open copy
+updates live and shows each collaborator's caret with their name.
+
+- Editors get a toolbar labelled `Document formatting` with the following
+  controls: `Undo`, `Redo`, a `Paragraph style` select, bold, italic,
+  underline and strikethrough, `Bulleted list`, `Numbered list`, the alignment
+  buttons, `Insert table` and `Track changes`.
+- Typing is committed after about a second of idle time, or on blur. Wait
+  roughly 1.5 s before checking another tab for the text.
+- Editors see editable `Header` and `Footer` bands. Viewers and commenters get
+  a read-only paginated rendering instead.
+- To comment on any text, including table cells: select it, then click the
+  floating `Comment` button beside the selection. You can also use the toolbar
+  `Comment on selection` button or Mod+Alt+M. The draft opens a thread card in
+  the right margin. Posting creates a normal document discussion (`markdown`
+  anchor with `mark_id`), so it also appears in channels and notifications.
+- Highlighted text is drawn with the CSS Custom Highlight API rather than DOM
+  marks: query `CSS.highlights`, not `<mark>` elements.
+- Threads whose text was deleted are listed under `Comments on text that has
+  changed`, above the `Discussion` composer.
+- AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to
+  the first matching text the next time someone opens the file.
+- `Download .docx` exports the current collaborative state with every edit.
+  Comments stay in Macro threads and are not written into the file.
+- The stored upload is not rewritten yet. Search, the PDF export and AI
+  `ReadContent` still see the original file.
+
 ## Document history
 
 On desktop, open the title's file menu (**…**) and choose **History**. This

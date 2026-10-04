@@ -9,6 +9,7 @@ import {
   CallStatusBadge,
   SharedBadge,
 } from '../../components/Badges';
+import { GithubLabelPills } from '../../components/GithubLabelPill';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -171,6 +172,12 @@ export function WideLayout(props: LayoutProps) {
                   <Entity.Title entity={entity()} />
                 </span>
                 <GithubPullRequestChecksIndicator entity={entity()} />
+                {/* One row tall, so labels that don't fit wrap out of view. */}
+                <GithubLabelPills
+                  labels={entity().metadata.labels}
+                  class="h-5 max-w-[40%] flex-wrap overflow-hidden"
+                  pillClass="shrink-0"
+                />
               </span>
             )}
           </Match>

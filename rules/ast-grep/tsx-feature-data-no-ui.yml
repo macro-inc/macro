@@ -11,6 +11,10 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/scheduling/core/**
+  - apps/web/src/features/scheduling/context/**
+  - apps/web/src/features/scheduling/queries/**
+  - apps/web/src/features/scheduling/primitives/**
   - apps/web/src/features/crm/queries/**
   - apps/web/src/features/crm/primitives/**
   - apps/web/src/features/slack-import/queries/**
@@ -44,6 +48,8 @@ files:
   - apps/web/src/features/email-compose/primitives/**
   - apps/web/src/features/agent-changes/queries/**
   - apps/web/src/features/agent-changes/primitives/**
+  - apps/web/src/features/block-write/queries/**
+  - apps/web/src/features/block-write/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))

@@ -586,11 +586,71 @@ async fn comment_on_text_rejects_documents_that_are_not_markdown() {
         .unwrap_err();
 
     assert!(
-        error.description.contains("markdown documents only"),
+        error
+            .description
+            .contains("markdown and Word documents only"),
         "{}",
         error.description
     );
     assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_docx_text_posts_a_thread_the_editor_places_by_its_quote() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::default();
+    let response = comment_on_text("  thirty (30) days  ", Some(1))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "docx",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap();
+
+    // DOCX marks live in the collaborative document, not in Lexical: no
+    // editing-worker round trip.
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+    let posts = messages.posts.lock().unwrap();
+    let [(access, post)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_bot_on_document(access);
+    assert_eq!(post.thread_id, None);
+    let Some(NewThreadAnchor::Markdown { marked_text, .. }) = &post.anchor else {
+        panic!("expected a text anchor, got {:?}", post.anchor);
+    };
+    assert_eq!(marked_text.as_deref(), Some("thirty (30) days"));
+    assert_eq!(response.marked_text.as_deref(), Some("thirty (30) days"));
+    assert_eq!(response.thread_id, Uuid::from_u128(99));
+}
+
+#[tokio::test]
+async fn comment_on_docx_text_asks_for_a_unique_quote_instead_of_an_occurrence() {
+    let messages = FakeMessages::default();
+    let error = comment_on_text("the Agreement", Some(2))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "docx",
+                FakeEditingWorker::default(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("first appearance"),
+        "{}",
+        error.description
+    );
+    assert!(messages.posts.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
