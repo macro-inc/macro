@@ -21,6 +21,7 @@ import {
   redoEdit,
   renderSlide,
   renderSlideLayer,
+  renderSlideSpan,
   savePresentation,
   undoEdit,
 } from '@core/pptx-engine/client';
@@ -63,6 +64,13 @@ function readers(key: string) {
       mode: 'without' | 'only',
       shape: number
     ) => renderSlideLayer(key, index, width, mode, shape),
+    renderSpan: (
+      index: number,
+      width: number,
+      start: number,
+      end: number,
+      backdrop: boolean
+    ) => renderSlideSpan(key, index, width, start, end, backdrop),
     textLayout: (index: number, shape: number, cell?: CellRef) =>
       getTextLayout(key, index, shape, cell),
     presetPaths: getPresetPaths,

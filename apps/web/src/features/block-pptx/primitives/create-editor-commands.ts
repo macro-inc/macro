@@ -6,6 +6,8 @@
  */
 
 import type {
+  AnimationClass,
+  AnimationSpec,
   BorderEdges,
   BulletSpec,
   CellRef,
@@ -23,6 +25,7 @@ import type {
   TransitionPatch,
 } from '@core/pptx-engine/types';
 import type { PptxEditorContext } from '../context/pptx-editor-context';
+import { effectInfo, specOf } from '../core/animation-catalog';
 import { formatState, stepFontSize } from '../core/formatting';
 import { modulate } from '../core/palette';
 import {
@@ -992,8 +995,141 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     return apply([{ op: 'setAltText', slide: s.id, shape: shape.id, text }]);
   };
 
+  // ---- animations ------------------------------------------------------------
+
+  const animations = () => slide()?.animations ?? [];
+  const writeAnimations = (list: AnimationSpec[]) => {
+    const s = slide();
+    if (!s) return Promise.resolve(null);
+    return apply([{ op: 'setAnimations', slide: s.id, animations: list }]);
+  };
+  // Animation edits rewrite the slide's whole list, so each one waits for
+  // the last to land and reads the list afresh.
+  let animationQueue: Promise<unknown> = Promise.resolve();
+  const serial =
+    <A extends unknown[], T>(edit: (...args: A) => Promise<T>) =>
+    (...args: A): Promise<T> => {
+      const next = animationQueue.then(
+        () => edit(...args),
+        () => edit(...args)
+      );
+      animationQueue = next.catch(() => {});
+      return next;
+    };
+  /**
+   * Gives the selected shapes an effect, as the Animation gallery does:
+   * `replace` swaps the effect of their animations (or of the one picked
+   * in the pane), `add` adds one more (Add Animation), and the effect
+   * `none` removes their animations.
+   */
+  const animate = serial(
+    (
+      cls: AnimationClass,
+      effect: string,
+      mode: 'replace' | 'add',
+      picked?: number
+    ) => {
+      const ids = new Set(targets().map((t) => t.id));
+      if (ids.size === 0) return Promise.resolve(null);
+      const list = animations().map(specOf);
+      const holds = (a: AnimationSpec) => ids.has(a.shapeId);
+      if (effect === 'none')
+        return writeAnimations(list.filter((a) => !holds(a)));
+      const option = effectInfo(cls, effect)?.options?.[0]?.value;
+      const swap = (a: AnimationSpec): AnimationSpec => ({
+        shapeId: a.shapeId,
+        class: cls,
+        effect,
+        start: a.start,
+        delayMs: a.delayMs,
+        direction: option,
+        paragraph: a.paragraph,
+      });
+      const fresh = (shapeId: number): AnimationSpec => ({
+        shapeId,
+        class: cls,
+        effect,
+        start: 'onClick',
+        direction: option,
+      });
+      if (mode === 'add')
+        return writeAnimations([...list, ...[...ids].map(fresh)]);
+      if (picked !== undefined && list[picked] && holds(list[picked]))
+        return writeAnimations(
+          list.map((a, i) => (i === picked ? swap(a) : a))
+        );
+      const missing = [...ids].filter(
+        (id) => !list.some((a) => a.shapeId === id)
+      );
+      return writeAnimations([
+        ...list.map((a) => (holds(a) ? swap(a) : a)),
+        ...missing.map(fresh),
+      ]);
+    }
+  );
+  /** Changes animations' timing or options. */
+  const updateAnimations = serial(
+    (indexes: number[], patch: Partial<AnimationSpec>) =>
+      writeAnimations(
+        animations().map((a, i) =>
+          indexes.includes(i) ? { ...specOf(a), ...patch } : specOf(a)
+        )
+      )
+  );
+  /** Moves an animation earlier (-1) or later (1) in the sequence. */
+  const moveAnimation = serial((index: number, delta: -1 | 1) => {
+    const list = animations().map(specOf);
+    const to = index + delta;
+    if (!list[index] || to < 0 || to >= list.length)
+      return Promise.resolve(null);
+    const [moved] = list.splice(index, 1);
+    list.splice(to, 0, moved);
+    return writeAnimations(list);
+  });
+  const removeAnimations = serial((indexes: number[]) =>
+    writeAnimations(
+      animations()
+        .map(specOf)
+        .filter((_, i) => !indexes.includes(i))
+    )
+  );
+  /**
+   * Effect Options ▸ Sequence: a text shape animates as one object, or
+   * paragraph by paragraph (one click each).
+   */
+  const setSequence = serial((shape: ShapeOutline, byParagraph: boolean) => {
+    const list = animations().map(specOf);
+    const own = list.filter((a) => a.shapeId === shape.id);
+    const first = own[0];
+    if (!first) return Promise.resolve(null);
+    const at = list.indexOf(first);
+    const rest = list.filter((a) => a.shapeId !== shape.id);
+    const paragraphs = (shape.paragraphs ?? [])
+      .map((p, i) => ({ i, text: p.text }))
+      .filter((p) => p.text.trim() !== '')
+      .map((p) => p.i);
+    const replaced: AnimationSpec[] =
+      byParagraph && paragraphs.length > 0
+        ? paragraphs.map((paragraph, n) => ({
+            ...first,
+            paragraph,
+            start: n === 0 ? first.start : 'onClick',
+          }))
+        : [{ ...first, paragraph: undefined }];
+    const before = rest.slice(
+      0,
+      list.slice(0, at).filter((a) => a.shapeId !== shape.id).length
+    );
+    const after = rest.slice(before.length);
+    return writeAnimations([...before, ...replaced, ...after]);
+  });
   return {
     canEdit,
+    animate,
+    updateAnimations,
+    moveAnimation,
+    removeAnimations,
+    setSequence,
     insertRows,
     insertColumns,
     deleteRows,

@@ -439,9 +439,26 @@ Layout and test hooks:
   `pptx-find-input`, `pptx-replace-input`, count `pptx-find-count`, and
   `pptx-replace-all`; Enter steps through matches, selecting each in its shape
   or cell.
+- **Animations** tab (`pptx-tab-animations`): with shapes selected, the
+  gallery (`pptx-animation-gallery`, tiles
+  `pptx-animation-<entrance|emphasis|exit|path>-<effect>`, `pptx-animation-none`)
+  replaces their effect; Add Animation (`pptx-animation-add`) adds another;
+  Effect Options (`pptx-animation-options`) holds directions
+  (`pptx-animation-option-<value>`) and, for text, Sequence As One Object /
+  By Paragraph (`pptx-animation-sequence-object|paragraph`). Timing: Start
+  (`pptx-animation-start` select: onClick, withPrevious, afterPrevious),
+  Duration and Delay in seconds (`pptx-animation-duration`,
+  `pptx-animation-delay`), Move Earlier/Later (`pptx-animation-earlier|later`).
+  Preview (`pptx-animation-preview`) plays the slide in place. The Animation
+  Pane (`pptx-animation-pane-toggle`, `pptx-animation-pane`) lists
+  `pptx-animation-row`s (click picks one and selects its shape; Delete or
+  `pptx-animation-remove` removes it), and numbered `pptx-animation-tag`s
+  mark animated shapes while the tab or pane is open.
 - **Slide show** (`pptx-slideshow`, F5 from the start, Shift+F5 from the
   current slide): full screen with the slides' transitions; →/Space/click
-  advance, ← goes back, a number then Enter jumps, B/W blank the screen, S
+  play the next animation step, then advance (`pptx-slideshow-canvas` carries
+  `data-slide-index` and `data-step`; animated shapes are `[data-piece]`
+  layers), ← goes back, a number then Enter jumps, B/W blank the screen, S
   shows notes, Esc ends.
 - **Presenter View** (Slide Show ▸ Presenter view `pptx-present-presenter`,
   Alt+F5): opens the audience show in a pop-up window (`pptx-audience-canvas`;

@@ -56,6 +56,20 @@ export interface RibbonEnv {
   find: (replace: boolean) => void;
   zoom: () => number | 'fit';
   setZoom: (zoom: number | 'fit') => void;
+  /** The Animations tab and pane. */
+  animation: {
+    pane: () => boolean;
+    togglePane: () => void;
+    /** The animation picked in the pane (playback position). */
+    picked: () => number | undefined;
+    pick: (index?: number) => void;
+    /** The animation the tab shows: the picked one, else the selection's first. */
+    current: () => number | undefined;
+    /** The animations timing and option edits apply to. */
+    selected: () => number[];
+    /** Plays the slide's animations in place. */
+    preview: () => void;
+  };
   /** Normal view or the slide sorter. */
   sorter: () => boolean;
   setSorter: (on: boolean) => void;
@@ -91,8 +105,14 @@ export function Ribbon(props: {
   keepFocus: boolean;
   start?: JSX.Element;
   end?: JSX.Element;
+  /** Called with the id of the tab chosen. */
+  onTabChange?: (id: string) => void;
 }) {
-  const [active, setActive] = createSignal('home');
+  const [active, setActiveRaw] = createSignal('home');
+  const setActive = (id: string) => {
+    setActiveRaw(id);
+    props.onTabChange?.(id);
+  };
   const current = () =>
     props.tabs.find((t) => t.id === active()) ?? props.tabs[0];
   // Clicks must not move focus out of the text being edited.

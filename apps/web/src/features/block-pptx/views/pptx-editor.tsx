@@ -44,6 +44,11 @@ import {
   Show,
 } from 'solid-js';
 import {
+  AnimationPane,
+  AnimationPreview,
+  AnimationTags,
+} from '../components/animation-pane';
+import {
   ChartDataEditor,
   ChartDesignTab,
   ChartGallery,
@@ -55,6 +60,7 @@ import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
 import { PresenterView } from '../components/presenter-view';
 import { PrintDialog } from '../components/print-dialog';
+import { AnimationsTab } from '../components/ribbon/animations-tab';
 import { RibbonButton } from '../components/ribbon/controls';
 import { HomeTab } from '../components/ribbon/home-tab';
 import { InsertTab } from '../components/ribbon/insert-tab';
@@ -1057,6 +1063,61 @@ export function PptxEditor() {
   const [notesVisible, setNotesVisible] = createSignal(true);
   const [pane, setPane] = createSignal<PaneSection | null>(null);
   const [find, setFind] = createSignal<{ replace: boolean } | null>(null);
+  // ---- animations -----------------------------------------------------------
+
+  const [ribbonTab, setRibbonTab] = createSignal('home');
+  const [animationPane, setAnimationPane] = createSignal(false);
+  const [previewing, setPreviewing] = createSignal(false);
+  /** The animation picked in the pane, on its slide. */
+  const [pickedAnimation, setPickedAnimation] = createSignal<{
+    slide: number;
+    index: number;
+  } | null>(null);
+  const slideAnimations = () => session.currentSlide()?.animations ?? [];
+  const picked = () => {
+    const p = pickedAnimation();
+    return p &&
+      p.slide === session.currentSlide()?.id &&
+      p.index < slideAnimations().length
+      ? p.index
+      : undefined;
+  };
+  /** Animations of the selected shapes (a group's members count). */
+  const selectionAnimations = () => {
+    const ids = new Set<number>();
+    const add = (s: ShapeOutline) => {
+      ids.add(s.id);
+      for (const c of s.children ?? []) add(c);
+    };
+    for (const s of ribbonSelection()) add(s);
+    return slideAnimations()
+      .map((a, i) => (ids.has(a.shapeId) ? i : -1))
+      .filter((i) => i >= 0);
+  };
+  const animationEnv = {
+    pane: animationPane,
+    togglePane: () => setAnimationPane((v) => !v),
+    picked,
+    pick: (index?: number) => {
+      const slide = session.currentSlide();
+      setPickedAnimation(
+        index === undefined || !slide ? null : { slide: slide.id, index }
+      );
+    },
+    current: () => picked() ?? selectionAnimations()[0],
+    selected: () => {
+      const p = picked();
+      return p !== undefined ? [p] : selectionAnimations();
+    },
+    preview: () => {
+      editor.stopEditing();
+      setPreviewing(true);
+    },
+  };
+  const showAnimationTags = () =>
+    (ribbonTab() === 'animations' || animationPane()) &&
+    slideAnimations().length > 0;
+
   const [printing, setPrinting] = createSignal(false);
   const [sorter, setSorterRaw] = createSignal(false);
   const setSorter = (on: boolean) => {
@@ -1253,6 +1314,7 @@ export function PptxEditor() {
     setZoom,
     sorter,
     setSorter,
+    animation: animationEnv,
     notesVisible,
     toggleNotes: () => setNotesVisible((v) => !v),
     download: () => void download(),
@@ -1327,6 +1389,11 @@ export function PptxEditor() {
       },
       { id: 'design', label: 'Design', content: () => <DesignTab /> },
       transitionsTab,
+      {
+        id: 'animations',
+        label: 'Animations',
+        content: () => <AnimationsTab />,
+      },
       { id: 'slideshow', label: 'Slide Show', content: () => <SlideShowTab /> },
       { id: 'view', label: 'View', content: () => <ViewTab /> },
       ...(drawable && !readonly()
@@ -1531,6 +1598,7 @@ export function PptxEditor() {
         env={env}
         tabs={tabs()}
         keepFocus={!!editor.editing()}
+        onTabChange={setRibbonTab}
         start={
           <Show when={!readonly()}>
             <RibbonButton
@@ -1613,6 +1681,18 @@ export function PptxEditor() {
             class="relative flex min-h-0 flex-1"
             classList={{ hidden: sorter() }}
           >
+            <Show
+              when={previewing() && session.outline() && session.currentSlide()}
+            >
+              <AnimationPreview
+                engine={engine}
+                deck={session.outline()!}
+                index={session.slideIndex()}
+                width={hostSize().w - 2 * STAGE_MARGIN}
+                height={hostSize().h - 2 * STAGE_MARGIN}
+                onDone={() => setPreviewing(false)}
+              />
+            </Show>
             <div
               ref={stageHost}
               class="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
@@ -1719,6 +1799,19 @@ export function PptxEditor() {
                               width={slideW()}
                               height={slideH()}
                               unit={unit()}
+                            />
+                          )}
+                        </Show>
+                        <Show
+                          when={showAnimationTags() && session.currentSlide()}
+                        >
+                          {(slide) => (
+                            <AnimationTags
+                              slide={slide()}
+                              width={slideW()}
+                              height={slideH()}
+                              unit={unit()}
+                              picked={picked()}
                             />
                           )}
                         </Show>
@@ -1847,6 +1940,25 @@ export function PptxEditor() {
                 </Show>
               </div>
             </div>
+            <Show when={animationPane() && !pane()}>
+              <AnimationPane
+                env={env}
+                onSelectShape={(id) => {
+                  const top = session
+                    .currentSlide()
+                    ?.shapes.find(
+                      (s) =>
+                        s.id === id ||
+                        (s.children ?? []).some((c) => c.id === id)
+                    );
+                  if (top) editor.select(top.id);
+                }}
+                onClose={() => {
+                  setAnimationPane(false);
+                  refocus();
+                }}
+              />
+            </Show>
             <Show when={pane()}>
               {(section) => (
                 <FormatPane

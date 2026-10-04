@@ -45,6 +45,17 @@ export interface PresentationEngine {
     shape: number
   ) => Promise<ImageBitmap>;
   /**
+   * The top-level shapes at z-order positions `start..end`, over the
+   * background and inherited shapes when `backdrop` (slide show layers).
+   */
+  renderSpan?: (
+    index: number,
+    width: number,
+    start: number,
+    end: number,
+    backdrop: boolean
+  ) => Promise<ImageBitmap>;
+  /**
    * A shape's text laid out for carets, or with `cell` a table cell's (a
    * merged cell's, for a cell it covers); `null` when it holds no text.
    */

@@ -100,7 +100,8 @@ export function SlideShow(props: {
         height={size().h}
         pixelRatio={window.devicePixelRatio || 1}
         screen={show.screen()}
-        preload={show.step(1)}
+        preload={show.nextSlide(1)}
+        step={show.step()}
         onShown={show.shown}
         testId="pptx-slideshow-canvas"
       />

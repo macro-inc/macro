@@ -3,6 +3,9 @@
  * presenter console: the current slide, blacked or whitened screens, the
  * end-of-show screen, automatic advance, and PowerPoint's show keys.
  *
+ * Each click first plays the slide's next animation step, then moves on;
+ * going back steps back through them.
+ *
  * Next: click, Space, →, ↓, Enter, PageDown, N. Previous: ←, ↑, Backspace,
  * PageUp, P. Home/End jump; a number then Enter goes to that slide; B or .
  * blacks the screen, W or , whites it; Esc ends.
@@ -10,6 +13,7 @@
 
 import type { DeckOutline, SlideOutline } from '@core/pptx-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
+import { buildTimeline, clickSteps } from '../core/animation-timeline';
 
 export type ShowScreen = 'slide' | 'black' | 'white';
 
@@ -21,6 +25,13 @@ export function createShow(options: {
   const slides = () => options.deck().slides;
   const clamp = (i: number) => Math.min(Math.max(0, i), slides().length - 1);
   const [index, setIndex] = createSignal(clamp(options.start));
+  /** Click steps played on the current slide. */
+  const [step, setStep] = createSignal(0);
+  /** Click steps a slide takes. */
+  const stepsOf = (i: number) => {
+    const slide = slides()[i];
+    return slide?.animations?.length ? clickSteps(buildTimeline(slide)) : 0;
+  };
   const [screen, setScreen] = createSignal<ShowScreen>('slide');
   const [ended, setEnded] = createSignal(false);
   let typed = '';
@@ -30,7 +41,7 @@ export function createShow(options: {
   const slide = (): SlideOutline | undefined => slides()[index()];
 
   /** The next visible slide in a direction from `from`, if any. */
-  const step = (direction: 1 | -1, from = index()): number | undefined => {
+  const nextSlide = (direction: 1 | -1, from = index()): number | undefined => {
     for (
       let i = from + direction;
       i >= 0 && i < slides().length;
@@ -47,17 +58,28 @@ export function createShow(options: {
       else exit();
       return;
     }
-    const next = step(direction);
+    if (direction > 0 && step() < stepsOf(index())) {
+      setStep(step() + 1);
+      return;
+    }
+    if (direction < 0 && step() > 0) {
+      setStep(step() - 1);
+      return;
+    }
+    const next = nextSlide(direction);
     if (next === undefined) {
       if (direction > 0) setEnded(true);
       return;
     }
+    // Going back lands on a slide with all its animations played.
+    setStep(direction > 0 ? 0 : stepsOf(next));
     setIndex(next);
   };
 
   const jump = (i: number) => {
     setEnded(false);
     setScreen('slide');
+    setStep(0);
     setIndex(clamp(i));
   };
 
@@ -139,7 +161,10 @@ export function createShow(options: {
     slide,
     screen,
     ended,
+    /** Click steps played on the current slide. */
     step,
+    /** The next visible slide in a direction, if any. */
+    nextSlide,
     go,
     jump,
     exit,

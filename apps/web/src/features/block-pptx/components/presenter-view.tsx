@@ -174,7 +174,7 @@ export function PresenterView(props: {
     });
   });
 
-  const nextIndex = () => show.step(1);
+  const nextIndex = () => show.nextSlide(1);
 
   return (
     <div
@@ -265,6 +265,7 @@ export function PresenterView(props: {
                   screen={show.screen()}
                   preload={nextIndex()}
                   onShown={show.shown}
+                  step={show.step()}
                   testId="pptx-presenter-current"
                 />
               </Show>
@@ -427,6 +428,7 @@ export function PresenterView(props: {
               height={audienceSize().h}
               pixelRatio={win().devicePixelRatio || 1}
               screen={show.ended() ? 'black' : show.screen()}
+              step={show.step()}
               testId="pptx-audience-canvas"
             />
           </Portal>
