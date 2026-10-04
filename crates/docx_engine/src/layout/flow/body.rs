@@ -1,21 +1,28 @@
 //! The body paginator: sections, columns, pages, keep rules, notes.
 
+use super::super::format::TableCtx;
 use super::super::inline::FieldValues;
 use super::super::lines::LineEnd;
 use super::super::{Item, Page, ParaBox, StoryRef};
 use super::anchors::{PageGeom, resolve};
+use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, resolve_frame};
 use super::stack::{
-    PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines, emit_row,
-    para_box, placed, prev_record, space_before, stack_story, table_box,
+    BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
+    emit_row, para_box, placed, prev_record, space_before, stack_story, table_box,
 };
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
+use crate::model::props::ParaProps;
 use crate::model::section::{HeaderRefs, LineNumberRestart, PageVAlign, Section, SectionStart};
 use pptx_engine::path::Rect;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 const EPS: f32 = 0.01;
+
+/// A frame at least this fraction of the column wide leaves no room for
+/// text beside it.
+const WIDE_FRAME: f32 = 0.66;
 
 /// Default distance of line numbers from the text.
 const LINE_NUMBER_DISTANCE: f32 = 18.0;
@@ -36,6 +43,9 @@ struct Cur {
     placed_any: bool,
     hard: bool,
     line_on_page: u32,
+    /// Vertical bands of the page that body text skips (frames that allow
+    /// no text beside them).
+    bands: Vec<(f32, f32)>,
 }
 
 pub(in crate::layout) struct Flow<'e, 'a> {
@@ -146,6 +156,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 table: Default::default(),
                 fields: fields.clone(),
                 note_number: None,
+                float_frames: true,
             },
         ))
     }
@@ -223,6 +234,14 @@ impl<'e, 'a> Flow<'e, 'a> {
             }
             chrome.extend(h.items);
             place_anchors(&h.anchors, &geom, &mut behind, &mut front);
+            place_frames(
+                &mut h.frames,
+                (s.left + s.gutter, s.header),
+                &geom,
+                &mut chrome,
+                &mut behind,
+                &mut front,
+            );
         }
         if let Some(mut f) = footer {
             let y = s.page_h - s.footer - f.height;
@@ -237,6 +256,14 @@ impl<'e, 'a> Flow<'e, 'a> {
             }
             chrome.extend(f.items);
             place_anchors(&f.anchors, &geom, &mut behind, &mut front);
+            place_frames(
+                &mut f.frames,
+                (s.left + s.gutter, y),
+                &geom,
+                &mut chrome,
+                &mut behind,
+                &mut front,
+            );
         }
         let page = Page {
             width: s.page_w,
@@ -264,6 +291,7 @@ impl<'e, 'a> Flow<'e, 'a> {
             placed_any: false,
             hard,
             line_on_page: 0,
+            bands: Vec::new(),
         });
     }
 
@@ -362,6 +390,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                         table: Default::default(),
                         fields: self.fields(),
                         note_number: None,
+                        float_frames: false,
                     },
                 ),
                 None => Stack {
@@ -380,6 +409,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                     anchors: Vec::new(),
                     height: 12.0,
                     notes: Vec::new(),
+                    frames: Vec::new(),
                 },
             });
         }
@@ -409,6 +439,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 table: Default::default(),
                 fields: self.fields(),
                 note_number: Some(number),
+                float_frames: false,
             },
         );
         let h = st.height;
@@ -467,7 +498,74 @@ impl<'e, 'a> Flow<'e, 'a> {
     }
 
     fn avail_bottom(&self) -> f32 {
-        self.cur.as_ref().map_or(0.0, |c| c.bottom - c.notes_height)
+        self.cur.as_ref().map_or(0.0, |c| {
+            // Text stops at the next blocked band below it.
+            c.bands
+                .iter()
+                .filter(|(top, _)| *top >= c.y - EPS)
+                .fold(c.bottom - c.notes_height, |b, (top, _)| b.min(*top))
+        })
+    }
+
+    /// Moves the current position past a blocked band it is in.
+    fn skip_bands(&mut self) {
+        if let Some(c) = &mut self.cur {
+            while let Some(&(_, bottom)) = c
+                .bands
+                .iter()
+                .find(|(top, bottom)| *top < c.y - EPS && *bottom > c.y + EPS)
+            {
+                c.y = bottom;
+            }
+        }
+    }
+
+    /// Places the text frame starting at `blocks[i]`, if it starts one, and
+    /// returns the index after its paragraphs.
+    fn place_frame(&mut self, blocks: &[&Block], i: usize) -> Option<usize> {
+        let (col_left, width) = self.col_geom();
+        let sc = StackCtx {
+            story: StoryRef::Body,
+            width,
+            table: TableCtx::default(),
+            fields: self.fields(),
+            note_number: None,
+            float_frames: false,
+        };
+        let (mut f, end) = frame_box(self.env, &self.env.doc.body, blocks, i, &sc)?;
+        self.skip_bands();
+        let (y, placed_any) = self
+            .cur
+            .as_ref()
+            .map_or((0.0, false), |c| (c.y, c.placed_any));
+        f.para_top = y;
+        f.text_left = col_left;
+        let wrap = f.wrap();
+        // Text cannot go beside a frame that leaves no room for it.
+        let blocks_text = wrap == FrameWrap::NotBeside
+            || (wrap == FrameWrap::Beside && f.width >= width * WIDE_FRAME);
+        let in_flow = f.follows_text() && blocks_text;
+        if in_flow && y + f.height > self.avail_bottom() + EPS && placed_any {
+            self.next_column(false);
+            f.para_top = self.cur.as_ref().map_or(0.0, |c| c.y);
+        }
+        let geom = self.page_geom();
+        let rect = resolve_frame(&f, &geom);
+        let mut items = Vec::new();
+        let mut anchors = Vec::new();
+        emit_frame(&f, rect, &mut items, &mut anchors);
+        if let Some(c) = &mut self.cur {
+            c.body.extend(items);
+            place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
+            if in_flow {
+                c.y = c.y.max(rect.y + rect.h + f.props.v_space);
+                c.placed_any = true;
+            } else if blocks_text {
+                c.bands
+                    .push((rect.y - f.props.v_space, rect.y + rect.h + f.props.v_space));
+            }
+        }
+        Some(end)
     }
 
     fn para(&mut self, b: &Block, width: f32) -> Arc<ParaBox> {
@@ -502,10 +600,29 @@ impl<'e, 'a> Flow<'e, 'a> {
         pb
     }
 
+    /// How paragraph `k` (formatted `props`) joins its neighbours' borders.
+    fn border_join(
+        &self,
+        blocks: &[&Block],
+        k: usize,
+        props: &ParaProps,
+        prev: Option<&PrevPara>,
+    ) -> BorderJoin {
+        let next = blocks
+            .get(k + 1)
+            .filter(|n| n.kind == BlockKind::Paragraph)
+            .map(|n| self.env.formats.paragraph(&n.props, &TableCtx::default()));
+        BorderJoin::new(
+            props,
+            prev.map(|p| &p.border),
+            next.as_ref().map(|f| &f.props),
+        )
+    }
+
     /// Height a keep-with-next chain starting at `i` needs on one page.
     fn keep_chain(&mut self, blocks: &[&Block], i: usize, width: f32) -> f32 {
         let mut need = 0.0;
-        let mut prev: Option<PrevPara> = None;
+        let mut prev: Option<PrevPara> = self.prev.clone();
         let mut k = i;
         while k < blocks.len() {
             let b = blocks[k];
@@ -529,7 +646,8 @@ impl<'e, 'a> Flow<'e, 'a> {
             } else {
                 space_before(props, prev.as_ref(), false, self.sum_spacing())
             };
-            let (bt, bb) = border_space(props);
+            let join = self.border_join(blocks, k, props, prev.as_ref());
+            let (bt, bb) = border_space(props, join);
             let lines = &pb.lines.lines;
             if props.keep_next && k + 1 < blocks.len() && k - i < 32 {
                 need += bt + pb.lines.height + bb;
@@ -560,7 +678,11 @@ impl<'e, 'a> Flow<'e, 'a> {
 
     pub fn run(&mut self, blocks: &[&Block], section_of: &[usize]) {
         let mut cur_section = usize::MAX;
+        let mut skip_to = 0;
         for (i, b) in blocks.iter().enumerate() {
+            if i < skip_to {
+                continue;
+            }
             let s = section_of[i].min(self.sections.len() - 1);
             if self.cur.is_none() {
                 self.start_page(s, false);
@@ -596,7 +718,10 @@ impl<'e, 'a> Flow<'e, 'a> {
                 }
             }
             match b.kind {
-                BlockKind::Paragraph => self.place_paragraph(blocks, i),
+                BlockKind::Paragraph => match self.place_frame(blocks, i) {
+                    Some(end) => skip_to = end,
+                    None => self.place_paragraph(blocks, i),
+                },
                 BlockKind::Table => self.place_table(b),
                 _ => {}
             }
@@ -639,16 +764,23 @@ impl<'e, 'a> Flow<'e, 'a> {
         } else {
             space_before(&props, self.prev.as_ref(), false, self.sum_spacing())
         };
+        let gap_top = self.cur.as_ref().map_or(0.0, |c| c.y);
         if let Some(c) = &mut self.cur {
             c.y += before;
         }
-        let (bt, bb) = border_space(&props);
+        let mut join = self.border_join(blocks, i, &props, self.prev.as_ref());
         let lines_len = pb.lines.lines.len();
         let mut li = 0;
         let mut first_fragment = true;
         while li < lines_len {
+            self.skip_bands();
+            let (bt, bb) = border_space(&props, join);
             let mut frag_top = self.cur.as_ref().map_or(0.0, |c| c.y);
             if first_fragment {
+                if join.prev {
+                    // The shared border box spans the gap to the previous paragraph.
+                    frag_top = gap_top;
+                }
                 if let Some(c) = &mut self.cur {
                     c.y += bt;
                 }
@@ -693,6 +825,8 @@ impl<'e, 'a> Flow<'e, 'a> {
                         c.y -= bt;
                     }
                     self.next_column(false);
+                    // A new column starts a new border box.
+                    join.prev = false;
                     continue;
                 }
                 take = 1;
@@ -735,6 +869,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                     first_fragment,
                     last_fragment,
                     width,
+                    join,
                     &mut deco,
                 );
                 if let Some(c) = &mut self.cur {
@@ -853,6 +988,7 @@ impl<'e, 'a> Flow<'e, 'a> {
         // does not fit, or a row taller than the page would never land.
         let mut moved = false;
         while r < tb.rows.len() {
+            self.skip_bands();
             let h = tb.rows[r].height;
             let (y, placed_any) = self
                 .cur
@@ -927,6 +1063,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                     table: Default::default(),
                     fields: self.fields(),
                     note_number: Some(number.clone()),
+                    float_frames: false,
                 },
             );
             let (y, placed_any) = self
@@ -950,6 +1087,24 @@ impl<'e, 'a> Flow<'e, 'a> {
     pub fn finish(mut self) -> Vec<Page> {
         self.finish_page();
         self.pages
+    }
+}
+
+/// Places a header's or footer's text frames, given where its stack went.
+fn place_frames(
+    frames: &mut [PendingFrame],
+    origin: (f32, f32),
+    geom: &PageGeom,
+    out: &mut Vec<Item>,
+    behind: &mut Vec<Item>,
+    front: &mut Vec<Item>,
+) {
+    for f in frames {
+        f.offset(origin.0, origin.1);
+        let rect = resolve_frame(f, geom);
+        let mut anchors = Vec::new();
+        emit_frame(f, rect, out, &mut anchors);
+        place_anchors(&anchors, geom, behind, front);
     }
 }
 

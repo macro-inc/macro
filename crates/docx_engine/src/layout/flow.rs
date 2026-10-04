@@ -1,6 +1,7 @@
 //! Flowing the body into pages and columns.
 
 mod anchors;
+mod frames;
 mod body;
 mod stack;
 
@@ -124,6 +125,24 @@ impl<'a> Env<'a> {
         });
         self.labels = labels;
         self.note_numbers = numbers;
+    }
+
+    /// The list label of a paragraph outside the body (headers, footers,
+    /// notes), counted on its own.
+    fn story_label(&self, block: &Block, table: &TableCtx) -> Option<(Label, RunProps)> {
+        let fmt = self.formats.paragraph(&block.props, table);
+        let (num_id, ilvl) = fmt.props.num?;
+        if fmt.mark.vanish {
+            return None;
+        }
+        let label = Counters::default().next(
+            self.formats.numbering,
+            self.formats.styles,
+            num_id,
+            ilvl,
+        )?;
+        let props = self.formats.label_props(&fmt, &label);
+        Some((label, props))
     }
 
     /// The part a section's header/footer reference points to.
@@ -259,3 +278,6 @@ pub(super) fn offset_items(items: &mut [Item], dx: f32, dy: f32) {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

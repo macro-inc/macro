@@ -48,6 +48,8 @@ struct PageOut {
     width: f32,
     height: f32,
     lines: Vec<LineOut>,
+    /// Drawings: (x, y, width, height).
+    drawings: Vec<[f32; 4]>,
 }
 
 fn story_name(s: &StoryRef) -> &'static str {
@@ -127,6 +129,13 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
     let mut pages = Vec::with_capacity(layout.pages.len());
     for page in &layout.pages {
         let mut lines = Vec::new();
+        let drawings = page
+            .all_items()
+            .filter_map(|i| match i {
+                Item::Drawing(d) => Some([d.rect.x, d.rect.y, d.rect.w, d.rect.h]),
+                _ => None,
+            })
+            .collect();
         for item in page.all_items() {
             if let Item::Line(l) = item {
                 let line = l.line();
@@ -146,6 +155,7 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
             width: page.width,
             height: page.height,
             lines,
+            drawings,
         });
     }
     let json = serde_json::to_string(&pages)?;

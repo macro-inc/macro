@@ -147,6 +147,9 @@ pub struct FramePr {
     pub w: Option<f32>,
     /// Height (points).
     pub h: Option<f32>,
+    /// How the height applies (`None`: at least the given height, as Word
+    /// reads frames without a rule).
+    pub h_rule: Option<super::table::HeightRule>,
     /// Horizontal position (points).
     pub x: Option<f32>,
     /// Vertical position (points).
@@ -377,6 +380,11 @@ impl PPr {
                         .map_or(1, |v| v.clamp(1, 10) as u32),
                     w: twips_attr(t, c, "w"),
                     h: twips_attr(t, c, "h"),
+                    h_rule: t.w_attr(c, "hRule").map(|r| match r {
+                        "exact" => super::table::HeightRule::Exact,
+                        "auto" => super::table::HeightRule::Auto,
+                        _ => super::table::HeightRule::AtLeast,
+                    }),
                     x: twips_attr(t, c, "x"),
                     y: twips_attr(t, c, "y"),
                     h_anchor: t.w_attr(c, "hAnchor").map(str::to_owned),
