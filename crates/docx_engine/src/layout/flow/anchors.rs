@@ -33,7 +33,7 @@ pub fn resolve(a: &PendingAnchor, g: &PageGeom) -> Option<Rect> {
     let (x0, span) = match anchor.h.from {
         RelFrom::Page => (0.0, g.width),
         RelFrom::Margin => (g.left, g.width - g.left - g.right),
-        RelFrom::Column => (g.col_left, g.col_width),
+        RelFrom::Column => a.cell.unwrap_or((g.col_left, g.col_width)),
         RelFrom::Text => (a.char_x, 0.0),
         RelFrom::LeftMargin | RelFrom::InsideMargin => (0.0, g.left),
         RelFrom::RightMargin | RelFrom::OutsideMargin => (g.width - g.right, g.right),

@@ -139,8 +139,7 @@ pub fn split_stack(stack: &Stack, cut: f32) -> (Stack, Stack) {
             a.anchors.push(anchor.clone());
         } else {
             let mut anchor = anchor.clone();
-            anchor.para_top -= shift;
-            anchor.line_top -= shift;
+            anchor.shift(0.0, -shift);
             b.anchors.push(anchor);
         }
     }
@@ -168,7 +167,7 @@ pub fn split_row(tb: &TableBox, r: usize, room: f32) -> Option<(RowBox, RowBox)>
     let mut continues = false;
     for (k, cell) in row.cells.iter().enumerate() {
         let m = &cell.geom.margins;
-        let limit = room - m[0] - m[2];
+        let limit = room - m[0] - m[2] - row.border_top;
         let content = &cell.content;
         let (a, b) = if content.height <= limit + EPS {
             (content.clone(), Stack::default())
@@ -186,7 +185,10 @@ pub fn split_row(tb: &TableBox, r: usize, room: f32) -> Option<(RowBox, RowBox)>
     if !fits_some || !continues {
         return None;
     }
-    first.height = h1.min(room);
-    rest.height = h2;
+    // The first part ends at the page; the rest makes room for its top
+    // border again, and keeps the bottom one.
+    first.height = (h1 + row.border_top).min(room);
+    first.border_bottom = 0.0;
+    rest.height = h2 + row.border_top + row.border_bottom;
     Some((first, rest))
 }

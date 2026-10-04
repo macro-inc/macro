@@ -3,13 +3,16 @@
 
 use super::super::format::{ParaFormat, TableCtx};
 use super::super::inline::{self, FieldValues, InlineCtx, Kind};
-use super::super::lines::{LineCtx, break_lines};
+use super::super::lines::{LineCtx, break_lines, break_lines_from};
 use super::super::table::{CellGeom, TableGeom, geometry};
 use super::super::{Item, ParaBox, PlacedDrawing, PlacedLine, StoryRef};
 use super::Env;
-use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, place_in_container};
+use super::anchors::PageGeom;
+use super::frames::{
+    FrameWrap, PendingFrame, across_text, emit_frame, frame_box, place_in_container,
+};
 use crate::model::block::{Block, BlockId, BlockKind, Story};
-use crate::model::props::{HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
+use crate::model::props::{Border, HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
 use pptx_engine::path::Rect;
 use std::sync::Arc;
 
@@ -26,6 +29,25 @@ pub struct PendingAnchor {
     pub char_x: f32,
     /// Story of the anchoring paragraph.
     pub story: StoryRef,
+    /// The anchoring paragraph.
+    pub block: BlockId,
+    /// The drawing's index among the paragraph's objects.
+    pub object: u16,
+    /// The text area of the table cell the drawing is positioned in, when
+    /// it is: left edge (as `char_x`) and width.
+    pub cell: Option<(f32, f32)>,
+}
+
+impl PendingAnchor {
+    /// Moves it along with its container.
+    pub fn shift(&mut self, dx: f32, dy: f32) {
+        self.para_top += dy;
+        self.line_top += dy;
+        self.char_x += dx;
+        if let Some((x, _)) = &mut self.cell {
+            *x += dx;
+        }
+    }
 }
 
 /// Blocks laid out top to bottom.
@@ -58,6 +80,9 @@ pub struct StackCtx {
     /// Leave text frames for the page to place (headers and footers);
     /// otherwise they are placed inside the stack.
     pub float_frames: bool,
+    /// The page the stack goes on, with the stack's text area as its
+    /// column, when known while laying it out.
+    pub page: Option<PageGeom>,
 }
 
 /// The previous paragraph, for spacing between paragraphs.
@@ -184,6 +209,40 @@ pub fn prev_record(props: &ParaProps) -> PrevPara {
     }
 }
 
+/// How lines of a paragraph formatted `props` break in a text area `width`
+/// wide.
+fn line_ctx<'a>(env: &Env<'_>, props: &'a ParaProps, width: f32, grid: Option<f32>) -> LineCtx<'a> {
+    let settings = &env.doc.parts().settings;
+    LineCtx {
+        props,
+        width,
+        default_tab: settings.default_tab,
+        no_expand_shift_return: settings.do_not_expand_shift_return,
+        grid: grid.filter(|_| props.snap_to_grid),
+        shrink_spaces: settings.compat_mode >= 15,
+    }
+}
+
+/// The rest of a laid-out paragraph, from cluster `from` on, broken again
+/// for a text area `width` wide: a paragraph going on in a column of
+/// another width.
+pub(in crate::layout) fn rebreak(
+    env: &Env<'_>,
+    pb: &ParaBox,
+    width: f32,
+    from: usize,
+    grid: Option<f32>,
+) -> Arc<ParaBox> {
+    let ctx = line_ctx(env, &pb.format.props, width, grid);
+    Arc::new(ParaBox {
+        story: pb.story.clone(),
+        block: pb.block.clone(),
+        inline: pb.inline.clone(),
+        lines: break_lines_from(&pb.inline, &ctx, None, from),
+        format: Arc::clone(&pb.format),
+    })
+}
+
 /// Lays out one paragraph into a box.
 pub(in crate::layout) fn para_box(
     env: &Env<'_>,
@@ -235,20 +294,7 @@ pub(in crate::layout) fn para_box(
         markup: env.options.markup,
     };
     let built = inline::build(block, &format, label, &ctx);
-    let props = &format.props;
-    let grid = grid.filter(|_| props.snap_to_grid);
-    let lines = break_lines(
-        &built,
-        &LineCtx {
-            props,
-            width,
-            default_tab: env.doc.parts().settings.default_tab,
-            no_expand_shift_return: env.doc.parts().settings.do_not_expand_shift_return,
-            grid,
-            shrink_spaces: env.doc.parts().settings.compat_mode >= 15,
-        },
-        None,
-    );
+    let lines = break_lines(&built, &line_ctx(env, &format.props, width, grid), None);
     let pb = Arc::new(ParaBox {
         story: story.clone(),
         block: block.id.clone(),
@@ -393,6 +439,9 @@ pub(super) fn emit_lines(
                     line_top: top,
                     char_x: x + pb.lines.x[c],
                     story: pb.story.clone(),
+                    block: pb.block.clone(),
+                    object: o,
+                    cell: None,
                 });
             }
         }
@@ -443,8 +492,11 @@ pub(in crate::layout) fn stack_blocks(
             skip_to = end;
             f.para_top = y;
             // Text continues below a frame anchored to it that allows
-            // nothing beside it.
-            let band = if f.wrap() == FrameWrap::NotBeside && f.follows_text() {
+            // nothing beside it, unless the frame is in a margin.
+            let band = if f.wrap() == FrameWrap::NotBeside
+                && f.follows_text()
+                && sc.page.as_ref().is_none_or(|g| across_text(&f, g))
+            {
                 f.height
             } else {
                 0.0
@@ -570,6 +622,12 @@ pub struct RowBox {
     pub cant_split: bool,
     /// Repeat on each page.
     pub header: bool,
+    /// Width of the border line along the row's top: the row makes room
+    /// for it above its cells' content.
+    pub border_top: f32,
+    /// Width of the border line along the row's bottom when the row makes
+    /// room for it too (the last row of the table).
+    pub border_bottom: f32,
 }
 
 /// A table laid out (rows not yet placed).
@@ -592,15 +650,21 @@ pub(in crate::layout) fn table_box(
 ) -> TableBox {
     let geom = geometry(story, table, &env.formats, avail);
     let mut rows: Vec<RowBox> = Vec::with_capacity(geom.rows.len());
-    for row in &geom.rows {
+    let row_count = geom.rows.len();
+    for (ri, row) in geom.rows.iter().enumerate() {
         let mut cells = Vec::with_capacity(row.cells.len());
         let mut content_h: f32 = 0.0;
         for cell in &row.cells {
-            let x = geom.col_x(cell.col);
             let width: f32 = geom.cols
                 [cell.col.min(geom.cols.len())..(cell.col + cell.span).min(geom.cols.len())]
                 .iter()
                 .sum();
+            // Right-to-left tables put the first column at the right.
+            let x = if geom.tbl.bidi == Some(true) {
+                geom.width() - geom.col_x(cell.col) - width
+            } else {
+                geom.col_x(cell.col)
+            };
             let inner = (width - cell.margins[1] - cell.margins[3]).max(4.0);
             let continuation = cell.v_merge == Some(VMerge::Continue);
             let content = if continuation {
@@ -617,6 +681,7 @@ pub(in crate::layout) fn table_box(
                         fields: fields.clone(),
                         note_number: None,
                         float_frames: false,
+                        page: None,
                     },
                 )
             };
@@ -631,6 +696,20 @@ pub(in crate::layout) fn table_box(
                 rows: usize::from(!continuation),
             });
         }
+        // Horizontal borders take room of their own: the one along the top
+        // of each row, and the one along the bottom of the last row.
+        let border_top = border_room(
+            row.cells
+                .iter()
+                .filter(|c| c.v_merge != Some(VMerge::Continue))
+                .map(|c| c.borders[0]),
+        );
+        let border_bottom = if ri + 1 == row_count {
+            border_room(row.cells.iter().map(|c| c.borders[2]))
+        } else {
+            0.0
+        };
+        let content_h = content_h + border_top + border_bottom;
         let height = match row.tr.height {
             Some((h, HeightRule::Exact)) if h > 0.0 => h,
             Some((h, HeightRule::AtLeast)) => content_h.max(h),
@@ -643,6 +722,8 @@ pub(in crate::layout) fn table_box(
             cells,
             cant_split: row.tr.cant_split.unwrap_or(false),
             header: row.tr.header.unwrap_or(false),
+            border_top,
+            border_bottom,
         });
     }
     // Vertical merges: spans, and growing the last spanned row to fit.
@@ -663,7 +744,11 @@ pub(in crate::layout) fn table_box(
             }
             rows[r].cells[c].rows = span;
             let cell = &rows[r].cells[c];
-            let need = cell.content.height + cell.geom.margins[0] + cell.geom.margins[2];
+            let need = cell.content.height
+                + cell.geom.margins[0]
+                + cell.geom.margins[2]
+                + rows[r].border_top
+                + rows[r + span - 1].border_bottom;
             let have: f32 = rows[r..r + span].iter().map(|x| x.height).sum();
             if need > have {
                 rows[r + span - 1].height += need - have;
@@ -671,6 +756,14 @@ pub(in crate::layout) fn table_box(
         }
     }
     TableBox { geom, rows }
+}
+
+/// The room the widest of `borders` takes.
+fn border_room(borders: impl Iterator<Item = Option<Border>>) -> f32 {
+    borders
+        .flatten()
+        .map(|b| b.total_width())
+        .fold(0.0, f32::max)
 }
 
 /// Emits row `r` with its top-left table corner at (x, y) (x = the
@@ -702,15 +795,18 @@ pub(super) fn emit_row(
                 color,
             });
         }
+        let last = (r + cell.rows).min(tb.rows.len()) - 1;
+        let (top_room, bottom_room) = (row.border_top, tb.rows[last].border_bottom);
         let content_h = cell.content.height;
-        let avail = h - g.margins[0] - g.margins[2];
+        let avail = h - g.margins[0] - g.margins[2] - top_room - bottom_room;
         let dy = match g.tc.v_align.as_deref() {
             Some("center") => ((avail - content_h) / 2.0).max(0.0),
             Some("bottom") => (avail - content_h).max(0.0),
             _ => 0.0,
         };
+        let content_y = y + top_room + g.margins[0] + dy;
         let mut items = cell.content.items.clone();
-        super::offset_items(&mut items, cx + g.margins[1], y + g.margins[0] + dy);
+        super::offset_items(&mut items, cx + g.margins[1], content_y);
         let exact = matches!(tb.geom.rows[r].tr.height, Some((_, HeightRule::Exact)));
         if exact {
             let clip = Rect::from_xywh(cx, y, cell.width, h);
@@ -723,9 +819,10 @@ pub(super) fn emit_row(
         out.extend(items);
         for a in &cell.content.anchors {
             let mut a = a.clone();
-            a.para_top += y + g.margins[0] + dy;
-            a.line_top += y + g.margins[0] + dy;
-            a.char_x += cx + g.margins[1];
+            a.shift(cx + g.margins[1], content_y);
+            if a.cell.is_none() && a.drawing.anchor.as_ref().is_some_and(|x| x.in_cell) {
+                a.cell = Some((cx + g.margins[1], cell.width - g.margins[1] - g.margins[3]));
+            }
             anchors.push(a);
         }
         notes.extend(cell.content.notes.iter().copied());
@@ -738,10 +835,17 @@ pub(super) fn emit_row(
         } else {
             g.borders[2]
         };
+        // Horizontal lines run along the middle of the room made for them:
+        // a row's top, or the next row's top for a bottom border.
+        let top = y + top_room / 2.0;
+        let bottom_y = match tb.rows.get(last + 1) {
+            Some(next) => y + h + next.border_top / 2.0,
+            None => y + h - bottom_room / 2.0,
+        };
         let edges = [
-            (g.borders[0], cx, y, cx + cell.width, y),
+            (g.borders[0], cx, top, cx + cell.width, top),
             (g.borders[1], cx, y, cx, y + h),
-            (bottom, cx, y + h, cx + cell.width, y + h),
+            (bottom, cx, bottom_y, cx + cell.width, bottom_y),
             (g.borders[3], cx + cell.width, y, cx + cell.width, y + h),
         ];
         for (border, x0, y0, x1, y1) in edges {

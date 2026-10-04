@@ -1,7 +1,7 @@
 use crate::Document;
 use crate::layout::inline::Kind;
 use crate::layout::{Item, Layout, PlacedLine, StoryRef};
-use crate::test_support::{Parts, docx, fonts};
+use crate::test_support::{Parts, docx, fonts, shape_paragraph};
 
 const ARIAL_10: &str = r#"<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>"#;
 
@@ -311,4 +311,274 @@ fn rows_taller_than_a_page_split_instead_of_overflowing() {
             assert!(p.y + p.line().height <= page.height - 72.0 + 0.5, "{}", p.y);
         }
     }
+}
+
+const LETTER: &str = r#"<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>"#;
+
+fn arial_10() -> Parts<'static> {
+    Parts {
+        styles: Some(ARIAL_10),
+        ..Parts::default()
+    }
+}
+
+#[test]
+fn right_to_left_runs_size_lines_by_their_complex_script_size() {
+    let para = |rpr: &str| {
+        format!(
+            r#"<w:p><w:r><w:rPr>{rpr}<w:sz w:val="40"/><w:szCs w:val="20"/></w:rPr><w:t>abc</w:t></w:r></w:p>"#
+        )
+    };
+    let body = format!("{}{}{LETTER}", para("<w:rtl/>"), para(""));
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let (rtl, ltr) = (ls[0].line().height, ls[1].line().height);
+    assert!((ltr / rtl - 2.0).abs() < 0.01, "{rtl} {ltr}");
+}
+
+/// A two-column table 500pt wide placed by `tblpPr` attributes `pos`, of
+/// `rows` rows of `lines` paragraphs.
+fn floating_table(pos: &str, rows: usize, lines: usize) -> String {
+    let cell = |c: &str, r: usize| -> String {
+        (0..lines)
+            .map(|i| format!("<w:p><w:r><w:t>{c}{r}.{i}</w:t></w:r></w:p>"))
+            .collect()
+    };
+    let rows: String = (0..rows)
+        .map(|r| {
+            format!(
+                r#"<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc>{}</w:tc><w:tc>{}</w:tc></w:tr>"#,
+                cell("A", r),
+                cell("B", r)
+            )
+        })
+        .collect();
+    format!(
+        r#"<w:tbl><w:tblPr><w:tblpPr {pos}/><w:tblW w:w="10000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>{rows}</w:tbl>"#
+    )
+}
+
+fn find<'a>(l: &'a Layout, page: usize, t: &str) -> &'a PlacedLine {
+    l.pages[page]
+        .lines_of(&StoryRef::Body)
+        .find(|p| text(p) == t)
+        .unwrap_or_else(|| panic!("no line {t:?} on page {page}"))
+}
+
+#[test]
+fn floating_tables_sit_at_their_position() {
+    let pos = r#"w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="400" w:bottomFromText="200""#;
+    let body = format!(
+        "<w:p><w:r><w:t>Before</w:t></w:r></w:p>{}<w:p><w:r><w:t>After</w:t></w:r></w:p>{LETTER}",
+        floating_table(pos, 1, 1)
+    );
+    let l = layout(&body, &arial_10());
+    let before = find(&l, 0, "Before");
+    let cell = find(&l, 0, "A0.0");
+    let after = find(&l, 0, "After");
+    // Centered on the 468pt text area, 20pt below the text it follows.
+    assert!((cell.x - (72.0 - 16.0 + 5.4)).abs() < 0.1, "{}", cell.x);
+    let top = before.y + before.line().height + 20.0;
+    assert!((cell.y - top).abs() < 0.1, "{} {top}", cell.y);
+    // Text goes on below it, at its distance from text.
+    let bottom = cell.y + cell.line().height + 10.0;
+    assert!((after.y - bottom).abs() < 0.1, "{} {bottom}", after.y);
+}
+
+#[test]
+fn page_positioned_floating_tables_go_on_at_the_same_place() {
+    let pos = r#"w:vertAnchor="page" w:horzAnchor="page" w:tblpX="1000" w:tblpY="3000""#;
+    let body = format!("{}<w:p/>{LETTER}", floating_table(pos, 12, 6));
+    let l = layout(&body, &arial_10());
+    assert!(l.pages.len() >= 2);
+    let first = find(&l, 0, "A0.0");
+    assert!((first.y - 150.0).abs() < 0.1, "{}", first.y);
+    assert!((first.x - 55.4).abs() < 0.1, "{}", first.x);
+    let next = l.pages[1]
+        .lines_of(&StoryRef::Body)
+        .next()
+        .expect("the table goes on");
+    assert!((next.y - 150.0).abs() < 0.1, "{}", next.y);
+}
+
+#[test]
+fn right_to_left_tables_start_at_the_right() {
+    let table = r#"<w:tbl><w:tblPr><w:bidiVisual/><w:tblW w:w="4000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>First</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#;
+    let body = format!("{table}<w:p/>{LETTER}");
+    let l = layout(&body, &arial_10());
+    let first = find(&l, 0, "First");
+    let second = find(&l, 0, "Second");
+    // The first column is rightmost, the text of its cell ending at the
+    // right margin (cell margins of 5.4pt, columns 100pt wide).
+    assert!(
+        (first.x - 5.4 + 100.0 - 5.4 - 540.0).abs() < 0.1,
+        "{}",
+        first.x
+    );
+    assert!((first.x - second.x - 100.0).abs() < 0.1, "{}", second.x);
+}
+
+#[test]
+fn table_rows_make_room_for_their_borders() {
+    let line =
+        |side: &str| format!(r#"<w:{side} w:val="single" w:sz="16" w:space="0" w:color="auto"/>"#);
+    let row = |t: &str| format!("<w:tr><w:tc><w:p><w:r><w:t>{t}</w:t></w:r></w:p></w:tc></w:tr>");
+    let body = format!(
+        r#"<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/><w:tblBorders>{}{}{}</w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>{}{}</w:tbl><w:p><w:r><w:t>After</w:t></w:r></w:p>{LETTER}"#,
+        line("top"),
+        line("insideH"),
+        line("bottom"),
+        row("One"),
+        row("Two"),
+    );
+    let l = layout(&body, &arial_10());
+    let (one, two, after) = (find(&l, 0, "One"), find(&l, 0, "Two"), find(&l, 0, "After"));
+    let h = one.line().height;
+    // Each row makes room for the 2pt line along its top, the last row for
+    // the one along its bottom too.
+    assert!((one.y - 74.0).abs() < 0.01, "{}", one.y);
+    assert!((two.y - (one.y + h + 2.0)).abs() < 0.01, "{}", two.y);
+    assert!((after.y - (two.y + h + 2.0)).abs() < 0.01, "{}", after.y);
+}
+
+#[test]
+fn frames_in_the_margin_leave_the_text_beside_them() {
+    let header = r#"<w:p><w:pPr><w:framePr w:w="400" w:h="400" w:hRule="exact" w:wrap="notBeside" w:vAnchor="text" w:hAnchor="page" w:x="11000" w:y="0"/></w:pPr><w:r><w:t>9</w:t></w:r></w:p><w:p><w:r><w:t>Header text</w:t></w:r></w:p>"#;
+    let body = format!("<w:p><w:r><w:t>Body</w:t></w:r></w:p>{SECTION}");
+    let l = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            header: Some(header),
+            ..Parts::default()
+        },
+    );
+    let part = header_part();
+    let hs = lines(&l, &part);
+    let rest = hs.iter().find(|p| text(p) == "Header text").expect("text");
+    // The frame is right of the text area: the text stays at the top.
+    assert!((rest.y - 36.0).abs() < 0.01, "{}", rest.y);
+}
+
+#[test]
+fn keeping_with_the_next_paragraph_stops_at_a_page_break() {
+    let filler: String = (0..55)
+        .map(|i| format!("<w:p><w:r><w:t>Filler {i}</w:t></w:r></w:p>"))
+        .collect();
+    let body = format!(
+        r#"{filler}<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:br w:type="page"/><w:t>Heading</w:t></w:r></w:p><w:p><w:r><w:t>Text</w:t></w:r></w:p>{LETTER}"#
+    );
+    let l = layout(&body, &arial_10());
+    assert_eq!(l.pages.len(), 2);
+    assert!(page_texts(&l, 1).iter().any(|t| t == "Heading"));
+}
+
+fn drawing_rects(l: &Layout) -> Vec<pptx_engine::path::Rect> {
+    l.pages[0]
+        .all_items()
+        .filter_map(|i| match i {
+            Item::Drawing(d) => Some(d.rect),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn text_box_text_sits_in_its_shape() {
+    let body = format!(
+        "{}{LETTER}",
+        shape_paragraph("page", 200, 300, Some("Inside"))
+    );
+    let l = layout(&body, &arial_10());
+    let inside = l.pages[0]
+        .all_items()
+        .find_map(|i| match i {
+            Item::Line(p) if text(p) == "Inside" => Some(p),
+            _ => None,
+        })
+        .expect("the text box text");
+    assert!(matches!(inside.para.story, StoryRef::TextBox(..)));
+    // Inside the shape, past its default insets of 7.2pt and 3.6pt.
+    assert!((inside.x - 207.2).abs() < 0.01, "{}", inside.x);
+    assert!((inside.y - 303.6).abs() < 0.01, "{}", inside.y);
+}
+
+#[test]
+fn drawings_in_table_cells_are_positioned_in_the_cell() {
+    let cell = shape_paragraph("column", 10, 0, None);
+    let body = format!(
+        r#"<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc><w:tc>{cell}</w:tc></w:tr></w:tbl><w:p/>{LETTER}"#
+    );
+    let l = layout(&body, &arial_10());
+    let rects = drawing_rects(&l);
+    // The first cell's text lines up with the margin (tables before Word
+    // 2013), so the second cell's text starts 100pt to the right of it.
+    assert_eq!(rects.len(), 1);
+    assert!(
+        (rects[0].x - (72.0 + 100.0 + 10.0)).abs() < 0.01,
+        "{}",
+        rects[0].x
+    );
+}
+
+const PAGE: &str = r#"<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>"#;
+
+/// A section break paragraph ending a section of `cols` columns that
+/// started `how` (`continuous` or `nextPage`).
+fn section_end(how: &str, cols: &str) -> String {
+    format!(r#"<w:p><w:pPr><w:sectPr><w:type w:val="{how}"/>{PAGE}{cols}</w:sectPr></w:pPr></w:p>"#)
+}
+
+fn para(t: &str) -> String {
+    format!("<w:p><w:r><w:t>{t}</w:t></w:r></w:p>")
+}
+
+#[test]
+fn sections_on_one_page_stack_their_columns() {
+    let two = r#"<w:cols w:num="2" w:space="720"/>"#;
+    let body = format!(
+        r#"{}{}{}<w:p><w:r><w:br w:type="column"/><w:t>Right</w:t></w:r></w:p>{}{}<w:sectPr><w:type w:val="continuous"/>{PAGE}</w:sectPr>"#,
+        para("Intro"),
+        section_end("nextPage", ""),
+        para("Left"),
+        section_end("continuous", two),
+        para("After"),
+    );
+    let l = layout(&body, &arial_10());
+    let intro = find(&l, 0, "Intro");
+    let h = intro.line().height;
+    let (left, right, after) = (
+        find(&l, 0, "Left"),
+        find(&l, 0, "Right"),
+        find(&l, 0, "After"),
+    );
+    // The two columns start below the first section (its empty section
+    // break paragraph included), the second at 72 + 216 + 36.
+    assert!((left.y - (72.0 + 2.0 * h)).abs() < 0.01, "{}", left.y);
+    assert!((right.y - left.y).abs() < 0.01, "{}", right.y);
+    assert!((right.x - 324.0).abs() < 0.01, "{}", right.x);
+    // The next section starts below both columns: the column break and the
+    // empty paragraph ending the columns take no room.
+    assert!((after.y - (left.y + h)).abs() < 0.01, "{}", after.y);
+}
+
+#[test]
+fn paragraphs_going_on_in_a_wider_column_fill_it() {
+    let cols = r#"<w:cols w:num="2" w:space="720" w:equalWidth="0"><w:col w:w="2000" w:space="720"/><w:col w:w="6640"/></w:cols>"#;
+    let words = "word ".repeat(600);
+    let body = format!("{}<w:sectPr>{PAGE}{cols}</w:sectPr>", para(words.trim()));
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let (narrow, wide): (Vec<&PlacedLine>, Vec<&PlacedLine>) =
+        ls.iter().copied().partition(|p| p.x < 150.0);
+    assert!(!narrow.is_empty() && !wide.is_empty());
+    // The second column is 332pt wide: its lines hold more than the first
+    // column's 100pt.
+    let widest = wide.iter().map(|p| p.line().width).fold(0.0f32, f32::max);
+    assert!(widest > 300.0, "{widest}");
+    assert!(
+        (wide[0].x - (72.0 + 100.0 + 36.0)).abs() < 0.01,
+        "{}",
+        wide[0].x
+    );
 }

@@ -1,30 +1,31 @@
 //! The body paginator: sections, columns, pages, keep rules, notes.
 
-use super::super::drawing::Wrap;
+mod floats;
+mod notes;
+mod tables;
+
 use super::super::format::TableCtx;
 use super::super::inline::{FieldValues, Kind};
 use super::super::lines::LineEnd;
 use super::super::{Chrome, Item, Page, ParaBox, StoryRef};
-use super::anchors::{PageGeom, resolve};
-use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, resolve_frame};
-use super::split::split_row;
+use super::anchors::PageGeom;
 use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
-    emit_row, para_box, placed, prev_record, space_before, stack_story, table_box,
+    para_box, prev_record, rebreak, space_before, stack_story, table_box,
 };
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
 use crate::model::props::ParaProps;
 use crate::model::section::{HeaderRefs, LineNumberRestart, PageVAlign, Section, SectionStart};
+use floats::{OnPage, place_anchors, place_frames};
 use pptx_engine::path::Rect;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 const EPS: f32 = 0.01;
 
-/// A frame at least this fraction of the column wide leaves no room for
-/// text beside it.
-const WIDE_FRAME: f32 = 0.66;
+/// Columns this close in width take the same line breaks.
+const COLUMN_SLACK: f32 = 0.5;
 
 /// Default distance of line numbers from the text.
 const LINE_NUMBER_DISTANCE: f32 = 18.0;
@@ -48,6 +49,11 @@ struct Cur {
     /// Vertical bands of the page that body text skips (frames that allow
     /// no text beside them).
     bands: Vec<(f32, f32)>,
+    /// Where the columns of the current section start on this page (below
+    /// what earlier sections left on it).
+    sect_top: f32,
+    /// The lowest point the current section's columns reached on this page.
+    sect_bottom: f32,
 }
 
 pub(in crate::layout) struct Flow<'e, 'a> {
@@ -159,6 +165,16 @@ impl<'e, 'a> Flow<'e, 'a> {
                 fields: fields.clone(),
                 note_number: None,
                 float_frames: true,
+                page: Some(PageGeom {
+                    width: sect.page_w,
+                    height: sect.page_h,
+                    left: sect.left,
+                    right: sect.right,
+                    top: sect.top,
+                    bottom: sect.bottom,
+                    col_left: sect.left + sect.gutter,
+                    col_width: sect.text_width(),
+                }),
             },
         ))
     }
@@ -230,22 +246,25 @@ impl<'e, 'a> Flow<'e, 'a> {
             col_left: s.left,
             col_width: s.text_width(),
         };
+        let on_page = OnPage {
+            env: self.env,
+            fields: &fields,
+            geom: &geom,
+        };
         if let Some(mut h) = header {
             offset_items(&mut h.items, s.left + s.gutter, s.header);
             for a in &mut h.anchors {
-                a.para_top += s.header;
-                a.line_top += s.header;
-                a.char_x += s.left;
+                a.shift(s.left, s.header);
             }
             if !s.top_exact {
                 top = top.max(s.header + h.height);
             }
             chrome.extend(h.items);
-            place_anchors(&h.anchors, &geom, &mut behind, &mut front);
+            place_anchors(&on_page, &h.anchors, &mut behind, &mut front);
             place_frames(
+                &on_page,
                 &mut h.frames,
                 (s.left + s.gutter, s.header),
-                &geom,
                 &mut chrome,
                 &mut behind,
                 &mut front,
@@ -255,19 +274,17 @@ impl<'e, 'a> Flow<'e, 'a> {
             let y = s.page_h - s.footer - f.height;
             offset_items(&mut f.items, s.left + s.gutter, y);
             for a in &mut f.anchors {
-                a.para_top += y;
-                a.line_top += y;
-                a.char_x += s.left;
+                a.shift(s.left, y);
             }
             if !s.bottom_exact {
                 bottom = bottom.min(y);
             }
             chrome.extend(f.items);
-            place_anchors(&f.anchors, &geom, &mut behind, &mut front);
+            place_anchors(&on_page, &f.anchors, &mut behind, &mut front);
             place_frames(
+                &on_page,
                 &mut f.frames,
                 (s.left + s.gutter, y),
-                &geom,
                 &mut chrome,
                 &mut behind,
                 &mut front,
@@ -310,6 +327,8 @@ impl<'e, 'a> Flow<'e, 'a> {
             hard,
             line_on_page: 0,
             bands: Vec::new(),
+            sect_top: top,
+            sect_bottom: top,
         });
     }
 
@@ -392,110 +411,6 @@ impl<'e, 'a> Flow<'e, 'a> {
         self.pages.push(cur.page);
     }
 
-    fn separator_stack(&mut self) -> Option<Stack> {
-        if self.separator.is_none() {
-            let notes = self.env.doc.footnotes();
-            let sep = notes.by_id.values().find(|n| n.kind == "separator");
-            let width = self.section().text_width();
-            self.separator = Some(match sep {
-                Some(n) => stack_story(
-                    self.env,
-                    &n.story,
-                    None,
-                    &StackCtx {
-                        story: StoryRef::Footnote(-1),
-                        width,
-                        table: Default::default(),
-                        fields: self.fields(),
-                        note_number: None,
-                        float_frames: false,
-                    },
-                ),
-                None => Stack {
-                    items: vec![Item::Rule {
-                        x0: 0.0,
-                        y0: 6.0,
-                        x1: 144.0,
-                        y1: 6.0,
-                        border: crate::model::props::Border {
-                            style: crate::model::props::LineStyle::Single,
-                            width: 0.5,
-                            space: 0.0,
-                            color: crate::model::props::ColorRef::Auto,
-                        },
-                    }],
-                    anchors: Vec::new(),
-                    height: 12.0,
-                    notes: Vec::new(),
-                    frames: Vec::new(),
-                },
-            });
-        }
-        self.separator.clone()
-    }
-
-    fn note_height(&mut self, id: i64) -> f32 {
-        if let Some(st) = self.note_stacks.get(&id) {
-            return st.height;
-        }
-        let Some(note) = self.env.doc.footnotes().by_id.get(&id) else {
-            return 0.0;
-        };
-        let number = self
-            .env
-            .note_numbers
-            .get(&(false, id))
-            .cloned()
-            .unwrap_or_default();
-        let st = stack_story(
-            self.env,
-            &note.story,
-            None,
-            &StackCtx {
-                story: StoryRef::Footnote(id),
-                width: self.section().text_width(),
-                table: Default::default(),
-                fields: self.fields(),
-                note_number: Some(number),
-                float_frames: false,
-            },
-        );
-        let h = st.height;
-        self.note_stacks.insert(id, st);
-        h
-    }
-
-    /// Extra note height needed for these note references on this page.
-    fn notes_needed(&mut self, ids: &[i64]) -> f32 {
-        let fresh: Vec<i64> = {
-            let cur = self.cur.as_ref();
-            ids.iter()
-                .copied()
-                .filter(|id| cur.is_none_or(|c| !c.notes.contains(id)))
-                .collect()
-        };
-        if fresh.is_empty() {
-            return 0.0;
-        }
-        let mut h: f32 = fresh.iter().map(|&id| self.note_height(id)).sum();
-        if self.cur.as_ref().is_some_and(|c| c.notes.is_empty()) {
-            h += self.separator_stack().map_or(0.0, |s| s.height);
-        }
-        h
-    }
-
-    fn add_notes(&mut self, ids: &[i64]) {
-        let need = self.notes_needed(ids);
-        if let Some(cur) = &mut self.cur {
-            for id in ids {
-                if !cur.notes.contains(id) {
-                    cur.notes.push(*id);
-                }
-            }
-            cur.notes_height += need;
-        }
-    }
-
     /// Moves to the next column, or the next page after the last column.
     fn next_column(&mut self, hard: bool) {
         let (sect, col, cols) = match &self.cur {
@@ -504,8 +419,10 @@ impl<'e, 'a> Flow<'e, 'a> {
         };
         if col + 1 < cols {
             if let Some(c) = &mut self.cur {
+                // The next column starts where the section started on the page.
+                c.sect_bottom = c.sect_bottom.max(c.y);
                 c.col += 1;
-                c.y = c.top;
+                c.y = c.sect_top;
                 c.placed_any = false;
                 c.hard = hard;
             }
@@ -513,77 +430,6 @@ impl<'e, 'a> Flow<'e, 'a> {
             self.start_page(sect, hard);
         }
         self.prev = None;
-    }
-
-    fn avail_bottom(&self) -> f32 {
-        self.cur.as_ref().map_or(0.0, |c| {
-            // Text stops at the next blocked band below it.
-            c.bands
-                .iter()
-                .filter(|(top, _)| *top >= c.y - EPS)
-                .fold(c.bottom - c.notes_height, |b, (top, _)| b.min(*top))
-        })
-    }
-
-    /// Moves the current position past a blocked band it is in.
-    fn skip_bands(&mut self) {
-        if let Some(c) = &mut self.cur {
-            while let Some(&(_, bottom)) = c
-                .bands
-                .iter()
-                .find(|(top, bottom)| *top <= c.y + EPS && *bottom > c.y + EPS)
-            {
-                c.y = bottom;
-            }
-        }
-    }
-
-    /// Places the text frame starting at `blocks[i]`, if it starts one, and
-    /// returns the index after its paragraphs.
-    fn place_frame(&mut self, blocks: &[&Block], i: usize) -> Option<usize> {
-        let (col_left, width) = self.col_geom();
-        let sc = StackCtx {
-            story: StoryRef::Body,
-            width,
-            table: TableCtx::default(),
-            fields: self.fields(),
-            note_number: None,
-            float_frames: false,
-        };
-        let (mut f, end) = frame_box(self.env, &self.env.doc.body, blocks, i, &sc)?;
-        self.skip_bands();
-        let (y, placed_any) = self
-            .cur
-            .as_ref()
-            .map_or((0.0, false), |c| (c.y, c.placed_any));
-        f.para_top = y;
-        f.text_left = col_left;
-        let wrap = f.wrap();
-        // Text cannot go beside a frame that leaves no room for it.
-        let blocks_text = wrap == FrameWrap::NotBeside
-            || (wrap == FrameWrap::Beside && f.width >= width * WIDE_FRAME);
-        let in_flow = f.follows_text() && blocks_text;
-        if in_flow && y + f.height > self.avail_bottom() + EPS && placed_any {
-            self.next_column(false);
-            f.para_top = self.cur.as_ref().map_or(0.0, |c| c.y);
-        }
-        let geom = self.page_geom();
-        let rect = resolve_frame(&f, &geom);
-        let mut items = Vec::new();
-        let mut anchors = Vec::new();
-        emit_frame(&f, rect, &mut items, &mut anchors);
-        if let Some(c) = &mut self.cur {
-            c.body.extend(items);
-            place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
-            if in_flow {
-                c.y = c.y.max(rect.y + rect.h + f.props.v_space);
-                c.placed_any = true;
-            } else if blocks_text {
-                c.bands
-                    .push((rect.y - f.props.v_space, rect.y + rect.h + f.props.v_space));
-            }
-        }
-        Some(end)
     }
 
     fn para(&mut self, b: &Block, width: f32) -> Arc<ParaBox> {
@@ -600,10 +446,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 return Arc::clone(pb);
             }
         }
-        let grid = {
-            let s = self.section();
-            (s.grid.snap_lines && s.grid.line_pitch > 0.0).then_some(s.grid.line_pitch)
-        };
+        let grid = self.grid();
         let pb = para_box(
             self.env,
             b,
@@ -667,6 +510,14 @@ impl<'e, 'a> Flow<'e, 'a> {
             let join = self.border_join(blocks, k, props, prev.as_ref());
             let (bt, bb) = border_space(props, join);
             let lines = &pb.lines.lines;
+            if let Some(b) = lines
+                .iter()
+                .position(|l| matches!(l.ends, LineEnd::PageBreak | LineEnd::ColumnBreak))
+            {
+                // The chain ends at a page break.
+                need += bt + lines[..=b].iter().map(|l| l.height).sum::<f32>();
+                break;
+            }
             if props.keep_next && k + 1 < blocks.len() && k - i < 32 {
                 need += bt + pb.lines.height + bb;
                 prev = Some(prev_record(props));
@@ -718,8 +569,14 @@ impl<'e, 'a> Flow<'e, 'a> {
                         if same_size {
                             self.section_started[s] = true;
                             if let Some(c) = &mut self.cur {
+                                // Below everything the previous section's
+                                // columns hold on the page.
+                                let y = c.sect_bottom.max(c.y);
                                 c.sect = s;
                                 c.col = 0;
+                                c.y = y;
+                                c.sect_top = y;
+                                c.sect_bottom = y;
                             }
                         } else {
                             self.start_page(s, true);
@@ -736,6 +593,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 }
             }
             match b.kind {
+                BlockKind::Paragraph if self.bare_section_end(blocks, i, section_of) => {}
                 BlockKind::Paragraph => match self.place_frame(blocks, i) {
                     Some(end) => skip_to = end,
                     None => self.place_paragraph(blocks, i),
@@ -752,15 +610,17 @@ impl<'e, 'a> Flow<'e, 'a> {
 
     fn place_paragraph(&mut self, blocks: &[&Block], i: usize) {
         let b = blocks[i];
-        let (col_left, width) = self.col_geom();
-        let pb = self.para(b, width);
+        let (_, width) = self.col_geom();
+        let mut pb = self.para(b, width);
         let props = pb.format.props.clone();
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         if props.page_break_before && !at_top {
             let sect = self.cur.as_ref().map_or(0, |c| c.sect);
             self.start_page(sect, true);
             self.prev = None;
-        } else if props.keep_next && !at_top {
+        } else if props.keep_next && !at_top && !hard_break(&pb) {
+            // (A paragraph with a page break in it goes on after the break
+            // anyway: what comes before it stays.)
             let need = self.keep_chain(blocks, i, width);
             let (y, top) = self.cur.as_ref().map_or((0.0, 0.0), |c| (c.y, c.top));
             let before = space_before(&props, self.prev.as_ref(), false, self.sum_spacing());
@@ -770,6 +630,10 @@ impl<'e, 'a> Flow<'e, 'a> {
                 self.next_column(false);
             }
         }
+        // The paragraph goes in the column it is now in.
+        let (mut col_left, mut width) = (0.0, width);
+        let mut li = 0;
+        self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         let hard = self.cur.as_ref().is_some_and(|c| c.hard);
         let first_in_doc = self.pages.is_empty() && at_top;
@@ -789,8 +653,7 @@ impl<'e, 'a> Flow<'e, 'a> {
         // Where the paragraph's floating drawings are positioned from.
         let mut anchor_top = self.reserve_float_bands(&pb, col_left, width);
         let mut join = self.border_join(blocks, i, &props, self.prev.as_ref());
-        let lines_len = pb.lines.lines.len();
-        let mut li = 0;
+        let mut lines_len = pb.lines.lines.len();
         let mut first_fragment = true;
         while li < lines_len {
             self.skip_bands();
@@ -849,6 +712,8 @@ impl<'e, 'a> Flow<'e, 'a> {
                         continue;
                     }
                     self.next_column(false);
+                    self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
+                    lines_len = pb.lines.lines.len();
                     // A new column starts a new border box.
                     join.prev = false;
                     anchor_top = self.reserve_float_bands(&pb, col_left, width);
@@ -902,9 +767,15 @@ impl<'e, 'a> Flow<'e, 'a> {
                 }
             }
             let geom = self.page_geom();
+            let fields = self.fields();
+            let on_page = OnPage {
+                env: self.env,
+                fields: &fields,
+                geom: &geom,
+            };
             if let Some(c) = &mut self.cur {
                 c.body.extend(items);
-                place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
+                place_anchors(&on_page, &anchors, &mut c.behind, &mut c.front);
                 c.y = bottom;
                 c.placed_any = true;
                 c.hard = false;
@@ -927,89 +798,65 @@ impl<'e, 'a> Flow<'e, 'a> {
                         }
                     }
                 }
+                self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
+                lines_len = pb.lines.lines.len();
             }
         }
         self.prev = Some(prev_record(&props));
     }
 
-    /// Reserves the bands of the floating drawings in `pb` that leave no
-    /// room for text beside them, for a paragraph starting at the current
-    /// position; moves to the next column first when such a drawing does
-    /// not fit. Returns the paragraph top the drawings are positioned from.
-    fn reserve_float_bands(&mut self, pb: &Arc<ParaBox>, col_left: f32, width: f32) -> f32 {
-        for attempt in 0..2 {
-            let Some(c) = &self.cur else {
-                return 0.0;
-            };
-            let top = c.y;
-            let geom = self.page_geom();
-            let mut bands = Vec::new();
-            for line in &pb.lines.lines {
-                for k in line.start..line.end {
-                    let Kind::Anchor(o) = pb.inline.clusters[k].kind else {
-                        continue;
-                    };
-                    let d = &pb.inline.objects[o as usize];
-                    let Some(anchor) = &d.anchor else {
-                        continue;
-                    };
-                    let a = PendingAnchor {
-                        drawing: Arc::new(d.clone()),
-                        para_top: top,
-                        line_top: top + line.top,
-                        char_x: col_left + pb.lines.x[k],
-                        story: pb.story.clone(),
-                    };
-                    let Some(r) = resolve(&a, &geom) else {
-                        continue;
-                    };
-                    let beside_column = r.x + r.w <= col_left || r.x >= col_left + width;
-                    let no_room = match anchor.wrap {
-                        Wrap::TopAndBottom => true,
-                        Wrap::Square | Wrap::Tight => r.w >= width * WIDE_FRAME,
-                        Wrap::None => false,
-                    };
-                    if no_room && !beside_column && !anchor.behind {
-                        bands.push((r.y - anchor.dist[0], r.y + r.h + anchor.dist[1]));
-                    }
-                }
-            }
-            let bottom = c.bottom - c.notes_height;
-            let overflows = bands.iter().any(|&(_, b)| b > bottom + EPS);
-            if attempt == 0 && overflows && c.placed_any {
-                self.next_column(false);
-                continue;
-            }
-            if let Some(c) = &mut self.cur {
-                c.bands.extend(bands);
-            }
-            return top;
+    /// Takes the current column's left edge and width for a paragraph
+    /// whose lines from `li` on are still to be placed, breaking those
+    /// lines again when the column is not as wide as they were broken for.
+    fn follow_column(
+        &mut self,
+        pb: &mut Arc<ParaBox>,
+        li: &mut usize,
+        col_left: &mut f32,
+        width: &mut f32,
+    ) {
+        let (left, w) = self.col_geom();
+        *col_left = left;
+        if (w - *width).abs() <= COLUMN_SLACK {
+            return;
         }
-        self.cur.as_ref().map_or(0.0, |c| c.y)
+        *width = w;
+        if let Some(line) = pb.lines.lines.get(*li) {
+            *pb = rebreak(self.env, pb, w, line.start, self.grid());
+            *li = 0;
+        }
     }
 
-    /// When a band starts within `next` points below the current position
-    /// and there is room below it, moves past it and says so.
-    fn jump_band(&mut self, next: f32) -> bool {
-        let Some(c) = &mut self.cur else {
+    /// Whether `blocks[i]` is an empty paragraph that only ends a section of
+    /// several columns before a section going on on the same page: Word
+    /// gives it no room when it ends the columns.
+    fn bare_section_end(&mut self, blocks: &[&Block], i: usize, section_of: &[usize]) -> bool {
+        let (Some(&s), Some(&next)) = (section_of.get(i), section_of.get(i + 1)) else {
             return false;
         };
-        let bottom = c.bottom - c.notes_height;
-        let band = c
-            .bands
-            .iter()
-            .filter(|(top, _)| *top >= c.y - EPS && *top < c.y + next + EPS)
-            .map(|&(_, b)| b)
-            .fold(None, |acc: Option<f32>, b| {
-                Some(acc.map_or(b, |a| a.max(b)))
-            });
-        match band {
-            Some(b) if b + next <= bottom + EPS => {
-                c.y = b;
-                true
-            }
-            _ => false,
+        if s == next
+            || self.sections.get(s).is_none_or(|c| c.columns.len() < 2)
+            || self
+                .sections
+                .get(next)
+                .is_none_or(|n| n.start != SectionStart::Continuous)
+        {
+            return false;
         }
+        let (_, width) = self.col_geom();
+        let pb = self.para(blocks[i], width);
+        pb.inline.label_len == 0
+            && pb
+                .inline
+                .clusters
+                .iter()
+                .all(|c| matches!(c.kind, Kind::End | Kind::Zero))
+    }
+
+    /// The pitch lines snap to in the current section, if they do.
+    fn grid(&self) -> Option<f32> {
+        let s = self.section();
+        (s.grid.snap_lines && s.grid.line_pitch > 0.0).then_some(s.grid.line_pitch)
     }
 
     /// How many lines from `li` fit in the current column, and the note
@@ -1076,182 +923,16 @@ impl<'e, 'a> Flow<'e, 'a> {
         }
     }
 
-    fn place_table(&mut self, b: &Block) {
-        let (col_left, width) = self.col_geom();
-        if let (Some(prev), Some(c)) = (self.prev.take(), &mut self.cur)
-            && c.placed_any
-        {
-            c.y += prev.after;
-        }
-        let mut tb = table_box(
-            self.env,
-            &self.env.doc.body,
-            b,
-            width,
-            &StoryRef::Body,
-            &self.fields(),
-        );
-        let headers: Vec<usize> = (0..tb.rows.len())
-            .take_while(|&r| tb.rows[r].header)
-            .collect();
-        let mut r = 0;
-        // The row was moved to a fresh column already: place it even if it
-        // does not fit, or a row taller than the page would never land.
-        let mut moved = false;
-        while r < tb.rows.len() {
-            self.skip_bands();
-            let h = tb.rows[r].height;
-            let (y, placed_any) = self
-                .cur
-                .as_ref()
-                .map_or((0.0, false), |c| (c.y, c.placed_any));
-            let avail = self.avail_bottom();
-            if y + h > avail + EPS {
-                if self.jump_band(h) {
-                    continue;
-                }
-                // A row that may break keeps the lines that fit here and
-                // goes on in the next column.
-                let split = split_row(&tb, r, avail - y);
-                let next = split.is_some() || (placed_any && !moved);
-                if let Some((first, rest)) = split {
-                    tb.rows[r] = first;
-                    self.emit_table_row(&tb, r, col_left);
-                    tb.rows[r] = rest;
-                }
-                if next {
-                    self.next_column(false);
-                    moved = true;
-                    // Repeat header rows at the top of the new page.
-                    if r >= headers.len() && !headers.is_empty() {
-                        for &hr in &headers {
-                            self.emit_table_row(&tb, hr, col_left);
-                        }
-                    }
-                    continue;
-                }
-            }
-            self.emit_table_row(&tb, r, col_left);
-            moved = false;
-            r += 1;
-        }
-        self.prev = None;
-    }
-
-    fn emit_table_row(&mut self, tb: &super::stack::TableBox, r: usize, col_left: f32) {
-        let y = self.cur.as_ref().map_or(0.0, |c| c.y);
-        let mut items = Vec::new();
-        let mut anchors = Vec::new();
-        let mut notes: Vec<(bool, i64)> = Vec::new();
-        emit_row(tb, r, col_left, y, &mut items, &mut anchors, &mut notes);
-        let ids: Vec<i64> = notes
-            .iter()
-            .filter(|(e, _)| !e)
-            .map(|(_, id)| *id)
-            .collect();
-        self.add_notes(&ids);
-        let geom = self.page_geom();
-        if let Some(c) = &mut self.cur {
-            c.body.extend(items);
-            place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
-            c.y += tb.rows[r].height;
-            c.placed_any = true;
-            c.hard = false;
-        }
-    }
-
-    fn place_endnotes(&mut self) {
-        let notes = self.env.doc.endnotes();
-        let mut ordered: Vec<(&String, i64)> = self
-            .env
-            .note_numbers
-            .iter()
-            .filter(|((endnote, _), _)| *endnote)
-            .map(|((_, id), n)| (n, *id))
-            .collect();
-        if ordered.is_empty() {
-            return;
-        }
-        ordered.sort_by_key(|(_, id)| *id);
-        let width = self.section().text_width();
-        let (col_left, _) = self.col_geom();
-        for (number, id) in ordered {
-            let Some(note) = notes.by_id.get(&id) else {
-                continue;
-            };
-            let st = stack_story(
-                self.env,
-                &note.story,
-                None,
-                &StackCtx {
-                    story: StoryRef::Endnote(id),
-                    width,
-                    table: Default::default(),
-                    fields: self.fields(),
-                    note_number: Some(number.clone()),
-                    float_frames: false,
-                },
-            );
-            let (y, placed_any) = self
-                .cur
-                .as_ref()
-                .map_or((0.0, false), |c| (c.y, c.placed_any));
-            if y + st.height > self.avail_bottom() && placed_any {
-                self.next_column(false);
-            }
-            let y = self.cur.as_ref().map_or(0.0, |c| c.y);
-            let mut items = st.items.clone();
-            offset_items(&mut items, col_left, y);
-            if let Some(c) = &mut self.cur {
-                c.body.extend(items);
-                c.y += st.height;
-                c.placed_any = true;
-            }
-        }
-    }
-
     pub fn finish(mut self) -> Vec<Page> {
         self.finish_page();
         self.pages
     }
 }
 
-/// Places a header's or footer's text frames, given where its stack went.
-fn place_frames(
-    frames: &mut [PendingFrame],
-    origin: (f32, f32),
-    geom: &PageGeom,
-    out: &mut Vec<Item>,
-    behind: &mut Vec<Item>,
-    front: &mut Vec<Item>,
-) {
-    for f in frames {
-        f.offset(origin.0, origin.1);
-        let rect = resolve_frame(f, geom);
-        let mut anchors = Vec::new();
-        emit_frame(f, rect, out, &mut anchors);
-        place_anchors(&anchors, geom, behind, front);
-    }
-}
-
-/// Places floating drawings behind or in front of the text.
-fn place_anchors(
-    anchors: &[PendingAnchor],
-    geom: &PageGeom,
-    behind: &mut Vec<Item>,
-    front: &mut Vec<Item>,
-) {
-    let mut sorted: Vec<&PendingAnchor> = anchors.iter().collect();
-    sorted.sort_by_key(|a| a.drawing.anchor.as_ref().map_or(0, |x| x.z));
-    for a in sorted {
-        let Some(rect) = resolve(a, geom) else {
-            continue;
-        };
-        let item = placed(Arc::clone(&a.drawing), rect, a.story.clone());
-        if a.drawing.anchor.as_ref().is_some_and(|x| x.behind) {
-            behind.push(item);
-        } else {
-            front.push(item);
-        }
-    }
+/// Whether a page or column break ends one of the paragraph's lines.
+fn hard_break(pb: &ParaBox) -> bool {
+    pb.lines
+        .lines
+        .iter()
+        .any(|l| matches!(l.ends, LineEnd::PageBreak | LineEnd::ColumnBreak))
 }

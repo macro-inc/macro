@@ -5,6 +5,7 @@ mod body;
 mod frames;
 mod split;
 mod stack;
+mod textbox;
 
 use super::fonts::Fonts;
 use super::format::{Formats, TableCtx};

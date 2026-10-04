@@ -100,6 +100,7 @@ pub(in crate::layout) fn frame_box(
             fields: sc.fields.clone(),
             note_number: sc.note_number.clone(),
             float_frames: false,
+            page: None,
         };
         stack_blocks(env, story, content, &ctx, false)
     };
@@ -150,20 +151,33 @@ fn content_width(items: &[Item]) -> f32 {
         .fold(0.0, f32::max)
 }
 
+/// Where a frame `width` wide goes across a page, `text_left` being the
+/// left edge of the text it is anchored in.
+fn frame_x(p: &FramePr, width: f32, text_left: f32, g: &PageGeom) -> f32 {
+    let (x0, span) = match p.h_anchor.as_deref() {
+        Some("margin") => (g.left, g.width - g.left - g.right),
+        Some("text") => (text_left, g.col_width),
+        _ => (0.0, g.width),
+    };
+    match p.x_align.as_deref() {
+        Some("center") => x0 + (span - width) / 2.0,
+        Some("right" | "outside") => x0 + span - width,
+        Some("left" | "inside") => x0,
+        _ => x0 + p.x.unwrap_or(0.0),
+    }
+}
+
+/// Whether frame `f` of a stack laid out in the column of `g` stands
+/// across that column's text: a frame wholly in a margin leaves it alone.
+pub fn across_text(f: &PendingFrame, g: &PageGeom) -> bool {
+    let x = frame_x(&f.props, f.width, g.col_left, g);
+    x < g.col_left + g.col_width && x + f.width > g.col_left
+}
+
 /// Where a frame goes on a page.
 pub fn resolve_frame(f: &PendingFrame, g: &PageGeom) -> Rect {
     let p = &f.props;
-    let (x0, span) = match p.h_anchor.as_deref() {
-        Some("margin") => (g.left, g.width - g.left - g.right),
-        Some("text") => (f.text_left, g.col_width),
-        _ => (0.0, g.width),
-    };
-    let x = match p.x_align.as_deref() {
-        Some("center") => x0 + (span - f.width) / 2.0,
-        Some("right" | "outside") => x0 + span - f.width,
-        Some("left" | "inside") => x0,
-        _ => x0 + p.x.unwrap_or(0.0),
-    };
+    let x = frame_x(p, f.width, f.text_left, g);
     let y = if f.follows_text() {
         f.para_top + p.y.unwrap_or(0.0)
     } else {
@@ -207,9 +221,7 @@ pub fn emit_frame(
     out.extend(items);
     for a in &f.anchors {
         let mut a = a.clone();
-        a.para_top += rect.y;
-        a.line_top += rect.y;
-        a.char_x += rect.x;
+        a.shift(rect.x, rect.y);
         anchors.push(a);
     }
 }

@@ -116,6 +116,7 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
     tbl.apply(&direct);
     tbl.style = style.map(|s| s.id.clone());
     let look = tbl.look.unwrap_or_default();
+    let bidi = tbl.bidi == Some(true);
     let mut cols = grid_cols(snippets, &table.props);
 
     // Rows and cells.
@@ -251,7 +252,7 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
             cell_tbl.apply(&styled.tbl);
             cell_tbl.apply(&direct);
             let (dt, dl, db, dr) = cell_tbl.margins();
-            let margins = [
+            let mut margins = [
                 tc.margins.top.unwrap_or(dt),
                 tc.margins.left.unwrap_or(dl),
                 tc.margins.bottom.unwrap_or(db),
@@ -277,12 +278,18 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
                     }
                 })
             };
-            let borders = [
+            let mut borders = [
                 edge(tc.borders.top, tb.top, tb.inside_h, first_row),
                 edge(tc.borders.left, tb.left, tb.inside_v, first_col),
                 edge(tc.borders.bottom, tb.bottom, tb.inside_h, last_row),
                 edge(tc.borders.right, tb.right, tb.inside_v, last_col),
             ];
+            if bidi {
+                // Left and right mean start and end: a right-to-left table
+                // starts at the right.
+                borders.swap(1, 3);
+                margins.swap(1, 3);
+            }
             let shading = tc.shading.flatten().or_else(|| cell_tbl.shading.flatten());
             cells.push(CellGeom {
                 id: id.clone(),
@@ -309,7 +316,7 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
     let first_margin = rows
         .first()
         .and_then(|r| r.cells.first())
-        .map_or(5.4, |c| c.margins[1]);
+        .map_or(5.4, |c| c.margins[if bidi { 3 } else { 1 }]);
     let indent = tbl.ind.unwrap_or(0.0);
     let compat = formats.settings.compat_mode;
     let mut left = if compat < 15 {
@@ -317,9 +324,16 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
     } else {
         indent
     };
-    match tbl.jc.as_deref() {
+    let jc = match (tbl.jc.as_deref(), bidi) {
+        (Some("start"), false) | (Some("end"), true) => Some("left"),
+        (Some("start"), true) | (Some("end"), false) => Some("right"),
+        (jc, _) => jc,
+    };
+    match jc {
         Some("center") => left = (avail - width) / 2.0,
-        Some("right" | "end") => left = avail - width,
+        Some("right") => left = avail - width,
+        // A right-to-left table is indented from the right.
+        None if bidi => left = avail - width - left,
         _ => {}
     }
     TableGeom {

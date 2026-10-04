@@ -69,6 +69,9 @@ pub struct Anchor {
     pub dist: [f32; 4],
     /// Z-order.
     pub z: i64,
+    /// Positioned within the table cell holding its anchor (rather than
+    /// the page's column) when it is in one.
+    pub in_cell: bool,
 }
 
 /// What a drawing shows.
@@ -105,6 +108,95 @@ pub struct Drawing {
     pub node: NodeId,
     /// VML rather than DrawingML.
     pub vml: bool,
+}
+
+/// Where text goes vertically in a text box.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextAnchor {
+    /// At the top.
+    Top,
+    /// Centered.
+    Middle,
+    /// At the bottom.
+    Bottom,
+}
+
+/// The text of a shape: its content and where it goes in the shape.
+#[derive(Clone, Copy, Debug)]
+pub struct TextBox {
+    /// The `w:txbxContent` element (in the drawing's tree).
+    pub content: NodeId,
+    /// Distances of the text from the shape's edges: left, top, right,
+    /// bottom (points).
+    pub insets: [f32; 4],
+    /// Vertical placement of the text.
+    pub anchor: TextAnchor,
+}
+
+/// Default text box insets: 0.1in left and right, 0.05in top and bottom.
+const TEXT_INSETS: [f32; 4] = [7.2, 3.6, 7.2, 3.6];
+
+impl Drawing {
+    /// The text box of a shape (not of a shape in a group), if it holds
+    /// text.
+    pub fn text_box(&self) -> Option<TextBox> {
+        let t = &self.tree;
+        if self.graphic != Graphic::Shape {
+            return None;
+        }
+        if self.vml {
+            let tb = t.children(self.node).find(|&c| t.is(c, Ns::V, "textbox"))?;
+            let content = t.children(tb).find(|&c| t.is_w(c, "txbxContent"))?;
+            let mut insets = TEXT_INSETS;
+            if let Some(v) = t.attr(tb, Ns::NONE, "inset") {
+                for (i, part) in v.split(',').take(4).enumerate() {
+                    if let Some(len) = css_length(part) {
+                        insets[i] = len;
+                    }
+                }
+            }
+            let style = t.attr(self.node, Ns::NONE, "style").unwrap_or("");
+            let anchor = match css_prop(style, "v-text-anchor") {
+                Some(a) if a.starts_with("middle") => TextAnchor::Middle,
+                Some(a) if a.starts_with("bottom") => TextAnchor::Bottom,
+                _ => TextAnchor::Top,
+            };
+            return Some(TextBox {
+                content,
+                insets,
+                anchor,
+            });
+        }
+        let wsp = t
+            .descendants(self.node)
+            .into_iter()
+            .find(|&d| t.is(d, Ns::WPS, "wsp"))?;
+        let content = t
+            .child(wsp, Ns::WPS, "txbx")
+            .and_then(|tb| t.children(tb).find(|&c| t.is_w(c, "txbxContent")))?;
+        let body = t.child(wsp, Ns::WPS, "bodyPr");
+        let inset = |name: &str, default: f32| {
+            body.and_then(|b| t.attr(b, Ns::NONE, name))
+                .and_then(parse_int)
+                .map_or(default, emu)
+        };
+        let insets = [
+            inset("lIns", TEXT_INSETS[0]),
+            inset("tIns", TEXT_INSETS[1]),
+            inset("rIns", TEXT_INSETS[2]),
+            inset("bIns", TEXT_INSETS[3]),
+        ];
+        let anchor = match body.and_then(|b| t.attr(b, Ns::NONE, "anchor")) {
+            Some("ctr") => TextAnchor::Middle,
+            Some("b") => TextAnchor::Bottom,
+            _ => TextAnchor::Top,
+        };
+        Some(TextBox {
+            content,
+            insets,
+            anchor,
+        })
+    }
 }
 
 fn rel_from(v: Option<&str>) -> RelFrom {
@@ -324,6 +416,9 @@ fn drawingml(t: &Arc<XmlTree>, holder: NodeId) -> Option<Drawing> {
             z: t.attr(holder, Ns::NONE, "relativeHeight")
                 .and_then(parse_int)
                 .unwrap_or(0),
+            in_cell: t
+                .attr(holder, Ns::NONE, "layoutInCell")
+                .is_none_or(|v| parse_on_off(Some(v))),
         }
     });
     Some(Drawing {
@@ -406,6 +501,9 @@ fn vml(t: &Arc<XmlTree>, object: NodeId, shape: NodeId) -> Option<Drawing> {
             behind: z < 0,
             dist: [0.0; 4],
             z,
+            in_cell: t
+                .attr(shape, Ns::O, "allowincell")
+                .is_none_or(|v| parse_on_off(Some(v))),
         }
     });
     let has_image = t
