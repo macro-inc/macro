@@ -278,17 +278,18 @@ already in this project are excluded. Adding a task moves it from its previous
 project; the dialog explains this before saving. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
 
-The regular Tasks list includes a Project column; clicking its cell opens the
-project picker. Right-click a task and choose `Add to project…` to choose or clear
+The regular Tasks list includes a Project column. Its cell is a regular property
+cell: clicking it opens the same entity dropdown as the other property columns,
+listing projects. Right-click a task and choose `Add to project…` to choose or clear
 its project. On mobile the same action is in the long-press menu. For a selection,
 choose `Actions → Add to project…`; there is no separate assignment button in the
 selection toolbar. A context action on a selected row applies to the selection.
-Inside an open task, use the Project pill below the title, the Project row in
-the Properties side panel, or `Add to project…` in the title's actions menu.
-The property shows `No project` until assigned and stays read-only without edit
-access. Choose `No project` in the assignment dialog to remove the association.
-The Project property does not appear in the generic Properties list or the
-`Add property` picker; these project controls set it.
+Inside an open task, Project is a regular property: a pill beside Status,
+Priority and Assignees below the title, and a row in the Properties side panel.
+Both open the standard property dropdown, which searches projects; clear the
+value there to remove the task from its project. `Add to project…` in the
+title's actions menu does the same. Tasks show Project even before it's set,
+and the `Add property` picker doesn't list it.
 
 Discussion at the bottom of Overview uses the new discussions system. Comments
 appear from oldest to newest, with the comment input below them. The Discussion

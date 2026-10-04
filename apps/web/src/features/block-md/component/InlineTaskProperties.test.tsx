@@ -27,9 +27,24 @@ const mocks = vi.hoisted(() => ({
   properties: () => [] as Property[],
   add: vi.fn(),
   open: vi.fn<typeof openPropertyEditor>(),
+  kind: 'document' as 'document' | 'task',
+  projectsEnabled: false,
 }));
-vi.mock('@app/features/projects/task-project-property', () => ({
-  TaskProjectProperty: () => null,
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.projectsEnabled }),
+}));
+vi.mock('@entity/extractors-property', () => ({
+  buildTaskProjectDefaultProperty: () => ({
+    propertyId: 'pending:project',
+    propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+    displayName: 'Project',
+    valueType: 'ENTITY',
+    value: null,
+    isMultiSelect: false,
+    owner: { scope: 'system' },
+    createdAt: '1970-01-01',
+    updatedAt: '1970-01-01',
+  }),
 }));
 vi.mock('@property/editor/state/propertyEditor', () => ({
   openPropertyEditor: mocks.open,
@@ -59,7 +74,7 @@ vi.mock('./MarkdownNameProvider', () => ({
 vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'doc',
-    kind: () => 'document',
+    kind: () => mocks.kind,
     permissions: { canEdit: () => true },
     state: { editor: { md: { editor: mocks.editor } } },
   }),
@@ -79,6 +94,8 @@ vi.mock('./InlinePropertyValue', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.kind = 'document';
+  mocks.projectsEnabled = false;
 });
 
 const property: Property = {
@@ -148,4 +165,19 @@ it('repins an existing property without assigning it a second time', async () =>
     ).toBeTruthy()
   );
   expect(mocks.add).not.toHaveBeenCalled();
+});
+
+it("shows a task's Project with the other task properties, through the same pill", async () => {
+  mocks.kind = 'task';
+  mocks.projectsEnabled = true;
+  setup();
+  // A task without a project still gets the standard pill, from a placeholder.
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Unpin Project' })).toBeTruthy()
+  );
+
+  cleanup();
+  mocks.projectsEnabled = false;
+  setup();
+  expect(screen.queryByRole('button', { name: 'Unpin Project' })).toBeNull();
 });
