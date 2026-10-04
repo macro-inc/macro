@@ -5,7 +5,8 @@ use super::super::super::StoryRef;
 use super::super::anchors::PageGeom;
 use super::super::split::split_row;
 use super::super::stack::{TableBox, emit_row, table_box};
-use super::{EPS, Flow, OnPage, place_anchors};
+use super::floats::{OnPage, place_anchors};
+use super::{EPS, Flow};
 use crate::model::block::Block;
 use crate::model::props::TablePosition;
 
