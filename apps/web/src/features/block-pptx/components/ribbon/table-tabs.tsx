@@ -95,7 +95,7 @@ export function TableDesignTab(props: TableTabProps) {
         disabled={ro() || !c.setTableStyle}
         checked={style()?.[key] ?? false}
         onChange={(e) =>
-          void c.setTableStyle?.({ [key]: e.currentTarget.checked })
+          void c.setTableStyle({ [key]: e.currentTarget.checked })
         }
       />
       {label}
@@ -113,7 +113,7 @@ export function TableDesignTab(props: TableTabProps) {
           {option('bandCol', 'Banded columns')}
         </div>
       </RibbonGroup>
-      <Show when={c.setTableStyle && props.styles.length > 0}>
+      <Show when={props.styles.length > 0}>
         <RibbonGroup label="Table styles">
           <RibbonPopover
             label="Table styles"
@@ -132,7 +132,7 @@ export function TableDesignTab(props: TableTabProps) {
                       icon={<TableStyleSwatch name={s.name} />}
                       onClick={() => {
                         close();
-                        void c.setTableStyle?.({ style: s.id });
+                        void c.setTableStyle({ style: s.id });
                       }}
                     />
                   )}
@@ -143,7 +143,7 @@ export function TableDesignTab(props: TableTabProps) {
         </RibbonGroup>
       </Show>
       <RibbonGroup label="Cells">
-        <Show when={c.fillCells}>
+        <>
           <RibbonPopover
             label="Shading"
             icon={<PaintBucket class="size-3.5" />}
@@ -157,13 +157,13 @@ export function TableDesignTab(props: TableTabProps) {
                 noneLabel="No fill"
                 onPick={(v) => {
                   close();
-                  void c.fillCells?.(v);
+                  void c.fillCells(v);
                 }}
               />
             )}
           </RibbonPopover>
-        </Show>
-        <Show when={c.borderCells}>
+        </>
+        <>
           <RibbonPopover
             label="Borders"
             icon={<BorderIcon edges="all" />}
@@ -179,7 +179,7 @@ export function TableDesignTab(props: TableTabProps) {
                       icon={<BorderIcon edges={edges} />}
                       onClick={() => {
                         close();
-                        void c.borderCells?.(edges);
+                        void c.borderCells(edges);
                       }}
                     />
                   )}
@@ -189,7 +189,7 @@ export function TableDesignTab(props: TableTabProps) {
                   icon={<BorderIcon edges="none" />}
                   onClick={() => {
                     close();
-                    void c.borderCells?.('all', true);
+                    void c.borderCells('all', true);
                   }}
                 />
                 <PopoverLabel>Pen</PopoverLabel>
@@ -197,7 +197,7 @@ export function TableDesignTab(props: TableTabProps) {
                   themeGrid={env.themeGrid()}
                   standard={env.standardColors}
                   onPick={(v) => {
-                    if (v) c.setBorderPen?.({ color: v });
+                    if (v) c.setBorderPen({ color: v });
                   }}
                 />
                 <div class="flex flex-wrap gap-1 px-1 pt-1">
@@ -206,7 +206,7 @@ export function TableDesignTab(props: TableTabProps) {
                       <button
                         type="button"
                         class="rounded-md border border-edge-muted px-1.5 py-0.5 text-xs hover:bg-ink/5"
-                        onClick={() => c.setBorderPen?.({ width: w })}
+                        onClick={() => c.setBorderPen({ width: w })}
                       >
                         {w} pt
                       </button>
@@ -216,7 +216,7 @@ export function TableDesignTab(props: TableTabProps) {
               </div>
             )}
           </RibbonPopover>
-        </Show>
+        </>
       </RibbonGroup>
     </>
   );
@@ -373,61 +373,61 @@ export function TableLayoutTab(props: TableTabProps) {
           Insert right
         </RibbonTextButton>
       </RibbonGroup>
-      <Show when={c.mergeCells}>
+      <>
         <RibbonGroup label="Merge">
           <RibbonTextButton
             label="Merge cells"
-            disabled={ro() || !c.canMerge?.()}
+            disabled={ro() || !c.canMerge()}
             data-testid="pptx-merge-cells"
-            onClick={() => void c.mergeCells?.()}
+            onClick={() => void c.mergeCells()}
           >
             Merge cells
           </RibbonTextButton>
           <RibbonTextButton
             label="Split cells"
-            disabled={ro() || !c.canSplit?.()}
-            onClick={() => void c.splitCells?.()}
+            disabled={ro() || !c.canSplit()}
+            onClick={() => void c.splitCells()}
           >
             Split cells
           </RibbonTextButton>
         </RibbonGroup>
-      </Show>
-      <Show when={c.setCellSize}>
+      </>
+      <>
         <RibbonGroup label="Cell size">
           <NumberField
             label="Row height"
             unit="pt"
-            value={c.cellSize?.()?.h}
+            value={c.cellSize()?.h}
             min={4}
             max={2000}
             disabled={ro()}
-            onCommit={(h) => void c.setCellSize?.({ h })}
+            onCommit={(h) => void c.setCellSize({ h })}
           />
           <NumberField
             label="Column width"
             unit="pt"
-            value={c.cellSize?.()?.w}
+            value={c.cellSize()?.w}
             min={4}
             max={2000}
             disabled={ro()}
-            onCommit={(w) => void c.setCellSize?.({ w })}
+            onCommit={(w) => void c.setCellSize({ w })}
           />
           <RibbonTextButton
             label="Distribute rows"
             disabled={ro()}
-            onClick={() => void c.distributeRows?.()}
+            onClick={() => void c.distributeRows()}
           >
             Distribute rows
           </RibbonTextButton>
           <RibbonTextButton
             label="Distribute columns"
             disabled={ro()}
-            onClick={() => void c.distributeColumns?.()}
+            onClick={() => void c.distributeColumns()}
           >
             Distribute columns
           </RibbonTextButton>
         </RibbonGroup>
-      </Show>
+      </>
       <RibbonGroup label="Alignment">
         <RibbonButton
           label="Align left"

@@ -471,7 +471,7 @@ export function PptxEditor() {
         anchorOf(t.shape, edit.cell).col === anchorOf(t.shape, t.cell).col;
       // A column or row border of the selected table resizes it.
       const border =
-        editor.selectedShape()?.id === t.shape.id && commands.resizeGrid
+        editor.selectedShape()?.id === t.shape.id
           ? boundaryAt(t.g, at, 3 * unit())
           : undefined;
       if (border) {

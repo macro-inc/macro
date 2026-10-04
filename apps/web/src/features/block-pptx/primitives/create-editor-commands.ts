@@ -6,6 +6,7 @@
  */
 
 import type {
+  BorderEdges,
   BulletSpec,
   CellRef,
   ChartGrouping,
@@ -626,15 +627,19 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     );
   /** Vertical alignment in each cell of the range. */
   const anchorCells = (anchor: 'top' | 'middle' | 'bottom') =>
-    tableOp((slideId, t) =>
-      cellsOf(t).map((cell) => ({
-        op: 'formatBody' as const,
-        slide: slideId,
-        shape: t.shape.id,
-        cell,
-        props: { anchor },
-      }))
-    );
+    tableOp((slideId, t) => {
+      const { rows, cols } = span(t);
+      return [
+        {
+          op: 'formatCells' as const,
+          slide: slideId,
+          shape: t.shape.id,
+          from: { row: rows[0], col: cols[0] },
+          to: { row: rows[1], col: cols[1] },
+          anchor,
+        },
+      ];
+    });
   /** Character formatting in each cell of the range. */
   const formatCells = (props: RunPatch) =>
     tableOp((slideId, t) =>
@@ -646,6 +651,227 @@ export function createEditorCommands(options: EditorCommandsOptions) {
         props,
       }))
     );
+
+  /** The range as a normalized rectangle. */
+  const rect = (t: TableTarget) => {
+    const { rows, cols } = span(t);
+    return {
+      from: { row: rows[0], col: cols[0] },
+      to: { row: rows[1], col: cols[1] },
+    };
+  };
+  const canMerge = () => {
+    const t = options.tableTarget();
+    if (!t) return false;
+    const { rows, cols } = span(t);
+    return rows[1] > rows[0] || cols[1] > cols[0];
+  };
+  const mergeCells = () =>
+    tableOp((slideId, t) => [
+      { op: 'mergeCells', slide: slideId, shape: t.shape.id, ...rect(t) },
+    ]);
+  /** Merged cells in the range (their anchors). */
+  const mergesIn = (t: TableTarget): CellRef[] => {
+    const cells = t.shape.table?.cells;
+    if (!cells) return [];
+    const { rows, cols } = span(t);
+    const out: CellRef[] = [];
+    for (let row = rows[0]; row <= rows[1]; row++)
+      for (let col = cols[0]; col <= cols[1]; col++) {
+        const c = cells[row]?.[col];
+        if (c && !c.merged && (c.rowSpan > 1 || c.colSpan > 1))
+          out.push({ row, col });
+      }
+    return out;
+  };
+  const canSplit = () => {
+    const t = options.tableTarget();
+    if (!t) return false;
+    const { rows, cols } = span(t);
+    const cells = t.shape.table?.cells;
+    // A cell covered by a merge counts too.
+    for (let row = rows[0]; row <= rows[1]; row++)
+      for (let col = cols[0]; col <= cols[1]; col++) {
+        const c = cells?.[row]?.[col];
+        if (c && (c.merged || c.rowSpan > 1 || c.colSpan > 1)) return true;
+      }
+    return false;
+  };
+  const splitCells = () =>
+    tableOp((slideId, t) => {
+      const anchors = mergesIn(t);
+      const list = anchors.length > 0 ? anchors : [rect(t).from];
+      return list.map((cell) => ({
+        op: 'splitCell' as const,
+        slide: slideId,
+        shape: t.shape.id,
+        cell,
+      }));
+    });
+  const fillCells = (color: string | null) =>
+    tableOp((slideId, t) => [
+      {
+        op: 'formatCells',
+        slide: slideId,
+        shape: t.shape.id,
+        ...rect(t),
+        fill: color ? { kind: 'solid', color } : { kind: 'none' },
+      },
+    ]);
+  /** The pen new borders are drawn with. */
+  let pen: { color?: string; width?: number } = {};
+  const setBorderPen = (change: { color?: string; width?: number }) => {
+    pen = { ...pen, ...change };
+  };
+  const borderCells = (edges: string, none = false) =>
+    tableOp((slideId, t) => [
+      {
+        op: 'formatCells',
+        slide: slideId,
+        shape: t.shape.id,
+        ...rect(t),
+        borders: {
+          edges: edges as BorderEdges,
+          line: none
+            ? { none: true }
+            : {
+                color: pen.color ?? 'tx1',
+                width: pen.width ?? 1,
+                dash: 'solid',
+              },
+        },
+      },
+    ]);
+  const setTableStyle = (
+    change: Partial<{
+      style: string;
+      firstRow: boolean;
+      lastRow: boolean;
+      firstCol: boolean;
+      lastCol: boolean;
+      bandRow: boolean;
+      bandCol: boolean;
+    }>
+  ) =>
+    tableOp((slideId, t) => [
+      { op: 'setTableStyle', slide: slideId, shape: t.shape.id, ...change },
+    ]);
+  /** Grid sizes with `change` applied to the range's rows/columns. */
+  const gridOp = (
+    slideId: number,
+    t: TableTarget,
+    widths: number[] | undefined,
+    heights: number[] | undefined
+  ): EditOp => ({
+    op: 'setTableGrid',
+    slide: slideId,
+    shape: t.shape.id,
+    ...(widths ? { columnWidths: widths } : {}),
+    ...(heights ? { rowHeights: heights } : {}),
+  });
+  const cellSize = () => {
+    const t = options.tableTarget();
+    const table = t?.shape.table;
+    if (!t || !table) return undefined;
+    const { rows, cols } = span(t);
+    return {
+      w: table.columnWidths[cols[0]],
+      h: (table.laidOutRowHeights ?? table.rowHeights)[rows[0]],
+    };
+  };
+  const setCellSize = (size: { w?: number; h?: number }) =>
+    tableOp((slideId, t) => {
+      const table = t.shape.table;
+      if (!table) return [];
+      const { rows, cols } = span(t);
+      const widths =
+        size.w !== undefined
+          ? table.columnWidths.map((w, i) =>
+              i >= cols[0] && i <= cols[1] ? size.w! : w
+            )
+          : undefined;
+      const heights =
+        size.h !== undefined
+          ? table.rowHeights.map((h, i) =>
+              i >= rows[0] && i <= rows[1] ? size.h! : h
+            )
+          : undefined;
+      return [gridOp(slideId, t, widths, heights)];
+    });
+  /** Evens out the range's rows (the whole table when one row is picked). */
+  const distributeRows = () =>
+    tableOp((slideId, t) => {
+      const table = t.shape.table;
+      if (!table) return [];
+      let { rows } = span(t);
+      if (rows[0] === rows[1]) rows = [0, table.rowHeights.length - 1];
+      const drawn = table.laidOutRowHeights ?? table.rowHeights;
+      const picked = drawn.slice(rows[0], rows[1] + 1);
+      const even = picked.reduce((a, b) => a + b, 0) / picked.length;
+      return [
+        gridOp(
+          slideId,
+          t,
+          undefined,
+          table.rowHeights.map((h, i) =>
+            i >= rows[0] && i <= rows[1] ? even : h
+          )
+        ),
+      ];
+    });
+  const distributeColumns = () =>
+    tableOp((slideId, t) => {
+      const table = t.shape.table;
+      if (!table) return [];
+      let { cols } = span(t);
+      if (cols[0] === cols[1]) cols = [0, table.columnWidths.length - 1];
+      const picked = table.columnWidths.slice(cols[0], cols[1] + 1);
+      const even = picked.reduce((a, b) => a + b, 0) / picked.length;
+      return [
+        gridOp(
+          slideId,
+          t,
+          table.columnWidths.map((w, i) =>
+            i >= cols[0] && i <= cols[1] ? even : w
+          ),
+          undefined
+        ),
+      ];
+    });
+  /**
+   * Drags a column border (the next column gives up the space, as in
+   * PowerPoint) or a row border (the row grows).
+   */
+  const resizeGrid = (
+    shape: number,
+    axis: 'col' | 'row',
+    index: number,
+    delta: number
+  ) => {
+    const s = slide();
+    const table = editor.findShape(shape)?.table;
+    if (!s || !table) return Promise.resolve(null);
+    if (axis === 'col') {
+      const widths = [...table.columnWidths];
+      const next = index + 1 < widths.length ? index + 1 : undefined;
+      const d =
+        next === undefined
+          ? Math.max(delta, 8 - widths[index])
+          : Math.min(Math.max(delta, 8 - widths[index]), widths[next] - 8);
+      widths[index] += d;
+      if (next !== undefined) widths[next] -= d;
+      return apply([
+        { op: 'setTableGrid', slide: s.id, shape, columnWidths: widths },
+      ]);
+    }
+    const drawn = table.laidOutRowHeights ?? table.rowHeights;
+    const heights = table.rowHeights.map((h, i) =>
+      i === index ? Math.max(8, drawn[i] + delta) : h
+    );
+    return apply([
+      { op: 'setTableGrid', slide: s.id, shape, rowHeights: heights },
+    ]);
+  };
 
   return {
     canEdit,
@@ -659,50 +885,19 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     anchorCells,
     formatCells,
     tableOp,
-    /** Merges the selected cells (needs engine support). */
-    mergeCells: undefined as (() => Promise<unknown>) | undefined,
-    canMerge: undefined as (() => boolean) | undefined,
-    splitCells: undefined as (() => Promise<unknown>) | undefined,
-    canSplit: undefined as (() => boolean) | undefined,
-    fillCells: undefined as
-      | ((color: string | null) => Promise<unknown>)
-      | undefined,
-    borderCells: undefined as
-      | ((edges: string, none?: boolean) => Promise<unknown>)
-      | undefined,
-    distributeRows: undefined as (() => Promise<unknown>) | undefined,
-    setTableStyle: undefined as
-      | ((
-          change: Partial<{
-            style: string;
-            firstRow: boolean;
-            lastRow: boolean;
-            firstCol: boolean;
-            lastCol: boolean;
-            bandRow: boolean;
-            bandCol: boolean;
-          }>
-        ) => Promise<unknown>)
-      | undefined,
-    setBorderPen: undefined as
-      | ((pen: { color?: string; width?: number }) => void)
-      | undefined,
-    cellSize: undefined as
-      | (() => { w: number; h: number } | undefined)
-      | undefined,
-    setCellSize: undefined as
-      | ((size: { w?: number; h?: number }) => Promise<unknown>)
-      | undefined,
-    distributeColumns: undefined as (() => Promise<unknown>) | undefined,
-    /** Moves a table's column or row border by `delta` points. */
-    resizeGrid: undefined as
-      | ((
-          shape: number,
-          axis: 'col' | 'row',
-          index: number,
-          delta: number
-        ) => Promise<unknown>)
-      | undefined,
+    mergeCells,
+    canMerge,
+    splitCells,
+    canSplit,
+    fillCells,
+    borderCells,
+    distributeRows,
+    distributeColumns,
+    setTableStyle,
+    setBorderPen,
+    cellSize,
+    setCellSize,
+    resizeGrid,
     deleteSelection: () => editor.deleteSelected(),
     duplicateSelection: () => editor.duplicateSelected(),
     format,

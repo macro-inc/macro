@@ -447,30 +447,30 @@ export function StageMenuItems(props: {
           />
           <MenuItem text="Select table" onClick={() => a().selectTable?.()} />
         </Sub>
-        <Show when={c().mergeCells}>
+        <>
           <MenuItem
             text="Merge cells"
-            disabled={ro() || !c().canMerge?.()}
-            onClick={() => void c().mergeCells?.()}
+            disabled={ro() || !c().canMerge()}
+            onClick={() => void c().mergeCells()}
           />
           <MenuItem
             text="Split cells"
-            disabled={ro() || !c().canSplit?.()}
-            onClick={() => void c().splitCells?.()}
+            disabled={ro() || !c().canSplit()}
+            onClick={() => void c().splitCells()}
           />
-        </Show>
+        </>
         <MenuSeparator />
-        <Show when={c().fillCells}>
+        <>
           <ColorSub
             text="Shading"
             icon={<PaintBucket class="size-4" />}
             swatches={a().swatches}
             noneLabel="No fill"
             disabled={ro()}
-            onPick={(v) => void c().fillCells?.(v)}
+            onPick={(v) => void c().fillCells(v)}
           />
-        </Show>
-        <Show when={c().borderCells}>
+        </>
+        <>
           <Sub text="Borders" disabled={ro()}>
             <For
               each={
@@ -490,17 +490,17 @@ export function StageMenuItems(props: {
               {([edges, label]) => (
                 <MenuItem
                   text={label}
-                  onClick={() => void c().borderCells?.(edges)}
+                  onClick={() => void c().borderCells(edges)}
                 />
               )}
             </For>
             <MenuSeparator />
             <MenuItem
               text="No border"
-              onClick={() => void c().borderCells?.('all', true)}
+              onClick={() => void c().borderCells('all', true)}
             />
           </Sub>
-        </Show>
+        </>
         <Sub text="Align text" disabled={ro()}>
           <MenuItem
             text="Left"
@@ -534,18 +534,18 @@ export function StageMenuItems(props: {
             onClick={() => void c().anchorCells('bottom')}
           />
         </Sub>
-        <Show when={c().distributeRows}>
+        <>
           <MenuItem
             text="Distribute rows"
             disabled={ro()}
-            onClick={() => void c().distributeRows?.()}
+            onClick={() => void c().distributeRows()}
           />
           <MenuItem
             text="Distribute columns"
             disabled={ro()}
-            onClick={() => void c().distributeColumns?.()}
+            onClick={() => void c().distributeColumns()}
           />
-        </Show>
+        </>
         <MenuSeparator />
         <ArrangeItems a={a()} />
         <MenuItem
