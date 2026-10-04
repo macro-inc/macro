@@ -31,6 +31,13 @@ pub use animation::AnimationOutline;
 
 mod animation;
 
+pub use picture::{
+    CropOutline, EffectsOutline, GlowOutline, PictureOutline, ReflectionOutline, ShadowOutline,
+    SoftEdgeOutline,
+};
+
+mod picture;
+
 /// What kind of object a shape is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +239,12 @@ pub struct ShapeOutline {
     /// Chart summary (charts only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chart: Option<ChartOutline>,
+    /// Crop and adjustments (pictures only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub picture: Option<PictureOutline>,
+    /// Shadow, glow, soft edges, and reflection, when the shape has any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<EffectsOutline>,
     /// Group members, back to front. Their box, rotation, and flips are in
     /// slide space: where each would sit directly on the slide (what
     /// `setTransform` takes and ungrouping gives it).
@@ -388,6 +401,9 @@ pub struct RunStyle {
     /// Highlight color as `#RRGGBB`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highlight: Option<String>,
+    /// Text shadow and glow (WordArt effects), when the text has any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<EffectsOutline>,
 }
 
 /// The resolved formatting of a paragraph.
@@ -516,8 +532,36 @@ fn chart_outlines(pres: &mut Presentation, ctx: &SlideContext, shapes: &[Shape],
     }
 }
 
+/// Pixel sizes of picture images by part name.
+type ImageSizes = HashMap<String, (u32, u32)>;
+
+/// Reads the pixel size of every picture's image among `shapes` (and their
+/// group members) from its header.
+fn image_sizes(pres: &Presentation, shapes: &[Shape], out: &mut ImageSizes) {
+    for s in shapes {
+        match &s.kind {
+            ShapeKind::Group(members) => image_sizes(pres, members, out),
+            ShapeKind::Picture(Some(img)) => {
+                if let Some(part) = img.part.as_deref()
+                    && !out.contains_key(part)
+                    && let Some(size) = crate::edit::picture::natural_size(pres, part)
+                {
+                    out.insert(part.to_owned(), size);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// What a shape outline needs beyond the shape: chart outlines and picture sizes.
+struct Media {
+    charts: Charts,
+    image_sizes: ImageSizes,
+}
+
 /// `groups` are the spaces of the groups around `s`, outermost first.
-fn shape_outline(s: &Shape, groups: &[GroupSpace], charts: &Charts) -> ShapeOutline {
+fn shape_outline(s: &Shape, groups: &[GroupSpace], media: &Media) -> ShapeOutline {
     let doc = &s.part.doc;
     // Group members report the frame they have in slide space (what
     // `setTransform` takes and ungrouping gives them).
@@ -562,15 +606,29 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], charts: &Charts) -> ShapeOutl
             inner.push(GroupSpace::from_xfrm(&s.xfrm));
             members
                 .iter()
-                .map(|c| shape_outline(c, &inner, charts))
+                .map(|c| shape_outline(c, &inner, media))
                 .collect()
         }
         _ => Vec::new(),
     };
     let chart = match &s.kind {
-        ShapeKind::Frame(Graphic::Chart(name)) => charts.get(name).cloned(),
+        ShapeKind::Frame(Graphic::Chart(name)) => media.charts.get(name).cloned(),
         _ => None,
     };
+    let picture = match &s.kind {
+        ShapeKind::Picture(img) => {
+            let natural = img
+                .as_ref()
+                .and_then(|i| i.part.as_deref())
+                .and_then(|p| media.image_sizes.get(p).copied());
+            crate::edit::picture::outline(doc, s.node, natural)
+        }
+        _ => None,
+    };
+    let effects = crate::edit::effects::outline(
+        &s.effects,
+        !crate::edit::effects::has_own_effects(doc, s.node),
+    );
     ShapeOutline {
         id: s.id,
         name: s.name.clone(),
@@ -598,6 +656,8 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], charts: &Charts) -> ShapeOutl
         paragraphs: tx_body.map(|b| paragraphs_of(doc, b)).unwrap_or_default(),
         table,
         chart,
+        picture,
+        effects,
         children,
     }
 }
@@ -630,11 +690,15 @@ impl Presentation {
         let shapes = sp_tree(&ctx.slide.doc)
             .map(|t| resolve_tree(&walk, &ctx.slide, t))
             .unwrap_or_default();
-        let mut charts = Charts::new();
-        chart_outlines(self, &ctx, &shapes, &mut charts);
+        let mut media = Media {
+            charts: Charts::new(),
+            image_sizes: ImageSizes::new(),
+        };
+        chart_outlines(self, &ctx, &shapes, &mut media.charts);
+        image_sizes(self, &shapes, &mut media.image_sizes);
         let mut outlines: Vec<ShapeOutline> = shapes
             .iter()
-            .map(|s| shape_outline(s, &[], &charts))
+            .map(|s| shape_outline(s, &[], &media))
             .collect();
         let styles = table_styles_part(&ctx).and_then(|n| self.part(&n).ok());
         complete_tables(&ctx, styles.as_ref(), &shapes, &mut outlines, fonts);
@@ -1026,6 +1090,7 @@ fn run_style(props: &RunProps, start: usize, end: usize) -> RunStyle {
         font: props.latin.clone(),
         baseline: props.baseline,
         highlight: props.highlight.and_then(|c| hex(&Fill::Solid(c))),
+        effects: crate::edit::effects::outline(&props.effects, false),
     }
 }
 

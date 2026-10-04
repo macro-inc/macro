@@ -1,7 +1,7 @@
 //! Values the edit operations take: text positions, formatting patches,
 //! fills, outlines, new shapes, chart data, and table borders.
 
-use super::nullable;
+use super::{EffectSpec, GlowOptions, ShadowOptions, nullable};
 use serde::{Deserialize, Deserializer, Serialize};
 
 /// Reads `null` (as AI tool calls send for an omitted start) as 1.
@@ -56,6 +56,11 @@ pub struct RunPatch {
     pub baseline: Option<f32>,
     /// Hyperlink URL, or `""` to remove.
     pub link: Option<String>,
+    /// Text shadow (WordArt-style): a preset name, `none`, or options, as
+    /// for `setShapeEffects`.
+    pub shadow: Option<EffectSpec<ShadowOptions>>,
+    /// Text glow: `none` or options, as for `setShapeEffects`.
+    pub glow: Option<EffectSpec<GlowOptions>>,
 }
 
 /// Bullet style for paragraphs.

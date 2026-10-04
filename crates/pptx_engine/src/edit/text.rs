@@ -455,7 +455,7 @@ pub fn patch_rpr(
             doc.insert_in_order(rpr, el, R_PR_ORDER);
         }
     }
-    Ok(())
+    super::effects::patch_run_effects(doc, rpr, patch.shadow.as_ref(), patch.glow.as_ref())
 }
 
 /// Applies character formatting to a range (or the whole body).

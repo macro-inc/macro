@@ -7,6 +7,12 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+mod picture_format;
+
+pub use picture_format::{
+    CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
+};
+
 /// Reads `null` as the default value: AI tool calls in strict mode send
 /// `null` for every optional field they leave out.
 fn nullable<'de, D, T>(de: D) -> Result<T, D::Error>
@@ -662,6 +668,103 @@ pub enum EditOp {
         from_slide: u32,
         /// Shape id to copy from (a shape, line, or picture).
         from_shape: u32,
+    },
+    // ---- pictures and effects ----
+    /// Crops a picture (PowerPoint's Crop). Edges are fractions of the
+    /// original image: 0.1 crops 10% of its width (left, right) or height
+    /// (top, bottom) off that edge, 0 shows the edge, and a negative value
+    /// adds empty padding; omitted edges keep their current crop. The image
+    /// keeps its size and place on the slide, so the picture's frame moves
+    /// and resizes to the part left visible. With `mode` (and no edges), the
+    /// image is instead cropped (`fill`) or padded (`fit`) to the frame's
+    /// aspect ratio, centered, and the frame stays. To crop to a shape, use
+    /// `setGeometry` on the picture.
+    CropPicture {
+        /// Slide id.
+        slide: u32,
+        /// Picture id.
+        shape: u32,
+        /// Fraction of the image's width cropped off its left edge.
+        #[serde(default)]
+        left: Option<f32>,
+        /// Fraction of the image's height cropped off its top edge.
+        #[serde(default)]
+        top: Option<f32>,
+        /// Fraction of the image's width cropped off its right edge.
+        #[serde(default)]
+        right: Option<f32>,
+        /// Fraction of the image's height cropped off its bottom edge.
+        #[serde(default)]
+        bottom: Option<f32>,
+        /// `fill` or `fit` the frame's aspect ratio (instead of edges).
+        #[serde(default)]
+        mode: Option<CropMode>,
+    },
+    /// Adjusts pictures (PowerPoint's Corrections, Color, and Transparency).
+    /// Omitted fields keep their current value.
+    FormatPicture {
+        /// Slide id.
+        slide: u32,
+        /// Ids of the pictures.
+        shapes: Vec<u32>,
+        /// Brightness from -1 to 1 (0 = unchanged, 0.2 = +20%).
+        #[serde(default)]
+        brightness: Option<f32>,
+        /// Contrast from -1 to 1 (0 = unchanged).
+        #[serde(default)]
+        contrast: Option<f32>,
+        /// Recolor: `none`, `grayscale`, `sepia`, `washout`, `blackWhite`
+        /// (50% threshold), `blackWhite25`, `blackWhite75`,
+        /// `duotone:<color>` (the image in dark shades of the color, on
+        /// white), `duotoneLight:<color>` (in light shades of it, on black),
+        /// or `duotone:<dark>,<light>` (black and white become these
+        /// colors). Colors are `RRGGBB` or theme names (`accent1`...).
+        #[serde(default)]
+        recolor: Option<String>,
+        /// Transparency from 0 (opaque) to 1.
+        #[serde(default)]
+        transparency: Option<f32>,
+        /// First remove the crop (the frame grows back to the whole image at
+        /// its current scale) and every adjustment; the other fields then
+        /// apply.
+        #[serde(default, deserialize_with = "nullable")]
+        reset: bool,
+    },
+    /// Sets shape effects (PowerPoint's Shape Effects and Picture Effects)
+    /// on shapes, pictures, lines, or groups. Each effect is kept when
+    /// omitted (or null), removed with `"none"`, or set from a preset name
+    /// or an options object (omitted options keep the current values). A
+    /// shape that inherits effects from the theme starts from those.
+    SetShapeEffects {
+        /// Slide id.
+        slide: u32,
+        /// Shape ids.
+        shapes: Vec<u32>,
+        /// Shadow: `none`; an outer preset (`outerBottomRight`,
+        /// `outerBottom`, `outerBottomLeft`, `outerRight`, `outerCenter`,
+        /// `outerLeft`, `outerTopRight`, `outerTop`, `outerTopLeft`); an
+        /// inner preset (`innerTopLeft`, `innerTop`, `innerTopRight`,
+        /// `innerLeft`, `innerCenter`, `innerRight`, `innerBottomLeft`,
+        /// `innerBottom`, `innerBottomRight`); a perspective preset
+        /// (`perspectiveUpperLeft`, `perspectiveUpperRight`,
+        /// `perspectiveBelow`, `perspectiveLowerLeft`,
+        /// `perspectiveLowerRight`); or options.
+        #[serde(default)]
+        shadow: Option<EffectSpec<ShadowOptions>>,
+        /// Glow: `none` or options (PowerPoint's gallery uses the accent
+        /// colors at 5, 8, 11, and 18 pt with 0.6 transparency).
+        #[serde(default)]
+        glow: Option<EffectSpec<GlowOptions>>,
+        /// Soft edges: `none` or options (PowerPoint's gallery: 1, 2.5, 5,
+        /// 10, 25, and 50 pt).
+        #[serde(default)]
+        soft_edge: Option<EffectSpec<SoftEdgeOptions>>,
+        /// Reflection: `none`; a preset (`tightTouching`, `halfTouching`,
+        /// `fullTouching`, `tight4pt`, `half4pt`, `full4pt`, `tight8pt`,
+        /// `half8pt`, `full8pt`: how much of the shape is reflected, and the
+        /// gap); or options.
+        #[serde(default)]
+        reflection: Option<EffectSpec<ReflectionOptions>>,
     },
     // ---- theme ----
     /// Recolors the deck: sets theme color slots in every slide master's

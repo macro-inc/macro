@@ -291,6 +291,22 @@ impl Package {
         }
     }
 
+    /// Reads at most the first `max` bytes of a part (inflating only those),
+    /// for file headers.
+    pub fn read_prefix(&self, name: &str, max: usize) -> Result<Cow<'_, [u8]>> {
+        let part = self
+            .part(name)
+            .ok_or_else(|| Error::MissingPart(name.to_owned()))?;
+        match &part.data {
+            PartData::Original(entry) => {
+                let raw = &self.source
+                    [entry.data_start..entry.data_start + entry.compressed_size as usize];
+                Ok(Cow::Owned(zip::inflate_prefix(entry, raw, max)?))
+            }
+            PartData::Modified(bytes, _) => Ok(Cow::Borrowed(&bytes[..max.min(bytes.len())])),
+        }
+    }
+
     /// Uncompressed size of a part, without inflating it.
     pub fn part_size(&self, name: &str) -> Option<u64> {
         self.part(name).map(|p| match &p.data {

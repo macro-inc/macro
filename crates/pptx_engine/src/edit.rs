@@ -29,10 +29,12 @@ mod xmlutil;
 
 mod clipboard;
 mod diff;
+pub(crate) mod effects;
 mod find;
 mod format_painter;
 pub(crate) mod group;
 pub(crate) mod header_footer;
+pub(crate) mod picture;
 mod relayout;
 pub(crate) mod sections;
 mod slide_size;
@@ -46,6 +48,9 @@ pub use ops::{
     FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
 };
 pub use ops::{BorderEdges, BorderLine, CellBorders, SlideScale, ThemeColor};
+pub use ops::{
+    CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
+};
 pub use slides::{LayoutInfo, layouts};
 
 pub use clipboard::{
@@ -116,7 +121,10 @@ impl EditOp {
             | O::PasteFormat { slide, .. }
             | O::SetAnimations { slide, .. }
             | O::AddAnimation { slide, .. }
-            | O::RemoveAnimations { slide, .. } => Some(*slide),
+            | O::RemoveAnimations { slide, .. }
+            | O::CropPicture { slide, .. }
+            | O::FormatPicture { slide, .. }
+            | O::SetShapeEffects { slide, .. } => Some(*slide),
             O::PasteSlides { .. }
             | O::SetThemeColors { .. }
             | O::SetThemeFonts { .. }
@@ -146,6 +154,7 @@ impl EditOp {
                 | EditOp::SetBackground { .. }
                 | EditOp::SetFill { .. }
                 | EditOp::RemoveSection { .. }
+                | EditOp::FormatPicture { .. }
         )
     }
 }
@@ -808,6 +817,55 @@ impl Presentation {
                 sections::remove_section(self, id, *delete_slides)?
             }
             O::MoveSection { id, to_index } => sections::move_section(self, id, *to_index)?,
+            O::CropPicture {
+                slide,
+                shape,
+                left,
+                top,
+                right,
+                bottom,
+                mode,
+            } => {
+                let patch = picture::CropPatch {
+                    edges: [*left, *top, *right, *bottom],
+                    mode: *mode,
+                };
+                picture::crop_picture(self, *slide, *shape, &patch)?;
+            }
+            O::FormatPicture {
+                slide,
+                shapes,
+                brightness,
+                contrast,
+                recolor,
+                transparency,
+                reset,
+            } => {
+                let patch = picture::PicturePatch {
+                    brightness: *brightness,
+                    contrast: *contrast,
+                    recolor: recolor.as_deref(),
+                    transparency: *transparency,
+                    reset: *reset,
+                };
+                picture::format_picture(self, *slide, shapes, &patch)?;
+            }
+            O::SetShapeEffects {
+                slide,
+                shapes,
+                shadow,
+                glow,
+                soft_edge,
+                reflection,
+            } => {
+                let patch = effects::EffectsPatch {
+                    shadow: shadow.as_ref(),
+                    glow: glow.as_ref(),
+                    soft_edge: soft_edge.as_ref(),
+                    reflection: reflection.as_ref(),
+                };
+                effects::set_shape_effects(self, *slide, shapes, &patch)?;
+            }
         }
         out.created.extend(created);
         Ok(())

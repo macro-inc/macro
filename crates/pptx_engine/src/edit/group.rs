@@ -107,6 +107,12 @@ impl Frame {
             .pre_concat(&Affine::translate(-self.w / 2.0, -self.h / 2.0))
     }
 
+    /// Maps a point in box-local coordinates (`0..w`, `0..h`, before
+    /// rotation and flips) to parent coordinates.
+    pub fn map_local(&self, x: f64, y: f64) -> (f64, f64) {
+        apply(&self.local_to_parent(), (x, y))
+    }
+
     /// Writes the box into an `xfrm` element, and the rotation and flips when `turn`.
     pub fn write(&self, doc: &mut XmlDoc, xfrm: NodeId, turn: bool) {
         let off = doc.ensure_child(xfrm, Ns::A, "off", XFRM_ORDER);

@@ -314,6 +314,8 @@ pub fn collect_garbage(pres: &mut Presentation, before: &GcBaseline) -> Result<(
 fn prunable(rel_type: &str) -> bool {
     const PRUNABLE: &[&str] = &[
         "/image",
+        // PowerPoint 2010+ keeps a corrected picture's original in an HD Photo.
+        "/hdphoto",
         "/chart",
         "/hyperlink",
         "/oleObject",
