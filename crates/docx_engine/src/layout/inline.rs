@@ -340,6 +340,11 @@ fn no_line_end(c: char) -> bool {
 
 /// Characters after which a line may break besides spaces.
 fn breaks_after(c: char, next: Option<char>) -> bool {
+    // Joiners glue their neighbours together.
+    let joiner = |c: char| matches!(c, '\u{200D}' | '\u{2060}' | '\u{FEFF}');
+    if joiner(c) || next.is_some_and(joiner) {
+        return false;
+    }
     match c {
         '-' | '\u{2010}' | '\u{2012}' | '\u{2013}' | '\u{2014}' => {
             next.is_some_and(|n| !n.is_ascii_digit() && !n.is_whitespace())
