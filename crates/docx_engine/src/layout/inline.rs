@@ -25,6 +25,20 @@ const SUPER_RAISE: f32 = 0.33;
 const SUB_DROP: f32 = 0.08;
 /// Small capitals size relative to the run.
 const SMALL_CAPS_SIZE: f32 = 0.8;
+/// Resolution of the device Word measures some runs on.
+const DEVICE_DPI: f32 = 600.0;
+
+/// Whether Word measures a run with a device font: runs with character
+/// scaling or kerning come out as wide as a font of a whole number of
+/// pixels at 600 dpi (10pt text measures as 9.96pt).
+fn device_metrics(props: &RunProps, size: f32) -> bool {
+    (props.scale - 1.0).abs() > 0.001 || (props.kern > 0.0 && size >= props.kern)
+}
+
+/// `size` rounded to whole device pixels.
+fn device_size(size: f32) -> f32 {
+    (size * DEVICE_DPI / 72.0).round().max(1.0) * 72.0 / DEVICE_DPI
+}
 
 /// What a cluster is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -363,6 +377,9 @@ impl Builder<'_, '_> {
             VertAlign::Baseline => size,
             _ => size * SCRIPT_SIZE,
         };
+        if device_metrics(&props, size) {
+            size = device_size(size);
+        }
         let Some(font) = fonts.select(family, bold, italic) else {
             self.zero(offset, len, run);
             return;

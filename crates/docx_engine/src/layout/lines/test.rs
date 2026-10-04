@@ -135,6 +135,51 @@ fn justifies_all_but_the_last_line() {
     }
 }
 
+const COMPAT_15: &str = r#"<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat>"#;
+
+/// Line texts of a justified paragraph of `words` with a right indent that
+/// makes the last of its first `fit` words cross the edge by `over` points.
+fn justified_lines(words: &[&str], fit: usize, over: f32, settings: Option<&str>) -> Vec<String> {
+    let parts = Parts {
+        styles: Some(ARIAL_10),
+        settings,
+        ..Parts::default()
+    };
+    // The natural width of the first `fit` words on one line.
+    let probe = para(&words[..fit].join(" "));
+    let (_, l) = layout(&probe, &parts);
+    let natural = lines(&l, 0)[0].line().width;
+    let right = ((468.0 - (natural - over)) * 20.0).round();
+    let body = format!(
+        r#"<w:p><w:pPr><w:ind w:right="{right}"/><w:jc w:val="both"/></w:pPr><w:r><w:t xml:space="preserve">{}</w:t></w:r></w:p>"#,
+        words.join(" ")
+    );
+    let (_, l) = layout(&body, &parts);
+    lines(&l, 0).iter().map(|p| line_text(p)).collect()
+}
+
+#[test]
+fn justified_lines_shrink_spaces_for_a_word_that_barely_overflows() {
+    let words = ["aaaa"; 14];
+    // Word 2013 and later shrink the spaces to keep the tenth word.
+    let shrunk = justified_lines(&words, 10, 3.0, Some(COMPAT_15));
+    assert_eq!(shrunk[0].split_whitespace().count(), 10, "{shrunk:?}");
+    // Earlier versions (and too large an overflow) wrap it.
+    let old = justified_lines(&words, 10, 3.0, None);
+    assert_eq!(old[0].split_whitespace().count(), 9, "{old:?}");
+    let far = justified_lines(&words, 10, 7.0, Some(COMPAT_15));
+    assert_eq!(far[0].split_whitespace().count(), 9, "{far:?}");
+}
+
+#[test]
+fn justified_lines_do_not_shrink_for_a_short_word() {
+    let mut words = vec!["aaaa"; 9];
+    words.extend(["a", "aaaa", "aaaa"]);
+    // Crossing by more than a third of its own width, a short word wraps.
+    let l = justified_lines(&words, 10, 2.5, Some(COMPAT_15));
+    assert_eq!(l[0].split_whitespace().count(), 9, "{l:?}");
+}
+
 #[test]
 fn numbered_paragraphs_get_labels_and_hanging_tabs() {
     let numbering = r#"<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>"#;

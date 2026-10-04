@@ -185,6 +185,7 @@ pub(in crate::layout) fn para_box(
             default_tab: env.doc.parts().settings.default_tab,
             no_expand_shift_return: env.doc.parts().settings.do_not_expand_shift_return,
             grid,
+            shrink_spaces: env.doc.parts().settings.compat_mode >= 15,
         },
         None,
     );

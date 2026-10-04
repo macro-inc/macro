@@ -4,7 +4,9 @@
 //! right indent, spaces hang past it, and a word longer than the line is
 //! broken where it overflows. Tabs jump to the next stop (custom stops, the
 //! hanging indent, then default stops after the last custom one); right,
-//! center and decimal stops align the text that follows them.
+//! center and decimal stops align the text that follows them. In justified
+//! paragraphs, Word 2013 and later also keep a word that crosses the edge
+//! slightly by shrinking the line's spaces.
 
 use super::inline::{Inline, Kind};
 use crate::model::props::{Align, LineSpacing, ParaProps, TabAlign, TabLeader};
@@ -77,6 +79,9 @@ pub struct LineCtx<'a> {
     pub no_expand_shift_return: bool,
     /// Document grid pitch when lines snap to it.
     pub grid: Option<f32>,
+    /// Justified lines may shrink their spaces to fit more text (Word 2013
+    /// and later).
+    pub shrink_spaces: bool,
 }
 
 /// Space a wrapping float takes from a line: (left inset, right inset) for
@@ -84,6 +89,13 @@ pub struct LineCtx<'a> {
 pub type Exclusion<'a> = &'a dyn Fn(f32, f32) -> (f32, f32);
 
 const EPS: f32 = 0.01;
+
+/// How much justified lines may shrink their spaces (fraction of their
+/// natural width) to fit one more word, as Word 2013 and later do.
+const MAX_SPACE_SHRINK: f32 = 0.21;
+/// Word only shrinks spaces for a word that crosses the right edge by less
+/// than this fraction of its own width.
+const MAX_WORD_OVERFLOW: f32 = 0.35;
 
 struct Stop {
     pos: f32,
@@ -156,6 +168,30 @@ fn segment_width(inline: &Inline, from: usize) -> (f32, f32) {
     (w, before_decimal.unwrap_or(w))
 }
 
+/// Width of the unbreakable run of clusters starting at `from`: up to and
+/// including the next cluster that allows a break after it, stopping
+/// before spaces, tabs and breaks.
+fn word_width(inline: &Inline, adv: &[f32], from: usize) -> f32 {
+    let mut w = 0.0;
+    for (k, c) in inline.clusters.iter().enumerate().skip(from) {
+        match c.kind {
+            Kind::Space
+            | Kind::Tab
+            | Kind::LineBreak
+            | Kind::PageBreak
+            | Kind::ColumnBreak
+            | Kind::End
+            | Kind::SoftHyphen => break,
+            _ => {}
+        }
+        w += adv[k];
+        if c.brk == super::inline::Brk::After {
+            break;
+        }
+    }
+    w
+}
+
 fn is_content(kind: Kind) -> bool {
     matches!(
         kind,
@@ -167,6 +203,11 @@ fn is_content(kind: Kind) -> bool {
 pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion<'_>>) -> Lines {
     let p = ctx.props;
     let n = inline.clusters.len();
+    let shrink = if ctx.shrink_spaces && p.jc == Align::Justify {
+        MAX_SPACE_SHRINK
+    } else {
+        0.0
+    };
     let mut adv: Vec<f32> = inline.clusters.iter().map(|c| c.advance).collect();
     for (i, c) in inline.clusters.iter().enumerate() {
         if let Kind::Separator(continuation) = c.kind {
@@ -201,6 +242,9 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
         let mut ends = LineEnd::Wrap;
         let mut has_content = false;
         let mut line_leaders: Vec<(usize, TabLeader)> = Vec::new();
+        // Width of the spaces since the last tab (justification only
+        // adjusts those).
+        let mut spaces = 0.0f32;
         while j < n {
             let c = &inline.clusters[j];
             match c.kind {
@@ -251,10 +295,12 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
                     x += adv[j];
                     has_content = true;
                     last_break = Some(j);
+                    spaces = 0.0;
                 }
                 Kind::Space => {
                     x_pos[j] = x;
                     x += adv[j];
+                    spaces += adv[j];
                     last_break = Some(j);
                 }
                 Kind::Zero | Kind::Anchor(_) => x_pos[j] = x,
@@ -263,7 +309,15 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
                     last_break = Some(j);
                 }
                 _ => {
-                    if x + adv[j] > right + EPS && has_content {
+                    // How far a word may cross the right edge when shrinking
+                    // the spaces before it can pull it back in.
+                    let allowance = if shrink > 0.0 && spaces > 0.0 && x + adv[j] > right + EPS {
+                        let word = word_width(inline, &adv, last_break.map_or(i, |b| b + 1));
+                        (spaces * shrink).min(word * MAX_WORD_OVERFLOW)
+                    } else {
+                        0.0
+                    };
+                    if x + adv[j] > right + allowance + EPS && has_content {
                         ends = LineEnd::Wrap;
                         if let Some(b) = last_break {
                             j = b + 1;
@@ -324,15 +378,23 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
             Align::Distribute => true,
             _ => false,
         };
-        let slack = (right - content_right).max(0.0);
-        if stretch && slack > EPS {
-            let last_tab = (i..content_end)
-                .rev()
-                .find(|&k| inline.clusters[k].kind == Kind::Tab)
-                .map_or(i, |k| k + 1);
-            let spaces: Vec<usize> = (last_tab..content_end)
-                .filter(|&k| inline.clusters[k].kind == Kind::Space)
-                .collect();
+        let last_tab = (i..content_end)
+            .rev()
+            .find(|&k| inline.clusters[k].kind == Kind::Tab)
+            .map_or(i, |k| k + 1);
+        let spaces: Vec<usize> = (last_tab..content_end)
+            .filter(|&k| inline.clusters[k].kind == Kind::Space)
+            .collect();
+        // Text that only fits with shrunk spaces shrinks them, on any line
+        // and never by more than they may shrink.
+        let squeeze = shrink > 0.0 && right - content_right < -EPS && !spaces.is_empty();
+        let slack = if squeeze {
+            let room: f32 = spaces.iter().map(|&k| adv[k]).sum::<f32>() * shrink;
+            (right - content_right).max(-room)
+        } else {
+            (right - content_right).max(0.0)
+        };
+        if (stretch && slack > EPS) || squeeze {
             if !spaces.is_empty() {
                 let each = slack / spaces.len() as f32;
                 let mut shift = 0.0;
@@ -370,7 +432,7 @@ pub fn break_lines(inline: &Inline, ctx: &LineCtx<'_>, exclude: Option<Exclusion
             baseline,
             left,
             right,
-            width: content_right - left,
+            width: content_right - left + if squeeze { slack } else { 0.0 },
             ends,
             hyphen,
         });
