@@ -140,8 +140,19 @@ const COMPAT_15: &str = r#"<w:compat><w:compatSetting w:name="compatibilityMode"
 /// Line texts of a justified paragraph of `words` with a right indent that
 /// makes the last of its first `fit` words cross the edge by `over` points.
 fn justified_lines(words: &[&str], fit: usize, over: f32, settings: Option<&str>) -> Vec<String> {
+    justified_lines_in(ARIAL_10, words, fit, over, settings)
+}
+
+/// [`justified_lines`] with the styles `styles`.
+fn justified_lines_in(
+    styles: &str,
+    words: &[&str],
+    fit: usize,
+    over: f32,
+    settings: Option<&str>,
+) -> Vec<String> {
     let parts = Parts {
-        styles: Some(ARIAL_10),
+        styles: Some(styles),
         settings,
         ..Parts::default()
     };
@@ -169,6 +180,19 @@ fn justified_lines_shrink_spaces_for_a_word_that_barely_overflows() {
     assert_eq!(old[0].split_whitespace().count(), 9, "{old:?}");
     let far = justified_lines(&words, 10, 7.0, Some(COMPAT_15));
     assert_eq!(far[0].split_whitespace().count(), 9, "{far:?}");
+}
+
+#[test]
+fn spaces_shrink_by_a_quarter_of_their_glyph_unless_measured_on_a_device() {
+    let words = ["aaaa"; 14];
+    // Nine 2.78pt spaces may give a quarter of their width: 6.25pt.
+    let plain = justified_lines(&words, 10, 5.8, Some(COMPAT_15));
+    assert_eq!(plain[0].split_whitespace().count(), 10, "{plain:?}");
+    // Kerned text, which Word measures with a device font, gives only 21%
+    // of each space (5.2pt): the word wraps.
+    let kerned = ARIAL_10.replace("<w:sz ", r#"<w:kern w:val="2"/><w:sz "#);
+    let device = justified_lines_in(&kerned, &words, 10, 5.8, Some(COMPAT_15));
+    assert_eq!(device[0].split_whitespace().count(), 9, "{device:?}");
 }
 
 #[test]

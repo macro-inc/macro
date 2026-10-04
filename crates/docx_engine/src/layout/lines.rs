@@ -9,7 +9,7 @@
 //! slightly by shrinking the line's spaces.
 
 use super::bidi;
-use super::inline::{Inline, Kind};
+use super::inline::{Inline, Kind, device_metrics};
 use crate::model::props::{Align, LineSpacing, ParaProps, TabAlign, TabLeader};
 
 /// How a line ended.
@@ -98,9 +98,14 @@ pub type Exclusion<'a> = &'a dyn Fn(f32, f32) -> (f32, f32);
 
 const EPS: f32 = 0.01;
 
-/// How much justified lines may shrink their spaces (fraction of their
-/// natural width) to fit one more word, as Word 2013 and later do.
-const MAX_SPACE_SHRINK: f32 = 0.21;
+/// How much Word 2013 and later may shrink a space to squeeze one more word
+/// into a justified line: a share of the space's glyph, without letter
+/// spacing.
+const SPACE_SHRINK: f32 = 0.25;
+/// The share of a space's whole advance that text Word measures with a
+/// device font (scaled or kerned runs) may lose: it squeezes less, as the
+/// line ends of the UN's New York documents show.
+const DEVICE_SPACE_SHRINK: f32 = 0.21;
 /// Word only shrinks spaces for a word that crosses the right edge by less
 /// than this fraction of its own width.
 const MAX_WORD_OVERFLOW: f32 = 0.35;
@@ -216,6 +221,29 @@ fn segment_width(inline: &Inline, from: usize) -> (f32, f32) {
     (w, before_decimal.unwrap_or(w))
 }
 
+/// How much Word may shrink each cluster when it squeezes a justified line
+/// (points; only spaces shrink).
+fn squeeze_room(inline: &Inline) -> Vec<f32> {
+    inline
+        .clusters
+        .iter()
+        .map(|c| {
+            if c.kind != Kind::Space {
+                return 0.0;
+            }
+            let Some(style) = inline.runs.get(usize::from(c.run)) else {
+                return c.advance * SPACE_SHRINK;
+            };
+            let props = &style.props;
+            if device_metrics(props, c.size) {
+                c.advance * DEVICE_SPACE_SHRINK
+            } else {
+                (c.advance - props.spacing).max(0.0) * SPACE_SHRINK
+            }
+        })
+        .collect()
+}
+
 /// Width of the unbreakable run of clusters starting at `from`: up to and
 /// including the next cluster that allows a break after it, stopping
 /// before spaces, tabs and breaks.
@@ -263,12 +291,9 @@ pub fn break_lines_from(
 ) -> Lines {
     let p = ctx.props;
     let n = inline.clusters.len();
-    let shrink = if ctx.shrink_spaces && p.jc == Align::Justify {
-        MAX_SPACE_SHRINK
-    } else {
-        0.0
-    };
+    let shrink = ctx.shrink_spaces && p.jc == Align::Justify;
     let mut adv: Vec<f32> = inline.clusters.iter().map(|c| c.advance).collect();
+    let squeezable = squeeze_room(inline);
     for (i, c) in inline.clusters.iter().enumerate() {
         if let Kind::Separator(continuation) = c.kind {
             adv[i] = if continuation {
@@ -302,9 +327,9 @@ pub fn break_lines_from(
         let mut ends = LineEnd::Wrap;
         let mut has_content = false;
         let mut line_leaders: Vec<(usize, TabLeader)> = Vec::new();
-        // Width of the spaces since the last tab (justification only
-        // adjusts those).
-        let mut spaces = 0.0f32;
+        // How much the spaces since the last tab may shrink (justification
+        // only adjusts those).
+        let mut room = 0.0f32;
         while j < n {
             let c = &inline.clusters[j];
             match c.kind {
@@ -377,12 +402,12 @@ pub fn break_lines_from(
                     x += adv[j];
                     has_content = true;
                     last_break = Some(j);
-                    spaces = 0.0;
+                    room = 0.0;
                 }
                 Kind::Space => {
                     x_pos[j] = x;
                     x += adv[j];
-                    spaces += adv[j];
+                    room += squeezable[j];
                     last_break = Some(j);
                 }
                 Kind::Zero | Kind::Anchor(_) => x_pos[j] = x,
@@ -393,9 +418,9 @@ pub fn break_lines_from(
                 _ => {
                     // How far a word may cross the right edge when shrinking
                     // the spaces before it can pull it back in.
-                    let allowance = if shrink > 0.0 && spaces > 0.0 && x + adv[j] > right + EPS {
+                    let allowance = if shrink && room > 0.0 && x + adv[j] > right + EPS {
                         let word = word_width(inline, &adv, last_break.map_or(i, |b| b + 1));
-                        (spaces * shrink).min(word * MAX_WORD_OVERFLOW)
+                        room.min(word * MAX_WORD_OVERFLOW)
                     } else {
                         0.0
                     };
@@ -469,9 +494,9 @@ pub fn break_lines_from(
             .collect();
         // Text that only fits with shrunk spaces shrinks them, on any line
         // and never by more than they may shrink.
-        let squeeze = shrink > 0.0 && right - content_right < -EPS && !spaces.is_empty();
+        let squeeze = shrink && right - content_right < -EPS && !spaces.is_empty();
         let slack = if squeeze {
-            let room: f32 = spaces.iter().map(|&k| adv[k]).sum::<f32>() * shrink;
+            let room: f32 = spaces.iter().map(|&k| squeezable[k]).sum();
             (right - content_right).max(-room)
         } else {
             (right - content_right).max(0.0)
