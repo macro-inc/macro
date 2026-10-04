@@ -3228,6 +3228,15 @@ export const EditPresentation = z.object({
             .strict(),
           z
             .object({
+              slide: z.number().int().gte(0),
+              shapes: z.array(z.number().int().gte(0)),
+              fromSlide: z.number().int().gte(0),
+              fromShape: z.number().int().gte(0),
+              op: z.literal('pasteFormat'),
+            })
+            .strict(),
+          z
+            .object({
               colors: z.array(
                 z.object({ slot: z.string(), color: z.string() }).strict()
               ),

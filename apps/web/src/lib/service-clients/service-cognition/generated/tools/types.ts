@@ -1239,6 +1239,25 @@ export type EditOp =
     }
   | {
       /**
+       * Slide id of the shapes to restyle.
+       */
+      slide: number;
+      /**
+       * Shape ids to restyle.
+       */
+      shapes: number[];
+      /**
+       * Slide id of the shape to copy from.
+       */
+      fromSlide: number;
+      /**
+       * Shape id to copy from (a shape, line, or picture).
+       */
+      fromShape: number;
+      op: 'pasteFormat';
+    }
+  | {
+      /**
        * Slots to set.
        */
       colors: ThemeColor[];
