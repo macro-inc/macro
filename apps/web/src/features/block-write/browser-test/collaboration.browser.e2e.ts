@@ -379,6 +379,78 @@ test('tracked changes are recorded per author and resolved for everyone', async 
   }
 });
 
+test('copy and paste keep formatting, from here and from other apps', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] }),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  try {
+    await open(alice, documentId, ALICE);
+    await open(bob, documentId, BOB);
+    // The first paragraph has a bold defined term ("Agreement").
+    await selectParagraph(alice, 'This Mutual Non-Disclosure');
+    await alice.keyboard.press('ControlOrMeta+c');
+    await expect
+      .poll(() =>
+        alice.evaluate(async () => {
+          const [item] = await navigator.clipboard.read();
+          return item?.types ?? [];
+        })
+      )
+      .toContain('text/html');
+    await caretAtEnd(alice, 'IN WITNESS WHEREOF');
+    await alice.keyboard.press('Enter');
+    await alice.keyboard.press('ControlOrMeta+v');
+    await expect
+      .poll(async () =>
+        (await paragraphs(bob)).filter((p) =>
+          p.startsWith('This Mutual Non-Disclosure')
+        )
+      )
+      .toHaveLength(2);
+    const copies = await bob.evaluate(() => {
+      const fixture = window.docxFixture;
+      return fixture?.sharedBlock('This Mutual Non-Disclosure');
+    });
+    expect(JSON.stringify(copies?.attrs)).toContain('r:w:b');
+
+    // HTML from another application keeps bold text and becomes a list.
+    await caretAtEnd(alice, 'IN WITNESS WHEREOF');
+    await alice.keyboard.press('Enter');
+    await alice.evaluate(() => {
+      const data = new DataTransfer();
+      data.setData(
+        'text/html',
+        '<b style="font-weight:normal" id="docs-internal-guid-1"><p><span style="font-weight:700">Notices.</span><span> All notices</span></p><ul><li><p>by email</p></li><li><p>by courier</p></li></ul></b>'
+      );
+      data.setData('text/plain', 'Notices. All notices\nby email\nby courier');
+      document.querySelector('[data-docx-input]')?.dispatchEvent(
+        new ClipboardEvent('paste', {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    });
+    await expect
+      .poll(async () => (await sharedBlock(bob, 'by courier'))?.props ?? '')
+      .toContain('numPr');
+    expect(
+      JSON.stringify((await sharedBlock(bob, 'Notices.'))?.attrs ?? [])
+    ).toContain('r:w:b');
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('viewers follow along read-only', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([

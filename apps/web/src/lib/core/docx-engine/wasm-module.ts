@@ -43,6 +43,7 @@ export interface WasmDocxDocument {
   rangeRects: (from: string, to: string) => string;
   /** The selected text, for the clipboard. */
   selectedText: () => string;
+  copySelection: () => string;
   /** `ParagraphText[]` JSON. */
   paragraphs: () => string;
   /** `StyleInfo[]` JSON. */

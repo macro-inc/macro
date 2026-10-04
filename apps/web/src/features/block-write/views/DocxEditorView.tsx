@@ -57,6 +57,8 @@ export type DocxEditorViewProps = {
   displayName: (userId: string | undefined) => string;
   /** The name this person's tracked changes are recorded under. */
   author?: string;
+  /** The document's id (for pasting copied content back losslessly). */
+  documentId?: string;
   onSelection?: (selection: DocxSelection | undefined) => void;
   /** Comment roots for this document; omit to disable commenting. */
   commentRoots?: Accessor<MessageListItem[]>;
@@ -299,6 +301,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
               editor={editor}
               scroller={scroller()}
               editable={props.canEdit}
+              documentId={props.documentId}
               onTextClick={onTextClick}
               onComment={props.commentRoots ? beginComment : undefined}
               inputRef={(el) => {

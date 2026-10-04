@@ -391,6 +391,7 @@ function Fixture() {
               peers={session.peers}
               displayName={shortName}
               author={shortName(user)}
+              documentId={documentId}
               onSelection={session.setSelection}
               commentRoots={roots}
               onReady={setEditor}

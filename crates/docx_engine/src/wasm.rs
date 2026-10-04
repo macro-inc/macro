@@ -196,6 +196,12 @@ impl DocxDocument {
     }
 
     /// The selected text, for the clipboard.
+    /// The selection for the clipboard (`Clip` JSON: paragraphs, HTML, text).
+    #[wasm_bindgen(js_name = copySelection)]
+    pub fn copy_selection(&mut self) -> Result<String, JsError> {
+        to_json(&self.session.copy_selection())
+    }
+
     #[wasm_bindgen(js_name = selectedText)]
     pub fn selected_text(&mut self) -> String {
         self.session.selected_text()

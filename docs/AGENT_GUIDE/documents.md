@@ -806,35 +806,57 @@ shown as a bare highlight.
 When `enable-docx-editor` is on, uploaded `.docx` files open at
 `/app/write/<id>` in an editor instead of the PDF preview. The flag is a
 PostHog flag that is on by default in dev mode; set `VITE_ENABLE_DOCX_EDITOR`
-to override it locally. The header label has a **Beta** badge. The page is the
-Docxodus WASM engine. Edits sync through the sync service, so every open copy
-updates live and shows each collaborator's caret with their name.
+to override it locally. The header label has a **Beta** badge. Pages are laid
+out and drawn by Macro's own DOCX engine (Rust compiled to wasm, in a worker)
+as `<canvas>` sheets with Word's pagination, so the document's text is not
+in the DOM. Edits sync through the sync service as you type: every open copy
+updates live and shows each collaborator's caret with their name
+(`[data-docx-peer]`).
 
-- Editors get a toolbar labelled `Document formatting` with the following
-  controls: `Undo`, `Redo`, a `Paragraph style` select, bold, italic,
-  underline and strikethrough, `Bulleted list`, `Numbered list`, the alignment
-  buttons, `Insert table` and `Track changes`.
-- Typing is committed after about a second of idle time, or on blur. Wait
-  roughly 1.5 s before checking another tab for the text.
-- Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo. They
-  commit pending typing first, so an undo straight after typing removes it,
-  and leave the caret at the end of the change.
+- Pages are `[data-docx-page="<index>"]` elements. Click a page to place the
+  caret, drag to select, double-click for a word and triple-click for a
+  paragraph. Keystrokes go to a hidden textarea, `[data-docx-input]`
+  (labelled `Document text`); it must have focus, which a click on a page
+  gives it. Read text back from another tab or after a download, not from
+  the page.
+- Editors get a toolbar labelled `Document formatting`: `Undo`, `Redo`, a
+  `Paragraph style` select, a `Font size` select, `Bold`, `Italic`,
+  `Underline`, `Strikethrough`, `Bulleted list`, `Numbered list`, the
+  alignment buttons, `Insert table`, `Track changes`, `Hide tracked changes` /
+  `Show tracked changes`, `Comment on selection` and `Download .docx`. While
+  tracking is on (or the caret is on a tracked change) it also shows `Accept
+  change`, `Reject change`, `Accept all changes` and `Reject all changes`.
+- Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo your
+  own edits only, never a collaborator's. Mod+B/I/U format, Tab and
+  Shift+Tab indent list items, Enter splits paragraphs and Shift+Enter
+  inserts a line break.
+- `Track changes` turns tracking on for the whole document (it is saved in
+  the file, as in Word): every editor's typing then shows as an underlined
+  insertion and deletions stay visible struck through, each under its
+  author's name. Accept and reject act on the selection, the change at the
+  caret, or every change.
+- Double-click a page's header or footer area to edit it. The body dims, the
+  area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
+  button; Escape or a click on the body returns to the body. Header and
+  footer edits reach collaborators and the download like body edits.
 - Clicking a DOCX in the Home list opens the editor in the Home preview pane.
-- Editors see editable `Header` and `Footer` bands. Viewers and commenters get
-  a read-only paginated rendering instead.
+  Viewers and commenters see the same paginated pages, read-only.
 - To comment on any text, including table cells: select it, then click the
-  floating `Comment` button beside the selection. You can also use the toolbar
-  `Comment on selection` button or Mod+Alt+M. The draft opens a thread card in
-  the right margin. Posting creates a normal document discussion (`markdown`
-  anchor with `mark_id`), so it also appears in channels and notifications.
-- Highlighted text is drawn with the CSS Custom Highlight API rather than DOM
-  marks: query `CSS.highlights`, not `<mark>` elements.
+  floating `Comment` button beside the selection
+  (`[data-docx-comment-button]`). You can also use the toolbar `Comment on
+  selection` button or Mod+Alt+M. The draft opens a thread card in the right
+  margin. Posting creates a normal document discussion (`markdown` anchor
+  with `mark_id`), so it also appears in channels and notifications.
+  Commented text is highlighted by overlay elements
+  (`[data-docx-comment-highlight]`) above the canvas. Comments anchor in the
+  body only, not in headers or footers.
 - Threads whose text was deleted are listed under `Comments on text that has
   changed`, above the `Discussion` composer.
 - AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to
   the first matching text the next time someone opens the file.
-- `Download .docx` exports the current collaborative state with every edit.
-  Comments stay in Macro threads and are not written into the file.
+- `Download .docx` exports the current collaborative state with every edit,
+  including headers, footers and tracked changes. Comments stay in Macro
+  threads and are not written into the file.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
 - AI `EditDocument` edits Markdown documents only and rejects DOCX files.
