@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX, type Setter } from 'solid-js';
@@ -38,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   run: vi.fn(),
   setEnabled: vi.fn(),
+  writeClipboardData: vi.fn(),
   activationPending: (): boolean => false,
   openWithSplit: vi.fn(),
   setDisplayName: vi.fn(),
@@ -79,7 +81,23 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn(), success: vi.fn() },
 }));
-vi.mock('@entity', () => ({ formatDateAndTime: (value: string) => value }));
+vi.mock('@core/util/dataTransfer', () => ({
+  writeClipboardData: mocks.writeClipboardData,
+}));
+vi.mock('@entity', () => ({
+  formatDateAndTime: (value: string) => value,
+  ListLayoutProvider: (props: { children: JSX.Element }) => props.children,
+  ListEntity: (props: {
+    entity: { name: string };
+    leadingAction: JSX.Element;
+    onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  }) => (
+    <button onClick={props.onClick}>
+      {props.entity.name}
+      {props.leadingAction}
+    </button>
+  ),
+}));
 vi.mock('@app/features/entity/bulk-edit/BulkEditEntityModal', () => ({
   openBulkEditModal: vi.fn(),
 }));
@@ -155,21 +173,6 @@ vi.mock('@ui', async () => ({
     <button {...props} />
   ),
   cn: (...classes: string[]) => classes.join(' '),
-  ToggleSwitch: (props: {
-    label: string;
-    checked: boolean;
-    disabled?: boolean;
-    onChange: (checked: boolean) => void;
-  }) => (
-    <button
-      type="button"
-      role="switch"
-      aria-label={props.label}
-      aria-checked={props.checked}
-      disabled={props.disabled}
-      onClick={() => props.onChange(!props.checked)}
-    />
-  ),
 }));
 vi.mock('@queries/chat', () => ({
   useChatQuery: (id: () => string) => {
@@ -198,7 +201,15 @@ vi.mock('@queries/agent-session/session', () => ({
         return mocks.metadataStatus() === 'pending';
       },
       get data() {
-        return mocks.agentMetadata();
+        const metadata = mocks.agentMetadata();
+        return metadata
+          ? {
+              ...metadata,
+              ownerId: 'macro|owner@example.com',
+              botId: 'test-bot',
+              status: { kind: 'event', event: 'session/end' },
+            }
+          : undefined;
       },
     };
   },
@@ -272,6 +283,7 @@ let setActivationPending: Setter<boolean>;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.update.mockReset().mockResolvedValue(cron);
+  mocks.writeClipboardData.mockReset().mockResolvedValue(true);
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
@@ -310,8 +322,16 @@ function runButton(): HTMLButtonElement {
   return screen.getByRole('button', { name: 'Run now' });
 }
 
-function activeSwitch(): HTMLButtonElement {
-  return screen.getByRole('switch');
+function openRunOptions() {
+  const trigger = screen.getByRole('button', { name: 'Run options' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+}
+
+function activationItem(): HTMLElement {
+  const name = /^(Enable|Disable) routine$/;
+  if (!screen.queryByRole('menuitem', { name })) openRunOptions();
+  return screen.getByRole('menuitem', { name });
 }
 
 function selectedTarget(): RoutineTarget {
@@ -333,6 +353,34 @@ function deferredSave(): {
 }
 
 describe('automation execution target autosave', () => {
+  it('copies the current prompt, including unsaved edits, from the run menu', async () => {
+    render(() => <Automation />);
+    mocks.changePrompt('Use my latest instructions');
+    openRunOptions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Copy prompt' }), {
+      key: 'Enter',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.writeClipboardData).toHaveBeenCalledExactlyOnceWith({
+      'text/plain': 'Use my latest instructions',
+    });
+    expect(toast.success).toHaveBeenCalledWith('Prompt copied');
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(screen.queryByText('All changes saved')).toBeNull();
+  });
+
+  it('reports when the prompt could not be copied', async () => {
+    mocks.writeClipboardData.mockResolvedValueOnce(false);
+    render(() => <Automation />);
+    openRunOptions();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Copy prompt' }), {
+      key: 'Enter',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(toast.alert).toHaveBeenCalledWith('Could not copy prompt');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   it('initializes the stored agent and duplicates its full saved configuration', () => {
     const saved = {
       ...cron,
@@ -454,7 +502,7 @@ describe('automation execution target autosave', () => {
     render(() => <Automation />);
     mocks.changePrompt('');
     expect(screen.getByText('Instructions are required.')).toBeTruthy();
-    fireEvent.click(activeSwitch());
+    fireEvent.keyDown(activationItem(), { key: 'Enter' });
     expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
       enabled: false,
@@ -484,37 +532,41 @@ describe('automation execution target autosave', () => {
     const claimed = '2026-09-28T11:55:00Z';
     setSchedules([{ ...cron, claimed }]);
     render(() => <Automation />);
-    expect(screen.getByText('Running')).toBeTruthy();
-    fireEvent.click(activeSwitch());
+    expect(
+      screen.getByText(/Configuration cannot be changed while running/)
+    ).toBeTruthy();
+    fireEvent.keyDown(activationItem(), { key: 'Enter' });
     expect(mocks.setEnabled).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
       enabled: false,
     });
     setSchedules([{ ...cron, claimed, enabled: false }]);
-    expect(activeSwitch().getAttribute('aria-checked')).toBe('false');
-    expect(activeSwitch().disabled).toBe(true);
+    expect(activationItem().textContent).toContain('Enable routine');
+    expect(activationItem().getAttribute('aria-disabled')).toBe('true');
     setSchedules([{ ...cron, enabled: false }]);
-    expect(activeSwitch().disabled).toBe(false);
+    expect(activationItem().getAttribute('aria-disabled')).not.toBe('true');
   });
 
-  it('shows a paused routine switched off and still runs it on demand', () => {
+  it('shows a paused routine and still runs it on demand', async () => {
     render(() => <Automation />);
-    expect(activeSwitch().getAttribute('aria-checked')).toBe('true');
+    expect(activationItem().textContent).toContain('Disable routine');
     expect(screen.getByText(/Next run/)).toBeTruthy();
     setSchedules([{ ...cron, enabled: false }]);
-    expect(activeSwitch().getAttribute('aria-checked')).toBe('false');
-    expect(screen.queryByText(/Next run/)).toBeNull();
+    expect(activationItem().textContent).toContain('Enable routine');
+    expect(screen.getByText('Paused')).toBeTruthy();
+    fireEvent.keyDown(activationItem(), { key: 'Escape' });
+    await vi.advanceTimersByTimeAsync(0);
     fireEvent.click(runButton());
     expect(mocks.run).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
     });
   });
 
-  it('holds the switch while an activation request is pending', () => {
+  it('disables activation while a request is pending', () => {
     render(() => <Automation />);
-    expect(activeSwitch().disabled).toBe(false);
+    expect(activationItem().getAttribute('aria-disabled')).not.toBe('true');
     setActivationPending(true);
-    expect(activeSwitch().disabled).toBe(true);
+    expect(activationItem().getAttribute('aria-disabled')).toBe('true');
   });
 
   it.each(['unmount'])(
@@ -652,7 +704,7 @@ describe('routine editor triggers', () => {
 
   it('supports keyboard switching between settings and run history', async () => {
     render(() => <Automation />);
-    const settings = screen.getByRole('tab', { name: 'Settings' });
+    const settings = screen.getByRole('tab', { name: 'Overview' });
     settings.focus();
     fireEvent.keyDown(settings, { key: 'ArrowRight' });
     await vi.advanceTimersByTimeAsync(300);

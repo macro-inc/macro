@@ -51,10 +51,10 @@ describe('routines list', () => {
     expect(screen.queryByText('Morning briefing')).toBeNull();
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'View run history for Revenue signals',
+        name: 'Revenue signals',
       })
     );
-    expect(props.onOpen).toHaveBeenCalledWith('revenue', true);
+    expect(props.onOpen).toHaveBeenCalledWith('revenue');
     expect(props.onOpen).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     fireEvent.click(screen.getByRole('button', { name: 'Morning briefing' }));

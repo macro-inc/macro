@@ -452,7 +452,7 @@ columns. The search field sits below the top bar, as in Projects; search by name
 creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
 to the right of search. Click a row to open its settings in the same pane. Toggle
 the **Enabled** checkbox property directly in the list to pause or resume it.
-The history button at the end of each row opens that routine's **Run History** tab.
+Open the routine and use its **Run History** tab to see past runs.
 
 **Create → Routine** (U) and **Create Routine** open the same popover host as task
 and project creation. Enter a name and instructions, then choose a model or agent
@@ -486,11 +486,20 @@ include project creation. Bots’ or delegated actions do not retrigger routines
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
-to remove it. Saved settings and **Run History** appear beneath the routine’s top
-bar; **Back to routines** returns
-to the list in the same pane.
+to remove it. The routine's top bar uses the task breadcrumb layout:
+**Routines → routine name**, followed by the three-dot menu for duplication and
+deletion. Tabs switch between **Overview** and **Run History**. Overview follows
+the project home layout: an editable title, model and trigger property chips,
+a **Next run** chip, and a plain prompt editor. The combined **Run now** button
+is on the right of the content title. Its **Run options** dropdown contains
+**Enable routine** / **Disable routine** and **Copy prompt**, which copies the
+current instructions, including unsaved edits. **Run History** uses full-width
+Soup rows for past agent sessions, with each run's
+outcome, duration, and time. Click a row or press Enter to open its session;
+Shift opens it in another split. **Back to routines** returns to the list in the
+same pane.
 
-The **Active / Inactive** switch pauses immediately, including with invalid
+**Disable routine** pauses immediately, including with invalid
 unsaved edits. Resuming waits for valid settings to save. Settings autosave in
 order without changing activation. **Run Now** waits for the latest valid edit
 to save; it also works while paused. A failed save keeps the draft and offers

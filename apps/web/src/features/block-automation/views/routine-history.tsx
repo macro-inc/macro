@@ -1,7 +1,13 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import { formatDateAndTime } from '@entity';
+import {
+  type AgentSessionEntity,
+  type ChatEntity,
+  formatDateAndTime,
+  ListEntity,
+  ListLayoutProvider,
+} from '@entity';
 import { getHistoryResource } from '@queries/agent-schedule/run-resource';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -26,7 +32,7 @@ type HistoryResource = NonNullable<ReturnType<typeof getHistoryResource>>;
 export type HistoryMetadata =
   | { status: 'pending' }
   | { status: 'unavailable' }
-  | { status: 'ready'; name: string };
+  | { status: 'ready'; entity: AgentSessionEntity | ChatEntity };
 
 type RoutineHistoryProps = {
   records: readonly HistoryRecord[];
@@ -43,11 +49,7 @@ type HistoryRowProps = {
   onOpen?: (resource: HistoryResource, newSplit: boolean) => void;
 };
 
-function HistoryRow(props: HistoryRowProps): JSX.Element {
-  const clickable = () =>
-    Boolean(
-      props.resource && props.metadata.status === 'ready' && props.onOpen
-    );
+function RunOutcome(props: { record: HistoryRecord }) {
   const outcome = () =>
     !props.record.id
       ? 'Running'
@@ -55,7 +57,7 @@ function HistoryRow(props: HistoryRowProps): JSX.Element {
         ? 'Succeeded'
         : 'Failed';
   const duration = () => {
-    if (!props.record.start_time || !props.record.end_time) return '—';
+    if (!props.record.start_time || !props.record.end_time) return undefined;
     const seconds = Math.max(
       0,
       Math.round(
@@ -64,65 +66,89 @@ function HistoryRow(props: HistoryRowProps): JSX.Element {
           1000
       )
     );
-    if (!Number.isFinite(seconds)) return '—';
+    if (!Number.isFinite(seconds)) return undefined;
     return seconds < 60
       ? `${seconds}s`
       : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
   };
-  const name = () => {
-    const metadata = props.metadata;
-    if (metadata.status === 'ready')
-      return metadata.name.trim() || 'Untitled run';
-    if (metadata.status === 'pending') return 'Loading…';
-    return 'Run unavailable';
-  };
-
   return (
-    <button
-      type="button"
-      disabled={!clickable()}
-      class={cn(
-        'flex w-full items-center gap-2 border-b border-edge-muted px-3 py-2 text-left text-sm cursor-default',
-        clickable() && 'hover:bg-hover'
-      )}
-      onClick={(event) => {
-        if (clickable() && props.resource) {
-          props.onOpen?.(props.resource, event.shiftKey);
-        }
-      }}
-    >
-      <div class="size-4 shrink-0">
-        <EntityIcon
-          targetType={props.resource?.type ?? 'automation'}
-          size="xs"
-        />
-      </div>
-      <span class="min-w-0 flex-1 truncate" title={name()}>
-        {name()}
-      </span>
-      <span
-        class={cn(
-          'hidden shrink-0 text-xs sm:inline',
-          outcome() === 'Failed' ? 'text-failure' : 'text-ink-muted'
-        )}
-      >
+    <span class="inline-flex items-center gap-3 whitespace-nowrap text-xs text-ink-muted">
+      <span class={cn(outcome() === 'Failed' && 'text-failure')}>
         {outcome()}
       </span>
-      <span class="hidden w-16 shrink-0 text-right text-xs text-ink-muted sm:inline">
-        {duration()}
-      </span>
-      <span
-        class={cn(
-          'ml-auto shrink-0 text-xs font-mono uppercase font-light',
-          // Live synthetic rows have no persisted ID and are not failures.
-          !props.record.id || props.record.is_success
-            ? 'text-ink-extra-muted'
-            : 'text-failure'
+      <Show when={duration()}>
+        {(value) => (
+          <span class="tabular-nums text-ink-extra-muted">{value()}</span>
         )}
-      >
-        {formatDateAndTime(props.record.start_time ?? new Date())}
-      </span>
-    </button>
+      </Show>
+    </span>
+  );
+}
+
+function HistoryRow(props: HistoryRowProps): JSX.Element {
+  const entity = () => {
+    const metadata = props.metadata;
+    return metadata.status === 'ready'
+      ? {
+          ...metadata.entity,
+          name: metadata.entity.name.trim() || 'Untitled run',
+          sortTs: props.record.start_time ?? metadata.entity.sortTs,
+        }
+      : undefined;
+  };
+  const open = (newSplit: boolean) => {
+    if (props.resource && entity()) props.onOpen?.(props.resource, newSplit);
+  };
+  return (
+    <Show
+      when={entity()}
+      fallback={
+        <div
+          role="listitem"
+          class="soup-list-entity mx-1 flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm text-ink-muted"
+        >
+          <span class="size-4 shrink-0">
+            <EntityIcon
+              targetType={props.resource?.type ?? 'automation'}
+              size="xs"
+            />
+          </span>
+          <span class="min-w-0 flex-1 truncate">
+            {props.metadata.status === 'pending'
+              ? 'Loading…'
+              : 'Run unavailable'}
+          </span>
+          <RunOutcome record={props.record} />
+          <span class="ml-2 text-xs text-ink-extra-muted">
+            {props.record.start_time
+              ? formatDateAndTime(props.record.start_time)
+              : '—'}
+          </span>
+        </div>
+      }
+    >
+      {(entity) => (
+        <div
+          role="listitem"
+          tabIndex={0}
+          aria-label={entity().name}
+          class="outline-none focus-visible:bg-list-highlighted"
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            open(event.shiftKey);
+          }}
+        >
+          <ListEntity
+            entity={entity()}
+            hideCheckbox
+            deferInteractions
+            leadingAction={<RunOutcome record={props.record} />}
+            onClick={(event) => open(event.shiftKey)}
+          />
+        </div>
+      )}
+    </Show>
   );
 }
 
@@ -187,34 +213,37 @@ function ResolvedHistoryRow(props: {
 
 export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
   const [visibleCount, setVisibleCount] = createSignal(50);
+  const [listElement, setListElement] = createSignal<HTMLDivElement>();
   return (
-    <Show
-      when={props.records.length > 0}
-      fallback={
-        <div class="px-3 py-8 text-center text-xs text-ink-muted">
-          {props.isPending ? 'Loading…' : 'No runs yet.'}
-        </div>
-      }
-    >
-      <div class="min-h-0 overflow-y-auto">
-        <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-3 text-xs text-ink-muted">
-          <span class="flex-1">Run</span>
-          <span class="hidden sm:inline">Status / Duration</span>
-          <span class="ml-4">Triggered</span>
-        </div>
-        <For each={props.records.slice(0, visibleCount())}>
-          {(record) => <ResolvedHistoryRow record={record} history={props} />}
-        </For>
-        <Show when={props.records.length > visibleCount()}>
-          <button
-            type="button"
-            class="w-full p-3 text-xs text-ink-muted hover:bg-hover"
-            onClick={() => setVisibleCount((count) => count + 50)}
+    <div ref={setListElement} class="min-h-0 flex-1 overflow-y-auto py-3">
+      <Show
+        when={props.records.length > 0}
+        fallback={
+          <div
+            role="status"
+            class="px-4 py-16 text-center text-sm text-ink-muted"
           >
-            Load more runs
-          </button>
+            {props.isPending ? 'Loading…' : 'No runs yet.'}
+          </div>
+        }
+      >
+        <ListLayoutProvider ref={listElement}>
+          <div role="list" aria-label="Routine runs">
+            <For each={props.records.slice(0, visibleCount())}>
+              {(record) => (
+                <ResolvedHistoryRow record={record} history={props} />
+              )}
+            </For>
+          </div>
+        </ListLayoutProvider>
+        <Show when={props.records.length > visibleCount()}>
+          <div class="flex justify-center p-3">
+            <Button onClick={() => setVisibleCount((count) => count + 50)}>
+              Load more runs
+            </Button>
+          </div>
         </Show>
-      </div>
-    </Show>
+      </Show>
+    </div>
   );
 }

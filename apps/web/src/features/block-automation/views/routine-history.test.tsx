@@ -1,5 +1,12 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createResource, createSignal, Suspense } from 'solid-js';
+import type { AgentSessionEntity, ChatEntity } from '@entity';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
+import { createResource, createSignal, type JSX, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type HistoryMetadata,
@@ -12,9 +19,26 @@ vi.mock('@core/component/EntityIcon', () => ({
     <span data-icon={props.targetType} />
   ),
 }));
-vi.mock('@entity', () => ({ formatDateAndTime: (value: string) => value }));
+vi.mock('@entity', () => ({
+  formatDateAndTime: (value: string) => value,
+  ListLayoutProvider: (props: { children: JSX.Element }) => props.children,
+  ListEntity: (props: {
+    entity: AgentSessionEntity | ChatEntity;
+    leadingAction: JSX.Element;
+    onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  }) => (
+    <button data-entity-type={props.entity.type} onClick={props.onClick}>
+      {props.entity.name}
+      {props.leadingAction}
+      <time>{String(props.entity.sortTs ?? '')}</time>
+    </button>
+  ),
+}));
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props} />
+  ),
 }));
 afterEach(cleanup);
 
@@ -32,35 +56,41 @@ function record(
     ...overrides,
   };
 }
-
+function entity(
+  type: 'chat' | 'agent',
+  id: string,
+  name: string
+): ChatEntity | AgentSessionEntity {
+  const base = {
+    id,
+    name,
+    ownerId: 'owner',
+    updatedAt: '2026-10-05T12:00:00Z',
+  };
+  return type === 'agent'
+    ? { ...base, type: 'agent_session', botId: 'bot', status: 'idle' }
+    : { ...base, type: 'chat' };
+}
 function sources() {
   return {
     createChatMetadata: vi.fn(
       (id: string) => (): HistoryMetadata => ({
         status: 'ready',
-        name: `Chat ${id}`,
+        entity: entity('chat', id, `Chat ${id}`),
       })
     ),
     createAgentMetadata: vi.fn(
       (id: string) => (): HistoryMetadata => ({
         status: 'ready',
-        name: `Agent ${id}`,
+        entity: entity('agent', id, `Agent ${id}`),
       })
     ),
     onOpen: vi.fn(),
   };
 }
 
-function row(name: string): HTMLButtonElement {
-  const words = name.split(' ');
-  const timestamp = words.pop();
-  return screen.getByRole('button', {
-    name: new RegExp(`${words.join(' ')}.*${timestamp}$`),
-  });
-}
-
 describe('routine history', () => {
-  it('resolves mixed and legacy history from each result, not resource_id or current target', () => {
+  it('uses Soup entities and resolves agent and legacy resources from each result', () => {
     const source = sources();
     render(() => (
       <RoutineHistory
@@ -83,9 +113,16 @@ describe('routine history', () => {
       ['legacy-error'],
     ]);
     expect(source.createAgentMetadata.mock.calls).toEqual([['session']]);
-    fireEvent.click(screen.getByText('Chat chat'));
-    fireEvent.click(screen.getByText('Agent session'), { shiftKey: true });
-    fireEvent.click(screen.getByText('Chat legacy-error'), { shiftKey: true });
+    const session = screen.getByRole('listitem', { name: 'Agent session' });
+    expect(
+      session.querySelector('[data-entity-type="agent_session"]')
+    ).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Chat chat/ }));
+    fireEvent.keyDown(session, { key: 'Enter', shiftKey: true });
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Chat legacy-error/ }),
+      { shiftKey: true }
+    );
     expect(source.onOpen.mock.calls).toEqual([
       [{ type: 'chat', id: 'chat' }, false],
       [{ type: 'agent', id: 'session' }, true],
@@ -93,32 +130,41 @@ describe('routine history', () => {
     ]);
   });
 
-  it('preserves neutral synthetic rows and marks only persisted unsuccessful runs as failures', () => {
+  it('keeps live runs neutral, shows failures, and includes execution duration', () => {
     render(() => (
       <RoutineHistory
         {...sources()}
         isPending={false}
         records={[
-          record('agent', 'pending-agent', {
-            id: undefined,
-            is_success: false,
+          record('agent', 'pending', { id: undefined, is_success: false }),
+          record('agent', 'failed', { is_success: false }),
+          record('agent', 'success', {
+            start_time: '2026-10-04T12:00:00Z',
+            end_time: '2026-10-04T12:01:12Z',
           }),
-          record('chat', 'pending-chat', { id: null, is_success: false }),
-          record('agent', 'failed-agent', { is_success: false }),
-          record('chat', 'success'),
         ]}
       />
     ));
-    for (const id of ['pending-agent', 'pending-chat', 'success']) {
-      expect(
-        screen.getByText(id).classList.contains('text-ink-extra-muted')
-      ).toBe(true);
-    }
     expect(
-      screen.getByText('failed-agent').classList.contains('text-failure')
+      within(screen.getByRole('listitem', { name: 'Agent pending' }))
+        .getByText('Running')
+        .classList.contains('text-failure')
+    ).toBe(false);
+    expect(
+      within(screen.getByRole('listitem', { name: 'Agent failed' }))
+        .getByText('Failed')
+        .classList.contains('text-failure')
     ).toBe(true);
-    fireEvent.click(screen.getByText('Agent pending-agent'));
-    expect(row('Agent pending-agent pending-agent').disabled).toBe(false);
+    expect(
+      within(screen.getByRole('listitem', { name: 'Agent success' })).getByText(
+        '1m 12s'
+      )
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole('listitem', { name: 'Agent success' })).getByText(
+        '2026-10-04T12:00:00Z'
+      )
+    ).toBeTruthy();
   });
 
   it.each([
@@ -137,7 +183,7 @@ describe('routine history', () => {
     },
     { result: undefined, resource_id: 'unsafe' },
   ])(
-    'renders missing/unknown resources without queries or links: %j',
+    'keeps unavailable resources visible without queries or navigation: %j',
     (invalid) => {
       const source = sources();
       render(() => (
@@ -149,18 +195,16 @@ describe('routine history', () => {
           ]}
         />
       ));
-      expect(row('Run unavailable missing').disabled).toBe(true);
       fireEvent.click(screen.getByText('Run unavailable'));
+      expect(screen.queryByRole('button')).toBeNull();
       expect(source.onOpen).not.toHaveBeenCalled();
       expect(source.createChatMetadata).not.toHaveBeenCalled();
       expect(source.createAgentMetadata).not.toHaveBeenCalled();
-      expect(
-        screen.getByText('missing').classList.contains('text-failure')
-      ).toBe(true);
+      expect(screen.getByText('Failed')).toBeTruthy();
     }
   );
 
-  it('isolates metadata loading, unavailable resources, and empty titles', () => {
+  it('isolates loading and unavailable metadata while retaining other sessions', () => {
     const source = sources();
     const [metadata, setMetadata] = createSignal<HistoryMetadata>({
       status: 'pending',
@@ -173,21 +217,23 @@ describe('routine history', () => {
         records={[record('agent', 'session'), record('chat', 'ready')]}
       />
     ));
-    expect(row('Loading… session').disabled).toBe(true);
-    expect(row('Chat ready ready').disabled).toBe(false);
+    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(screen.getByRole('listitem', { name: 'Chat ready' })).toBeTruthy();
     setMetadata({ status: 'unavailable' });
-    expect(row('Run unavailable session').disabled).toBe(true);
     fireEvent.click(screen.getByText('Run unavailable'));
     expect(source.onOpen).not.toHaveBeenCalled();
-    setMetadata({ status: 'ready', name: '  ' });
-    expect(row('Untitled run session').disabled).toBe(false);
+    setMetadata({ status: 'ready', entity: entity('agent', 'session', '  ') });
+    expect(screen.getByRole('listitem', { name: 'Untitled run' })).toBeTruthy();
   });
 
-  it('catches a suspending metadata source at the row rather than detaching siblings', () => {
+  it('catches suspending metadata at the row without detaching siblings', () => {
     const source = sources();
     source.createAgentMetadata.mockImplementation(() => {
       const [name] = createResource(() => new Promise<string>(() => {}));
-      return () => ({ status: 'ready', name: name() ?? '' });
+      return () => ({
+        status: 'ready',
+        entity: entity('agent', 'session', name() ?? ''),
+      });
     });
     render(() => (
       <Suspense fallback={<div>Outer loading</div>}>
@@ -201,26 +247,26 @@ describe('routine history', () => {
     ));
     expect(screen.queryByText('Outer loading')).toBeNull();
     expect(screen.getByText('Editor')).toBeTruthy();
-    expect(row('Loading… session').disabled).toBe(true);
-    expect(row('Chat ready ready').disabled).toBe(false);
+    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(screen.getByRole('listitem', { name: 'Chat ready' })).toBeTruthy();
   });
 
-  it('replaces a resource with the correct metadata source when a row changes', () => {
+  it('replaces a resource with the correct metadata source when records change', () => {
     const source = sources();
     const [records, setRecords] = createSignal([record('chat', 'first')]);
     render(() => (
       <RoutineHistory {...source} records={records()} isPending={false} />
     ));
     setRecords([record('agent', 'second')]);
-    expect(screen.queryByText('Chat first')).toBeNull();
-    fireEvent.click(screen.getByText('Agent second'));
+    expect(screen.queryByRole('listitem', { name: 'Chat first' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Agent second/ }));
     expect(source.onOpen).toHaveBeenCalledWith(
       { type: 'agent', id: 'second' },
       false
     );
   });
 
-  it('loads history in bounded pages without fetching hidden transcripts', () => {
+  it('loads bounded pages without fetching hidden sessions', () => {
     const source = sources();
     const [pending, setPending] = createSignal(true);
     const [records, setRecords] = createSignal<HistoryRecord[]>([]);
@@ -231,12 +277,13 @@ describe('routine history', () => {
     setPending(false);
     expect(screen.getByText('No runs yet.')).toBeTruthy();
     setRecords(
-      Array.from({ length: 51 }, (_, index) => record('chat', String(index)))
+      Array.from({ length: 51 }, (_, index) => record('agent', String(index)))
     );
-    expect(screen.getAllByRole('button')).toHaveLength(51);
-    expect(source.createChatMetadata).toHaveBeenCalledTimes(50);
+    expect(screen.getAllByRole('listitem')).toHaveLength(50);
+    expect(source.createAgentMetadata).toHaveBeenCalledTimes(50);
     fireEvent.click(screen.getByRole('button', { name: 'Load more runs' }));
-    expect(source.createChatMetadata).toHaveBeenCalledTimes(51);
+    expect(source.createAgentMetadata).toHaveBeenCalledTimes(51);
+    expect(screen.getAllByRole('listitem')).toHaveLength(51);
     expect(screen.queryByText('Load more runs')).toBeNull();
   });
 });

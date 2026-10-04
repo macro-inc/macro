@@ -5,8 +5,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, tryMacroId } from '@core/user';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import CopyIcon from '@phosphor/copy.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
@@ -27,7 +26,7 @@ import {
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useChatQuery } from '@queries/chat';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
-import { Button, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -40,6 +39,7 @@ import {
   Switch,
 } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
+import { RoutineRunButton } from '../components/routine-run-button';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from '../primitives/routine-autosave';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
@@ -81,7 +81,18 @@ function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
     if (!query.isSuccess) return { status: 'unavailable' };
     const chat = query.data?.chat;
     return chat
-      ? { status: 'ready', name: chat.name }
+      ? {
+          status: 'ready',
+          entity: {
+            type: 'chat',
+            id,
+            name: chat.name,
+            ownerId: chat.userId,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            model: chat.model,
+          },
+        }
       : { status: 'unavailable' };
   };
 }
@@ -93,7 +104,24 @@ function createAgentHistoryMetadata(id: string): Accessor<HistoryMetadata> {
     if (!query.isSuccess) return { status: 'unavailable' };
     const session = query.data;
     return session
-      ? { status: 'ready', name: session.name }
+      ? {
+          status: 'ready',
+          entity: {
+            type: 'agent_session',
+            id,
+            name: session.name,
+            ownerId: session.ownerId,
+            botId: session.botId,
+            harness: session.harness,
+            isArchived: session.isArchived,
+            createdAt: session.createdAt,
+            updatedAt: session.modifiedAt,
+            status:
+              session.status.kind === 'event'
+                ? session.status.event
+                : session.status.kind,
+          },
+        }
       : { status: 'unavailable' };
   };
 }
@@ -304,6 +332,37 @@ export function RoutineDetail(props: {
     void invalidateSchedules();
   });
 
+  const nextRun = () => {
+    if (!isActive()) return 'Paused';
+    const next = schedule()?.next_run_at;
+    if (next) return formatDateTime(next);
+    if (isRunning()) return 'Running now';
+    if (isCompleted()) return 'No upcoming runs';
+    return 'On the next matching event';
+  };
+
+  const runDisabled = () =>
+    !isOwned() ||
+    runNowMutation.isPending ||
+    isRunning() ||
+    autosave.dirty() ||
+    autosave.saving() ||
+    Boolean(formError()) ||
+    !state();
+  const activationDisabled = () =>
+    !isOwned() ||
+    setEnabledMutation.isPending ||
+    (!isActive() && (isCompleted() || runDisabled()));
+  const copyPrompt = async () => {
+    const prompt = state()?.prompt;
+    if (!prompt) return;
+    if (await writeClipboardData({ 'text/plain': prompt })) {
+      toast.success('Prompt copied');
+    } else {
+      toast.alert('Could not copy prompt');
+    }
+  };
+
   return (
     <Show
       when={schedule()}
@@ -318,49 +377,29 @@ export function RoutineDetail(props: {
         </div>
       }
     >
-      {(d) => (
-        <div class="flex h-full min-h-0 flex-col">
-          <header
-            class="flex h-12 shrink-0 items-center gap-2 border-b border-edge-muted px-4"
-            aria-label="Routine toolbar"
-          >
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Back to routines"
-              onClick={back}
-            >
-              <ArrowLeftIcon class="size-4" />
-            </Button>
-            <button
-              type="button"
-              class="text-xs text-ink-muted hover:text-ink"
-              onClick={back}
-            >
-              Routines
-            </button>
-            <span class="text-xs text-ink-extra-muted">/</span>
-            <span class="min-w-0 flex-1 truncate text-sm text-ink">
-              {state()?.name || d().name || 'Untitled routine'}
-            </span>
-            <Show when={isOwned()}>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={
-                  runNowMutation.isPending ||
-                  isRunning() ||
-                  autosave.dirty() ||
-                  autosave.saving() ||
-                  Boolean(formError()) ||
-                  !state()
-                }
-                onClick={runNow}
-              >
-                Run now
-              </Button>
-            </Show>
-            <Dropdown placement="bottom-end">
+      {(routine) => (
+        <RoutineEditor
+          draft={state() ?? { ...createEmptyDraft(), name: routine().name }}
+          onChange={setState}
+          disabled={!isOwned() || isRunning() || !state()}
+          tab={tab()}
+          onTab={setTab}
+          onBack={back}
+          runActions={
+            <RoutineRunButton
+              enabled={isActive()}
+              runDisabled={runDisabled()}
+              activationDisabled={activationDisabled()}
+              copyDisabled={!state()?.prompt}
+              onRun={runNow}
+              onEnabled={(enabled) =>
+                setEnabledMutation.mutate({ scheduleId, enabled })
+              }
+              onCopyPrompt={() => void copyPrompt()}
+            />
+          }
+          actions={
+            <Dropdown placement="bottom-start">
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
@@ -369,7 +408,10 @@ export function RoutineDetail(props: {
                 <DotsIcon class="size-5" />
               </Dropdown.Trigger>
               <Dropdown.Content portalScope="local">
-                <Dropdown.Item onSelect={duplicateAutomation}>
+                <Dropdown.Item
+                  disabled={!state() || duplicateMutation.isPending}
+                  onSelect={duplicateAutomation}
+                >
                   <CopyIcon class="size-4" />
                   Duplicate
                 </Dropdown.Item>
@@ -381,194 +423,116 @@ export function RoutineDetail(props: {
                 </Show>
               </Dropdown.Content>
             </Dropdown>
-          </header>
-          <Show
-            when={state()}
-            fallback={
-              <RoutineEditor
-                draft={{ ...createEmptyDraft(), name: d().name }}
-                onChange={() => {}}
-                enabled={isActive()}
-                disabled
-                activationDisabled={
-                  !isOwned() ||
-                  setEnabledMutation.isPending ||
-                  (isRunning() && !isActive())
-                }
-                onEnabled={(enabled) =>
-                  setEnabledMutation.mutate({ scheduleId, enabled })
-                }
-                tab={tab()}
-                onTab={setTab}
-                instructions={null}
-                executionPicker={null}
-                triggerContent={
-                  <p class="text-sm text-ink-muted">
-                    This routine has an unsupported task configuration.
+          }
+          nextRun={nextRun()}
+          instructions={
+            <Show when={state()}>
+              <Show when={{ version: editorVersion() }} keyed>
+                <AutomationPromptEditor
+                  initialValue={state()?.prompt ?? ''}
+                  onChange={(prompt) =>
+                    setState((draft) =>
+                      draft.prompt === prompt ? draft : { ...draft, prompt }
+                    )
+                  }
+                />
+              </Show>
+            </Show>
+          }
+          executionPicker={
+            <Show when={state()}>
+              {(draft) => (
+                <RoutineExecutionPicker
+                  target={draft().target}
+                  onChange={(target) =>
+                    setState((current) => ({ ...current, target }))
+                  }
+                />
+              )}
+            </Show>
+          }
+          triggerContent={
+            <Show
+              when={state()}
+              fallback={
+                <p class="text-sm text-ink-muted">
+                  This routine has an unsupported task configuration.
+                </p>
+              }
+            >
+              {(draft) => (
+                <RoutineTriggers
+                  triggers={draft().triggers ?? []}
+                  onChange={(triggers) =>
+                    setState((current) => ({ ...current, triggers }))
+                  }
+                />
+              )}
+            </Show>
+          }
+          feedback={
+            <>
+              <Show when={autosave.error()}>
+                <p role="alert" class="text-sm text-failure">
+                  Changes not saved. {getErrorMessage(autosave.error())}
+                  <button
+                    type="button"
+                    class="ml-2 underline"
+                    onClick={() => {
+                      if (autosave.error() instanceof RoutineConflictError) {
+                        autosave.cancel();
+                        initializeDraft();
+                      } else autosave.retry();
+                    }}
+                  >
+                    {autosave.error() instanceof RoutineConflictError
+                      ? 'Reload latest'
+                      : 'Retry save'}
+                  </button>
+                </p>
+              </Show>
+              <Show when={formError()}>
+                {(message) => (
+                  <p role="alert" class="text-sm text-failure">
+                    {message()}
                   </p>
-                }
-                history={
-                  <RoutineHistory
-                    records={history()}
-                    isPending={historyQuery.isPending}
-                    createChatMetadata={createChatHistoryMetadata}
-                    createAgentMetadata={createAgentHistoryMetadata}
-                    onOpen={(resource, newSplit) =>
-                      openWithSplit(resource, {
-                        activate: true,
-                        preferNewSplit: newSplit,
-                      })
-                    }
-                  />
-                }
-              />
-            }
-          >
-            {(draft) => (
-              <RoutineEditor
-                draft={draft()}
-                onChange={setState}
-                enabled={isActive()}
-                disabled={!isOwned() || isRunning()}
-                activationDisabled={
-                  !isOwned() ||
-                  isCompleted() ||
-                  setEnabledMutation.isPending ||
-                  (!isActive() &&
-                    (autosave.dirty() ||
-                      autosave.saving() ||
-                      Boolean(formError()) ||
-                      isRunning()))
-                }
-                onEnabled={(enabled) =>
-                  setEnabledMutation.mutate({ scheduleId, enabled })
-                }
-                tab={tab()}
-                onTab={setTab}
-                metadata={
-                  <>
-                    <span class="border-l border-edge-muted pl-4">
-                      By{' '}
-                      {isOwned()
-                        ? 'you'
-                        : getDisplayName(tryMacroId(d().owner))}
-                    </span>
-                    <Show when={!isOwned()}>
-                      <span>Shared · View only</span>
-                    </Show>
-                    <Show when={isRunning()}>
-                      <span class="text-accent">Running</span>
-                    </Show>
-                    <Show when={isActive() && d().next_run_at}>
-                      <span>Next run {formatDateTime(d().next_run_at)}</span>
-                    </Show>
-                  </>
-                }
-                status={
-                  isOwned() && tab() === 'settings'
-                    ? autosave.saving()
-                      ? 'Saving…'
-                      : autosave.dirty()
-                        ? 'Unsaved changes'
-                        : 'All changes saved'
-                    : undefined
-                }
-                instructions={
-                  <Show when={{ version: editorVersion() }} keyed>
-                    <AutomationPromptEditor
-                      initialValue={draft().prompt}
-                      onChange={(prompt) =>
-                        setState((d) =>
-                          d.prompt === prompt ? d : { ...d, prompt }
-                        )
-                      }
-                    />
-                  </Show>
-                }
-                executionPicker={
-                  <RoutineExecutionPicker
-                    target={draft().target}
-                    onChange={(target) =>
-                      setState((current) => ({ ...current, target }))
-                    }
-                  />
-                }
-                triggerContent={
-                  <RoutineTriggers
-                    triggers={draft().triggers ?? []}
-                    onChange={(triggers) =>
-                      setState((current) => ({ ...current, triggers }))
-                    }
-                  />
-                }
-                feedback={
-                  <>
-                    <Show when={autosave.error()}>
-                      <p role="alert" class="text-sm text-failure">
-                        Changes not saved. {getErrorMessage(autosave.error())}
-                        <button
-                          type="button"
-                          class="ml-2 underline"
-                          onClick={() => {
-                            if (
-                              autosave.error() instanceof RoutineConflictError
-                            ) {
-                              autosave.cancel();
-                              initializeDraft();
-                            } else autosave.retry();
-                          }}
-                        >
-                          {autosave.error() instanceof RoutineConflictError
-                            ? 'Reload latest'
-                            : 'Retry save'}
-                        </button>
-                      </p>
-                    </Show>
-                    <Show when={formError()}>
-                      {(message) => (
-                        <p role="alert" class="text-sm text-failure">
-                          {message()}
-                        </p>
-                      )}
-                    </Show>
-                    <Show when={isRunning()}>
-                      <p class="text-xs text-ink-muted">
-                        Configuration cannot be changed while running.
-                      </p>
-                    </Show>
-                  </>
-                }
-                history={
-                  <div class="overflow-hidden rounded-xl border border-edge-muted">
-                    <Show when={historyQuery.isError}>
-                      <p role="alert" class="p-4 text-sm text-failure">
-                        Could not load run history.{' '}
-                        <button
-                          class="underline"
-                          onClick={() => void historyQuery.refetch()}
-                        >
-                          Retry
-                        </button>
-                      </p>
-                    </Show>
-                    <RoutineHistory
-                      records={history()}
-                      isPending={historyQuery.isPending}
-                      createChatMetadata={createChatHistoryMetadata}
-                      createAgentMetadata={createAgentHistoryMetadata}
-                      onOpen={(resource, newSplit) =>
-                        openWithSplit(resource, {
-                          activate: true,
-                          preferNewSplit: newSplit,
-                        })
-                      }
-                    />
-                  </div>
+                )}
+              </Show>
+              <Show when={isRunning()}>
+                <p class="text-xs text-ink-muted">
+                  Running. Configuration cannot be changed while running.
+                </p>
+              </Show>
+            </>
+          }
+          history={
+            <>
+              <Show when={historyQuery.isError}>
+                <p role="alert" class="px-4 py-3 text-sm text-failure">
+                  Could not load run history.{' '}
+                  <button
+                    class="underline"
+                    onClick={() => void historyQuery.refetch()}
+                  >
+                    Retry
+                  </button>
+                </p>
+              </Show>
+              <RoutineHistory
+                records={history()}
+                isPending={historyQuery.isPending}
+                createChatMetadata={createChatHistoryMetadata}
+                createAgentMetadata={createAgentHistoryMetadata}
+                onOpen={(resource, newSplit) =>
+                  openWithSplit(resource, {
+                    activate: true,
+                    preferNewSplit: newSplit,
+                  })
                 }
               />
-            )}
-          </Show>
-        </div>
+            </>
+          }
+        />
       )}
     </Show>
   );

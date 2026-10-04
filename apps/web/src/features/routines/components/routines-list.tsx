@@ -1,6 +1,5 @@
 import { SearchBar, ViewShell } from '@app/components/view-shell';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
@@ -47,15 +46,7 @@ export function RoutinesList(props: {
             class="max-w-md flex-1"
             hotkey="cmd+f"
           />
-          <Button
-            variant="strong"
-            size="lg"
-            class="h-10 px-5 text-sm"
-            onClick={props.onCreate}
-          >
-            <PlusIcon class="size-4" />
-            Create Routine
-          </Button>
+          <Button onClick={props.onCreate}>Create Routine</Button>
         </div>
       </ViewShell.Header>
       <Show when={props.error}>
@@ -77,7 +68,7 @@ export function RoutinesList(props: {
         tabIndex={-1}
         class="min-h-0 min-w-0 flex-1 overflow-auto outline-none"
       >
-        <div role="rowgroup" class="sticky top-0 z-1 min-w-[788px] bg-panel">
+        <div role="rowgroup" class="sticky top-0 z-1 min-w-[748px] bg-panel">
           <RoutineRowLayout
             role="row"
             class="text-xs font-medium text-ink-extra-muted"
@@ -89,12 +80,9 @@ export function RoutinesList(props: {
             <span role="columnheader" class="px-2">
               Enabled
             </span>
-            <span role="columnheader" class="sr-only">
-              History
-            </span>
           </RoutineRowLayout>
         </div>
-        <div role="rowgroup" class="min-w-[788px]">
+        <div role="rowgroup" class="min-w-[748px]">
           <For each={filtered()}>
             {(row) => (
               <RoutineListRow
@@ -110,7 +98,7 @@ export function RoutinesList(props: {
           <div role="row">
             <div
               role="cell"
-              aria-colspan={6}
+              aria-colspan={5}
               class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
             >
               <ClockIcon class="size-6 text-ink-extra-muted" />

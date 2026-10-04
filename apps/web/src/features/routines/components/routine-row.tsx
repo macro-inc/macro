@@ -2,7 +2,7 @@ import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
 import RobotIcon from '@phosphor/robot.svg';
-import { Button, cn, InlineCheckbox, Layer, Tooltip } from '@ui';
+import { cn, InlineCheckbox, Layer, Tooltip } from '@ui';
 import type { JSX, ParentProps } from 'solid-js';
 import type { RoutineRow } from '../core/types';
 
@@ -14,7 +14,7 @@ export function RoutineRowLayout(
     <EntityLayout
       role={props.role}
       class={cn(
-        'grid min-h-10 min-w-[780px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem_2rem] items-center gap-2 px-3',
+        'grid min-h-10 min-w-[740px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem] items-center gap-2 px-3',
         props.class
       )}
     >
@@ -46,7 +46,7 @@ export function RoutineListRow(props: {
   return (
     <div
       role="row"
-      class="soup-list-entity @container/entity mx-1 min-w-[780px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted"
+      class="soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted"
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
@@ -116,16 +116,6 @@ export function RoutineListRow(props: {
               </button>
             </Tooltip>
           </Layer>
-        </EntitySlot>
-        <EntitySlot role="cell" onClick={(event) => event.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            label={`View run history for ${props.row.name}`}
-            onClick={() => props.onOpen(props.row.id, true)}
-          >
-            <ClockIcon class="size-3.5" />
-          </Button>
         </EntitySlot>
       </RoutineRowLayout>
     </div>
