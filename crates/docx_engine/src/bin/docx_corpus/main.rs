@@ -1,5 +1,6 @@
 //! `docx_corpus`: renders documents and scores them against reference renders.
 
+mod check;
 mod fontconfig;
 mod lines;
 mod render;
@@ -24,6 +25,9 @@ enum Command {
     Fontconfig(fontconfig::Args),
     /// Dumps the text lines of every page with their positions as JSON.
     Lines(lines::Args),
+    /// Runs every document through rendering, the collaborative state,
+    /// editing, tracked changes, header edits, copy/paste and saving.
+    Check(check::Args),
 }
 
 fn main() {
@@ -33,6 +37,7 @@ fn main() {
         Command::Score(args) => score::run(&args),
         Command::Fontconfig(args) => fontconfig::run(&args),
         Command::Lines(args) => lines::run(&args),
+        Command::Check(args) => check::run(&args),
     };
     match ok {
         Ok(true) => {}
