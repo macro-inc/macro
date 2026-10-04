@@ -158,7 +158,7 @@ export function transitionFrames(
           }
         : { incoming: fadeIn };
     default:
-      // dissolve, randomBar, morph (approximated with a fade)...
+      // dissolve, randomBar, and Morph when its scene cannot be drawn...
       return { incoming: fadeIn };
   }
 }

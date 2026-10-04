@@ -2,10 +2,11 @@
  * Presenter View: PowerPoint's speaker console. The audience sees the show
  * in a separate window (drag it to the projector and double-click it for
  * full screen); this window shows the current slide, the next one, the
- * speaker notes, a timer, and every slide to jump to.
+ * speaker notes, a timer, and every slide to jump to. Videos and audio play
+ * on the audience screen; the console mirrors them and holds the controls.
  */
 
-import type { DeckOutline } from '@core/pptx-engine/types';
+import type { DeckOutline, ShapeOutline } from '@core/pptx-engine/types';
 import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -23,7 +24,10 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { PresentationEngine } from '../context/pptx-editor-context';
+import { mediaShapes } from '../core/media';
+import { createMediaUrls } from '../primitives/create-media-urls';
 import { createShow } from '../primitives/create-show';
+import { AudienceClip, ConsoleClip } from './presenter-media';
 import { ShowCanvas } from './show-canvas';
 
 /** `h:mm:ss`, or `mm:ss` under an hour. */
@@ -53,6 +57,15 @@ function createSize() {
     });
   };
   return [size, ref] as const;
+}
+
+/** The size a slide takes fitted into `box`, and its points-to-pixels scale. */
+function fitSlide(
+  deck: { width: number; height: number },
+  box: { w: number; h: number }
+) {
+  const s = Math.min(box.w / deck.width, box.h / deck.height);
+  return { w: deck.width * s, h: deck.height * s, s };
 }
 
 /** The audience's window: a black page that shows the slide. */
@@ -126,8 +139,53 @@ export function PresenterView(props: {
     if (pausedAt() !== null) setPausedAt(Date.now());
   };
 
+  // ---- video and audio -----------------------------------------------------
+  const mediaUrls = createMediaUrls(props.engine);
+  const clips = () => (show.ended() ? [] : mediaShapes(show.slide()));
+  /** The clip playing, by slide index and shape id. */
+  const [playing, setPlayingClip] = createSignal<{
+    index: number;
+    id: number;
+  }>();
+  const [audienceClip, setAudienceClip] = createSignal<HTMLMediaElement>();
+  const [audienceMuted, setAudienceMuted] = createSignal(false);
+  const isPlaying = (id: number) =>
+    playing()?.index === show.index() && playing()?.id === id;
+  const setPlaying = (id: number | undefined) => {
+    setAudienceMuted(false);
+    setPlayingClip(id === undefined ? undefined : { index: show.index(), id });
+  };
+  /** A click on a clip in the audience window plays or pauses it. */
+  const toggleClip = (id: number) => {
+    const el = audienceClip();
+    if (!isPlaying(id)) setPlaying(id);
+    else if (el?.paused) void el.play().catch(() => {});
+    else el?.pause();
+  };
+  const boxIn = (shape: ShapeOutline, s: number) => ({
+    x: shape.x * s,
+    y: shape.y * s,
+    w: shape.w * s,
+    h: shape.h * s,
+  });
+
   // ---- the audience window -------------------------------------------------
   const [audienceSize, setAudienceSize] = createSignal({ w: 960, h: 540 });
+  const audienceFit = () => fitSlide(props.deck, audienceSize());
+  /** The clip under a click in the audience window. */
+  const audienceClipAt = (e: MouseEvent) => {
+    if (show.screen() !== 'slide') return;
+    const f = audienceFit();
+    const { w, h } = audienceSize();
+    const x = (e.clientX - (w - f.w) / 2) / f.s;
+    const y = (e.clientY - (h - f.h) / 2) / f.s;
+    return clips()
+      .reverse()
+      .find(
+        ({ shape: c }) =>
+          x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h
+      );
+  };
   const attach = () => {
     const win = openAudience();
     setPopup(win);
@@ -135,7 +193,11 @@ export function PresenterView(props: {
     const onKey = (e: KeyboardEvent) => {
       if (show.onKey(e)) e.preventDefault();
     };
-    const onClick = () => show.go(1);
+    const onClick = (e: MouseEvent) => {
+      const clip = audienceClipAt(e);
+      if (clip) toggleClip(clip.shape.id);
+      else show.go(1);
+    };
     const onContext = (e: MouseEvent) => {
       e.preventDefault();
       show.go(-1);
@@ -255,19 +317,46 @@ export function PresenterView(props: {
               class="flex min-h-0 flex-1 items-center justify-center"
             >
               <Show when={current().w > 0}>
-                <ShowCanvas
-                  engine={props.engine}
-                  deck={props.deck}
-                  index={show.index()}
-                  width={current().w}
-                  height={current().h}
-                  pixelRatio={window.devicePixelRatio || 1}
-                  screen={show.screen()}
-                  preload={nextIndex()}
-                  onShown={show.shown}
-                  step={show.step()}
-                  testId="pptx-presenter-current"
-                />
+                <div
+                  class="relative"
+                  style={{
+                    width: `${fitSlide(props.deck, current()).w}px`,
+                    height: `${fitSlide(props.deck, current()).h}px`,
+                  }}
+                >
+                  <ShowCanvas
+                    engine={props.engine}
+                    deck={props.deck}
+                    index={show.index()}
+                    width={current().w}
+                    height={current().h}
+                    pixelRatio={window.devicePixelRatio || 1}
+                    screen={show.screen()}
+                    preload={nextIndex()}
+                    onShown={show.shown}
+                    step={show.step()}
+                    testId="pptx-presenter-current"
+                  />
+                  <For each={clips()}>
+                    {(clip) => (
+                      <ConsoleClip
+                        media={clip.media}
+                        box={boxIn(
+                          clip.shape,
+                          fitSlide(props.deck, current()).s
+                        )}
+                        urls={mediaUrls}
+                        playing={isPlaying(clip.shape.id)}
+                        audience={
+                          isPlaying(clip.shape.id) ? audienceClip() : undefined
+                        }
+                        audienceMuted={audienceMuted()}
+                        onPlay={() => setPlaying(clip.shape.id)}
+                        onStop={() => setPlaying(undefined)}
+                      />
+                    )}
+                  </For>
+                </div>
               </Show>
             </div>
           </Panel>
@@ -420,17 +509,40 @@ export function PresenterView(props: {
       <Show when={popup()}>
         {(win) => (
           <Portal mount={win().document.body}>
-            <ShowCanvas
-              engine={props.engine}
-              deck={props.deck}
-              index={show.index()}
-              width={audienceSize().w}
-              height={audienceSize().h}
-              pixelRatio={win().devicePixelRatio || 1}
-              screen={show.ended() ? 'black' : show.screen()}
-              step={show.step()}
-              testId="pptx-audience-canvas"
-            />
+            <div
+              style={{
+                position: 'relative',
+                width: `${audienceFit().w}px`,
+                height: `${audienceFit().h}px`,
+              }}
+            >
+              <ShowCanvas
+                engine={props.engine}
+                deck={props.deck}
+                index={show.index()}
+                width={audienceSize().w}
+                height={audienceSize().h}
+                pixelRatio={win().devicePixelRatio || 1}
+                screen={show.ended() ? 'black' : show.screen()}
+                preload={nextIndex()}
+                step={show.step()}
+                testId="pptx-audience-canvas"
+              />
+              <For each={clips()}>
+                {(clip) => (
+                  <Show when={isPlaying(clip.shape.id)}>
+                    <AudienceClip
+                      media={clip.media}
+                      box={boxIn(clip.shape, audienceFit().s)}
+                      urls={mediaUrls}
+                      onElement={setAudienceClip}
+                      onMuted={() => setAudienceMuted(true)}
+                      onEnded={() => setPlaying(undefined)}
+                    />
+                  </Show>
+                )}
+              </For>
+            </div>
           </Portal>
         )}
       </Show>

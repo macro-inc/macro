@@ -1,8 +1,9 @@
 /**
  * One slide of a running show, drawn to fit a box. Slide changes play the
- * slide's transition; with `step`, slides with animations are drawn as
- * layers (`renderSpan`) whose pieces play each click's animations. Renders
- * are cached per slide.
+ * slide's transition (Morph animates each object from one slide to the
+ * next); with `step`, slides with animations are drawn as layers
+ * (`renderSpan`) whose pieces play each click's animations. Renders are
+ * cached per slide.
  */
 
 import type { DeckOutline, TextLayoutInfo } from '@core/pptx-engine/types';
@@ -30,6 +31,13 @@ import {
 import type { Rect } from '../core/selection';
 import { transitionFrames } from '../core/transitions';
 import type { ShowScreen } from '../primitives/create-show';
+import {
+  closeMorph,
+  type MorphRun,
+  type MorphScene,
+  playMorph,
+  prepareMorph,
+} from '../primitives/morph-scene';
 
 /** A slide ready to show: one image, or layers and a timeline. */
 type Prepared =
@@ -161,6 +169,30 @@ export function ShowCanvas(props: {
     return hit;
   };
 
+  // Morph scenes, newest last; only a few are kept (each holds two slides).
+  const morphs = new Map<string, Promise<MorphScene | null>>();
+  const morphInto = (i: number) =>
+    props.transitions !== false &&
+    props.deck.slides[i]?.transition?.kind === 'morph';
+  const prepareMorphFor = (from: number, to: number, width: number) => {
+    const key = `${from}:${to}:${width}`;
+    let hit = morphs.get(key);
+    if (hit) morphs.delete(key);
+    else {
+      hit = prepareMorph(props.engine, props.deck, from, to, width).catch(
+        () => null
+      );
+      while (morphs.size >= 3) {
+        const [oldest, scene] = morphs.entries().next().value!;
+        morphs.delete(oldest);
+        void scene.then((s) => s && closeMorph(s));
+      }
+    }
+    morphs.set(key, hit);
+    return hit;
+  };
+  let morphRun: MorphRun | undefined;
+
   const stop = (m: Mounted | null) => {
     if (!m) return;
     m.token++;
@@ -169,6 +201,9 @@ export function ShowCanvas(props: {
   };
 
   onCleanup(() => {
+    morphRun?.cancel();
+    for (const scene of morphs.values())
+      void scene.then((s) => s && closeMorph(s));
     for (const m of mounted) stop(m);
     for (const p of cache.values())
       void p
@@ -314,11 +349,20 @@ export function ShowCanvas(props: {
   const [shown] = createResource(
     () => `${props.index}:${pixelWidth()}:${layered()}`,
     async (key) => {
-      const [i, width, layers] = key.split(':');
-      return {
-        i: Number(i),
-        prepared: await prepare(Number(i), Number(width), layers === 'true'),
-      };
+      const [i, width, layers] = key
+        .split(':')
+        .map((v, n) => (n === 2 ? Number(v === 'true') : Number(v)));
+      // Morph needs both slides' objects drawn before it can start.
+      const from = mounted[active]?.index;
+      const morph =
+        from !== undefined && from !== i && morphInto(i)
+          ? prepareMorphFor(from, i, width)
+          : Promise.resolve(null);
+      const [prepared, scene] = await Promise.all([
+        prepare(i, width, layers === 1),
+        morph,
+      ]);
+      return { i, prepared, morph: scene && { from, scene } };
     }
   );
 
@@ -326,6 +370,8 @@ export function ShowCanvas(props: {
   createEffect(
     on(shown, (value) => {
       if (!value) return;
+      morphRun?.cancel();
+      morphRun = undefined;
       const previous = mounted[active];
       const changed = previous !== null && previous.index !== value.i;
       const target = changed ? 1 - active : active;
@@ -335,11 +381,15 @@ export function ShowCanvas(props: {
       const step = props.step ?? Number.POSITIVE_INFINITY;
       const appearing = previous === null || changed;
       const t = props.deck.slides[value.i]?.transition;
+      const morph =
+        changed && value.morph?.from === previous?.index
+          ? value.morph?.scene
+          : undefined;
       const frames =
-        changed && props.transitions !== false
+        changed && props.transitions !== false && !morph
           ? transitionFrames(t?.kind ?? 'none', t?.direction)
           : null;
-      const duration = frames ? (t?.durationMs ?? 500) : 0;
+      const duration = frames || morph ? (t?.durationMs ?? 500) : 0;
       if (appearing && step === 0 && value.prepared.kind === 'layered') {
         // What plays as the slide appears starts after its transition.
         settleAt(m, -1);
@@ -360,6 +410,8 @@ export function ShowCanvas(props: {
         incoming.style.zIndex = onTop ? '0' : '1';
         outgoing.style.zIndex = onTop ? '1' : '0';
         incoming.style.visibility = 'visible';
+        // The Morph scene covers both slots while it plays.
+        if (morph) morphRun = playMorph(wrapper, morph, k(), duration);
         const timing = { duration, easing: 'ease-in-out' };
         if (frames?.incoming) incoming.animate(frames.incoming, timing);
         if (frames) {
@@ -381,8 +433,11 @@ export function ShowCanvas(props: {
       } else {
         slots[target].style.visibility = 'visible';
       }
-      if (props.preload !== undefined)
+      if (props.preload !== undefined) {
         void prepare(props.preload, pixelWidth(), layered()).catch(() => {});
+        if (props.preload !== value.i && morphInto(props.preload))
+          void prepareMorphFor(value.i, props.preload, pixelWidth());
+      }
       props.onShown?.(value.i);
     })
   );
@@ -397,6 +452,8 @@ export function ShowCanvas(props: {
         lastStep = step;
         const m = mounted[active];
         if (step === undefined || !m || m.index !== props.index) return;
+        // A click during Morph finishes it first.
+        morphRun?.finish();
         if (previousStep !== undefined && step === previousStep + 1)
           play(m, step);
         else settleAt(m, step);

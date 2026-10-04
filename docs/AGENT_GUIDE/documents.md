@@ -598,7 +598,12 @@ Layout and test hooks:
   layers), ← goes back, a number then Enter jumps, B/W blank the screen, S
   shows notes, Esc ends. Over a link the pointer becomes a hand and its
   ScreenTip shows (`pptx-slideshow-link-tip`); clicking follows the link
-  instead of advancing.
+  instead of advancing. **Morph** (`pptx-transition-morph`) plays as a scene
+  (`pptx-morph`, `data-pairs` = objects matched): objects on both slides
+  glide, resize, and turn to their new place (matched by a `!!` name, then
+  the same name and kind, as a duplicated slide keeps them, then the same
+  text, then the same placeholder); text-only boxes move without stretching;
+  the rest fade out or in. A click finishes it.
 - **Presenter View** (Slide Show ▸ Presenter view `pptx-present-presenter`,
   Alt+F5): opens the audience show in a pop-up window (`pptx-audience-canvas`;
   double-click it for full screen) and turns the tab into the speaker
@@ -607,7 +612,15 @@ Layout and test hooks:
   (`pptx-presenter-timer`), counter (`pptx-presenter-counter`), All slides
   (`pptx-presenter-grid-toggle`, or G), and End slide show
   (`pptx-presenter-end`). Show keys work in either window. A blocked pop-up
-  shows **Open audience window** (`pptx-presenter-audience-closed`).
+  shows **Open audience window** (`pptx-presenter-audience-closed`). A video
+  or audio clip on the current slide has a Play button on the console
+  (`pptx-presenter-media-play`), and clicking the clip in the audience window
+  also plays or pauses it instead of advancing: it plays on the audience
+  screen (`pptx-audience-media`) while the console mirrors a video silently
+  (`pptx-presenter-media-video`) with controls (`pptx-presenter-media-controls`:
+  `pptx-presenter-media-toggle`, `pptx-presenter-media-stop`, seek
+  `pptx-presenter-media-seek`, time `pptx-presenter-media-time`). With the
+  audience window closed, the console's copy plays the sound.
 - **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
   Cmd/Ctrl+S saves now, Cmd/Ctrl+A selects all, Shift+Cmd/Ctrl+C and V copy
   and paste formatting, Cmd/Ctrl+C/X/V copy, cut, and
