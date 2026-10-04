@@ -23,6 +23,12 @@ export interface PainterSource {
   run?: RunStyle;
   /** Paragraph formatting to paint with whole-shape painting. */
   paragraph?: ParagraphStyle;
+  /**
+   * Every paragraph's formatting, when the source is a whole shape: a
+   * target's paragraphs take them in order (the last repeats), so shapes
+   * built alike (a figure over a caption) keep their structure.
+   */
+  paragraphs?: ParagraphStyle[];
 }
 
 /** The run of `paragraph` that formats the character at `offset`. */
@@ -62,7 +68,11 @@ export function paraPatchOf(paragraph: ParagraphStyle): ParaPatch {
 export function paintShapesOps(
   source: PainterSource,
   slide: number,
-  shapes: { id: number; textEditable: boolean }[]
+  shapes: {
+    id: number;
+    textEditable: boolean;
+    paragraphs?: { text: string }[];
+  }[]
 ): EditOp[] {
   const ops: EditOp[] = [];
   if (source.look && shapes.length > 0)
@@ -75,6 +85,33 @@ export function paintShapesOps(
     });
   for (const shape of shapes) {
     if (!shape.textEditable) continue;
+    const styles = source.paragraphs ?? [];
+    const paragraphs = shape.paragraphs ?? [];
+    if (styles.length > 1 && paragraphs.length > 0) {
+      paragraphs.forEach((p, i) => {
+        const style = styles[Math.min(i, styles.length - 1)];
+        const run = runAt(style, 0);
+        const length = [...p.text].length;
+        if (run && length > 0)
+          ops.push({
+            op: 'formatText',
+            slide,
+            shape: shape.id,
+            start: { paragraph: i, offset: 0 },
+            end: { paragraph: i, offset: length },
+            props: runPatchOf(run),
+          });
+        ops.push({
+          op: 'formatParagraphs',
+          slide,
+          shape: shape.id,
+          from: i,
+          to: i,
+          props: paraPatchOf(style),
+        });
+      });
+      continue;
+    }
     if (source.run)
       ops.push({
         op: 'formatText',

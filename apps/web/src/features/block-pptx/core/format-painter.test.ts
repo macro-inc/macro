@@ -60,6 +60,43 @@ describe('format painter', () => {
     expect(ops[0]).toMatchObject({ slide: 7, shapes: [3, 4], fromShape: 2 });
   });
 
+  it('paints paragraph by paragraph when the source has several', () => {
+    const style = (size: number) => ({
+      align: 'center' as const,
+      level: 0,
+      bullet: false,
+      runs: [run(0, 3, { size })],
+      end: run(3, 3, { size }),
+    });
+    const ops = paintShapesOps(
+      {
+        slide: 1,
+        shape: 2,
+        look: false,
+        run: run(0, 1, { size: 28 }),
+        paragraphs: [style(28), style(12)],
+      },
+      1,
+      [
+        {
+          id: 3,
+          textEditable: true,
+          paragraphs: [{ text: '76%' }, { text: 'Gross' }, { text: 'x' }],
+        },
+      ]
+    );
+    const sizes = ops
+      .filter((o) => o.op === 'formatText')
+      .map((o) =>
+        o.op === 'formatText' ? [o.start?.paragraph, o.props.size] : []
+      );
+    expect(sizes).toEqual([
+      [0, 28],
+      [1, 12],
+      [2, 12],
+    ]);
+  });
+
   it('paints only character formatting onto a range', () => {
     const start = { paragraph: 0, offset: 1 };
     const end = { paragraph: 0, offset: 4 };

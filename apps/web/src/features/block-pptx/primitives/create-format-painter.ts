@@ -70,6 +70,7 @@ export function createFormatPainter(options: {
       look: shape.kind !== 'group',
       run: paragraph && runAt(paragraph, 0),
       paragraph,
+      paragraphs: layout?.styles,
     });
     return true;
   };
