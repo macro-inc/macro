@@ -51,6 +51,18 @@ const TRUE_METRICS: &[(&str, [f32; 6])] = &[
     ("georgia", [2048.0, 1878.0, 449.0, 1878.0, 449.0, 0.0]),
 ];
 
+/// Condensed families drawn by squeezing their regular-width substitute:
+/// Arial Narrow is Arial at 82% of its width.
+const CONDENSED: &[(&str, f32)] = &[
+    ("arial narrow", 0.82),
+    ("liberation sans narrow", 0.82),
+    ("helvetica narrow", 0.82),
+    ("helvetica condensed", 0.82),
+];
+
+/// A face whose `n` is at least this wide (em) is not a condensed face.
+const REGULAR_N_WIDTH: f32 = 0.5;
+
 /// A resolved font: face plus synthesis flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Font {
@@ -177,6 +189,20 @@ impl<'a> Fonts<'a> {
         self.vmetrics(face)
     }
 
+    /// Horizontal scale that makes `face` as wide as `family` when the face
+    /// substitutes a condensed family at regular width (else 1).
+    pub fn width_factor(&self, family: &str, face: FaceId) -> f32 {
+        let lower = family.trim().to_lowercase();
+        let Some((_, factor)) = CONDENSED.iter().find(|(name, _)| *name == lower) else {
+            return 1.0;
+        };
+        let n = self
+            .db
+            .glyph(face, 'n')
+            .map_or(0.0, |g| self.db.advance(face, g));
+        if n >= REGULAR_N_WIDTH { *factor } else { 1.0 }
+    }
+
     /// Vertical metrics of a face.
     pub fn vmetrics(&self, face: FaceId) -> VMetrics {
         if let Some(m) = self.metrics.borrow().get(&face) {
@@ -254,3 +280,6 @@ impl<'a> Fonts<'a> {
         self.db.kerning(face, left, right)
     }
 }
+
+#[cfg(test)]
+mod test;

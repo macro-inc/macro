@@ -308,6 +308,16 @@ impl Builder<'_, '_> {
         }
         let fonts = self.ctx.fonts;
         let font = fonts.select(&props.ascii, props.bold, props.italic);
+        // A condensed family drawn with a regular-width face is squeezed.
+        let factor = font.map_or(1.0, |f| fonts.width_factor(&props.ascii, f.face));
+        let props = &if (factor - 1.0).abs() > f32::EPSILON {
+            Arc::new(RunProps {
+                scale: props.scale * factor,
+                ..(**props).clone()
+            })
+        } else {
+            Arc::clone(props)
+        };
         let (ascent, descent, leading) = match font {
             Some(f) => {
                 let m = fonts.vmetrics_for(&props.ascii, f.face);
