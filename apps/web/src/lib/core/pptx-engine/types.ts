@@ -519,6 +519,14 @@ export type EditOp =
   | ({ op: 'setAltText'; text: string } & ShapeTarget)
   | ({ op: 'setShapeName'; name: string } & ShapeTarget)
   | ({ op: 'setShapeHidden'; hidden: boolean } & ShapeTarget)
+  /** Format painter: gives `shapes` the look (fill, line, effects, style) of another shape. */
+  | {
+      op: 'pasteFormat';
+      slide: number;
+      shapes: number[];
+      fromSlide: number;
+      fromShape: number;
+    }
   /** Recolors the deck's theme (slots: dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink). */
   | {
       op: 'setThemeColors';

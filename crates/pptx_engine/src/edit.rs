@@ -28,6 +28,7 @@ mod xmlutil;
 
 mod clipboard;
 mod find;
+mod format_painter;
 pub(crate) mod group;
 mod relayout;
 mod theme;
@@ -103,7 +104,8 @@ impl EditOp {
             | O::SetTransition { slide, .. }
             | O::SetAltText { slide, .. }
             | O::SetShapeName { slide, .. }
-            | O::SetShapeHidden { slide, .. } => Some(*slide),
+            | O::SetShapeHidden { slide, .. }
+            | O::PasteFormat { slide, .. } => Some(*slide),
             O::PasteSlides { .. } | O::SetThemeColors { .. } | O::SetThemeFonts { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
@@ -693,6 +695,16 @@ impl Presentation {
                 let part = self.slide_part(*slide)?;
                 let value = hidden.then_some("1");
                 shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "hidden", value)?;
+            }
+            O::PasteFormat {
+                slide,
+                shapes,
+                from_slide,
+                from_shape,
+            } => {
+                let part = self.slide_part(*slide)?;
+                let from_part = self.slide_part(*from_slide)?;
+                format_painter::paste_format(self, &from_part, *from_shape, &part, shapes)?;
             }
         }
         out.created.extend(created);

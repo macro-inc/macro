@@ -42,6 +42,13 @@ export interface RibbonEnv {
   copy: () => void;
   cut: () => void;
   paste: () => void;
+  formatPainter: {
+    active: () => boolean;
+    sticky: () => boolean;
+    /** Copies the selection's formatting; `keep` paints until Escape. */
+    arm: (keep: boolean) => Promise<void>;
+    cancel: () => void;
+  };
   /** Opens the format pane on a section. */
   openFormatPane: (section?: 'shape' | 'text' | 'size' | 'background') => void;
   present: (fromCurrent: boolean) => void;

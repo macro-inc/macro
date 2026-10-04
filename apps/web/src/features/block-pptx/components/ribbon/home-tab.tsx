@@ -25,6 +25,7 @@ import Highlighter from '@phosphor/highlighter.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
 import ListNumbers from '@phosphor/list-numbers.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
+import PaintBrush from '@phosphor/paint-brush.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
 import PenNib from '@phosphor/pen-nib.svg';
 import Plus from '@phosphor/plus.svg';
@@ -381,6 +382,21 @@ export function HomeTab() {
         </RibbonButton>
         <RibbonButton label="Copy" tooltip="Copy (⌘C)" onClick={env.copy}>
           <CopyIcon />
+        </RibbonButton>
+        <RibbonButton
+          label="Format Painter"
+          tooltip="Format Painter: click to paint once, double-click to keep painting (⇧⌘C / ⇧⌘V)"
+          disabled={ro() || env.selection().length === 0}
+          active={env.formatPainter.active()}
+          data-testid="pptx-format-painter"
+          onClick={() =>
+            env.formatPainter.active()
+              ? env.formatPainter.cancel()
+              : void env.formatPainter.arm(false)
+          }
+          onDblClick={() => void env.formatPainter.arm(true)}
+        >
+          <PaintBrush />
         </RibbonButton>
       </RibbonGroup>
       <RibbonGroup label="Slides">

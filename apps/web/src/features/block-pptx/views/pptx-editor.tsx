@@ -94,6 +94,7 @@ import {
 import { paragraphCommand } from '../core/text-commands';
 import { createClipboard } from '../primitives/create-clipboard';
 import { createEditorCommands } from '../primitives/create-editor-commands';
+import { createFormatPainter } from '../primitives/create-format-painter';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
@@ -135,6 +136,11 @@ type TableGesture =
       start: Point;
       current: Point;
     };
+
+/** The format painter's pointer: an arrow with a brush, hot spot at the tip. */
+const PAINT_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M2 2v15l4-4 3 6 2-1-3-6h5z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/><g transform="translate(12 10) scale(0.06)"><path d="M232,32a8,8,0,0,0-8-8c-44.08,0-89.31,49.71-114.43,82.63A60,60,0,0,0,32,164c0,30.88-19.54,44.73-20.47,45.37A8,8,0,0,0,16,224H92a60,60,0,0,0,57.37-77.57C182.3,121.31,232,76.08,232,32Z" fill="#fff" stroke="#000" stroke-width="18"/></g></svg>'
+)}") 2 2, copy`;
 
 export function PptxEditor() {
   const context = usePptxEditorContext();
@@ -364,6 +370,8 @@ export function PptxEditor() {
     },
   });
 
+  const painter = createFormatPainter({ engine, session, editor });
+
   // ---- table cell editing ---------------------------------------------------
 
   const [cellEdit, setCellEdit] = createSignal<CellEdit | null>(null);
@@ -460,6 +468,10 @@ export function PptxEditor() {
           ?.value ?? ''
       );
     const at = toSlide(e);
+    if (painter.active() && paintAt(at)) {
+      e.preventDefault();
+      return;
+    }
     stage.setPointerCapture(e.pointerId);
     const toggle = e.metaKey || e.ctrlKey;
     const t = !e.shiftKey && !toggle && !readonly() ? tableHit(at) : undefined;
@@ -526,6 +538,27 @@ export function PptxEditor() {
     }
   };
 
+  /**
+   * A click while the format painter is armed paints the shape under it
+   * (text being edited is painted by selecting it instead). True when the
+   * click was taken.
+   */
+  const paintAt = (at: Point): boolean => {
+    const slide = session.currentSlide();
+    const hit = slide ? hitTest(slide.shapes, at) : undefined;
+    const edit = editor.editing();
+    if (edit && hit?.id === edit.shape) return false;
+    if (!hit) {
+      painter.cancel();
+      return false;
+    }
+    if (edit) editor.stopEditing();
+    editor.select(hit.id);
+    focusStage();
+    void painter.paintShapes([hit]);
+    return true;
+  };
+
   const onPointerMove = (e: PointerEvent) => {
     if (!stage.hasPointerCapture(e.pointerId)) return;
     const at = toSlide(e);
@@ -574,6 +607,7 @@ export function PptxEditor() {
       return;
     }
     void editor.pointerUp();
+    if (painter.active() && editor.editing()) void painter.paintSelection();
   };
 
   const onDoubleClick = (e: MouseEvent) => {
@@ -670,7 +704,10 @@ export function PptxEditor() {
       return true;
     }
     if (!mod) return false;
-    if (key === 'z') void (e.shiftKey ? redo() : undo());
+    if (key === 'c' && e.shiftKey) void painter.copy();
+    else if (key === 'v' && e.shiftKey && !readonly())
+      void painter.pasteToSelection();
+    else if (key === 'z') void (e.shiftKey ? redo() : undo());
     else if (key === 'y') void redo();
     else if (key === 's') void session.save().catch(() => {});
     else if (key === 'f') setFind({ replace: false });
@@ -700,6 +737,11 @@ export function PptxEditor() {
   const onStageKeyDown = (e: KeyboardEvent) => {
     if (e.target === input) return;
     const key = e.key;
+    if (key === 'Escape' && painter.active()) {
+      e.preventDefault();
+      painter.cancel();
+      return;
+    }
     if (sharedShortcut(e)) {
       e.preventDefault();
       return;
@@ -844,7 +886,10 @@ export function PptxEditor() {
       e.preventDefault();
       e.stopPropagation();
     };
-    if (key === 'Escape') {
+    if (key === 'Escape' && painter.active()) {
+      handled();
+      painter.cancel();
+    } else if (key === 'Escape') {
       handled();
       const edit = editor.editing();
       stopEditing();
@@ -1117,6 +1162,7 @@ export function PptxEditor() {
     copy: copyCommand,
     cut: cutCommand,
     paste: pasteCommand,
+    formatPainter: painter,
     openFormatPane: (section) => setPane(section ?? 'shape'),
     present,
     find: (replace) => setFind({ replace }),
@@ -1523,7 +1569,14 @@ export function PptxEditor() {
                         tabIndex={0}
                         data-testid="pptx-stage"
                         class="absolute inset-0 outline-none"
-                        classList={{ 'cursor-text': !!editor.editing() }}
+                        classList={{
+                          'cursor-text':
+                            !!editor.editing() && !painter.active(),
+                        }}
+                        style={{
+                          cursor: painter.active() ? PAINT_CURSOR : undefined,
+                        }}
+                        data-format-painter={painter.active() || undefined}
                         onPointerDown={onPointerDown}
                         onPointerMove={onPointerMove}
                         onPointerUp={onPointerUp}

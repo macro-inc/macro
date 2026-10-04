@@ -885,6 +885,20 @@ pub enum EditOp {
         /// Hidden.
         hidden: bool,
     },
+    /// Format painter: gives shapes the look of another shape — its fill,
+    /// outline, effects, theme style, and text margins and anchoring.
+    /// Character and paragraph formatting are not copied (use formatText and
+    /// formatParagraphs). Group targets paint every member.
+    PasteFormat {
+        /// Slide id of the shapes to restyle.
+        slide: u32,
+        /// Shape ids to restyle.
+        shapes: Vec<u32>,
+        /// Slide id of the shape to copy from.
+        from_slide: u32,
+        /// Shape id to copy from (a shape, line, or picture).
+        from_shape: u32,
+    },
     // ---- theme ----
     /// Recolors the deck: sets theme color slots in every slide master's
     /// theme, so everything that uses theme colors (most text, shapes,

@@ -371,7 +371,10 @@ Layout and test hooks:
   selection (`pptx-tab-shape-format`, `pptx-tab-table-design`,
   `pptx-tab-table-layout`, `pptx-tab-chart-design`). Undo/Redo sit left of the
   tabs; the save state (`pptx-save-state`), Download, and **Present**
-  (`pptx-present`) sit right. Home: clipboard, **New slide**
+  (`pptx-present`) sit right. Home: clipboard and **Format Painter**
+  (`pptx-format-painter`: click, then click a shape or select text to paint
+  the selection's look and text formatting; double-click keeps it armed until
+  Escape; the stage carries `data-format-painter` while armed), **New slide**
   (`pptx-new-slide`), layouts, font (`pptx-font-family`) and size
   (`pptx-font-size`) boxes, Bold (`pptx-bold`) and the other run toggles,
   text and highlight colors (`pptx-text-color`), bullets and numbering, list
@@ -432,7 +435,8 @@ Layout and test hooks:
   advance, ← goes back, a number then Enter jumps, B/W blank the screen, S
   shows notes, Esc ends.
 - **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
-  Cmd/Ctrl+S saves now, Cmd/Ctrl+A selects all, Cmd/Ctrl+C/X/V copy, cut, and
+  Cmd/Ctrl+S saves now, Cmd/Ctrl+A selects all, Shift+Cmd/Ctrl+C and V copy
+  and paste formatting, Cmd/Ctrl+C/X/V copy, cut, and
   paste shapes (and slides from the rail; also across decks), Cmd/Ctrl+D
   duplicates, Cmd/Ctrl+G and Shift+Cmd/Ctrl+G group and ungroup, Cmd/Ctrl+] and
   [ (with Shift: to front/back) reorder, Cmd/Ctrl+M adds a slide, arrows nudge

@@ -287,3 +287,54 @@ test('recolors and refonts the deck from Design variants', async ({ page }) => {
     fonts: { major: 'Calibri', minor: 'Calibri' },
   });
 });
+
+test('paints formatting with the format painter', async ({ page }) => {
+  await open(page);
+  // Subtitle (gray, 32 pt) → title.
+  const subtitle = await screen(page, 480, 332);
+  await page.mouse.click(subtitle.x, subtitle.y);
+  await page.getByTestId('pptx-format-painter').click();
+  await expect(page.getByTestId('pptx-stage')).toHaveAttribute(
+    'data-format-painter',
+    'true'
+  );
+  const title = await screen(page, 480, 229);
+  await page.mouse.click(title.x, title.y);
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const layout = await window.pptxFixture.engine()?.textLayout(0, 2);
+        const run = layout?.styles[0]?.runs[0];
+        return run && { size: run.size, color: run.color };
+      })
+    )
+    .toEqual({ size: 32, color: '#8C8C8C' });
+  // One click disarms it.
+  await expect(page.getByTestId('pptx-stage')).not.toHaveAttribute(
+    'data-format-painter'
+  );
+  // Double-click keeps painting until Escape: the accent band's fill.
+  await goToSlide(page, 2);
+  const bar = await screen(page, 480, 4);
+  await page.mouse.click(bar.x, bar.y);
+  await page.getByTestId('pptx-format-painter').dblclick();
+  for (const [x, y] of [
+    [140, 160],
+    [360, 160],
+  ]) {
+    const at = await screen(page, x, y);
+    await page.mouse.click(at.x, at.y);
+  }
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('pptx-stage')).not.toHaveAttribute(
+    'data-format-painter'
+  );
+  await expect
+    .poll(async () => {
+      const deck = await outline(page);
+      return deck.slides[2].shapes
+        .filter((s) => s.id === 5 || s.id === 8)
+        .map((s) => s.fill);
+    })
+    .toEqual(['#1F4E79', '#1F4E79']);
+});
