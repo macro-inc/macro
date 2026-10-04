@@ -238,7 +238,7 @@ export function ProjectRowMenu(
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <ContextMenuContent
-              class="w-56 text-xs text-ink-muted"
+              class="w-64 text-xs text-ink-muted"
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
               <ProjectMenuItems {...props} />
@@ -256,7 +256,7 @@ export function ProjectMenuDropdown(props: ProjectMenuProps) {
       <Dropdown.Trigger variant="ghost" size="icon-sm" label="Project actions">
         <DotsThreeIcon />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-56 text-xs text-ink-muted">
+      <Dropdown.Content class="w-64 text-xs text-ink-muted">
         <Dropdown.Group>
           <ProjectMenuItems {...props} />
         </Dropdown.Group>
