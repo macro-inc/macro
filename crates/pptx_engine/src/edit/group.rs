@@ -491,6 +491,18 @@ fn group_fill(doc: &XmlDoc, group: NodeId) -> Option<NodeId> {
         .find(|&c| doc.ns(c) == Ns::A && FILL_NAMES.contains(&doc.local(c)))
 }
 
+/// The fill that `a:grpFill` resolves to for a member of the groups around
+/// `item`: the nearest enclosing group fill that is not itself inherited.
+pub(crate) fn inherited_group_fill(doc: &XmlDoc, item: NodeId) -> Option<NodeId> {
+    for g in ancestors(doc, item) {
+        match group_fill(doc, g) {
+            Some(f) if doc.local(f) == "grpFill" => continue,
+            other => return other,
+        }
+    }
+    None
+}
+
 /// Replaces a former member's `a:grpFill` (fill or outline) with the group's
 /// fill, so it keeps its look outside the group.
 pub(crate) fn inherit_group_fill(doc: &mut XmlDoc, shape: NodeId, fill: Option<NodeId>) {

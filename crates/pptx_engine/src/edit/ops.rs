@@ -763,6 +763,37 @@ pub enum EditOp {
         /// Group id.
         shape: u32,
     },
+    /// Pastes shapes copied with `copyShapes` (from this or another
+    /// presentation) on top of a slide, with fresh ids, offset by (dx, dy)
+    /// points. Pictures, media, charts, and links come along. Theme colors,
+    /// theme fonts, and style references take this presentation's theme
+    /// (PowerPoint's "Use Destination Theme"). The new top-level shape ids are
+    /// reported in the result, back to front.
+    PasteShapes {
+        /// Slide id.
+        slide: u32,
+        /// The clipboard payload JSON returned by `copyShapes`.
+        payload: String,
+        /// Horizontal offset in points.
+        #[serde(default, deserialize_with = "nullable")]
+        dx: f32,
+        /// Vertical offset in points.
+        #[serde(default, deserialize_with = "nullable")]
+        dy: f32,
+    },
+    /// Pastes slides copied with `copySlides` (from this or another
+    /// presentation), with their speaker notes. Each slide takes this deck's
+    /// layout of the same name, else the first with the same placeholder
+    /// types, else "Title and Content", else the first layout; theme colors
+    /// and fonts follow this deck's theme. New slide ids are reported in the
+    /// result, in order.
+    PasteSlides {
+        /// Insert after this slide (end of deck when omitted).
+        #[serde(default)]
+        after: Option<u32>,
+        /// The clipboard payload JSON returned by `copySlides`.
+        payload: String,
+    },
     /// Changes a slide's layout. Placeholders are matched to the new layout's
     /// placeholders by type and index and take their position; placeholders
     /// without a match stay where they are. Content is kept, and the new

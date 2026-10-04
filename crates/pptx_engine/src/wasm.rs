@@ -240,6 +240,24 @@ impl PptxDocument {
         FONTS.with(|f| to_json(&f.borrow().missing_families()))
     }
 
+    /// Copies shapes of slide `index` (`ids`: JSON array of shape ids) as a
+    /// clipboard payload (JSON) for the `pasteShapes` operation.
+    #[wasm_bindgen(js_name = copyShapes)]
+    pub fn copy_shapes(&mut self, index: usize, ids: &str) -> Result<String, JsError> {
+        let ids: Vec<u32> = serde_json::from_str(ids).map_err(js_err)?;
+        let payload = self.pres().copy_shapes(index, &ids).map_err(js_err)?;
+        to_json(&payload)
+    }
+
+    /// Copies slides (`ids`: JSON array of slide ids) with their notes as a
+    /// clipboard payload (JSON) for the `pasteSlides` operation.
+    #[wasm_bindgen(js_name = copySlides)]
+    pub fn copy_slides(&mut self, ids: &str) -> Result<String, JsError> {
+        let ids: Vec<u32> = serde_json::from_str(ids).map_err(js_err)?;
+        let payload = self.pres().copy_slides(&ids).map_err(js_err)?;
+        to_json(&payload)
+    }
+
     /// Finds text in every slide (`options`: `FindOptions` JSON); returns
     /// `TextMatch[]` JSON.
     #[wasm_bindgen(js_name = findText)]

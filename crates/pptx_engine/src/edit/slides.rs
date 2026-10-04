@@ -282,7 +282,11 @@ pub fn add_slide(
 }
 
 /// Adds a slide part to the slide list after `after` (or at the end); returns its id.
-fn register_slide(pres: &mut Presentation, part: &str, after: Option<u32>) -> Result<u32> {
+pub(super) fn register_slide(
+    pres: &mut Presentation,
+    part: &str,
+    after: Option<u32>,
+) -> Result<u32> {
     let main = pres.main_part.clone();
     let rid = pres.rels_mut(&main)?.add_internal(rel_type::SLIDE, part);
     let random = pres.pkg.ids().cloned();
@@ -413,8 +417,13 @@ pub fn duplicate_slide(pres: &mut Presentation, id: u32) -> Result<u32> {
     let part = pres.slide_part(id)?;
     let mut renamed = HashMap::new();
     let new = copy_part_tree(pres, &part, &mut renamed)?;
-    // The creation id identifies the original slide for co-authoring.
-    let doc = pres.xml_mut(&new)?;
+    drop_creation_id(pres.xml_mut(&new)?);
+    register_slide(pres, &new, Some(id))
+}
+
+/// Removes a copied slide's creation id, which identifies the original
+/// slide for co-authoring.
+pub(super) fn drop_creation_id(doc: &mut XmlDoc) {
     if let Some(ext_lst) = doc.child(doc.root(), Ns::P, "extLst") {
         let doomed: Vec<NodeId> = doc
             .children(ext_lst)
@@ -428,7 +437,6 @@ pub fn duplicate_slide(pres: &mut Presentation, id: u32) -> Result<u32> {
             doc.detach(d);
         }
     }
-    register_slide(pres, &new, Some(id))
 }
 
 /// Deletes a slide, its private parts, and links pointing at it.

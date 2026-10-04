@@ -26,6 +26,7 @@ mod table_style;
 mod text;
 mod xmlutil;
 
+mod clipboard;
 mod find;
 pub(crate) mod group;
 mod relayout;
@@ -39,6 +40,10 @@ pub use ops::{
 pub use ops::{BorderEdges, BorderLine, CellBorders};
 pub use slides::{LayoutInfo, layouts};
 
+pub use clipboard::{
+    CLIPBOARD_FORMAT, ClipFrame, ClipLayout, ClipNotes, ClipPart, ClipRel, ClipSlide,
+    ClipboardPayload,
+};
 pub use find::{FindOptions, TextMatch};
 
 use crate::error::{Error, Result};
@@ -92,8 +97,10 @@ impl EditOp {
             O::AddSlide { .. } => None,
             O::GroupShapes { slide, .. }
             | O::UngroupShape { slide, .. }
+            | O::PasteShapes { slide, .. }
             | O::SetSlideLayout { slide, .. }
             | O::SetTransition { slide, .. } => Some(*slide),
+            O::PasteSlides { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
     }
@@ -599,6 +606,29 @@ impl Presentation {
                     out.created.push(Created {
                         slide: *slide,
                         shape: Some(id),
+                    });
+                }
+            }
+            O::PasteShapes {
+                slide,
+                payload,
+                dx,
+                dy,
+            } => {
+                let part = self.slide_part(*slide)?;
+                for id in clipboard::paste_shapes(self, &part, payload, *dx, *dy)? {
+                    out.created.push(Created {
+                        slide: *slide,
+                        shape: Some(id),
+                    });
+                    refit.push((part.clone(), id));
+                }
+            }
+            O::PasteSlides { after, payload } => {
+                for id in clipboard::paste_slides(self, *after, payload)? {
+                    out.created.push(Created {
+                        slide: id,
+                        shape: None,
                     });
                 }
             }
