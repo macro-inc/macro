@@ -417,3 +417,26 @@ fn right_to_left_tables_start_at_the_right() {
     );
     assert!((first.x - second.x - 100.0).abs() < 0.1, "{}", second.x);
 }
+
+#[test]
+fn table_rows_make_room_for_their_borders() {
+    let line =
+        |side: &str| format!(r#"<w:{side} w:val="single" w:sz="16" w:space="0" w:color="auto"/>"#);
+    let row = |t: &str| format!("<w:tr><w:tc><w:p><w:r><w:t>{t}</w:t></w:r></w:p></w:tc></w:tr>");
+    let body = format!(
+        r#"<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/><w:tblBorders>{}{}{}</w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>{}{}</w:tbl><w:p><w:r><w:t>After</w:t></w:r></w:p>{LETTER}"#,
+        line("top"),
+        line("insideH"),
+        line("bottom"),
+        row("One"),
+        row("Two"),
+    );
+    let l = layout(&body, &arial_10());
+    let (one, two, after) = (find(&l, 0, "One"), find(&l, 0, "Two"), find(&l, 0, "After"));
+    let h = one.line().height;
+    // Each row makes room for the 2pt line along its top, the last row for
+    // the one along its bottom too.
+    assert!((one.y - 74.0).abs() < 0.01, "{}", one.y);
+    assert!((two.y - (one.y + h + 2.0)).abs() < 0.01, "{}", two.y);
+    assert!((after.y - (two.y + h + 2.0)).abs() < 0.01, "{}", after.y);
+}

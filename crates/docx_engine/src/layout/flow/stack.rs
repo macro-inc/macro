@@ -9,7 +9,7 @@ use super::super::{Item, ParaBox, PlacedDrawing, PlacedLine, StoryRef};
 use super::Env;
 use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, place_in_container};
 use crate::model::block::{Block, BlockId, BlockKind, Story};
-use crate::model::props::{HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
+use crate::model::props::{Border, HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
 use pptx_engine::path::Rect;
 use std::sync::Arc;
 
@@ -570,6 +570,12 @@ pub struct RowBox {
     pub cant_split: bool,
     /// Repeat on each page.
     pub header: bool,
+    /// Width of the border line along the row's top: the row makes room
+    /// for it above its cells' content.
+    pub border_top: f32,
+    /// Width of the border line along the row's bottom when the row makes
+    /// room for it too (the last row of the table).
+    pub border_bottom: f32,
 }
 
 /// A table laid out (rows not yet placed).
@@ -592,7 +598,8 @@ pub(in crate::layout) fn table_box(
 ) -> TableBox {
     let geom = geometry(story, table, &env.formats, avail);
     let mut rows: Vec<RowBox> = Vec::with_capacity(geom.rows.len());
-    for row in &geom.rows {
+    let row_count = geom.rows.len();
+    for (ri, row) in geom.rows.iter().enumerate() {
         let mut cells = Vec::with_capacity(row.cells.len());
         let mut content_h: f32 = 0.0;
         for cell in &row.cells {
@@ -636,6 +643,20 @@ pub(in crate::layout) fn table_box(
                 rows: usize::from(!continuation),
             });
         }
+        // Horizontal borders take room of their own: the one along the top
+        // of each row, and the one along the bottom of the last row.
+        let border_top = border_room(
+            row.cells
+                .iter()
+                .filter(|c| c.v_merge != Some(VMerge::Continue))
+                .map(|c| c.borders[0]),
+        );
+        let border_bottom = if ri + 1 == row_count {
+            border_room(row.cells.iter().map(|c| c.borders[2]))
+        } else {
+            0.0
+        };
+        let content_h = content_h + border_top + border_bottom;
         let height = match row.tr.height {
             Some((h, HeightRule::Exact)) if h > 0.0 => h,
             Some((h, HeightRule::AtLeast)) => content_h.max(h),
@@ -648,6 +669,8 @@ pub(in crate::layout) fn table_box(
             cells,
             cant_split: row.tr.cant_split.unwrap_or(false),
             header: row.tr.header.unwrap_or(false),
+            border_top,
+            border_bottom,
         });
     }
     // Vertical merges: spans, and growing the last spanned row to fit.
@@ -668,7 +691,11 @@ pub(in crate::layout) fn table_box(
             }
             rows[r].cells[c].rows = span;
             let cell = &rows[r].cells[c];
-            let need = cell.content.height + cell.geom.margins[0] + cell.geom.margins[2];
+            let need = cell.content.height
+                + cell.geom.margins[0]
+                + cell.geom.margins[2]
+                + rows[r].border_top
+                + rows[r + span - 1].border_bottom;
             let have: f32 = rows[r..r + span].iter().map(|x| x.height).sum();
             if need > have {
                 rows[r + span - 1].height += need - have;
@@ -676,6 +703,14 @@ pub(in crate::layout) fn table_box(
         }
     }
     TableBox { geom, rows }
+}
+
+/// The room the widest of `borders` takes.
+fn border_room(borders: impl Iterator<Item = Option<Border>>) -> f32 {
+    borders
+        .flatten()
+        .map(|b| b.total_width())
+        .fold(0.0, f32::max)
 }
 
 /// Emits row `r` with its top-left table corner at (x, y) (x = the
@@ -707,15 +742,18 @@ pub(super) fn emit_row(
                 color,
             });
         }
+        let last = (r + cell.rows).min(tb.rows.len()) - 1;
+        let (top_room, bottom_room) = (row.border_top, tb.rows[last].border_bottom);
         let content_h = cell.content.height;
-        let avail = h - g.margins[0] - g.margins[2];
+        let avail = h - g.margins[0] - g.margins[2] - top_room - bottom_room;
         let dy = match g.tc.v_align.as_deref() {
             Some("center") => ((avail - content_h) / 2.0).max(0.0),
             Some("bottom") => (avail - content_h).max(0.0),
             _ => 0.0,
         };
+        let content_y = y + top_room + g.margins[0] + dy;
         let mut items = cell.content.items.clone();
-        super::offset_items(&mut items, cx + g.margins[1], y + g.margins[0] + dy);
+        super::offset_items(&mut items, cx + g.margins[1], content_y);
         let exact = matches!(tb.geom.rows[r].tr.height, Some((_, HeightRule::Exact)));
         if exact {
             let clip = Rect::from_xywh(cx, y, cell.width, h);
@@ -728,8 +766,8 @@ pub(super) fn emit_row(
         out.extend(items);
         for a in &cell.content.anchors {
             let mut a = a.clone();
-            a.para_top += y + g.margins[0] + dy;
-            a.line_top += y + g.margins[0] + dy;
+            a.para_top += content_y;
+            a.line_top += content_y;
             a.char_x += cx + g.margins[1];
             anchors.push(a);
         }
@@ -743,10 +781,17 @@ pub(super) fn emit_row(
         } else {
             g.borders[2]
         };
+        // Horizontal lines run along the middle of the room made for them:
+        // a row's top, or the next row's top for a bottom border.
+        let top = y + top_room / 2.0;
+        let bottom_y = match tb.rows.get(last + 1) {
+            Some(next) => y + h + next.border_top / 2.0,
+            None => y + h - bottom_room / 2.0,
+        };
         let edges = [
-            (g.borders[0], cx, y, cx + cell.width, y),
+            (g.borders[0], cx, top, cx + cell.width, top),
             (g.borders[1], cx, y, cx, y + h),
-            (bottom, cx, y + h, cx + cell.width, y + h),
+            (bottom, cx, bottom_y, cx + cell.width, bottom_y),
             (g.borders[3], cx + cell.width, y, cx + cell.width, y + h),
         ];
         for (border, x0, y0, x1, y1) in edges {

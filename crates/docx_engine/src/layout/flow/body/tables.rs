@@ -128,12 +128,20 @@ impl Flow<'_, '_> {
     /// the anchoring text on the first page (`first`), at the same place on
     /// the page after that for tables positioned on the page.
     fn float_down(&mut self, pos: &TablePosition, height: f32, first: bool) {
-        if !first && pos.v_anchor == "text" {
+        let on_page = pos.v_anchor != "text";
+        if !first && !on_page {
             return;
         }
         let g = self.page_geom();
         if let Some(c) = &mut self.cur {
-            c.y = c.y.max(float_y(pos, &g, c.y, height));
+            let top = float_y(pos, &g, c.y, height);
+            // On a page with nothing on it yet, a table placed on the page
+            // goes to its place even above the body (over a tall header).
+            c.y = if on_page && !c.placed_any {
+                top
+            } else {
+                c.y.max(top)
+            };
         }
     }
 
