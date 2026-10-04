@@ -71,8 +71,12 @@ fn inject(pres: &mut Presentation, parts: &[(&str, String, &str)], rels: &[(&str
     pres.flush();
 }
 
+/// Saves and reopens, checking the package is one PowerPoint opens without repair.
 fn reopen(pres: &mut Presentation) -> Presentation {
-    Presentation::open(pres.save().unwrap()).unwrap()
+    let mut reopened = Presentation::open(pres.save().unwrap()).unwrap();
+    let problems = reopened.integrity_problems().unwrap();
+    assert!(problems.is_empty(), "{problems:#?}");
+    reopened
 }
 
 fn part_text(pres: &Presentation, part: &str) -> String {
@@ -586,6 +590,8 @@ fn copied_and_deleted_slides_keep_comment_parts_consistent() {
     let pasted = other.slide_part(pasted.created[0].slide).unwrap();
     assert!(!part_text(&other, &pasted).contains("commentRel"));
     assert!(parts_under(&other, "/ppt/comments/").is_empty());
+    reopen(&mut other);
+    reopen(&mut pres);
 
     // Deleting the slide deletes its comments part.
     apply(&mut pres, vec![EditOp::DeleteSlide { slide: 256 }]);
@@ -659,4 +665,39 @@ fn ops_read_null_optional_fields_as_omitted() {
     assert_eq!(op, add(256, "Hi", "AI"));
     let op: EditOp = serde_json::from_str(r#"{"op":"deleteAllComments","slide":null}"#).unwrap();
     assert_eq!(op, EditOp::DeleteAllComments { slide: None });
+}
+
+#[test]
+fn comments_travel_between_collaborators() {
+    use crate::collab::Entries;
+    let mut seeding = two_slides();
+    seeding.enable_collab(1);
+    let entries = Entries::from_changes(&seeding.collab_changes().unwrap());
+    let mut a = Presentation::from_entries(entries.clone(), 2).unwrap();
+    let mut b = Presentation::from_entries(entries, 3).unwrap();
+    apply(&mut a, vec![add(256, "From Ann", "Ann Lee")]);
+    let changes = a.collab_changes().unwrap();
+    let result = b.apply_collab_changes(&changes).unwrap();
+    assert!(result.changed_slides.contains(&256));
+    let list = comments(&mut b, 0);
+    assert_eq!(list.len(), 1);
+    assert_eq!(
+        (list[0].author.as_str(), list[0].text.as_str()),
+        ("Ann Lee", "From Ann")
+    );
+    // A reply from the other peer comes back.
+    apply(
+        &mut b,
+        vec![EditOp::ReplyComment {
+            slide: 256,
+            comment: list[0].id.clone(),
+            text: "Seen".into(),
+            author: "Ben Ray".into(),
+            initials: None,
+        }],
+    );
+    a.apply_collab_changes(&b.collab_changes().unwrap())
+        .unwrap();
+    assert_eq!(comments(&mut a, 0)[0].replies[0].text, "Seen");
+    reopen(&mut a);
 }
