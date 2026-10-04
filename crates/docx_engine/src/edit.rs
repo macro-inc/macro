@@ -8,6 +8,8 @@
 
 mod format;
 mod geometry;
+mod lists;
+mod table;
 mod text;
 mod txn;
 mod xmledit;
@@ -209,6 +211,40 @@ pub enum EditOp {
         /// Style id.
         style: String,
     },
+    /// Makes the selected paragraphs a list of `kind`, or plain paragraphs
+    /// when they already are one.
+    ToggleList {
+        /// Bullets or numbers.
+        kind: ListKind,
+    },
+    /// Moves list items a level deeper (or out), or changes the left indent.
+    Indent {
+        /// Deeper (true) or shallower.
+        forward: bool,
+    },
+    /// Inserts a table at the caret.
+    InsertTable {
+        /// Rows.
+        rows: usize,
+        /// Columns.
+        cols: usize,
+    },
+    /// Inserts a row next to the caret's.
+    InsertRow {
+        /// Below (true) or above.
+        below: bool,
+    },
+    /// Inserts a column next to the caret's.
+    InsertColumn {
+        /// Right (true) or left.
+        right: bool,
+    },
+    /// Deletes the caret's table row.
+    DeleteRow,
+    /// Deletes the caret's table column.
+    DeleteColumn,
+    /// Deletes the caret's table.
+    DeleteTable,
 }
 
 /// A page's size and a fingerprint of what it shows.
@@ -278,6 +314,72 @@ pub struct EditResult {
     pub pages: Option<Vec<PageInfo>>,
     /// Formatting at the selection.
     pub format: FormatState,
+}
+
+/// A change other peers made, as the shared containers now hold it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "t", rename_all = "camelCase")]
+pub enum RemoteChange {
+    /// A block as it now is (new or changed).
+    Block {
+        /// The block.
+        block: BlockRecord,
+    },
+    /// A block that no longer exists.
+    Remove {
+        /// Block id.
+        id: BlockId,
+    },
+    /// An entry of the parts, relationships or content types maps.
+    Entry {
+        /// The map.
+        container: String,
+        /// The key.
+        key: String,
+        /// The value (`None` = deleted).
+        value: Option<String>,
+    },
+}
+
+/// A paragraph's id and text (object characters included), for anchoring
+/// comments and searching.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ParagraphText {
+    /// Block id.
+    pub id: BlockId,
+    /// Text.
+    pub text: String,
+}
+
+/// Where an offset moves when a paragraph's text changes from `old` to
+/// `new`: text kept at both ends keeps its place, an offset inside the
+/// replaced middle goes to the end of the new middle.
+fn map_offset(old: &str, new: &str, offset: usize) -> usize {
+    let a: Vec<char> = old.chars().collect();
+    let b: Vec<char> = new.chars().collect();
+    let mut prefix = 0;
+    while prefix < a.len() && prefix < b.len() && a[prefix] == b[prefix] {
+        prefix += 1;
+    }
+    let mut suffix = 0;
+    while suffix < a.len() - prefix
+        && suffix < b.len() - prefix
+        && a[a.len() - 1 - suffix] == b[b.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+    let units = |cs: &[char]| cs.iter().map(|c| c.len_utf16()).sum::<usize>();
+    let p16 = units(&a[..prefix]);
+    let old_len = units(&a);
+    let new_len = units(&b);
+    let s16 = units(&a[a.len() - suffix..]);
+    if offset <= p16 {
+        offset
+    } else if offset >= old_len - s16 {
+        offset + new_len - old_len
+    } else {
+        new_len - s16
+    }
 }
 
 /// Paragraphs in document order.
@@ -585,6 +687,15 @@ impl Session {
         self.redo.clear();
     }
 
+    /// Shows tracked changes inline (`true`) or the document as if they
+    /// were accepted.
+    pub fn set_markup(&mut self, markup: bool) {
+        if self.options.markup != markup {
+            self.options.markup = markup;
+            self.stale = true;
+        }
+    }
+
     /// Layout choices.
     pub fn set_options(&mut self, options: LayoutOptions) {
         self.options = options;
@@ -864,6 +975,89 @@ impl Session {
         self.result(Vec::new(), relaid)
     }
 
+    /// Opens a session over a shared document; undo history stays with
+    /// the caller.
+    pub fn from_collab(state: &crate::collab::CollabState, seed: u64) -> crate::Result<Self> {
+        let doc = Document::from_collab_state(state, seed)?;
+        let mut s = Self::new(doc);
+        s.external_undo = true;
+        Ok(s)
+    }
+
+    /// The shared state of the document.
+    pub fn collab_state(&self) -> crate::Result<crate::collab::CollabState> {
+        self.doc.collab_state()
+    }
+
+    /// Paragraph ids and texts in document order.
+    pub fn paragraphs(&self) -> Vec<ParagraphText> {
+        self.doc
+            .body
+            .paragraphs()
+            .into_iter()
+            .filter_map(|id| {
+                let text = self.doc.body.get(&id)?.content.text();
+                Some(ParagraphText { id, text })
+            })
+            .collect()
+    }
+
+    /// Applies changes other peers made (or the shared undo history
+    /// replayed), keeping the selection on the same text.
+    pub fn apply_remote(
+        &mut self,
+        changes: &[RemoteChange],
+        fonts: &FontDb,
+    ) -> crate::Result<EditResult> {
+        let mut entries: Vec<(String, String, Option<String>)> = Vec::new();
+        let mut old_texts: HashMap<BlockId, String> = HashMap::new();
+        for c in changes {
+            match c {
+                RemoteChange::Block { block } => {
+                    let Some(b) = block.to_block() else {
+                        continue;
+                    };
+                    if let Some(old) = self.doc.body.get(&b.id) {
+                        old_texts
+                            .entry(b.id.clone())
+                            .or_insert_with(|| old.content.text());
+                    }
+                    self.doc.body.insert(b);
+                    self.doc.body_dirty = true;
+                }
+                RemoteChange::Remove { id } => {
+                    if self.doc.body.contains(id) {
+                        self.doc.body.remove_one(id);
+                        self.doc.body_dirty = true;
+                    }
+                }
+                RemoteChange::Entry {
+                    container,
+                    key,
+                    value,
+                } => entries.push((container.clone(), key.clone(), value.clone())),
+            }
+        }
+        if !entries.is_empty() {
+            self.doc.apply_entries(&entries)?;
+        }
+        // Keep the caret on the same text.
+        for pos in [&mut self.sel.anchor, &mut self.sel.focus] {
+            if let Some(old) = old_texts.get(&pos.block)
+                && let Some(b) = self.doc.body.get(&pos.block)
+            {
+                let new = b.content.text();
+                pos.offset = map_offset(old, &new, pos.offset);
+            }
+        }
+        self.stale = true;
+        self.order = None;
+        self.pending = None;
+        let relaid = self.ensure_layout(fonts);
+        self.clamp_selection();
+        Ok(self.result(Vec::new(), relaid))
+    }
+
     // ----- geometry ------------------------------------------------------
 
     /// The position at a point on a page (points).
@@ -907,6 +1101,7 @@ impl Session {
         let mut relaid = self.ensure_layout(fonts);
         self.clamp_selection();
         let before = self.sel.clone();
+        let snapshot = self.doc.snapshot();
         let mut step = Step::default();
         for op in ops {
             if self.stale {
@@ -919,7 +1114,8 @@ impl Session {
         }
         relaid |= self.ensure_layout(fonts);
         self.clamp_selection();
-        let changes = step.changes();
+        let mut changes = step.changes();
+        changes.extend(self.doc.entry_changes(&snapshot)?);
         if !step.is_empty() {
             self.record_undo(step, before, group);
         } else if ops.iter().any(|op| {
@@ -1106,7 +1302,260 @@ impl Session {
                 let style = style.clone();
                 Ok(self.map_paragraphs(move |e| e.set_val("pStyle", Some(&style))))
             }
+            EditOp::ToggleList { kind } => self.toggle_list(*kind),
+            EditOp::Indent { forward } => Ok(self.indent(*forward)),
+            EditOp::InsertTable { rows, cols } => Ok(self.insert_table(*rows, *cols)),
+            EditOp::InsertRow { below } => {
+                let below = *below;
+                Ok(self.table_op(move |txn, p| table::insert_row(txn, p, below)))
+            }
+            EditOp::InsertColumn { right } => {
+                let right = *right;
+                Ok(self.table_op(move |txn, p| table::insert_column(txn, p, right)))
+            }
+            EditOp::DeleteRow => Ok(self.table_op(table::delete_row)),
+            EditOp::DeleteColumn => Ok(self.table_op(table::delete_column)),
+            EditOp::DeleteTable => Ok(self.table_op(table::delete_table)),
         }
+    }
+
+    // ----- lists and tables ----------------------------------------------
+
+    /// The list kind each paragraph has (from its formatting).
+    fn list_kinds(&self, paras: &[BlockId]) -> Vec<Option<(ListKind, i64, u8)>> {
+        let (parts, decls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &decls,
+        );
+        paras
+            .iter()
+            .map(|id| {
+                let pf = self.para_format(&formats, id)?;
+                let (num, ilvl) = pf.props.num?;
+                if num <= 0 {
+                    return None;
+                }
+                let level = parts.numbering.level(num, ilvl, &parts.styles)?;
+                Some((lists::kind_of(&level.fmt)?, num, ilvl))
+            })
+            .collect()
+    }
+
+    fn toggle_list(&mut self, kind: ListKind) -> crate::Result<Option<Step>> {
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        let kinds = self.list_kinds(&paras);
+        let all = kinds.iter().all(|k| k.is_some_and(|(k, _, _)| k == kind));
+        let w = self.doc.w_prefix().to_owned();
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let list_style = self
+            .doc
+            .parts()
+            .styles
+            .id_by_name("List Paragraph")
+            .map(str::to_owned);
+        let default_style = self
+            .doc
+            .parts()
+            .styles
+            .default_paragraph_id()
+            .map(str::to_owned);
+        if all {
+            // Back to plain paragraphs.
+            let styles = std::sync::Arc::clone(&self.doc.parts().styles);
+            let mut txn = Txn::new(&mut self.doc);
+            for id in &paras {
+                format::edit_ppr(&mut txn, id, |e| {
+                    let style = e.get("pStyle").map(str::to_owned);
+                    let style_id = style.as_deref().and_then(|x| {
+                        let at = x.find("val=\"")? + 5;
+                        x[at..].split('"').next().map(str::to_owned)
+                    });
+                    let style_numbered = style_id
+                        .as_deref()
+                        .and_then(|id| styles.get(id))
+                        .is_some_and(|st| st.ppr.num.num_id.is_some_and(|n| n > 0));
+                    if style_numbered {
+                        e.set(
+                            "numPr",
+                            Some(format!(
+                                "<{np}><{nid} {val}=\"0\"/></{np}>",
+                                np = q("numPr"),
+                                nid = q("numId"),
+                                val = q("val")
+                            )),
+                        );
+                    } else {
+                        e.set("numPr", None);
+                    }
+                    if style_id.is_some() && style_id == list_style {
+                        e.set("pStyle", None);
+                    }
+                });
+            }
+            return Ok(Some(txn.finish()));
+        }
+        // Continue the list just before the selection, if it is this kind.
+        let prev = self.neighbour_para(&paras[0], false);
+        let continued = prev
+            .map(|p| self.list_kinds(&[p]))
+            .and_then(|k| k.into_iter().next().flatten())
+            .filter(|(k, _, _)| *k == kind);
+        let (num, base_level) = match continued {
+            Some((_, num, ilvl)) => (num, ilvl),
+            None => (lists::instance_for(&mut self.doc, kind)?, 0),
+        };
+        self.stale = true;
+        let current = self.list_kinds(&paras);
+        let mut txn = Txn::new(&mut self.doc);
+        for (id, k) in paras.iter().zip(current) {
+            let ilvl = k.map_or(base_level, |(_, _, l)| l);
+            format::edit_ppr(&mut txn, id, |e| {
+                e.set(
+                    "numPr",
+                    Some(format!(
+                        "<{np}><{il} {val}=\"{ilvl}\"/><{nid} {val}=\"{num}\"/></{np}>",
+                        np = q("numPr"),
+                        il = q("ilvl"),
+                        nid = q("numId"),
+                        val = q("val")
+                    )),
+                );
+                // Word gives new list items the List Paragraph style.
+                let plain = e.get("pStyle").is_none_or(|x| {
+                    default_style
+                        .as_deref()
+                        .is_some_and(|d| x.contains(&format!("\"{d}\"")))
+                });
+                if plain && let Some(ls) = &list_style {
+                    e.set_val("pStyle", Some(ls));
+                }
+            });
+        }
+        Ok(Some(txn.finish()))
+    }
+
+    fn indent(&mut self, forward: bool) -> Option<Step> {
+        let (s, e) = self.ordered();
+        let paras = self.paras_between(&s.block, &e.block);
+        let kinds = self.list_kinds(&paras);
+        let w = self.doc.w_prefix().to_owned();
+        let decls = std::sync::Arc::clone(self.doc.decls());
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let (parts, pdecls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &pdecls,
+        );
+        let lefts: Vec<f32> = paras
+            .iter()
+            .map(|id| {
+                self.para_format(&formats, id)
+                    .map_or(0.0, |pf| pf.props.ind_left)
+            })
+            .collect();
+        let mut txn = Txn::new(&mut self.doc);
+        for ((id, k), left) in paras.iter().zip(kinds).zip(lefts) {
+            match k {
+                Some((_, num, ilvl)) => {
+                    let next = if forward {
+                        (ilvl + 1).min(8)
+                    } else {
+                        ilvl.saturating_sub(1)
+                    };
+                    format::edit_ppr(&mut txn, id, |e| {
+                        e.set(
+                            "numPr",
+                            Some(format!(
+                                "<{np}><{il} {val}=\"{next}\"/><{nid} {val}=\"{num}\"/></{np}>",
+                                np = q("numPr"),
+                                il = q("ilvl"),
+                                nid = q("numId"),
+                                val = q("val")
+                            )),
+                        );
+                    });
+                }
+                None => {
+                    // Half an inch at a time, to the next multiple.
+                    let step = 36.0;
+                    let target = if forward {
+                        ((left / step).floor() + 1.0) * step
+                    } else {
+                        (((left / step).ceil() - 1.0) * step).max(0.0)
+                    };
+                    let twips = ((target * 20.0).round() as i64).to_string();
+                    format::edit_ppr(&mut txn, id, |e| {
+                        e.set_attrs(
+                            "ind",
+                            &[("left", Some(twips.clone())), ("start", None)],
+                            &decls,
+                        );
+                    });
+                }
+            }
+        }
+        Some(txn.finish())
+    }
+
+    fn insert_table(&mut self, rows: usize, cols: usize) -> Option<Step> {
+        let at = self.sel.focus.clone();
+        let width = {
+            let section = self.doc.final_section();
+            ((section.text_width() * 20.0).round() as i64).max(1440)
+        };
+        let grid_style = self
+            .doc
+            .parts()
+            .styles
+            .id_by_name("Table Grid")
+            .map(str::to_owned);
+        let sel = self.sel.clone();
+        let mut txn = Txn::new(&mut self.doc);
+        let at = if sel.is_collapsed() {
+            at
+        } else {
+            delete_selection(&mut txn, &sel)
+        };
+        // Nested tables get two thirds of the page width.
+        let nested = table::enclosing(&txn, &at.block).is_some();
+        let width = if nested { width * 2 / 3 } else { width };
+        let caret = table::insert_table(&mut txn, &at, rows, cols, width, grid_style.as_deref());
+        let step = txn.finish();
+        if let Some(c) = caret {
+            self.set_caret(c);
+        }
+        Some(step)
+    }
+
+    fn table_op(&mut self, f: impl FnOnce(&mut Txn<'_>, &BlockId) -> Option<Pos>) -> Option<Step> {
+        let at = self.sel.focus.block.clone();
+        let mut txn = Txn::new(&mut self.doc);
+        let caret = f(&mut txn, &at);
+        let step = txn.finish();
+        if let Some(c) = caret {
+            self.set_caret(c);
+        }
+        Some(step)
     }
 
     // ----- movement ------------------------------------------------------

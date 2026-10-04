@@ -9,6 +9,7 @@
 
 #![deny(missing_docs)]
 
+pub mod collab;
 pub mod document;
 pub mod edit;
 mod error;
@@ -18,6 +19,8 @@ pub mod render;
 #[cfg(test)]
 mod test_support;
 pub mod units;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 pub mod xml;
 
 pub use document::Document;

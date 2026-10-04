@@ -624,3 +624,138 @@ fn content_deltas_reproduce_random_edits() {
         attrs: Attrs::empty(),
     };
 }
+
+#[test]
+fn lists_toggle_on_and_off_and_create_the_numbering_part() {
+    let mut s = open(&format!("{}{}{}", p("One"), p("Two"), p("Three")));
+    select(&mut s, (0, 0), (1, 1));
+    let r = run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Bullet,
+        },
+    );
+    assert!(r.format.list);
+    // The new part reaches the shared maps: its XML, relationship and type.
+    assert!(r.changes.iter().any(|c| matches!(c, Change::Entry { container, key, .. } if container == "wordParts" && key == "/word/numbering.xml")));
+    assert!(r.changes.iter().any(|c| matches!(c, Change::Entry { container, value: Some(v), .. } if container == "wordRels" && v.contains("numbering"))));
+    assert!(r.changes.iter().any(|c| matches!(c, Change::Entry { container, key, .. } if container == "wordTypes" && key.contains("numbering"))));
+    let kinds = s.list_kinds(&s.document().body().paragraphs());
+    assert!(kinds[0].is_some_and(|(k, _, _)| k == ListKind::Bullet));
+    assert!(kinds[1].is_some());
+    assert!(kinds[2].is_none());
+    // A numbered list started separately on the third paragraph.
+    select(&mut s, (2, 0), (2, 0));
+    run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Number,
+        },
+    );
+    let kinds = s.list_kinds(&s.document().body().paragraphs());
+    assert!(kinds[2].is_some_and(|(k, _, _)| k == ListKind::Number));
+    // Off again.
+    select(&mut s, (0, 0), (1, 0));
+    let r = run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Bullet,
+        },
+    );
+    assert!(!r.format.list);
+    let kinds = s.list_kinds(&s.document().body().paragraphs());
+    assert!(kinds[0].is_none() && kinds[1].is_none());
+    // Saved and reopened, the numbering part is valid.
+    let doc = Document::open(s.save().unwrap()).unwrap();
+    assert!(doc.parts().numbering.num_ids().count() >= 2);
+}
+
+#[test]
+fn numbered_items_continue_the_list_before_them() {
+    let mut s = open(&format!("{}{}", p("First"), p("Second")));
+    caret_at(&mut s, 0, 0);
+    run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Number,
+        },
+    );
+    caret_at(&mut s, 1, 0);
+    run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Number,
+        },
+    );
+    let kinds = s.list_kinds(&s.document().body().paragraphs());
+    let (a, b) = (kinds[0].unwrap(), kinds[1].unwrap());
+    assert_eq!(a.1, b.1, "same list instance");
+    // Tab-style indent moves the item a level down.
+    run(&mut s, EditOp::Indent { forward: true });
+    let kinds = s.list_kinds(&s.document().body().paragraphs());
+    assert_eq!(kinds[1].unwrap().2, 1);
+    // The labels lay out as 1. and a.
+    let layout = s.layout(fonts());
+    let labels: Vec<String> = layout.pages[0]
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            crate::layout::Item::Line(l) => Some(l),
+            _ => None,
+        })
+        .map(|l| {
+            let pb = &l.para;
+            pb.inline.clusters[..pb.inline.label_len]
+                .iter()
+                .map(|c| c.ch)
+                .filter(|c| !c.is_whitespace() && *c != '\t')
+                .collect()
+        })
+        .collect();
+    assert_eq!(labels, vec!["1.", "a."]);
+}
+
+#[test]
+fn tables_insert_and_change_shape() {
+    let mut s = open(&p("Before"));
+    caret_at(&mut s, 0, 6);
+    let r = run(&mut s, EditOp::InsertTable { rows: 2, cols: 3 });
+    let count =
+        |s: &Session, k: BlockKind| s.document().body().blocks().filter(|b| b.kind == k).count();
+    assert_eq!(count(&s, BlockKind::Table), 1);
+    assert_eq!(count(&s, BlockKind::Row), 2);
+    assert_eq!(count(&s, BlockKind::Cell), 6);
+    // The caret is in the first cell, and a paragraph follows the table.
+    let first_cell = r.selection.focus.block.clone();
+    type_text(&mut s, "A1");
+    assert_eq!(
+        s.document().body().get(&first_cell).unwrap().content.text(),
+        "A1"
+    );
+    let top = s.document().body().children(None).to_vec();
+    assert_eq!(top.len(), 3);
+    assert_eq!(
+        s.document().body().get(&top[2]).unwrap().kind,
+        BlockKind::Paragraph
+    );
+    run(&mut s, EditOp::InsertRow { below: true });
+    assert_eq!(count(&s, BlockKind::Row), 3);
+    run(&mut s, EditOp::InsertColumn { right: true });
+    assert_eq!(count(&s, BlockKind::Cell), 12);
+    run(&mut s, EditOp::DeleteColumn);
+    assert_eq!(count(&s, BlockKind::Cell), 9);
+    run(&mut s, EditOp::DeleteRow);
+    assert_eq!(count(&s, BlockKind::Row), 2);
+    // It lays out and saves.
+    assert_eq!(s.pages(fonts()).len(), 1);
+    let doc = Document::open(s.save().unwrap()).unwrap();
+    assert_eq!(
+        doc.body()
+            .blocks()
+            .filter(|b| b.kind == BlockKind::Cell)
+            .count(),
+        6
+    );
+    run(&mut s, EditOp::DeleteTable);
+    assert_eq!(count(&s, BlockKind::Table), 0);
+}
