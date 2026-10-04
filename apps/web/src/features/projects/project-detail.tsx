@@ -121,6 +121,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         createTask: (
           ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
         ) => commands.createTask(projectId, ...args),
+        initialProjectId: projectId,
         onSuccess: () => section('tasks'),
       },
     });

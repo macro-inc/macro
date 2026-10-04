@@ -1,7 +1,10 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import { enableProjects } from '@core/constant/featureFlags';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
+  entityPropertyFromApi,
   propertyApiValuesToNormalized,
   propertyValueToApi,
 } from '@property/api/converters';
@@ -15,18 +18,31 @@ import type {
 } from '@property/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useTagsQuery } from '@queries/properties/tags';
+import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
-/** Props shown in the composer (Linear-style left-to-right order). */
+/**
+ * Props shown in the composer (Linear-style left-to-right order). Project
+ * shows only while Projects is enabled.
+ */
 const COMPOSER_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.STATUS,
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
+  SYSTEM_PROPERTY_IDS.PROJECT,
 ];
 const COMPOSER_PROPERTY_SET = new Set<string>(COMPOSER_PROPERTIES);
+
+/** The Project value naming `projectId`. */
+export function taskComposerProjectValue(projectId: string): PropertyApiValues {
+  return {
+    valueType: 'ENTITY',
+    refs: [{ entity_id: projectId, entity_type: 'INITIATIVE' }],
+  };
+}
 
 /** The default property values a fresh task composer starts from. */
 export function defaultTaskPropertyValues(
@@ -104,7 +120,68 @@ export async function createTaskWithProperties(
     itemType: 'document',
   });
 
+  // Creation keeps the task when a property is rejected, so confirm a chosen
+  // project took and say when it didn't.
+  const projectId = chosenProjectId(properties);
+  if (
+    projectId &&
+    (await taskIsInProject(createdTask.documentId, projectId)) === false
+  ) {
+    toast.failure(
+      'Task created, but could not be added to the project. Use Add to project from the task menu to try again.'
+    );
+  }
+
   return createdTask;
+}
+
+/** The project the composer's Project value names, if any. */
+function chosenProjectId(
+  properties: Array<[string, PropertyApiValues]>
+): string | undefined {
+  const project = properties.find(
+    ([id]) => id === SYSTEM_PROPERTY_IDS.PROJECT
+  )?.[1];
+  if (project?.valueType !== 'ENTITY') return undefined;
+  return project.refs?.find(
+    (reference) => reference.entity_type === 'INITIATIVE'
+  )?.entity_id;
+}
+
+/**
+ * Whether the server has `taskId` in `projectId`, from its Project property;
+ * undefined when the properties can't be read.
+ */
+async function taskIsInProject(
+  taskId: string,
+  projectId: string
+): Promise<boolean | undefined> {
+  const result = await propertiesServiceClient.getEntityProperties({
+    entity_type: 'DOCUMENT',
+    entity_id: taskId,
+    query: {},
+  });
+  if (result.isErr()) return undefined;
+  const project = result.value.properties
+    .flatMap((property) => {
+      try {
+        return [entityPropertyFromApi(property)];
+      } catch {
+        return [];
+      }
+    })
+    .find(
+      (property) =>
+        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+    );
+  if (project?.valueType !== 'ENTITY') return false;
+  return (
+    project.value?.some(
+      (reference) =>
+        reference.entity_type === 'INITIATIVE' &&
+        reference.entity_id === projectId
+    ) ?? false
+  );
 }
 
 /**
@@ -195,8 +272,11 @@ export function createTaskComposerProperties(args: {
     );
   };
 
+  const projects = useFeatureFlag(enableProjects);
+
   const properties = (): Property[] => {
     return filterMap(COMPOSER_PROPERTIES, (id) => {
+      if (id === SYSTEM_PROPERTY_IDS.PROJECT && !projects().enabled) return;
       const definition = definitions().get(id);
       if (!definition) return;
       return {

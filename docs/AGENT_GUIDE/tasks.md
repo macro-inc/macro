@@ -125,8 +125,10 @@ filter sheets. Desktop uses the centered composer dialog.
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
-   chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
-   a `Create More` switch, and `Create Task Ctrl ↵`.
+   chip (defaults to you), `Due Date`, `Project` (when Projects is enabled; the standard
+   property dropdown, listing projects), `Change or select tags`, `Attach image or video`,
+   a `Create More` switch, and `Create Task Ctrl ↵`. If the chosen project can't be
+   set, the task is still created and a toast says it wasn't added to the project.
    The `Shared with Team` row defaults to on and remembers your choice in local
    storage across composer openings and page reloads. Its hint explains whether
    the task will be visible to your whole team or only to you and the people you
@@ -268,8 +270,9 @@ tasks whose Project property names the project.
 
 The project's Tasks tab starts with the task search, controls, and unified list;
 the project title and property pills appear only on Overview. Use
-`New task` to create a task in the project: the create request carries the
-Project property, so there is no separate assignment step. The new row appears
+`New task` to create a task in the project: the composer opens with its Project
+set to this project (change or clear it like any property), and the create
+request carries it, so there is no separate assignment step. The new row appears
 once the task is created. Verify this with GraphQL Soup both enabled and
 disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
