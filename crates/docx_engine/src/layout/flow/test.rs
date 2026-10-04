@@ -665,3 +665,74 @@ fn paragraph_positions_count_from_above_the_space_before() {
         );
     }
 }
+
+/// A paragraph with 12pt space before (and `ppr` besides, and `spacing`
+/// attributes), `run` before its text `t`.
+fn spaced(t: &str, ppr: &str, spacing: &str, run: &str) -> String {
+    format!(
+        r#"<w:p><w:pPr>{ppr}<w:spacing w:before="240" {spacing}/></w:pPr><w:r>{run}<w:t>{t}</w:t></w:r></w:p>"#
+    )
+}
+
+#[test]
+fn space_before_stays_at_a_page_top_only_after_a_page_break() {
+    let page_break = r#"<w:br w:type="page"/>"#;
+    let body = [
+        para("One"),
+        // Starting a page of its own is no hard break.
+        spaced("Two", "<w:pageBreakBefore/>", "", ""),
+        format!("<w:p><w:r>{page_break}</w:r></w:p>"),
+        spaced("Three", "", "", ""),
+        // A paragraph that starts with a page break starts after it.
+        spaced("Four", "", "", page_break),
+        // (Exactly spaced lines leave the space out there.)
+        spaced("Five", "", r#"w:line="300" w:lineRule="exact""#, page_break),
+    ]
+    .concat();
+    let l = layout(&format!("{body}{LETTER}"), &arial_10());
+    assert_eq!(l.pages.len(), 5);
+    for (page, t, y) in [
+        (1, "Two", 72.0),
+        (2, "Three", 84.0),
+        (3, "Four", 84.0),
+        (4, "Five", 72.0),
+    ] {
+        let line = find(&l, page, t);
+        assert!((line.y - y).abs() < 0.01, "{t}: {}", line.y);
+    }
+    // A heading kept with the paragraph after it moves to the next page
+    // without its space before.
+    let filler: String = (0..54).map(|k| para(&format!("Line {k}"))).collect();
+    let body = format!(
+        "{filler}{}{}{LETTER}",
+        spaced("Heading", "<w:keepNext/>", "", ""),
+        para(&"word ".repeat(200)),
+    );
+    let l = layout(&body, &arial_10());
+    let heading = find(&l, 1, "Heading");
+    assert!((heading.y - 72.0).abs() < 0.01, "{}", heading.y);
+}
+
+#[test]
+fn sections_keep_space_before_from_word_2013_on() {
+    let body = format!(
+        "{}{}{}<w:sectPr>{PAGE}</w:sectPr>",
+        para("One"),
+        section_end("nextPage", ""),
+        spaced("Two", "", "", ""),
+    );
+    for (mode, y) in [(14, 72.0), (15, 84.0)] {
+        let settings = format!(
+            r#"<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="{mode}"/></w:compat>"#
+        );
+        let l = layout(
+            &body,
+            &Parts {
+                settings: Some(&settings),
+                ..arial_10()
+            },
+        );
+        let two = find(&l, 1, "Two");
+        assert!((two.y - y).abs() < 0.01, "mode {mode}: {}", two.y);
+    }
+}

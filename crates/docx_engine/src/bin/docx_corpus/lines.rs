@@ -46,6 +46,10 @@ struct LineOut {
     spacing: String,
     /// Whether the line starts its paragraph.
     first: bool,
+    /// The paragraph's space before (points).
+    before: f32,
+    /// Whether the paragraph starts on a new page (`pageBreakBefore`).
+    page_break_before: bool,
 }
 
 /// One page.
@@ -159,6 +163,8 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
                     style: l.para.format.props.style.clone(),
                     spacing: format!("{:?}", l.para.format.props.line),
                     first: line.start == 0,
+                    before: l.para.format.props.before,
+                    page_break_before: l.para.format.props.page_break_before,
                 });
             }
         }

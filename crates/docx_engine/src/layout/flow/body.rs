@@ -30,6 +30,9 @@ const COLUMN_SLACK: f32 = 0.5;
 /// Default distance of line numbers from the text.
 const LINE_NUMBER_DISTANCE: f32 = 18.0;
 
+/// The compatibility mode of Word 2013 and later.
+const MODERN_COMPAT: u32 = 15;
+
 struct Cur {
     page: Page,
     sect: usize,
@@ -558,6 +561,10 @@ impl<'e, 'a> Flow<'e, 'a> {
                 cur_section = s;
             } else if s != cur_section {
                 cur_section = s;
+                // Word 2013 and later keep the space before of a section's
+                // first paragraph, as after a page break; earlier versions
+                // drop it, as at any page top.
+                let hard = self.env.doc.parts().settings.compat_mode >= MODERN_COMPAT;
                 match self.sections[s].start {
                     SectionStart::Continuous => {
                         let same_size = {
@@ -579,7 +586,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                                 c.sect_bottom = y;
                             }
                         } else {
-                            self.start_page(s, true);
+                            self.start_page(s, hard);
                         }
                     }
                     SectionStart::NextColumn => {
@@ -587,9 +594,9 @@ impl<'e, 'a> Flow<'e, 'a> {
                             c.sect = s;
                         }
                         self.section_started[s] = true;
-                        self.next_column(true);
+                        self.next_column(hard);
                     }
-                    _ => self.start_page(s, true),
+                    _ => self.start_page(s, hard),
                 }
             }
             match b.kind {
@@ -615,8 +622,10 @@ impl<'e, 'a> Flow<'e, 'a> {
         let props = pb.format.props.clone();
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         if props.page_break_before && !at_top {
+            // Not a hard break: the paragraph's space before goes, as at
+            // any page top.
             let sect = self.cur.as_ref().map_or(0, |c| c.sect);
-            self.start_page(sect, true);
+            self.start_page(sect, false);
             self.prev = None;
         } else if props.keep_next && !at_top && !hard_break(&pb) {
             // (A paragraph with a page break in it goes on after the break
@@ -635,7 +644,8 @@ impl<'e, 'a> Flow<'e, 'a> {
         let mut li = 0;
         self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
-        let hard = self.cur.as_ref().is_some_and(|c| c.hard);
+        let hard = self.cur.as_ref().is_some_and(|c| c.hard)
+            && !self.env.doc.parts().settings.suppress_sp_bf_after_pg_brk;
         let first_in_doc = self.pages.is_empty() && at_top;
         let before = if at_top {
             if hard || first_in_doc || self.env.options.space_before_at_page_top {
@@ -791,6 +801,11 @@ impl<'e, 'a> Flow<'e, 'a> {
                     LineEnd::PageBreak => {
                         let sect = self.cur.as_ref().map_or(0, |c| c.sect);
                         self.start_page(sect, true);
+                        if pb.lines.lines[..li].iter().all(|l| l.height == 0.0) {
+                            // A paragraph that starts with a page break
+                            // starts after it, with its space before.
+                            self.space_after_hard_break(&props);
+                        }
                     }
                     LineEnd::ColumnBreak => self.next_column(true),
                     _ => {
@@ -858,6 +873,21 @@ impl<'e, 'a> Flow<'e, 'a> {
             .is_some_and(|n| n.start == SectionStart::Continuous);
         let y = self.cur.as_ref().map_or(0.0, |c| c.y);
         continuous || y + pb.lines.height > self.avail_bottom() + EPS
+    }
+
+    /// Adds the space before of a paragraph that started with a page break
+    /// at the top of the page the break started, unless the document
+    /// suppresses it there. (Word leaves it out for exactly spaced lines.)
+    fn space_after_hard_break(&mut self, props: &ParaProps) {
+        if self.env.doc.parts().settings.suppress_sp_bf_after_pg_brk
+            || matches!(props.line, LineSpacing::Exact(_))
+        {
+            return;
+        }
+        let before = space_before(props, None, false, self.sum_spacing());
+        if let Some(c) = &mut self.cur {
+            c.y += before;
+        }
     }
 
     /// Lifts the page's first line when the document suppresses extra line

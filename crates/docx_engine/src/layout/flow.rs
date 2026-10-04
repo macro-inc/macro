@@ -25,7 +25,7 @@ pub struct LayoutOptions {
     /// Show tracked changes inline (else the document as if accepted).
     pub markup: bool,
     /// Keep a paragraph's space before when it lands at the top of a page
-    /// after a natural page break.
+    /// after a natural page break (Word drops it: off by default).
     pub space_before_at_page_top: bool,
 }
 
@@ -33,7 +33,7 @@ impl Default for LayoutOptions {
     fn default() -> Self {
         Self {
             markup: true,
-            space_before_at_page_top: true,
+            space_before_at_page_top: false,
         }
     }
 }
