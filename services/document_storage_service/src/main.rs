@@ -1458,6 +1458,9 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.as_ref().clone(),
             sync_service_client.as_ref().clone(),
         )),
+        Arc::new(collab_surface::outbound::document_ids::PgDocumentIds::new(
+            db.clone(),
+        )),
         config.document_permission_jwt.as_ref().to_string(),
     );
 

@@ -44,11 +44,31 @@ fn edit_permission() -> EntityPermission {
     }
 }
 
-/// In-memory repo: one optional surface plus operation flags.
+/// In-memory repo: one optional surface plus operation flags. Also stands in
+/// for the document namespace.
 #[derive(Default)]
 struct MemRepo {
     surface: std::sync::Mutex<Option<CollabSurface>>,
     soft_deleted: AtomicBool,
+    /// Whether every id reads as naming an existing document.
+    document_ids: AtomicBool,
+    /// How many times the document namespace was consulted.
+    document_lookups: AtomicUsize,
+    /// How many upcoming `mark_ready` calls fail.
+    mark_ready_failures: AtomicUsize,
+}
+
+impl MemRepo {
+    /// A repo already holding `surface`, as an earlier ensure left it.
+    fn holding(surface: CollabSurface) -> Arc<Self> {
+        let repo = Arc::new(Self::default());
+        *repo.surface.lock().unwrap() = Some(surface);
+        repo
+    }
+
+    fn stored(&self) -> Option<CollabSurface> {
+        self.surface.lock().unwrap().clone()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -82,6 +102,13 @@ impl CollabSurfaceRepo for Arc<MemRepo> {
     }
 
     async fn mark_ready(&self, _id: Uuid) -> Result<(), MemErr> {
+        if self
+            .mark_ready_failures
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(MemErr);
+        }
         if let Some(s) = self.surface.lock().unwrap().as_mut() {
             s.state = SurfaceState::Ready;
         }
@@ -92,19 +119,69 @@ impl CollabSurfaceRepo for Arc<MemRepo> {
         self.soft_deleted.store(true, Ordering::SeqCst);
         Ok(())
     }
+
+    async fn is_deleted(&self, id: Uuid) -> Result<bool, MemErr> {
+        Ok(self.soft_deleted.load(Ordering::SeqCst)
+            && self
+                .surface
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|s| s.id == id))
+    }
 }
 
-fn service_with(
-    repo: Arc<MemRepo>,
-    initializer: MockSurfaceInitializer,
-) -> CollabSurfaceServiceImpl<Arc<MemRepo>, MockSurfaceInitializer> {
-    CollabSurfaceServiceImpl::new(Arc::new(repo), Arc::new(initializer), SECRET.to_string())
+impl DocumentIds for Arc<MemRepo> {
+    async fn is_document_id(&self, _id: Uuid) -> Result<bool, rootcause::Report> {
+        self.document_lookups.fetch_add(1, Ordering::SeqCst);
+        Ok(self.document_ids.load(Ordering::SeqCst))
+    }
+}
+
+type TestService = CollabSurfaceServiceImpl<Arc<MemRepo>, MockSurfaceInitializer, Arc<MemRepo>>;
+
+fn service_with(repo: Arc<MemRepo>, initializer: MockSurfaceInitializer) -> TestService {
+    CollabSurfaceServiceImpl::new(
+        Arc::new(repo.clone()),
+        Arc::new(initializer),
+        Arc::new(repo),
+        SECRET.to_string(),
+    )
+}
+
+/// An initializer that finds no session under any id yet.
+fn no_sessions() -> MockSurfaceInitializer {
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_session_exists()
+        .returning(|_| Box::pin(async { Ok(false) }));
+    init
+}
+
+/// A pending surface an earlier ensure left behind.
+fn pending_surface(id: Uuid) -> CollabSurface {
+    let now = chrono::Utc::now();
+    CollabSurface {
+        id,
+        parent: EntityType::Channel.with_entity_string("chan-1".to_string()),
+        state: SurfaceState::Pending,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+fn channel_receipt() -> EntityAccessReceipt<AnyEntityPermission> {
+    receipt_for(
+        "macro|a@b.c",
+        EntityType::Channel,
+        "chan-1",
+        edit_permission(),
+    )
 }
 
 #[tokio::test]
 async fn ensure_creates_initializes_then_marks_ready() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     init.expect_initialize()
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(()) }));
@@ -133,7 +210,7 @@ async fn ensure_creates_initializes_then_marks_ready() {
 #[tokio::test]
 async fn ensure_is_idempotent_for_a_ready_surface() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     // Exactly one initialization across both ensures: the second sees a
     // ready surface and does not touch the initializer.
     init.expect_initialize()
@@ -172,7 +249,7 @@ async fn ensure_is_idempotent_for_a_ready_surface() {
 #[tokio::test]
 async fn ensure_retries_init_for_a_pending_surface() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     // First ensure: init fails, row stays pending. Second ensure: init
     // succeeds and the surface becomes ready.
     let calls = Arc::new(AtomicUsize::new(0));
@@ -222,7 +299,7 @@ async fn ensure_retries_init_for_a_pending_surface() {
 #[tokio::test]
 async fn ensure_maps_insert_conflict_on_deleted_id_to_gone() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     init.expect_initialize()
         .returning(|_, _| Box::pin(async { Ok(()) }));
 
@@ -254,7 +331,7 @@ async fn ensure_maps_insert_conflict_on_deleted_id_to_gone() {
 #[tokio::test]
 async fn ensure_rejects_mismatched_parent() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     init.expect_initialize()
         .returning(|_, _| Box::pin(async { Ok(()) }));
     let svc = service_with(repo, init);
@@ -305,7 +382,7 @@ async fn ensure_rejects_receipt_for_other_user() {
 #[tokio::test]
 async fn mint_token_maps_channel_role_to_edit() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     init.expect_initialize()
         .returning(|_, _| Box::pin(async { Ok(()) }));
     let svc = service_with(repo, init);
@@ -344,7 +421,7 @@ async fn mint_token_maps_channel_role_to_edit() {
 #[tokio::test]
 async fn mint_token_rejects_receipt_for_wrong_parent() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     init.expect_initialize()
         .returning(|_, _| Box::pin(async { Ok(()) }));
     let svc = service_with(repo, init);
@@ -382,7 +459,7 @@ async fn mint_token_rejects_receipt_for_wrong_parent() {
 #[tokio::test]
 async fn delete_requires_edit_capable_permission() {
     let repo = Arc::new(MemRepo::default());
-    let mut init = MockSurfaceInitializer::new();
+    let mut init = no_sessions();
     init.expect_initialize()
         .returning(|_, _| Box::pin(async { Ok(()) }));
     let svc = service_with(repo.clone(), init);
@@ -432,4 +509,338 @@ async fn delete_requires_edit_capable_permission() {
     // Deleted surfaces read as absent.
     let gone = svc.get_parent(surface.id).await.unwrap_err();
     assert!(matches!(gone, CollabSurfaceError::NotFound));
+}
+
+#[tokio::test]
+async fn ensure_refuses_an_id_that_names_a_document() {
+    let repo = Arc::new(MemRepo::default());
+    repo.document_ids.store(true, Ordering::SeqCst);
+    // The initializer would report the document's session as "already
+    // initialized" and let the surface adopt it; it must never be reached.
+    let svc = service_with(repo.clone(), no_sessions());
+    let receipt = receipt_for(
+        "macro|a@b.c",
+        EntityType::Document,
+        "doc-2",
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    );
+
+    let id = surface_id();
+    for _ in 0..2 {
+        let err = svc
+            .ensure_surface(&user("macro|a@b.c"), receipt.clone(), id, String::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CollabSurfaceError::IdReserved));
+    }
+    // Nothing is left behind binding the id to the caller's parent.
+    assert!(repo.surface.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn a_pending_surface_with_a_document_id_is_never_initialized() {
+    let repo = Arc::new(MemRepo::default());
+    repo.document_ids.store(true, Ordering::SeqCst);
+    let id = surface_id();
+    let now = chrono::Utc::now();
+    // A pending row for a document id, as written before ids were reserved.
+    *repo.surface.lock().unwrap() = Some(CollabSurface {
+        id,
+        parent: EntityType::Document.with_entity_string("doc-1".to_string()),
+        state: SurfaceState::Pending,
+        created_at: now,
+        updated_at: now,
+    });
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+    let receipt = receipt_for(
+        "macro|a@b.c",
+        EntityType::Document,
+        "doc-1",
+        edit_permission(),
+    );
+
+    let err = svc
+        .ensure_surface(&user("macro|a@b.c"), receipt, id, String::new())
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::IdReserved));
+    assert_eq!(
+        repo.surface.lock().unwrap().as_ref().unwrap().state,
+        SurfaceState::Pending
+    );
+}
+
+#[tokio::test]
+async fn mint_token_refuses_a_pending_surface() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize().returning(|_, _| {
+        Box::pin(async {
+            Err(CollabSurfaceError::Internal(
+                rootcause::Report::new(MemErr).into_dynamic(),
+            ))
+        })
+    });
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+    let receipt = || {
+        receipt_for(
+            "macro|a@b.c",
+            EntityType::Channel,
+            "chan-1",
+            edit_permission(),
+        )
+    };
+
+    svc.ensure_surface(&user("macro|a@b.c"), receipt(), id, String::new())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        repo.surface.lock().unwrap().as_ref().unwrap().state,
+        SurfaceState::Pending
+    );
+
+    // A pending row has not proven its session is its own.
+    let err = svc
+        .mint_token(&user("macro|a@b.c"), receipt(), id)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::NotReady));
+}
+
+#[tokio::test]
+async fn parent_comment_access_mints_a_read_only_token() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize()
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo, init);
+    let id = surface_id();
+    let receipt = |access_level| {
+        receipt_for(
+            "macro|a@b.c",
+            EntityType::Document,
+            "doc-1",
+            EntityPermission::AccessLevel { access_level },
+        )
+    };
+    svc.ensure_surface(
+        &user("macro|a@b.c"),
+        receipt(AccessLevel::Edit),
+        id,
+        String::new(),
+    )
+    .await
+    .unwrap();
+
+    for (parent, minted) in [
+        (AccessLevel::View, AccessLevel::View),
+        (AccessLevel::Comment, AccessLevel::View),
+        (AccessLevel::Edit, AccessLevel::Edit),
+        (AccessLevel::Owner, AccessLevel::Owner),
+    ] {
+        let token = svc
+            .mint_token(&user("macro|a@b.c"), receipt(parent), id)
+            .await
+            .unwrap();
+        let claims: model::document::DocumentPermissionsToken =
+            macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+        assert_eq!(claims.document_id, id.to_string());
+        assert_eq!(claims.access_level, minted, "{parent:?}");
+    }
+}
+
+#[tokio::test]
+async fn a_fresh_ensure_checks_the_document_namespace_once() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+
+    let surface = svc
+        .ensure_surface(
+            &user("macro|a@b.c"),
+            channel_receipt(),
+            surface_id(),
+            String::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(surface.state, SurfaceState::Ready);
+    assert_eq!(repo.document_lookups.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn ensure_refuses_an_id_that_already_has_a_session() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = MockSurfaceInitializer::new();
+    // The id has a session no surface created; it must never be initialized
+    // over (the initializer would report it as already initialized).
+    init.expect_session_exists()
+        .returning(|_| Box::pin(async { Ok(true) }));
+    let svc = service_with(repo.clone(), init);
+
+    let err = svc
+        .ensure_surface(
+            &user("macro|a@b.c"),
+            channel_receipt(),
+            surface_id(),
+            String::new(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::IdReserved));
+    // Refused before anything is written.
+    assert!(repo.stored().is_none());
+}
+
+#[tokio::test]
+async fn a_pending_surface_whose_session_exists_heals_on_retry() {
+    let repo = Arc::new(MemRepo::default());
+    // The first ensure initializes the session, then fails to mark it ready.
+    repo.mark_ready_failures.store(1, Ordering::SeqCst);
+    let mut init = MockSurfaceInitializer::new();
+    // Only the fresh ensure checks for a session; the retry trusts its row.
+    init.expect_session_exists()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(false) }));
+    // The retry finds the session the first ensure created, which the
+    // initializer reports as success.
+    init.expect_initialize()
+        .times(2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+
+    svc.ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+        .await
+        .unwrap_err();
+    assert_eq!(repo.stored().unwrap().state, SurfaceState::Pending);
+
+    let surface = svc
+        .ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+        .await
+        .unwrap();
+    assert_eq!(surface.state, SurfaceState::Ready);
+}
+
+#[tokio::test]
+async fn concurrent_ensures_of_a_new_id_both_end_ready() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = MockSurfaceInitializer::new();
+    // Both ensures pass the pre-insert checks before either inserts.
+    let checked = Arc::new(AtomicUsize::new(0));
+    init.expect_session_exists().times(2).returning(move |_| {
+        let checked = checked.clone();
+        Box::pin(async move {
+            checked.fetch_add(1, Ordering::SeqCst);
+            while checked.load(Ordering::SeqCst) < 2 {
+                tokio::task::yield_now().await;
+            }
+            Ok(false)
+        })
+    });
+    init.expect_initialize()
+        .times(1..=2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+
+    let caller = user("macro|a@b.c");
+    let (first, second) = tokio::join!(
+        svc.ensure_surface(&caller, channel_receipt(), id, String::new()),
+        svc.ensure_surface(&caller, channel_receipt(), id, String::new()),
+    );
+
+    // The loser re-reads the winner's row: no extra lookups, no `Gone`.
+    assert_eq!(first.unwrap().state, SurfaceState::Ready);
+    assert_eq!(second.unwrap().state, SurfaceState::Ready);
+    assert_eq!(repo.document_lookups.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn mint_token_refuses_a_ready_surface_whose_id_names_a_document() {
+    let id = surface_id();
+    // A ready binding to a document's id, as written before ids were reserved.
+    let repo = MemRepo::holding(CollabSurface {
+        state: SurfaceState::Ready,
+        ..pending_surface(id)
+    });
+    repo.document_ids.store(true, Ordering::SeqCst);
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+
+    let err = svc
+        .mint_token(&user("macro|a@b.c"), channel_receipt(), id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::IdReserved));
+}
+
+#[tokio::test]
+async fn ensure_on_a_deleted_id_is_gone_even_though_its_session_remains() {
+    let id = surface_id();
+    // Deletion leaves the surface's sync-service session behind.
+    let repo = MemRepo::holding(CollabSurface {
+        state: SurfaceState::Ready,
+        ..pending_surface(id)
+    });
+    repo.soft_deleted.store(true, Ordering::SeqCst);
+    let mut init = MockSurfaceInitializer::new();
+    init.expect_session_exists()
+        .returning(|_| Box::pin(async { Ok(true) }));
+    let svc = service_with(repo, init);
+
+    let err = svc
+        .ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, CollabSurfaceError::Gone));
+}
+
+#[tokio::test]
+async fn ensure_accepts_random_ids() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize()
+        .times(2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let svc = service_with(repo.clone(), init);
+
+    // v4, as a browser's crypto.randomUUID() makes, and v7.
+    for id in [uuid::Uuid::new_v4(), surface_id()] {
+        let surface = svc
+            .ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+            .await
+            .unwrap();
+        assert_eq!(surface.state, SurfaceState::Ready);
+        *repo.surface.lock().unwrap() = None;
+    }
+}
+
+#[tokio::test]
+async fn ensure_refuses_ids_that_are_not_random() {
+    let repo = Arc::new(MemRepo::default());
+    let svc = service_with(repo.clone(), MockSurfaceInitializer::new());
+
+    for id in [
+        uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, b"surface"),
+        uuid::Uuid::nil(),
+    ] {
+        let err = svc
+            .ensure_surface(&user("macro|a@b.c"), channel_receipt(), id, String::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CollabSurfaceError::BadRequest(_)));
+    }
+    assert!(repo.stored().is_none());
+    assert_eq!(repo.document_lookups.load(Ordering::SeqCst), 0);
 }

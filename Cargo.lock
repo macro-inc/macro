@@ -4227,6 +4227,7 @@ dependencies = [
  "entity_access",
  "lexical_client",
  "macro_authorization",
+ "macro_db_client",
  "macro_db_migrator",
  "macro_sync_service_jwt",
  "macro_user_id",

@@ -70,7 +70,8 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
             Ok(()) => Ok(()),
             // Initialization is one-shot on the sync-service side, so "snapshot
             // already exists" means an earlier or concurrent ensure won the
-            // init — success for our purposes. This is what makes `ensure`
+            // init — success for our purposes (a new id was checked to have no
+            // session before its row was written). This is what makes `ensure`
             // idempotent across retries and races.
             Err(e) if e.to_string().contains("snapshot already exists") => {
                 tracing::debug!(
@@ -84,5 +85,20 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
                     .into_dynamic(),
             )),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn session_exists(&self, surface_id: &str) -> Result<bool, CollabSurfaceError> {
+        // `exists` is true once the durable object has the id set (e.g. after a
+        // client connected), which is broader than "initialized".
+        self.sync_service_client
+            .exists(surface_id)
+            .await
+            .map_err(|e| {
+                CollabSurfaceError::Internal(
+                    rootcause::report!("failed to check sync-service session: {e:?}")
+                        .into_dynamic(),
+                )
+            })
     }
 }

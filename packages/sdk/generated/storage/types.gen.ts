@@ -15601,6 +15601,10 @@ export type EnsureCollabSurfaceErrors = {
      */
     404: ErrorResponse;
     /**
+     * The surface id is already in use
+     */
+    409: ErrorResponse;
+    /**
      * The surface id was deleted and cannot be reused
      */
     410: ErrorResponse;
@@ -15638,6 +15642,10 @@ export type CreateCollabSurfaceTokenErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * The surface is not initialized yet, or its id is in use
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
