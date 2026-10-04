@@ -21,7 +21,6 @@ import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
-import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
@@ -129,9 +128,6 @@ function Row(props: {
           data-kind="chat"
           onClick={props.onOpen}
         >
-          <ViewSidebar.Icon>
-            <ChatIcon />
-          </ViewSidebar.Icon>
           <span class="min-w-0 flex-1 truncate">{title()}</span>
           <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
             {compactAge(conversationTimestamp(props.conversation))}

@@ -12,7 +12,7 @@ export function AgentSessionRow(props: {
   title: string;
   kind: 'chat' | 'code';
   state: ConversationState;
-  leading: JSX.Element;
+  leading?: JSX.Element;
   trailing?: JSX.Element;
   timestamp: string;
   unread?: boolean;
@@ -47,9 +47,11 @@ export function AgentSessionRow(props: {
         aria-current={props.active ? 'page' : undefined}
         {...pressHandlers((event) => props.onOpen?.(event))}
       />
-      <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
-        {props.leading}
-      </ViewSidebar.Icon>
+      <Show when={props.leading !== undefined}>
+        <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
+          {props.leading}
+        </ViewSidebar.Icon>
+      </Show>
       <span class="pointer-events-none relative min-w-0 flex-1">
         <span class="flex min-w-0 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{props.title}</span>
@@ -61,33 +63,5 @@ export function AgentSessionRow(props: {
         {metadata()}
       </span>
     </ViewSidebar.Item>
-  );
-}
-
-/** One leading dot combines activity and unread state; read dormant rows are empty. */
-export function AgentSessionStatusIndicator(props: {
-  state: ConversationState;
-  unread?: boolean;
-}) {
-  return (
-    <Show
-      when={
-        props.state === 'starting' ||
-        props.state === 'working' ||
-        props.state === 'waiting' ||
-        props.unread
-      }
-    >
-      <span
-        data-agent-status-indicator
-        aria-label={props.unread ? 'Unread' : undefined}
-        class={cn(
-          'size-1.5 rounded-full',
-          props.state === 'waiting' ? 'bg-warning' : 'bg-accent',
-          (props.state === 'starting' || props.state === 'working') &&
-            'motion-safe:animate-pulse'
-        )}
-      />
-    </Show>
   );
 }
