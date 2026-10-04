@@ -536,6 +536,101 @@ pub enum EditOp {
         /// Column index.
         col: usize,
     },
+    /// Merges the rectangle of table cells between two corners into one cell.
+    /// The top-left cell keeps its formatting; the text of the other cells is
+    /// appended to it as paragraphs. Merged cells already inside the rectangle
+    /// are absorbed; a rectangle that cuts through a merged cell is rejected.
+    MergeCells {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// One corner of the rectangle.
+        from: CellRef,
+        /// The opposite corner.
+        to: CellRef,
+    },
+    /// Splits a merged cell back into the grid cells it covers. The revealed
+    /// cells are empty and take the merged cell's fill and outer borders.
+    SplitCell {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// Any grid cell the merged cell covers.
+        cell: CellRef,
+    },
+    /// Formats the table cells in the rectangle between two corners (widened
+    /// to whole merged cells). Omitted fields stay unchanged.
+    FormatCells {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// One corner of the rectangle.
+        from: CellRef,
+        /// The opposite corner.
+        to: CellRef,
+        /// Cell fill (`{"kind":"none"}` = no fill, so the table background shows).
+        #[serde(default)]
+        fill: Option<FillSpec>,
+        /// Borders to change.
+        #[serde(default)]
+        borders: Option<CellBorders>,
+        /// Vertical text alignment: `top`, `middle`, or `bottom`.
+        #[serde(default)]
+        anchor: Option<String>,
+        /// Cell margins `[left, top, right, bottom]` in points.
+        #[serde(default)]
+        margins: Option<[f32; 4]>,
+    },
+    /// Sets a table's style and which of its parts the style emphasizes
+    /// (omitted fields stay unchanged). Applying a different style clears
+    /// fills and borders set directly on cells, as PowerPoint does, so the
+    /// table shows the new style.
+    SetTableStyle {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// Style id (a GUID from the deck outline's `tableStyles`, e.g.
+        /// `{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}` = Medium Style 2 - Accent 1),
+        /// or `""` for no style.
+        #[serde(default)]
+        style: Option<String>,
+        /// Emphasize the first (header) row.
+        #[serde(default)]
+        first_row: Option<bool>,
+        /// Emphasize the last (total) row.
+        #[serde(default)]
+        last_row: Option<bool>,
+        /// Emphasize the first column.
+        #[serde(default)]
+        first_col: Option<bool>,
+        /// Emphasize the last column.
+        #[serde(default)]
+        last_col: Option<bool>,
+        /// Alternate the shading of rows.
+        #[serde(default)]
+        band_row: Option<bool>,
+        /// Alternate the shading of columns.
+        #[serde(default)]
+        band_col: Option<bool>,
+    },
+    /// Sets table column widths and minimum row heights in points (rows still
+    /// grow to fit their text). The frame is resized to match.
+    SetTableGrid {
+        /// Slide id.
+        slide: u32,
+        /// Graphic frame id.
+        shape: u32,
+        /// One width per column.
+        #[serde(default)]
+        column_widths: Option<Vec<f32>>,
+        /// One minimum height per row.
+        #[serde(default)]
+        row_heights: Option<Vec<f32>>,
+    },
     /// Adds a slide based on a layout (its id is reported in the result).
     AddSlide {
         /// Layout name (e.g. "Title and Content"); defaults to the layout of the reference slide.
@@ -659,4 +754,58 @@ pub struct EditResult {
     pub changed_slides: Vec<u32>,
     /// Whether slides were added, removed, or reordered.
     pub structure_changed: bool,
+}
+
+/// Which borders of a cell range [`EditOp::FormatCells`] changes. A border
+/// between two cells is shared, so both cells get the change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum BorderEdges {
+    /// Every border, outside and inside.
+    All,
+    /// The range's outline.
+    Outside,
+    /// The lines between the range's cells.
+    Inside,
+    /// The range's top edge.
+    Top,
+    /// The range's bottom edge.
+    Bottom,
+    /// The range's left edge.
+    Left,
+    /// The range's right edge.
+    Right,
+    /// The lines between the range's rows.
+    InsideHorizontal,
+    /// The lines between the range's columns.
+    InsideVertical,
+}
+
+/// A table border change (`None` = leave unchanged). A border that did not
+/// exist yet becomes a solid 1 pt `tx1` line unless the change says otherwise.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+pub struct BorderLine {
+    /// Remove the border (no line).
+    #[serde(deserialize_with = "nullable")]
+    pub none: bool,
+    /// Color (`RRGGBB` or theme name).
+    pub color: Option<String>,
+    /// Width in points.
+    pub width: Option<f32>,
+    /// Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).
+    pub dash: Option<String>,
+}
+
+/// Borders to change in [`EditOp::FormatCells`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CellBorders {
+    /// Which borders.
+    pub edges: BorderEdges,
+    /// The change applied to each of them.
+    pub line: BorderLine,
 }

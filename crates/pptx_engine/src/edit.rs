@@ -22,6 +22,7 @@ mod parts;
 mod shapes;
 pub(crate) mod slides;
 mod table;
+mod table_style;
 mod text;
 mod xmlutil;
 
@@ -30,6 +31,7 @@ pub use ops::{
     BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
     FillSpec, LinePatch, NewShape, ParaPatch, RunPatch, TextPos, ZOrder,
 };
+pub use ops::{BorderEdges, BorderLine, CellBorders};
 pub use slides::{LayoutInfo, layouts};
 
 use crate::error::{Error, Result};
@@ -66,6 +68,11 @@ impl EditOp {
             | O::DeleteTableRow { slide, .. }
             | O::InsertTableColumn { slide, .. }
             | O::DeleteTableColumn { slide, .. }
+            | O::MergeCells { slide, .. }
+            | O::SplitCell { slide, .. }
+            | O::FormatCells { slide, .. }
+            | O::SetTableStyle { slide, .. }
+            | O::SetTableGrid { slide, .. }
             | O::DuplicateSlide { slide }
             | O::DeleteSlide { slide }
             | O::MoveSlide { slide, .. }
@@ -175,6 +182,22 @@ impl Presentation {
         f(doc, body)
     }
 
+    /// Runs `f` on a table's graphic frame, then re-fits the frame to the table.
+    fn edit_table(
+        &mut self,
+        slide: u32,
+        shape: u32,
+        refit: &mut Vec<(String, u32)>,
+        f: impl FnOnce(&mut XmlDoc, NodeId) -> Result<()>,
+    ) -> Result<()> {
+        let part = self.slide_part(slide)?;
+        let doc = self.xml_mut(&part)?;
+        let node = shapes::find(doc, shape)?;
+        f(doc, node)?;
+        refit.push((part, shape));
+        Ok(())
+    }
+
     fn apply_op(&mut self, op: &EditOp, refit: &mut Vec<(String, u32)>) -> Result<Option<Created>> {
         use EditOp as O;
         let mut created = None;
@@ -260,9 +283,17 @@ impl Presentation {
                 props,
             } => {
                 let part = self.slide_part(*slide)?;
-                self.edit_text(&part, *shape, *cell, |doc, body| {
-                    text::format_body(doc, body, props)
-                })?;
+                match cell {
+                    // A cell's alignment and margins live on the cell, not its text body.
+                    Some(c) => {
+                        let doc = self.xml_mut(&part)?;
+                        let node = shapes::find(doc, *shape)?;
+                        table::format_cell_body(doc, node, *c, props)?;
+                    }
+                    None => self.edit_text(&part, *shape, None, |doc, body| {
+                        text::format_body(doc, body, props)
+                    })?,
+                }
                 refit.push((part, *shape));
             }
             O::SetTransform {
@@ -288,6 +319,7 @@ impl Presentation {
                 };
                 shapes::set_transform(self, &part, *shape, &patch)?;
                 if w.is_some() || h.is_some() {
+                    table::fit_frame(self.xml_mut(&part)?, *shape, *w, *h)?;
                     refit.push((part, *shape));
                 }
             }
@@ -323,6 +355,9 @@ impl Presentation {
             } => {
                 let part = self.slide_part(*slide)?;
                 let id = shapes::add_shape(self, &part, shape, [*x, *y, *w, *h])?;
+                if matches!(shape, NewShape::Table { .. }) {
+                    table_style::define(self, crate::model::table_style::DEFAULT_TABLE_STYLE)?;
+                }
                 created = Some(Created {
                     slide: *slide,
                     shape: Some(id),
@@ -373,30 +408,99 @@ impl Presentation {
                 self.edit_text(&part, *shape, Some(cell), |doc, body| {
                     text::set_text(doc, body, text)
                 })?;
+                refit.push((part, *shape));
             }
             O::InsertTableRow { slide, shape, at } => {
-                let part = self.slide_part(*slide)?;
-                let doc = self.xml_mut(&part)?;
-                let node = shapes::find(doc, *shape)?;
-                table::insert_row(doc, node, *at)?;
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::insert_row(doc, node, *at)
+                })?;
             }
             O::DeleteTableRow { slide, shape, row } => {
-                let part = self.slide_part(*slide)?;
-                let doc = self.xml_mut(&part)?;
-                let node = shapes::find(doc, *shape)?;
-                table::delete_row(doc, node, *row)?;
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::delete_row(doc, node, *row)
+                })?;
             }
             O::InsertTableColumn { slide, shape, at } => {
-                let part = self.slide_part(*slide)?;
-                let doc = self.xml_mut(&part)?;
-                let node = shapes::find(doc, *shape)?;
-                table::insert_column(doc, node, *at)?;
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::insert_column(doc, node, *at)
+                })?;
             }
             O::DeleteTableColumn { slide, shape, col } => {
-                let part = self.slide_part(*slide)?;
-                let doc = self.xml_mut(&part)?;
-                let node = shapes::find(doc, *shape)?;
-                table::delete_column(doc, node, *col)?;
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::delete_column(doc, node, *col)
+                })?;
+            }
+            O::MergeCells {
+                slide,
+                shape,
+                from,
+                to,
+            } => {
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::merge_cells(doc, node, *from, *to)
+                })?;
+            }
+            O::SplitCell { slide, shape, cell } => {
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::split_cell(doc, node, *cell)
+                })?;
+            }
+            O::FormatCells {
+                slide,
+                shape,
+                from,
+                to,
+                fill,
+                borders,
+                anchor,
+                margins,
+            } => {
+                let format = table::CellFormat {
+                    fill: fill.as_ref(),
+                    borders: borders.as_ref(),
+                    anchor: anchor.as_deref(),
+                    margins: *margins,
+                };
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::format_cells(doc, node, *from, *to, &format)
+                })?;
+            }
+            O::SetTableStyle {
+                slide,
+                shape,
+                style,
+                first_row,
+                last_row,
+                first_col,
+                last_col,
+                band_row,
+                band_col,
+            } => {
+                let style = match style.as_deref().map(str::trim) {
+                    Some(id) if !id.is_empty() => Some(table_style::define(self, id)?),
+                    other => other.map(str::to_owned),
+                };
+                let flags = table::StyleFlags {
+                    first_row: *first_row,
+                    last_row: *last_row,
+                    first_col: *first_col,
+                    last_col: *last_col,
+                    band_row: *band_row,
+                    band_col: *band_col,
+                };
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::set_style(doc, node, style.as_deref(), flags)
+                })?;
+            }
+            O::SetTableGrid {
+                slide,
+                shape,
+                column_widths,
+                row_heights,
+            } => {
+                self.edit_table(*slide, *shape, refit, |doc, node| {
+                    table::set_grid(doc, node, column_widths.as_deref(), row_heights.as_deref())
+                })?;
             }
             O::AddSlide {
                 layout,

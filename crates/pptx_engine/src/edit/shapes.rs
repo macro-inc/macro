@@ -34,8 +34,8 @@ const TREE_ITEMS: &[&str] = &[
 const DEFAULT_TABLE_STYLE: &str = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
 /// Arrowhead types accepted by [`LinePatch`].
 const LINE_ENDS: &[&str] = &["none", "triangle", "stealth", "diamond", "oval", "arrow"];
-/// Preset dashes accepted by [`LinePatch`].
-const DASHES: &[&str] = &[
+/// Preset dashes accepted by [`LinePatch`] (and table borders).
+pub(super) const DASHES: &[&str] = &[
     "solid",
     "dot",
     "dash",

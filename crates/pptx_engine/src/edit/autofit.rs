@@ -10,7 +10,9 @@ use crate::model::presentation::Presentation;
 use crate::model::shape::{Inherit, WalkCtx, resolve_shape};
 use crate::model::text::{Autofit, Vert};
 use crate::render::build::shape_geometry;
+use crate::render::table::{layout_table, table_styles_part};
 use crate::render::text::{LayoutParams, layout};
+use crate::units::{emu_to_pt, pt_to_emu};
 use crate::xml::Ns;
 use std::collections::HashSet;
 
@@ -48,6 +50,9 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
     let Some(node) = find_shape(&slide.doc, id) else {
         return Ok(());
     };
+    if slide.doc.local(node) == "graphicFrame" {
+        return refit_table(pres, part, id, fonts);
+    }
     if slide.doc.local(node) != "sp" {
         return Ok(());
     }
@@ -151,5 +156,35 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
         }
         Autofit::None => {}
     }
+    Ok(())
+}
+
+/// Sizes a table's frame to the table as drawn: its columns, and its rows
+/// grown to fit their text, as PowerPoint keeps the frame in step.
+fn refit_table(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> Result<()> {
+    let slide = pres.part(part)?;
+    let doc = &slide.doc;
+    let Some(node) = find_shape(doc, id) else {
+        return Ok(());
+    };
+    let (Some(tbl), Some(ext)) = (
+        doc.path(node, Ns::A, &["graphic", "graphicData", "tbl"]),
+        doc.child(node, Ns::P, "xfrm")
+            .and_then(|x| doc.child(x, Ns::A, "ext")),
+    ) else {
+        return Ok(());
+    };
+    let ctx = pres.context_for(slide.clone(), 1)?;
+    let styles = table_styles_part(&ctx).and_then(|n| pres.part(&n).ok());
+    let grid = layout_table(&ctx, styles.as_ref(), &slide, tbl, fonts);
+    let size = |v: &[f32]| v.last().copied().unwrap_or(0.0).max(0.0);
+    let (w, h) = (size(&grid.xs), size(&grid.ys));
+    let current = |a: &str| emu_to_pt(doc.attr_f64(ext, a).unwrap_or(0.0));
+    if (current("cx") - w).abs() < TOLERANCE && (current("cy") - h).abs() < TOLERANCE {
+        return Ok(());
+    }
+    let doc = pres.xml_mut(part)?;
+    doc.set_attr(ext, "cx", &pt_to_emu(f64::from(w)).to_string());
+    doc.set_attr(ext, "cy", &pt_to_emu(f64::from(h)).to_string());
     Ok(())
 }
