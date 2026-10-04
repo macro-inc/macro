@@ -93,6 +93,72 @@ pub struct Patch {
     /// Replaces a text layer's characters (laid out by [`crate::text`]).
     pub characters: Option<String>,
     pub font_size: Option<f32>,
+    pub font_family: Option<String>,
+    /// Figma's style name: `Regular`, `Semi Bold`, `Bold Italic`…
+    pub font_style: Option<String>,
+    pub line_height: Option<Measure>,
+    pub letter_spacing: Option<Measure>,
+    pub paragraph_spacing: Option<f32>,
+    /// `LEFT`, `CENTER`, `RIGHT`, or `JUSTIFIED`.
+    pub text_align_horizontal: Option<String>,
+    /// `TOP`, `CENTER`, or `BOTTOM`.
+    pub text_align_vertical: Option<String>,
+    /// `WIDTH_AND_HEIGHT`, `HEIGHT`, or `NONE`.
+    pub text_auto_resize: Option<String>,
+    /// `NONE`, `UNDERLINE`, or `STRIKETHROUGH`.
+    pub text_decoration: Option<String>,
+    /// `ORIGINAL`, `UPPER`, `LOWER`, or `TITLE`.
+    pub text_case: Option<String>,
+}
+
+/// A length as the design panel shows it: `PIXELS`, `PERCENT` (of the font
+/// size), or `AUTO` (line height only).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Measure {
+    #[serde(default)]
+    pub value: f32,
+    pub unit: String,
+}
+
+impl Patch {
+    fn text_change(&self) -> Option<crate::text::Change<'_>> {
+        let line_height = self.line_height.as_ref().map(|m| match m.unit.as_str() {
+            "PIXELS" => (m.value, "PIXELS"),
+            "PERCENT" => (m.value / 100.0, "RAW"),
+            _ => (100.0, "PERCENT"),
+        });
+        let letter_spacing = self.letter_spacing.as_ref().map(|m| match m.unit.as_str() {
+            "PERCENT" => (m.value, "PERCENT"),
+            _ => (m.value, "PIXELS"),
+        });
+        let change = crate::text::Change {
+            characters: self.characters.as_deref(),
+            font_family: self.font_family.as_deref(),
+            font_style: self.font_style.as_deref(),
+            font_size: self.font_size,
+            line_height,
+            letter_spacing,
+            paragraph_spacing: self.paragraph_spacing,
+            align_horizontal: self.text_align_horizontal.as_deref(),
+            align_vertical: self.text_align_vertical.as_deref(),
+            auto_resize: self.text_auto_resize.as_deref(),
+            decoration: self.text_decoration.as_deref(),
+            case: self.text_case.as_deref(),
+        };
+        let any = change.characters.is_some()
+            || change.font_family.is_some()
+            || change.font_style.is_some()
+            || change.font_size.is_some()
+            || change.line_height.is_some()
+            || change.letter_spacing.is_some()
+            || change.paragraph_spacing.is_some()
+            || change.align_horizontal.is_some()
+            || change.align_vertical.is_some()
+            || change.auto_resize.is_some()
+            || change.decoration.is_some()
+            || change.case.is_some();
+        any.then_some(change)
+    }
 }
 
 /// A layer to create.
@@ -525,8 +591,31 @@ impl<'a> Txn<'a> {
         if let Some(c) = patch.clip_content {
             self.edit(i, flags::CLIP).clip_disabled = Some(!c);
         }
+        let text = self.doc.props(i).node_type() == NodeType::Text;
+        let mut resized_text = None;
         if patch.width.is_some() || patch.height.is_some() {
+            let before = self.doc.props(i).size();
             self.resize(i, patch.width, patch.height);
+            let after = self.doc.props(i).size();
+            if text && before != after {
+                // Figma: dragging a width fixes it; a height fixes both.
+                let auto = self
+                    .doc
+                    .props(i)
+                    .text_style
+                    .as_ref()
+                    .and_then(|s| s.auto_resize.clone());
+                resized_text = Some(if (after.y - before.y).abs() > 1e-9 {
+                    "NONE"
+                } else if auto.as_deref() == Some("WIDTH_AND_HEIGHT") {
+                    "HEIGHT"
+                } else {
+                    auto.as_deref().map_or("NONE", |a| match a {
+                        "HEIGHT" => "HEIGHT",
+                        _ => "NONE",
+                    })
+                });
+            }
         }
         if let Some(r) = patch.rotation {
             self.set_rotation(i, r);
@@ -534,9 +623,27 @@ impl<'a> Txn<'a> {
         if patch.x.is_some() || patch.y.is_some() {
             self.set_position(i, patch.x, patch.y);
         }
-        if patch.characters.is_some() || patch.font_size.is_some() {
-            crate::text::edit(self.doc, i, patch.characters.as_deref(), patch.font_size)?;
-            self.touch(i).edits |= flags::TEXT | flags::SIZE;
+        if text {
+            let mut change = patch.text_change();
+            if let Some(auto) = resized_text {
+                // Text in a missing font keeps Figma's layout when resized.
+                let family = self
+                    .doc
+                    .props(i)
+                    .text_style
+                    .as_ref()
+                    .and_then(|s| s.font_family.clone());
+                let edited = self.doc.node(i).edits & flags::TEXT != 0;
+                if change.is_some() || edited || family.as_deref().is_none_or(crate::text::has_font)
+                {
+                    let c = change.get_or_insert_with(Default::default);
+                    c.auto_resize = c.auto_resize.or(Some(auto));
+                }
+            }
+            if let Some(change) = change {
+                crate::text::edit(self.doc, i, &change)?;
+                self.touch(i).edits |= flags::TEXT | flags::SIZE;
+            }
         }
         Ok(())
     }
@@ -661,17 +768,14 @@ impl<'a> Txn<'a> {
             .unwrap_or_default()
             .mul(&Affine::translate(spec.x, spec.y));
         self.edit(i, flags::TRANSFORM).transform = Some(local);
-        if node_type == NodeType::Text {
-            crate::text::edit(
-                self.doc,
-                i,
-                Some(spec.props.characters.as_deref().unwrap_or("")),
-                spec.props.font_size.or(Some(12.0)),
-            )?;
-        }
         let mut patch = spec.props.clone();
-        patch.characters = None;
-        patch.font_size = None;
+        if node_type == NodeType::Text {
+            patch.characters.get_or_insert_with(String::new);
+            patch.font_size.get_or_insert(12.0);
+        }
+        // The spec's size is already set; a text box sizes itself.
+        patch.width = None;
+        patch.height = None;
         self.set(i, &patch)?;
         self.created.push(guid.to_string());
         Ok(i)

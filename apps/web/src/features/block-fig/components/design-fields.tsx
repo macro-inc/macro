@@ -8,7 +8,7 @@ import type { PaintInfo } from '@core/fig-engine/types';
 import Eye from '@phosphor/eye.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import Minus from '@phosphor/minus.svg';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { evaluate } from '../core/arith';
 import { formatMeasure } from '../core/measure';
 
@@ -248,6 +248,81 @@ export function PaintEditRow(props: {
       >
         <Minus class="size-3.5" />
       </button>
+    </div>
+  );
+}
+
+/**
+ * A value typed as text and parsed on commit (Enter or blur), such as a
+ * line height that may be `Auto`, a percentage, or pixels.
+ */
+export function ParsedField<T>(props: {
+  label: string | JSX.Element;
+  shown: string;
+  parse: (text: string) => T | null;
+  testId?: string;
+  onChange: (value: T) => void;
+}) {
+  const [draft, setDraft] = createSignal<string>();
+  const commit = () => {
+    const text = draft();
+    setDraft(undefined);
+    if (text === undefined || text === props.shown) return;
+    const v = props.parse(text);
+    if (v !== null) props.onChange(v);
+  };
+  return (
+    <label class="flex min-w-0 items-center gap-2 rounded-md bg-inset px-2 py-1 focus-within:outline focus-within:outline-1 focus-within:outline-accent">
+      <span class="shrink-0 select-none text-ink-muted">{props.label}</span>
+      <input
+        class={inputClass}
+        data-testid={props.testId}
+        value={draft() ?? props.shown}
+        onFocus={(e) => {
+          setDraft(e.currentTarget.value);
+          e.currentTarget.select();
+        }}
+        onInput={(e) => setDraft(e.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') {
+            setDraft(undefined);
+            e.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+/** A row of icon buttons choosing one value, like Figma's alignment. */
+export function ChoiceRow<T extends string>(props: {
+  value: string | null | undefined;
+  options: readonly { value: T; label: string; icon: JSX.Element }[];
+  testId?: string;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div
+      class="flex items-center gap-0.5 rounded-md bg-inset p-0.5"
+      data-testid={props.testId}
+    >
+      <For each={props.options}>
+        {(o) => (
+          <button
+            type="button"
+            aria-label={o.label}
+            title={o.label}
+            aria-pressed={props.value === o.value}
+            class="flex flex-1 items-center justify-center rounded p-1 text-ink-muted hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink"
+            onClick={() => props.onChange(o.value)}
+          >
+            {o.icon}
+          </button>
+        )}
+      </For>
     </div>
   );
 }

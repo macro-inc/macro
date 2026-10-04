@@ -192,3 +192,29 @@ fn saves_added_images() {
         "the image fills the rectangle"
     );
 }
+
+#[test]
+fn saves_text_styles() {
+    let bytes = blank("Type");
+    let mut doc = Document::open(&bytes).unwrap();
+    let created = apply(
+        &mut doc,
+        r#"[{"op":"create","parent":"0:1","node":{"type":"TEXT","x":0,"y":0,"width":1,"height":1,"props":{"characters":"Styled","fontSize":20,"fontStyle":"Semi Bold","lineHeight":{"value":150,"unit":"PERCENT"},"letterSpacing":{"value":2,"unit":"PERCENT"},"textDecoration":"UNDERLINE","textCase":"UPPER","textAlignHorizontal":"CENTER"}}}]"#,
+    );
+    let before = find(&doc, &created[0]).clone();
+    let reopened = Document::open(&save(&doc, &bytes).unwrap()).unwrap();
+    let text = find(&reopened, &created[0]);
+    let style = text.text_style.as_deref().unwrap();
+    assert_eq!(style.font_style.as_deref(), Some("Semi Bold"));
+    assert_eq!(style.line_height, Some((1.5, "RAW".into())));
+    assert_eq!(style.letter_spacing, Some((2.0, "PERCENT".into())));
+    assert_eq!(style.decoration.as_deref(), Some("UNDERLINE"));
+    assert_eq!(style.case.as_deref(), Some("UPPER"));
+    assert_eq!(style.align_horizontal.as_deref(), Some("CENTER"));
+    let layout = text.text_layout.as_deref().unwrap();
+    assert_eq!(
+        layout.decorations,
+        before.text_layout.as_deref().unwrap().decorations
+    );
+    assert_eq!(layout.glyphs.len(), 6);
+}

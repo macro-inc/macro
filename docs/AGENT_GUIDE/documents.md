@@ -494,8 +494,14 @@ Layout and test hooks:
   radius|opacity|font-size|stroke-weight>`; type a value or arithmetic, or
   drag the label to scrub), fills and strokes (`fig-fills`, `fig-strokes`,
   rows `fig-fill-<n>` with a hex input `fig-fill-<n>-hex`, opacity,
-  visibility, and remove; "+" adds), stroke weight and position, font size,
-  clip content (`fig-clip-content`), effects, typography, auto layout, and
+  visibility, and remove; "+" adds), stroke weight and position, clip
+  content (`fig-clip-content`), the Text section for text layers (`fig-type`:
+  family `fig-font-family`, weight `fig-font-weight`, `fig-italic`, size,
+  line height `fig-field-line-height` as `Auto`, a percentage, or pixels,
+  letter spacing `fig-field-letter-spacing`, paragraph spacing, horizontal
+  and vertical alignment, auto width / auto height / fixed size
+  `fig-text-resize`, `fig-underline`, strikethrough, and case
+  `fig-text-case`), effects, auto layout, and
   export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color.

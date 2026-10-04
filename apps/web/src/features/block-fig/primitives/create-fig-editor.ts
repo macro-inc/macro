@@ -13,6 +13,7 @@ import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import type { NodeInfo, Rect } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
 import { type Alignment, alignOffset } from '../core/align';
+import type { Measure } from '../core/type';
 import type { FigViewer, Selected } from './create-fig-viewer';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
@@ -37,6 +38,17 @@ export interface Patch {
   blendMode?: string;
   characters?: string;
   fontSize?: number;
+  fontFamily?: string;
+  /** Figma's style name: `Regular`, `Semi Bold`, `Bold Italic`… */
+  fontStyle?: string;
+  lineHeight?: Measure;
+  letterSpacing?: Measure;
+  paragraphSpacing?: number;
+  textAlignHorizontal?: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFIED';
+  textAlignVertical?: 'TOP' | 'CENTER' | 'BOTTOM';
+  textAutoResize?: 'WIDTH_AND_HEIGHT' | 'HEIGHT' | 'NONE';
+  textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
+  textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE';
 }
 
 /** A paint as the editor sends it: an existing one kept, or a solid. */

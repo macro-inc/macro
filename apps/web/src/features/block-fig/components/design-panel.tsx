@@ -9,6 +9,7 @@ import type {
   NodeInfo,
   PageSummary,
   PaintInfo,
+  TextInfo,
 } from '@core/fig-engine/types';
 import AlignBottom from '@phosphor/align-bottom.svg';
 import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
@@ -24,6 +25,7 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import { cssColor, cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
+import { formatLetterSpacing, formatLineHeight } from '../core/type';
 import type { PaintSpec, Patch } from '../primitives/create-fig-editor';
 import {
   NumberField,
@@ -31,6 +33,7 @@ import {
   paintHex,
   TextField,
 } from './design-fields';
+import { TypeControls } from './type-controls';
 
 function Section(props: {
   title: string;
@@ -234,6 +237,33 @@ function EffectRow(props: { effect: EffectInfo }) {
   );
 }
 
+function TextFields(props: { text: TextInfo }) {
+  const t = () => props.text;
+  return (
+    <>
+      <Field
+        label="Font"
+        value={[t().fontFamily, t().fontStyle].filter(Boolean).join(' ')}
+      />
+      <div class="grid grid-cols-2 gap-1.5">
+        <Show when={t().fontSize}>
+          {(size) => <Field label="Size" value={fmt(size())} />}
+        </Show>
+        <Field label="Line" value={formatLineHeight(t().lineHeight)} />
+        <Show when={t().letterSpacing}>
+          <Field
+            label="Letter"
+            value={formatLetterSpacing(t().letterSpacing)}
+          />
+        </Show>
+        <Show when={t().alignHorizontal}>
+          {(a) => <Field label="Align" value={title(a())} />}
+        </Show>
+      </div>
+    </>
+  );
+}
+
 export function DesignPanel(props: {
   info: NodeInfo | undefined;
   selectionCount: number;
@@ -245,6 +275,8 @@ export function DesignPanel(props: {
   onExport: (scale: number) => void;
   onCopyPng: () => void;
   onCopyText: (text: string) => void;
+  /** Font families text can be set in. */
+  fontFamilies?: readonly string[];
 }) {
   const [tab, setTab] = createSignal<'design' | 'code'>('design');
   return (
@@ -489,63 +521,16 @@ export function DesignPanel(props: {
               <Show when={info().text}>
                 {(t) => (
                   <Section title="Text">
-                    <Field
-                      label="Font"
-                      value={[t().fontFamily, t().fontStyle]
-                        .filter(Boolean)
-                        .join(' ')}
-                    />
-                    <div class="grid grid-cols-2 gap-1.5">
-                      <Show when={t().fontSize}>
-                        {(size) => (
-                          <Show
-                            when={props.onPatch && !info().id.startsWith('I')}
-                            fallback={
-                              <Field label="Size" value={fmt(size())} />
-                            }
-                          >
-                            <NumberField
-                              label="Size"
-                              value={size()}
-                              min={1}
-                              testId="fig-field-font-size"
-                              onChange={(fontSize, live) =>
-                                props.onPatch?.({ fontSize }, live)
-                              }
-                            />
-                          </Show>
-                        )}
-                      </Show>
-                      <Show when={t().lineHeight}>
-                        {(lh) => (
-                          <Field
-                            label="Line"
-                            value={
-                              lh()[1] === 'PERCENT'
-                                ? `${fmt(lh()[0])}%`
-                                : lh()[1] === 'RAW'
-                                  ? 'Auto'
-                                  : fmt(lh()[0])
-                            }
-                          />
-                        )}
-                      </Show>
-                      <Show when={t().letterSpacing}>
-                        {(ls) => (
-                          <Field
-                            label="Letter"
-                            value={
-                              ls()[1] === 'PERCENT'
-                                ? `${fmt(ls()[0])}%`
-                                : fmt(ls()[0])
-                            }
-                          />
-                        )}
-                      </Show>
-                      <Show when={t().alignHorizontal}>
-                        {(a) => <Field label="Align" value={title(a())} />}
-                      </Show>
-                    </div>
+                    <Show
+                      when={props.onPatch && !info().id.startsWith('I')}
+                      fallback={<TextFields text={t()} />}
+                    >
+                      <TypeControls
+                        text={t()}
+                        families={props.fontFamilies ?? ['Inter']}
+                        onPatch={(patch, live) => props.onPatch?.(patch, live)}
+                      />
+                    </Show>
                     <Show when={t().fonts.length > 0}>
                       <span class="text-ink-muted">
                         Also uses {t().fonts.join(', ')}

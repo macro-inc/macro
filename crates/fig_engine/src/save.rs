@@ -43,9 +43,12 @@ enum NumberUnits RAW PIXELS PERCENT
 enum TextAlignHorizontal LEFT CENTER RIGHT JUSTIFIED
 enum TextAlignVertical TOP CENTER BOTTOM
 enum TextAutoResize NONE WIDTH_AND_HEIGHT HEIGHT
+enum TextDecoration NONE UNDERLINE STRIKETHROUGH
+enum TextCase ORIGINAL UPPER LOWER TITLE SMALL_CAPS SMALL_CAPS_FORCED
 struct GUID sessionID:uint localID:uint
 struct Color r:float g:float b:float a:float
 struct Vector x:float y:float
+struct Rect x:float y:float w:float h:float
 struct Matrix m00:float m01:float m02:float m10:float m11:float m12:float
 message ParentIndex guid:GUID position:string
 message Number value:float units:NumberUnits
@@ -57,11 +60,12 @@ message Effect type:EffectType color:Color offset:Vector radius:float visible:bo
 message Path windingRule:WindingRule commandsBlob:uint styleID:uint
 message Glyph commandsBlob:uint position:Vector styleID:uint fontSize:float firstCharacter:uint advance:float
 message Baseline position:Vector width:float lineY:float lineHeight:float lineAscent:float firstCharacter:uint endCharacter:uint
-message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[]
+message Decoration rects:Rect[] styleID:uint
+message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[] decorations:Decoration[]
 message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:NodeChange[]
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -292,6 +296,13 @@ impl<'s> Build<'s> {
         self.list_field(m, field, items);
     }
 
+    fn number(&self, m: &mut Msg, field: &str, (value, units): &(f32, String)) {
+        self.msg_field(m, field, |b, inner| {
+            inner.set(b.schema, "value", Value::Float(*value));
+            b.set_enum(inner, "units", units);
+        });
+    }
+
     fn text(&self, m: &mut Msg, props: &Props) {
         if let Some(content) = &props.text_content {
             let existing = match m.get(self.schema, "textData") {
@@ -314,6 +325,7 @@ impl<'s> Build<'s> {
                         Value::Uints(content.style_ids.as_ref().into()),
                     );
                 }
+                self.style_overrides(&mut t, &content.styles);
                 m.set(self.schema, "textData", Value::Msg(Box::new(t)));
             }
         }
@@ -323,17 +335,45 @@ impl<'s> Build<'s> {
             }
             if let Some(family) = &style.font_family {
                 let font_style = style.font_style.as_deref().unwrap_or("Regular");
-                self.msg_field(m, "fontName", |b, inner| {
-                    inner.set(b.schema, "family", Value::Str(family.as_str().into()));
-                    inner.set(b.schema, "style", Value::Str(font_style.into()));
-                    let ps = format!(
-                        "{}-{}",
-                        family.replace(' ', ""),
-                        font_style.replace(' ', "")
-                    );
-                    inner.set(b.schema, "postscript", Value::Str(ps.into()));
-                });
+                let same = match m.get(self.schema, "fontName") {
+                    Some(Value::Msg(f)) => {
+                        matches!(f.get(self.schema, "family"), Some(Value::Str(s)) if s.as_ref() == family.as_str())
+                            && matches!(f.get(self.schema, "style"), Some(Value::Str(s)) if s.as_ref() == font_style)
+                    }
+                    _ => false,
+                };
+                if !same {
+                    self.msg_field(m, "fontName", |b, inner| {
+                        inner.set(b.schema, "family", Value::Str(family.as_str().into()));
+                        inner.set(b.schema, "style", Value::Str(font_style.into()));
+                        let ps = format!(
+                            "{}-{}",
+                            family.replace(' ', ""),
+                            font_style.replace(' ', "")
+                        );
+                        inner.set(b.schema, "postscript", Value::Str(ps.into()));
+                    });
+                    // Axis values and the font's version belong to the old face.
+                    for f in ["fontVariations", "fontVersion"] {
+                        m.remove(self.schema, f);
+                    }
+                }
             }
+            if let Some(lh) = &style.line_height {
+                self.number(m, "lineHeight", lh);
+            }
+            if let Some(ls) = &style.letter_spacing {
+                self.number(m, "letterSpacing", ls);
+            }
+            if let Some(p) = style.paragraph_spacing {
+                m.set(self.schema, "paragraphSpacing", Value::Float(p));
+            }
+            self.set_enum(
+                m,
+                "textDecoration",
+                style.decoration.as_deref().unwrap_or("NONE"),
+            );
+            self.set_enum(m, "textCase", style.case.as_deref().unwrap_or("ORIGINAL"));
             if let Some(a) = &style.auto_resize {
                 self.set_enum(m, "textAutoResize", a);
             }
@@ -342,6 +382,10 @@ impl<'s> Build<'s> {
             }
             if let Some(a) = &style.align_vertical {
                 self.set_enum(m, "textAlignVertical", a);
+            }
+            // The text no longer follows a shared text style.
+            for f in ["styleIdForText", "inheritTextStyleKey"] {
+                m.remove(self.schema, f);
             }
         }
         if let Some(layout) = &props.text_layout
@@ -376,8 +420,73 @@ impl<'s> Build<'s> {
                     .collect();
                 self.list_field(&mut d, "glyphs", glyphs);
             }
+            if !layout.decorations.is_empty()
+                && let Some(ddef) = self.sub(def, "decorations")
+                && let Some(rdef) = self.sub(ddef, "rects")
+            {
+                let decorations = layout
+                    .decorations
+                    .iter()
+                    .map(|deco| {
+                        let mut dm = Msg::new(ddef);
+                        let rects = deco
+                            .rects
+                            .iter()
+                            .map(|r| {
+                                let mut rm = Msg::new(rdef);
+                                for (k, v) in ["x", "y", "w", "h"].into_iter().zip(r) {
+                                    rm.set(self.schema, k, Value::Float(*v));
+                                }
+                                Value::Msg(Box::new(rm))
+                            })
+                            .collect();
+                        dm.set(self.schema, "rects", Value::List(rects));
+                        dm.set(self.schema, "styleID", Value::Uint(deco.style_id));
+                        Value::Msg(Box::new(dm))
+                    })
+                    .collect();
+                self.list_field(&mut d, "decorations", decorations);
+            }
             m.set(self.schema, "derivedTextData", Value::Msg(Box::new(d)));
         }
+    }
+
+    /// Drops the properties an edit took over from the per-character style
+    /// table (the node's own style now applies).
+    fn style_overrides(&self, t: &mut Msg, runs: &[crate::model::StyleRun]) {
+        let Some(Value::List(entries)) = t.get(self.schema, "styleOverrideTable").cloned() else {
+            return;
+        };
+        let entries = entries
+            .into_iter()
+            .map(|e| {
+                let Value::Msg(mut e) = e else { return e };
+                let id = match e.get(self.schema, "styleID") {
+                    Some(Value::Uint(id)) => Some(*id),
+                    _ => None,
+                };
+                if let Some(run) = id.and_then(|id| runs.iter().find(|r| r.id == id)) {
+                    let mut drop = Vec::new();
+                    if run.font_size.is_none() {
+                        drop.push("fontSize");
+                    }
+                    if run.font_family.is_none() && run.font_style.is_none() {
+                        drop.extend(["fontName", "fontVariations", "fontVersion"]);
+                    }
+                    if run.decoration.is_none() {
+                        drop.push("textDecoration");
+                    }
+                    if run.fills.is_none() {
+                        drop.extend(["fillPaints", "styleIdForFill"]);
+                    }
+                    for f in drop {
+                        e.remove(self.schema, f);
+                    }
+                }
+                Value::Msg(e)
+            })
+            .collect();
+        t.set(self.schema, "styleOverrideTable", Value::List(entries));
     }
 
     /// Rewrites the fields of `m` that `edits` names, from `node`.

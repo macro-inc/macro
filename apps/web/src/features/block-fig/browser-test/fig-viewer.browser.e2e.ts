@@ -269,6 +269,36 @@ test('types text and keeps it after saving', async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
+test('styles text from the design panel', async ({ page }) => {
+  await openNew(page);
+  await page.getByTestId('fig-canvas').focus();
+  await page.keyboard.press('t');
+  const box = await page.getByTestId('fig-canvas').boundingBox();
+  if (!box) throw new Error('The canvas is not visible.');
+  await page.mouse.click(box.x + 120, box.y + 120);
+  await expect(page.getByTestId('fig-text-editor')).toBeFocused();
+  await page.keyboard.type('Type');
+  await page.keyboard.press('Escape');
+  const width = page.getByTestId('fig-field-w');
+  const regular = Number(await width.inputValue());
+  await page.getByTestId('fig-font-weight').selectOption('700');
+  await expect
+    .poll(async () => Number(await width.inputValue()))
+    .toBeGreaterThan(regular);
+  const lineHeight = page.getByTestId('fig-field-line-height');
+  await expect(lineHeight).toHaveValue('Auto');
+  await lineHeight.fill('200%');
+  await lineHeight.press('Enter');
+  await expect(page.getByTestId('fig-field-h')).toHaveValue('24');
+  await page.getByTestId('fig-underline').click();
+  await expect(page.getByTestId('fig-underline')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await page.getByTestId('fig-text-case').selectOption('UPPER');
+  await expect(page.getByTestId('fig-text-content')).toHaveText('Type');
+});
+
 test('adds and renames pages', async ({ page }) => {
   await openNew(page);
   await page.getByTestId('fig-page-add').click();

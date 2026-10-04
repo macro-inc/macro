@@ -11,27 +11,18 @@
 import type { FigEngine } from '@core/fig-engine/client';
 import type { NodeInfo } from '@core/fig-engine/types';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import { cssLineHeight, parseStyle } from '../core/type';
 import type { FigEditor } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
 
 let session = 0;
 
-function weight(style: string | null | undefined): number {
-  const s = (style ?? '').toLowerCase().replace(/[\s-]/g, '');
-  if (s.includes('thin')) return 100;
-  if (s.includes('extralight') || s.includes('ultralight')) return 200;
-  if (s.includes('light')) return 300;
-  if (s.includes('medium')) return 500;
-  if (s.includes('semibold') || s.includes('demibold')) return 600;
-  if (s.includes('extrabold') || s.includes('ultrabold')) return 800;
-  if (s.includes('black') || s.includes('heavy')) return 900;
-  if (s.includes('bold')) return 700;
-  return 400;
-}
-
-function textAlign(a: string | null | undefined): 'left' | 'center' | 'right' {
+function textAlign(
+  a: string | null | undefined
+): 'left' | 'center' | 'right' | 'justify' {
   if (a === 'CENTER') return 'center';
   if (a === 'RIGHT') return 'right';
+  if (a === 'JUSTIFIED') return 'justify';
   return 'left';
 }
 
@@ -66,7 +57,7 @@ export function TextEditor(props: {
     }
     latest = i.text?.characters ?? '';
     area.value = latest;
-    area.focus();
+    area.focus({ preventScroll: true });
     area.select();
   });
 
@@ -108,13 +99,14 @@ export function TextEditor(props: {
     const c = props.viewer.camera();
     const t = i.text;
     const size = (t?.fontSize ?? 12) * c.zoom;
-    const lh = t?.lineHeight;
-    const lineHeight =
-      lh && lh[1] === 'PIXELS'
-        ? `${lh[0] * c.zoom}px`
-        : lh && lh[1] === 'PERCENT'
-          ? `${lh[0]}%`
-          : 'normal';
+    const lineHeight = cssLineHeight(t?.lineHeight ?? null, c.zoom);
+    const ls = t?.letterSpacing;
+    const letterSpacing = ls
+      ? ls[1] === 'PERCENT'
+        ? `${ls[0] / 100}em`
+        : `${ls[0] * c.zoom}px`
+      : 'normal';
+    const { weight, italic } = parseStyle(t?.fontStyle);
     const autoWidth = t?.autoResize === 'WIDTH_AND_HEIGHT';
     return {
       left: `${(i.bounds.x - c.x) * c.zoom}px`,
@@ -124,7 +116,17 @@ export function TextEditor(props: {
       height: `${Math.max(i.bounds.h * c.zoom, size * 1.3) + size * 1.3}px`,
       'font-family': `"${t?.fontFamily ?? 'Inter'}", "Inter Variable", Inter, sans-serif`,
       'font-size': `${size}px`,
-      'font-weight': String(weight(t?.fontStyle)),
+      'font-weight': String(weight),
+      'font-style': italic ? 'italic' : 'normal',
+      'letter-spacing': letterSpacing,
+      'text-transform':
+        t?.case === 'UPPER'
+          ? 'uppercase'
+          : t?.case === 'LOWER'
+            ? 'lowercase'
+            : t?.case === 'TITLE'
+              ? 'capitalize'
+              : 'none',
       'line-height': lineHeight,
       'text-align': textAlign(t?.alignHorizontal),
       'white-space': autoWidth ? 'pre' : 'pre-wrap',
