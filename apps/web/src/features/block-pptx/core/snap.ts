@@ -44,20 +44,20 @@ function nearest(values: number[], candidates: number[], threshold: number) {
 }
 
 /**
- * Where `moving` (already offset by the drag) snaps among `others` and the
- * slide. `threshold` is in points (a few screen pixels).
- */
-/**
- * Snaps a moved box: to smart guides within `threshold` (unless `guides` is
- * off), else, with a `grid` spacing, its top-left corner to the grid, as
- * PowerPoint's Snap objects to grid does.
+ * Snaps a moved box (already offset by the drag): its edges and center to
+ * smart guides (the slide's and `others`' edges and centers, unless
+ * `guides` is off) and to the drawing guides shown on the slide
+ * (`drawingGuides`, View ▸ Guides) within `threshold` points; else, with a
+ * `grid` spacing, its top-left corner to the grid, as PowerPoint's Snap
+ * objects to grid does. Only smart guides are reported for display: drawing
+ * guides are already on screen.
  */
 export function snapMove(
   moving: Rect,
   others: Rect[],
   slide: { w: number; h: number },
   threshold: number,
-  options: { grid?: number; guides?: boolean } = {}
+  options: { grid?: number; guides?: boolean; drawingGuides?: Guides } = {}
 ): Snap {
   const smart = options.guides ?? true;
   const xCandidates = smart
@@ -66,8 +66,17 @@ export function snapMove(
   const yCandidates = smart
     ? [...stops(0, slide.h), ...others.flatMap((o) => stops(o.y, o.h))]
     : [];
-  const x = nearest(stops(moving.x, moving.w), xCandidates, threshold);
-  const y = nearest(stops(moving.y, moving.h), yCandidates, threshold);
+  const drawn = options.drawingGuides ?? { xs: [], ys: [] };
+  const x = nearest(
+    stops(moving.x, moving.w),
+    [...xCandidates, ...drawn.xs],
+    threshold
+  );
+  const y = nearest(
+    stops(moving.y, moving.h),
+    [...yCandidates, ...drawn.ys],
+    threshold
+  );
   const grid = options.grid && options.grid > 0 ? options.grid : undefined;
   const toGrid = (v: number) => (grid ? Math.round(v / grid) * grid - v : 0);
   const dx = x?.delta ?? toGrid(moving.x);

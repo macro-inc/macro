@@ -28,6 +28,7 @@ import { swatchCss } from '../../core/palette';
 import { GRID_SPACINGS } from '../../core/rulers';
 import { unionBounds } from '../../core/selection';
 import { COLOR_SETS, type ColorSet, FONT_PAIRS } from '../../core/themes';
+import { GuidesIcon } from '../guides';
 import {
   ColorPicker,
   NumberField,
@@ -359,6 +360,17 @@ export function ViewTab() {
           <GridFour />
           Gridlines
         </RibbonTextButton>
+        <RibbonTextButton
+          label="Guides"
+          tooltip="Guides (⌥F9)"
+          aria-pressed={view().drawingGuides}
+          variant={view().drawingGuides ? 'accent' : 'ghost'}
+          data-testid="pptx-view-guides"
+          onClick={() => env.view.set({ drawingGuides: !view().drawingGuides })}
+        >
+          <GuidesIcon />
+          Guides
+        </RibbonTextButton>
         <RibbonPopover
           label="Grid settings"
           icon={<GearSix />}
@@ -407,6 +419,17 @@ export function ViewTab() {
                 Display grid on screen
               </label>
               <PopoverLabel>Guide settings</PopoverLabel>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={view().drawingGuides}
+                  data-testid="pptx-view-drawing-guides"
+                  onChange={(e) =>
+                    env.view.set({ drawingGuides: e.currentTarget.checked })
+                  }
+                />
+                Display drawing guides on screen
+              </label>
               <label class="flex items-center gap-2">
                 <input
                   type="checkbox"

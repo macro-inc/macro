@@ -24,6 +24,7 @@ import {
   RibbonTextButton,
 } from './controls';
 import { useRibbon } from './ribbon';
+import { TextDirectionMenu } from './text-direction';
 
 const BORDER_EDGES: [string, string][] = [
   ['all', 'All borders'],
@@ -477,6 +478,13 @@ export function TableLayoutTab(props: TableTabProps) {
         >
           <AlignBottom />
         </RibbonButton>
+        <TextDirectionMenu
+          current={c.textDirection()}
+          disabled={ro()}
+          testId="pptx-cell-text-direction"
+          onPick={(direction) => void c.setTextDirection(direction)}
+          onMore={() => env.openFormatPane('text')}
+        />
       </RibbonGroup>
     </>
   );

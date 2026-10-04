@@ -4,6 +4,7 @@
  * background.
  */
 
+import type { TextDirection } from '@core/pptx-engine/types';
 import { Popover } from '@kobalte/core/popover';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
@@ -11,6 +12,7 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 import { boxOf } from '../core/geometry';
 import { swatchCss } from '../core/palette';
 import { unionBounds } from '../core/selection';
+import { directionChoices } from '../core/text-direction';
 import { EffectsPaneSections, PicturePaneSections } from './effects-pane';
 import { ColorPicker, NumberField } from './ribbon/controls';
 import type { RibbonEnv } from './ribbon/ribbon';
@@ -92,10 +94,12 @@ function Select(props: {
   options: [string, string][];
   onChange: (value: string) => void;
   disabled?: boolean;
+  testId?: string;
 }) {
   return (
     <select
       aria-label={props.label}
+      data-testid={props.testId}
       class="h-7 rounded-md border border-edge-muted bg-input px-1 text-ink text-xs"
       disabled={props.disabled}
       value={props.value ?? ''}
@@ -579,6 +583,19 @@ export function FormatPane(props: {
         </Show>
         <Show when={props.section === 'text' && shapes().length > 0}>
           <Section title="Text box">
+            <Row label="Text direction">
+              <Select
+                label="Text direction"
+                value={c.textDirection()}
+                disabled={ro()}
+                testId="pptx-pane-text-direction"
+                options={directionChoices(c.textDirection()).map((d) => [
+                  d.value,
+                  d.label,
+                ])}
+                onChange={(d) => void c.setTextDirection(d as TextDirection)}
+              />
+            </Row>
             <Row label="Vertical alignment">
               <Select
                 label="Vertical alignment"

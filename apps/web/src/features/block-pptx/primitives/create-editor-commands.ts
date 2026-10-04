@@ -23,6 +23,7 @@ import type {
   RunPatch,
   ShapeOutline,
   SlideOutline,
+  TextDirection,
   TextPos,
   TransitionPatch,
 } from '@core/pptx-engine/types';
@@ -334,6 +335,23 @@ export function createEditorCommands(options: EditorCommandsOptions) {
         }))
     );
   };
+
+  /** The text direction Text Direction shows: the edited or first target's. */
+  const textDirection = (): TextDirection => {
+    const edit = editor.editing();
+    const t = options.tableTarget();
+    if (t && (!edit || edit.cell))
+      return (
+        t.shape.table?.cells?.[t.from.row]?.[t.from.col]?.textDirection ??
+        'horz'
+      );
+    const shape = edit
+      ? editor.findShape(edit.shape)
+      : editor.selection().find((s) => s.textEditable);
+    return shape?.textDirection ?? 'horz';
+  };
+  /** Home ▸ Text Direction (and the table Layout tab's) for the targets. */
+  const setTextDirection = (direction: TextDirection) => body({ direction });
 
   // ---- shapes ----------------------------------------------------------------
 
@@ -1463,6 +1481,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     lineSpacing,
     spacing,
     body,
+    textDirection,
+    setTextDirection,
     targets,
     setFill,
     fillColor,

@@ -27,6 +27,7 @@ import Columns from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import CopySimple from '@phosphor/copy-simple.svg';
 import CropIcon from '@phosphor/crop.svg';
+import GridFour from '@phosphor/grid-four.svg';
 import ImageIcon from '@phosphor/image.svg';
 import ImageSquare from '@phosphor/image-square.svg';
 import LinkIcon from '@phosphor/link.svg';
@@ -54,7 +55,23 @@ export type MenuTarget =
   | { kind: 'shapes' }
   | { kind: 'text' }
   | { kind: 'table' }
-  | { kind: 'chart' };
+  | { kind: 'chart' }
+  /** A drawing guide (by index among the deck's guides). */
+  | { kind: 'guide'; index: number };
+
+/** View ▸ Guides and grid choices, and editing the deck's guides. */
+export interface GuideMenuActions {
+  /** Whether drawing guides show. */
+  shown: boolean;
+  toggle: () => void;
+  gridlines: boolean;
+  toggleGridlines: () => void;
+  smartGuides: boolean;
+  toggleSmartGuides: () => void;
+  add: (orient: 'vertical' | 'horizontal') => void;
+  remove: (index: number) => void;
+  recolor: (index: number, color: string) => void;
+}
 
 export interface StageMenuActions {
   commands: EditorCommands;
@@ -94,6 +111,46 @@ export interface StageMenuActions {
   /** Follows a link (opens a web address, goes to a slide). */
   openLink: (link: string) => void;
   removeLink: () => void;
+  /** Grid and Guides (the empty slide's menu) and a guide's own menu. */
+  guides?: GuideMenuActions;
+}
+
+/** PowerPoint's Grid and Guides submenu of the slide's menu. */
+function GridAndGuides(props: {
+  actions: GuideMenuActions;
+  readonly: boolean;
+}) {
+  return (
+    <Sub text="Grid and Guides" icon={<GridFour class="size-4" />}>
+      <MenuItem
+        text="Guides"
+        icon={props.actions.shown ? CheckIcon : undefined}
+        shortcut="opt+f9"
+        onClick={props.actions.toggle}
+      />
+      <MenuItem
+        text="Gridlines"
+        icon={props.actions.gridlines ? CheckIcon : undefined}
+        onClick={props.actions.toggleGridlines}
+      />
+      <MenuItem
+        text="Smart Guides"
+        icon={props.actions.smartGuides ? CheckIcon : undefined}
+        onClick={props.actions.toggleSmartGuides}
+      />
+      <MenuSeparator />
+      <MenuItem
+        text="Add Vertical Guide"
+        disabled={props.readonly}
+        onClick={() => props.actions.add('vertical')}
+      />
+      <MenuItem
+        text="Add Horizontal Guide"
+        disabled={props.readonly}
+        onClick={() => props.actions.add('horizontal')}
+      />
+    </Sub>
+  );
 }
 
 /** Link…, or Edit/Open/Copy/Remove Link for something linked. */
@@ -388,12 +445,51 @@ export function StageMenuItems(props: {
           onClick={a().hideSlide}
         />
         <MenuSeparator />
+        <Show when={a().guides}>
+          {(actions) => <GridAndGuides actions={actions()} readonly={ro()} />}
+        </Show>
         <MenuItem
           text="Format background…"
           icon={PaintBucket}
           disabled={ro()}
           onClick={() => a().openFormatPane('background')}
         />
+      </Match>
+      <Match
+        when={
+          props.target.kind === 'guide' && a().guides
+            ? { actions: a().guides!, index: props.target.index }
+            : undefined
+        }
+      >
+        {(guide) => (
+          <>
+            <MenuItem
+              text="Add Vertical Guide"
+              disabled={ro()}
+              onClick={() => guide().actions.add('vertical')}
+            />
+            <MenuItem
+              text="Add Horizontal Guide"
+              disabled={ro()}
+              onClick={() => guide().actions.add('horizontal')}
+            />
+            <MenuSeparator />
+            <ColorSub
+              text="Color"
+              icon={<PaintBucket class="size-4" />}
+              swatches={a().swatches}
+              disabled={ro()}
+              onPick={(v) => v && guide().actions.recolor(guide().index, v)}
+            />
+            <MenuItem
+              text="Delete"
+              icon={Trash}
+              disabled={ro()}
+              onClick={() => guide().actions.remove(guide().index)}
+            />
+          </>
+        )}
       </Match>
       <Match when={props.target.kind === 'text'}>
         <ClipboardItems a={a()} />

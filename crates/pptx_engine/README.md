@@ -41,14 +41,15 @@ operation fails, the presentation is left exactly as it was. `Editor` adds
 undo/redo (snapshots of the immutable part maps are cheap) and merges typing
 into one undo step per group. Slides are addressed by their stable
 `p:sldId/@id`, shapes by `p:cNvPr/@id`, positions in points. Operations cover
-text (set, insert, delete, run and paragraph formatting, body properties,
-text shadow and glow), shapes (transform, fill, outline, geometry, add,
+text (set, insert, delete, run and paragraph formatting, body properties
+including every vertical text direction, text shadow and glow), shapes (transform, fill, outline, geometry, add,
 delete, duplicate, z-order, picture replacement, and the shadow, glow, soft
 edge, and reflection galleries of Shape Effects), pictures (crop keeping the
 image in place, crop to fill or fit the frame, brightness, contrast,
 recolor, transparency), tables (cell text, rows, columns), slides (add from a
 layout, duplicate, delete, move, hide, notes, background), charts (data,
-type, title, legend, data labels, series colors, new charts), and animations.
+type, title, legend, data labels, series colors, new charts), animations,
+and the deck's drawing guides (`p15:sldGuideLst`).
 The same JSON
 vocabulary is used by the browser editor and by the `EditPresentation` AI
 tool; with the `schema` feature the operations derive JSON Schemas.

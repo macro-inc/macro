@@ -27,6 +27,7 @@ import {
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import {
   lineEdge,
+  logicalArrow,
   moveHorizontal,
   moveVertical,
   moveWord,
@@ -122,8 +123,11 @@ export interface SlideEditorOptions {
   renderWidth: Accessor<number>;
   /** Slide points per screen pixel, for drag thresholds. */
   pointsPerPixel: Accessor<number>;
-  /** Smart guides, and the grid spacing moves snap to (View ▸ Grid). */
-  snap?: Accessor<{ guides: boolean; grid?: number }>;
+  /**
+   * Smart guides, the grid spacing moves snap to (View ▸ Grid), and the
+   * drawing guides shown (View ▸ Guides).
+   */
+  snap?: Accessor<{ guides: boolean; grid?: number; drawingGuides?: Guides }>;
 }
 
 const DRAG_THRESHOLD_PX = 3;
@@ -467,7 +471,9 @@ export function createSlideEditor(options: SlideEditorOptions) {
         !opts.alt &&
         deck &&
         bounds &&
-        (snapping.guides || snapping.grid !== undefined)
+        (snapping.guides ||
+          snapping.grid !== undefined ||
+          snapping.drawingGuides !== undefined)
       ) {
         const moving = new Set(d.shapes.map((x) => x.id));
         const others = shapes()
@@ -863,13 +869,17 @@ export function createSlideEditor(options: SlideEditorOptions) {
 
   /** Arrow/Home/End handling. */
   async function moveCaret(
-    key: 'left' | 'right' | 'up' | 'down' | 'home' | 'end',
+    pressed: 'left' | 'right' | 'up' | 'down' | 'home' | 'end',
     opts: { extend: boolean; word: boolean; line: boolean }
   ) {
     await editReady;
     const edit = editing();
     if (!edit?.layout) return;
     const { layout, selection } = edit;
+    const key =
+      pressed === 'home' || pressed === 'end'
+        ? pressed
+        : logicalArrow(layout, pressed);
     const collapsedMove =
       !opts.extend &&
       !isCollapsed(selection) &&

@@ -60,6 +60,7 @@ import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { ExportDialog } from '../components/export-dialog';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
+import { GuidesOverlay } from '../components/guides';
 import { LinkDialog } from '../components/link-dialog';
 import { MediaPlayButton, MediaPlayer } from '../components/media-player';
 import { NotesPanel } from '../components/notes-panel';
@@ -101,7 +102,13 @@ import {
 import { usePptxEditorContext } from '../context/pptx-editor-context';
 import { caretSegment, positionAt, selectionQuads } from '../core/caret';
 import { baseName } from '../core/export-images';
-import { type Box, boxOf, hitTest, type Point } from '../core/geometry';
+import {
+  type Box,
+  boxContains,
+  boxOf,
+  hitTest,
+  type Point,
+} from '../core/geometry';
 import { linkAction, linkAt } from '../core/links';
 import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
 import { unionBounds } from '../core/selection';
@@ -124,6 +131,7 @@ import {
   type LinkTarget,
 } from '../primitives/create-editor-commands';
 import { createFormatPainter } from '../primitives/create-format-painter';
+import { createGuides } from '../primitives/create-guides';
 import { createMediaUrls } from '../primitives/create-media-urls';
 import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
@@ -244,6 +252,16 @@ export function PptxEditor() {
   const unit = () => 1 / Math.max(scale(), 0.01);
 
   const view = createViewOptions();
+  /** View ▸ Guides: the deck's drawing guides over the slide. */
+  const guides = createGuides({
+    guides: () => session.outline()?.guides ?? [],
+    layoutGuides: () => session.currentSlide()?.layoutGuides ?? [],
+    slide: () => ({ w: slideW(), h: slideH() }),
+    visible: () => view.options().drawingGuides,
+    setVisible: (on) => view.set({ drawingGuides: on }),
+    canEdit: context.canEdit,
+    apply: (list) => session.apply([{ op: 'setGuides', guides: list }]),
+  });
   const editor = createSlideEditor({
     engine,
     session,
@@ -254,6 +272,7 @@ export function PptxEditor() {
     snap: () => ({
       guides: view.options().guides,
       grid: view.options().snapToGrid ? view.options().gridSpacing : undefined,
+      drawingGuides: guides.snapLines(),
     }),
   });
 
@@ -572,6 +591,37 @@ export function PptxEditor() {
     return { shape: hit, g, cell };
   };
 
+  // ---- guides ----------------------------------------------------------------
+
+  /**
+   * The deck guide under the pointer (3 px), unless a selected shape or the
+   * text being edited is there: those keep the click.
+   */
+  const guideUnder = (at: Point): number | undefined => {
+    if (crop.active()) return undefined;
+    const index = guides.hit(at, 3 * unit());
+    if (index === undefined) return undefined;
+    const edit = editor.editing();
+    const shapeEdited = edit && editor.findShape(edit.shape);
+    const edited = edit?.bounds ?? (shapeEdited && boxOf(shapeEdited));
+    if (edited && boxContains(edited, at)) return undefined;
+    const shape = hitTest(session.currentSlide()?.shapes ?? [], at, 0);
+    if (shape && editor.selectedIds().includes(shape.id)) return undefined;
+    return index;
+  };
+  /** The orientation of the guide under the pointer (for its cursor). */
+  const [guideHover, setGuideHover] = createSignal<
+    'horizontal' | 'vertical' | undefined
+  >();
+  const guideCursor = () => {
+    const orient = guides.drag()?.orient ?? guideHover();
+    return orient === 'vertical'
+      ? 'col-resize'
+      : orient === 'horizontal'
+        ? 'row-resize'
+        : undefined;
+  };
+
   // ---- pointer ---------------------------------------------------------------
 
   const onPointerDown = (e: PointerEvent) => {
@@ -590,6 +640,16 @@ export function PptxEditor() {
     const toggle = e.metaKey || e.ctrlKey;
     // A click on the slide stops a clip playing over it.
     setPlaying(undefined);
+    const guide = guideUnder(at);
+    if (guide !== undefined) {
+      // A click outside the text being edited ends editing; Ctrl+drag
+      // copies the guide, as in PowerPoint.
+      if (editor.editing()) editor.stopEditing();
+      guides.begin(guide, at, toggle);
+      e.preventDefault();
+      focusStage();
+      return;
+    }
     // Ctrl+click follows a link in the text being edited, as in PowerPoint.
     const editLayout = editor.editing()?.layout;
     if (toggle && editLayout) {
@@ -687,8 +747,20 @@ export function PptxEditor() {
   };
 
   const onPointerMove = (e: PointerEvent) => {
-    if (!stage.hasPointerCapture(e.pointerId)) return;
     const at = toSlide(e);
+    if (!stage.hasPointerCapture(e.pointerId)) {
+      const index = painter.active() ? undefined : guideUnder(at);
+      setGuideHover(
+        index === undefined
+          ? undefined
+          : session.outline()?.guides?.[index]?.orient
+      );
+      return;
+    }
+    if (guides.drag()) {
+      guides.move(at, { copy: e.ctrlKey || e.metaKey, free: e.altKey });
+      return;
+    }
     const g = tableGesture;
     if (g?.kind === 'border') {
       g.current = at;
@@ -715,6 +787,10 @@ export function PptxEditor() {
   const onPointerUp = (e: PointerEvent) => {
     if (stage.hasPointerCapture(e.pointerId))
       stage.releasePointerCapture(e.pointerId);
+    if (guides.drag()) {
+      void guides.end();
+      return;
+    }
     const g = tableGesture;
     tableGesture = null;
     if (g?.kind === 'border') {
@@ -759,6 +835,11 @@ export function PptxEditor() {
   /** Selects what was right-clicked (keeping a selection it is part of). */
   const onContextMenu = (e: MouseEvent) => {
     const at = toSlide(e);
+    const guide = guideUnder(at);
+    if (guide !== undefined) {
+      setMenuTarget({ kind: 'guide', index: guide });
+      return;
+    }
     const edit = editor.editing();
     if (edit) {
       const shape = editor.findShape(edit.shape);
@@ -828,6 +909,10 @@ export function PptxEditor() {
     const mod = isMod(e);
     if (e.key === 'F5') {
       present(e.shiftKey, e.altKey);
+      return true;
+    }
+    if (e.key === 'F9' && e.altKey) {
+      view.set({ drawingGuides: !view.options().drawingGuides });
       return true;
     }
     if (e.key === 'F10' && e.altKey) {
@@ -1952,13 +2037,16 @@ export function PptxEditor() {
                             !!editor.editing() && !painter.active(),
                         }}
                         style={{
-                          cursor: painter.active() ? PAINT_CURSOR : undefined,
+                          cursor: painter.active()
+                            ? PAINT_CURSOR
+                            : guideCursor(),
                         }}
                         data-format-painter={painter.active() || undefined}
                         onPointerDown={onPointerDown}
                         onPointerMove={onPointerMove}
                         onPointerUp={onPointerUp}
                         onPointerCancel={() => {
+                          guides.cancel();
                           tableGesture = null;
                           setBorderGuide(null);
                           editor.cancelDrag();
@@ -2116,6 +2204,26 @@ export function PptxEditor() {
                               link: menuLink(),
                               editLink: () => void openLinkDialog(),
                               openLink: followLink,
+                              guides: {
+                                shown: view.options().drawingGuides,
+                                toggle: () =>
+                                  view.set({
+                                    drawingGuides:
+                                      !view.options().drawingGuides,
+                                  }),
+                                gridlines: view.options().gridlines,
+                                toggleGridlines: () =>
+                                  view.set({
+                                    gridlines: !view.options().gridlines,
+                                  }),
+                                smartGuides: view.options().guides,
+                                toggleSmartGuides: () =>
+                                  view.set({ guides: !view.options().guides }),
+                                add: (orient) => void guides.add(orient),
+                                remove: (index) => void guides.remove(index),
+                                recolor: (index, color) =>
+                                  void guides.recolor(index, color),
+                              },
                               removeLink: () => {
                                 const target = commands.linkTarget();
                                 if (target) void commands.applyLink(target, '');
@@ -2125,6 +2233,19 @@ export function PptxEditor() {
                         </ContextMenuContent>
                       </ContextMenu.Portal>
                     </ContextMenu>
+                    <Show when={view.options().drawingGuides}>
+                      <GuidesOverlay
+                        width={slideW()}
+                        height={slideH()}
+                        scale={scale()}
+                        guides={session.outline()?.guides ?? []}
+                        layoutGuides={
+                          session.currentSlide()?.layoutGuides ?? []
+                        }
+                        drag={guides.drag()}
+                        themeColors={themeColors()}
+                      />
+                    </Show>
                     <Show when={view.options().gridlines}>
                       <Gridlines
                         width={slideW()}

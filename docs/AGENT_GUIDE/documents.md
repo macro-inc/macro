@@ -382,7 +382,10 @@ Layout and test hooks:
   (`pptx-char-spacing`: Very Tight to Very Loose as
   `pptx-char-spacing-<points>`, or More spacing `pptx-char-spacing-custom`),
   bullets and numbering, list
-  levels, line spacing, alignment, the shape gallery (`pptx-insert-shape`,
+  levels, line spacing, alignment, Text Direction (`pptx-text-direction`:
+  Horizontal, Rotate all text 90°, Rotate all text 270°, and Stacked as
+  `pptx-text-direction-<horz|vert|vert270|wordArtVert>`, More Options…
+  `pptx-text-direction-more`), the shape gallery (`pptx-insert-shape`,
   then `pptx-shape-<preset>`), Arrange (`pptx-arrange`), Shape fill
   (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table
   grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
@@ -471,13 +474,18 @@ Layout and test hooks:
   typing) starts editing; keystrokes go to a hidden textarea
   (`pptx-text-input`, "Slide text"). The caret is `pptx-caret`, an SVG line of
   zero width, so assert it with `toBeAttached()`, not `toBeVisible()`. Escape
-  stops editing.
+  stops editing. Vertical text (Text Direction) is edited in place too: the
+  caret lies across the rotated line, and arrow keys follow the screen (in
+  text rotated 90°, Down is the next character and Left the next line).
+  Turning a text box that resizes to fit its text swaps its width and height.
 - **Tables**: click a cell to type in it in place (same caret); Tab and
   Shift+Tab move between cells (Tab in the last cell adds a row); drag across
   cells to select a range (`pptx-cell-range`), which the Table Design/Layout
   tabs and the table menu act on (merge/split, shading `pptx-cell-shading`,
   borders `pptx-cell-borders`, styles `pptx-table-styles`, insert/delete rows
-  and columns, distribute, alignment). Drag a column or row border of a
+  and columns, distribute, alignment, and Text Direction
+  `pptx-cell-text-direction`, items `pptx-cell-text-direction-<value>`; a
+  vertical cell's row grows to its text). Drag a column or row border of a
   selected table to resize it; drag near the frame's edge to move the table.
 - **Charts**: double-click a chart, or **Edit data** (`pptx-chart-edit-data`)
   on Chart Design, opens the data grid (`pptx-chart-data`, cells
@@ -523,7 +531,8 @@ Layout and test hooks:
   and flipped pictures crop in place too.
 - **Format pane** (`pptx-format-pane`): Format shape… in menus opens fill and
   line, size and position (with alt text `pptx-alt-text`), and text box and
-  paragraph settings; Format background… opens the slide background. Its
+  paragraph settings (Text box's Text direction select is
+  `pptx-pane-text-direction`); Format background… opens the slide background. Its
   tabs (`pptx-pane-tab-<shape|effects|size|picture|text>`) include
   **Effects** (shadow, reflection, glow, and soft edge presets and values,
   such as `pptx-pane-shadow-blur` and `pptx-pane-glow-size`) and, for
@@ -563,9 +572,25 @@ Layout and test hooks:
   (`pptx-view-gridlines`, drawn as `pptx-gridlines`), and Grid settings
   (`pptx-view-grid-settings`: Snap objects to grid `pptx-view-snap-grid`,
   spacing `pptx-view-grid-spacing` in points, and smart guides
-  `pptx-view-smart-guides`). Snapping moves the dragged box's top-left corner
+  `pptx-view-smart-guides`, and Display drawing guides
+  `pptx-view-drawing-guides`). Snapping moves the dragged box's top-left corner
   to the grid where no smart guide is within reach; Alt-drag snaps to
   nothing. These choices are remembered in the browser.
+- **Guides** (View ▸ Show ▸ Guides `pptx-view-guides`, or Alt+F9) draw the
+  deck's drawing guides as dashed lines over every slide (`pptx-guides`, one
+  `pptx-guide` line per guide with `data-orient` and `data-position` in
+  points; layout and master guides are `pptx-layout-guide` and do not move).
+  Dragging a guide moves it in 1/24" steps (Alt: freely) with a tooltip of its
+  distance from the slide's center in inches (`pptx-guide-tooltip`, such as
+  `← 2.50`); Ctrl+drag copies it; dragging it off the slide deletes it. A
+  selected shape or the text being edited keeps clicks over a guide.
+  Right-click a guide for Add Vertical Guide, Add Horizontal Guide, Color, and
+  Delete; the empty slide's menu has Grid and Guides ▸ Guides, Gridlines,
+  Smart Guides, Add Vertical Guide, and Add Horizontal Guide (new guides go
+  to the center, or half an inch beside guides already there). While guides
+  show, dragged shapes snap their edges and center to them. Guide changes
+  are `setGuides` edits: saved in the file (PowerPoint's
+  `p15:sldGuideLst`) and undoable.
 - **Selection Pane** (Arrange ▸ Selection Pane… `pptx-selection-pane-toggle`,
   or Alt+F10) opens `pptx-selection-pane`: one `pptx-selection-row` per
   object (`data-shape-id`), topmost first with groups nested. Click selects

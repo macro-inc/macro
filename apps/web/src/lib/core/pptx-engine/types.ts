@@ -56,6 +56,43 @@ export interface CellOutline {
   anchor: CellAnchor;
   /** `[left, top, right, bottom]` margins. */
   margins: [number, number, number, number];
+  /** Text direction, when not horizontal. */
+  textDirection?: TextDirection;
+}
+
+/**
+ * Text direction (`a:bodyPr/@vert`): `vert` rotates all text 90°, `vert270`
+ * 270°, `wordArtVert` stacks upright letters; `eaVert`/`mongolianVert` keep
+ * CJK upright; `wordArtVertRtl` stacks with lines right to left.
+ */
+export type TextDirection =
+  | 'horz'
+  | 'vert'
+  | 'vert270'
+  | 'wordArtVert'
+  | 'eaVert'
+  | 'mongolianVert'
+  | 'wordArtVertRtl';
+
+/** A drawing guide (View ▸ Guides). Mirrors `edit::guides::GuideOutline`. */
+export interface GuideOutline {
+  /** Unique within its list; `setGuides` keeps a guide by it. */
+  id: number;
+  orient: GuideOrient;
+  /** Points from the slide's top (horizontal) or left (vertical) edge. */
+  position: number;
+  /** `RRGGBB` or a theme color name. */
+  color?: string;
+}
+
+export type GuideOrient = 'horizontal' | 'vertical';
+
+/** One guide of `setGuides`; `id` keeps an existing guide's other settings. */
+export interface GuideSpec {
+  orient: GuideOrient;
+  position: number;
+  color?: string;
+  id?: number;
 }
 
 /** A table's style and the parts it emphasizes. */
@@ -161,6 +198,8 @@ export interface ShapeOutline {
   fill?: string;
   /** Whether text operations apply to this shape. */
   textEditable: boolean;
+  /** Text direction, when the text is not horizontal. */
+  textDirection?: TextDirection;
   paragraphs?: ParagraphOutline[];
   table?: TableOutline;
   /** Chart content, for charts. */
@@ -327,6 +366,8 @@ export interface SlideOutline {
   animations?: AnimationOutline[];
   /** The slide number, date, and footer the slide shows (absent: none). */
   headerFooter?: HeaderFooterOutline;
+  /** Guides the slide's layout and master define (not movable here). */
+  layoutGuides?: GuideOutline[];
 }
 
 /** An automatic date format of the Header & Footer dialog (`setHeaderFooter`). */
@@ -393,6 +434,8 @@ export interface DeckOutline {
   tableStyles: TableStyleInfo[];
   /** Sections in order; absent when the deck has none. Every slide is in exactly one. */
   sections?: SectionOutline[];
+  /** Drawing guides shown over every slide; absent when there are none. */
+  guides?: GuideOutline[];
 }
 
 export interface CaretStop {
@@ -572,6 +615,7 @@ export interface BodyPatch {
   autofit?: 'none' | 'shrink' | 'resize';
   insets?: [number, number, number, number];
   columns?: number;
+  direction?: TextDirection;
 }
 
 export type FillSpec =
@@ -908,7 +952,9 @@ export type EditOp =
    */
   | { op: 'removeSection'; id: string; deleteSlides?: boolean }
   /** Moves a section and its slides to a 0-based index among the sections. */
-  | { op: 'moveSection'; id: string; toIndex: number };
+  | { op: 'moveSection'; id: string; toIndex: number }
+  /** Replaces the deck's drawing guides (the whole list). */
+  | { op: 'setGuides'; guides: GuideSpec[] };
 
 /**
  * How content follows a new slide size: `none` keeps it as is; `fit`

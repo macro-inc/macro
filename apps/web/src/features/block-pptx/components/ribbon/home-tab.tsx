@@ -67,6 +67,7 @@ import { SectionMenu } from './deck-setup-controls';
 import { FontPicker, FontSizePicker } from './font-controls';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
+import { TextDirectionMenu } from './text-direction';
 
 const BULLETS: { char: string; label: string }[] = [
   { char: '•', label: 'Filled round' },
@@ -847,6 +848,13 @@ export function HomeTab() {
             </div>
           )}
         </RibbonPopover>
+        <TextDirectionMenu
+          current={c.textDirection()}
+          disabled={!text()}
+          testId="pptx-text-direction"
+          onPick={(direction) => void c.setTextDirection(direction)}
+          onMore={() => env.openFormatPane('text')}
+        />
       </RibbonGroup>
       <RibbonGroup label="Drawing">
         <RibbonPopover
