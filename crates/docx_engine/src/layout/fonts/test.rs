@@ -14,6 +14,17 @@ fn east_asian_characters_without_a_face_take_an_em() {
 }
 
 #[test]
+fn letters_of_uncovered_scripts_keep_their_typical_width() {
+    let f = Fonts::new(fonts());
+    let font = f.select("Simplified Arabic", false, false).unwrap();
+    // Arabic letters, a vowel mark, Hebrew.
+    assert!((f.glyph(font, 'ب').advance - ARABIC_ADVANCE).abs() < 1e-6);
+    assert!(f.glyph(font, '\u{064E}').advance.abs() < 1e-6);
+    assert!((f.glyph(font, 'ש').advance - HEBREW_ADVANCE).abs() < 1e-6);
+    assert_eq!(missing_advance('a'), None);
+}
+
+#[test]
 fn condensed_families_squeeze_regular_substitutes() {
     let f = Fonts::new(fonts());
     let narrow = f.select("Arial Narrow", false, false).unwrap();

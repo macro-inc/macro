@@ -63,6 +63,39 @@ const CONDENSED: &[(&str, f32)] = &[
 /// A face whose `n` is at least this wide (em) is not a condensed face.
 const REGULAR_N_WIDTH: f32 = 0.5;
 
+/// Average advance (em) of Arabic letters in joined text (Simplified
+/// Arabic, Arial, Times New Roman measure about this much).
+const ARABIC_ADVANCE: f32 = 0.35;
+/// Average advance (em) of Hebrew letters.
+const HEBREW_ADVANCE: f32 = 0.5;
+
+/// The typical advance (em) of a character of a script no bundled face
+/// covers, so layout keeps the text's length without the font.
+pub fn missing_advance(c: char) -> Option<f32> {
+    if is_wide(c) {
+        // Every CJK font draws these one em wide.
+        return Some(1.0);
+    }
+    match c as u32 {
+        // Vowel marks and other combining signs take no room.
+        0x064B..=0x065F
+        | 0x0670
+        | 0x06D6..=0x06ED
+        | 0x0591..=0x05BD
+        | 0x05BF
+        | 0x05C1
+        | 0x05C2
+        | 0x05C4
+        | 0x05C5
+        | 0x05C7 => Some(0.0),
+        0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF => {
+            Some(ARABIC_ADVANCE)
+        }
+        0x0590..=0x05FF | 0xFB1D..=0xFB4F => Some(HEBREW_ADVANCE),
+        _ => None,
+    }
+}
+
 /// Whether a character is East Asian wide or full-width (ideographs, kana,
 /// hangul, CJK punctuation and full-width forms): one em in any CJK font.
 pub fn is_wide(c: char) -> bool {
@@ -270,18 +303,15 @@ impl<'a> Fonts<'a> {
                         advance: self.db.advance(c.face, id),
                     },
                     None => {
-                        // No face has it: East Asian wide characters take
-                        // a full em, as in every CJK font; others advance
-                        // like a space so text keeps its shape.
+                        // No face has it: the script's typical advance, else
+                        // a space's so text keeps its shape.
                         let space = self.db.glyph(font.face, ' ');
                         Glyph {
                             font,
                             id: 0,
-                            advance: if is_wide(ch) {
-                                1.0
-                            } else {
+                            advance: missing_advance(ch).unwrap_or_else(|| {
                                 space.map_or(0.25, |s| self.db.advance(font.face, s))
-                            },
+                            }),
                         }
                     }
                 }

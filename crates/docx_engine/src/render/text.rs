@@ -2,7 +2,7 @@
 
 use super::Renderer;
 use crate::layout::PlacedLine;
-use crate::layout::fonts::is_wide;
+use crate::layout::fonts::{is_wide, missing_advance};
 use crate::layout::inline::{Kind, Revision, RunStyle};
 use crate::model::props::{TabLeader, UnderlineStyle};
 use pptx_engine::font::FaceId;
@@ -19,6 +19,10 @@ const PLACEHOLDER_INSET: f32 = 0.1;
 const PLACEHOLDER_RISE: f32 = 0.8;
 /// Its opacity relative to the text color.
 const PLACEHOLDER_ALPHA: f32 = 0.25;
+/// Inset of the bar drawn for a letter no face has (em).
+const LETTER_INSET: f32 = 0.02;
+/// Height of that bar above the baseline (em).
+const LETTER_RISE: f32 = 0.45;
 
 /// Glyphs collected into one path per color.
 struct GlyphBatch {
@@ -201,16 +205,29 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
                     continue;
                 };
                 if c.glyph == 0 {
-                    if is_wide(c.ch) {
+                    if missing_advance(c.ch).is_some_and(|a| a > 0.0) {
                         // No face has the character: a light box shows
-                        // where it is.
+                        // where it is (an em square for East Asian text, a
+                        // low bar for letters).
                         batch.flush(out);
                         let size = if c.size > 0.0 { c.size } else { style.size };
-                        let x = pl.x + lines.x[k] + size * PLACEHOLDER_INSET;
-                        let side = size * (1.0 - 2.0 * PLACEHOLDER_INSET);
-                        let y = baseline - style.shift - size * PLACEHOLDER_RISE;
+                        let (inset, rise, height) = if is_wide(c.ch) {
+                            (
+                                PLACEHOLDER_INSET,
+                                PLACEHOLDER_RISE,
+                                1.0 - 2.0 * PLACEHOLDER_INSET,
+                            )
+                        } else {
+                            (LETTER_INSET, LETTER_RISE, LETTER_RISE)
+                        };
+                        let rect = Rect::from_xywh(
+                            pl.x + lines.x[k] + size * inset,
+                            baseline - style.shift - size * rise,
+                            (lines.adv[k] - 2.0 * size * inset).max(0.0),
+                            size * height,
+                        );
                         out.push(Node::Fill {
-                            path: Path::rect(Rect::from_xywh(x, y, side, side)),
+                            path: Path::rect(rect),
                             paint: Paint::Solid(style.color.with_alpha_mul(PLACEHOLDER_ALPHA)),
                             even_odd: false,
                         });
