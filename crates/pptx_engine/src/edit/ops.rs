@@ -798,6 +798,25 @@ pub enum EditOp {
         #[serde(default, deserialize_with = "nullable")]
         apply_to_all: bool,
     },
+    /// Replaces text in shapes, group members, and table cells, on one slide
+    /// or on every slide. A match may span differently formatted runs but not
+    /// paragraphs; the replacement takes the formatting of the first matched
+    /// character. The number of replacements is reported in the result.
+    ReplaceText {
+        /// Text to find (within one paragraph).
+        find: String,
+        /// Replacement text (may be empty; no paragraph or line breaks).
+        replace: String,
+        /// Match upper and lower case exactly (default: ignore case).
+        #[serde(default, deserialize_with = "nullable")]
+        match_case: bool,
+        /// Only match whole words (no letter, digit, or `_` on either side).
+        #[serde(default, deserialize_with = "nullable")]
+        whole_word: bool,
+        /// Slide id; omit to replace on every slide.
+        #[serde(default)]
+        slide: Option<u32>,
+    },
 }
 
 /// Something an edit created.
@@ -822,6 +841,9 @@ pub struct EditResult {
     pub changed_slides: Vec<u32>,
     /// Whether slides were added, removed, or reordered.
     pub structure_changed: bool,
+    /// Text replacements made by `replaceText` operations.
+    #[serde(default)]
+    pub replaced: usize,
 }
 
 /// Which borders of a cell range [`EditOp::FormatCells`] changes. A border

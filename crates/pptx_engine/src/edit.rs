@@ -26,6 +26,7 @@ mod table_style;
 mod text;
 mod xmlutil;
 
+mod find;
 pub(crate) mod group;
 pub(crate) mod transition;
 
@@ -36,6 +37,8 @@ pub use ops::{
 };
 pub use ops::{BorderEdges, BorderLine, CellBorders};
 pub use slides::{LayoutInfo, layouts};
+
+pub use find::{FindOptions, TextMatch};
 
 use crate::error::{Error, Result};
 use crate::font::FontDb;
@@ -89,6 +92,7 @@ impl EditOp {
             O::GroupShapes { slide, .. }
             | O::UngroupShape { slide, .. }
             | O::SetTransition { slide, .. } => Some(*slide),
+            O::ReplaceText { slide, .. } => *slide,
         }
     }
 
@@ -132,6 +136,7 @@ impl Presentation {
                 self.flush();
                 let mut result = diff(&before, self);
                 result.created = out.created;
+                result.replaced = out.replaced;
                 Ok((result, before))
             }
             Err(e) => {
@@ -613,6 +618,19 @@ impl Presentation {
                 };
                 transition::set_transition(self, *slide, &patch, *apply_to_all)?;
             }
+            O::ReplaceText {
+                find: query,
+                replace,
+                match_case,
+                whole_word,
+                slide,
+            } => {
+                let options = FindOptions {
+                    match_case: *match_case,
+                    whole_word: *whole_word,
+                };
+                out.replaced += find::replace_text(self, query, replace, options, *slide, refit)?;
+            }
         }
         out.created.extend(created);
         Ok(())
@@ -624,6 +642,8 @@ impl Presentation {
 struct BatchOutput {
     /// Ids created, in order.
     created: Vec<Created>,
+    /// Text replacements made.
+    replaced: usize,
 }
 
 /// Which slides differ between two states of the same presentation.
@@ -669,6 +689,7 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
         created: Vec::new(),
         changed_slides,
         structure_changed,
+        replaced: 0,
     }
 }
 

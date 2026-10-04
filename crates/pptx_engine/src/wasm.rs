@@ -5,7 +5,7 @@
 //! `ImageData`.
 
 use crate::collab::{Entries, EntryChange};
-use crate::edit::{CellRef, EditOp, Editor};
+use crate::edit::{CellRef, EditOp, Editor, FindOptions};
 use crate::font::FontDb;
 use crate::model::presentation::Presentation;
 use crate::render::Layer;
@@ -238,5 +238,18 @@ impl PptxDocument {
     #[wasm_bindgen(js_name = missingFonts)]
     pub fn missing_fonts(&self) -> Result<String, JsError> {
         FONTS.with(|f| to_json(&f.borrow().missing_families()))
+    }
+
+    /// Finds text in every slide (`options`: `FindOptions` JSON); returns
+    /// `TextMatch[]` JSON.
+    #[wasm_bindgen(js_name = findText)]
+    pub fn find_text(&mut self, query: &str, options: &str) -> Result<String, JsError> {
+        let options: FindOptions = if options.trim().is_empty() {
+            FindOptions::default()
+        } else {
+            serde_json::from_str(options).map_err(js_err)?
+        };
+        let matches = self.pres().find_text(query, options).map_err(js_err)?;
+        to_json(&matches)
     }
 }

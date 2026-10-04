@@ -686,3 +686,48 @@ pub fn format_body(doc: &mut XmlDoc, body: NodeId, patch: &BodyPatch) -> Result<
     }
     Ok(())
 }
+
+/// Replaces characters `start..end` of paragraph `p` with `text` (no breaks)
+/// in the formatting of the first replaced character, whatever runs the
+/// range spans. Returns `false`, changing nothing, when the range is empty or
+/// touches a field (fields cannot be split).
+pub fn replace_range(doc: &mut XmlDoc, p: NodeId, start: usize, end: usize, text: &str) -> bool {
+    if end <= start {
+        return false;
+    }
+    let mut pos = 0;
+    for (node, len) in items(doc, p) {
+        if doc.local(node) == "fld" && pos < end && start < pos + len {
+            return false;
+        }
+        pos += len;
+    }
+    split_at(doc, p, end);
+    split_at(doc, p, start);
+    let mut replaced = Vec::new();
+    let mut pos = 0;
+    for (node, len) in items(doc, p) {
+        if pos >= start && pos + len <= end && len > 0 {
+            replaced.push(node);
+        }
+        pos += len;
+    }
+    let Some(&first) = replaced.first() else {
+        return false;
+    };
+    if !text.is_empty() {
+        if doc.local(first) == "r" {
+            set_run_text(doc, first, text);
+            replaced.remove(0);
+        } else {
+            // A line break carries its formatting in its own rPr.
+            let template = doc.child(first, Ns::A, "rPr");
+            let run = new_run(doc, text, template);
+            doc.insert_before(first, run);
+        }
+    }
+    for n in replaced {
+        doc.detach(n);
+    }
+    true
+}
