@@ -101,6 +101,8 @@ struct Stop {
     pos: f32,
     align: TabAlign,
     leader: TabLeader,
+    /// Set in the paragraph's tabs (not a default stop).
+    custom: bool,
 }
 
 fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool) -> Stop {
@@ -115,6 +117,7 @@ fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool) -> Stop {
                 pos: s.pos,
                 align: s.align,
                 leader: s.leader,
+                custom: true,
             });
         }
     }
@@ -128,6 +131,7 @@ fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool) -> Stop {
             pos: p.ind_left,
             align: TabAlign::Left,
             leader: TabLeader::None,
+            custom: false,
         });
     }
     if let Some(b) = best {
@@ -147,6 +151,7 @@ fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool) -> Stop {
         pos,
         align: TabAlign::Left,
         leader: TabLeader::None,
+        custom: false,
     }
 }
 
@@ -288,10 +293,21 @@ pub fn break_lines_from(
                                 },
                                 align,
                                 leader: TabLeader::None,
+                                custom: false,
                             }
                         }
                         None => next_stop(x, ctx, first),
                     };
+                    // A tab to a stop of its own past the right edge goes
+                    // to the next line, as a word that does not fit would.
+                    if stop.custom
+                        && stop.align == TabAlign::Left
+                        && stop.pos > right + EPS
+                        && has_content
+                    {
+                        ends = LineEnd::Wrap;
+                        break;
+                    }
                     let (seg, before_dec) = segment_width(inline, j + 1);
                     let target = match stop.align {
                         TabAlign::Right => stop.pos - seg,

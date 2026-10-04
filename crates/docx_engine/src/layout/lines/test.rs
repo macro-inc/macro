@@ -298,3 +298,34 @@ fn the_paragraph_mark_only_sizes_lines_without_text() {
     assert!((text - 9.0 * 1.1499).abs() < 0.01, "{text}");
     assert!((empty - 20.0 * 1.1499).abs() < 0.01, "{empty}");
 }
+
+#[test]
+fn tabs_to_stops_past_the_right_edge_go_to_the_next_line() {
+    // Stops at 1" and 7" in a 6.5" wide text area: the second tab cannot
+    // reach its stop on the line.
+    let body = r#"<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="1440"/><w:tab w:val="left" w:pos="10080"/></w:tabs></w:pPr><w:r><w:t>from</w:t><w:tab/><w:t xml:space="preserve"> to</w:t><w:tab/><w:t>end</w:t></w:r></w:p>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    assert_eq!(ls.len(), 2);
+    assert_eq!(line_text(ls[0]), "from\t to");
+    // On its own line the tab goes to the first stop.
+    let p = ls[1];
+    let e = p
+        .para
+        .inline
+        .clusters
+        .iter()
+        .position(|c| c.ch == 'e')
+        .unwrap();
+    assert!(
+        (p.para.lines.x[e] - 72.0).abs() < 0.05,
+        "{}",
+        p.para.lines.x[e]
+    );
+}
