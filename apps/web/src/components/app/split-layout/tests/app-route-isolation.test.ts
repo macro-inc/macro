@@ -1,10 +1,19 @@
 import {
+  routineContent,
+  routineIdFromContent,
+} from '@app/features/routines/routine-navigation';
+import {
   createRoutesManifest,
   decodeRoute,
   encodeRoute,
 } from '@app/lib/split-router/routes';
 import { describe, expect, it, vi } from 'vitest';
 import { appSplitRoutes } from '../split-router/app-routes';
+import {
+  resolveContentLocation,
+  splitContentFromLocation,
+  splitLocationFromContent,
+} from '../split-router/legacy-route';
 
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -37,6 +46,51 @@ vi.mock('@app/features/settings/Settings', () => {
 });
 
 describe('application route import isolation', () => {
+  it('opens routine list, details, and creation through canonical routes', () => {
+    const routes = createRoutesManifest(appSplitRoutes);
+    for (const [path, routeId] of [
+      [['routines'], 'view-routines'],
+      [['routines', 'routine-1'], 'routine-detail'],
+      [['routines', 'new'], 'routine-create'],
+    ] as const) {
+      const entry = decodeRoute(routes, [...path]);
+      expect(entry?.location.route.matches[0].id).toBe(routeId);
+      const content = splitContentFromLocation(entry!.location);
+      expect(content).toMatchObject({ type: 'component', id: 'routines' });
+      expect(
+        encodeRoute(routes, {
+          location: resolveContentLocation(routes, content),
+        })
+      ).toEqual(path);
+    }
+  });
+
+  it('canonicalizes existing routine links and block navigation', () => {
+    const routes = createRoutesManifest(appSplitRoutes);
+    for (const id of ['routine-1', 'new']) {
+      const entry = decodeRoute(routes, ['automation', id]);
+      expect(encodeRoute(routes, entry!)).toEqual(['routines', id]);
+      const location = splitLocationFromContent(routes, {
+        type: 'automation',
+        id,
+      });
+      expect(encodeRoute(routes, { location })).toEqual(['routines', id]);
+    }
+  });
+
+  it('restores routine identity from the route instead of stale component params', () => {
+    const current = routineContent('routine-b');
+    expect(
+      routineIdFromContent({ ...current, params: { routineId: 'routine-a' } })
+    ).toBe('routine-b');
+    expect(
+      routineIdFromContent({
+        ...routineContent(),
+        params: { routineId: 'routine-a' },
+      })
+    ).toBeUndefined();
+  });
+
   it('routes debug views and canonicalizes their legacy URLs', () => {
     const routes = createRoutesManifest(appSplitRoutes);
     for (const id of ['ui', 'icon-gallery']) {

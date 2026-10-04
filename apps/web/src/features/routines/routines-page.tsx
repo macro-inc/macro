@@ -9,14 +9,7 @@ import {
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
 } from '@queries/agent-schedule/schedules';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createMemo, Show, Suspense } from 'solid-js';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
 import { RoutineDetail } from '../block-automation/component/Automation';
 import {
@@ -28,19 +21,23 @@ import {
 import { hasOnlyScheduledTriggers } from '../block-automation/core/routine-triggers';
 import { RoutinesList } from './components/routines-list';
 import type { RoutineRow } from './core/types';
+import { routineContent, routineIdFromContent } from './routine-navigation';
 
 function RoutinesContent() {
   const userId = useUserId();
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const [selected, setSelected] = createSignal<{
-    id: string;
-    tab: 'settings' | 'history';
-  }>();
+  const selectedId = () => routineIdFromContent(panel.handle.content());
+  const open = (id?: string) =>
+    layout.openWithSplit(routineContent(id), {
+      handle: panel.handle,
+      activate: true,
+      search: {},
+    });
   let searchInput: HTMLInputElement | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
-    enabled: () => panel.isPanelActive() && !selected(),
+    enabled: () => panel.isPanelActive() && !selectedId(),
     search: {
       description: 'Search routines',
       run: () => {
@@ -50,31 +47,6 @@ function RoutinesContent() {
       },
     },
   });
-  createEffect(
-    on(
-      () => {
-        const content = panel.handle.content();
-        return content.type === 'component'
-          ? content.params?.agentPageRequest
-          : undefined;
-      },
-      () => {
-        const content = panel.handle.content();
-        const id =
-          content.type === 'component' ? content.params?.routineId : undefined;
-        setSelected(
-          typeof id === 'string' ? { id, tab: 'settings' } : undefined
-        );
-        if (id !== undefined) {
-          panel.handle.updateCurrentEntry((current) => {
-            if (current.type !== 'component') return current;
-            const { routineId: _routineId, ...params } = current.params ?? {};
-            return { ...current, params };
-          });
-        }
-      }
-    )
-  );
   const query = useSchedulesQuery(() => true);
   const roster = createAgentRosterSource();
   const rows = createMemo<RoutineRow[]>(() => {
@@ -132,13 +104,13 @@ function RoutinesContent() {
       type: 'component',
       id: 'routine-compose',
       params: {
-        onCreated: (id: string) => setSelected({ id, tab: 'settings' }),
+        onCreated: (id: string) => open(id),
       },
     });
   }
   return (
     <Show
-      when={selected()}
+      when={selectedId()}
       keyed
       fallback={
         <RoutinesList
@@ -148,9 +120,7 @@ function RoutinesContent() {
           error={query.isError}
           onRetry={() => void query.refetch()}
           onCreate={create}
-          onOpen={(id, history) =>
-            setSelected({ id, tab: history ? 'history' : 'settings' })
-          }
+          onOpen={(id) => open(id)}
           pendingId={
             toggle.isPending ? toggle.variables?.scheduleId : undefined
           }
@@ -160,12 +130,11 @@ function RoutinesContent() {
         />
       }
     >
-      {(routine) => (
+      {(id) => (
         <RoutineDetail
-          scheduleId={routine.id}
-          initialTab={routine.tab}
-          onBack={() => setSelected(undefined)}
-          onOpen={(id) => setSelected({ id, tab: 'settings' })}
+          scheduleId={id}
+          onBack={() => open()}
+          onOpen={(id) => open(id)}
         />
       )}
     </Show>

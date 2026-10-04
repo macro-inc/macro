@@ -2,6 +2,7 @@ import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
@@ -14,9 +15,10 @@ import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { createRenderEffect, createSignal, lazy, Show } from 'solid-js';
+import { createRenderEffect, lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { routineContent } from '../routines/routine-navigation';
 import { parseAgentsRoute } from './core/route';
 
 const SoupView = lazy(async () => ({
@@ -33,7 +35,8 @@ const McpConnections = lazy(async () => ({
 }));
 
 function LegacyAgentsView() {
-  const [routines, setRoutines] = createSignal(false);
+  const layout = useSplitLayout();
+  const panel = useSplitPanelOrThrow();
   const user = useUserContext();
   const preset = getViewPreset('agents', undefined, {
     userId: user.userId(),
@@ -49,36 +52,34 @@ function LegacyAgentsView() {
       >
         <button
           type="button"
-          aria-pressed={!routines()}
+          aria-pressed={true}
           class="rounded-md px-3 py-1.5 text-sm text-ink hover:bg-hover"
-          onClick={() => setRoutines(false)}
         >
           Agents
         </button>
         <button
           type="button"
-          aria-pressed={routines()}
+          aria-pressed={false}
           class="rounded-md px-3 py-1.5 text-sm text-ink hover:bg-hover"
-          onClick={() => setRoutines(true)}
+          onClick={() =>
+            layout.openWithSplit(routineContent(), {
+              handle: panel.handle,
+              activate: true,
+              search: {},
+            })
+          }
         >
           Routines
         </button>
       </div>
       <div class="min-h-0 flex-1 overflow-auto">
-        <Show
-          when={routines()}
-          fallback={
-            <SoupView
-              viewName="Agents"
-              initialFilters={preset?.filters}
-              initialClientFilters={preset?.clientFilters}
-              initialGroupBy={preset?.groupBy}
-              additionalEntities={entities}
-            />
-          }
-        >
-          <RoutinesPage />
-        </Show>
+        <SoupView
+          viewName="Agents"
+          initialFilters={preset?.filters}
+          initialClientFilters={preset?.clientFilters}
+          initialGroupBy={preset?.groupBy}
+          additionalEntities={entities}
+        />
       </div>
     </div>
   );
@@ -88,6 +89,7 @@ export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
   const route = () => {
     const content = panel.handle.content();
+    if (content.type === 'component' && content.id === 'routines') return;
     const requested =
       content.type === 'component' &&
       typeof content.params?.agentsRoute === 'string'
@@ -108,6 +110,7 @@ export const AgentsRouteView = withAuth(() => {
     const content = panel.handle.content();
     return (
       content.type === 'component' &&
+      content.id !== 'routines' &&
       content.params?.agentPage === 'connections'
     );
   };
@@ -127,7 +130,8 @@ export const AgentsRouteView = withAuth(() => {
                       const content = panel.handle.content();
                       return (
                         content.type === 'component' &&
-                        content.params?.agentPage === 'routines'
+                        (content.id === 'routines' ||
+                          content.params?.agentPage === 'routines')
                       );
                     })()}
                     fallback={<LegacyAgentsView />}

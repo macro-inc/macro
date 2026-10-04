@@ -224,6 +224,11 @@ registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);
 registerComponent(
+  'routines',
+  () => <AgentsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'agents',
   () => <AgentsRouteView />,
   () =>

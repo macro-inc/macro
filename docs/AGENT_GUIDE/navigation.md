@@ -50,8 +50,9 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/automation/new` | Legacy link that opens the routine creation modal |
-| `/app/automation/<uuid>` | Routine settings, triggers, and run history |
+| `/app/routines` | Routines list in the Agents workspace |
+| `/app/routines/new` | Opens the routine creation modal |
+| `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
@@ -445,7 +446,11 @@ the static highlight.
 
 ## Routines
 
-Open **Agents → Routines** for your routines. On the legacy
+Open **Agents → Routines** for your routines. Opening a routine updates the URL
+to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
+URL restores that routine; browser Back and Forward restore the list or detail.
+Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
+On the legacy
 or touch Agents screen, use the **Routines** button above the list. Routines use
 full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**
 columns. The search field sits below the top bar, as in Projects; search by name,

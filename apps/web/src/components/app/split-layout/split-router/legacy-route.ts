@@ -20,6 +20,14 @@ import {
   reminderIdFromDetailContent,
 } from '@app/features/reminders/reminder-navigation';
 import {
+  ROUTINE_CREATE_ROUTE_ID,
+  ROUTINE_DETAIL_ROUTE_ID,
+  ROUTINES_ROUTE_ID,
+  routineContent,
+  routineIdFromContent,
+  routineLocation,
+} from '@app/features/routines/routine-navigation';
+import {
   defineRoute,
   routeParams,
   type SplitLocation,
@@ -53,6 +61,8 @@ export function decodeLegacyPair(
   id: string
 ): SplitContent | undefined {
   if (!type || !id) return;
+
+  if (type === 'automation') return routineContent(id);
 
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) return { type: 'component', id: agentsRoute };
@@ -96,6 +106,7 @@ export function decodeLegacyPair(
 }
 
 function legacyEntry(type: string, id: string): SplitRouterEntry | undefined {
+  if (type === 'automation') return { location: routineLocation(id) };
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) {
     return {
@@ -193,6 +204,21 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  if (content.type === 'automation') return routineLocation(content.id);
+  if (content.type === 'component' && content.id === 'routines') {
+    return routineLocation(routineIdFromContent(content));
+  }
+  if (
+    content.type === 'component' &&
+    content.id === 'agents' &&
+    content.params?.agentPage === 'routines'
+  ) {
+    return routineLocation(
+      typeof content.params.routineId === 'string'
+        ? content.params.routineId
+        : undefined
+    );
+  }
   const reminderId =
     content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
       ? reminderIdFromDetailContent(content)
@@ -357,6 +383,15 @@ export function splitContentFromLocation(
   location: SplitLocation
 ): SplitContent {
   const root = location.route.matches[0];
+
+  if (root.id === ROUTINES_ROUTE_ID) return routineContent();
+  if (root.id === ROUTINE_CREATE_ROUTE_ID) return routineContent('new');
+  if (root.id === ROUTINE_DETAIL_ROUTE_ID) {
+    const { routineId } = routeParams(location.route);
+    if (typeof routineId === 'string' && routineId.length > 0)
+      return routineContent(routineId);
+    throw new Error('Invalid routine detail split route');
+  }
 
   if (root.id === REMINDER_DETAIL_ROUTE_ID) {
     const { reminderId } = routeParams(location.route);

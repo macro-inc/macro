@@ -1,4 +1,5 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { CALENDAR_PREFERENCES_KEY } from '@app/features/calendar/calendar-preferences';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
@@ -14,6 +15,7 @@ import {
 } from '@app/features/reminders/reminder-navigation';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { reviewsSplitRoute } from '@app/features/reviews-view/route';
+import { routineIdFromContent } from '@app/features/routines/routine-navigation';
 import {
   getListNavigationSource,
   listNavigationSourceId,
@@ -885,6 +887,41 @@ describe('layoutManager', () => {
         return { manager, location, router, dispose };
       });
     }
+
+    it('navigates routine identities in the same pane and restores their history', async () => {
+      const { manager, router, location, dispose } = ingressRouter('/routines');
+      await router.settled();
+      const split = manager.activeSplit()!;
+
+      openAgentsPage(manager, 'routines', { routineId: 'routine-a' });
+      await router.settled();
+      expect(location.read().pathname).toBe('/routines/routine-a');
+      expect(routineIdFromContent(split.content())).toBe('routine-a');
+
+      openAgentsPage(manager, 'routines', { routineId: 'routine-b' });
+      await router.settled();
+      expect(location.read().pathname).toBe('/routines/routine-b');
+      expect(routineIdFromContent(split.content())).toBe('routine-b');
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.activeSplitId()).toBe(split.id);
+
+      router.navigate(split.id, -1);
+      await router.settled();
+      expect(location.read().pathname).toBe('/routines/routine-a');
+      expect(routineIdFromContent(split.content())).toBe('routine-a');
+
+      router.navigate(split.id, -1);
+      await router.settled();
+      expect(location.read().pathname).toBe('/routines');
+      expect(routineIdFromContent(split.content())).toBeUndefined();
+
+      router.navigate(split.id, 1);
+      await router.settled();
+      expect(location.read().pathname).toBe('/routines/routine-a');
+      expect(routineIdFromContent(split.content())).toBe('routine-a');
+      router.dispose();
+      dispose();
+    });
 
     it('shares reminder identity across Home and standalone routes', async () => {
       const { manager, router, location, dispose } = ingressRouter(

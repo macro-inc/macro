@@ -31,6 +31,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
 import { AgentSessionPane } from '../components/AgentSessionPane';
@@ -76,7 +77,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
-  const [page, setPage] = createSignal<AgentsPage>('new');
+  const [localPage, setPage] = createSignal<AgentsPage>('new');
+  const isRoutinesPage = () => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'routines';
+  };
+  const page = () => (isRoutinesPage() ? 'routines' : localPage());
   const [selected, setSelected] = createSignal<
     SelectedConversation | undefined
   >(
@@ -155,6 +161,25 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     )
   );
   const openPage = (next: AgentsPage) => {
+    if (next === 'routines') {
+      layout.openWithSplit(routineContent(), {
+        handle: panel.handle,
+        activate: true,
+        search: {},
+      });
+      return;
+    }
+    if (isRoutinesPage()) {
+      layout.openWithSplit(
+        {
+          type: 'component',
+          id: 'agents',
+          params: { agentPage: next, agentPageRequest: crypto.randomUUID() },
+        },
+        { handle: panel.handle, activate: true, search: {} }
+      );
+      return;
+    }
     setSelected(undefined);
     setPage(next);
   };
@@ -177,8 +202,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     )
   );
   const openRoster = (_kind: AgentKind) => {
-    setSelected(undefined);
-    setPage('agents');
+    openPage('agents');
   };
   const openConversation = (
     conversation: AgentConversationTarget,

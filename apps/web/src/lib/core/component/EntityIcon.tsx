@@ -414,7 +414,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
-    prettyName: 'Automation',
+    prettyName: 'Routine',
   },
   crm_company: {
     icon: BuildingOffice,

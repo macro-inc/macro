@@ -25,6 +25,11 @@ import {
   remindersRoute,
 } from '@app/features/reminders/route';
 import { reviewsSplitRoute } from '@app/features/reviews-view/route';
+import {
+  routineCreateRoute,
+  routineDetailRoute,
+  routinesRoute,
+} from '@app/features/routines/route';
 import { settingsRoute } from '@app/features/settings/route';
 import { tasksSplitRoute } from '@app/features/tasks-view/route';
 import { defineRoutes } from '@app/lib/split-router';
@@ -45,6 +50,9 @@ export const appSplitRoutes = defineRoutes({
     reminderDetailRoute,
     remindersRoute,
     agentsViewRoute,
+    routinesRoute,
+    routineCreateRoute,
+    routineDetailRoute,
     emailSplitRoute,
     tasksSplitRoute,
     reviewsSplitRoute,

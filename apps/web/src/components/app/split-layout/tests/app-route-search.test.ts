@@ -123,6 +123,16 @@ describe('application route mentions', () => {
     ).toEqual({ id: mentionId, block: 'agent', params: {} });
   });
 
+  it('resolves canonical routine links and their existing aliases to the same entity', () => {
+    for (const path of [`routines/${mentionId}`, `automation/${mentionId}`]) {
+      expect(resolveMention(`https://dev.macro.com/app/${path}`)).toEqual({
+        id: mentionId,
+        block: 'automation',
+        params: {},
+      });
+    }
+  });
+
   it('uses the rightmost pane of a copied layout URL', () => {
     expect(
       resolveMention(

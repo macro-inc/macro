@@ -278,14 +278,14 @@ export function EmptyState(props: {
       </Match>
 
       <Match
-        when={props.listView === 'agents' && soup.activeTab() === 'automations'}
+        when={props.listView === 'agents' && soup.activeTab() === 'routines'}
       >
         <EmptyStatePanel
           graphic={EmptyStateAutomationsGraphic}
           title="No routines to show"
           description="Routines run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
-            label: 'New automation',
+            label: 'New routine',
             icon: PlusIcon,
             onClick: () => runCreateAction('automation'),
           }}

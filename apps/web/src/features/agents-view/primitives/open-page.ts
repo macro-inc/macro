@@ -1,4 +1,5 @@
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import { routineContent } from '../../routines/routine-navigation';
 import type { AgentsPage } from '../core/pages';
 
 /** Open a workspace page, also when an Agents split is already mounted. */
@@ -7,6 +8,15 @@ export function openAgentsPage(
   page: AgentsPage,
   params: Record<string, unknown> = {}
 ) {
+  if (page === 'routines') {
+    layout.openWithSplit(
+      routineContent(
+        typeof params.routineId === 'string' ? params.routineId : undefined
+      ),
+      { activate: true, search: {} }
+    );
+    return;
+  }
   const content = {
     type: 'component' as const,
     id: 'agents',

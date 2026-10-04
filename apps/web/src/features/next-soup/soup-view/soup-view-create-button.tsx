@@ -63,7 +63,7 @@ const CREATE_COMPANY_OPTION: CreateOption = {
  * specific list views.
  */
 const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, string>> = {
-  automation: 'Automation',
+  automation: 'Routine',
 };
 
 const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
