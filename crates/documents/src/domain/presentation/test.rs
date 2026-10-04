@@ -212,6 +212,43 @@ async fn text_direction_and_guides_are_set_and_described() {
 }
 
 #[tokio::test]
+async fn masters_smart_art_equations_and_comments_are_described() {
+    let files = MemoryFiles::with(DECK);
+    let service = PresentationService::new(files.clone());
+    let (slide, _) = first_text_shape(DECK);
+    let ops: Vec<EditOp> = serde_json::from_value(serde_json::json!([
+        { "op": "insertEquation", "slide": slide, "latex": "a^2+b^2=c^2" },
+        { "op": "addShape", "slide": slide,
+          "shape": { "kind": "smartArt", "layout": "process1",
+                     "items": [{ "text": "Plan" }, { "text": "Ship" }] },
+          "x": 100, "y": 100, "w": 400, "h": 200 },
+        { "op": "addComment", "slide": slide, "text": "Check this", "author": "Ann Lee" }
+    ]))
+    .unwrap();
+    service
+        .edit(receipt(AccessLevel::Edit), &ops)
+        .await
+        .unwrap();
+    let text = service
+        .read(receipt(AccessLevel::View), None)
+        .await
+        .unwrap();
+    for expected in [
+        "Slide masters (",
+        "- master 2147483648 ",
+        "equations: @0 \"a^2+b^2=c^2\" display",
+        "SmartArt layout \"Basic Process\" (process1; nodes editable)",
+        "- node ",
+        ": \"Plan\"",
+        "comments:",
+        "by \"Ann Lee\"",
+        ": \"Check this\"",
+    ] {
+        assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
+    }
+}
+
+#[tokio::test]
 async fn animations_are_edited_and_described() {
     let files = MemoryFiles::with(DECK);
     let service = PresentationService::new(files.clone());

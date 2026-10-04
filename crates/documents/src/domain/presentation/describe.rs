@@ -6,8 +6,9 @@ use pptx_engine::edit::{
     AnimationClass, AnimationRepeat, AnimationStart, GuideOrient, RepeatUntil,
 };
 use pptx_engine::inspect::{
-    AnimationOutline, ChartOutline, DeckOutline, EffectsOutline, HeaderFooterOutline,
-    PictureOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline,
+    AnimationOutline, ChartOutline, CommentOutline, DeckOutline, EffectsOutline, EquationOutline,
+    HeaderFooterOutline, PictureOutline, ShapeKindName, ShapeOutline, SlideOutline,
+    SmartArtOutline, TableOutline,
 };
 use std::fmt::Write as _;
 
@@ -108,6 +109,7 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     };
     let geometry = match (&s.geometry, s.kind) {
         (Some(g), ShapeKindName::Shape) => format!(" geometry={g}"),
+        (None, ShapeKindName::Shape) => " geometry=freeform".to_owned(),
         _ => String::new(),
     };
     let fill = s
@@ -160,6 +162,7 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
         [] => {}
         [only] if only.level == 0 => {
             let _ = writeln!(out, "{pad}  text: {}", quote(&only.text));
+            equations_line(out, &pad, &only.equations);
         }
         paragraphs => {
             for (i, p) in paragraphs.iter().enumerate() {
@@ -169,6 +172,7 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
                     String::new()
                 };
                 let _ = writeln!(out, "{pad}  ¶{i}{level}: {}", quote(&p.text));
+                equations_line(out, &pad, &p.equations);
             }
         }
     }
@@ -196,6 +200,9 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     if let Some(chart) = &s.chart {
         chart_lines(out, chart, &pad);
     }
+    if let Some(smart_art) = &s.smart_art {
+        smart_art_lines(out, smart_art, &pad);
+    }
     for (i, a) in animations.iter().enumerate() {
         if a.shape_id == s.id {
             animation_line(out, &pad, i, a);
@@ -203,6 +210,88 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     }
     for child in &s.children {
         shape(out, child, depth + 1, animations);
+    }
+}
+
+/// A paragraph's equations: where each stands (its U+FFFC character) and
+/// its linear (LaTeX-style) text.
+fn equations_line(out: &mut String, pad: &str, equations: &[EquationOutline]) {
+    if equations.is_empty() {
+        return;
+    }
+    let list: Vec<String> = equations
+        .iter()
+        .map(|e| {
+            let display = if e.display { " display" } else { "" };
+            format!("@{} {}{display}", e.index, quote(&e.latex))
+        })
+        .collect();
+    let _ = writeln!(out, "{pad}    equations: {}", list.join(", "));
+}
+
+/// A SmartArt graphic: its layout, colors, and style, then its nodes
+/// indented by level as the Text Pane shows them.
+fn smart_art_lines(out: &mut String, smart_art: &SmartArtOutline, pad: &str) {
+    let layout = &smart_art.layout;
+    let short = layout.id.rsplit('/').next().unwrap_or(&layout.id);
+    let editable = if layout.supported {
+        "nodes editable"
+    } else {
+        "text, colors, style, and layout only"
+    };
+    let _ = writeln!(
+        out,
+        "{pad}  SmartArt layout {} ({short}; {editable}), colors {}, style {}:",
+        quote(&layout.name),
+        smart_art.colors,
+        smart_art.style
+    );
+    for node in &smart_art.nodes {
+        let indent = "  ".repeat(usize::from(node.level.max(1)) - 1);
+        let assistant = if node.assistant { " (assistant)" } else { "" };
+        let _ = writeln!(
+            out,
+            "{pad}    {indent}- node {}{assistant}: {}",
+            node.id,
+            quote(&node.text)
+        );
+    }
+}
+
+/// A slide's comment threads and their replies.
+fn comment_lines(out: &mut String, comments: &[CommentOutline]) {
+    if comments.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "  comments:");
+    for c in comments {
+        let place = match (c.shape, c.x, c.y) {
+            (Some(shape), _, _) => format!(" on shape {shape}"),
+            (None, Some(x), Some(y)) => format!(" at x={x:.0} y={y:.0}"),
+            _ => String::new(),
+        };
+        let resolved = if c.resolved { ", resolved" } else { "" };
+        let legacy = if c.legacy {
+            " (legacy: edit or delete only)"
+        } else {
+            ""
+        };
+        let _ = writeln!(
+            out,
+            "  - comment {} by {}{place}{resolved}{legacy}: {}",
+            c.id,
+            quote(&c.author),
+            quote(&c.text)
+        );
+        for r in &c.replies {
+            let _ = writeln!(
+                out,
+                "    reply {} by {}: {}",
+                r.id,
+                quote(&r.author),
+                quote(&r.text)
+            );
+        }
     }
 }
 
@@ -395,6 +484,7 @@ fn slide(out: &mut String, s: &SlideOutline) {
     for sh in &s.shapes {
         shape(out, sh, 1, &s.animations);
     }
+    comment_lines(out, &s.comments);
     if let Some(notes) = &s.notes {
         let _ = writeln!(out, "  speaker notes: {}", quote(notes));
     }
@@ -469,6 +559,33 @@ pub fn describe(pres: &mut Presentation, slides: Option<&[usize]>) -> anyhow::Re
     );
     let layouts: Vec<String> = deck.layouts.iter().map(|l| quote(&l.name)).collect();
     let _ = writeln!(out, "Layouts: {}", layouts.join(", "));
+    if !deck.masters.is_empty() {
+        let _ = writeln!(
+            out,
+            "Slide masters (their ids and their layouts' ids work as slide ids; edits reach every slide using them):"
+        );
+        for m in &deck.masters {
+            let layouts: Vec<String> = m
+                .layouts
+                .iter()
+                .map(|l| {
+                    let used = if l.slide_ids.is_empty() {
+                        "unused".to_owned()
+                    } else {
+                        slide_ranges(&deck, &l.slide_ids)
+                    };
+                    format!("{} {} ({used})", l.id, quote(&l.name))
+                })
+                .collect();
+            let _ = writeln!(
+                out,
+                "- master {} {}: {}",
+                m.id,
+                quote(&m.name),
+                layouts.join(", ")
+            );
+        }
+    }
     let colors: Vec<String> = deck
         .theme_colors
         .iter()
