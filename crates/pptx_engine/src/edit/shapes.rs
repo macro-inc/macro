@@ -448,6 +448,7 @@ pub fn add_shape(
         };
         (id, n)
     };
+    let mut media_shapes: Vec<(u32, bool)> = Vec::new();
     let fragment = match new {
         NewShape::TextBox { text } => {
             let xfrm = xfrm_xml(x, y, w, h);
@@ -499,6 +500,44 @@ pub fn add_shape(
                 esc(&image.rid)
             )
         }
+        NewShape::Video {
+            data,
+            content_type,
+            poster,
+            description,
+        }
+        | NewShape::Audio {
+            data,
+            content_type,
+            poster,
+            description,
+        } => {
+            let audio = matches!(new, NewShape::Audio { .. });
+            let (link, embed) =
+                parts::add_media(pres, part, parts::decode_base64(data)?, content_type, audio)?;
+            let image = parts::add_image(pres, part, &parts::decode_base64(poster)?)?;
+            let (pw, ph) = (image.width as f32 * 0.75, image.height as f32 * 0.75);
+            match (w == 0.0, h == 0.0) {
+                (true, true) => (w, h) = (pw, ph),
+                (true, false) if ph > 0.0 => w = h * pw / ph,
+                (false, true) if pw > 0.0 => h = w * ph / pw,
+                _ => {}
+            }
+            let xfrm = xfrm_xml(x, y, w, h);
+            let (file, name) = if audio {
+                ("audioFile", "Audio")
+            } else {
+                ("videoFile", "Video")
+            };
+            media_shapes.push((id, audio));
+            format!(
+                "<p:pic><p:nvPicPr><p:cNvPr id=\"{id}\" name=\"{name} {n}\" descr=\"{}\"><a:hlinkClick r:id=\"\" action=\"ppaction://media\"/></p:cNvPr><p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr><p:nvPr><a:{file} r:link=\"{}\"/><p:extLst><p:ext uri=\"{{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}}\"><p14:media xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\" r:embed=\"{}\"/></p:ext></p:extLst></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed=\"{}\"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>{xfrm}<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr></p:pic>",
+                esc(description),
+                esc(&link),
+                esc(&embed),
+                esc(&image.rid)
+            )
+        }
         NewShape::Table { cells } => table_xml(id, n, cells, [x, y, w, h])?,
         NewShape::Chart {
             chart_type,
@@ -521,6 +560,10 @@ pub fn add_shape(
     let el = import_fragment(doc, &fragment)?;
     let tree = sp_tree(doc).ok_or_else(|| Error::InvalidEdit("slide has no shape tree".into()))?;
     append_to_tree(doc, tree, el);
+    // Media plays from a time node of its own, as PowerPoint writes it.
+    for (shape, audio) in media_shapes {
+        super::animation::add_media_node(doc, shape, audio)?;
+    }
     Ok(id)
 }
 

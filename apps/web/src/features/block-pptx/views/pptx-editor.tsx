@@ -59,6 +59,7 @@ import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
 import { LinkDialog } from '../components/link-dialog';
+import { MediaPlayButton, MediaPlayer } from '../components/media-player';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
 import { PresenterView } from '../components/presenter-view';
@@ -119,6 +120,7 @@ import {
   type LinkTarget,
 } from '../primitives/create-editor-commands';
 import { createFormatPainter } from '../primitives/create-format-painter';
+import { createMediaUrls } from '../primitives/create-media-urls';
 import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
@@ -574,6 +576,8 @@ export function PptxEditor() {
     }
     stage.setPointerCapture(e.pointerId);
     const toggle = e.metaKey || e.ctrlKey;
+    // A click on the slide stops a clip playing over it.
+    setPlaying(undefined);
     // Ctrl+click follows a link in the text being edited, as in PowerPoint.
     const editLayout = editor.editing()?.layout;
     if (toggle && editLayout) {
@@ -1121,6 +1125,15 @@ export function PptxEditor() {
   const [ribbonTab, setRibbonTab] = createSignal('home');
   const [animationPane, setAnimationPane] = createSignal(false);
   const [selectionPane, setSelectionPane] = createSignal(false);
+  // ---- video and audio ------------------------------------------------------
+  const mediaUrls = createMediaUrls(engine);
+  /** The media shape playing over the stage. */
+  const [playing, setPlaying] = createSignal<number>();
+  /** The one selected video or audio shape, outside text editing. */
+  const selectedMedia = () => {
+    const shape = editor.selectedShape();
+    return shape?.media && !editor.editing() ? shape : undefined;
+  };
   function toggleSelectionPane() {
     const next = !selectionPane();
     if (next) {
@@ -2073,6 +2086,37 @@ export function PptxEditor() {
                         </ContextMenuContent>
                       </ContextMenu.Portal>
                     </ContextMenu>
+                    <Show when={selectedMedia()}>
+                      {(shape) => {
+                        const box = () => ({
+                          x: shape().x * scale(),
+                          y: shape().y * scale(),
+                          w: shape().w * scale(),
+                          h: shape().h * scale(),
+                        });
+                        return (
+                          <Show
+                            when={playing() === shape().id && shape().media}
+                            fallback={
+                              <MediaPlayButton
+                                box={box()}
+                                kind={shape().media?.kind ?? 'video'}
+                                onPlay={() => setPlaying(shape().id)}
+                              />
+                            }
+                          >
+                            {(media) => (
+                              <MediaPlayer
+                                media={media()}
+                                box={box()}
+                                urls={mediaUrls}
+                                onEnded={() => setPlaying(undefined)}
+                              />
+                            )}
+                          </Show>
+                        );
+                      }}
+                    </Show>
                     <Show when={crop.active()}>
                       <CropOverlay
                         crop={crop}

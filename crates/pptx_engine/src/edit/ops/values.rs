@@ -219,6 +219,32 @@ pub enum NewShape {
         #[serde(default, deserialize_with = "nullable")]
         description: String,
     },
+    /// A video, played when clicked in a slide show. A zero width or height
+    /// takes the poster's aspect ratio.
+    Video {
+        /// Base64-encoded MP4, M4V, MOV, WebM, WMV, or AVI bytes.
+        data: String,
+        /// The file's MIME type (`video/mp4`...).
+        content_type: String,
+        /// Base64-encoded PNG or JPEG shown until it plays (its first frame).
+        poster: String,
+        /// Alt text.
+        #[serde(default, deserialize_with = "nullable")]
+        description: String,
+    },
+    /// An audio clip, shown as its poster (a speaker icon) and played when
+    /// clicked in a slide show.
+    Audio {
+        /// Base64-encoded MP3, M4A, WAV, or OGG bytes.
+        data: String,
+        /// The file's MIME type (`audio/mpeg`...).
+        content_type: String,
+        /// Base64-encoded PNG or JPEG icon.
+        poster: String,
+        /// Alt text.
+        #[serde(default, deserialize_with = "nullable")]
+        description: String,
+    },
     /// A table.
     Table {
         /// Cell text, row by row.

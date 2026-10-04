@@ -2739,6 +2739,24 @@ export const EditPresentation = z.object({
                     .strict(),
                   z
                     .object({
+                      data: z.string(),
+                      contentType: z.string(),
+                      poster: z.string(),
+                      description: z.string().optional(),
+                      kind: z.literal('video'),
+                    })
+                    .strict(),
+                  z
+                    .object({
+                      data: z.string(),
+                      contentType: z.string(),
+                      poster: z.string(),
+                      description: z.string().optional(),
+                      kind: z.literal('audio'),
+                    })
+                    .strict(),
+                  z
+                    .object({
                       cells: z.array(z.array(z.string())),
                       kind: z.literal('table'),
                     })

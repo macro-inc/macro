@@ -2,7 +2,7 @@
  * Slide show: the deck full screen, one slide at a time, with the slides'
  * transitions and PowerPoint's keyboard controls (see `createShow`); S shows
  * speaker notes. Links show a hand and their ScreenTip, and a click follows
- * them.
+ * them; a click on a video or audio clip plays it in place.
  */
 
 import type { DeckOutline, LinkRegion } from '@core/pptx-engine/types';
@@ -12,13 +12,17 @@ import X from '@phosphor/x.svg';
 import {
   createResource,
   createSignal,
+  For,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import { linkLabel, regionAt } from '../core/links';
+import { mediaShapes } from '../core/media';
+import { createMediaUrls } from '../primitives/create-media-urls';
 import { createShow } from '../primitives/create-show';
+import { MediaPlayer } from './media-player';
 import { ShowCanvas } from './show-canvas';
 
 export function SlideShow(props: {
@@ -51,20 +55,58 @@ export function SlideShow(props: {
     () => (props.engine.linkRegions ? show.index() : undefined),
     async (index) => (await props.engine.linkRegions?.(index)) ?? []
   );
+  const [overMedia, setOverMedia] = createSignal(false);
   const [hover, setHover] = createSignal<{
     region: LinkRegion;
     x: number;
     y: number;
   }>();
-  /** The link under a pointer event, in slide points. */
-  const regionAtEvent = (e: MouseEvent) => {
-    const list = regions.latest;
-    if (!list?.length || show.ended() || show.screen() !== 'slide') return;
+  /** Where the slide sits on screen: its scale and top-left corner. */
+  const frame = () => {
     const { w, h } = size();
     const scale = Math.min(w / props.deck.width, h / props.deck.height);
-    const x = (e.clientX - (w - props.deck.width * scale) / 2) / scale;
-    const y = (e.clientY - (h - props.deck.height * scale) / 2) / scale;
-    return regionAt(list, x, y);
+    return {
+      scale,
+      x: (w - props.deck.width * scale) / 2,
+      y: (h - props.deck.height * scale) / 2,
+    };
+  };
+  /** A pointer event's position in slide points. */
+  const slidePoint = (e: MouseEvent) => {
+    const f = frame();
+    return { x: (e.clientX - f.x) / f.scale, y: (e.clientY - f.y) / f.scale };
+  };
+  const showing = () => !show.ended() && show.screen() === 'slide';
+  /** The link under a pointer event. */
+  const regionAtEvent = (e: MouseEvent) => {
+    const list = regions.latest;
+    if (!list?.length || !showing()) return;
+    const p = slidePoint(e);
+    return regionAt(list, p.x, p.y);
+  };
+
+  // Video and audio play where they sit when clicked.
+  const mediaUrls = createMediaUrls(props.engine);
+  const media = () => (showing() ? mediaShapes(show.slide()) : []);
+  /** The clip playing, by slide index and shape id. */
+  const [playing, setPlaying] = createSignal<{ index: number; id: number }>();
+  const mediaAtEvent = (e: MouseEvent) => {
+    const p = slidePoint(e);
+    return media()
+      .reverse()
+      .find(
+        ({ shape: s }) =>
+          p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h
+      );
+  };
+  const screenBox = (s: { x: number; y: number; w: number; h: number }) => {
+    const f = frame();
+    return {
+      x: f.x + s.x * f.scale,
+      y: f.y + s.y * f.scale,
+      w: s.w * f.scale,
+      h: s.h * f.scale,
+    };
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -109,16 +151,24 @@ export function SlideShow(props: {
       aria-label="Slide show"
       data-testid="pptx-slideshow"
       class="fixed inset-0 z-modal flex items-center justify-center bg-[black] outline-none"
-      classList={{ 'cursor-none': !chrome() && !hover() }}
-      style={{ cursor: hover() ? 'pointer' : undefined }}
+      classList={{ 'cursor-none': !chrome() && !hover() && !overMedia() }}
+      style={{ cursor: hover() || overMedia() ? 'pointer' : undefined }}
       onKeyDown={onKeyDown}
       onPointerMove={(e) => {
         showChrome();
         const region = regionAtEvent(e);
         setHover(region ? { region, x: e.clientX, y: e.clientY } : undefined);
+        setOverMedia(!region && !!mediaAtEvent(e));
       }}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest('button')) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('[data-media-player]'))
+          return;
+        const clip = mediaAtEvent(e);
+        if (clip) {
+          setPlaying({ index: show.index(), id: clip.shape.id });
+          return;
+        }
         const region = regionAtEvent(e);
         if (region) {
           setHover(undefined);
@@ -146,6 +196,24 @@ export function SlideShow(props: {
         onShown={show.shown}
         testId="pptx-slideshow-canvas"
       />
+      <For each={media()}>
+        {(clip) => (
+          <Show
+            when={
+              playing()?.index === show.index() &&
+              playing()?.id === clip.shape.id
+            }
+          >
+            <MediaPlayer
+              media={clip.media}
+              box={screenBox(clip.shape)}
+              urls={mediaUrls}
+              testId="pptx-slideshow-media"
+              onEnded={() => setPlaying(undefined)}
+            />
+          </Show>
+        )}
+      </For>
       <Show when={hover()}>
         {(h) => (
           <div

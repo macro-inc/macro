@@ -249,6 +249,15 @@ export async function getTextLayout(
   ).layout;
 }
 
+/** The bytes of a video or audio clip (`MediaOutline.part`). */
+export async function getMediaBytes(
+  docKey: string,
+  part: string
+): Promise<Uint8Array> {
+  return (await request({ kind: 'mediaBytes', docKey, part }, 'mediaBytes'))
+    .bytes;
+}
+
 /** The clickable areas of a slide: linked text first, then linked shapes. */
 export async function getLinkRegions(
   docKey: string,

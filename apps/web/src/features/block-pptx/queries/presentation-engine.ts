@@ -13,6 +13,7 @@ import {
   enableCollab,
   findText,
   getLinkRegions,
+  getMediaBytes,
   getOutline,
   getPresetPaths,
   getSlideOutline,
@@ -75,6 +76,7 @@ function readers(key: string) {
     textLayout: (index: number, shape: number, cell?: CellRef) =>
       getTextLayout(key, index, shape, cell),
     linkRegions: (index: number) => getLinkRegions(key, index),
+    mediaBytes: (part: string) => getMediaBytes(key, part),
     presetPaths: getPresetPaths,
     save: () => savePresentation(key),
     close: () => closePresentation(key),

@@ -31,6 +31,7 @@ import { effectInfo, specOf } from '../core/animation-catalog';
 import { orderRange, textInRange } from '../core/caret';
 import { formatState, stepFontSize } from '../core/formatting';
 import { linkSpan } from '../core/links';
+import { mediaBox, mediaType } from '../core/media';
 import { modulate } from '../core/palette';
 import { aspectCrop, NO_CROP } from '../core/picture';
 import {
@@ -49,6 +50,7 @@ import {
 import { createDeckCommands } from './create-deck-commands';
 import type { PresentationSession } from './create-presentation-session';
 import type { SlideEditor } from './create-slide-editor';
+import { audioPoster, videoPoster } from './media-poster';
 
 export interface EditorCommandsOptions {
   session: PresentationSession;
@@ -525,6 +527,37 @@ export function createEditorCommands(options: EditorCommandsOptions) {
       if (id !== undefined) editor.select(id);
     } catch {
       context.notifyError('That picture could not be inserted.');
+    }
+  };
+  /** Insert ▸ Video or Audio: embeds the clip with a poster, centered. */
+  const insertMedia = async (file: File, kind: 'video' | 'audio') => {
+    const checked = mediaType(file, kind);
+    if ('error' in checked) {
+      context.notifyError(checked.error);
+      return;
+    }
+    try {
+      const poster =
+        kind === 'video' ? await videoPoster(file) : await audioPoster();
+      const natural =
+        kind === 'video'
+          ? { w: poster.width * 0.75, h: poster.height * 0.75 }
+          : { w: 48, h: 48 };
+      const box = mediaBox(natural, options.slideSize());
+      const id = await insert(
+        {
+          kind,
+          data: await fileToBase64(file),
+          contentType: checked.type,
+          poster: poster.data,
+          description: file.name,
+        },
+        box
+      );
+      if (id !== undefined) editor.select(id);
+      options.refocus();
+    } catch {
+      context.notifyError(`That ${kind} could not be inserted.`);
     }
   };
   // ---- charts ----------------------------------------------------------------
@@ -1448,6 +1481,7 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     insertTextBox,
     insertShape,
     insertImage,
+    insertMedia,
     insertTable,
     replaceImage,
     formatChart,

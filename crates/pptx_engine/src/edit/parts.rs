@@ -143,6 +143,85 @@ pub fn add_image(pres: &mut Presentation, source_part: &str, bytes: &[u8]) -> Re
     Ok(AddedImage { rid, width, height })
 }
 
+/// The largest media file `video` and `audio` shapes take.
+pub const MAX_MEDIA_BYTES: usize = 50 * 1024 * 1024;
+
+/// The file extension and content type for a media MIME type.
+fn media_format(content_type: &str, audio: bool) -> Result<(&'static str, &'static str)> {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let format = match mime.as_str() {
+        "video/mp4" => ("mp4", "video/mp4"),
+        "video/x-m4v" => ("m4v", "video/x-m4v"),
+        "video/quicktime" => ("mov", "video/quicktime"),
+        "video/webm" => ("webm", "video/webm"),
+        "video/x-ms-wmv" => ("wmv", "video/x-ms-wmv"),
+        "video/x-msvideo" | "video/avi" => ("avi", "video/x-msvideo"),
+        "audio/mpeg" | "audio/mp3" => ("mp3", "audio/mpeg"),
+        "audio/mp4" | "audio/x-m4a" | "audio/m4a" => ("m4a", "audio/mp4"),
+        "audio/wav" | "audio/x-wav" | "audio/wave" => ("wav", "audio/wav"),
+        "audio/ogg" => ("ogg", "audio/ogg"),
+        _ => {
+            return Err(Error::InvalidEdit(format!(
+                "unsupported media type `{content_type}`"
+            )));
+        }
+    };
+    if format.1.starts_with("audio/") != audio {
+        return Err(Error::InvalidEdit(format!(
+            "`{content_type}` is not {}",
+            if audio { "audio" } else { "video" }
+        )));
+    }
+    Ok(format)
+}
+
+/// Stores a video or audio file and relates it to `source_part` as
+/// PowerPoint does: returns the `a:videoFile`/`a:audioFile` link and the
+/// `p14:media` embed relationship ids.
+pub fn add_media(
+    pres: &mut Presentation,
+    source_part: &str,
+    bytes: Vec<u8>,
+    content_type: &str,
+    audio: bool,
+) -> Result<(String, String)> {
+    if bytes.is_empty() || bytes.len() > MAX_MEDIA_BYTES {
+        return Err(Error::InvalidEdit(format!(
+            "media files must be between 1 byte and {} MB",
+            MAX_MEDIA_BYTES / (1024 * 1024)
+        )));
+    }
+    let (ext, content_type) = media_format(content_type, audio)?;
+    let name = pres
+        .pkg
+        .unique_part_name("/ppt/media/media", &format!(".{ext}"));
+    pres.pkg.write(&name, bytes, None);
+    pres.pkg
+        .content_types_mut()
+        .ensure_default(ext, content_type);
+    if pres.pkg.content_type(&name) != Some(content_type) {
+        pres.pkg
+            .content_types_mut()
+            .set_override(&name, content_type);
+    }
+    let rels = pres.rels_mut(source_part)?;
+    let link = rels.add_internal(
+        if audio {
+            rel_type::AUDIO
+        } else {
+            rel_type::VIDEO
+        },
+        &name,
+    );
+    let embed = rels.add_internal(rel_type::MEDIA, &name);
+    Ok((link, embed))
+}
+
 /// A fresh part name in the same folder, numbered like the original
 /// (`/ppt/charts/chart3.xml` → `/ppt/charts/chart7.xml`).
 pub fn sibling_name(pres: &Presentation, part: &str) -> String {

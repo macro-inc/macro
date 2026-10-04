@@ -32,8 +32,10 @@ pub use animation::AnimationOutline;
 mod animation;
 
 pub use links::LinkRegion;
+pub use media::MediaOutline;
 
 mod links;
+mod media;
 
 pub use picture::{
     CropOutline, EffectsOutline, GlowOutline, PictureOutline, ReflectionOutline, ShadowOutline,
@@ -233,6 +235,9 @@ pub struct ShapeOutline {
     /// The shape link's ScreenTip.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link_tip: Option<String>,
+    /// The clip a video or audio shape plays.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media: Option<MediaOutline>,
     /// Preset geometry name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub geometry: Option<String>,
@@ -652,7 +657,12 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], media: &Media) -> ShapeOutlin
     let link = crate::model::shape::c_nv_pr(doc, s.node)
         .and_then(|nv| doc.child(nv, Ns::A, "hlinkClick"))
         .and_then(|h| read_link(&s.part, h));
+    let clip = match &s.kind {
+        ShapeKind::Picture(_) => media::media_outline(doc, &s.part, s.node),
+        _ => None,
+    };
     ShapeOutline {
+        media: clip,
         link: link.as_ref().and_then(|l| link_string(&media.slides, l)),
         link_tip: link.and_then(|l| l.tooltip),
         id: s.id,

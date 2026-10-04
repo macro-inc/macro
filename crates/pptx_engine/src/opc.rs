@@ -64,6 +64,14 @@ pub mod rel_type {
     /// Slide → comments.
     pub const COMMENTS: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    /// Slide → video file (`a:videoFile r:link`).
+    pub const VIDEO: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
+    /// Slide → audio file (`a:audioFile r:link`).
+    pub const AUDIO: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
+    /// Slide → embedded media (`p14:media r:embed`).
+    pub const MEDIA: &str = "http://schemas.microsoft.com/office/2007/relationships/media";
     /// Package → core properties.
     pub const CORE_PROPERTIES: &str =
         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";

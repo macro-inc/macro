@@ -384,8 +384,14 @@ Layout and test hooks:
   (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table
   grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
   (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
-  `pptx-chart-<kind>-<grouping>`), Text box (`pptx-insert-textbox`), and Link
-  (`pptx-insert-link`).
+  `pptx-chart-<kind>-<grouping>`), Video and Audio (`pptx-insert-video`,
+  `pptx-insert-audio`; file inputs `pptx-video-input`, `pptx-audio-input`;
+  clips up to 50 MB are embedded with a poster frame or speaker icon), Text
+  box (`pptx-insert-textbox`), and Link (`pptx-insert-link`). A selected
+  video or audio shape shows Play (`pptx-media-play`), which plays it over
+  the shape (`pptx-media-player`, with `pptx-media-video` or
+  `pptx-media-audio`) until the slide is clicked; in a slide show a click on
+  the clip plays it in place (`pptx-slideshow-media`) instead of advancing.
   Design: slide background, and Variants that restyle every slide through the
   theme: Colors (`pptx-theme-colors`, then `pptx-theme-colors-<set name>`,
   such as `Red Violet`) and Fonts (`pptx-theme-fonts`, then

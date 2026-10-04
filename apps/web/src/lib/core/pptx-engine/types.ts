@@ -154,6 +154,8 @@ export interface ShapeOutline {
   link?: string;
   /** The shape link's ScreenTip. */
   linkTip?: string;
+  /** The clip a video or audio shape plays. */
+  media?: MediaOutline;
   geometry?: string;
   /** Solid fill as `#RRGGBB`. */
   fill?: string;
@@ -587,6 +589,14 @@ export type NewShape =
   | { kind: 'shape'; preset: string; text?: string }
   | { kind: 'line'; arrow?: boolean }
   | { kind: 'image'; data: string; description?: string }
+  /** A clip played when clicked in a show; `poster` is shown until then. */
+  | {
+      kind: 'video' | 'audio';
+      data: string;
+      contentType: string;
+      poster: string;
+      description?: string;
+    }
   | { kind: 'table'; cells: string[][] }
   | {
       kind: 'chart';
@@ -1182,4 +1192,13 @@ export interface LinkRegion {
   tip?: string;
   /** Corners in slide points, clockwise from the top left. */
   quad: [number, number, number, number, number, number, number, number];
+}
+
+/** The clip of a video or audio shape. */
+export interface MediaOutline {
+  kind: 'video' | 'audio';
+  /** The embedded media part (`mediaBytes`). */
+  part?: string;
+  /** The address of a linked clip. */
+  url?: string;
 }

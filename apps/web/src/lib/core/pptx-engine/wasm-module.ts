@@ -44,6 +44,8 @@ export interface WasmPptxDocument {
     row?: number,
     col?: number
   ) => string;
+  /** The bytes of a video or audio clip (`MediaOutline.part`). */
+  mediaBytes: (part: string) => Uint8Array;
   /** `LinkRegion[]` JSON: a slide's clickable areas. */
   linkRegions: (index: number) => string;
   /** Applies an `EditOp[]` JSON batch; returns `EditResult` JSON. */

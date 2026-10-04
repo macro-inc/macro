@@ -310,6 +310,13 @@ async function serve(
         Transferable[],
       ];
     })
+    .with({ kind: 'mediaBytes' }, ({ docKey, part }) => {
+      const bytes = documentFor(docKey).mediaBytes(part);
+      return [{ id, ok: true, kind: 'mediaBytes', bytes }, [bytes.buffer]] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
     .with({ kind: 'linkRegions' }, ({ docKey, index }) => {
       const regions = JSON.parse(
         documentFor(docKey).linkRegions(index)

@@ -2,13 +2,16 @@
  * The Insert tab: slides, tables, pictures, shapes, text boxes, links.
  */
 
+import FilmStrip from '@phosphor/film-strip.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
 import Plus from '@phosphor/plus.svg';
 import ShapesIcon from '@phosphor/shapes.svg';
+import SpeakerHigh from '@phosphor/speaker-high.svg';
 import TableIcon from '@phosphor/table.svg';
 import TextT from '@phosphor/text-t.svg';
 import { createSignal, For, Index, type JSX } from 'solid-js';
+import { ACCEPT } from '../../core/media';
 import {
   PopoverItem,
   RibbonGroup,
@@ -70,6 +73,8 @@ export function InsertTab(props: {
   const c = env.commands;
   const ro = () => env.readonly();
   let fileInput!: HTMLInputElement;
+  let videoInput!: HTMLInputElement;
+  let audioInput!: HTMLInputElement;
   return (
     <>
       <RibbonGroup label="Slides">
@@ -179,6 +184,52 @@ export function InsertTab(props: {
             {(close) => props.chartMenu!(close)}
           </RibbonPopover>
         ) : null}
+      </RibbonGroup>
+      <RibbonGroup label="Media">
+        <RibbonTextButton
+          label="Video"
+          tooltip="Insert a video from this device"
+          disabled={ro()}
+          data-testid="pptx-insert-video"
+          onClick={() => videoInput.click()}
+        >
+          <FilmStrip />
+          Video
+        </RibbonTextButton>
+        <RibbonTextButton
+          label="Audio"
+          tooltip="Insert audio from this device"
+          disabled={ro()}
+          data-testid="pptx-insert-audio"
+          onClick={() => audioInput.click()}
+        >
+          <SpeakerHigh />
+          Audio
+        </RibbonTextButton>
+        <input
+          ref={videoInput}
+          type="file"
+          accept={ACCEPT.video}
+          class="hidden"
+          data-testid="pptx-video-input"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (file) void c.insertMedia(file, 'video');
+          }}
+        />
+        <input
+          ref={audioInput}
+          type="file"
+          accept={ACCEPT.audio}
+          class="hidden"
+          data-testid="pptx-audio-input"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (file) void c.insertMedia(file, 'audio');
+          }}
+        />
       </RibbonGroup>
       <RibbonGroup label="Text">
         <RibbonTextButton

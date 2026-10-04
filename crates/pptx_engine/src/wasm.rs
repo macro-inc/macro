@@ -235,6 +235,12 @@ impl PptxDocument {
         to_json(&lay)
     }
 
+    /// The bytes of a video or audio clip (`MediaOutline.part`).
+    #[wasm_bindgen(js_name = mediaBytes)]
+    pub fn media_bytes(&mut self, part: &str) -> Result<Vec<u8>, JsError> {
+        self.pres().media_bytes(part).map_err(js_err)
+    }
+
     /// A slide's clickable areas as JSON (`LinkRegion[]`): linked text, then
     /// linked shapes.
     #[wasm_bindgen(js_name = linkRegions)]

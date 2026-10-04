@@ -128,6 +128,14 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     if !s.alt_text.is_empty() {
         let _ = writeln!(out, "{pad}  alt text: {}", quote(&s.alt_text));
     }
+    if let Some(media) = &s.media {
+        let source = match (&media.part, &media.url) {
+            (Some(_), _) => "embedded".to_owned(),
+            (None, Some(url)) => format!("linked {}", quote(url)),
+            (None, None) => "missing".to_owned(),
+        };
+        let _ = writeln!(out, "{pad}  {}: {source}", media.kind);
+    }
     if let Some(link) = &s.link {
         let tip = s
             .link_tip

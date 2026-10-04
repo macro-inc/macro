@@ -56,6 +56,8 @@ export interface PresentationEngine {
     end: number,
     backdrop: boolean
   ) => Promise<ImageBitmap>;
+  /** The bytes of a video or audio clip (`MediaOutline.part`). */
+  mediaBytes?: (part: string) => Promise<Uint8Array>;
   /** A slide's clickable link areas (slide shows follow them). */
   linkRegions?: (index: number) => Promise<LinkRegion[]>;
   /**

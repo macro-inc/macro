@@ -96,6 +96,36 @@ pub(super) fn write(doc: &mut XmlDoc, effects: Vec<Placed>, shapes: &ShapeIndex)
     Ok(())
 }
 
+/// Adds the time node media shape `shape` plays from (`p:video` or
+/// `p:audio`) to the slide's timing, as PowerPoint writes it for inserted
+/// media: it plays when clicked in a slide show.
+pub(crate) fn add_media_node(doc: &mut XmlDoc, shape: u32, audio: bool) -> Result<()> {
+    let existing = timing(doc).map(|t| unwrap_alternate(doc, t));
+    let timing = match existing.filter(|&t| root_ctn(doc, t).is_some()) {
+        Some(t) => t,
+        None => {
+            if let Some(t) = existing {
+                doc.detach(t);
+            }
+            create_timing(doc)?
+        }
+    };
+    let Some(root) = root_ctn(doc, timing) else {
+        return Ok(());
+    };
+    let list = doc.ensure_child(root, Ns::P, "childTnLst", CTN_ORDER);
+    let id = max_id(doc, timing) + 1;
+    let el = if audio { "audio" } else { "video" };
+    let node = import_fragment(
+        doc,
+        &format!(
+            r#"<p:{el}><p:cMediaNode vol="80000"><p:cTn id="{id}" fill="hold" display="0"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="{shape}"/></p:tgtEl></p:cMediaNode></p:{el}>"#
+        ),
+    )?;
+    doc.append_child(list, node);
+    Ok(())
+}
+
 /// Replaces an `mc:AlternateContent` around the timing with the timing itself.
 fn unwrap_alternate(doc: &mut XmlDoc, timing: NodeId) -> NodeId {
     let root = doc.root();

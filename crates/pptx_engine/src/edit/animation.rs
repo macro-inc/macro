@@ -23,6 +23,7 @@ mod read;
 mod sequence;
 
 pub(crate) use read::read;
+pub(crate) use sequence::add_media_node;
 
 use self::markup::NewEffect;
 use self::read::{Entry, ShapeIndex};

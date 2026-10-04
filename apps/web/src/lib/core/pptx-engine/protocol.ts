@@ -60,6 +60,8 @@ export type PptxRequest =
       shape: number;
       cell?: CellRef;
     })
+  /** The bytes of a video or audio clip. */
+  | (Base & { kind: 'mediaBytes'; part: string })
   /** The clickable areas of a slide. */
   | (Base & { kind: 'linkRegions'; index: number })
   | (Base & { kind: 'apply'; ops: string; group?: string })
@@ -107,6 +109,7 @@ export type PptxResponse =
     }
   | { id: number; ok: true; kind: 'textLayout'; layout: TextLayoutInfo | null }
   | { id: number; ok: true; kind: 'linkRegions'; regions: LinkRegion[] }
+  | { id: number; ok: true; kind: 'mediaBytes'; bytes: Uint8Array }
   | {
       id: number;
       ok: true;

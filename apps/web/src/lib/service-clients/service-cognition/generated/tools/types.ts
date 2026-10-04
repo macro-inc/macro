@@ -1671,6 +1671,44 @@ export type NewShape =
     }
   | {
       /**
+       * Base64-encoded MP4, M4V, MOV, WebM, WMV, or AVI bytes.
+       */
+      data: string;
+      /**
+       * The file's MIME type (`video/mp4`...).
+       */
+      contentType: string;
+      /**
+       * Base64-encoded PNG or JPEG shown until it plays (its first frame).
+       */
+      poster: string;
+      /**
+       * Alt text.
+       */
+      description?: string;
+      kind: 'video';
+    }
+  | {
+      /**
+       * Base64-encoded MP3, M4A, WAV, or OGG bytes.
+       */
+      data: string;
+      /**
+       * The file's MIME type (`audio/mpeg`...).
+       */
+      contentType: string;
+      /**
+       * Base64-encoded PNG or JPEG icon.
+       */
+      poster: string;
+      /**
+       * Alt text.
+       */
+      description?: string;
+      kind: 'audio';
+    }
+  | {
+      /**
        * Cell text, row by row.
        */
       cells: string[][];
