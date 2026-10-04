@@ -365,30 +365,77 @@ one-time ~6 MB module download.
 
 Layout and test hooks:
 
+- **Ribbon** (`pptx-toolbar`): tabs `pptx-tab-<id>` for Home, Insert,
+  Design, Transitions, Slide Show, and View, plus contextual Shape Format,
+  Table Design, Layout (tables), and Chart Design tabs that appear for the
+  selection (`pptx-tab-shape-format`, `pptx-tab-table-design`,
+  `pptx-tab-table-layout`, `pptx-tab-chart-design`). Undo/Redo sit left of the
+  tabs; the save state (`pptx-save-state`), Download, and **Present**
+  (`pptx-present`) sit right. Home: clipboard, **New slide**
+  (`pptx-new-slide`), layouts, font (`pptx-font-family`) and size
+  (`pptx-font-size`) boxes, Bold (`pptx-bold`) and the other run toggles,
+  text and highlight colors (`pptx-text-color`), bullets and numbering, list
+  levels, line spacing, alignment, the shape gallery (`pptx-insert-shape`,
+  then `pptx-shape-<preset>`), Arrange (`pptx-arrange`), Shape fill
+  (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table
+  grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
+  (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
+  `pptx-chart-<kind>-<grouping>`), Text box (`pptx-insert-textbox`), and Link.
+  Transitions: `pptx-transition-<kind>`, Effect options, duration
+  (`pptx-transition-duration`), automatic advance, and Apply to all
+  (`pptx-transition-all`). Color menus are PowerPoint's theme grid with tints.
 - **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one
   `pptx-thumbnail` button per slide, labelled `Slide N: <title>`, with
   `aria-current="true"` on the current one. Hovering a thumbnail shows
   **Duplicate slide**, **Hide slide**/**Show slide**, and **Delete slide**;
-  thumbnails reorder by dragging. **New slide** is at the bottom.
+  thumbnails reorder by dragging; right-click opens cut/copy/paste, new,
+  duplicate, delete, layout, background, and hide. **New slide** is at the
+  bottom.
 - **Stage** (`pptx-stage`, focusable): click selects a shape
   (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
-  `pptx-rotate-handle`); drag moves it; handles resize and rotate. The stage
-  covers exactly the slide, so slide point `(x, y)` is at
-  `stage.left + x × stage.width / slideWidth`.
-- **Text**: double-click (or Enter/F2 on a selected text shape) starts
-  editing; keystrokes go to a hidden textarea (`pptx-text-input`, "Slide
-  text"). The caret is `pptx-caret`, an SVG line of zero width, so assert it
-  with `toBeAttached()`, not `toBeVisible()`. Escape stops editing.
-- **Tables**: double-click a cell to edit it in `pptx-cell-input`; Enter
-  commits, Escape cancels.
-- **Toolbar** (`pptx-toolbar`): Undo, Redo, Text box (`pptx-insert-textbox`),
-  Insert shape (`pptx-insert-shape`, then `pptx-shape-<preset>`), Picture,
-  Table (`pptx-insert-table`), Bold (`pptx-bold`), Italic, Underline,
-  Smaller/Larger text (`pptx-font-size` shows the size), Text color, alignment,
-  Bullets, Shape fill, the save state, Save, and Download.
+  `pptx-rotate-handle`); Shift/Cmd/Ctrl-click adds to the selection, dragging
+  on empty slide draws a marquee (`pptx-marquee`), and several selected shapes
+  show `pptx-selection-outline` boxes inside one handle box; drag moves,
+  handles resize (several shapes scale together) and rotate. Right-click opens
+  a menu for what is under the pointer (shapes, text being edited, a table, a
+  chart, or the empty slide). The stage covers exactly the slide, so slide
+  point `(x, y)` is at `stage.left + x × stage.width / slideWidth`.
+- **Text**: double-click (or Enter/F2 on a selected text shape, or just start
+  typing) starts editing; keystrokes go to a hidden textarea
+  (`pptx-text-input`, "Slide text"). The caret is `pptx-caret`, an SVG line of
+  zero width, so assert it with `toBeAttached()`, not `toBeVisible()`. Escape
+  stops editing.
+- **Tables**: click a cell to type in it in place (same caret); Tab and
+  Shift+Tab move between cells (Tab in the last cell adds a row); drag across
+  cells to select a range (`pptx-cell-range`), which the Table Design/Layout
+  tabs and the table menu act on (merge/split, shading `pptx-cell-shading`,
+  borders `pptx-cell-borders`, styles `pptx-table-styles`, insert/delete rows
+  and columns, distribute, alignment). Drag a column or row border of a
+  selected table to resize it; drag near the frame's edge to move the table.
+- **Charts**: double-click a chart, or **Edit data** (`pptx-chart-edit-data`)
+  on Chart Design, opens the data grid (`pptx-chart-data`, cells
+  `pptx-chart-cell-<row>-<col>`, **Apply** `pptx-chart-apply`); Chart Design
+  also changes the type (`pptx-chart-type`), title, legend, data labels, and
+  colors.
+- **Format pane** (`pptx-format-pane`): Format shape… in menus opens fill and
+  line, size and position (with alt text `pptx-alt-text`), and text box and
+  paragraph settings; Format background… opens the slide background.
+- **Find and replace** (`pptx-find`, Cmd/Ctrl+F and Cmd/Ctrl+H): find input
+  `pptx-find-input`, `pptx-replace-input`, count `pptx-find-count`, and
+  `pptx-replace-all`; Enter steps through matches, selecting each in its shape
+  or cell.
+- **Slide show** (`pptx-slideshow`, F5 from the start, Shift+F5 from the
+  current slide): full screen with the slides' transitions; →/Space/click
+  advance, ← goes back, a number then Enter jumps, B/W blank the screen, S
+  shows notes, Esc ends.
 - **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
-  Cmd/Ctrl+S saves now, Cmd/Ctrl+D duplicates, arrows nudge (Shift for 10 pt),
-  Delete removes, PageUp/PageDown change slides.
+  Cmd/Ctrl+S saves now, Cmd/Ctrl+A selects all, Cmd/Ctrl+C/X/V copy, cut, and
+  paste shapes (and slides from the rail; also across decks), Cmd/Ctrl+D
+  duplicates, Cmd/Ctrl+G and Shift+Cmd/Ctrl+G group and ungroup, Cmd/Ctrl+] and
+  [ (with Shift: to front/back) reorder, Cmd/Ctrl+M adds a slide, arrows nudge
+  (Shift for 10 pt), Delete removes, Tab walks through shapes, PageUp/PageDown
+  change slides, Cmd/Ctrl+±/0 and Cmd/Ctrl+wheel zoom. The status bar shows the
+  slide number and a zoom slider (`pptx-zoom` fits the slide).
 - **Speaker notes** (`pptx-notes`) sit below the slide.
 
 Changes save automatically 1.5 s after the last edit, when the tab is hidden,
@@ -411,10 +458,11 @@ a deck nobody has shared yet, or anyone when the sync service is unreachable,
 gets the stored file read-only.
 
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
-and every shape with its id, kind, placeholder role, position in points, text,
-and table cells; `ReadContent` returns the same description) and changes them
-with `EditPresentation`, an atomic batch of the editor's own operations saved
-as a new version. When an `EditPresentation` result arrives in chat, an open
+transitions, and every shape with its id, kind, placeholder role, position in
+points, text, table cells with merges and style, and chart type and data;
+`ReadContent` returns the same description) and changes them with
+`EditPresentation`, an atomic batch of the editor's own operations saved as a
+new version (`saveAs` creates an edited copy instead). When an `EditPresentation` result arrives in chat, an open
 editor of that deck reloads in place and says **Updated with changes made
 elsewhere.** If it holds unsaved edits it keeps them and says the deck also
 changed elsewhere; saving those edits replaces the other version.

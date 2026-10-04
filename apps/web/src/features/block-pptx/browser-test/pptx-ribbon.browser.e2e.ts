@@ -1,0 +1,264 @@
+import { expect, type Page, test } from '@playwright/test';
+
+const KITCHEN_SINK = 'generated/kitchen-sink-financial.pptx';
+
+async function open(page: Page) {
+  await page.goto(`/?deck=${encodeURIComponent(KITCHEN_SINK)}&autosave=0`);
+  await expect(page.getByTestId('pptx-editor')).toBeVisible();
+  await expect(page.getByTestId('pptx-thumbnail').first()).toBeVisible();
+}
+
+function outline(page: Page) {
+  return page.evaluate(async () => {
+    const engine = window.pptxFixture.engine();
+    if (!engine) throw new Error('No presentation is open.');
+    return engine.outline();
+  });
+}
+
+/** Screen position of a slide point. */
+async function screen(page: Page, x: number, y: number) {
+  const box = await page.getByTestId('pptx-stage').boundingBox();
+  if (!box) throw new Error('The stage is not visible.');
+  const deck = await outline(page);
+  const scale = box.width / deck.width;
+  return { x: box.x + x * scale, y: box.y + y * scale };
+}
+
+async function goToSlide(page: Page, index: number) {
+  await page.getByTestId('pptx-thumbnail').nth(index).click();
+  await expect(page.getByTestId('pptx-thumbnail').nth(index)).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
+}
+
+/** The title of slide 1 (id 256, shape 2). */
+async function selectTitle(page: Page) {
+  const at = await screen(page, 480, 226);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.getByTestId('pptx-selection')).toBeVisible();
+}
+
+test('formats text from the ribbon', async ({ page }) => {
+  await open(page);
+  await selectTitle(page);
+  const size = page.getByTestId('pptx-font-size');
+  await size.fill('54');
+  await size.press('Enter');
+  await page.getByRole('button', { name: 'Strikethrough' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const layout = await window.pptxFixture.engine()?.textLayout(0, 2);
+        const run = layout?.styles[0]?.runs[0];
+        return run && { size: run.size, strike: run.strike };
+      })
+    )
+    .toEqual({ size: 54, strike: true });
+});
+
+test('right-click menus act on what was clicked', async ({ page }) => {
+  await open(page);
+  const at = await screen(page, 480, 226);
+  await page.mouse.click(at.x, at.y, { button: 'right' });
+  await expect(
+    page.getByRole('menuitem', { name: 'Bring to front' })
+  ).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect
+    .poll(async () =>
+      (await outline(page)).slides[0].shapes.some((s) => s.id === 2)
+    )
+    .toBe(false);
+  // The empty slide offers slide commands.
+  const empty = await screen(page, 480, 480);
+  await page.mouse.click(empty.x, empty.y, { button: 'right' });
+  await expect(
+    page.getByRole('menuitem', { name: 'Format background…' })
+  ).toBeVisible();
+});
+
+test('selects shapes with a marquee and aligns them', async ({ page }) => {
+  await open(page);
+  await goToSlide(page, 2);
+  // Nudge the second card down so aligning has something to do.
+  const card = await screen(page, 360, 200);
+  await page.mouse.click(card.x, card.y);
+  await page.keyboard.press('Shift+ArrowDown');
+  const from = await screen(page, 30, 120);
+  const to = await screen(page, 940, 380);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(
+    page.getByTestId('pptx-selection-outline').first()
+  ).toBeVisible();
+  const count = await page.getByTestId('pptx-selection-outline').count();
+  expect(count).toBeGreaterThan(4);
+  await page.getByTestId('pptx-arrange').click();
+  await page.getByRole('button', { name: 'Align top' }).click();
+  await expect
+    .poll(async () => {
+      const cards = (await outline(page)).slides[2].shapes.filter(
+        (s) => s.kind === 'shape' && s.w > 150 && s.w < 400
+      );
+      return new Set(cards.map((s) => Math.round(s.y))).size;
+    })
+    .toBe(1);
+});
+
+test('groups shapes, pastes them on another slide, and ungroups', async ({
+  page,
+}) => {
+  await open(page);
+  await goToSlide(page, 2);
+  const from = await screen(page, 30, 120);
+  const to = await screen(page, 940, 380);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.press('ControlOrMeta+g');
+  await expect
+    .poll(
+      async () =>
+        (await outline(page)).slides[2].shapes.filter((s) => s.kind === 'group')
+          .length
+    )
+    .toBe(1);
+  await page.keyboard.press('ControlOrMeta+c');
+  await goToSlide(page, 7);
+  await page.getByTestId('pptx-stage').focus();
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect
+    .poll(
+      async () =>
+        (await outline(page)).slides[7].shapes.filter((s) => s.kind === 'group')
+          .length
+    )
+    .toBe(1);
+  await page.keyboard.press('ControlOrMeta+Shift+g');
+  await expect
+    .poll(
+      async () =>
+        (await outline(page)).slides[7].shapes.filter((s) => s.kind === 'group')
+          .length
+    )
+    .toBe(0);
+});
+
+test('edits table cells in place and merges a range', async ({ page }) => {
+  await open(page);
+  await goToSlide(page, 5);
+  const table = (await outline(page)).slides[5].shapes.find(
+    (s) => s.kind === 'table'
+  );
+  if (!table?.table) throw new Error('No table on slide 6.');
+  const xs = [table.x];
+  for (const w of table.table.columnWidths) xs.push(xs[xs.length - 1] + w);
+  const ys = [table.y];
+  for (const h of table.table.laidOutRowHeights) ys.push(ys[ys.length - 1] + h);
+  const cell = (r: number, c: number) =>
+    screen(page, (xs[c] + xs[c + 1]) / 2, (ys[r] + ys[r + 1]) / 2);
+  const a = await cell(1, 1);
+  await page.mouse.click(a.x, a.y);
+  await expect(page.getByTestId('pptx-caret')).toBeAttached();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' est.');
+  await expect
+    .poll(
+      async () =>
+        (await outline(page)).slides[5].shapes.find((s) => s.id === table.id)
+          ?.table?.rows[1][1]
+    )
+    .toBe('84.2 est.');
+  await page.keyboard.press('Escape');
+  const b = await cell(2, 2);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByTestId('pptx-cell-range')).toBeVisible();
+  await page.getByTestId('pptx-tab-table-layout').click();
+  await page.getByTestId('pptx-merge-cells').click();
+  await expect
+    .poll(async () => {
+      const t = (await outline(page)).slides[5].shapes.find(
+        (s) => s.id === table.id
+      )?.table;
+      return t && [t.cells[1][1].rowSpan, t.cells[1][1].colSpan];
+    })
+    .toEqual([2, 2]);
+});
+
+test('inserts a chart and edits its data', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('pptx-tab-insert').click();
+  await page.getByTestId('pptx-insert-chart').click();
+  await page.getByTestId('pptx-chart-column-clustered').click();
+  await expect(page.getByTestId('pptx-chart-data')).toBeVisible();
+  await page.getByTestId('pptx-chart-cell-0-1').fill('Revenue');
+  await page.getByTestId('pptx-chart-cell-1-1').fill('9.5');
+  await page.getByTestId('pptx-chart-apply').click();
+  await expect
+    .poll(async () => {
+      const chart = (await outline(page)).slides[0].shapes.find(
+        (s) => s.kind === 'chart'
+      )?.chart;
+      return (
+        chart && [chart.kind, chart.series[0].name, chart.series[0].values[0]]
+      );
+    })
+    .toEqual(['column', 'Revenue', 9.5]);
+  await page.getByTestId('pptx-tab-chart-design').click();
+  await page.getByTestId('pptx-chart-type').click();
+  await page.getByTestId('pptx-chart-line-standard').click();
+  await expect
+    .poll(
+      async () =>
+        (await outline(page)).slides[0].shapes.find((s) => s.kind === 'chart')
+          ?.chart?.kind
+    )
+    .toBe('line');
+});
+
+test('finds and replaces text across the deck', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('pptx-stage').focus();
+  await page.keyboard.press('ControlOrMeta+h');
+  await page.getByTestId('pptx-find-input').fill('Northwind');
+  await expect(page.getByTestId('pptx-find-count')).toContainText('of');
+  await page.getByTestId('pptx-replace-input').fill('Contoso');
+  await page.getByTestId('pptx-replace-all').click();
+  await expect
+    .poll(async () => JSON.stringify(await outline(page)).includes('Northwind'))
+    .toBe(false);
+  expect(JSON.stringify(await outline(page))).toContain('Contoso Analytics');
+});
+
+test('sets transitions and plays the slide show', async ({ page }) => {
+  await open(page);
+  await page.getByTestId('pptx-tab-transitions').click();
+  await page.getByTestId('pptx-transition-push').click();
+  await page.getByTestId('pptx-transition-all').click();
+  await expect
+    .poll(async () =>
+      (await outline(page)).slides.every((s) => s.transition?.kind === 'push')
+    )
+    .toBe(true);
+  await page.getByTestId('pptx-tab-slideshow').click();
+  await page.getByTestId('pptx-present-start').click();
+  const show = page.getByTestId('pptx-slideshow');
+  await expect(show).toBeVisible();
+  await expect(page.getByTestId('pptx-slideshow-counter')).toHaveText('1 / 8');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('pptx-slideshow-counter')).toHaveText('2 / 8');
+  await page.keyboard.press('Escape');
+  await expect(show).toBeHidden();
+  await expect(page.getByTestId('pptx-thumbnail').nth(1)).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
+});
