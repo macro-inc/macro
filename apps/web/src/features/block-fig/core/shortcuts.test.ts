@@ -139,6 +139,15 @@ describe('editing shortcuts', () => {
     ).toBe('bring-to-front');
   });
 
+  it('adds and removes auto layout', () => {
+    expect(shortcutAction(key('A', 'KeyA', { shiftKey: true }), true)).toBe(
+      'add-auto-layout'
+    );
+    expect(
+      shortcutAction(key('Å', 'KeyA', { shiftKey: true, altKey: true }), true)
+    ).toBe('remove-auto-layout');
+  });
+
   it('nudges with the arrows', () => {
     expect(shortcutAction(key('ArrowLeft', 'ArrowLeft'), true)).toBe(
       'nudge-left'

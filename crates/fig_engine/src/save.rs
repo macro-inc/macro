@@ -43,6 +43,13 @@ enum NumberUnits RAW PIXELS PERCENT
 enum TextAlignHorizontal LEFT CENTER RIGHT JUSTIFIED
 enum TextAlignVertical TOP CENTER BOTTOM
 enum TextAutoResize NONE WIDTH_AND_HEIGHT HEIGHT
+enum StackMode NONE HORIZONTAL VERTICAL GRID
+enum StackAlign MIN CENTER MAX BASELINE
+enum StackCounterAlign MIN CENTER MAX STRETCH AUTO BASELINE
+enum StackJustify MIN CENTER MAX SPACE_EVENLY SPACE_BETWEEN SPACE_AROUND SPACE_EVENLY_CSS
+enum StackSize FIXED RESIZE_TO_FIT RESIZE_TO_FIT_WITH_IMPLICIT_SIZE
+enum StackPositioning AUTO ABSOLUTE
+enum StackWrap NO_WRAP WRAP
 enum TextDecoration NONE UNDERLINE STRIKETHROUGH
 enum TextCase ORIGINAL UPPER LOWER TITLE SMALL_CAPS SMALL_CAPS_FORCED
 struct GUID sessionID:uint localID:uint
@@ -65,7 +72,7 @@ message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[] de
 message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:NodeChange[]
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -597,6 +604,22 @@ impl<'s> Build<'s> {
         if edits & flags::TEXT != 0 {
             self.text(m, p);
         }
+        if edits & flags::AUTO_LAYOUT != 0 {
+            self.auto_layout(m, p.auto_layout.as_deref());
+        }
+        if edits & flags::LAYOUT_CHILD != 0
+            && let Some(c) = &p.layout_child
+        {
+            if let Some(g) = c.grow {
+                m.set(s, "stackChildPrimaryGrow", Value::Float(g));
+            }
+            if let Some(a) = &c.align {
+                self.set_enum(m, "stackChildAlignSelf", a);
+            }
+            if let Some(a) = c.absolute {
+                self.set_enum(m, "stackPositioning", if a { "ABSOLUTE" } else { "AUTO" });
+            }
+        }
         if edits & flags::PARENT != 0 {
             let parent_guid = node.parent.and_then(|pi| doc.props(pi).guid);
             if let (Some(g), Some(def)) = (parent_guid, self.sub(m.def, "parentIndex")) {
@@ -613,6 +636,43 @@ impl<'s> Build<'s> {
                 m.set(s, "parentIndex", Value::Msg(Box::new(pm)));
             }
         }
+    }
+
+    fn auto_layout(&self, m: &mut Msg, al: Option<&crate::model::AutoLayout>) {
+        let s = self.schema;
+        let Some(al) = al else {
+            self.set_enum(m, "stackMode", "NONE");
+            return;
+        };
+        self.set_enum(m, "stackMode", &al.mode);
+        m.set(s, "stackSpacing", Value::Float(al.spacing));
+        m.remove(s, "stackPadding");
+        m.set(s, "stackHorizontalPadding", Value::Float(al.padding_left));
+        m.set(s, "stackVerticalPadding", Value::Float(al.padding_top));
+        m.set(s, "stackPaddingRight", Value::Float(al.padding_right));
+        m.set(s, "stackPaddingBottom", Value::Float(al.padding_bottom));
+        for (field, value) in [
+            ("stackPrimaryAlignItems", &al.primary_align),
+            ("stackCounterAlignItems", &al.counter_align),
+        ] {
+            match value {
+                Some(v) => self.set_enum(m, field, v),
+                None => m.remove(s, field),
+            }
+        }
+        self.set_enum(
+            m,
+            "stackPrimarySizing",
+            al.primary_sizing
+                .as_deref()
+                .unwrap_or("RESIZE_TO_FIT_WITH_IMPLICIT_SIZE"),
+        );
+        self.set_enum(
+            m,
+            "stackCounterSizing",
+            al.counter_sizing.as_deref().unwrap_or("FIXED"),
+        );
+        self.set_enum(m, "stackWrap", if al.wrap { "WRAP" } else { "NO_WRAP" });
     }
 
     /// A complete record for a node created in Macro.

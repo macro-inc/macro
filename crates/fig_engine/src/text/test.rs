@@ -317,3 +317,17 @@ fn lays_out_character_styles() {
     let layout = doc.props(t).text_layout.clone().unwrap();
     assert!(layout.glyphs.iter().all(|g| g.font_size == 12.0));
 }
+
+#[test]
+fn undoes_typing() {
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut h = History::default();
+    let t = new_text(&mut doc, &mut h, r#"{"characters":"Hi","fontSize":10}"#);
+    let w = width(&doc, t);
+    set(&mut doc, &mut h, t, r#"{"characters":"Hi there"}"#);
+    assert!(width(&doc, t) > w);
+    h.undo(&mut doc).unwrap();
+    assert_eq!(width(&doc, t), w);
+    let content = doc.props(t).text_content.clone().unwrap();
+    assert_eq!(&*content.characters, "Hi");
+}

@@ -36,6 +36,8 @@ const base: NodeInfo = {
   booleanOperation: null,
   isMask: false,
   childCount: 0,
+  sizing: null,
+  layoutParent: null,
 };
 
 const solid = (color: string, alpha = 1) => ({

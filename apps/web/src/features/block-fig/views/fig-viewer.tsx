@@ -200,6 +200,8 @@ export function FigViewer() {
       .with('group', () => void editor.group())
       .with('ungroup', () => void editor.ungroup())
       .with('frame-selection', () => void editor.group(true))
+      .with('add-auto-layout', () => void editor.addAutoLayout())
+      .with('remove-auto-layout', () => void editor.removeAutoLayout())
       .with('bring-forward', () => void editor.arrange('forward'))
       .with('send-backward', () => void editor.arrange('backward'))
       .with('bring-to-front', () => void editor.arrange('front'))
@@ -451,6 +453,9 @@ export function FigViewer() {
                       live ? `panel-${Object.keys(patch).join(',')}` : undefined
                     )
                 : undefined
+            }
+            onAddAutoLayout={
+              editor.enabled() ? () => void editor.addAutoLayout() : undefined
             }
             selectionCount={viewer.selected().length}
             page={viewer.pages[viewer.page()]}

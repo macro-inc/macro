@@ -76,6 +76,15 @@ const NODE_FIELDS: &[&str] = &[
     "stackPrimaryAlignItems",
     "stackCounterAlignItems",
     "stackWrap",
+    "stackPrimarySizing",
+    "stackCounterSizing",
+    "stackCounterSpacing",
+    "stackReverseZIndex",
+    "stackChildPrimaryGrow",
+    "stackChildAlignSelf",
+    "stackPositioning",
+    "minSize",
+    "maxSize",
     "exportSettings",
     "booleanOperation",
     "horizontalConstraint",
@@ -474,12 +483,29 @@ fn auto_layout(m: &MsgRef) -> Option<AutoLayout> {
         spacing: m.f32("stackSpacing").unwrap_or(0.0),
         padding_left: horizontal,
         padding_top: vertical,
-        padding_right: m.f32("stackPaddingRight").unwrap_or(horizontal),
-        padding_bottom: m.f32("stackPaddingBottom").unwrap_or(vertical),
+        // Right and bottom default to 0, except in files from before
+        // padding per side, which have one `stackPadding`.
+        padding_right: m.f32("stackPaddingRight").or(padding).unwrap_or(0.0),
+        padding_bottom: m.f32("stackPaddingBottom").or(padding).unwrap_or(0.0),
         primary_align: m.enum_name("stackPrimaryAlignItems").map(Into::into),
         counter_align: m.enum_name("stackCounterAlignItems").map(Into::into),
         wrap: m.enum_name("stackWrap") == Some("WRAP"),
+        primary_sizing: m.enum_name("stackPrimarySizing").map(Into::into),
+        counter_sizing: m.enum_name("stackCounterSizing").map(Into::into),
+        counter_spacing: m.f32("stackCounterSpacing").unwrap_or(0.0),
+        reverse_z: m.bool("stackReverseZIndex").unwrap_or(false),
     })
+}
+
+fn layout_child(m: &MsgRef) -> Option<LayoutChild> {
+    let child = LayoutChild {
+        grow: m.f32("stackChildPrimaryGrow"),
+        align: m.enum_name("stackChildAlignSelf").map(Into::into),
+        absolute: m.enum_name("stackPositioning").map(|p| p == "ABSOLUTE"),
+        min_size: m.msg("minSize").and_then(|v| v.msg("value")).map(vec2),
+        max_size: m.msg("maxSize").and_then(|v| v.msg("value")).map(vec2),
+    };
+    (child != LayoutChild::default()).then_some(child)
 }
 
 /// Reads one `NodeChange` (a node, an override, or derived layout).
@@ -630,6 +656,7 @@ pub fn props(m: MsgRef) -> Props {
     }
     p.override_key = m.msg("overrideKey").and_then(guid);
     p.auto_layout = auto_layout(&m).map(Arc::new);
+    p.layout_child = layout_child(&m);
     if m.has("exportSettings") {
         p.export_settings = Some(
             m.msgs("exportSettings")

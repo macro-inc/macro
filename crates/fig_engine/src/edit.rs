@@ -46,6 +46,10 @@ pub mod flags {
     pub const CREATED: u32 = 1 << 17;
     /// A page's canvas color.
     pub const BACKGROUND: u32 = 1 << 18;
+    /// Auto layout settings of a frame.
+    pub const AUTO_LAYOUT: u32 = 1 << 19;
+    /// How a layer sits in its auto layout parent.
+    pub const LAYOUT_CHILD: u32 = 1 << 20;
 }
 
 /// A paint as the editor describes it.
@@ -109,6 +113,24 @@ pub struct Patch {
     pub text_decoration: Option<String>,
     /// `ORIGINAL`, `UPPER`, `LOWER`, or `TITLE`.
     pub text_case: Option<String>,
+    /// Auto layout: `HORIZONTAL`, `VERTICAL`, or `NONE` to remove it.
+    pub layout_mode: Option<String>,
+    pub item_spacing: Option<f32>,
+    pub padding_top: Option<f32>,
+    pub padding_right: Option<f32>,
+    pub padding_bottom: Option<f32>,
+    pub padding_left: Option<f32>,
+    /// `MIN`, `CENTER`, `MAX`, or `SPACE_BETWEEN` along the flow.
+    pub primary_align: Option<String>,
+    /// `MIN`, `CENTER`, or `MAX` across it.
+    pub counter_align: Option<String>,
+    /// How the width follows auto layout: `FIXED`, `HUG` (the content),
+    /// or `FILL` (the parent).
+    pub sizing_horizontal: Option<String>,
+    pub sizing_vertical: Option<String>,
+    /// `ABSOLUTE` takes a layer out of its auto layout parent's flow;
+    /// `AUTO` puts it back.
+    pub layout_positioning: Option<String>,
 }
 
 /// A length as the design panel shows it: `PIXELS`, `PERCENT` (of the font
@@ -195,11 +217,22 @@ pub enum Op {
         ids: Vec<String>,
         props: Patch,
     },
-    /// Moves layers by a page-space offset.
+    /// Moves layers by a page-space offset. In an auto layout frame the
+    /// layers float where they are put while the others make room, until a
+    /// [`Op::Reflow`] (the end of the drag) settles them into the flow.
     Translate {
         ids: Vec<String>,
         dx: f64,
         dy: f64,
+    },
+    /// Lays out the auto layout frames holding these layers again.
+    Reflow {
+        ids: Vec<String>,
+    },
+    /// Figma's "Add auto layout" (⇧A): a frame without it gets it; other
+    /// layers are wrapped in a new auto layout frame.
+    AutoLayout {
+        ids: Vec<String>,
     },
     /// Creates a layer in `parent` (a page or layer id), on top unless
     /// `index` (bottom is 0) says otherwise.
@@ -271,7 +304,13 @@ struct Txn<'a> {
     before: Vec<(NodeIdx, Node)>,
     seen: HashSet<NodeIdx>,
     created: Vec<String>,
+    /// Layers being dragged: auto layout leaves them where they are.
+    floating: HashSet<NodeIdx>,
+    /// Layers whose auto layout parents lay out again regardless.
+    relayout: Vec<NodeIdx>,
 }
+
+pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
     fn touch(&mut self, i: NodeIdx) -> &mut Node {
@@ -592,6 +631,7 @@ impl<'a> Txn<'a> {
             self.edit(i, flags::CLIP).clip_disabled = Some(!c);
         }
         let text = self.doc.props(i).node_type() == NodeType::Text;
+        let text_sizing = self.set_layout(i, patch);
         let mut resized_text = None;
         if patch.width.is_some() || patch.height.is_some() {
             let before = self.doc.props(i).size();
@@ -625,6 +665,10 @@ impl<'a> Txn<'a> {
         }
         if text {
             let mut change = patch.text_change();
+            if let Some(auto) = text_sizing {
+                change.get_or_insert_with(Default::default).auto_resize = Some(auto);
+                resized_text = None;
+            }
             if let Some(auto) = resized_text {
                 // Text in a missing font keeps Figma's layout when resized.
                 let family = self
@@ -641,8 +685,9 @@ impl<'a> Txn<'a> {
                 }
             }
             if let Some(change) = change {
-                crate::text::edit(self.doc, i, &change)?;
+                // Snapshot before the layout changes the node.
                 self.touch(i).edits |= flags::TEXT | flags::SIZE;
+                crate::text::edit(self.doc, i, &change)?;
             }
         }
         Ok(())
@@ -936,7 +981,10 @@ impl<'a> Txn<'a> {
                                 self.edit(i, flags::BACKGROUND).background_color = Some(c);
                             }
                         }
-                        _ => self.set(i, props)?,
+                        _ => {
+                            let patch = self.user_resize(i, props);
+                            self.set(i, &patch)?;
+                        }
                     }
                 }
             }
@@ -947,8 +995,17 @@ impl<'a> Txn<'a> {
                 for &i in &all {
                     if !self.has_ancestor_in(i, &all) {
                         self.translate(i, *dx, *dy);
+                        self.floating.insert(i);
                     }
                 }
+            }
+            Op::AutoLayout { ids } => {
+                let all = self.layers(ids)?;
+                self.add_auto_layout(&all)?;
+            }
+            Op::Reflow { ids } => {
+                let all = self.layers(ids)?;
+                self.relayout.extend(all);
             }
             Op::Create {
                 parent,
@@ -1119,6 +1176,8 @@ impl History {
             before: Vec::new(),
             seen: HashSet::new(),
             created: Vec::new(),
+            floating: HashSet::new(),
+            relayout: Vec::new(),
         };
         for op in ops {
             if let Err(e) = txn.apply(op) {
@@ -1128,6 +1187,16 @@ impl History {
                 let _ = blobs_before;
                 return Err(e);
             }
+        }
+        // Auto layout follows what moved, resized, appeared, or went.
+        let mut changed: Vec<(NodeIdx, bool)> = txn
+            .before
+            .iter()
+            .filter_map(|(i, old)| layout_change(old, txn.doc.node(*i)).map(|own| (*i, own)))
+            .collect();
+        changed.extend(txn.relayout.drain(..).map(|i| (i, false)));
+        if !changed.is_empty() {
+            txn.reflow_after(&changed);
         }
         let Txn {
             doc,
@@ -1195,6 +1264,21 @@ impl History {
         self.undo.push(step);
         Some(touched)
     }
+}
+
+/// How a node changed for auto layout: `None` if not at all, `Some(true)`
+/// when its own content changed (its children, size, or settings), and
+/// `Some(false)` when only its place in its parent did.
+fn layout_change(old: &Node, new: &Node) -> Option<bool> {
+    let own = old.children != new.children
+        || old.props.size != new.props.size
+        || old.props.auto_layout != new.props.auto_layout;
+    let placed = old.removed != new.removed
+        || old.parent != new.parent
+        || old.props.transform != new.props.transform
+        || old.props.visible != new.props.visible
+        || old.props.layout_child != new.props.layout_child;
+    (own || placed).then_some(own)
 }
 
 fn restore(doc: &mut Document, snapshots: &[(NodeIdx, Node)]) {

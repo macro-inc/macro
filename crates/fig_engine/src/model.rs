@@ -255,6 +255,78 @@ pub struct AutoLayout {
     pub primary_align: Option<String>,
     pub counter_align: Option<String>,
     pub wrap: bool,
+    /// `FIXED`, or the frame hugs its content (`RESIZE_TO_FIT…`; the
+    /// default along the primary axis).
+    pub primary_sizing: Option<String>,
+    /// Along the counter axis the default is `FIXED`.
+    pub counter_sizing: Option<String>,
+    pub counter_spacing: f32,
+    /// Earlier children draw on top.
+    pub reverse_z: bool,
+}
+
+impl AutoLayout {
+    pub fn horizontal(&self) -> bool {
+        self.mode == "HORIZONTAL"
+    }
+
+    /// Whether children are placed in a single row or column (the layouts
+    /// the engine reflows; wrapping and grids keep Figma's positions).
+    pub fn is_stack(&self) -> bool {
+        (self.mode == "HORIZONTAL" || self.mode == "VERTICAL") && !self.wrap
+    }
+
+    pub fn hugs_primary(&self) -> bool {
+        self.primary_sizing.as_deref() != Some("FIXED")
+    }
+
+    pub fn hugs_counter(&self) -> bool {
+        self.counter_sizing
+            .as_deref()
+            .is_some_and(|s| s.starts_with("RESIZE_TO_FIT"))
+    }
+}
+
+/// How a layer sits in its auto layout parent.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LayoutChild {
+    /// Share of the free space along the primary axis ("fill"); 0 is fixed.
+    pub grow: Option<f32>,
+    /// `STRETCH` fills the counter axis; `MIN`, `CENTER`, `MAX` override the
+    /// parent's alignment; `AUTO` follows it.
+    pub align: Option<Arc<str>>,
+    /// Positioned freely, outside the flow.
+    pub absolute: Option<bool>,
+    /// Size limits (0 means none), kept when the layout sizes the layer.
+    pub min_size: Option<Vec2>,
+    pub max_size: Option<Vec2>,
+}
+
+impl LayoutChild {
+    pub fn fills_primary(&self) -> bool {
+        self.grow.unwrap_or(0.0) > 0.0
+    }
+
+    pub fn stretches(&self) -> bool {
+        self.align.as_deref() == Some("STRETCH")
+    }
+
+    pub fn is_absolute(&self) -> bool {
+        self.absolute.unwrap_or(false)
+    }
+
+    /// `v` within the limits on one axis (`x` or not).
+    pub fn clamp(&self, v: f64, x: bool) -> f64 {
+        let pick = |s: Option<Vec2>| s.map(|s| if x { s.x } else { s.y }).filter(|&l| l > 0.0);
+        let v = match pick(self.max_size) {
+            Some(max) => v.min(max),
+            None => v,
+        };
+        match pick(self.min_size) {
+            Some(min) => v.max(min),
+            None => v,
+        }
+    }
 }
 
 /// An export preset (`Export` section in the inspector).
@@ -361,6 +433,7 @@ pub struct Props {
     pub guid_path: Option<Arc<[Guid]>>,
     pub override_key: Option<Guid>,
     pub auto_layout: Option<Arc<AutoLayout>>,
+    pub layout_child: Option<LayoutChild>,
     pub export_settings: Option<Arc<[ExportSetting]>>,
     pub boolean_operation: Option<Arc<str>>,
     pub constraints: Option<(Arc<str>, Arc<str>)>,
@@ -393,7 +466,7 @@ impl Props {
             corner_smoothing, clip_disabled, background_color, internal_only, text_content,
             text_layout, text_style,
             symbol, derived, swapped_symbol, prop_assignments, prop_refs, prop_defs,
-            override_key, auto_layout, export_settings, boolean_operation, constraints,
+            override_key, auto_layout, layout_child, export_settings, boolean_operation, constraints,
             description, is_state_group, fill_style, stroke_style, effect_style,
         );
     }

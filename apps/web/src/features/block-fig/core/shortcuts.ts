@@ -48,6 +48,8 @@ export type ViewerAction =
   | 'group'
   | 'ungroup'
   | 'frame-selection'
+  | 'add-auto-layout'
+  | 'remove-auto-layout'
   | 'bring-forward'
   | 'send-backward'
   | 'bring-to-front'
@@ -89,6 +91,7 @@ export function shortcutAction(
     return 'show-shortcuts';
 
   if (e.altKey && !mod && !otherMod) {
+    if (e.shiftKey && e.code === 'KeyA') return 'remove-auto-layout';
     if (e.code === 'Digit1') return 'toggle-layers';
     if (e.code === 'Digit8') return 'toggle-design';
     if (e.code === 'KeyL') return 'collapse-layers';
@@ -144,6 +147,8 @@ export function shortcutAction(
         return 'zoom-selection';
       case 'KeyN':
         return 'previous-frame';
+      case 'KeyA':
+        return 'add-auto-layout';
       case 'KeyR':
         return 'toggle-rulers';
       case 'Quote':
@@ -233,6 +238,8 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'group',
   'ungroup',
   'frame-selection',
+  'add-auto-layout',
+  'remove-auto-layout',
   'bring-forward',
   'send-backward',
   'bring-to-front',
@@ -289,6 +296,8 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Group', keys: ['mod', 'G'] },
       { action: 'Ungroup', keys: ['mod', '⇧', 'G'] },
       { action: 'Frame selection', keys: ['mod', '⌥', 'G'] },
+      { action: 'Add auto layout', keys: ['⇧', 'A'] },
+      { action: 'Remove auto layout', keys: ['⌥', '⇧', 'A'] },
       { action: 'Bring forward', keys: ['mod', ']'] },
       { action: 'Send backward', keys: ['mod', '['] },
       { action: 'Bring to front', keys: ['mod', '⌥', ']'] },

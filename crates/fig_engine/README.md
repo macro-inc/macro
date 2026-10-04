@@ -43,7 +43,8 @@ scene            one page with instances expanded: overrides, component
 render           tiles: fills, strokes (inside/outside via clipping), masks,
                  blend modes, isolation, effects (shadows, blurs), images, text
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG outlines
-edit             edit operations, undo/redo, fractional-index positions
+edit             edit operations, undo/redo, fractional-index positions;
+                 auto layout (stacks re-laid out after edits)
 text             text layout for edited text (bundled Inter, kerning, wrapping)
 save             writing `.fig`: patch edited records, splice the rest; blank files
 wasm             the worker API (`FigFile`)
@@ -61,6 +62,12 @@ nodes (copies start from their source's record) and blobs. Fields the engine
 does not model therefore survive, and saving a large file takes about as
 long as compressing it. `fig_render roundtrip` checks that edited, saved,
 and reopened files render identically.
+
+Auto layout frames are laid out again when an edit changes them or their
+children: fill and stretch sizing, gaps (fixed or automatic), padding,
+alignment, min and max sizes, and hugging, which carries the change up
+through hugging parents. `fig_render relayout` re-lays out every stack in a
+file and reports the frames placed differently from Figma's own layout.
 
 Text the editor changes is laid out again with Inter (`fonts/`, SIL Open
 Font License), embedded in the build, or a font registered at run time;

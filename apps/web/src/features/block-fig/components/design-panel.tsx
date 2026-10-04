@@ -19,6 +19,7 @@ import AlignRight from '@phosphor/align-right.svg';
 import AlignTop from '@phosphor/align-top.svg';
 import Copy from '@phosphor/copy.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
+import Minus from '@phosphor/minus.svg';
 import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -27,6 +28,7 @@ import { cssColor, cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
 import type { PaintSpec, Patch } from '../primitives/create-fig-editor';
+import { AutoLayoutControls, SizingControls } from './auto-layout-controls';
 import {
   NumberField,
   PaintEditRow,
@@ -40,6 +42,8 @@ function Section(props: {
   children: JSX.Element;
   /** A "+" action in the header (add a fill, say). */
   onAdd?: () => void;
+  /** A "−" action in the header (remove auto layout, say). */
+  onRemove?: () => void;
   testId?: string;
 }) {
   return (
@@ -58,6 +62,18 @@ function Section(props: {
               onClick={() => add()()}
             >
               <Plus class="size-3.5" />
+            </button>
+          )}
+        </Show>
+        <Show when={props.onRemove}>
+          {(remove) => (
+            <button
+              type="button"
+              aria-label={`Remove ${props.title.toLowerCase()}`}
+              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+              onClick={() => remove()()}
+            >
+              <Minus class="size-3.5" />
             </button>
           )}
         </Show>
@@ -237,6 +253,37 @@ function EffectRow(props: { effect: EffectInfo }) {
   );
 }
 
+const canHaveAutoLayout = (type: string) => ['FRAME', 'SYMBOL'].includes(type);
+
+function AutoLayoutFields(props: { info: NodeInfo }) {
+  return (
+    <Show when={props.info.autoLayout}>
+      {(al) => (
+        <Section title="Auto layout">
+          <div class="grid grid-cols-2 gap-1.5">
+            <Field label="Direction" value={title(al().mode)} />
+            <Field label="Gap" value={fmt(al().spacing)} />
+            <Field
+              label="Padding"
+              value={[
+                al().paddingTop,
+                al().paddingRight,
+                al().paddingBottom,
+                al().paddingLeft,
+              ]
+                .map(fmt)
+                .join(' ')}
+            />
+            <Show when={al().primaryAlign}>
+              {(a) => <Field label="Align" value={title(a())} />}
+            </Show>
+          </div>
+        </Section>
+      )}
+    </Show>
+  );
+}
+
 function TextFields(props: { text: TextInfo }) {
   const t = () => props.text;
   return (
@@ -277,6 +324,8 @@ export function DesignPanel(props: {
   onCopyText: (text: string) => void;
   /** Font families text can be set in. */
   fontFamilies?: readonly string[];
+  /** Adds auto layout to the selection (⇧A); absent when read-only. */
+  onAddAutoLayout?: () => void;
 }) {
   const [tab, setTab] = createSignal<'design' | 'code'>('design');
   return (
@@ -443,6 +492,32 @@ export function DesignPanel(props: {
                       />
                     </Show>
                   </div>
+                  <SizingControls
+                    info={info()}
+                    onPatch={(patch, live) => props.onPatch?.(patch, live)}
+                  />
+                  <Show when={info().layoutParent}>
+                    {(positioning) => (
+                      <label class="flex items-center gap-2 text-ink-muted">
+                        <input
+                          type="checkbox"
+                          checked={positioning() === 'ABSOLUTE'}
+                          data-testid="fig-absolute"
+                          onChange={(e) =>
+                            props.onPatch?.(
+                              {
+                                layoutPositioning: e.currentTarget.checked
+                                  ? 'ABSOLUTE'
+                                  : 'AUTO',
+                              },
+                              false
+                            )
+                          }
+                        />
+                        Absolute position
+                      </label>
+                    )}
+                  </Show>
                   <Show when={info().type === 'FRAME'}>
                     <label class="flex items-center gap-2 text-ink-muted">
                       <input
@@ -471,29 +546,56 @@ export function DesignPanel(props: {
                   )}
                 </Show>
               </Section>
-              <Show when={info().autoLayout}>
-                {(al) => (
-                  <Section title="Auto layout">
-                    <div class="grid grid-cols-2 gap-1.5">
-                      <Field label="Direction" value={title(al().mode)} />
-                      <Field label="Gap" value={fmt(al().spacing)} />
-                      <Field
-                        label="Padding"
-                        value={[
-                          al().paddingTop,
-                          al().paddingRight,
-                          al().paddingBottom,
-                          al().paddingLeft,
-                        ]
-                          .map(fmt)
-                          .join(' ')}
-                      />
-                      <Show when={al().primaryAlign}>
-                        {(a) => <Field label="Align" value={title(a())} />}
+              <Show
+                when={props.onPatch && !info().id.startsWith('I')}
+                fallback={<AutoLayoutFields info={info()} />}
+              >
+                <Show
+                  when={info().autoLayout}
+                  fallback={
+                    <Show when={canHaveAutoLayout(info().type)}>
+                      <Section
+                        title="Auto layout"
+                        testId="fig-auto-layout-section"
+                        onAdd={props.onAddAutoLayout}
+                      >
+                        <span class="text-ink-muted">⇧A adds auto layout</span>
+                      </Section>
+                    </Show>
+                  }
+                >
+                  {(al) => (
+                    <Section
+                      title="Auto layout"
+                      testId="fig-auto-layout-section"
+                      onRemove={() =>
+                        props.onPatch?.({ layoutMode: 'NONE' }, false)
+                      }
+                    >
+                      <Show
+                        when={
+                          (al().mode === 'HORIZONTAL' ||
+                            al().mode === 'VERTICAL') &&
+                          !al().wrap
+                        }
+                        fallback={
+                          <span class="text-ink-muted">
+                            {title(al().mode)}
+                            {al().wrap ? ' (wrap)' : ''}: kept as laid out in
+                            Figma
+                          </span>
+                        }
+                      >
+                        <AutoLayoutControls
+                          layout={al()}
+                          onPatch={(patch, live) =>
+                            props.onPatch?.(patch, live)
+                          }
+                        />
                       </Show>
-                    </div>
-                  </Section>
-                )}
+                    </Section>
+                  )}
+                </Show>
               </Show>
               <Section title="Appearance">
                 <div class="grid grid-cols-2 gap-1.5">

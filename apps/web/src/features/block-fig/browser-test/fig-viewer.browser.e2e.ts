@@ -231,6 +231,51 @@ test('draws, moves, and saves shapes', async ({ page }) => {
     .toEqual([]);
 });
 
+test('lays out with auto layout', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [140, 140]);
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [200, 100], [260, 160]);
+  await canvas.focus();
+  await page.keyboard.press('Control+a');
+  await expect(page.getByText('2 layers selected')).toBeVisible();
+  await page.keyboard.press('Shift+A');
+  await expect(page.getByTestId('fig-layer-row').first()).toHaveText('Frame');
+  // Side by side with the 60 px gap between them, hugging both.
+  await expect(page.getByTestId('fig-sizing-w')).toHaveValue('HUG');
+  await expect(page.getByTestId('fig-sizing-h')).toHaveValue('HUG');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('160');
+  // Dragging the first square past the second swaps them.
+  await canvas.focus();
+  await page.keyboard.press('Escape');
+  await dragOnCanvas(page, [120, 120], [262, 122]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('120');
+  await expect(page.getByTestId('fig-field-y')).toHaveValue('0');
+  await canvas.focus();
+  await page.keyboard.press('Shift+Enter');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Frame');
+  const gap = page.getByTestId('fig-field-gap');
+  await gap.fill('10');
+  await gap.press('Enter');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('110');
+  await page.getByTestId('fig-field-padding-h').fill('20');
+  await page.getByTestId('fig-field-padding-h').press('Enter');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('150');
+  // Fixing the width and filling it with a child.
+  await page.getByTestId('fig-field-w').fill('300');
+  await page.getByTestId('fig-field-w').press('Enter');
+  await expect(page.getByTestId('fig-sizing-w')).toHaveValue('FIXED');
+  await canvas.focus();
+  await page.keyboard.press('Control+z');
+  await expect(page.getByTestId('fig-sizing-w')).toHaveValue('HUG');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('150');
+});
+
 test('edits fills from the design panel and undoes', async ({ page }) => {
   await openNew(page);
   await page.getByTestId('fig-canvas').focus();

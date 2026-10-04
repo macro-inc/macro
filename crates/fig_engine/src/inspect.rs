@@ -118,6 +118,12 @@ pub struct NodeInfo {
     pub effects: Vec<EffectInfo>,
     pub text: Option<TextInfo>,
     pub auto_layout: Option<crate::model::AutoLayout>,
+    /// How the width and height follow auto layout: `FIXED`, `HUG`, or
+    /// `FILL` (layers outside instances).
+    pub sizing: Option<(&'static str, &'static str)>,
+    /// The layer is in an auto layout frame's flow (or `ABSOLUTE`ly
+    /// positioned in one).
+    pub layout_parent: Option<&'static str>,
     pub constraints: Option<(String, String)>,
     pub export_settings: Vec<crate::model::ExportSetting>,
     /// For instances: the main component's name.
@@ -325,6 +331,27 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
         effects: props.effects().iter().map(effect_info).collect(),
         text,
         auto_layout: props.auto_layout.as_deref().cloned(),
+        sizing: node.path.is_none().then(|| {
+            (
+                crate::edit::layout::axis_sizing(doc, node.src, true),
+                crate::edit::layout::axis_sizing(doc, node.src, false),
+            )
+        }),
+        layout_parent: node
+            .path
+            .is_none()
+            .then(|| doc.node(node.src).parent)
+            .flatten()
+            .filter(|&p| {
+                doc.props(p)
+                    .auto_layout
+                    .as_ref()
+                    .is_some_and(|a| a.mode == "HORIZONTAL" || a.mode == "VERTICAL")
+            })
+            .map(|_| {
+                let absolute = props.layout_child.as_ref().is_some_and(|c| c.is_absolute());
+                if absolute { "ABSOLUTE" } else { "AUTO" }
+            }),
         constraints: props
             .constraints
             .as_ref()

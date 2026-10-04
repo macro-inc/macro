@@ -132,7 +132,13 @@ export function TypeControls(props: {
         value={t().fontFamily ?? 'Inter'}
         onChange={(fontFamily) => props.onPatch({ fontFamily }, false)}
       >
-        <For each={families()}>{(f) => <option value={f}>{f}</option>}</For>
+        <For each={families()}>
+          {(f) => (
+            <option value={f} selected={f === (t().fontFamily ?? 'Inter')}>
+              {f}
+            </option>
+          )}
+        </For>
       </Select>
       <div class="grid grid-cols-[1fr_auto] gap-1.5">
         <Select
@@ -147,7 +153,11 @@ export function TypeControls(props: {
           }
         >
           <For each={WEIGHTS}>
-            {([w, name]) => <option value={String(w)}>{name}</option>}
+            {([w, name]) => (
+              <option value={String(w)} selected={w === style().weight}>
+                {name}
+              </option>
+            )}
           </For>
         </Select>
         <button
@@ -258,7 +268,14 @@ export function TypeControls(props: {
           }
         >
           <For each={CASES}>
-            {([value, label]) => <option value={value}>{label}</option>}
+            {([value, label]) => (
+              <option
+                value={value}
+                selected={value === (t().case ?? 'ORIGINAL')}
+              >
+                {label}
+              </option>
+            )}
           </For>
         </Select>
       </div>

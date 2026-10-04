@@ -155,6 +155,8 @@ export interface CornerRadii {
   bottom_left: number;
 }
 
+export type Sizing = 'FIXED' | 'HUG' | 'FILL';
+
 export interface AutoLayout {
   mode: string;
   spacing: number;
@@ -165,6 +167,12 @@ export interface AutoLayout {
   primaryAlign: string | null;
   counterAlign: string | null;
   wrap: boolean;
+  /** `FIXED`, or hugging (`RESIZE_TO_FIT…`, the default) along the flow. */
+  primarySizing: string | null;
+  /** Hugging across the flow when `RESIZE_TO_FIT…`; fixed by default. */
+  counterSizing: string | null;
+  counterSpacing: number;
+  reverseZ: boolean;
 }
 
 export interface ExportSetting {
@@ -207,6 +215,10 @@ export interface NodeInfo {
   effects: EffectInfo[];
   text: TextInfo | null;
   autoLayout: AutoLayout | null;
+  /** How width and height follow auto layout (layers outside instances). */
+  sizing: [Sizing, Sizing] | null;
+  /** Set when the layer is in an auto layout frame. */
+  layoutParent: 'AUTO' | 'ABSOLUTE' | null;
   constraints: [string, string] | null;
   exportSettings: ExportSetting[];
   mainComponent: string | null;

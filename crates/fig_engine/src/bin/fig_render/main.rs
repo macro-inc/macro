@@ -43,6 +43,14 @@ enum Command {
     /// Edit each file (move every top-level layer), save, reopen, and check
     /// the saved file renders like the edited one.
     Roundtrip { files: Vec<PathBuf> },
+    /// Lay out every auto layout frame again and report the frames whose
+    /// children the engine places differently from Figma.
+    Relayout {
+        /// Print each differing frame.
+        #[arg(long)]
+        verbose: bool,
+        files: Vec<PathBuf>,
+    },
 }
 
 fn main() {
@@ -67,6 +75,11 @@ fn main() {
         Command::Roundtrip { files } => {
             for path in files {
                 roundtrip(&path);
+            }
+        }
+        Command::Relayout { verbose, files } => {
+            for path in files {
+                relayout(&path, verbose);
             }
         }
         Command::Compare { out, files } => {
@@ -364,5 +377,88 @@ fn roundtrip(path: &Path) {
         bytes.len() / 1024,
         saved.len() / 1024,
         if same { "identical" } else { "DIFFER" }
+    );
+}
+
+fn relayout(path: &Path, verbose: bool) {
+    use fig_engine::edit::{History, Op};
+    let Some((_, mut doc)) = open(path) else {
+        return;
+    };
+    let stacks: Vec<u32> = (0..doc.nodes.len() as u32)
+        .filter(|&i| {
+            let p = doc.props(i);
+            p.node_type() != fig_engine::model::NodeType::Instance
+                && p.node_type().is_frame_like()
+                && p.auto_layout.as_ref().is_some_and(|a| a.is_stack())
+                && !doc.node(i).children.is_empty()
+        })
+        .collect();
+    let (mut same, mut differ) = (0, 0);
+    for &f in &stacks {
+        let child = doc.node(f).children[0];
+        let Some(g) = doc.props(child).guid else {
+            continue;
+        };
+        let ops: Vec<Op> =
+            serde_json::from_str(&format!(r#"[{{"op":"reflow","ids":["{g}"]}}]"#)).expect("ops");
+        let mut history = History::default();
+        let Ok(applied) = history.apply(&mut doc, &ops, None) else {
+            continue;
+        };
+        let after: Vec<(u32, fig_engine::model::Props)> = applied
+            .touched
+            .iter()
+            .map(|&i| (i, doc.props(i).clone()))
+            .collect();
+        history.undo(&mut doc);
+        let moved: Vec<String> = after
+            .iter()
+            .filter_map(|(i, b)| {
+                let a = doc.props(*i);
+                let (ta, tb) = (a.transform(), b.transform());
+                let d = (ta.m02 - tb.m02).abs().max((ta.m12 - tb.m12).abs());
+                let ds = (a.size().x - b.size().x)
+                    .abs()
+                    .max((a.size().y - b.size().y).abs());
+                (d > 0.5 || ds > 0.5).then(|| {
+                    format!(
+                        "{} ({:.1},{:.1} {:.1}x{:.1} -> {:.1},{:.1} {:.1}x{:.1})",
+                        a.name(),
+                        ta.m02,
+                        ta.m12,
+                        a.size().x,
+                        a.size().y,
+                        tb.m02,
+                        tb.m12,
+                        b.size().x,
+                        b.size().y
+                    )
+                })
+            })
+            .collect();
+        if moved.is_empty() {
+            same += 1;
+        } else {
+            differ += 1;
+            if verbose {
+                let al = doc.props(f).auto_layout.clone().unwrap_or_default();
+                println!(
+                    "  {} [{} {:?} {:?} {:?}/{:?}]: {}",
+                    doc.props(f).name(),
+                    al.mode,
+                    al.primary_align,
+                    al.counter_align,
+                    al.primary_sizing,
+                    al.counter_sizing,
+                    moved.join(", ")
+                );
+            }
+        }
+    }
+    println!(
+        "{}: {} stacks, {same} unchanged, {differ} differ",
+        stem(path),
+        stacks.len()
     );
 }

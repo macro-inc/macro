@@ -481,7 +481,8 @@ Layout and test hooks:
   the selection to the hovered layer. Scroll pans, ⌘/Ctrl+scroll or pinch
   zooms, Space-drag or middle-drag pans. When editing: drag a layer to move it
   (⌥ drags a copy, ⇧ constrains, edges and centers snap to siblings and the
-  parent frame with red guides), drag the selection's corners or edges to
+  parent frame with red guides; in an auto layout frame the dragged layer
+  takes the slot it is dropped over), drag the selection's corners or edges to
   resize (⇧ keeps proportions), draw with the frame, rectangle, ellipse, and
   text tools (a click places a default size; new layers go into the frame
   under the pointer), double-click or Enter on a text layer to type into it
@@ -501,7 +502,12 @@ Layout and test hooks:
   letter spacing `fig-field-letter-spacing`, paragraph spacing, horizontal
   and vertical alignment, auto width / auto height / fixed size
   `fig-text-resize`, `fig-underline`, strikethrough, and case
-  `fig-text-case`), effects, auto layout, and
+  `fig-text-case`), auto layout (`fig-auto-layout-section`: "+" or ⇧A adds
+  it, wrapping other layers in a new frame; "−" or ⌥⇧A removes it;
+  direction `fig-layout-direction`, gap `fig-field-gap` as a number or
+  `Auto`, padding `fig-field-padding-h|v`, and the alignment grid
+  `fig-layout-align`), width and height sizing (`fig-sizing-w|h`: Fixed,
+  Hug, Fill) and `fig-absolute` for layers in auto layout, effects, and
   export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color.

@@ -10,7 +10,7 @@
  */
 
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
-import type { NodeInfo, Rect } from '@core/fig-engine/types';
+import type { NodeInfo, Rect, Sizing } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
 import { type Alignment, alignOffset } from '../core/align';
 import type { Measure } from '../core/type';
@@ -49,6 +49,18 @@ export interface Patch {
   textAutoResize?: 'WIDTH_AND_HEIGHT' | 'HEIGHT' | 'NONE';
   textDecoration?: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
   textCase?: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE';
+  /** Auto layout direction; `NONE` removes it. */
+  layoutMode?: 'HORIZONTAL' | 'VERTICAL' | 'NONE';
+  itemSpacing?: number;
+  paddingTop?: number;
+  paddingRight?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  primaryAlign?: 'MIN' | 'CENTER' | 'MAX' | 'SPACE_BETWEEN';
+  counterAlign?: 'MIN' | 'CENTER' | 'MAX';
+  sizingHorizontal?: Sizing;
+  sizingVertical?: Sizing;
+  layoutPositioning?: 'AUTO' | 'ABSOLUTE';
 }
 
 /** A paint as the editor sends it: an existing one kept, or a solid. */
@@ -87,7 +99,9 @@ export type Op =
   | { op: 'arrange'; ids: string[]; how: Arrangement }
   | { op: 'duplicate'; ids: string[]; dx?: number; dy?: number }
   | { op: 'group'; ids: string[]; frame?: boolean }
-  | { op: 'ungroup'; ids: string[] };
+  | { op: 'ungroup'; ids: string[] }
+  | { op: 'reflow'; ids: string[] }
+  | { op: 'autoLayout'; ids: string[] };
 
 export interface FigEditorOptions {
   engine: FigEngine;
@@ -257,6 +271,17 @@ export function createFigEditor(options: FigEditorOptions) {
     await selectCreated(result);
   };
 
+  /** Figma's ⇧A: a frame gets auto layout; other layers are wrapped. */
+  const addAutoLayout = async () => {
+    const targets = editableIds();
+    if (targets.length === 0) return;
+    const result = await apply([{ op: 'autoLayout', ids: targets }]);
+    await selectCreated(result);
+  };
+
+  const removeAutoLayout = () =>
+    apply([{ op: 'set', ids: editableIds(), props: { layoutMode: 'NONE' } }]);
+
   const ungroup = async () => {
     const result = await apply([{ op: 'ungroup', ids: editableIds() }]);
     await selectCreated(result);
@@ -352,6 +377,9 @@ export function createFigEditor(options: FigEditorOptions) {
       },
       async end() {
         await pump();
+        // Settle what was dragged into its auto layout slot.
+        if (applied.x !== 0 || applied.y !== 0)
+          await apply([{ op: 'reflow', ids: targets }], key);
         await queue;
       },
     };
@@ -498,6 +526,8 @@ export function createFigEditor(options: FigEditorOptions) {
     copy,
     paste,
     cut,
+    addAutoLayout,
+    removeAutoLayout,
     startMove,
     startResize,
     create,
