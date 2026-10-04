@@ -46,4 +46,6 @@ ON entity_properties
 USING gin ((values->'value') jsonb_path_ops)
 WHERE property_definition_id = '00000001-0000-0000-0000-000000000014';
 
-DROP TABLE task_initiative;
+-- task_initiative stays until every service reads the Project property:
+-- migrations deploy before services, and the previous release still uses it.
+-- A later migration drops it.
