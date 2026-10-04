@@ -122,6 +122,15 @@ pub enum Revision {
     Inserted,
     /// Deleted text.
     Deleted,
+    /// Text whose formatting changed: drawn as it is now, with a change bar.
+    Formatted,
+}
+
+impl Revision {
+    /// Whether the text shows as inserted or deleted.
+    pub fn marked(self) -> bool {
+        matches!(self, Self::Inserted | Self::Deleted)
+    }
 }
 
 /// Drawing style of a run.
@@ -209,6 +218,11 @@ pub struct Inline {
     /// Embedding level of each cluster (Unicode bidirectional algorithm);
     /// empty when the paragraph is all left to right.
     pub levels: Vec<u8>,
+    /// The paragraph's mark is a tracked insertion or deletion shown with
+    /// markup.
+    pub mark_changed: bool,
+    /// The paragraph's properties are a tracked change shown with markup.
+    pub props_changed: bool,
 }
 
 /// A field being read.
@@ -355,7 +369,7 @@ impl Builder<'_, '_> {
         // Links take their color from their formatting (usually the
         // Hyperlink character style), like any other text.
         let mut color = props.color.unwrap_or_else(|| auto_color(props));
-        if revision != Revision::None && self.ctx.markup {
+        if revision.marked() && self.ctx.markup {
             // Word's default "by author" revision color for one author.
             color = Rgba::from_u8(0xC0, 0x00, 0x00);
         }
@@ -697,10 +711,22 @@ pub fn build(
             run
         }
     };
+    // The mark's revision also shows on the list label, as in Word.
+    let mark_revision = if !ctx.markup {
+        Revision::None
+    } else if para.mark.mark_deleted {
+        Revision::Deleted
+    } else if para.mark.mark_inserted {
+        Revision::Inserted
+    } else {
+        Revision::None
+    };
+    b.out.mark_changed = mark_revision != Revision::None;
+    b.out.props_changed = ctx.markup && block.props.contains("pPrChange");
     // List label.
     if let Some((label, props)) = label {
         let props = Arc::new(props.clone());
-        let run = b.run_style(&props, Revision::None, false);
+        let run = b.run_style(&props, mark_revision, false);
         b.synthetic(&label.text, 0, 0, run);
         match label.suffix {
             Suffix::Tab => b.tab(0, 0, run),
@@ -726,6 +752,8 @@ pub fn build(
             .any(|w| matches!(w.local(), "ins" | "moveTo"))
         {
             Revision::Inserted
+        } else if attrs.run_props().any(|(q, _)| q.ends_with("rPrChange")) {
+            Revision::Formatted
         } else {
             Revision::None
         };

@@ -1,4 +1,4 @@
-import type { PageRect, Pos } from '@core/docx-engine/types';
+import type { EditOp, PageRect, Pos } from '@core/docx-engine/types';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -11,10 +11,12 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { DocxFindBar } from '../components/DocxFindBar';
 import {
   type DocxAlignment,
   type DocxParagraphStyle,
+  type DocxTableOp,
   DocxToolbar,
 } from '../components/DocxToolbar';
 import {
@@ -207,6 +209,23 @@ export function DocxEditorView(props: DocxEditorViewProps) {
 
   const format = () => editor.state()?.format;
 
+  /** Runs a toolbar command and returns focus to the document. */
+  const command = (ops: EditOp[]) => {
+    editor.run(ops);
+    input?.focus();
+  };
+
+  const tableOp = (op: DocxTableOp): EditOp =>
+    match(op)
+      .with('rowAbove', (): EditOp => ({ op: 'insertRow', below: false }))
+      .with('rowBelow', (): EditOp => ({ op: 'insertRow', below: true }))
+      .with('columnLeft', (): EditOp => ({ op: 'insertColumn', right: false }))
+      .with('columnRight', (): EditOp => ({ op: 'insertColumn', right: true }))
+      .with('deleteRow', (): EditOp => ({ op: 'deleteRow' }))
+      .with('deleteColumn', (): EditOp => ({ op: 'deleteColumn' }))
+      .with('deleteTable', (): EditOp => ({ op: 'deleteTable' }))
+      .exhaustive();
+
   /** At most this many matches are highlighted (the count shows them all). */
   const HIGHLIGHTED = 5000;
 
@@ -308,8 +327,15 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           italic: format()?.italic,
           underline: format()?.underline,
           strike: format()?.strike,
+          superscript: format()?.superscript,
+          subscript: format()?.subscript,
         }}
         fontSize={format()?.size ?? null}
+        fontFamily={format()?.font ?? null}
+        color={format()?.color ?? null}
+        highlight={format()?.highlight ?? null}
+        lineSpacing={format()?.lineSpacing ?? null}
+        inTable={!!format()?.table}
         paragraphStyle={format()?.style ?? null}
         paragraphStyles={paragraphStyles()}
         showMarkup={editor.markup()}
@@ -323,6 +349,18 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           editor.run([{ op: 'setFormat', size }]);
           input?.focus();
         }}
+        onFontFamily={(font) => command([{ op: 'setFormat', font }])}
+        onColor={(color) => command([{ op: 'setFormat', color }])}
+        onHighlight={(highlight) => command([{ op: 'setFormat', highlight }])}
+        onClearFormat={() => command([{ op: 'clearFormat' }])}
+        onIndent={(forward) => command([{ op: 'indent', forward }])}
+        onLineSpacing={(value) =>
+          command([
+            { op: 'setParagraph', lineSpacing: { rule: 'auto', value } },
+          ])
+        }
+        onTable={(op) => command([tableOp(op)])}
+        onRefocus={() => input?.focus()}
         onParagraphStyle={(id) => {
           if (id) editor.run([{ op: 'setStyle', style: id }]);
           input?.focus();

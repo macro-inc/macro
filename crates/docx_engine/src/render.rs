@@ -10,7 +10,8 @@ mod shapes;
 mod text;
 
 use crate::document::Document;
-use crate::layout::{Item, Layout, Page};
+use crate::layout::inline::Revision;
+use crate::layout::{Item, Layout, Page, PlacedLine};
 use crate::model::props::{Border, LineStyle};
 use pptx_engine::font::FontDb;
 use pptx_engine::model::color::Rgba;
@@ -145,6 +146,45 @@ pub(crate) fn rule_nodes(x0: f32, y0: f32, x1: f32, y1: f32, b: &Border, out: &m
     }
 }
 
+/// Gap between a change bar and the body's left edge (points).
+const CHANGE_BAR_GAP: f32 = 7.0;
+/// Width of a change bar (points).
+const CHANGE_BAR_WIDTH: f32 = 0.75;
+
+/// Whether a placed line holds a tracked change shown with markup.
+fn line_changed(l: &PlacedLine) -> bool {
+    let inline = &l.para.inline;
+    let line = l.line();
+    let last = l.line + 1 == l.para.lines.lines.len();
+    inline.props_changed
+        || (last && inline.mark_changed)
+        || inline.clusters[line.start..line.end]
+            .iter()
+            .any(|c| inline.runs[c.run as usize].revision != Revision::None)
+}
+
+/// Change bars: a rule in the left margin beside every line holding a
+/// tracked change, as Word and LibreOffice draw them with markup.
+fn change_bars(page: &Page, out: &mut Vec<Node>) {
+    let x = page.body.x - CHANGE_BAR_GAP - CHANGE_BAR_WIDTH / 2.0;
+    let mut path = Path::new();
+    for item in &page.items {
+        if let Item::Line(l) = item
+            && line_changed(l)
+        {
+            let rect = Rect::from_xywh(x, l.y, CHANGE_BAR_WIDTH, l.line().height);
+            path.extend(&Path::rect(rect));
+        }
+    }
+    if !path.is_empty() {
+        out.push(Node::Fill {
+            path,
+            paint: Paint::Solid(Rgba::BLACK),
+            even_odd: false,
+        });
+    }
+}
+
 impl Renderer<'_> {
     /// The display list of a page (scene units are points).
     pub fn page_nodes(&mut self, page: &Page) -> Vec<Node> {
@@ -168,6 +208,7 @@ impl Renderer<'_> {
                 self.item(item, &mut out);
             }
         }
+        change_bars(page, &mut out);
         for item in &page.front {
             self.item(item, &mut out);
         }
@@ -281,3 +322,6 @@ impl Document {
         Some(r.render_page(page, scale))
     }
 }
+
+#[cfg(test)]
+mod test;

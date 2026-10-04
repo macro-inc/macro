@@ -10,6 +10,7 @@ use crate::document::{Document, rel_kind};
 use crate::error::Result;
 use crate::model::block::{BlockId, BlockKind};
 use crate::model::content::{Attrs, Content, Wrapper, encode_wrappers, key};
+use crate::model::write::rpr_xml;
 use crate::xml::{Decl, SnippetContext, XmlTree, escape_attr};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -209,6 +210,90 @@ impl Revisor {
         s
     }
 
+    /// Records a formatting change made to a run while tracking: the run
+    /// keeps its formatting from before in a `w:rPrChange` (the earliest
+    /// one when it already has a record). Text tracked as inserted is new
+    /// anyway and records nothing.
+    pub(crate) fn format_change(&self, old: &Attrs, new: &Attrs) -> Attrs {
+        let props = |a: &Attrs| {
+            let mut v: Vec<(String, String)> = a
+                .run_props()
+                .filter(|(q, _)| !q.ends_with("rPrChange"))
+                .map(|(q, x)| (q.to_owned(), x.to_owned()))
+                .collect();
+            v.sort();
+            v
+        };
+        if props(old) == props(new) || old.wrappers().iter().any(is_inserted) {
+            return new.clone();
+        }
+        let change_key = format!("{}{}", key::RUN_PROP, self.q("rPrChange"));
+        let existing = old
+            .iter()
+            .find(|(k, _)| k.starts_with(key::RUN_PROP) && k.ends_with(":rPrChange"))
+            .map(|(_, v)| v.to_owned());
+        let record = match existing {
+            // Formatting changed back to what was recorded: no change left.
+            Some(x) if x.contains(&rpr_xml(new, &self.w)) => None,
+            Some(x) => Some(x),
+            None => {
+                let tag = self.q("rPrChange");
+                Some(format!(
+                    "<{tag}{}>{}</{tag}>",
+                    self.attributes(4),
+                    rpr_xml(old, &self.w)
+                ))
+            }
+        };
+        new.with(&change_key, record.as_deref())
+    }
+
+    /// Records a change to a paragraph's properties made while tracking:
+    /// the paragraph keeps its properties from before in a `w:pPrChange`
+    /// (the earliest record when it already has one). The mark's
+    /// formatting and section break are not part of the record, and a
+    /// paragraph whose mark is tracked as inserted is new anyway.
+    pub(crate) fn para_change(&self, before: &Element, after: &mut Element, decls: &[Decl]) {
+        let recorded = |e: &Element| -> Vec<String> {
+            e.children
+                .iter()
+                .filter(|c| !matches!(c.local(), "rPr" | "sectPr" | "pPrChange"))
+                .map(|c| c.xml.clone())
+                .collect()
+        };
+        let old = recorded(before);
+        let new = recorded(after);
+        if old == new {
+            return;
+        }
+        let mark_inserted = before.get("rPr").is_some_and(|r| {
+            let r = Element::open(r, "rPr", &self.w, decls, MARK_RPR_ORDER);
+            r.has("ins") || r.has("moveTo")
+        });
+        if mark_inserted {
+            return;
+        }
+        if let Some(existing) = before.get("pPrChange") {
+            // Properties changed back to what was recorded: no change left.
+            let change = Element::open(existing, "pPrChange", &self.w, decls, PPR_ORDER);
+            let back = change.get("pPr").is_some_and(|p| {
+                recorded(&Element::open(p, "pPr", &self.w, decls, PPR_ORDER)) == new
+            }) || (change.get("pPr").is_none() && new.is_empty());
+            if back {
+                after.set("pPrChange", None);
+            }
+            return;
+        }
+        let tag = self.q("pPrChange");
+        let ppr = self.q("pPr");
+        let xml = format!(
+            "<{tag}{}><{ppr}>{}</{ppr}></{tag}>",
+            self.attributes(5),
+            old.concat()
+        );
+        after.set("pPrChange", Some(xml));
+    }
+
     /// A revision element wrapping runs (`ins` or `del`).
     pub(crate) fn wrapper(&self, local: &str) -> Wrapper {
         let kind = if local == "ins" { 0 } else { 1 };
@@ -368,6 +453,16 @@ pub(crate) fn mark_revision(
         }
     }
     None
+}
+
+/// The id of a paragraph's tracked property change (`w:pPrChange`).
+pub(crate) fn ppr_change_id(ppr: &str, w: &str, decls: &[Decl]) -> Option<String> {
+    if !ppr.contains("pPrChange") {
+        return None;
+    }
+    Element::open(ppr, "pPr", w, decls, PPR_ORDER)
+        .get("pPrChange")
+        .and_then(|x| attribute(x, "id"))
 }
 
 /// Records (`Some(inserted)`) or clears a revision on a paragraph's mark.
@@ -741,14 +836,8 @@ pub(crate) fn resolve(txn: &mut Txn<'_>, scope: &Scope, accept: bool) {
         let end = if k == last { to } else { usize::MAX };
         let content = resolve_text(&b.content, start, end, accept, &wanted, &ctx);
         let mut props = b.props.clone();
-        if props.contains("pPrChange") {
-            let id_ok = Element::open(&props, "pPr", &w, &decls, PPR_ORDER)
-                .get("pPrChange")
-                .and_then(|x| attribute(x, "id"))
-                .is_some_and(|i| wanted(&i));
-            if id_ok {
-                props = resolve_ppr_change(&props, accept, &w, &decls);
-            }
+        if ppr_change_id(&props, &w, &decls).is_some_and(|i| wanted(&i)) {
+            props = resolve_ppr_change(&props, accept, &w, &decls);
         }
         // The mark is in scope for every paragraph but the last of a range.
         let mark_in_scope = every_mark || k < last;

@@ -443,6 +443,72 @@ test('find and replace, shared with everyone', async ({ browser }) => {
   }
 });
 
+test('toolbar formatting and table commands reach collaborators', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  const rowCount = (page: Page) =>
+    page.evaluate(() => window.docxFixture?.sharedCount('tr') ?? 0);
+  const menu = async (page: Page, name: string, item: string) => {
+    await page.locator(`[data-docx-menu="${name}"]`).click();
+    await page.getByRole('menuitem', { name: item, exact: true }).click();
+  };
+  try {
+    await open(alice, documentId, ALICE, { fixture: 'complex-msa.docx' });
+    await open(bob, documentId, BOB, { fixture: 'complex-msa.docx' });
+
+    // Highlight, color and line spacing on a paragraph.
+    await selectParagraph(alice, 'Kickoff');
+    await menu(alice, 'highlight', 'Yellow');
+    await menu(alice, 'color', 'Red');
+    await expect
+      .poll(async () =>
+        JSON.stringify((await sharedBlock(bob, 'Kickoff'))?.attrs)
+      )
+      .toContain('w:highlight w:val=\\"yellow\\"');
+    await expect
+      .poll(async () =>
+        JSON.stringify((await sharedBlock(bob, 'Kickoff'))?.attrs)
+      )
+      .toContain('FF0000');
+    // The document keeps the caret: typing replaces the selection.
+    await expect(alice.locator('[data-docx-input]')).toBeFocused();
+    await expect
+      .poll(() =>
+        alice.evaluate(
+          () => window.docxFixture?.editor()?.state()?.format.highlight
+        )
+      )
+      .toBe('yellow');
+
+    // Rows added from the table menu, which shows inside tables only.
+    const before = await rowCount(bob);
+    await expect(alice.locator('[data-docx-menu="table"]')).toBeVisible();
+    await menu(alice, 'table', 'Insert row below');
+    await expect.poll(() => rowCount(bob)).toBe(before + 1);
+    await caretAtEnd(alice, 'Provider shall perform');
+    await expect(alice.locator('[data-docx-menu="table"]')).toHaveCount(0);
+    await menu(alice, 'line-spacing', '2.0');
+    await expect
+      .poll(
+        async () => (await sharedBlock(bob, 'Provider shall perform'))?.props
+      )
+      .toContain('w:line="480"');
+    if (SHOTS) await alice.screenshot({ path: `${SHOTS}/09-toolbar.png` });
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('copy and paste keep formatting, from here and from other apps', async ({
   browser,
 }) => {

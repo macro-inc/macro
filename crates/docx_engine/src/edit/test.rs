@@ -1091,3 +1091,22 @@ fn arrow_keys_move_visually_in_right_to_left_text() {
     assert_eq!(arrow(&mut s, false), 2);
     assert_eq!(arrow(&mut s, true), 1);
 }
+
+#[test]
+fn format_state_reports_highlight_spacing_and_tables() {
+    let mut s = open(&format!(
+        r#"<w:p><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>marked</w:t></w:r></w:p><w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>{}</w:tc></w:tr></w:tbl>{}"#,
+        p("cell"),
+        p("after")
+    ));
+    caret_at(&mut s, 0, 2);
+    let f = s.state(fonts()).format;
+    assert_eq!(f.highlight.as_deref(), Some("yellow"));
+    assert_eq!(f.line_spacing, Some(1.5));
+    assert!(!f.table);
+    caret_at(&mut s, 1, 1);
+    let f = s.state(fonts()).format;
+    assert!(f.table);
+    assert_eq!(f.highlight, None);
+    assert_eq!(f.line_spacing, Some(1.0));
+}

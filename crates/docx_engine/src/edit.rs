@@ -400,6 +400,8 @@ pub struct FormatState {
     pub size: Option<f32>,
     /// Text color (`RRGGBB`), when not automatic.
     pub color: Option<String>,
+    /// Highlight color name (`yellow`, `green`...), when highlighted.
+    pub highlight: Option<String>,
     /// Paragraph style id.
     pub style: Option<String>,
     /// Paragraph style name.
@@ -408,6 +410,10 @@ pub struct FormatState {
     pub align: Option<Alignment>,
     /// Whether the paragraph is in a list.
     pub list: bool,
+    /// Line spacing as a multiple of single spacing, when it is one.
+    pub line_spacing: Option<f32>,
+    /// Whether the selection starts in a table.
+    pub table: bool,
     /// Whether the document tracks changes.
     pub tracking: bool,
     /// Whether the selection (or the caret) touches a tracked change.
@@ -1489,6 +1495,20 @@ impl Session {
             Align::Left => Alignment::Left,
         });
         state.list = para.props.num.is_some();
+        state.line_spacing = match para.props.line {
+            crate::model::props::LineSpacing::Auto(m) => Some((m * 100.0).round() / 100.0),
+            _ => None,
+        };
+        state.table = self.story().ancestors(&start.block).iter().any(|id| {
+            self.story()
+                .get(id)
+                .is_some_and(|b| b.kind == BlockKind::Cell)
+        });
+        state.highlight = attrs
+            .run_props()
+            .find(|(q, _)| q.ends_with(":highlight") || *q == "highlight")
+            .and_then(|(_, xml)| revise::attribute(xml, "val"))
+            .filter(|v| v != "none");
         state.tracking = self.doc.parts().settings.track_revisions;
         state.revision = self.touches_revision(&start, &end, &paras);
         state.can_undo = !self.undo.is_empty();
@@ -1505,7 +1525,8 @@ impl Session {
                 return false;
             };
             let mark = revise::mark_revision(&b.props, w, decls).and_then(|(_, _, id)| id);
-            return !revise::ids_at(&b.content, start.offset, mark).is_empty();
+            return !revise::ids_at(&b.content, start.offset, mark).is_empty()
+                || revise::ppr_change_id(&b.props, w, decls).is_some();
         }
         let last = paras.len().saturating_sub(1);
         paras.iter().take(400).enumerate().any(|(k, id)| {
@@ -1520,6 +1541,7 @@ impl Session {
             };
             revise::has_revisions(&b.content, s, e)
                 || (k < last && revise::mark_revision(&b.props, w, decls).is_some())
+                || revise::ppr_change_id(&b.props, w, decls).is_some()
         })
     }
 
@@ -2149,12 +2171,13 @@ impl Session {
             .styles
             .default_paragraph_id()
             .map(str::to_owned);
+        let rev = self.revisor();
         if all {
             // Back to plain paragraphs.
             let styles = std::sync::Arc::clone(&self.doc.parts().styles);
             let mut txn = Txn::new(&mut self.doc, &self.active);
             for id in &paras {
-                format::edit_ppr(&mut txn, id, |e| {
+                format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
                     let style = e.get("pStyle").map(str::to_owned);
                     let style_id = style.as_deref().and_then(|x| {
                         let at = x.find("val=\"")? + 5;
@@ -2199,7 +2222,7 @@ impl Session {
         let mut txn = Txn::new(&mut self.doc, &self.active);
         for (id, k) in paras.iter().zip(current) {
             let ilvl = k.map_or(base_level, |(_, _, l)| l);
-            format::edit_ppr(&mut txn, id, |e| {
+            format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
                 e.set(
                     "numPr",
                     Some(format!(
@@ -2252,6 +2275,7 @@ impl Session {
                     .map_or(0.0, |pf| pf.props.ind_left)
             })
             .collect();
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
         for ((id, k), left) in paras.iter().zip(kinds).zip(lefts) {
             match k {
@@ -2261,7 +2285,7 @@ impl Session {
                     } else {
                         ilvl.saturating_sub(1)
                     };
-                    format::edit_ppr(&mut txn, id, |e| {
+                    format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
                         e.set(
                             "numPr",
                             Some(format!(
@@ -2283,7 +2307,7 @@ impl Session {
                         (((left / step).ceil() - 1.0) * step).max(0.0)
                     };
                     let twips = ((target * 20.0).round() as i64).to_string();
-                    format::edit_ppr(&mut txn, id, |e| {
+                    format::edit_ppr(&mut txn, id, rev.as_ref(), |e| {
                         e.set_attrs(
                             "ind",
                             &[("left", Some(twips.clone())), ("start", None)],
@@ -2525,7 +2549,7 @@ impl Session {
             .is_some_and(|b| b.content.is_empty() && text::has_direct_numbering(&b.props));
         let caret = if empty_list_item {
             // Enter on an empty list item ends the list.
-            format::edit_ppr(&mut txn, &at.block, |e| e.set("numPr", None));
+            format::edit_ppr(&mut txn, &at.block, rev.as_ref(), |e| e.set("numPr", None));
             at.clone()
         } else {
             text::split_tracked(&mut txn, &at, rev.as_ref()).unwrap_or(at.clone())
@@ -2660,8 +2684,9 @@ impl Session {
             .is_some_and(|b| text::has_direct_numbering(&b.props));
         if !forward && numbered {
             // Backspace at a list item's start removes its number first.
+            let rev = self.revisor();
             let mut txn = Txn::new(&mut self.doc, &self.active);
-            format::edit_ppr(&mut txn, &at.block, |e| e.set("numPr", None));
+            format::edit_ppr(&mut txn, &at.block, rev.as_ref(), |e| e.set("numPr", None));
             return Some(txn.finish());
         }
         let other = self.neighbour_para(&at.block, forward)?;
@@ -2942,9 +2967,11 @@ impl Session {
             revise::Scope::All
         } else if start.same_place(&end) {
             let b = self.story().get(&start.block)?;
-            let mark = revise::mark_revision(&b.props, self.doc.w_prefix(), self.doc.decls())
-                .and_then(|(_, _, id)| id);
-            let ids = revise::ids_at(&b.content, start.offset, mark);
+            let (w, decls) = (self.doc.w_prefix(), self.doc.decls());
+            let mark = revise::mark_revision(&b.props, w, decls).and_then(|(_, _, id)| id);
+            let mut ids = revise::ids_at(&b.content, start.offset, mark);
+            // The paragraph's property change applies wherever the caret is in it.
+            ids.extend(revise::ppr_change_id(&b.props, w, decls));
             if ids.is_empty() {
                 return None;
             }
@@ -2979,6 +3006,8 @@ impl Session {
         }
         let (s, e) = self.ordered();
         let paras = self.paras_between(&s.block, &e.block);
+        // While tracking, each run keeps a record of its formatting before.
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
         for (k, id) in paras.iter().enumerate() {
             let Some(len) = txn.get(id).map(|b| b.content.len()) else {
@@ -2996,7 +3025,11 @@ impl Session {
                 if a.marker().is_some() {
                     a.clone()
                 } else {
-                    f(a)
+                    let new = f(a);
+                    match &rev {
+                        Some(r) => r.format_change(a, &new),
+                        None => new,
+                    }
                 }
             });
             if content != before
@@ -3067,6 +3100,7 @@ impl Session {
             }
             return None;
         }
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
         for (k, id) in paras.iter().enumerate() {
             let Some(pf) = fmts.get(id) else {
@@ -3086,7 +3120,11 @@ impl Session {
                 if a.marker().is_some() {
                     a.clone()
                 } else {
-                    apply(a, pf)
+                    let new = apply(a, pf);
+                    match &rev {
+                        Some(r) => r.format_change(a, &new),
+                        None => new,
+                    }
                 }
             });
             if content != before
@@ -3102,9 +3140,10 @@ impl Session {
     fn map_paragraphs(&mut self, f: impl Fn(&mut Element)) -> Option<Step> {
         let (s, e) = self.ordered();
         let paras = self.paras_between(&s.block, &e.block);
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
         for id in &paras {
-            format::edit_ppr(&mut txn, id, &f);
+            format::edit_ppr(&mut txn, id, rev.as_ref(), &f);
         }
         Some(txn.finish())
     }

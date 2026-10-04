@@ -230,3 +230,146 @@ fn turning_tracking_on_writes_the_shared_setting() {
     assert_eq!(count(&xml(&s), "<w:ins "), 1);
     assert_eq!(texts(&s), vec!["Text!?"]);
 }
+
+#[test]
+fn formatting_while_tracking_is_recorded_and_can_be_rejected() {
+    let mut s = tracked(&p("Pay the Seller"));
+    select(&mut s, (0, 8), (0, 14));
+    run(
+        &mut s,
+        EditOp::ToggleFormat {
+            format: Toggle::Bold,
+        },
+    );
+    let out = xml(&s);
+    assert!(out.contains("<w:rPrChange"), "{out}");
+    assert!(out.contains("w:author=\"Alice\""), "{out}");
+    assert_eq!(count(&out, "<w:b/>"), 1, "{out}");
+    let r = s.state(fonts());
+    assert!(r.format.revision);
+    // A second change keeps the first record (the formatting before both).
+    run(
+        &mut s,
+        EditOp::SetFormat {
+            patch: RunPatch {
+                color: Some(Some("FF0000".into())),
+                ..RunPatch::default()
+            },
+        },
+    );
+    let out = xml(&s);
+    assert_eq!(count(&out, "<w:rPrChange"), 1, "{out}");
+    // Rejecting restores the plain text.
+    run(&mut s, EditOp::RejectChanges { all: true });
+    let out = xml(&s);
+    assert!(
+        !out.contains("rPrChange") && !out.contains("<w:b/>"),
+        "{out}"
+    );
+    assert!(!out.contains("FF0000"), "{out}");
+    assert_eq!(texts(&s), vec!["Pay the Seller"]);
+}
+
+#[test]
+fn formatting_new_text_records_nothing() {
+    let mut s = tracked(&p("Hello"));
+    caret_at(&mut s, 0, 5);
+    type_text(&mut s, " world");
+    select(&mut s, (0, 6), (0, 11));
+    run(
+        &mut s,
+        EditOp::ToggleFormat {
+            format: Toggle::Italic,
+        },
+    );
+    let out = xml(&s);
+    assert!(!out.contains("rPrChange"), "{out}");
+    assert!(out.contains("<w:i/>"), "{out}");
+}
+
+fn align(s: &mut Session, a: Alignment) {
+    run(
+        s,
+        EditOp::SetParagraph {
+            patch: ParaPatch {
+                align: Some(a),
+                ..ParaPatch::default()
+            },
+        },
+    );
+}
+
+#[test]
+fn paragraph_formatting_while_tracking_is_recorded_and_can_be_rejected() {
+    let mut s = tracked(&p("Recitals"));
+    caret_at(&mut s, 0, 3);
+    align(&mut s, Alignment::Center);
+    let out = xml(&s);
+    assert_eq!(count(&out, "<w:pPrChange"), 1, "{out}");
+    assert!(out.contains(r#"<w:jc w:val="center"/>"#), "{out}");
+    // Accepting keeps the new alignment and drops the record.
+    run(&mut s, EditOp::AcceptChanges { all: true });
+    let out = xml(&s);
+    assert!(!out.contains("pPrChange"), "{out}");
+    assert!(out.contains(r#"<w:jc w:val="center"/>"#), "{out}");
+    // Two more changes keep one record; rejecting the change at the caret
+    // goes back to centered.
+    align(&mut s, Alignment::Right);
+    align(&mut s, Alignment::Justify);
+    assert_eq!(count(&xml(&s), "<w:pPrChange"), 1);
+    assert!(s.state(fonts()).format.revision);
+    run(&mut s, EditOp::RejectChanges { all: false });
+    let out = xml(&s);
+    assert!(!out.contains("pPrChange"), "{out}");
+    assert!(out.contains(r#"<w:jc w:val="center"/>"#), "{out}");
+}
+
+#[test]
+fn formatting_changed_back_leaves_no_change() {
+    let mut s = tracked(&p("Pay the Seller"));
+    select(&mut s, (0, 8), (0, 14));
+    for _ in 0..2 {
+        run(
+            &mut s,
+            EditOp::ToggleFormat {
+                format: Toggle::Bold,
+            },
+        );
+    }
+    let out = xml(&s);
+    assert!(
+        !out.contains("rPrChange") && !out.contains("<w:b/>"),
+        "{out}"
+    );
+    for _ in 0..2 {
+        run(
+            &mut s,
+            EditOp::ToggleList {
+                kind: ListKind::Bullet,
+            },
+        );
+    }
+    let out = xml(&s);
+    assert!(
+        !out.contains("pPrChange") && !out.contains("numPr"),
+        "{out}"
+    );
+}
+
+#[test]
+fn list_changes_in_new_paragraphs_record_nothing() {
+    let mut s = tracked(&p("Terms"));
+    caret_at(&mut s, 0, 5);
+    run(&mut s, EditOp::InsertParagraph);
+    type_text(&mut s, "Price");
+    // The first paragraph's mark is the new one.
+    caret_at(&mut s, 0, 2);
+    run(
+        &mut s,
+        EditOp::ToggleList {
+            kind: ListKind::Number,
+        },
+    );
+    let out = xml(&s);
+    assert!(out.contains("numPr") && !out.contains("pPrChange"), "{out}");
+}
