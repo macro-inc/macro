@@ -12,6 +12,15 @@ use pptx_engine::collab::order;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static VERSION: AtomicU64 = AtomicU64::new(1);
+
+/// A version number no other change in this process has used, so a block's
+/// (id, version) identifies its content across stories and document copies.
+pub fn next_version() -> u64 {
+    VERSION.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Identifies a block, stable across edits, saves and peers.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -153,7 +162,7 @@ pub struct Story {
     blocks: HashMap<BlockId, Block>,
     /// Children of each parent (`None` = top level), sorted by (order, id).
     children: HashMap<Option<BlockId>, Vec<BlockId>>,
-    /// Bumped on every change.
+    /// Changes on every change (a [`next_version`] value).
     revision: u64,
 }
 
@@ -165,7 +174,7 @@ impl Story {
         Self::default()
     }
 
-    /// Bumped on every change to the story.
+    /// Changes on every change to the story.
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -187,10 +196,10 @@ impl Story {
 
     /// A block, for changing. Bumps its version.
     pub fn get_mut(&mut self, id: &BlockId) -> Option<&mut Block> {
-        self.revision += 1;
-        let revision = self.revision;
+        let version = next_version();
+        self.revision = version;
         self.blocks.get_mut(id).map(|b| {
-            b.version = revision;
+            b.version = version;
             b
         })
     }
@@ -225,7 +234,7 @@ impl Story {
 
     /// Adds or replaces a block, keeping its parent's children ordered.
     pub fn insert(&mut self, mut block: Block) {
-        self.revision += 1;
+        self.revision = next_version();
         block.version = self.revision;
         if let Some(old) = self.blocks.get(&block.id) {
             let old_parent = old.parent.clone();
@@ -270,7 +279,7 @@ impl Story {
                 removed.push(at);
             }
         }
-        self.revision += 1;
+        self.revision = next_version();
         removed
     }
 
@@ -281,7 +290,7 @@ impl Story {
         if let Some(list) = self.children.get_mut(&b.parent) {
             list.retain(|c| c != id);
         }
-        self.revision += 1;
+        self.revision = next_version();
         Some(b)
     }
 
@@ -301,6 +310,17 @@ impl Story {
             }
         }
         go(self, None, 0, &mut f);
+    }
+
+    /// Visits a block and everything inside it, depth-first in order.
+    pub fn walk_from(&self, id: &BlockId, f: &mut dyn FnMut(&Block)) {
+        let Some(b) = self.blocks.get(id) else {
+            return;
+        };
+        f(b);
+        for c in self.children(Some(id)) {
+            self.walk_from(c, f);
+        }
     }
 
     /// Paragraph ids in document order (including those inside tables).

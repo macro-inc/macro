@@ -23,7 +23,8 @@ use lines::Lines;
 use pptx_engine::font::FontDb;
 use pptx_engine::model::color::Rgba;
 use pptx_engine::path::Rect;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub use flow::LayoutOptions;
 
@@ -183,6 +184,82 @@ pub struct Layout {
     pub pages: Vec<Page>,
 }
 
+/// What a measured paragraph depends on besides its own content.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ParaKey {
+    pub version: u64,
+    pub generation: u64,
+    pub width: u32,
+    pub table: u64,
+    pub label: Option<(String, String)>,
+    pub grid: u32,
+    pub markup: bool,
+    pub note_number: Option<String>,
+}
+
+#[derive(Debug)]
+struct Cached {
+    key: ParaKey,
+    pb: Arc<ParaBox>,
+    epoch: u64,
+}
+
+/// Paragraph measurements kept between layouts, so laying out again after
+/// an edit re-measures only the paragraphs the edit touched.
+#[derive(Debug, Default)]
+pub struct LayoutCache {
+    paras: Mutex<(u64, HashMap<(StoryRef, BlockId), Cached>)>,
+}
+
+impl LayoutCache {
+    /// An empty cache.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn get(&self, story: &StoryRef, block: &BlockId, key: &ParaKey) -> Option<Arc<ParaBox>> {
+        let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = guard.0;
+        let hit = guard.1.get_mut(&(story.clone(), block.clone()))?;
+        if hit.key != *key {
+            return None;
+        }
+        hit.epoch = epoch;
+        Some(Arc::clone(&hit.pb))
+    }
+
+    pub(crate) fn put(&self, story: &StoryRef, block: &BlockId, key: ParaKey, pb: Arc<ParaBox>) {
+        let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = guard.0;
+        guard
+            .1
+            .insert((story.clone(), block.clone()), Cached { key, pb, epoch });
+    }
+
+    /// Starts a layout pass.
+    pub(crate) fn begin(&self) {
+        let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
+        guard.0 += 1;
+    }
+
+    /// Ends a layout pass, dropping paragraphs it did not use.
+    pub(crate) fn end(&self) {
+        let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = guard.0;
+        guard.1.retain(|_, c| c.epoch == epoch);
+    }
+
+    /// Number of cached paragraphs.
+    pub fn len(&self) -> usize {
+        self.paras.lock().map_or(0, |g| g.1.len())
+    }
+
+    /// Whether nothing is cached.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 impl Document {
     /// Lays the document out into pages.
     pub fn layout(&self, fonts: &FontDb) -> Layout {
@@ -191,6 +268,15 @@ impl Document {
 
     /// Lays the document out with options.
     pub fn layout_with(&self, fonts: &FontDb, options: &LayoutOptions) -> Layout {
-        flow::layout(self, fonts, options)
+        flow::layout(self, fonts, options, None)
+    }
+
+    /// Lays the document out, reusing paragraph measurements from `cache`
+    /// (and leaving this layout's in it).
+    pub fn layout_cached(&self, fonts: &FontDb, options: &LayoutOptions, cache: &LayoutCache) -> Layout {
+        cache.begin();
+        let layout = flow::layout(self, fonts, options, Some(cache));
+        cache.end();
+        layout
     }
 }

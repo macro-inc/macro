@@ -10,6 +10,7 @@
 #![deny(missing_docs)]
 
 pub mod document;
+pub mod edit;
 mod error;
 pub mod layout;
 pub mod model;

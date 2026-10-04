@@ -167,6 +167,9 @@ pub struct Document {
     pub(crate) endnotes: Notes,
     /// The body changed since opening (document.xml must be rewritten).
     pub(crate) body_dirty: bool,
+    /// Changes whenever the shared parts (styles, numbering, settings,
+    /// theme) are reloaded; layout caches key on it.
+    pub(crate) generation: u64,
 }
 
 impl std::fmt::Debug for Document {
@@ -256,6 +259,7 @@ impl Document {
             footnotes: Notes::default(),
             endnotes: Notes::default(),
             body_dirty: false,
+            generation: 0,
         };
         doc.load_parts()?;
         Ok(doc)
@@ -312,6 +316,7 @@ impl Document {
             Some(name) => Settings::parse(&read_tree(&self.pkg, &name)?),
             None => Settings::default(),
         };
+        self.generation = crate::model::block::next_version();
         self.parts = Parts {
             theme: Arc::new(theme),
             theme_full,

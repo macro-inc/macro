@@ -144,8 +144,28 @@ pub(in crate::layout) fn para_box(
     note_number: Option<&str>,
     grid: Option<f32>,
 ) -> Arc<ParaBox> {
-    let format: Arc<ParaFormat> = env.formats.paragraph(&block.props, table);
     let label = env.labels.get(&block.id).map(|(l, p)| (l, p));
+    let key = env.cache.map(|_| {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        table.hash(&mut h);
+        crate::layout::ParaKey {
+            version: block.version,
+            generation: env.doc.generation,
+            width: width.to_bits(),
+            table: h.finish(),
+            label: label.map(|(l, _)| (l.text.clone(), format!("{:?}{:?}", l.suffix, l.jc))),
+            grid: grid.map_or(0, f32::to_bits),
+            markup: env.options.markup,
+            note_number: note_number.map(str::to_owned),
+        }
+    });
+    if let (Some(cache), Some(key)) = (env.cache, key.as_ref())
+        && let Some(pb) = cache.get(story, &block.id, key)
+    {
+        return pb;
+    }
+    let format: Arc<ParaFormat> = env.formats.paragraph(&block.props, table);
     let ctx = InlineCtx {
         formats: &env.formats,
         fonts: &env.fonts,
@@ -168,13 +188,21 @@ pub(in crate::layout) fn para_box(
         },
         None,
     );
-    Arc::new(ParaBox {
+    let pb = Arc::new(ParaBox {
         story: story.clone(),
         block: block.id.clone(),
         inline: built,
         lines,
         format,
-    })
+    });
+    // Page fields and note numbers change with what comes before.
+    if let (Some(cache), Some(key)) = (env.cache, key)
+        && !pb.inline.dynamic
+        && pb.inline.notes.is_empty()
+    {
+        cache.put(story, &block.id, key, Arc::clone(&pb));
+    }
+    pb
 }
 
 /// Border spacing a paragraph adds above and below its lines.

@@ -849,14 +849,18 @@ impl<'e, 'a> Flow<'e, 'a> {
             .take_while(|&r| tb.rows[r].header)
             .collect();
         let mut r = 0;
+        // The row was moved to a fresh column already: place it even if it
+        // does not fit, or a row taller than the page would never land.
+        let mut moved = false;
         while r < tb.rows.len() {
             let h = tb.rows[r].height;
             let (y, placed_any) = self
                 .cur
                 .as_ref()
                 .map_or((0.0, false), |c| (c.y, c.placed_any));
-            if y + h > self.avail_bottom() + EPS && placed_any {
+            if y + h > self.avail_bottom() + EPS && placed_any && !moved {
                 self.next_column(false);
+                moved = true;
                 // Repeat header rows at the top of the new page.
                 if r >= headers.len() && !headers.is_empty() {
                     for &hr in &headers {
@@ -866,6 +870,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 continue;
             }
             self.emit_table_row(&tb, r, col_left);
+            moved = false;
             r += 1;
         }
         self.prev = None;

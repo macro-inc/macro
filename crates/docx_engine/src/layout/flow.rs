@@ -45,10 +45,17 @@ pub(super) struct Env<'a> {
     pub note_numbers: HashMap<(bool, i64), String>,
     /// List labels of numbered paragraphs.
     pub labels: HashMap<BlockId, (Label, RunProps)>,
+    /// Measurements kept between layouts.
+    pub cache: Option<&'a super::LayoutCache>,
 }
 
 impl<'a> Env<'a> {
-    fn new(doc: &'a Document, fonts: &'a FontDb, options: &'a LayoutOptions) -> Self {
+    fn new(
+        doc: &'a Document,
+        fonts: &'a FontDb,
+        options: &'a LayoutOptions,
+        cache: Option<&'a super::LayoutCache>,
+    ) -> Self {
         let parts = doc.parts();
         Env {
             doc,
@@ -63,6 +70,7 @@ impl<'a> Env<'a> {
             options,
             note_numbers: HashMap::new(),
             labels: HashMap::new(),
+            cache,
         }
     }
 
@@ -172,8 +180,13 @@ fn effective_refs(sections: &[Section]) -> Vec<(HeaderRefs, HeaderRefs)> {
 }
 
 /// Lays out a document.
-pub(super) fn layout(doc: &Document, fonts: &FontDb, options: &LayoutOptions) -> Layout {
-    let mut env = Env::new(doc, fonts, options);
+pub(super) fn layout(
+    doc: &Document,
+    fonts: &FontDb,
+    options: &LayoutOptions,
+    cache: Option<&super::LayoutCache>,
+) -> Layout {
+    let mut env = Env::new(doc, fonts, options, cache);
     env.prepare();
     let mut blocks: Vec<&Block> = Vec::new();
     flow_blocks(&doc.body, None, &mut blocks);
