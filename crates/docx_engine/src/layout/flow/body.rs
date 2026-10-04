@@ -8,7 +8,7 @@ use super::super::inline::{FieldValues, Kind};
 use super::super::lines::LineEnd;
 use super::super::{Item, Page, ParaBox, StoryRef};
 use super::anchors::{PageGeom, resolve};
-use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, resolve_frame};
+use super::frames::{FrameWrap, PendingFrame, across_text, emit_frame, frame_box, resolve_frame};
 use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
     para_box, placed, prev_record, space_before, stack_story, table_box,
@@ -160,6 +160,16 @@ impl<'e, 'a> Flow<'e, 'a> {
                 fields: fields.clone(),
                 note_number: None,
                 float_frames: true,
+                page: Some(PageGeom {
+                    width: sect.page_w,
+                    height: sect.page_h,
+                    left: sect.left,
+                    right: sect.right,
+                    top: sect.top,
+                    bottom: sect.bottom,
+                    col_left: sect.left + sect.gutter,
+                    col_width: sect.text_width(),
+                }),
             },
         ))
     }
@@ -394,6 +404,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                         fields: self.fields(),
                         note_number: None,
                         float_frames: false,
+                        page: None,
                     },
                 ),
                 None => Stack {
@@ -443,6 +454,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 fields: self.fields(),
                 note_number: Some(number),
                 float_frames: false,
+                page: None,
             },
         );
         let h = st.height;
@@ -534,6 +546,7 @@ impl<'e, 'a> Flow<'e, 'a> {
             fields: self.fields(),
             note_number: None,
             float_frames: false,
+            page: Some(self.page_geom()),
         };
         let (mut f, end) = frame_box(self.env, &self.env.doc.body, blocks, i, &sc)?;
         self.skip_bands();
@@ -544,9 +557,10 @@ impl<'e, 'a> Flow<'e, 'a> {
         f.para_top = y;
         f.text_left = col_left;
         let wrap = f.wrap();
-        // Text cannot go beside a frame that leaves no room for it.
-        let blocks_text = wrap == FrameWrap::NotBeside
-            || (wrap == FrameWrap::Beside && f.width >= width * WIDE_FRAME);
+        // Text cannot go beside a frame across it that leaves no room.
+        let blocks_text = (wrap == FrameWrap::NotBeside
+            || (wrap == FrameWrap::Beside && f.width >= width * WIDE_FRAME))
+            && across_text(&f, &self.page_geom());
         let in_flow = f.follows_text() && blocks_text;
         if in_flow && y + f.height > self.avail_bottom() + EPS && placed_any {
             self.next_column(false);
@@ -1091,6 +1105,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                     fields: self.fields(),
                     note_number: Some(number.clone()),
                     float_frames: false,
+                    page: None,
                 },
             );
             let (y, placed_any) = self

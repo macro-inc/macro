@@ -7,7 +7,10 @@ use super::super::lines::{LineCtx, break_lines};
 use super::super::table::{CellGeom, TableGeom, geometry};
 use super::super::{Item, ParaBox, PlacedDrawing, PlacedLine, StoryRef};
 use super::Env;
-use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, place_in_container};
+use super::anchors::PageGeom;
+use super::frames::{
+    FrameWrap, PendingFrame, across_text, emit_frame, frame_box, place_in_container,
+};
 use crate::model::block::{Block, BlockId, BlockKind, Story};
 use crate::model::props::{Border, HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
 use pptx_engine::path::Rect;
@@ -58,6 +61,9 @@ pub struct StackCtx {
     /// Leave text frames for the page to place (headers and footers);
     /// otherwise they are placed inside the stack.
     pub float_frames: bool,
+    /// The page the stack goes on, with the stack's text area as its
+    /// column, when known while laying it out.
+    pub page: Option<PageGeom>,
 }
 
 /// The previous paragraph, for spacing between paragraphs.
@@ -443,8 +449,11 @@ pub(in crate::layout) fn stack_blocks(
             skip_to = end;
             f.para_top = y;
             // Text continues below a frame anchored to it that allows
-            // nothing beside it.
-            let band = if f.wrap() == FrameWrap::NotBeside && f.follows_text() {
+            // nothing beside it, unless the frame is in a margin.
+            let band = if f.wrap() == FrameWrap::NotBeside
+                && f.follows_text()
+                && sc.page.as_ref().is_none_or(|g| across_text(&f, g))
+            {
                 f.height
             } else {
                 0.0
@@ -629,6 +638,7 @@ pub(in crate::layout) fn table_box(
                         fields: fields.clone(),
                         note_number: None,
                         float_frames: false,
+                        page: None,
                     },
                 )
             };

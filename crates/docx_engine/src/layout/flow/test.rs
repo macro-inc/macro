@@ -440,3 +440,22 @@ fn table_rows_make_room_for_their_borders() {
     assert!((two.y - (one.y + h + 2.0)).abs() < 0.01, "{}", two.y);
     assert!((after.y - (two.y + h + 2.0)).abs() < 0.01, "{}", after.y);
 }
+
+#[test]
+fn frames_in_the_margin_leave_the_text_beside_them() {
+    let header = r#"<w:p><w:pPr><w:framePr w:w="400" w:h="400" w:hRule="exact" w:wrap="notBeside" w:vAnchor="text" w:hAnchor="page" w:x="11000" w:y="0"/></w:pPr><w:r><w:t>9</w:t></w:r></w:p><w:p><w:r><w:t>Header text</w:t></w:r></w:p>"#;
+    let body = format!("<w:p><w:r><w:t>Body</w:t></w:r></w:p>{SECTION}");
+    let l = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            header: Some(header),
+            ..Parts::default()
+        },
+    );
+    let part = header_part();
+    let hs = lines(&l, &part);
+    let rest = hs.iter().find(|p| text(p) == "Header text").expect("text");
+    // The frame is right of the text area: the text stays at the top.
+    assert!((rest.y - 36.0).abs() < 0.01, "{}", rest.y);
+}
