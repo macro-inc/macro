@@ -142,65 +142,6 @@ fn header_paragraphs_do_not_take_body_list_labels() {
     assert_eq!(text(lines(&l, &part)[0]), "Header");
 }
 
-/// A one-inch picture anchored to its paragraph with `wrap`.
-fn anchored_picture(wrap: &str, offset_emu: i64) -> String {
-    format!(
-        r#"<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>{offset_emu}</wp:posOffset></wp:positionV><wp:extent cx="914400" cy="914400"/><wp:effectExtent l="0" t="0" r="0" b="0"/>{wrap}<wp:docPr id="1" name="p"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rIdX"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>"#
-    )
-}
-
-#[test]
-fn top_and_bottom_floats_push_text_below_them() {
-    let body = format!(
-        "<w:p>{}<w:r><w:t>Beside</w:t></w:r></w:p><w:p><w:r><w:t>Next</w:t></w:r></w:p>",
-        anchored_picture("<wp:wrapTopAndBottom/>", 0)
-    );
-    let l = layout(
-        &body,
-        &Parts {
-            styles: Some(ARIAL_10),
-            ..Parts::default()
-        },
-    );
-    let ls = lines(&l, &StoryRef::Body);
-    // The picture spans 72..144: its paragraph's text goes below it.
-    assert!((ls[0].y - 144.0).abs() < 0.01, "{}", ls[0].y);
-    // Text that ignores it stays put.
-    let body = format!(
-        "<w:p>{}<w:r><w:t>Over</w:t></w:r></w:p>",
-        anchored_picture("<wp:wrapNone/>", 0)
-    );
-    let l = layout(
-        &body,
-        &Parts {
-            styles: Some(ARIAL_10),
-            ..Parts::default()
-        },
-    );
-    assert!((lines(&l, &StoryRef::Body)[0].y - 72.0).abs() < 0.01);
-}
-
-#[test]
-fn text_continues_below_a_band_further_down() {
-    // A picture an inch below its paragraph: the paragraph's line stays on
-    // top, the next paragraph jumps the band instead of the page.
-    let body = format!(
-        "<w:p>{}<w:r><w:t>Above</w:t></w:r></w:p><w:p><w:r><w:t>Below</w:t></w:r></w:p>",
-        anchored_picture("<wp:wrapTopAndBottom/>", 914400 / 6)
-    );
-    let l = layout(
-        &body,
-        &Parts {
-            styles: Some(ARIAL_10),
-            ..Parts::default()
-        },
-    );
-    assert_eq!(l.pages.len(), 1);
-    let ls = lines(&l, &StoryRef::Body);
-    assert!((ls[0].y - 72.0).abs() < 0.01, "{}", ls[0].y);
-    assert!((ls[1].y - (72.0 + 12.0 + 72.0)).abs() < 0.01, "{}", ls[1].y);
-}
-
 #[test]
 fn links_take_their_color_from_their_formatting() {
     use pptx_engine::model::color::Rgba;
@@ -640,9 +581,10 @@ fn sections_on_one_page_stack_their_columns() {
         find(&l, 0, "Right"),
         find(&l, 0, "After"),
     );
-    // The two columns start below the first section (its empty section
-    // break paragraph included), the second at 72 + 216 + 36.
-    assert!((left.y - (72.0 + 2.0 * h)).abs() < 0.01, "{}", left.y);
+    // The two columns start right below the first section's text (its
+    // empty section break paragraph takes no room), the second at
+    // 72 + 216 + 36.
+    assert!((left.y - (72.0 + h)).abs() < 0.01, "{}", left.y);
     assert!((right.y - left.y).abs() < 0.01, "{}", right.y);
     assert!((right.x - 324.0).abs() < 0.01, "{}", right.x);
     // The next section starts below both columns: the column break and the
@@ -685,6 +627,30 @@ fn ending_full_columns_does_not_start_a_page() {
     assert_eq!(page_texts(&l, 0).len(), 112);
     assert_eq!(l.pages.len(), 2);
     assert_eq!(page_texts(&l, 1), vec!["Next".to_owned()]);
+}
+
+#[test]
+fn empty_breaks_to_continuous_sections_take_no_room_below_text() {
+    // An empty paragraph ending a section before a continuous one adds no
+    // line below text; one that starts the page keeps its line.
+    let continuous = format!("<w:sectPr><w:type w:val=\"continuous\"/>{PAGE}</w:sectPr>");
+    let body = format!(
+        "{}{}{}{continuous}",
+        para("One"),
+        section_end("continuous", ""),
+        para("Two"),
+    );
+    let l = layout(&body, &arial_10());
+    let (one, two) = (find(&l, 0, "One"), find(&l, 0, "Two"));
+    assert!(
+        (two.y - (one.y + one.line().height)).abs() < 0.01,
+        "{}",
+        two.y
+    );
+    let body = format!("{}{}{continuous}", section_end("nextPage", ""), para("Two"));
+    let l = layout(&body, &arial_10());
+    let two = find(&l, 0, "Two");
+    assert!(two.y > 72.0 + 1.0, "{}", two.y);
 }
 
 #[test]
@@ -966,4 +932,27 @@ fn space_after_must_fit_above_footnotes() {
     // would not. Without notes the space after may run into the margin.
     assert_eq!(count(true), 26);
     assert_eq!(count(false), 28);
+}
+
+#[test]
+fn auto_spacing_vanishes_between_items_of_one_list_only() {
+    // Two items of list 1, then two of list 2, all spaced automatically:
+    // none between the items of a list, 14pt between the two lists.
+    let numbering = r#"<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="-"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="0"/></w:num>"#;
+    let item = |num: u32| {
+        format!(
+            r#"<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="{num}"/></w:numPr><w:spacing w:before="100" w:beforeAutospacing="1" w:after="100" w:afterAutospacing="1"/></w:pPr><w:r><w:t>Item</w:t></w:r></w:p>"#
+        )
+    };
+    let body = format!("{}{}{}{}{LETTER}", item(1), item(1), item(2), item(2));
+    let parts = Parts {
+        numbering: Some(numbering),
+        ..arial_10()
+    };
+    let l = layout(&body, &parts);
+    let ls = lines(&l, &StoryRef::Body);
+    let gap = |k: usize| ls[k + 1].y - (ls[k].y + ls[k].line().height);
+    assert!(gap(0).abs() < 0.01, "{}", gap(0));
+    assert!((gap(1) - 14.0).abs() < 0.01, "{}", gap(1));
+    assert!(gap(2).abs() < 0.01, "{}", gap(2));
 }

@@ -3,7 +3,7 @@
 use super::format::{Formats, TableCtx};
 use crate::model::block::{Block, BlockKind, Story};
 use crate::model::props::{Border, BordersPr, TblPr, TcPr, TrPr, VMerge, Width};
-use crate::model::styles::cell_conditions;
+use crate::model::styles::{CellPlace, cell_conditions};
 use crate::xml::{SnippetContext, parse_int};
 
 /// A cell's resolved geometry and formatting.
@@ -34,8 +34,6 @@ pub struct CellGeom {
 /// A row's resolved geometry.
 #[derive(Clone, Debug)]
 pub struct RowGeom {
-    /// The row block.
-    pub id: crate::model::block::BlockId,
     /// Row properties.
     pub tr: TrPr,
     /// Cells.
@@ -53,8 +51,6 @@ pub struct TableGeom {
     pub tbl: TblPr,
     /// Rows.
     pub rows: Vec<RowGeom>,
-    /// Number of repeating header rows.
-    pub header_rows: usize,
 }
 
 impl TableGeom {
@@ -131,7 +127,6 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
         .cloned()
         .collect();
     struct RawRow {
-        id: crate::model::block::BlockId,
         tr: TrPr,
         cells: Vec<(crate::model::block::BlockId, TcPr)>,
     }
@@ -141,7 +136,7 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
             continue;
         };
         let tr = formats.parsed("trPr", &row.props, || {
-            read_props(snippets, &row.props, "trPr", |t, n| TrPr::read(t, n)).unwrap_or_default()
+            read_props(snippets, &row.props, "trPr", TrPr::read).unwrap_or_default()
         });
         let cells = story
             .children(Some(rid))
@@ -159,11 +154,7 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
                 })
             })
             .collect();
-        raw.push(RawRow {
-            id: rid.clone(),
-            tr,
-            cells,
-        });
+        raw.push(RawRow { tr, cells });
     }
     // The grid must cover every row.
     let needed = raw
@@ -237,16 +228,16 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
         let mut cells = Vec::with_capacity(ncells);
         for (ci, (id, direct_tc)) in r.cells.iter().enumerate() {
             let span = direct_tc.grid_span.unwrap_or(1).max(1) as usize;
-            let conds = cell_conditions(
-                &look,
-                ri,
-                rows_count,
-                ci,
-                ncells,
-                header_rows.max(1),
-                band_rows,
-                band_cols,
-            );
+            let place = CellPlace {
+                row: ri,
+                rows: rows_count,
+                col: ci,
+                cols: ncells,
+                header_rows: header_rows.max(1),
+                row_band: band_rows,
+                col_band: band_cols,
+            };
+            let conds = cell_conditions(&look, place);
             let ctx = TableCtx {
                 style: tbl.style.clone(),
                 conds,
@@ -313,7 +304,6 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
             col += span;
         }
         rows.push(RowGeom {
-            id: r.id.clone(),
             tr: r.tr.clone(),
             cells,
         });
@@ -348,6 +338,5 @@ pub fn geometry(story: &Story, table: &Block, formats: &Formats<'_>, avail: f32)
         left,
         tbl,
         rows,
-        header_rows,
     }
 }

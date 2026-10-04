@@ -540,6 +540,18 @@
     "notes": "list/heading numbering (1 abstractNums, numPr on 16 paras, 1 style-linked numbering, multi-level); tables x2; Arabic/Hebrew RTL script; bidi/rtl markup x405; compatibilityMode 15; Hebrew RTL questionnaire: bidi paragraphs, rtl runs, RTL (bidiVisual) tables, mixed Hebrew/English; LibreOffice 24.2.7.2 render: 5 pages (pages_hint 4)"
   },
   {
+    "file": "un-a-79-10-international-law-commission-report.docx",
+    "source_url": "https://documents.un.org/api/symbol/access?s=A/79/10&l=en&t=docx",
+    "retrieved": "2026-10-04",
+    "provenance": "United Nations (ODS) - Report of the International Law Commission, seventy-fifth session (A/79/10)",
+    "license": "UN official document (ODS); UN terms of use allow downloading/copying, official documents are routinely reproduced with attribution; verify before commercial redistribution",
+    "category": "legal",
+    "pages_hint": 170,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "un-a-79-10-international-law-commission-report.word.pdf",
+    "notes": "footnotes x508; list/heading numbering (4 abstractNums, 4 style-linked numbering, multi-level); tables x1; DrawingML objects (inline x2, anchored/floating x1); wps shapes x1; text boxes (txbxContent) x2; VML pict/shapes x1; 6 sections; different first-page header/footer; even/odd headers; header parts 8, footer parts 10; hyperlinks x55; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 170 pages (= docx Pages), 595 x 842 pts (A4); source https://documents.un.org/api/symbol/access?s=A/79/10&l=en&t=pdf; text check: 99.9% of 64509 docx body words found in PDF text"
+  },
+  {
     "file": "un-a-79-305-mercenaries-working-group-report.docx",
     "source_url": "https://documents.un.org/api/symbol/access?s=A/79/305&l=en&t=docx",
     "retrieved": "2026-10-04",
@@ -550,6 +562,18 @@
     "generator": "Microsoft Office Word 16.0000",
     "word_pdf": "un-a-79-305-mercenaries-working-group-report.word.pdf",
     "notes": "footnotes x73; comments (anchors/refs x2); list/heading numbering (13 abstractNums, 22 style-linked numbering, multi-level); fields: PAGE x2, NUMPAGES x2, HYPERLINK x2; tables x1; DrawingML objects (inline x2, anchored/floating x3); wps shapes x2; VML pict/shapes x2; frames (framePr) x2; 2 sections; different first-page header/footer; even/odd headers; header parts 3, footer parts 3; hyperlinks x19; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 20 pages (= docx Pages), 612 x 792 pts (letter); source https://documents.un.org/api/symbol/access?s=A/79/305&l=en&t=pdf; text check: 99.8% of 9134 docx body words found in PDF text; LibreOffice 24.2.7.2 render: 21 pages (pages_hint 20)"
+  },
+  {
+    "file": "un-a-hrc-res-56-1-human-rights-council-resolution-a4.docx",
+    "source_url": "https://documents.un.org/api/symbol/access?s=A/HRC/RES/56/1&l=en&t=docx",
+    "retrieved": "2026-10-04",
+    "provenance": "United Nations (ODS) - Human Rights Council resolution 56/1",
+    "license": "UN official document (ODS); UN terms of use allow downloading/copying, official documents are routinely reproduced with attribution; verify before commercial redistribution",
+    "category": "legal",
+    "pages_hint": 12,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "un-a-hrc-res-56-1-human-rights-council-resolution-a4.word.pdf",
+    "notes": "footnotes x6; list/heading numbering (8 abstractNums, 3 style-linked numbering, multi-level); tables x1; DrawingML objects (inline x1); different first-page header/footer; even/odd headers; header parts 2, footer parts 3; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 12 pages (= docx Pages), 595 x 842 pts (A4); source https://documents.un.org/api/symbol/access?s=A/HRC/RES/56/1&l=en&t=pdf; text check: 100.0% of 5599 docx body words found in PDF text"
   },
   {
     "file": "un-a-res-78-253-programme-budget-special-subjects.docx",
@@ -600,6 +624,18 @@
     "notes": "footnotes x26; comments (anchors/refs x2); list/heading numbering (13 abstractNums, 20 style-linked numbering, multi-level); fields: PAGE x2, NUMPAGES x2; DrawingML objects (inline x2, anchored/floating x2); wps shapes x1; VML pict/shapes x1; 2 sections; different first-page header/footer; even/odd headers; header parts 3, footer parts 3; hyperlinks x7; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 56 pages (= docx Pages), 612 x 792 pts (letter); source https://documents.un.org/api/symbol/access?s=A/RES/79/1&l=en&t=pdf; text check: 99.9% of 27569 docx body words found in PDF text; LibreOffice 24.2.7.2 render: 59 pages (pages_hint 56)"
   },
   {
+    "file": "un-a-res-79-243-convention-against-cybercrime.docx",
+    "source_url": "https://documents.un.org/api/symbol/access?s=A/RES/79/243&l=en&t=docx",
+    "retrieved": "2026-10-04",
+    "provenance": "United Nations (ODS) - General Assembly resolution 79/243 (United Nations Convention against Cybercrime)",
+    "license": "UN official document (ODS); UN terms of use allow downloading/copying, official documents are routinely reproduced with attribution; verify before commercial redistribution",
+    "category": "legal",
+    "pages_hint": 46,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "un-a-res-79-243-convention-against-cybercrime.word.pdf",
+    "notes": "footnotes x1; list/heading numbering (17 abstractNums, 20 style-linked numbering, multi-level); tables x1; DrawingML objects (anchored/floating x1); wps shapes x1; VML pict/shapes x1; 2 sections; different first-page header/footer; even/odd headers; header parts 3, footer parts 3; hyperlinks x9; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 46 pages (= docx Pages), 612 x 792 pts (letter); source https://documents.un.org/api/symbol/access?s=A/RES/79/243&l=en&t=pdf; text check: 100.0% of 16730 docx body words found in PDF text"
+  },
+  {
     "file": "un-bbnj-agreement-a-conf-232-2023-4.docx",
     "source_url": "https://documents.un.org/api/symbol/access?s=A/CONF.232/2023/4&l=en&t=docx",
     "retrieved": "2026-10-04",
@@ -610,6 +646,18 @@
     "generator": "Microsoft Office Word 16.0000",
     "word_pdf": "un-bbnj-agreement-a-conf-232-2023-4.word.pdf",
     "notes": "comments (anchors/refs x2); list/heading numbering (19 abstractNums, 21 style-linked numbering, multi-level); fields: PAGE x2, NUMPAGES x2; DrawingML objects (inline x2, anchored/floating x3); wps shapes x2; VML pict/shapes x2; frames (framePr) x2; 2 sections; different first-page header/footer; even/odd headers; header parts 3, footer parts 3; bookmarks x26 (cross-reference targets); dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 53 pages (= docx Pages), 612 x 792 pts (letter); source https://documents.un.org/api/symbol/access?s=A/CONF.232/2023/4&l=en&t=pdf; text check: 99.6% of 21636 docx body words found in PDF text; LibreOffice 24.2.7.2 render: 55 pages (pages_hint 53)"
+  },
+  {
+    "file": "un-e-2024-53-humanitarian-coordination-report.docx",
+    "source_url": "https://documents.un.org/api/symbol/access?s=E/2024/53&l=en&t=docx",
+    "retrieved": "2026-10-04",
+    "provenance": "United Nations (ODS) - Report of the Secretary-General on the coordination of emergency humanitarian assistance (A/79/78-E/2024/53)",
+    "license": "UN official document (ODS); UN terms of use allow downloading/copying, official documents are routinely reproduced with attribution; verify before commercial redistribution",
+    "category": "report",
+    "pages_hint": 19,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "un-e-2024-53-humanitarian-coordination-report.word.pdf",
+    "notes": "footnotes x35; list/heading numbering (13 abstractNums, 19 style-linked numbering, multi-level); tables x2; DrawingML objects (anchored/floating x2); wps shapes x2; VML pict/shapes x2; text frames (framePr) x3; 2 sections; different first-page header/footer; even/odd headers; header parts 3, footer parts 3; hyperlinks x12; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 19 pages (= docx Pages), 612 x 792 pts (letter); source https://documents.un.org/api/symbol/access?s=E/2024/53&l=en&t=pdf; text check: 99.9% of 7310 docx body words found in PDF text"
   },
   {
     "file": "un-s-res-2720-2023-security-council.docx",
@@ -648,6 +696,42 @@
     "notes": "footnotes x5; list/heading numbering (17 abstractNums, numPr on 74 paras, 23 style-linked numbering, multi-level); TOC field; fields: PAGEREF x27, PAGE x7; tables x26; native charts x28; DrawingML objects (inline x33, anchored/floating x2); wps shapes x9; text boxes (txbxContent) x10; shape groups x1; VML pict/shapes x9; multi-column sections (up to 2 cols); 13 sections; even/odd headers; header parts 0, footer parts 20; bookmarks x78 (cross-reference targets); hyperlinks x28; dot/leader tabs; compatibilityMode 15; PDF on site is Acrobat PDFMaker 26 for Word with 102 pages vs docx Pages=100 (not kept); LibreOffice 24.2.7.2 render: 123 pages (pages_hint 100)"
   },
   {
+    "file": "wacourts-civil-case-cover-sheet-superior-court.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/Civil-Case%20Cover%20Sheet%20Superior%20Court%20%2804.2026%29.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - Superior Court civil case cover sheet",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "form",
+    "pages_hint": 9,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "wacourts-civil-case-cover-sheet-superior-court.word.pdf",
+    "notes": "tables x4; 16 sections; multi-column sections x1; header parts 3, footer parts 10; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 9 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/Civil-Case%20Cover%20Sheet%20Superior%20Court%20%2804.2026%29%28Checked%29.pdf; text check: 99.9% of 1748 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-crrlj-04-1100-petition-for-deferred-prosecution.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/WPF%20CrRLJ%2004.1100%20Petition%20for%20Deferred%20Prosecution_2021%2012.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - criminal (CrRLJ) form 04.1100 (Petition for Deferred Prosecution)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 3,
+    "generator": "Microsoft Office Word 15.0000",
+    "word_pdf": "wacourts-crrlj-04-1100-petition-for-deferred-prosecution.word.pdf",
+    "notes": "list/heading numbering (1 abstractNums, multi-level); tables x1; header parts 3, footer parts 3; compatibilityMode 15; Word reference PDF: Microsoft® Word 2013, 3 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/WPF%20CrRLJ%2004.1100%20Petition%20for%20Deferred%20Prosecution_2021%2012.pdf; text check: 100.0% of 1150 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-crrlj-07-0110-judgment-and-sentence.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/CrRLJ%2007.0110%20Judgment%20and%20Sentence_2024%2001%20%28U%29.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - criminal (CrRLJ) form 07.0110 (Judgment and Sentence)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 5,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "wacourts-crrlj-07-0110-judgment-and-sentence.word.pdf",
+    "notes": "list/heading numbering (2 abstractNums, multi-level); tables x2; header parts 0, footer parts 1; compatibilityMode 15; Word reference PDF: Microsoft® Word 2019, 5 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/CrRLJ%2007.0110%20Judgment%20and%20Sentence_2024%2001%20%28U%29.pdf; text check: 100.0% of 1028 docx body words found in PDF text"
+  },
+  {
     "file": "wacourts-fl-all-family-001-confidential-info-form.docx",
     "source_url": "https://www.courts.wa.gov/forms/documents/FL%20All%20Family%20001%20Confidential%20Info%20Form_202601.docx",
     "retrieved": "2026-10-04",
@@ -670,6 +754,78 @@
     "generator": "Microsoft Office Word 16.0000",
     "word_pdf": "wacourts-fl-all-family-130-child-support-order.word.pdf",
     "notes": "list/heading numbering (20 abstractNums, numPr on 61 paras, 21 style-linked numbering, multi-level); fields: PAGE x1, NUMPAGES x1; tables x18; DrawingML objects (anchored/floating x5); wps shapes x5; VML pict/shapes x10; 5 sections; header parts 1, footer parts 1; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 18 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/FL%20All%20Family%20130%20Child%20Support%20Order%202026_01.pdf; text check: 99.9% of 5436 docx body words found in PDF text; LibreOffice 24.2.7.2 render: 20 pages (pages_hint 18)"
+  },
+  {
+    "file": "wacourts-fl-all-family-140-parenting-plan.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/FL%20All%20Family%20140%20Parenting%20Plan%2007.2025.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - pattern form FL All Family 140 (Parenting Plan)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 28,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "wacourts-fl-all-family-140-parenting-plan.word.pdf",
+    "notes": "list/heading numbering (38 abstractNums, numPr on 69 paras, 13 style-linked numbering, multi-level); tables x21; DrawingML objects (anchored/floating x7); wps shapes x7; VML pict/shapes x7; 6 sections; multi-column sections x1; header parts 0, footer parts 6; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 28 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/FL%20All%20Family%20140%20Parenting%20Plan%2007.2025.pdf; text check: 100.0% of 6560 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-gdn-c-104-order-appointing-guardian-conservator.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/GDN%20C%20104%20Or%20App%20Guardian%20Conservator_07.2025.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - guardianship form GDN C 104 (Order Appointing Full or Limited Guardian/Conservator)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 12,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "wacourts-gdn-c-104-order-appointing-guardian-conservator.word.pdf",
+    "notes": "list/heading numbering (8 abstractNums, numPr on 1 paras, multi-level); tables x4 (nested); header parts 0, footer parts 1; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 12 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/GDN%20C%20104%20Or%20App%20Guardian%20Conservator_07.2025.pdf; text check: 100.0% of 2573 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-gdn-e-301-emergency-guardianship-petition.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/GDN%20E%20301%20Emergency%20Pt%20for%20Appt%20Gdn%20Con%202022%2001.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - guardianship form GDN E 301 (Emergency Guardianship/Conservatorship Petition)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 10,
+    "generator": "Microsoft Office Word 15.0000",
+    "word_pdf": "wacourts-gdn-e-301-emergency-guardianship-petition.word.pdf",
+    "notes": "list/heading numbering (38 abstractNums, numPr on 29 paras, 1 style-linked numbering, multi-level); tables x1; DrawingML objects (anchored/floating x2); wps shapes x2; VML pict/shapes x2; 3 sections; multi-column sections x2; header parts 0, footer parts 1; compatibilityMode 15; Word reference PDF: Microsoft® Word 2013, 10 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/GDN%20E%20301%20Emergency%20Pt%20for%20Appt%20Gdn%20Con%202022%2001.pdf; text check: 99.9% of 1481 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-ju-03-0400-order-of-dependency.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/JU03_0400%20Order%20of%20Dependency_2025%2007.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - juvenile form JU 03.0400 (Order of Dependency)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 12,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "wacourts-ju-03-0400-order-of-dependency.word.pdf",
+    "notes": "list/heading numbering (10 abstractNums, numPr on 2 paras, multi-level); tables x2; header parts 0, footer parts 1; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 12 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/JU03_0400%20Order%20of%20Dependency_2025%2007.pdf; text check: 100.0% of 2413 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-ju-07-0800-order-on-adjudication-and-disposition.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/JU%2007_0800%20Order%20on%20Adjudication%20and%20Disposition_07.2025.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - juvenile offender form JU 07.0800 (Order on Adjudication and Disposition)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "legal",
+    "pages_hint": 14,
+    "generator": "Microsoft Office Word 16.0000",
+    "word_pdf": "wacourts-ju-07-0800-order-on-adjudication-and-disposition.word.pdf",
+    "notes": "list/heading numbering (5 abstractNums, numPr on 2 paras, multi-level); tables x9; text frames (framePr) x5; header parts 0, footer parts 1; dot/leader tabs; compatibilityMode 15; Word reference PDF: Microsoft® Word for Microsoft 365, 14 pages (= docx Pages), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/JU%2007_0800%20Order%20on%20Adjudication%20and%20Disposition_07.2025.pdf; text check: 99.9% of 3428 docx body words found in PDF text"
+  },
+  {
+    "file": "wacourts-mpi-408-assisted-outpatient-treatment-user-guide.docx",
+    "source_url": "https://www.courts.wa.gov/forms/documents/MPi%20408%20%20AOT%20User%20Guide_2023%2001.docx",
+    "retrieved": "2026-10-04",
+    "provenance": "Washington State Courts - MPi 408 (Assisted Outpatient Treatment user guide)",
+    "license": "Washington State Courts (Administrative Office of the Courts) pattern form; public government form, free to use",
+    "category": "report",
+    "pages_hint": 6,
+    "generator": "Microsoft Office Word 15.0000",
+    "word_pdf": "wacourts-mpi-408-assisted-outpatient-treatment-user-guide.word.pdf",
+    "notes": "list/heading numbering (32 abstractNums, numPr on 21 paras, multi-level); tables x2; DrawingML objects (inline x1); 2 sections; header parts 0, footer parts 1; hyperlinks x2; compatibilityMode 15; Word reference PDF: Microsoft® Word 2013, 6 pages (docx Pages says 1), 612 x 792 pts (letter); source https://www.courts.wa.gov/forms/documents/MPi%20408%20%20AOT%20User%20Guide_2023%2001.pdf; text check: 99.8% of 1290 docx body words found in PDF text"
   },
   {
     "file": "weconservepa-model-grant-of-conservation-easement-2025.docx",

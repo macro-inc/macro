@@ -12,7 +12,7 @@ use super::frames::{
     FrameWrap, PendingFrame, across_text, emit_frame, frame_box, place_in_container,
 };
 use crate::model::block::{Block, BlockId, BlockKind, Story};
-use crate::model::props::{Border, HeightRule, LineSpacing, ParaBorders, ParaProps, VMerge};
+use crate::model::props::{Border, HeightRule, ParaBorders, ParaProps, VMerge};
 use pptx_engine::path::Rect;
 use std::sync::Arc;
 
@@ -96,8 +96,8 @@ pub struct PrevPara {
     pub contextual: bool,
     /// Its space after is automatic.
     pub auto_after: bool,
-    /// It is a list item.
-    pub numbered: bool,
+    /// The list (numbering instance) it is an item of.
+    pub list: Option<i64>,
     /// Its borders and indents, for border groups.
     pub border: BorderBox,
 }
@@ -173,8 +173,10 @@ pub fn space_before(
     if prev.contextual && same_style {
         after = 0.0;
     }
-    if props.before_auto && prev.auto_after && prev.numbered && props.num.is_some() {
-        // HTML-style auto spacing gives list items none.
+    let list = props.num.map(|(id, _)| id);
+    if props.before_auto && prev.auto_after && list.is_some() && prev.list == list {
+        // HTML-style auto spacing leaves none between the items of a list
+        // (but keeps it between two lists).
         return 0.0;
     }
     if sum {
@@ -204,7 +206,7 @@ pub fn prev_record(props: &ParaProps) -> PrevPara {
         after: space_after(props),
         contextual: props.contextual_spacing,
         auto_after: props.after_auto,
-        numbered: props.num.is_some(),
+        list: props.num.map(|(id, _)| id),
         border: BorderBox::of(props),
     }
 }
@@ -244,17 +246,33 @@ pub(in crate::layout) fn rebreak(
     })
 }
 
+/// What a paragraph is laid out for.
+#[derive(Clone, Copy)]
+pub(in crate::layout) struct ParaCtx<'c> {
+    /// The story it is in.
+    pub story: &'c StoryRef,
+    /// The width its lines fill.
+    pub width: f32,
+    /// The table it is in.
+    pub table: &'c TableCtx,
+    /// The values of the page fields it shows.
+    pub fields: &'c FieldValues,
+    /// The number of the note it is in.
+    pub note_number: Option<&'c str>,
+    /// The line pitch of the document grid its lines snap to.
+    pub grid: Option<f32>,
+}
+
 /// Lays out one paragraph into a box.
-pub(in crate::layout) fn para_box(
-    env: &Env<'_>,
-    block: &Block,
-    story: &StoryRef,
-    width: f32,
-    table: &TableCtx,
-    fields: &FieldValues,
-    note_number: Option<&str>,
-    grid: Option<f32>,
-) -> Arc<ParaBox> {
+pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>) -> Arc<ParaBox> {
+    let ParaCtx {
+        story,
+        width,
+        table,
+        fields,
+        note_number,
+        grid,
+    } = *cx;
     // Body labels are numbered across the document; other stories (whose
     // block ids may repeat the body's) number their paragraphs themselves.
     let own_label = (*story != StoryRef::Body)
@@ -346,18 +364,33 @@ pub fn border_space(props: &ParaProps, join: BorderJoin) -> (f32, f32) {
     (top, bottom)
 }
 
-/// Shading and borders around a paragraph fragment spanning `top..bottom`.
-pub fn decorate(
-    props: &ParaProps,
-    x: f32,
-    top: f32,
-    bottom: f32,
-    first: bool,
-    last: bool,
-    width: f32,
-    join: BorderJoin,
-    out: &mut Vec<Item>,
-) {
+/// A piece of a paragraph on one page or in one column.
+#[derive(Clone, Copy, Debug)]
+pub struct Fragment {
+    /// The left edge of the column it is in.
+    pub x: f32,
+    /// The column's width.
+    pub width: f32,
+    /// Where it starts.
+    pub top: f32,
+    /// Where it ends.
+    pub bottom: f32,
+    /// Whether it holds the paragraph's first line.
+    pub first: bool,
+    /// Whether it holds the paragraph's last line.
+    pub last: bool,
+}
+
+/// Shading and borders around a paragraph fragment.
+pub fn decorate(props: &ParaProps, frag: Fragment, join: BorderJoin, out: &mut Vec<Item>) {
+    let Fragment {
+        x,
+        width,
+        top,
+        bottom,
+        first,
+        last,
+    } = frag;
     let left = x + props
         .ind_left
         .min(props.ind_left + props.ind_first.min(0.0));
@@ -424,18 +457,39 @@ pub fn decorate(
     }
 }
 
-/// Emits a paragraph's lines (`first..last`) at (x, y); returns the height used.
+/// Where laid out lines and rows go: their items, the floating drawings
+/// still to be positioned, and the note references (endnote?, id).
+pub(super) struct Sink<'o> {
+    pub items: &'o mut Vec<Item>,
+    pub anchors: &'o mut Vec<PendingAnchor>,
+    pub notes: &'o mut Vec<(bool, i64)>,
+}
+
+impl Stack {
+    /// The stack's items, anchors and notes, to add to.
+    pub(super) fn sink(&mut self) -> Sink<'_> {
+        Sink {
+            items: &mut self.items,
+            anchors: &mut self.anchors,
+            notes: &mut self.notes,
+        }
+    }
+}
+
+/// Emits a paragraph's lines `first..last` at (x, y), with the paragraph's
+/// floating drawings positioned from `para_top`; returns the height used.
 pub(super) fn emit_lines(
     pb: &Arc<ParaBox>,
-    first: usize,
-    last: usize,
-    x: f32,
-    y: f32,
-    out: &mut Vec<Item>,
-    anchors: &mut Vec<PendingAnchor>,
-    notes: &mut Vec<(bool, i64)>,
+    (first, last): (usize, usize),
+    (x, y): (f32, f32),
     para_top: f32,
+    out: Sink<'_>,
 ) -> f32 {
+    let Sink {
+        items: out,
+        anchors,
+        notes,
+    } = out;
     let lines = &pb.lines.lines;
     let base = lines.get(first).map_or(0.0, |l| l.top);
     for (i, line) in lines.iter().enumerate().take(last).skip(first) {
@@ -532,12 +586,14 @@ pub(in crate::layout) fn stack_blocks(
                 let pb = para_box(
                     env,
                     b,
-                    &sc.story,
-                    sc.width,
-                    &sc.table,
-                    &sc.fields,
-                    sc.note_number.as_deref(),
-                    None,
+                    &ParaCtx {
+                        story: &sc.story,
+                        width: sc.width,
+                        table: &sc.table,
+                        fields: &sc.fields,
+                        note_number: sc.note_number.as_deref(),
+                        grid: None,
+                    },
                 );
                 let props = &pb.format.props;
                 let gap_top = y;
@@ -561,21 +617,19 @@ pub(in crate::layout) fn stack_blocks(
                 let top = if join.prev { gap_top } else { y };
                 y += bt;
                 let n = pb.lines.lines.len();
-                let h = emit_lines(
-                    &pb,
-                    0,
-                    n,
-                    0.0,
-                    y,
-                    &mut out.items,
-                    &mut out.anchors,
-                    &mut out.notes,
-                    para_top,
-                );
+                let h = emit_lines(&pb, (0, n), (0.0, y), para_top, out.sink());
                 y += h + bb;
                 if props.shading.is_some() || props.borders.any() {
                     let mut deco = Vec::new();
-                    decorate(props, 0.0, top, y, true, true, sc.width, join, &mut deco);
+                    let frag = Fragment {
+                        x: 0.0,
+                        width: sc.width,
+                        top,
+                        bottom: y,
+                        first: true,
+                        last: true,
+                    };
+                    decorate(props, frag, join, &mut deco);
                     // Decorations go under the text.
                     let at = out.items.len() - n;
                     out.items.splice(at..at, deco);
@@ -590,15 +644,7 @@ pub(in crate::layout) fn stack_blocks(
                 let tb = table_box(env, story, b, sc.width, &sc.story, &sc.fields);
                 let mut ty = y;
                 for r in 0..tb.rows.len() {
-                    emit_row(
-                        &tb,
-                        r,
-                        0.0,
-                        ty,
-                        &mut out.items,
-                        &mut out.anchors,
-                        &mut out.notes,
-                    );
+                    emit_row(&tb, r, 0.0, ty, out.sink());
                     ty += tb.rows[r].height;
                 }
                 y = ty;
@@ -785,15 +831,12 @@ fn border_room(borders: impl Iterator<Item = Option<Border>>) -> f32 {
 
 /// Emits row `r` with its top-left table corner at (x, y) (x = the
 /// container's text area left; the table's own offset is added).
-pub(super) fn emit_row(
-    tb: &TableBox,
-    r: usize,
-    x: f32,
-    y: f32,
-    out: &mut Vec<Item>,
-    anchors: &mut Vec<PendingAnchor>,
-    notes: &mut Vec<(bool, i64)>,
-) {
+pub(super) fn emit_row(tb: &TableBox, r: usize, x: f32, y: f32, out: Sink<'_>) {
+    let Sink {
+        items: out,
+        anchors,
+        notes,
+    } = out;
     let row = &tb.rows[r];
     let tx = x + tb.geom.left;
     for cell in &row.cells {
@@ -894,16 +937,6 @@ pub(super) fn emit_row(
                 border: d,
             });
         }
-    }
-}
-
-/// Line height of a single-line paragraph with `props` at `size` points
-/// (used for estimates).
-pub fn nominal_line(props: &ParaProps, size: f32) -> f32 {
-    match props.line {
-        LineSpacing::Auto(m) => size * 1.15 * m,
-        LineSpacing::Exact(v) => v,
-        LineSpacing::AtLeast(v) => v.max(size * 1.15),
     }
 }
 

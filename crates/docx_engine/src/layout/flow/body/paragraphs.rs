@@ -5,8 +5,8 @@ use super::super::super::format::TableCtx;
 use super::super::super::lines::LineEnd;
 use super::super::super::{Item, ParaBox, StoryRef};
 use super::super::stack::{
-    BorderJoin, PendingAnchor, PrevPara, border_space, decorate, emit_lines, prev_record, rebreak,
-    space_after, space_before, table_box,
+    BorderJoin, Fragment, PendingAnchor, PrevPara, Sink, border_space, decorate, emit_lines,
+    prev_record, rebreak, space_after, space_before, table_box,
 };
 use super::floats::{OnPage, place_anchors};
 use super::{COLUMN_SLACK, EPS, Flow, LINE_NUMBER_DISTANCE};
@@ -14,6 +14,19 @@ use crate::model::block::{Block, BlockKind};
 use crate::model::props::{LineSpacing, ParaProps};
 use crate::model::section::LineNumberRestart;
 use std::sync::Arc;
+
+/// A paragraph on its way onto the pages: its lines, broken for the
+/// column it is in, the first of them still to place, and that column.
+pub(super) struct Placing {
+    /// The paragraph's lines.
+    pub(super) pb: Arc<ParaBox>,
+    /// The first line still to place.
+    pub(super) li: usize,
+    /// The column's left edge (page x).
+    pub(super) col_left: f32,
+    /// The column's width.
+    pub(super) width: f32,
+}
 
 impl Flow<'_, '_> {
     /// How paragraph `k` (formatted `props`) joins its neighbours' borders.
@@ -103,7 +116,7 @@ impl Flow<'_, '_> {
     pub(super) fn place_paragraph(&mut self, blocks: &[&Block], i: usize) {
         let b = blocks[i];
         let (_, width) = self.col_geom();
-        let mut pb = self.para(b, width);
+        let pb = self.para(b, width);
         let props = pb.format.props.clone();
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         if props.page_break_before && !at_top {
@@ -125,9 +138,13 @@ impl Flow<'_, '_> {
             }
         }
         // The paragraph goes in the column it is now in.
-        let (mut col_left, mut width) = (0.0, width);
-        let mut li = 0;
-        self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
+        let mut p = Placing {
+            pb,
+            li: 0,
+            col_left: 0.0,
+            width,
+        };
+        self.follow_column(&mut p);
         let at_top = self.cur.as_ref().is_some_and(|c| !c.placed_any);
         let hard = self.cur.as_ref().is_some_and(|c| c.hard)
             && !self.env.doc.parts().settings.suppress_sp_bf_after_pg_brk;
@@ -148,13 +165,13 @@ impl Flow<'_, '_> {
         // Where the paragraph's floating drawings are positioned from: its
         // top, above its own space before.
         let own = space_before(&props, None, first_in_doc, self.sum_spacing());
-        let mut anchor_top = self.reserve_float_bands(&pb, col_left, width, before.min(own));
+        let mut anchor_top = self.reserve_float_bands(&mut p, before.min(own));
         let mut join = self.border_join(blocks, i, &props, self.prev.as_ref());
-        let mut lines_len = pb.lines.lines.len();
         let mut first_fragment = true;
-        while li < lines_len {
+        while p.li < p.pb.lines.lines.len() {
+            let (li, lines_len) = (p.li, p.pb.lines.lines.len());
             self.skip_bands();
-            self.suppress_top_spacing(&pb, li);
+            self.suppress_top_spacing(&p.pb, li);
             let (bt, bb) = border_space(&props, join);
             let mut frag_top = self.cur.as_ref().map_or(0.0, |c| c.y);
             if first_fragment {
@@ -166,24 +183,18 @@ impl Flow<'_, '_> {
                     c.y += bt;
                 }
             }
-            let (fit, note_ids) = self.fit_lines(&pb, li);
+            let (fit, note_ids) = self.fit_lines(&p.pb, li);
+            let lines = &p.pb.lines.lines;
             let remaining = lines_len - li;
             let mut take = fit.min(remaining);
-            if let Some(k) = (li..li + take).find(|&k| {
-                matches!(
-                    pb.lines.lines[k].ends,
-                    LineEnd::PageBreak | LineEnd::ColumnBreak
-                )
-            }) {
+            if let Some(k) = (li..li + take)
+                .find(|&k| matches!(lines[k].ends, LineEnd::PageBreak | LineEnd::ColumnBreak))
+            {
                 take = k - li + 1;
             }
             if take < remaining {
-                let breaks_inside = (li..li + take).any(|k| {
-                    matches!(
-                        pb.lines.lines[k].ends,
-                        LineEnd::PageBreak | LineEnd::ColumnBreak
-                    )
-                });
+                let breaks_inside = (li..li + take)
+                    .any(|k| matches!(lines[k].ends, LineEnd::PageBreak | LineEnd::ColumnBreak));
                 if !breaks_inside {
                     if props.widow_control {
                         if remaining - take == 1 && take >= 2 {
@@ -194,7 +205,7 @@ impl Flow<'_, '_> {
                         }
                     }
                     let column = self.avail_bottom() - self.cur.as_ref().map_or(0.0, |c| c.top);
-                    if props.keep_lines && li == 0 && pb.lines.height <= column {
+                    if props.keep_lines && li == 0 && p.pb.lines.height <= column {
                         take = 0;
                     }
                 }
@@ -205,16 +216,15 @@ impl Flow<'_, '_> {
                     if first_fragment && let Some(c) = &mut self.cur {
                         c.y -= bt;
                     }
-                    let next = pb.lines.lines.get(li).map_or(0.0, |l| l.height);
+                    let next = p.pb.lines.lines.get(li).map_or(0.0, |l| l.height);
                     if self.jump_band(next + bt) {
                         continue;
                     }
                     self.next_column(false);
-                    self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
-                    lines_len = pb.lines.lines.len();
+                    self.follow_column(&mut p);
                     // A new column starts a new border box.
                     join.prev = false;
-                    anchor_top = self.reserve_float_bands(&pb, col_left, width, 0.0);
+                    anchor_top = self.reserve_float_bands(&mut p, 0.0);
                     continue;
                 }
                 take = 1;
@@ -230,18 +240,13 @@ impl Flow<'_, '_> {
             let mut items = Vec::new();
             let mut anchors: Vec<PendingAnchor> = Vec::new();
             let mut notes = Vec::new();
-            let h = emit_lines(
-                &pb,
-                li,
-                li + take,
-                col_left,
-                y,
-                &mut items,
-                &mut anchors,
-                &mut notes,
-                if first_fragment { anchor_top } else { y },
-            );
-            self.number_lines(&pb, li, li + take, col_left, y);
+            let sink = Sink {
+                items: &mut items,
+                anchors: &mut anchors,
+                notes: &mut notes,
+            };
+            let h = emit_lines(&p.pb, (li, li + take), (p.col_left, y), anchor_top, sink);
+            self.number_lines(&p.pb, li, li + take, p.col_left, y);
             let last_fragment = li + take >= lines_len;
             let bottom = y + h + if last_fragment { bb } else { 0.0 };
             if props.shading.is_some() || props.borders.any() {
@@ -249,17 +254,15 @@ impl Flow<'_, '_> {
                 if !first_fragment {
                     frag_top = y;
                 }
-                decorate(
-                    &props,
-                    col_left,
-                    frag_top,
+                let frag = Fragment {
+                    x: p.col_left,
+                    width: p.width,
+                    top: frag_top,
                     bottom,
-                    first_fragment,
-                    last_fragment,
-                    width,
-                    join,
-                    &mut deco,
-                );
+                    first: first_fragment,
+                    last: last_fragment,
+                };
+                decorate(&props, frag, join, &mut deco);
                 if let Some(c) = &mut self.cur {
                     c.body.extend(deco);
                 }
@@ -278,15 +281,15 @@ impl Flow<'_, '_> {
                 c.placed_any = true;
                 c.hard = false;
             }
-            li += take;
+            p.li += take;
             first_fragment = false;
-            let last_end = pb.lines.lines[li - 1].ends;
-            if li < lines_len || matches!(last_end, LineEnd::PageBreak | LineEnd::ColumnBreak) {
+            let last_end = p.pb.lines.lines[p.li - 1].ends;
+            if p.li < lines_len || matches!(last_end, LineEnd::PageBreak | LineEnd::ColumnBreak) {
                 match last_end {
                     LineEnd::PageBreak => {
                         let sect = self.cur.as_ref().map_or(0, |c| c.sect);
                         self.start_page(sect, true);
-                        if pb.lines.lines[..li].iter().all(|l| l.height == 0.0) {
+                        if p.pb.lines.lines[..p.li].iter().all(|l| l.height == 0.0) {
                             // A paragraph that starts with a page break
                             // starts after it, with its space before.
                             self.space_after_hard_break(&props);
@@ -294,39 +297,37 @@ impl Flow<'_, '_> {
                     }
                     LineEnd::ColumnBreak => self.next_column(true),
                     _ => {
-                        // Lines continue below a band that stopped them.
-                        let next = pb.lines.lines.get(li).map_or(0.0, |l| l.height);
-                        if !self.jump_band(next) {
-                            self.next_column(false);
+                        // Lines continue below a band that stopped them,
+                        // where their drawings' bands are already reserved.
+                        let next = p.pb.lines.lines.get(p.li).map_or(0.0, |l| l.height);
+                        if self.jump_band(next) {
+                            continue;
                         }
+                        self.next_column(false);
                     }
                 }
-                self.follow_column(&mut pb, &mut li, &mut col_left, &mut width);
-                lines_len = pb.lines.lines.len();
+                self.follow_column(&mut p);
+                // The drawings of the lines still to place go with them,
+                // positioned from where they go on.
+                anchor_top = self.reserve_float_bands(&mut p, 0.0);
             }
         }
         self.prev = Some(prev_record(&props));
     }
 
     /// Takes the current column's left edge and width for a paragraph
-    /// whose lines from `li` on are still to be placed, breaking those
+    /// whose lines from `p.li` on are still to be placed, breaking those
     /// lines again when the column is not as wide as they were broken for.
-    fn follow_column(
-        &mut self,
-        pb: &mut Arc<ParaBox>,
-        li: &mut usize,
-        col_left: &mut f32,
-        width: &mut f32,
-    ) {
+    pub(super) fn follow_column(&mut self, p: &mut Placing) {
         let (left, w) = self.col_geom();
-        *col_left = left;
-        if (w - *width).abs() <= COLUMN_SLACK {
+        p.col_left = left;
+        if (w - p.width).abs() <= COLUMN_SLACK {
             return;
         }
-        *width = w;
-        if let Some(line) = pb.lines.lines.get(*li) {
-            *pb = rebreak(self.env, pb, w, line.start, self.grid());
-            *li = 0;
+        p.width = w;
+        if let Some(line) = p.pb.lines.lines.get(p.li) {
+            p.pb = rebreak(self.env, &p.pb, w, line.start, self.grid());
+            p.li = 0;
         }
     }
 
@@ -385,7 +386,6 @@ impl Flow<'_, '_> {
             LineSpacing::Auto(m) if m > 1.0 && !(props.snap_to_grid && self.grid().is_some()) => m,
             _ => 1.0,
         };
-        let mut extra = 0.0;
         let mut count = 0;
         let mut ids: Vec<(usize, i64)> = Vec::new();
         for (k, line) in lines.iter().enumerate().skip(li) {
@@ -411,11 +411,9 @@ impl Flow<'_, '_> {
                 break;
             }
             y += line.height;
-            extra = note_h;
             count += 1;
             ids.extend(line_notes.into_iter().map(|id| (k, id)));
         }
-        let _ = extra;
         (count, ids)
     }
 
@@ -438,7 +436,7 @@ impl Flow<'_, '_> {
             self.line_no += 1;
             cur.line_on_page += 1;
             let n = ln.start - 1 + self.line_no;
-            if ln.count_by > 0 && n % ln.count_by == 0 {
+            if ln.count_by > 0 && n.is_multiple_of(ln.count_by) {
                 let mark = &pb.format.mark;
                 cur.body.push(Item::LineNumber {
                     text: n.to_string(),

@@ -22,7 +22,9 @@ import urllib.request
 from pathlib import Path
 
 DEFAULT_MANIFEST = Path(__file__).resolve().parent.parent / "tests" / "corpus" / "manifest.json"
-PDF_SOURCE = re.compile(r"source (https?://\S+?\.pdf)", re.IGNORECASE)
+# A PDF URL ends in `.pdf`, or asks an API for one (`t=pdf`, as the UN's
+# document system does).
+PDF_SOURCE = re.compile(r"source (https?://\S+?(?:\.pdf|[?&]t=pdf))", re.IGNORECASE)
 
 
 def fetch(url: str, dest: Path) -> bool:

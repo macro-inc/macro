@@ -319,18 +319,37 @@ impl Styles {
     }
 }
 
+/// Where a cell sits in its table, as table-style conditions see it.
+#[derive(Clone, Copy, Debug)]
+pub struct CellPlace {
+    /// The cell's row.
+    pub row: usize,
+    /// The table's row count.
+    pub rows: usize,
+    /// The cell's place in its row.
+    pub col: usize,
+    /// The row's cell count.
+    pub cols: usize,
+    /// The table's leading header rows.
+    pub header_rows: usize,
+    /// Rows per horizontal band.
+    pub row_band: usize,
+    /// Columns per vertical band.
+    pub col_band: usize,
+}
+
 /// Which table-style conditions apply to a cell, in Word's precedence order
 /// (later entries override earlier ones).
-pub fn cell_conditions(
-    look: &super::props::TableLook,
-    row: usize,
-    rows: usize,
-    col: usize,
-    cols: usize,
-    header_rows: usize,
-    row_band: usize,
-    col_band: usize,
-) -> Vec<&'static str> {
+pub fn cell_conditions(look: &super::props::TableLook, at: CellPlace) -> Vec<&'static str> {
+    let CellPlace {
+        row,
+        rows,
+        col,
+        cols,
+        header_rows,
+        row_band,
+        col_band,
+    } = at;
     let mut out = vec!["wholeTable"];
     let first_row = look.first_row && row < header_rows.max(1);
     let last_row = look.last_row && row + 1 == rows;

@@ -4,7 +4,7 @@
 use super::super::super::{Item, StoryRef};
 use super::super::anchors::PageGeom;
 use super::super::split::split_row;
-use super::super::stack::{RowBox, TableBox, emit_row, table_box};
+use super::super::stack::{RowBox, Sink, TableBox, emit_row, table_box};
 use super::floats::{OnPage, place_anchors};
 use super::{EPS, Flow};
 use crate::model::block::Block;
@@ -190,7 +190,12 @@ impl Flow<'_, '_> {
         let mut items = Vec::new();
         let mut anchors = Vec::new();
         let mut notes: Vec<(bool, i64)> = Vec::new();
-        emit_row(tb, r, col_left, y, &mut items, &mut anchors, &mut notes);
+        let sink = Sink {
+            items: &mut items,
+            anchors: &mut anchors,
+            notes: &mut notes,
+        };
+        emit_row(tb, r, col_left, y, sink);
         let ids: Vec<i64> = notes
             .iter()
             .filter(|(e, _)| !e)

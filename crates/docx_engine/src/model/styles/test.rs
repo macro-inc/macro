@@ -46,10 +46,19 @@ fn toggles_between_style_levels() {
 #[test]
 fn table_conditions_follow_look() {
     let look = crate::model::props::TableLook::default();
-    let c = cell_conditions(&look, 0, 3, 0, 2, 1, 1, 1);
+    let at = |row, col| CellPlace {
+        row,
+        rows: 3,
+        col,
+        cols: 2,
+        header_rows: 1,
+        row_band: 1,
+        col_band: 1,
+    };
+    let c = cell_conditions(&look, at(0, 0));
     assert!(c.contains(&"firstRow") && c.contains(&"firstCol") && c.contains(&"nwCell"));
-    let c = cell_conditions(&look, 1, 3, 1, 2, 1, 1, 1);
+    let c = cell_conditions(&look, at(1, 1));
     assert!(c.contains(&"band1Horz"));
-    let c = cell_conditions(&look, 2, 3, 1, 2, 1, 1, 1);
+    let c = cell_conditions(&look, at(2, 1));
     assert!(c.contains(&"band2Horz"));
 }
