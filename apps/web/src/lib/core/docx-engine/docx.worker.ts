@@ -38,7 +38,8 @@ type LogEntry =
   | { kind: 'redo' }
   | { kind: 'breakGroup' }
   | { kind: 'setMarkup'; markup: boolean }
-  | { kind: 'setExternalUndo'; external: boolean };
+  | { kind: 'setExternalUndo'; external: boolean }
+  | { kind: 'setAuthor'; author: string };
 
 /** What a document was opened from. */
 type Source =
@@ -116,6 +117,7 @@ async function recover() {
           .with({ kind: 'setExternalUndo' }, ({ external }) =>
             doc.setExternalUndo(external)
           )
+          .with({ kind: 'setAuthor' }, ({ author }) => doc.setAuthor(author))
           .exhaustive();
       }
       open.doc = doc;
@@ -237,6 +239,12 @@ async function serve(request: DocxRequest): Promise<Served> {
         )
       )
     )
+    .with({ kind: 'setAuthor' }, ({ docKey, author }): Served => {
+      record(docKey, { kind: 'setAuthor', author }, (doc) =>
+        doc.setAuthor(author)
+      );
+      return [{ id, ok: true, kind: 'done' }, []];
+    })
     .with({ kind: 'setExternalUndo' }, ({ docKey, external }): Served => {
       record(docKey, { kind: 'setExternalUndo', external }, (doc) =>
         doc.setExternalUndo(external)

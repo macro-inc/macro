@@ -1,4 +1,5 @@
 import type {
+  DeltaOp,
   EditOp,
   EditResult,
   RemoteChange,
@@ -69,6 +70,12 @@ export class DocxCollab {
   private pending: Touched = emptyTouched();
   /** Remote changes seen while a local edit is in flight. */
   private inflight: Touched | null = null;
+  /**
+   * Per paragraph, the text changes that take the engine's copy to the
+   * shared one (in the engine's coordinates), so carets follow them
+   * exactly instead of being guessed from the texts.
+   */
+  private drift = new Map<string, DeltaOp[][]>();
   private flushing = false;
   private restored: Selection | undefined;
   private readonly undoManager: UndoManager | undefined;
@@ -121,34 +128,76 @@ export class DocxCollab {
       batch.origin === DOCX_ORIGINS.comment
     )
       return;
-    collectTouched(batch.events, this.pending);
-    if (this.inflight) collectTouched(batch.events, this.inflight);
+    const touched = emptyTouched();
+    collectTouched(batch.events, touched);
+    merge(this.pending, touched);
+    if (this.inflight) {
+      // Where these land relative to the engine's copy is known once the
+      // local edit is done (see `apply`).
+      merge(this.inflight, touched);
+      for (const [id, list] of touched.text)
+        this.inflight.text.set(id, [
+          ...(this.inflight.text.get(id) ?? []),
+          ...list,
+        ]);
+    } else {
+      for (const [id, list] of touched.text)
+        for (const delta of list) this.addDrift(id, delta);
+    }
     this.flushSoon();
+  }
+
+  private addDrift(id: string, delta: DeltaOp[]) {
+    const list = this.drift.get(id) ?? [];
+    list.push(delta);
+    this.drift.set(id, list);
   }
 
   /** Runs operations in the engine and publishes their changes. */
   apply(ops: EditOp[], group?: string): Promise<EditResult | null> {
     const run = this.serial(async () => {
+      // Changes that arrived since the last flush first: the edit must be
+      // made against the shared text as it is.
+      await this.flushPending();
       this.inflight = emptyTouched();
       let result: EditResult | null;
       let seen: Touched;
       try {
         result = await this.engine.apply(ops, group);
-      } finally {
-        seen = this.inflight ?? emptyTouched();
+      } catch (error) {
+        // The engine's copy is as it was: the changes apply to it as made.
+        for (const [id, list] of this.inflight?.text ?? [])
+          for (const delta of list) this.addDrift(id, delta);
         this.inflight = null;
+        throw error;
       }
+      seen = this.inflight ?? emptyTouched();
+      this.inflight = null;
+      const local = new Map<string, DeltaOp[]>();
       if (result?.changes.length) {
         writeChanges(this.doc, result.changes, (id, delta) => {
+          local.set(id, delta);
           const remote = seen.text.get(id);
           if (!remote?.length) return delta;
-          // The engine's copy of this paragraph missed those changes.
+          // The engine's copy of this paragraph missed those changes. Where
+          // both inserted at one spot this person's text goes first, right
+          // after what they typed before, so each person's typing stays in
+          // one piece.
           this.pending.blocks.add(id);
-          return remote.reduce((local, r) => transform(r, local), delta);
+          return remote.reduce((l, r) => transform(r, l, true), delta);
         });
         this.doc.commit({ origin: DOCX_ORIGINS.local });
       }
-      merge(this.pending, seen);
+      // Remote changes made during the edit, as the engine (which has the
+      // local edit) must apply them: past the local change, and after it
+      // where both inserted at one spot, as the shared text has them.
+      for (const [id, remote] of seen.text) {
+        let mine = local.get(id) ?? [];
+        for (const r of remote) {
+          this.addDrift(id, transform(mine, r));
+          mine = transform(r, mine, true);
+        }
+      }
       return result;
     });
     void run.then(
@@ -166,18 +215,29 @@ export class DocxCollab {
     this.flushing = true;
     void this.serial(async () => {
       this.flushing = false;
-      const touched = this.pending;
-      this.pending = emptyTouched();
-      const changes = remoteChanges(this.doc, touched);
-      if (!changes.length) return;
-      const result = await this.engine.applyRemote(changes);
-      const restored = this.restored;
-      this.restored = undefined;
-      if (result) this.options.onRemote?.(result, restored);
+      await this.flushPending();
     }).catch((error: unknown) => {
       this.flushing = false;
       this.options.onError?.(error);
     });
+  }
+
+  /** Hands the engine every remote change it has not seen (serialized). */
+  private async flushPending() {
+    const touched = this.pending;
+    this.pending = emptyTouched();
+    const drift = this.drift;
+    this.drift = new Map();
+    const changes = remoteChanges(this.doc, touched).map((change) => {
+      if (change.t !== 'block') return change;
+      const deltas = drift.get(change.block.id);
+      return deltas?.length ? { ...change, deltas } : change;
+    });
+    if (!changes.length) return;
+    const result = await this.engine.applyRemote(changes);
+    const restored = this.restored;
+    this.restored = undefined;
+    if (result) this.options.onRemote?.(result, restored);
   }
 
   /** Resolves once every queued engine call has finished. */

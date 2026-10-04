@@ -9,6 +9,7 @@
 mod format;
 mod geometry;
 mod lists;
+mod revise;
 mod table;
 mod text;
 mod txn;
@@ -16,6 +17,8 @@ mod xmledit;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_util;
 
 pub use format::{Alignment, ParaPatch, RunPatch, Spacing, Toggle};
 pub use geometry::{CaretRect, PageRect, ViewIndex};
@@ -257,6 +260,26 @@ pub enum EditOp {
     },
     /// Leaves a header or footer for the body, where the caret was.
     ExitStory,
+    /// Turns tracking changes on or off for the document (everyone's edits
+    /// are recorded as revisions while it is on).
+    SetTracking {
+        /// On or off.
+        on: bool,
+    },
+    /// Accepts the tracked changes in the selection (the one at a caret),
+    /// or all of them.
+    AcceptChanges {
+        /// Every change in the story.
+        #[serde(default)]
+        all: bool,
+    },
+    /// Rejects the tracked changes in the selection (the one at a caret),
+    /// or all of them.
+    RejectChanges {
+        /// Every change in the story.
+        #[serde(default)]
+        all: bool,
+    },
 }
 
 /// A page's size and a fingerprint of what it shows.
@@ -353,6 +376,10 @@ pub struct FormatState {
     pub align: Option<Alignment>,
     /// Whether the paragraph is in a list.
     pub list: bool,
+    /// Whether the document tracks changes.
+    pub tracking: bool,
+    /// Whether the selection (or the caret) touches a tracked change.
+    pub revision: bool,
     /// Whether undo is possible.
     pub can_undo: bool,
     /// Whether redo is possible.
@@ -404,6 +431,11 @@ pub enum RemoteChange {
     Block {
         /// The block.
         block: BlockRecord,
+        /// The text changes from this session's copy of the paragraph to
+        /// the new one, in order, when the caller knows them: carets follow
+        /// them exactly instead of being placed by comparing texts.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        deltas: Vec<Vec<crate::model::content::DeltaOp>>,
     },
     /// A block that no longer exists.
     Remove {
@@ -429,6 +461,60 @@ pub struct ParagraphText {
     pub id: BlockId,
     /// Text.
     pub text: String,
+}
+
+/// Where an offset moves through a text delta. Text inserted exactly at
+/// the offset goes after it, so someone typing there keeps typing in one
+/// piece while another person's text arrives next to it.
+fn map_through(offset: usize, delta: &[crate::model::content::DeltaOp]) -> usize {
+    use crate::model::content::DeltaOp;
+    let mut index = offset;
+    let mut at = 0;
+    for op in delta {
+        if at > index {
+            break;
+        }
+        match op {
+            DeltaOp::Delete { delete } => {
+                index -= (*delete).min(index - at);
+            }
+            DeltaOp::Retain { retain, .. } => at += retain,
+            DeltaOp::Insert { insert, .. } => {
+                let len = crate::model::content::utf16_len(insert);
+                if at < index {
+                    index += len;
+                }
+                at += len;
+            }
+        }
+    }
+    index
+}
+
+/// `text` (UTF-16 units) with a delta applied, ignoring attributes;
+/// `None` when the delta does not fit the text.
+fn apply_text_delta(text: &[u16], delta: &[crate::model::content::DeltaOp]) -> Option<Vec<u16>> {
+    use crate::model::content::DeltaOp;
+    let mut out = Vec::with_capacity(text.len());
+    let mut at = 0;
+    for op in delta {
+        match op {
+            DeltaOp::Insert { insert, .. } => out.extend(insert.encode_utf16()),
+            DeltaOp::Delete { delete } => {
+                at += delete;
+                if at > text.len() {
+                    return None;
+                }
+            }
+            DeltaOp::Retain { retain, .. } => {
+                let end = at + retain;
+                out.extend_from_slice(text.get(at..end)?);
+                at = end;
+            }
+        }
+    }
+    out.extend_from_slice(text.get(at..)?);
+    Some(out)
 }
 
 /// Where an offset moves when a paragraph's text changes from `old` to
@@ -510,6 +596,10 @@ pub struct Session {
     body_index: Arc<ViewIndex>,
     /// Where the body selection was when a header or footer was entered.
     body_sel: Option<Selection>,
+    /// The name tracked changes are recorded under.
+    author: String,
+    /// When tracked changes are recorded (ISO 8601; empty leaves it out).
+    now: String,
 }
 
 impl std::fmt::Debug for Session {
@@ -887,6 +977,8 @@ impl Session {
             story_page: 0,
             body_index: Arc::new(ViewIndex::default()),
             body_sel: None,
+            author: "Author".to_owned(),
+            now: String::new(),
         };
         let first = first.unwrap_or_else(|| s.ensure_paragraph());
         s.sel = Selection::caret(Pos::new(first, 0));
@@ -925,6 +1017,31 @@ impl Session {
         self.external_undo = external;
         self.undo.clear();
         self.redo.clear();
+    }
+
+    /// The name tracked changes are recorded under.
+    pub fn set_author(&mut self, author: &str) {
+        if !author.trim().is_empty() {
+            self.author = author.trim().to_owned();
+        }
+    }
+
+    /// The time tracked changes made from now on are recorded at.
+    pub fn set_now(&mut self, now: &str) {
+        self.now = now.to_owned();
+    }
+
+    /// Who records the next tracked change, when the document tracks them.
+    fn revisor(&self) -> Option<revise::Revisor> {
+        if !self.doc.parts().settings.track_revisions {
+            return None;
+        }
+        Some(revise::Revisor {
+            author: self.author.clone(),
+            date: self.now.clone(),
+            w: self.doc.w_prefix().to_owned(),
+            id: revise::revision_id(self.doc.next_block_id().as_str()),
+        })
     }
 
     /// Shows tracked changes inline (`true`) or the document as if they
@@ -1337,9 +1454,38 @@ impl Session {
             Align::Left => Alignment::Left,
         });
         state.list = para.props.num.is_some();
+        state.tracking = self.doc.parts().settings.track_revisions;
+        state.revision = self.touches_revision(&start, &end, &paras);
         state.can_undo = !self.undo.is_empty();
         state.can_redo = !self.redo.is_empty();
         state
+    }
+
+    /// Whether the selection (or the caret) touches a tracked change.
+    fn touches_revision(&self, start: &Pos, end: &Pos, paras: &[BlockId]) -> bool {
+        let w = self.doc.w_prefix();
+        let decls = self.doc.decls();
+        if start.same_place(end) {
+            let Some(b) = self.story().get(&start.block) else {
+                return false;
+            };
+            let mark = revise::mark_revision(&b.props, w, decls).and_then(|(_, _, id)| id);
+            return !revise::ids_at(&b.content, start.offset, mark).is_empty();
+        }
+        let last = paras.len().saturating_sub(1);
+        paras.iter().take(400).enumerate().any(|(k, id)| {
+            let Some(b) = self.story().get(id) else {
+                return false;
+            };
+            let s = if k == 0 { start.offset } else { 0 };
+            let e = if k == last {
+                end.offset
+            } else {
+                b.content.len()
+            };
+            revise::has_revisions(&b.content, s, e)
+                || (k < last && revise::mark_revision(&b.props, w, decls).is_some())
+        })
     }
 
     fn result(&mut self, changes: Vec<Change>, relaid: bool) -> EditResult {
@@ -1447,9 +1593,11 @@ impl Session {
     ) -> crate::Result<EditResult> {
         let mut entries: Vec<(String, String, Option<String>)> = Vec::new();
         let mut old_texts: HashMap<BlockId, String> = HashMap::new();
+        let mut deltas_of: HashMap<BlockId, &[Vec<crate::model::content::DeltaOp>]> =
+            HashMap::new();
         for c in changes {
             match c {
-                RemoteChange::Block { block } => {
+                RemoteChange::Block { block, deltas } => {
                     let Some(b) = block.to_block() else {
                         continue;
                     };
@@ -1457,6 +1605,9 @@ impl Session {
                         old_texts
                             .entry(b.id.clone())
                             .or_insert_with(|| old.content.text());
+                    }
+                    if !deltas.is_empty() {
+                        deltas_of.insert(b.id.clone(), deltas);
                     }
                     self.doc.body.insert(b);
                     self.doc.body_dirty = true;
@@ -1495,14 +1646,24 @@ impl Session {
                 }
             }
         }
-        // Keep the caret on the same text.
+        // Keep the caret on the same text: through the changes made when
+        // they are known (and fit), else by comparing the texts.
         for pos in [&mut self.sel.anchor, &mut self.sel.focus] {
-            if let Some(old) = old_texts.get(&pos.block)
-                && let Some(b) = self.doc.body.get(&pos.block)
-            {
-                let new = b.content.text();
-                pos.offset = map_offset(old, &new, pos.offset);
-            }
+            let (Some(old), Some(b)) = (old_texts.get(&pos.block), self.doc.body.get(&pos.block))
+            else {
+                continue;
+            };
+            let new = b.content.text();
+            let exact = deltas_of.get(&pos.block).and_then(|deltas| {
+                let mut text: Vec<u16> = old.encode_utf16().collect();
+                let mut offset = pos.offset;
+                for d in deltas.iter() {
+                    text = apply_text_delta(&text, d)?;
+                    offset = map_through(offset, d);
+                }
+                (text == new.encode_utf16().collect::<Vec<u16>>()).then_some(offset)
+            });
+            pos.offset = exact.unwrap_or_else(|| map_offset(old, &new, pos.offset));
         }
         self.stale = true;
         self.order = None;
@@ -1749,6 +1910,15 @@ impl Session {
                 self.leave_story();
                 Ok(None)
             }
+            EditOp::SetTracking { on } => {
+                if revise::set_tracking(&mut self.doc, *on)? {
+                    self.order = None;
+                    self.stale = true;
+                }
+                Ok(None)
+            }
+            EditOp::AcceptChanges { all } => Ok(self.resolve(true, *all)),
+            EditOp::RejectChanges { all } => Ok(self.resolve(false, *all)),
             EditOp::SelectAll => {
                 let o = self.order();
                 if let (Some(first), Some(last)) = (o.list.first(), o.list.last()) {
@@ -2222,10 +2392,19 @@ impl Session {
     fn insert_text(&mut self, text: &str) -> Step {
         let pending = self.pending.take();
         let sel = self.sel.clone();
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
-        let at = delete_selection(&mut txn, &sel);
-        let attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
-        let end = text::insert_text(&mut txn, &at, text, &attrs);
+        let at = match &rev {
+            // Typing over a selection while tracking goes after the
+            // deleted text.
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
+        let end = text::insert_text(&mut txn, &at, text, &attrs, rev.as_ref());
         let step = txn.finish();
         self.set_caret(end);
         step
@@ -2234,8 +2413,12 @@ impl Session {
     fn insert_paragraph(&mut self) -> Step {
         self.pending = None;
         let sel = self.sel.clone();
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
-        let at = delete_selection(&mut txn, &sel);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
         let empty_list_item = txn
             .get(&at.block)
             .is_some_and(|b| b.content.is_empty() && text::has_direct_numbering(&b.props));
@@ -2244,7 +2427,7 @@ impl Session {
             format::edit_ppr(&mut txn, &at.block, |e| e.set("numPr", None));
             at.clone()
         } else {
-            text::split(&mut txn, &at).unwrap_or(at.clone())
+            text::split_tracked(&mut txn, &at, rev.as_ref()).unwrap_or(at.clone())
         };
         let step = txn.finish();
         self.set_caret(caret);
@@ -2267,9 +2450,16 @@ impl Session {
         };
         let pending = self.pending.take();
         let sel = self.sel.clone();
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
-        let at = delete_selection(&mut txn, &sel);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
         let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
         let ch = match &object {
             Some(xml) => {
                 attrs = attrs.with(key::OBJ, Some(xml));
@@ -2292,10 +2482,17 @@ impl Session {
 
     fn delete(&mut self, forward: bool, unit: Unit) -> Option<Step> {
         self.pending = None;
+        let rev = self.revisor();
         if !self.sel.is_collapsed() {
             let sel = self.sel.clone();
             let mut txn = Txn::new(&mut self.doc, &self.active);
-            let caret = delete_selection(&mut txn, &sel);
+            let caret = match &rev {
+                Some(r) => {
+                    let (start, end) = tracked_delete_selection(&mut txn, &sel, r);
+                    if forward { end } else { start }
+                }
+                None => delete_selection(&mut txn, &sel),
+            };
             let step = txn.finish();
             self.set_caret(caret);
             return Some(step);
@@ -2336,11 +2533,21 @@ impl Session {
             return None;
         }
         let mut txn = Txn::new(&mut self.doc, &self.active);
+        let mut caret = s;
         if let Some(b) = txn.block_mut(&at.block) {
-            b.content.delete(s, e);
+            match &rev {
+                // Deleted text stays (marked); the caret steps past it.
+                Some(r) => {
+                    let end = revise::delete_in(&mut b.content, s, e, r);
+                    if forward {
+                        caret = end;
+                    }
+                }
+                None => b.content.delete(s, e),
+            }
         }
         let step = txn.finish();
-        self.set_caret(Pos::new(at.block.clone(), s));
+        self.set_caret(Pos::new(at.block.clone(), caret));
         Some(step)
     }
 
@@ -2364,9 +2571,24 @@ impl Session {
         };
         let parent = |s: &Self, id: &BlockId| s.story().get(id).and_then(|b| b.parent.clone());
         let siblings = parent(self, &first) == parent(self, &second);
+        let rev = self.revisor();
         let mut txn = Txn::new(&mut self.doc, &self.active);
-        let caret = if siblings {
+        let caret = if siblings && let Some(r) = &rev {
+            // The mark between them is marked deleted (or goes, when the
+            // author inserted it); the caret steps over it.
+            let len = txn.get(&first).map_or(0, |b| b.content.len());
+            if revise::delete_mark(&mut txn, &first, &second, r) {
+                Some(Pos::new(first.clone(), len))
+            } else if forward {
+                Some(Pos::new(second.clone(), 0))
+            } else {
+                Some(Pos::new(first.clone(), len))
+            }
+        } else if siblings {
             text::join(&mut txn, &first, &second)
+        } else if rev.is_some() {
+            let len = txn.get(&other).map_or(0, |b| b.content.len());
+            Some(Pos::new(other.clone(), if forward { 0 } else { len }))
         } else {
             // Across a table edge: an empty paragraph goes, otherwise the
             // caret just moves.
@@ -2389,6 +2611,41 @@ impl Session {
         if let Some(c) = caret {
             self.set_caret(c);
         }
+        Some(step)
+    }
+
+    /// Accepts or rejects tracked changes: every one in the story, those in
+    /// the selection, or the one at the caret.
+    fn resolve(&mut self, accept: bool, all: bool) -> Option<Step> {
+        self.pending = None;
+        let (start, end) = self.ordered();
+        let scope = if all {
+            revise::Scope::All
+        } else if start.same_place(&end) {
+            let b = self.story().get(&start.block)?;
+            let mark = revise::mark_revision(&b.props, self.doc.w_prefix(), self.doc.decls())
+                .and_then(|(_, _, id)| id);
+            let ids = revise::ids_at(&b.content, start.offset, mark);
+            if ids.is_empty() {
+                return None;
+            }
+            revise::Scope::Ids(ids)
+        } else {
+            revise::Scope::Range {
+                paras: self.paras_between(&start.block, &end.block),
+                from: start.offset,
+                to: end.offset,
+            }
+        };
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        revise::resolve(&mut txn, &scope, accept);
+        let step = txn.finish();
+        // The selection's start survives; text after it may be gone.
+        self.sel = Selection::caret(Pos {
+            upstream: false,
+            ..start
+        });
+        self.clamp_selection();
         Some(step)
     }
 
@@ -2550,6 +2807,34 @@ fn delete_selection(txn: &mut Txn<'_>, sel: &Selection) -> Pos {
         return s;
     }
     text::delete_range(txn, &s, &e)
+}
+
+/// Deletes the selection while tracking changes; returns its ends after.
+fn tracked_delete_selection(
+    txn: &mut Txn<'_>,
+    sel: &Selection,
+    rev: &revise::Revisor,
+) -> (Pos, Pos) {
+    let list = txn.story().paragraphs();
+    let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
+    let (a, f) = (&sel.anchor, &sel.focus);
+    let ia = index.get(&a.block).copied().unwrap_or(0);
+    let ifo = index.get(&f.block).copied().unwrap_or(0);
+    let (s, e) = if (ia, a.offset) <= (ifo, f.offset) {
+        (a.clone(), f.clone())
+    } else {
+        (f.clone(), a.clone())
+    };
+    if s.same_place(&e) {
+        return (s.clone(), s);
+    }
+    revise::delete_range(txn, &s, &e, rev)
+}
+
+/// The attributes of the character before a position.
+fn char_before(txn: &Txn<'_>, at: &Pos) -> Option<Attrs> {
+    let b = txn.get(&at.block)?;
+    b.content.attrs_at(at.offset.checked_sub(1)?).cloned()
 }
 
 /// The formatting text typed at a position inside a transaction gets.

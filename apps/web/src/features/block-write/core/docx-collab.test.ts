@@ -45,6 +45,8 @@ const RESULT_BASE: Omit<EditResult, 'changes' | 'changed'> = {
     styleName: null,
     align: null,
     list: false,
+    tracking: false,
+    revision: false,
     canUndo: false,
     canRedo: false,
   },
@@ -88,12 +90,40 @@ class FakeEngine implements DocxEngine {
 
   async applyRemote(changes: RemoteChange[]): Promise<EditResult | null> {
     for (const c of changes) {
-      if (c.t === 'block' && c.block.k === 'p')
-        this.texts.set(c.block.id, deltaText(c.block.t));
+      if (c.t === 'block' && c.block.k === 'p') {
+        const text = deltaText(c.block.t);
+        if (c.block.id === this.caret.block) {
+          // Like the engine: follow the changes when they fit the text.
+          let old = this.texts.get(c.block.id) ?? '';
+          let offset = this.caret.offset;
+          for (const d of c.deltas ?? []) {
+            old = applyToText(old, d);
+            offset = mapThrough(offset, d);
+          }
+          if (c.deltas?.length && old === text) this.caret.offset = offset;
+        }
+        this.texts.set(c.block.id, text);
+      }
       if (c.t === 'remove') this.texts.delete(c.id);
     }
     return { ...RESULT_BASE, changed: false, changes: [] };
   }
+}
+
+/** The engine's caret mapping: text inserted at the caret goes after it. */
+function mapThrough(offset: number, delta: DeltaOp[]) {
+  let index = offset;
+  let at = 0;
+  for (const op of delta) {
+    if (at > index) break;
+    if ('delete' in op) index -= Math.min(op.delete, index - at);
+    else if ('retain' in op) at += op.retain;
+    else {
+      if (at < index) index += op.insert.length;
+      at += op.insert.length;
+    }
+  }
+  return index;
 }
 
 const STATE: CollabState = {
@@ -127,6 +157,48 @@ function paragraph(doc: LoroDoc, id: string): string {
 }
 
 describe('DocxCollab', () => {
+  it('keeps the typist in place when both type at one spot', async () => {
+    const a = new LoroDoc();
+    writeCollabState(a, STATE);
+    const b = new LoroDoc();
+    b.import(a.export({ mode: 'snapshot' }));
+    connect(a, b);
+    const ea = new FakeEngine(readCollabState(a));
+    const eb = new FakeEngine(readCollabState(b));
+    const ca = new DocxCollab(a, ea);
+    const cb = new DocxCollab(b, eb);
+    const end = { block: 'p1', offset: 11 };
+    let release!: () => void;
+    ea.gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    // A types a space at the end, held in flight while B types " x" there.
+    const pendingA = ca.apply([
+      { op: 'select', anchor: end, focus: end },
+      { op: 'insertText', text: ' ' },
+    ]);
+    await cb.apply([
+      { op: 'select', anchor: end, focus: end },
+      { op: 'insertText', text: ' x' },
+    ]);
+    await settle();
+    release();
+    await pendingA;
+    ea.gate = null;
+    await settle();
+    await ca.idle();
+    // A's space goes first: right after what A typed before.
+    expect(paragraph(a, 'p1')).toBe('Hello world  x');
+    // A keeps typing after the space A typed, not inside B's text.
+    await ca.apply([{ op: 'insertText', text: 'y' }]);
+    await settle();
+    await cb.idle();
+    expect(paragraph(b, 'p1')).toBe('Hello world y x');
+    expect(eb.texts.get('p1')).toBe('Hello world y x');
+    ca.dispose();
+    cb.dispose();
+  });
+
   it('seeds and reads back the shared state', () => {
     const doc = new LoroDoc();
     writeCollabState(doc, STATE);

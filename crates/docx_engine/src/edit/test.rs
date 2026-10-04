@@ -1,67 +1,7 @@
+use super::test_util::*;
 use super::*;
 use crate::model::content::{Content, DeltaOp, Span};
-use crate::test_support::{NS, Parts, docx, fonts};
-
-fn open(body: &str) -> Session {
-    open_with(body, &Parts::default())
-}
-
-fn open_with(body: &str, parts: &Parts<'_>) -> Session {
-    let doc = Document::open(docx(body, parts)).expect("open");
-    Session::new(doc)
-}
-
-fn p(text: &str) -> String {
-    format!(r#"<w:p><w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>"#)
-}
-
-fn texts(s: &Session) -> Vec<String> {
-    s.document()
-        .body()
-        .paragraphs()
-        .iter()
-        .map(|id| s.document().body().get(id).unwrap().content.text())
-        .collect()
-}
-
-fn para(s: &Session, i: usize) -> BlockId {
-    s.document().body().paragraphs()[i].clone()
-}
-
-fn caret_at(s: &mut Session, i: usize, offset: usize) {
-    let block = para(s, i);
-    s.apply(
-        &[EditOp::Select {
-            anchor: Pos::new(block.clone(), offset),
-            focus: Pos::new(block, offset),
-        }],
-        None,
-        fonts(),
-    )
-    .unwrap();
-}
-
-fn select(s: &mut Session, a: (usize, usize), f: (usize, usize)) {
-    let anchor = Pos::new(para(s, a.0), a.1);
-    let focus = Pos::new(para(s, f.0), f.1);
-    s.apply(&[EditOp::Select { anchor, focus }], None, fonts())
-        .unwrap();
-}
-
-fn run(s: &mut Session, op: EditOp) -> EditResult {
-    s.apply(&[op], None, fonts()).unwrap()
-}
-
-fn type_text(s: &mut Session, text: &str) -> EditResult {
-    s.apply(
-        &[EditOp::InsertText {
-            text: text.to_owned(),
-        }],
-        Some("typing"),
-        fonts(),
-    )
-    .unwrap()
-}
+use crate::test_support::{NS, Parts, fonts};
 
 #[test]
 fn typing_inserts_text_and_reports_a_delta() {
@@ -1018,4 +958,75 @@ fn a_remote_header_change_keeps_the_caret_in_the_header() {
             .count(),
         1
     );
+}
+
+#[test]
+fn remote_text_at_the_caret_keeps_the_typists_place() {
+    use crate::model::content::DeltaOp;
+    // This session typed " " after "X"; meanwhile another person typed
+    // " [two]" at the same spot, which the shared text put first.
+    let mut s = open(&p("X"));
+    caret_at(&mut s, 0, 1);
+    type_text(&mut s, " ");
+    let id = para(&s, 0);
+    let mut record = BlockRecord::of(s.document().body().get(&id).unwrap());
+    let mut shared = Content::from_delta(record.t.as_deref().unwrap());
+    shared.insert(1, " [two]", Default::default());
+    record.t = Some(shared.to_delta());
+    let insert = |at: usize, text: &str| {
+        vec![
+            DeltaOp::Retain {
+                retain: at,
+                attributes: Default::default(),
+            },
+            DeltaOp::Insert {
+                insert: text.to_owned(),
+                attributes: Default::default(),
+            },
+        ]
+    };
+    let r = s
+        .apply_remote(
+            &[RemoteChange::Block {
+                block: record.clone(),
+                deltas: vec![insert(1, " [two]")],
+            }],
+            fonts(),
+        )
+        .unwrap();
+    // The caret stays after this person's own space, at the end.
+    assert_eq!(texts(&s), vec!["X [two] "]);
+    assert_eq!(r.selection.focus.offset, 8);
+    // Comparing texts alone would have put it inside the other's text.
+    let mut s2 = open(&p("X"));
+    caret_at(&mut s2, 0, 1);
+    type_text(&mut s2, " ");
+    let mut record2 = BlockRecord::of(s2.document().body().get(&para(&s2, 0)).unwrap());
+    record2.t = record.t.clone();
+    let r2 = s2
+        .apply_remote(
+            &[RemoteChange::Block {
+                block: record2,
+                deltas: Vec::new(),
+            }],
+            fonts(),
+        )
+        .unwrap();
+    assert_eq!(r2.selection.focus.offset, 2);
+    // Deltas that do not fit the text are ignored.
+    let mut s3 = open(&p("X"));
+    caret_at(&mut s3, 0, 1);
+    type_text(&mut s3, " ");
+    let mut record3 = BlockRecord::of(s3.document().body().get(&para(&s3, 0)).unwrap());
+    record3.t = record.t.clone();
+    let r3 = s3
+        .apply_remote(
+            &[RemoteChange::Block {
+                block: record3,
+                deltas: vec![insert(5, "zzz")],
+            }],
+            fonts(),
+        )
+        .unwrap();
+    assert_eq!(r3.selection.focus.offset, 2);
 }

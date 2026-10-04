@@ -66,6 +66,7 @@ impl Shared {
                     self.blocks.insert(block.id.clone(), block.clone());
                     out.push(RemoteChange::Block {
                         block: block.clone(),
+                        deltas: Vec::new(),
                     });
                 }
                 Change::Fields { id, fields } => {
@@ -79,14 +80,20 @@ impl Shared {
                             _ => {}
                         }
                     }
-                    out.push(RemoteChange::Block { block: b.clone() });
+                    out.push(RemoteChange::Block {
+                        block: b.clone(),
+                        deltas: Vec::new(),
+                    });
                 }
                 Change::Text { id, delta } => {
                     let b = self.blocks.get_mut(id).expect("block");
                     let mut content = Content::from_delta(b.t.as_deref().unwrap_or_default());
                     content.apply_delta(delta);
                     b.t = Some(content.to_delta());
-                    out.push(RemoteChange::Block { block: b.clone() });
+                    out.push(RemoteChange::Block {
+                        block: b.clone(),
+                        deltas: vec![delta.clone()],
+                    });
                 }
                 Change::Remove { id } => {
                     self.blocks.remove(id);

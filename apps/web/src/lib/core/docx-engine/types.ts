@@ -90,7 +90,13 @@ export type EditOp =
   /** Edit the header, footer or body at a point on a page (points). */
   | { op: 'enterStory'; page: number; x: number; y: number }
   /** Back from a header or footer to the body. */
-  | { op: 'exitStory' };
+  | { op: 'exitStory' }
+  /** Turn tracking changes on or off for the document. */
+  | { op: 'setTracking'; on: boolean }
+  /** Accept the changes in the selection (the one at a caret), or all. */
+  | { op: 'acceptChanges'; all?: boolean }
+  /** Reject the changes in the selection (the one at a caret), or all. */
+  | { op: 'rejectChanges'; all?: boolean };
 
 export type CaretRect = { page: number; x: number; y: number; height: number };
 
@@ -142,6 +148,10 @@ export type FormatState = {
   styleName: string | null;
   align: Alignment | null;
   list: boolean;
+  /** The document records everyone's edits as tracked changes. */
+  tracking: boolean;
+  /** The selection (or the caret) touches a tracked change. */
+  revision: boolean;
   canUndo: boolean;
   canRedo: boolean;
 };
@@ -179,7 +189,15 @@ export type Change =
 
 /** A change other peers made, as the shared maps now hold it. */
 export type RemoteChange =
-  | { t: 'block'; block: BlockRecord }
+  | {
+      t: 'block';
+      block: BlockRecord;
+      /**
+       * The text changes from the engine's copy of the paragraph to this
+       * one, in order, when known: carets follow them exactly.
+       */
+      deltas?: DeltaOp[][];
+    }
   | { t: 'remove'; id: string }
   | { t: 'entry'; container: string; key: string; value: string | null };
 

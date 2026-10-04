@@ -188,6 +188,7 @@ export default function DocxBlock(props: { share?: string }) {
                       fileName={fileName()}
                       peers={session.peers}
                       displayName={displayName}
+                      author={displayName(userId())}
                       onSelection={session.setSelection}
                       commentRoots={doc ? rootThreads : undefined}
                       margin={(context) => (

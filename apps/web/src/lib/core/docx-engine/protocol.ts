@@ -34,6 +34,7 @@ export type DocxRequest =
   | (Base & { kind: 'state' })
   | (Base & { kind: 'setMarkup'; markup: boolean })
   | (Base & { kind: 'setExternalUndo'; external: boolean })
+  | (Base & { kind: 'setAuthor'; author: string })
   | (Base & { kind: 'breakGroup' })
   | (Base & { kind: 'undo' })
   | (Base & { kind: 'redo' })

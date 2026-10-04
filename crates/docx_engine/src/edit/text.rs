@@ -9,9 +9,14 @@ use crate::model::content::{Attrs, Content, Wrapper, encode_wrappers, key};
 use crate::xml::{SnippetContext, parse_on_off};
 use std::collections::HashMap;
 
-/// Wrappers that text typed next to them never joins.
+/// Wrappers that text typed next to them never joins: tracked changes
+/// (typing is recorded as the typist's own insertion, or not at all) and
+/// simple fields.
 fn never_extends(w: &Wrapper) -> bool {
-    matches!(w.local(), "del" | "moveFrom" | "fldSimple")
+    matches!(
+        w.local(),
+        "ins" | "del" | "moveFrom" | "moveTo" | "fldSimple"
+    )
 }
 
 /// Run property keys that belong to a tracked change rather than to the
@@ -406,9 +411,31 @@ pub(super) fn ensure_cell_paragraph(txn: &mut Txn<'_>, cell: &BlockId) {
     ));
 }
 
-/// Inserts `text` at `at` with `attrs`; newlines start new paragraphs.
-/// Returns the position after the text.
-pub(super) fn insert_text(txn: &mut Txn<'_>, at: &Pos, text: &str, attrs: &Attrs) -> Pos {
+/// Splits the paragraph at `at`; while tracking, the paragraph mark this
+/// adds is recorded as inserted.
+pub(super) fn split_tracked(
+    txn: &mut Txn<'_>,
+    at: &Pos,
+    rev: Option<&super::revise::Revisor>,
+) -> Option<Pos> {
+    let pos = split(txn, at)?;
+    if let Some(r) = rev
+        && let Some(prev) = super::revise::previous_paragraph(txn, &pos.block)
+    {
+        super::revise::mark_inserted(txn, &prev, r);
+    }
+    Some(pos)
+}
+
+/// Inserts `text` at `at` with `attrs`; newlines start new paragraphs
+/// (recorded as inserted while tracking). Returns the position after it.
+pub(super) fn insert_text(
+    txn: &mut Txn<'_>,
+    at: &Pos,
+    text: &str,
+    attrs: &Attrs,
+    rev: Option<&super::revise::Revisor>,
+) -> Pos {
     let text = text.replace("\r\n", "\n").replace('\r', "\n");
     let mut pos = Pos {
         upstream: false,
@@ -416,7 +443,7 @@ pub(super) fn insert_text(txn: &mut Txn<'_>, at: &Pos, text: &str, attrs: &Attrs
     };
     for (i, line) in text.split('\n').enumerate() {
         if i > 0 {
-            match split(txn, &pos) {
+            match split_tracked(txn, &pos, rev) {
                 Some(p) => pos = p,
                 None => break,
             }

@@ -110,17 +110,20 @@ function chop(ops: DeltaOp[]): DeltaOp[] {
 /**
  * `b` rewritten to apply after `a`, where both were made against the same
  * text and `a` is already applied. At the same position `a`'s insertion
- * comes first; when both change the same attribute, `b`'s value wins.
+ * comes first (`b`'s with `bFirst`); when both change the same attribute,
+ * `b`'s value wins.
  */
 export function transform(
   a: readonly DeltaOp[],
-  b: readonly DeltaOp[]
+  b: readonly DeltaOp[],
+  bFirst = false
 ): DeltaOp[] {
   const ai = new Cursor(a);
   const bi = new Cursor(b);
   const out: DeltaOp[] = [];
   while (ai.hasNext() || bi.hasNext()) {
-    if (ai.peekType() === 'insert' && ai.hasNext()) {
+    const bInserts = bi.peekType() === 'insert' && bi.hasNext();
+    if (ai.peekType() === 'insert' && ai.hasNext() && !(bFirst && bInserts)) {
       // Text the other side inserted: step over it.
       push(out, { retain: length(ai.next()) });
       continue;

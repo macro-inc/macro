@@ -5,6 +5,7 @@ import {
   createMemo,
   createSignal,
   For,
+  Index,
   type JSX,
   onCleanup,
   Show,
@@ -134,12 +135,12 @@ function StoryChrome(props: {
   return (
     <Show when={kind()}>
       {(k) => (
-        <For each={props.editor.pages()}>
+        <Index each={props.editor.pages()}>
           {(page, index) => {
-            const box = () => props.geometry.boxes[index()];
+            const box = () => props.geometry.boxes[index];
             const scale = () => props.geometry.scale;
-            const top = () => page.header?.bottom ?? 0;
-            const bottom = () => page.footer?.top ?? page.height;
+            const top = () => page().header?.bottom ?? 0;
+            const bottom = () => page().footer?.top ?? page().height;
             const edge = () =>
               k() === 'header' ? top() * scale() : bottom() * scale();
             return (
@@ -163,7 +164,7 @@ function StoryChrome(props: {
                         width: `${b().width}px`,
                       }}
                     />
-                    <Show when={story()?.page === index()}>
+                    <Show when={story()?.page === index}>
                       <div
                         class="pointer-events-auto absolute flex items-center gap-1 rounded-sm bg-accent px-1.5 py-0.5 text-[11px] text-accent-contrast"
                         data-docx-story-label
@@ -195,7 +196,7 @@ function StoryChrome(props: {
               </Show>
             );
           }}
-        </For>
+        </Index>
       )}
     </Show>
   );
@@ -542,20 +543,22 @@ export function DocxPages(props: DocxPagesProps) {
       onPointerUp={onPointerUp}
       data-docx-pages
     >
-      <For each={editor.pages()}>
+      {/* By position: every layout brings new page objects, and a page's
+          canvas must survive them to be repainted strip by strip. */}
+      <Index each={editor.pages()}>
         {(_, index) => (
-          <Show when={geometry().boxes[index()]}>
+          <Show when={geometry().boxes[index]}>
             {(box) => (
               <Page
                 editor={editor}
-                index={index()}
+                index={index}
                 box={box()}
                 root={props.scroller}
               />
             )}
           </Show>
         )}
-      </For>
+      </Index>
       <div class="pointer-events-none absolute inset-0" data-docx-overlay>
         <StoryChrome
           editor={editor}

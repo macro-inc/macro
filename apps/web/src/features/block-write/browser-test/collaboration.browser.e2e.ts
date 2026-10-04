@@ -63,6 +63,16 @@ async function selectParagraph(page: Page, prefix: string) {
 const sharedBlock = (page: Page, prefix: string) =>
   page.evaluate((p) => window.docxFixture?.sharedBlock(p) ?? null, prefix);
 
+/** Start tags of the elements wrapping a shared paragraph's text. */
+async function wrappers(page: Page, prefix: string) {
+  const attrs = (await sharedBlock(page, prefix))?.attrs ?? [];
+  return attrs
+    .flatMap((a) =>
+      a.wrap ? (JSON.parse(a.wrap) as [string, string][]).map(([o]) => o) : []
+    )
+    .join(' ');
+}
+
 test('two people edit the same DOCX live through the sync service', async ({
   browser,
 }) => {
@@ -309,6 +319,61 @@ test('headers and footers are edited in place and shared', async ({
       new Uint8Array(await readFile((await download.path())!))
     );
     expect(strFromU8(files['word/header1.xml'])).toContain('(Draft 2)');
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+test('tracked changes are recorded per author and resolved for everyone', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  const tracking = (page: Page) =>
+    page.evaluate(() => window.docxFixture?.editor()?.state()?.format.tracking);
+  try {
+    await open(alice, documentId, ALICE);
+    await open(bob, documentId, BOB);
+    const original = await paragraphs(alice);
+
+    // Alice turns tracking on for the document; Bob's editor follows.
+    await alice.getByRole('button', { name: 'Track changes' }).click();
+    await expect.poll(() => tracking(alice)).toBe(true);
+    await expect
+      .poll(() =>
+        bob.evaluate(() => window.docxFixture?.sharedPart('settings.xml'))
+      )
+      .toContain('trackRevisions');
+    // Bob's next edit refreshes his formatting state.
+    await caretAtEnd(bob, 'This Agreement shall remain');
+    await expect.poll(() => tracking(bob)).toBe(true);
+
+    // Bob's typing is his insertion, his deletion is marked, not removed.
+    await bob.keyboard.type(' Renewal requires mutual consent.');
+    await caretAtEnd(bob, 'This Agreement shall be governed');
+    for (let i = 0; i < 9; i++) await bob.keyboard.press('Backspace');
+    await expect
+      .poll(() => wrappers(alice, 'This Agreement shall remain'))
+      .toContain('w:author="Bob"');
+    await expect
+      .poll(() => wrappers(alice, 'This Agreement shall be governed'))
+      .toContain('<w:del ');
+    // The deleted text is still there, struck through.
+    expect(await joined(alice)).toContain('principles.');
+    if (SHOTS) await alice.screenshot({ path: `${SHOTS}/06-tracked.png` });
+
+    // Alice rejects everything: both see the original text again.
+    await alice.getByRole('button', { name: 'Reject all changes' }).click();
+    for (const page of [alice, bob])
+      await expect.poll(() => paragraphs(page)).toEqual(original);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

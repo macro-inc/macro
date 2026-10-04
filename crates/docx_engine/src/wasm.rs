@@ -35,6 +35,15 @@ fn to_json(v: &impl Serialize) -> Result<String, JsError> {
 }
 
 /// Registers an extra font file (TTF, OTF, or TTC) for every document.
+/// The current time as Word writes revision dates (whole seconds, UTC).
+fn now_iso() -> String {
+    let iso: String = js_sys::Date::new_0().to_iso_string().into();
+    match iso.split_once('.') {
+        Some((head, _)) => format!("{head}Z"),
+        None => iso,
+    }
+}
+
 #[wasm_bindgen(js_name = registerFont)]
 pub fn register_font(bytes: Vec<u8>) -> usize {
     FONTS.with(|f| f.borrow_mut().register(bytes).len())
@@ -107,10 +116,17 @@ impl DocxDocument {
         self.session.set_external_undo(external);
     }
 
+    /// The name tracked changes are recorded under.
+    #[wasm_bindgen(js_name = setAuthor)]
+    pub fn set_author(&mut self, author: &str) {
+        self.session.set_author(author);
+    }
+
     /// Applies a JSON array of operations; returns the `EditResult` JSON.
     /// Batches with the same `group` merge into one undo step (typing).
     pub fn apply(&mut self, ops: &str, group: Option<String>) -> Result<String, JsError> {
         let ops: Vec<EditOp> = serde_json::from_str(ops).map_err(js_err)?;
+        self.session.set_now(&now_iso());
         let result = FONTS
             .with(|f| self.session.apply(&ops, group.as_deref(), &f.borrow()))
             .map_err(js_err)?;

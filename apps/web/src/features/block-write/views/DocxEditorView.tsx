@@ -55,6 +55,8 @@ export type DocxEditorViewProps = {
   fileName: string;
   peers: Accessor<DocxPeer[]>;
   displayName: (userId: string | undefined) => string;
+  /** The name this person's tracked changes are recorded under. */
+  author?: string;
   onSelection?: (selection: DocxSelection | undefined) => void;
   /** Comment roots for this document; omit to disable commenting. */
   commentRoots?: Accessor<MessageListItem[]>;
@@ -78,6 +80,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     doc: props.doc,
     original: props.original,
     editable: props.canEdit,
+    author: props.author,
     onError: props.onError,
     onSelection: (selection) => {
       // Presence updates are throttled; the caret moves with every key.
@@ -235,6 +238,8 @@ export function DocxEditorView(props: DocxEditorViewProps) {
         paragraphStyle={format()?.style ?? null}
         paragraphStyles={paragraphStyles()}
         showMarkup={editor.markup()}
+        tracking={!!format()?.tracking}
+        onRevision={!!format()?.revision}
         onFormat={(key) => {
           editor.run([{ op: 'toggleFormat', format: key }]);
           input?.focus();
@@ -262,6 +267,11 @@ export function DocxEditorView(props: DocxEditorViewProps) {
           input?.focus();
         }}
         onToggleMarkup={() => void editor.setMarkup(!editor.markup())}
+        onToggleTracking={() =>
+          editor.run([{ op: 'setTracking', on: !format()?.tracking }])
+        }
+        onAccept={(all) => editor.run([{ op: 'acceptChanges', all }])}
+        onReject={(all) => editor.run([{ op: 'rejectChanges', all }])}
         onComment={beginComment}
         onDownload={() => {
           editor

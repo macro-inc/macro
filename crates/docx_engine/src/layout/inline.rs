@@ -662,8 +662,11 @@ pub fn build(
             .as_ref()
             .and_then(|(open, instr)| field_kind(instr).map(|k| (open.clone(), instr.clone(), k)));
         let props = ctx.formats.run(attrs, para);
-        let run = b.run_style(&props, revision, link);
         let hidden_revision = revision == Revision::Deleted && !ctx.markup;
+        // Without markup the document shows as if every change were
+        // accepted: insertions look like any other text.
+        let shown = if ctx.markup { revision } else { Revision::None };
+        let run = b.run_style(&props, shown, link);
         let text: Vec<char> = span.text.chars().collect();
         let mut offset = *start;
         for (ci, &ch) in text.iter().enumerate() {

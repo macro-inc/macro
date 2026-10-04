@@ -118,6 +118,8 @@ pub struct PartStory {
     pub(crate) tail: String,
     /// The prefix the part binds to WordprocessingML.
     pub(crate) w: String,
+    /// The part's bytes the story was read from (or last written as).
+    pub(crate) identity: Option<(bool, usize)>,
 }
 
 /// The story edits apply to.
@@ -352,7 +354,9 @@ impl Document {
     /// with the part (or note), so they never collide with the body's and
     /// stay the same when the part is read again.
     pub(crate) fn load_stories(&mut self) -> Result<()> {
-        self.stories.clear();
+        // A story whose part did not change since it was read stays as it
+        // is (with the blocks an editor may be positioned in).
+        let mut previous = std::mem::take(&mut self.stories);
         let parts: Vec<String> = self
             .main_rels
             .iter()
@@ -361,6 +365,14 @@ impl Document {
             .collect();
         for name in parts {
             if self.stories.contains_key(&name) {
+                continue;
+            }
+            let identity = self.pkg.part_identity(&name);
+            if let Some(kept) = previous.remove(&name)
+                && kept.identity.is_some()
+                && kept.identity == identity
+            {
+                self.stories.insert(name, kept);
                 continue;
             }
             let Ok(tree) = read_tree(&self.pkg, &name) else {
@@ -379,6 +391,7 @@ impl Document {
                     head,
                     tail,
                     w,
+                    identity,
                 },
             );
         }
@@ -435,6 +448,10 @@ impl Document {
     pub(crate) fn write_part_story(&mut self, part: &str) {
         if let Some(xml) = self.part_story_xml(part) {
             self.pkg.write(part, xml.into_bytes(), None);
+            let identity = self.pkg.part_identity(part);
+            if let Some(ps) = self.stories.get_mut(part) {
+                ps.identity = identity;
+            }
         }
     }
 

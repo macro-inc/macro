@@ -1,10 +1,14 @@
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import ChatCircleText from '@phosphor/chat-circle-text.svg';
+import Check from '@phosphor/check.svg';
+import Checks from '@phosphor/checks.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
+import Eye from '@phosphor/eye.svg';
+import EyeSlash from '@phosphor/eye-slash.svg';
+import GitDiff from '@phosphor/git-diff.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
 import ListNumbers from '@phosphor/list-numbers.svg';
-import PencilSimpleLine from '@phosphor/pencil-simple-line.svg';
 import Table from '@phosphor/table.svg';
 import TextAlignCenter from '@phosphor/text-align-center.svg';
 import TextAlignJustify from '@phosphor/text-align-justify.svg';
@@ -14,6 +18,8 @@ import TextB from '@phosphor/text-b.svg';
 import TextItalic from '@phosphor/text-italic.svg';
 import TextStrikethrough from '@phosphor/text-strikethrough.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
+import X from '@phosphor/x.svg';
+import XCircle from '@phosphor/x-circle.svg';
 import { Toolbar } from '@ui/components/Toolbar';
 import { For, type JSX, Show } from 'solid-js';
 
@@ -34,6 +40,10 @@ export type DocxToolbarProps = {
   paragraphStyles: DocxParagraphStyle[];
   /** Tracked changes shown inline (else the document as if accepted). */
   showMarkup: boolean;
+  /** The document records everyone's edits as tracked changes. */
+  tracking: boolean;
+  /** The selection (or the caret) is on a tracked change. */
+  onRevision: boolean;
   onFormat: (format: DocxInlineFormat) => void;
   onFontSize: (size: number) => void;
   onParagraphStyle: (styleId: string) => void;
@@ -43,6 +53,11 @@ export type DocxToolbarProps = {
   onRedo: () => void;
   onInsertTable: () => void;
   onToggleMarkup: () => void;
+  onToggleTracking: () => void;
+  /** Accept the change at the selection, or every change. */
+  onAccept: (all: boolean) => void;
+  /** Reject the change at the selection, or every change. */
+  onReject: (all: boolean) => void;
   onComment: () => void;
   onDownload: () => void;
 };
@@ -230,15 +245,58 @@ export function DocxToolbar(props: DocxToolbarProps) {
           >
             <Table />
           </Toolbar.Button>
-          <Toolbar.Button
-            label={
-              props.showMarkup ? 'Hide tracked changes' : 'Show tracked changes'
-            }
-            aria-pressed={props.showMarkup}
-            onClick={() => props.onToggleMarkup()}
-          >
-            <PencilSimpleLine />
-          </Toolbar.Button>
+          <Toolbar.Divider />
+          <Toolbar.Group>
+            <Toolbar.Button
+              label={props.tracking ? 'Stop tracking changes' : 'Track changes'}
+              aria-pressed={props.tracking}
+              data-docx-track-changes
+              onClick={() => props.onToggleTracking()}
+            >
+              <GitDiff />
+            </Toolbar.Button>
+            <Toolbar.Button
+              label={
+                props.showMarkup
+                  ? 'Hide tracked changes'
+                  : 'Show tracked changes'
+              }
+              aria-pressed={props.showMarkup}
+              onClick={() => props.onToggleMarkup()}
+            >
+              <Show when={props.showMarkup} fallback={<EyeSlash />}>
+                <Eye />
+              </Show>
+            </Toolbar.Button>
+            <Show when={props.tracking || props.onRevision}>
+              <Toolbar.Button
+                label="Accept change"
+                disabled={!props.onRevision}
+                onClick={() => props.onAccept(false)}
+              >
+                <Check />
+              </Toolbar.Button>
+              <Toolbar.Button
+                label="Reject change"
+                disabled={!props.onRevision}
+                onClick={() => props.onReject(false)}
+              >
+                <X />
+              </Toolbar.Button>
+              <Toolbar.Button
+                label="Accept all changes"
+                onClick={() => props.onAccept(true)}
+              >
+                <Checks />
+              </Toolbar.Button>
+              <Toolbar.Button
+                label="Reject all changes"
+                onClick={() => props.onReject(true)}
+              >
+                <XCircle />
+              </Toolbar.Button>
+            </Show>
+          </Toolbar.Group>
           <Toolbar.Divider />
         </Show>
         <Show when={props.canComment}>

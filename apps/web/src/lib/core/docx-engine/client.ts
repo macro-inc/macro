@@ -186,6 +186,11 @@ export async function setExternalUndo(
   await request({ kind: 'setExternalUndo', docKey, external }, 'done');
 }
 
+/** The name tracked changes are recorded under. */
+export async function setAuthor(docKey: string, author: string) {
+  await request({ kind: 'setAuthor', docKey, author }, 'done');
+}
+
 export async function breakGroup(docKey: string): Promise<void> {
   await request({ kind: 'breakGroup', docKey }, 'done');
 }

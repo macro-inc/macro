@@ -390,6 +390,7 @@ function Fixture() {
               fileName="fixture.docx"
               peers={session.peers}
               displayName={shortName}
+              author={shortName(user)}
               onSelection={session.setSelection}
               commentRoots={roots}
               onReady={setEditor}

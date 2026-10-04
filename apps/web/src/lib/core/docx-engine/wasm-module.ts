@@ -17,6 +17,7 @@ export interface WasmDocxDocument {
   /** The shared state (`CollabState` JSON). */
   collabState: () => string;
   setExternalUndo: (external: boolean) => void;
+  setAuthor: (author: string) => void;
   /** Applies an `EditOp[]` JSON batch; returns `EditResult` JSON. */
   apply: (ops: string, group?: string) => string;
   /** Applies `RemoteChange[]` JSON; returns `EditResult` JSON. */

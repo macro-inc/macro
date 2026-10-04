@@ -34,6 +34,8 @@ export type DocxEditorOptions = {
   original?: Uint8Array;
   /** Whether this user may change the document. */
   editable: boolean;
+  /** The name this person's tracked changes are recorded under. */
+  author?: string;
   /** Called with this user's selection when it changes. */
   onSelection?: (selection: Selection | undefined) => void;
   onError?: (error: unknown) => void;
@@ -153,6 +155,7 @@ export function createDocxEditor(options: DocxEditorOptions) {
           (options.original ?? new Uint8Array()).slice().buffer
         );
     if (disposed) return;
+    if (options.author) await engine.setAuthor(docKey, options.author);
     if (doc) {
       if (options.editable) await engine.setExternalUndo(docKey, true);
       if (docxFormatVersion(doc) === DOCX_FORMAT_VERSION) follow(doc);

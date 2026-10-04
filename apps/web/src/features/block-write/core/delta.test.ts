@@ -65,6 +65,24 @@ describe('transform', () => {
       // Inserts at one spot order differently by side, so compare lengths
       // and, without competing inserts, the exact text.
       expect(viaA.length).toBe(viaB.length);
+      // With the same side first at ties both ways, the texts agree.
+      expect(applyToText(applyToText(text, a), transform(a, b, true))).toBe(
+        viaB
+      );
     }
+  });
+
+  it('can put the second side first at the same position', () => {
+    const local: DeltaOp[] = [{ retain: 2 }, { insert: 'L' }];
+    const remote: DeltaOp[] = [{ retain: 2 }, { insert: 'R' }];
+    // The engine has the local edit; the shared text put the remote first.
+    expect(transform(local, remote, true)).toEqual([
+      { retain: 2 },
+      { insert: 'R' },
+    ]);
+    expect(applyToText('abcd', [...local])).toBe('abLcd');
+    expect(applyToText('abLcd', transform(local, remote, true))).toBe(
+      applyToText(applyToText('abcd', remote), transform(remote, local))
+    );
   });
 });
