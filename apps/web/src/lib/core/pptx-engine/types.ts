@@ -179,6 +179,52 @@ export interface SlideOutline {
   transition?: TransitionOutline;
   /** Animations of the main sequence, in playback order (index = playback position). */
   animations?: AnimationOutline[];
+  /** The slide number, date, and footer the slide shows (absent: none). */
+  headerFooter?: HeaderFooterOutline;
+}
+
+/** An automatic date format of the Header & Footer dialog (`setHeaderFooter`). */
+export type DateFormat =
+  | 'datetime1'
+  | 'datetime2'
+  | 'datetime3'
+  | 'datetime4'
+  | 'datetime5'
+  | 'datetime6'
+  | 'datetime7'
+  | 'datetime8'
+  | 'datetime9'
+  | 'datetime10'
+  | 'datetime11'
+  | 'datetime12'
+  | 'datetime13';
+
+/**
+ * What a slide shows of Header & Footer (`inspect::HeaderFooterOutline`):
+ * the slide number, date, and footer placeholders it carries.
+ */
+export interface HeaderFooterOutline {
+  slideNumber: boolean;
+  date: boolean;
+  /** The fixed date text, when the date is fixed. */
+  dateText?: string;
+  /**
+   * The format of an automatic date (a `DateFormat`, or another `datetime*`
+   * field type a deck may carry).
+   */
+  dateFormat?: DateFormat | (string & {});
+  footer: boolean;
+  /** The footer text (`\n` between paragraphs), when it shows a footer. */
+  footerText?: string;
+}
+
+/** A named run of consecutive slides (`inspect::SectionOutline`). */
+export interface SectionOutline {
+  /** A GUID such as `{8D2E61C4-0B1F-4E6A-9C3B-2A1D5F7E9B10}`. */
+  id: string;
+  name: string;
+  /** The section's slides in deck order (may be empty). */
+  slideIds: number[];
 }
 
 export interface LayoutInfo {
@@ -199,6 +245,8 @@ export interface DeckOutline {
   themeFonts?: { major: string; minor: string };
   /** Table styles to offer: the deck's own, then the built-in ones in gallery order. */
   tableStyles: TableStyleInfo[];
+  /** Sections in order; absent when the deck has none. Every slide is in exactly one. */
+  sections?: SectionOutline[];
 }
 
 export interface CaretStop {
@@ -558,11 +606,68 @@ export type EditOp =
       name?: string;
     }
   /** Sets the theme's heading and body fonts. */
-  | { op: 'setThemeFonts'; major?: string; minor?: string; name?: string };
+  | { op: 'setThemeFonts'; major?: string; minor?: string; name?: string }
+  | ({ op: 'setHeaderFooter' } & HeaderFooterPatch)
+  /**
+   * Changes the slide size (points, 72-4032 each: 960×540 widescreen,
+   * 720×540 4:3, 720×405 16:9 on-screen show, 780×540 A4). Every slide
+   * redraws; notes keep their size.
+   */
+  | { op: 'setSlideSize'; width: number; height: number; scale?: SlideScale }
+  /**
+   * Starts a section at `beforeSlide` (taking the rest of the section it was
+   * in; in a deck without sections, earlier slides go into "Default
+   * Section"). The new section's id is in `created[].section`.
+   */
+  | { op: 'addSection'; name: string; beforeSlide: number }
+  | { op: 'renameSection'; id: string; name: string }
+  /**
+   * Removes a section: its slides join the previous section (the next one for
+   * the first), or are deleted with `deleteSlides`. Removing the only section
+   * leaves the deck without sections.
+   */
+  | { op: 'removeSection'; id: string; deleteSlides?: boolean }
+  /** Moves a section and its slides to a 0-based index among the sections. */
+  | { op: 'moveSection'; id: string; toIndex: number };
+
+/**
+ * How content follows a new slide size: `none` keeps it as is; `fit`
+ * (PowerPoint's Ensure Fit) scales content, text, and lines by the smaller of
+ * the width and height ratios and centers it; `maximize` uses the larger
+ * ratio (content may run off the slide).
+ */
+export type SlideScale = 'none' | 'fit' | 'maximize';
+
+/**
+ * The fields of a `setHeaderFooter` op (Insert ▸ Header & Footer); omitted
+ * ones keep each slide's state. Shown elements are placeholders copied from
+ * the slide's layout (a layout without one cannot show it).
+ */
+export interface HeaderFooterPatch {
+  /** Slides to change; omit for every slide ("Apply to All", which new slides then follow). */
+  slides?: number[];
+  slideNumber?: boolean;
+  date?: boolean;
+  /**
+   * Fixed date text; `''` makes the date automatic. Only changes slides that
+   * show a date (pass `date: true` to turn it on).
+   */
+  dateText?: string;
+  /** Automatic date format (default `datetime1`); without `dateText` it makes the date automatic. */
+  dateFormat?: DateFormat;
+  footer?: boolean;
+  /** Footer text; only changes slides that show a footer (pass `footer: true`). */
+  footerText?: string;
+  /** Remove the elements from slides with a Title Slide layout. */
+  notOnTitle?: boolean;
+}
 
 export interface Created {
+  /** The slide (a new section's first slide). */
   slide: number;
   shape?: number;
+  /** The id of a section `addSection` created. */
+  section?: string;
 }
 
 /** What a batch (or an undo/redo) changed. */
@@ -570,7 +675,7 @@ export interface EditResult {
   created: Created[];
   /** Ids of slides whose rendering changed. */
   changedSlides: number[];
-  /** Slides were added, removed, or reordered. */
+  /** Slides were added, removed, or reordered, or the slide size or sections changed. */
   structureChanged: boolean;
   /** Text replacements made by `replaceText` operations. */
   replaced: number;
