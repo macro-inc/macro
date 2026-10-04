@@ -1,5 +1,7 @@
-//! Helpers for tests: in-memory packages and the bundled fonts.
+//! Helpers for tests: in-memory packages, the bundled fonts and comparing
+//! layouts.
 
+use crate::layout::{Item, Layout, Page, PlacedDrawing, PlacedLine};
 use pptx_engine::font::FontDb;
 use pptx_engine::zip::{WriteData, Writer};
 use std::sync::OnceLock;
@@ -180,5 +182,90 @@ pub fn shape_paragraph(from: &str, x: i64, y: i64, text: Option<&str>) -> String
         y * EMU,
         200 * EMU,
         100 * EMU
+    )
+}
+
+/// Where two layouts differ, if they do: page geometry and every item, a
+/// line with its clusters, their positions and run styles.
+pub fn layout_diff(a: &Layout, b: &Layout) -> Option<String> {
+    if a.pages.len() != b.pages.len() {
+        return Some(format!("{} pages, then {}", a.pages.len(), b.pages.len()));
+    }
+    for (i, (pa, pb)) in a.pages.iter().zip(&b.pages).enumerate() {
+        let (ga, gb) = (page_key(pa), page_key(pb));
+        if ga != gb {
+            return Some(format!("page {i}: {ga} then {gb}"));
+        }
+        let lists = [
+            ("behind", &pa.behind, &pb.behind),
+            ("items", &pa.items, &pb.items),
+            ("front", &pa.front, &pb.front),
+        ];
+        for (name, xa, xb) in lists {
+            if xa.len() != xb.len() {
+                return Some(format!(
+                    "page {i} {name}: {} items, then {}",
+                    xa.len(),
+                    xb.len()
+                ));
+            }
+            for (k, (ia, ib)) in xa.iter().zip(xb).enumerate() {
+                let (sa, sb) = (item_key(ia), item_key(ib));
+                if sa != sb {
+                    return Some(format!("page {i} {name} {k}: {sa}\nthen\n{sb}"));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn page_key(p: &Page) -> String {
+    format!(
+        "{:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+        p.width, p.height, p.section, p.number, p.body, p.header, p.footer
+    )
+}
+
+fn item_key(item: &Item) -> String {
+    match item {
+        Item::Line(l) => line_key(l),
+        Item::Drawing(d) => drawing_key(d),
+        other => format!("{other:?}"),
+    }
+}
+
+fn line_key(l: &PlacedLine) -> String {
+    let pb = &l.para;
+    let line = l.line();
+    let mut out = format!(
+        "{:?} {:?} line {} at ({:?}, {:?}) clip {:?} {line:?}",
+        pb.story, pb.block, l.line, l.x, l.y, l.clip
+    );
+    for c in line.start..line.end {
+        let cl = &pb.inline.clusters[c];
+        out.push_str(&format!(
+            "\n{cl:?} x {:?} adv {:?} run {:?} level {:?}",
+            pb.lines.x.get(c),
+            pb.lines.adv.get(c),
+            pb.inline.runs.get(usize::from(cl.run)),
+            pb.inline.levels.get(c)
+        ));
+    }
+    let leaders: Vec<_> = pb
+        .lines
+        .leaders
+        .iter()
+        .filter(|(c, _)| (line.start..line.end).contains(c))
+        .collect();
+    out.push_str(&format!("\nleaders {leaders:?}"));
+    out
+}
+
+fn drawing_key(d: &PlacedDrawing) -> String {
+    let g = &d.drawing;
+    format!(
+        "drawing {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+        d.rect, d.story, g.width, g.height, g.effect, g.anchor, g.node, g.vml
     )
 }

@@ -1,6 +1,8 @@
 //! Laying blocks out one after another without page breaks: table cells,
 //! headers, footers, notes and text boxes.
 
+mod cache;
+
 use super::super::format::{ParaFormat, TableCtx};
 use super::super::inline::{self, FieldValues, InlineCtx, Kind};
 use super::super::lines::{LineCtx, break_lines, break_lines_from};
@@ -15,6 +17,8 @@ use crate::model::block::{Block, BlockId, BlockKind, Story};
 use crate::model::props::{Border, HeightRule, ParaBorders, ParaProps, VMerge};
 use pptx_engine::path::Rect;
 use std::sync::Arc;
+
+pub(in crate::layout) use cache::TableCache;
 
 /// A floating drawing whose position depends on the page it lands on.
 #[derive(Clone, Debug)]
@@ -719,8 +723,21 @@ pub struct TableBox {
     pub rows: Vec<RowBox>,
 }
 
-/// Lays out a table's rows within a container `avail` wide.
+/// Lays out a table's rows within a container `avail` wide (from the
+/// cache when nothing they show changed).
 pub(in crate::layout) fn table_box(
+    env: &Env<'_>,
+    story: &Story,
+    table: &Block,
+    avail: f32,
+    story_ref: &StoryRef,
+    fields: &FieldValues,
+) -> Arc<TableBox> {
+    cache::table_box(env, story, table, avail, story_ref, fields)
+}
+
+/// Lays out a table's rows within a container `avail` wide.
+fn lay_out_table(
     env: &Env<'_>,
     story: &Story,
     table: &Block,

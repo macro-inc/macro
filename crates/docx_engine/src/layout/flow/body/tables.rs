@@ -9,6 +9,7 @@ use super::floats::{OnPage, place_anchors};
 use super::{EPS, Flow};
 use crate::model::block::Block;
 use crate::model::props::TablePosition;
+use std::sync::Arc;
 
 /// Where a floating table's left edge goes on the page.
 pub(in crate::layout::flow) fn float_x(pos: &TablePosition, g: &PageGeom, width: f32) -> f32 {
@@ -93,7 +94,7 @@ impl Flow<'_, '_> {
         let height: f32 = tb.rows.iter().map(|r| r.height).sum();
         if let Some(pos) = &float {
             let g = self.page_geom();
-            tb.geom.left = float_x(pos, &g, tb.geom.width()) - col_left;
+            Arc::make_mut(&mut tb).geom.left = float_x(pos, &g, tb.geom.width()) - col_left;
             self.float_down(pos, height, true);
         }
         let headers: Vec<usize> = (0..tb.rows.len())
@@ -128,9 +129,9 @@ impl Flow<'_, '_> {
                 let split = split_row(&tb, r, avail - y);
                 next = split.is_some() || (placed_any && !moved);
                 if let Some((first, rest)) = split {
-                    tb.rows[r] = first;
+                    Arc::make_mut(&mut tb).rows[r] = first;
                     self.emit_table_row(&tb, r, col_left);
-                    tb.rows[r] = rest;
+                    Arc::make_mut(&mut tb).rows[r] = rest;
                 }
             }
             if next {
@@ -140,7 +141,7 @@ impl Flow<'_, '_> {
                 // place across the page.
                 let (left, _) = self.col_geom();
                 if float.is_some() {
-                    tb.geom.left += col_left - left;
+                    Arc::make_mut(&mut tb).geom.left += col_left - left;
                 }
                 col_left = left;
                 if let Some(pos) = &float {

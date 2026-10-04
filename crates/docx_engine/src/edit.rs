@@ -728,10 +728,12 @@ pub struct Band {
 
 /// Hashes of a paragraph's lines (glyphs, positions and run styles),
 /// remembered per laid-out paragraph: cached paragraphs keep theirs between
-/// layouts, so fingerprinting a page after an edit costs little.
+/// layouts, so fingerprinting a page after an edit costs little. Entries
+/// are found by the box's address, which the weak reference keeps from
+/// being taken by another box while the entry exists.
 #[derive(Default)]
 struct LineHashes {
-    map: HashMap<usize, (std::sync::Weak<ParaBox>, Arc<Vec<u64>>)>,
+    map: crate::hash::FxMap<usize, (std::sync::Weak<ParaBox>, Vec<u64>)>,
 }
 
 fn rgba_bits(c: &pptx_engine::model::color::Rgba) -> [u32; 4] {
@@ -778,17 +780,13 @@ fn para_line_hashes(pb: &ParaBox) -> Vec<u64> {
 }
 
 impl LineHashes {
-    fn of(&mut self, pb: &Arc<ParaBox>) -> Arc<Vec<u64>> {
-        let key = Arc::as_ptr(pb) as usize;
-        if let Some((weak, hashes)) = self.map.get(&key)
-            && weak.upgrade().is_some_and(|p| Arc::ptr_eq(&p, pb))
-        {
-            return Arc::clone(hashes);
-        }
-        let hashes = Arc::new(para_line_hashes(pb));
-        self.map
-            .insert(key, (Arc::downgrade(pb), Arc::clone(&hashes)));
-        hashes
+    /// The hash of a paragraph's line.
+    fn line(&mut self, pb: &Arc<ParaBox>, line: usize) -> Option<u64> {
+        let (_, hashes) = self
+            .map
+            .entry(Arc::as_ptr(pb) as usize)
+            .or_insert_with(|| (Arc::downgrade(pb), para_line_hashes(pb)));
+        hashes.get(line).copied()
     }
 
     /// Forgets paragraphs no layout holds any more.
@@ -807,7 +805,7 @@ fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
             if let Some(c) = &l.clip {
                 (c.x.to_bits(), c.y.to_bits(), c.w.to_bits(), c.h.to_bits()).hash(&mut h);
             }
-            lines.of(&l.para).get(l.line).hash(&mut h);
+            lines.line(&l.para, l.line).hash(&mut h);
             // Glyphs can reach a little past the line box.
             (l.y - 3.0, l.y + l.line().height + 3.0)
         }
@@ -838,7 +836,10 @@ fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
                 border.space.to_bits(),
             )
                 .hash(&mut h);
-            format!("{:?}", border.color).hash(&mut h);
+            match border.color {
+                crate::model::props::ColorRef::Auto => 0u8.hash(&mut h),
+                crate::model::props::ColorRef::Rgb(c) => (1u8, rgba_bits(&c)).hash(&mut h),
+            }
             let pad = border.width * 3.0 + 2.0;
             (y0.min(*y1) - pad, y0.max(*y1) + pad)
         }
@@ -918,7 +919,10 @@ fn dirty_bands(old: &Layout, old_keys: &PageKeys, new: &Layout, new_keys: &PageK
             continue;
         }
         let b = &new_keys[i];
-        let mut count: HashMap<u64, i64> = HashMap::new();
+        if a == b {
+            continue;
+        }
+        let mut count: crate::hash::FxMap<u64, i64> = crate::hash::FxMap::default();
         for k in a {
             *count.entry(k.0).or_default() += 1;
         }
@@ -3399,6 +3403,9 @@ impl Session {
 
 /// Deletes the selection inside a transaction; returns the caret.
 fn delete_selection(txn: &mut Txn<'_>, sel: &Selection) -> Pos {
+    if sel.is_collapsed() {
+        return sel.anchor.clone();
+    }
     let list = txn.story().paragraphs();
     let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
     let (a, f) = (&sel.anchor, &sel.focus);
@@ -3421,6 +3428,9 @@ fn tracked_delete_selection(
     sel: &Selection,
     rev: &revise::Revisor,
 ) -> (Pos, Pos) {
+    if sel.is_collapsed() {
+        return (sel.anchor.clone(), sel.anchor.clone());
+    }
     let list = txn.story().paragraphs();
     let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
     let (a, f) = (&sel.anchor, &sel.focus);
