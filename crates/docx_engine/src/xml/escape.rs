@@ -4,7 +4,7 @@
 /// Attribute values also normalize literal tabs and newlines to spaces, as
 /// XML attribute-value normalization requires.
 pub(super) fn unescape(s: &str, attribute: bool) -> String {
-    if !s.contains('&') && !(attribute && s.contains(['\t', '\n', '\r'])) {
+    if !s.contains('&') && (!attribute || !s.contains(['\t', '\n', '\r'])) {
         return s.to_owned();
     }
     let mut out = String::with_capacity(s.len());

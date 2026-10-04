@@ -19,13 +19,12 @@ fn q(w: &str, l: &str) -> String {
 /// document has it, single borders otherwise.
 fn table_props(w: &str, grid_style: Option<&str>, cols: &[i64]) -> String {
     let mut tbl_pr = format!("<{}>", q(w, "tblPr"));
-    match grid_style {
-        Some(style) => tbl_pr.push_str(&format!(
+    if let Some(style) = grid_style {
+        tbl_pr.push_str(&format!(
             "<{} {}=\"{style}\"/>",
             q(w, "tblStyle"),
             q(w, "val")
-        )),
-        None => {}
+        ));
     }
     tbl_pr.push_str(&format!(
         "<{} {}=\"0\" {}=\"auto\"/>",
@@ -414,10 +413,10 @@ pub(super) fn delete_column(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
     }
     let rows: Vec<BlockId> = txn.story().children(Some(&table)).to_vec();
     for r in &rows {
-        if let Some(c) = cell_at(txn, r, col) {
-            if txn.story().children(Some(r)).len() > 1 {
-                txn.remove(&c);
-            }
+        if let Some(c) = cell_at(txn, r, col)
+            && txn.story().children(Some(r)).len() > 1
+        {
+            txn.remove(&c);
         }
     }
     resize_cells(txn, &table, &cols);

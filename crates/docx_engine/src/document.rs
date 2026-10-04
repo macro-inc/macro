@@ -566,11 +566,6 @@ impl Document {
         Ok(pkg.save()?)
     }
 
-    /// Marks the body changed.
-    pub(crate) fn touch_body(&mut self) {
-        self.body_dirty = true;
-    }
-
     /// A new block id.
     pub fn next_block_id(&self) -> BlockId {
         match self.ids.lock() {

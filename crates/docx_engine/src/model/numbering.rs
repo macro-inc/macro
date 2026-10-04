@@ -318,7 +318,7 @@ impl Counters {
             (None, None) => level.start,
         });
         // Deeper levels restart after this one (unless told otherwise).
-        for d in i + 1..9 {
+        for (d, value) in values.iter_mut().enumerate().skip(i + 1) {
             let deeper = numbering.level(num_id, d as u8, styles);
             let restarts = match deeper.as_ref().and_then(|l| l.restart) {
                 None => true,
@@ -326,7 +326,7 @@ impl Counters {
                 Some(r) => (i as i64) <= r,
             };
             if restarts {
-                values[d] = None;
+                *value = None;
             }
         }
         let snapshot = *values;

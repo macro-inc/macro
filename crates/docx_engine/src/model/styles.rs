@@ -338,7 +338,7 @@ pub fn cell_conditions(
     let last_col = look.last_col && col + 1 == cols;
     if look.v_band && !first_col && !last_col {
         let c = col - usize::from(look.first_col);
-        out.push(if (c / col_band.max(1)) % 2 == 0 {
+        out.push(if (c / col_band.max(1)).is_multiple_of(2) {
             "band1Vert"
         } else {
             "band2Vert"
@@ -351,7 +351,7 @@ pub fn cell_conditions(
             0
         };
         let r = row.saturating_sub(skipped);
-        out.push(if (r / row_band.max(1)) % 2 == 0 {
+        out.push(if (r / row_band.max(1)).is_multiple_of(2) {
             "band1Horz"
         } else {
             "band2Horz"

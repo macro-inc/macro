@@ -406,22 +406,9 @@ impl<'d> Txn<'d> {
         self.story_mut().remove(id);
     }
 
-    /// Moves a block to a new parent and position key.
-    pub fn move_block(&mut self, id: &BlockId, parent: Option<BlockId>, order: String) {
-        self.touch(id);
-        self.story_mut().move_block(id, parent, order);
-    }
-
     /// A fresh block id.
     pub fn new_id(&self) -> BlockId {
         self.doc.next_block_id()
-    }
-
-    /// Records a flat-map entry write.
-    pub fn entry(&mut self, container: &str, key: &str, old: Option<String>, new: Option<String>) {
-        self.step
-            .entries
-            .push((container.to_owned(), key.to_owned(), old, new));
     }
 
     /// Ends the transaction. A header or footer is written back to its

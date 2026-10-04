@@ -224,7 +224,7 @@ pub(super) fn instance_for(doc: &mut Document, kind: ListKind) -> Result<i64> {
         .filter(|&id| {
             numbering
                 .level(id, 0, &styles)
-                .is_some_and(|l| kind_of(&l.fmt) == Some(kind) && is_plain(&l, kind))
+                .is_some_and(|l| kind_of(&l.fmt) == Some(kind) && is_plain(l, kind))
         })
         .collect();
     candidates.sort_unstable();

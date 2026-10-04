@@ -98,8 +98,7 @@ pub(crate) fn line_stops(pb: &ParaBox, li: usize) -> Vec<Stop> {
     let clusters = &pb.inline.clusters;
     let mut stops: Vec<Stop> = Vec::new();
     let mut last_visible: Option<usize> = None;
-    for ci in line.start..line.end {
-        let c = &clusters[ci];
+    for (ci, c) in clusters.iter().enumerate().take(line.end).skip(line.start) {
         if ci < pb.inline.label_len || c.len == 0 && c.kind != Kind::End {
             continue;
         }

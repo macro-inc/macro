@@ -304,7 +304,7 @@ pub(super) fn delete_range(txn: &mut Txn<'_>, from: &Pos, to: &Pos) -> Pos {
             ..from.clone()
         };
     }
-    let positions = doc_positions(&txn.story());
+    let positions = doc_positions(txn.story());
     let (Some(&(a_at, _)), Some(&(b_at, _))) =
         (positions.get(&from.block), positions.get(&to.block))
     else {
@@ -321,7 +321,7 @@ pub(super) fn delete_range(txn: &mut Txn<'_>, from: &Pos, to: &Pos) -> Pos {
         if !covered(&b.id) {
             continue;
         }
-        if b.parent.as_ref().is_some_and(|p| covered(p)) {
+        if b.parent.as_ref().is_some_and(covered) {
             continue;
         }
         roots.push((positions[&b.id].0, b.id.clone()));

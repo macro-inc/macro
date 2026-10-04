@@ -207,10 +207,9 @@ impl Story {
     pub fn get_mut(&mut self, id: &BlockId) -> Option<&mut Block> {
         let version = next_version();
         self.revision = version;
-        self.blocks.get_mut(id).map(|b| {
-            b.version = version;
-            b
-        })
+        let block = self.blocks.get_mut(id)?;
+        block.version = version;
+        Some(block)
     }
 
     /// Whether the block exists.

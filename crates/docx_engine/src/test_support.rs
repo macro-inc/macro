@@ -15,10 +15,10 @@ pub fn fonts() -> &'static FontDb {
             .unwrap_or_default();
         files.sort();
         for f in files {
-            if f.extension().is_some_and(|e| e == "ttf") {
-                if let Ok(bytes) = std::fs::read(&f) {
-                    db.register(bytes);
-                }
+            if f.extension().is_some_and(|e| e == "ttf")
+                && let Ok(bytes) = std::fs::read(&f)
+            {
+                db.register(bytes);
             }
         }
         db
