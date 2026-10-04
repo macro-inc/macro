@@ -6,7 +6,7 @@ documents crate, tests, the corpus CLI) and as WebAssembly in the web app's
 presentation editor worker (`apps/web/src/lib/core/pptx-engine`).
 
 Third-party code is limited to small libraries: `tiny-skia` (rasterizing),
-`ttf-parser` (font tables), `png`, `zune-jpeg`, `gif`, `miniz_oxide`
+`skrifa` (font tables and glyph outlines), `png`, `zune-jpeg`, `gif`, `miniz_oxide`
 (deflate), and `serde`. The ZIP container, XML DOM, OPC packaging,
 DrawingML model, geometry presets, text layout, EMF/WMF interpreter, charts,
 and the editing engine are implemented here.

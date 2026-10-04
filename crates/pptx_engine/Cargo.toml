@@ -31,9 +31,9 @@ png = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+skrifa = { workspace = true }
 thiserror = { workspace = true }
 tiny-skia = { workspace = true }
-ttf-parser = { workspace = true }
 zune-core = { workspace = true }
 zune-jpeg = { workspace = true }
 
