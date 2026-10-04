@@ -3391,6 +3391,9 @@ impl Session {
 
 /// Deletes the selection inside a transaction; returns the caret.
 fn delete_selection(txn: &mut Txn<'_>, sel: &Selection) -> Pos {
+    if sel.is_collapsed() {
+        return sel.anchor.clone();
+    }
     let list = txn.story().paragraphs();
     let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
     let (a, f) = (&sel.anchor, &sel.focus);
@@ -3413,6 +3416,9 @@ fn tracked_delete_selection(
     sel: &Selection,
     rev: &revise::Revisor,
 ) -> (Pos, Pos) {
+    if sel.is_collapsed() {
+        return (sel.anchor.clone(), sel.anchor.clone());
+    }
     let list = txn.story().paragraphs();
     let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
     let (a, f) = (&sel.anchor, &sel.focus);
