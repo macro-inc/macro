@@ -57,6 +57,10 @@ pub mod flags {
     pub const TYPE: u32 = 1 << 22;
     /// Which component an instance shows.
     pub const INSTANCE_OF: u32 = 1 << 23;
+    /// An instance's overrides (edits to the layers inside it).
+    pub const OVERRIDES: u32 = 1 << 24;
+    /// An instance's component property values.
+    pub const PROP_ASSIGNMENTS: u32 = 1 << 25;
 }
 
 /// A paint as the editor describes it.
@@ -339,6 +343,8 @@ struct Txn<'a> {
 }
 
 mod components;
+mod overrides;
+pub(crate) use overrides::guid_of;
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -1009,7 +1015,13 @@ impl<'a> Txn<'a> {
     fn apply(&mut self, op: &Op) -> Result<()> {
         match op {
             Op::Set { ids, props } => {
-                for i in self.resolve_all(ids)? {
+                // Layers inside instances take overrides.
+                let (inside, ids): (Vec<String>, Vec<String>) =
+                    ids.iter().cloned().partition(|id| id.starts_with('I'));
+                for id in &inside {
+                    self.set_override(id, props)?;
+                }
+                for i in self.resolve_all(&ids)? {
                     match self.doc.props(i).node_type() {
                         NodeType::Document => {}
                         // Pages take a name (their canvas color is a fill).

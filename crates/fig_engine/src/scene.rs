@@ -90,6 +90,27 @@ impl Scene {
         scene
     }
 
+    /// Expands one instance alone (under its parent), to read what its
+    /// layers show without building the whole page.
+    pub fn build_instance(doc: &Document, instance: NodeIdx) -> Scene {
+        let mut b = Builder {
+            doc,
+            nodes: Vec::new(),
+            by_guid: HashMap::new(),
+        };
+        let parent = doc.node(instance).parent.unwrap_or(instance);
+        let root = b.push(parent, PropSource::Doc(parent), None, None);
+        b.add_doc_node(instance, root);
+        let page = doc.page_of(instance).unwrap_or(parent);
+        let mut scene = Scene {
+            page,
+            nodes: b.nodes,
+            by_guid: b.by_guid,
+        };
+        scene.compute_world(doc);
+        scene
+    }
+
     pub fn root(&self) -> SceneIdx {
         0
     }

@@ -73,6 +73,11 @@ Text the editor changes is laid out again with Inter (`fonts/`, SIL Open
 Font License), embedded in the build, or a font registered at run time;
 other text keeps Figma's own layout.
 
+Editing a layer inside an instance stores an override on the outermost
+instance (keyed by guid path, as Figma does), or sets the component text
+property the layer is bound to; `fig_render override` checks such an edit
+survives saving on real files.
+
 Instances have no stored children: the scene builds their sublayers from the
 component, applying overrides keyed by GUID paths (outer instances win), and
 uses the instance's derived sizes, transforms, and geometry. Rendering is a

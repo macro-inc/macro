@@ -622,7 +622,7 @@ export function DesignPanel(props: {
               <Section title="Appearance">
                 <div class="grid grid-cols-2 gap-1.5">
                   <Show
-                    when={props.onPatch && !info().id.startsWith('I')}
+                    when={props.onPatch}
                     fallback={
                       <Field label="Opacity" value={percent(info().opacity)} />
                     }
@@ -646,7 +646,7 @@ export function DesignPanel(props: {
                 {(t) => (
                   <Section title="Text">
                     <Show
-                      when={props.onPatch && !info().id.startsWith('I')}
+                      when={props.onPatch}
                       fallback={<TextFields text={t()} />}
                     >
                       <TypeControls
@@ -681,7 +681,7 @@ export function DesignPanel(props: {
                 )}
               </Show>
               <Show
-                when={props.onPatch && !info().id.startsWith('I')}
+                when={props.onPatch}
                 fallback={
                   <Show when={info().fills.length > 0}>
                     <Section title="Fill">
@@ -717,7 +717,7 @@ export function DesignPanel(props: {
                   />
                 </Section>
               </Show>
-              <Show when={props.onPatch && !info().id.startsWith('I')}>
+              <Show when={props.onPatch}>
                 <Section
                   title="Stroke"
                   testId="fig-strokes"
@@ -775,12 +775,7 @@ export function DesignPanel(props: {
                   </Show>
                 </Section>
               </Show>
-              <Show
-                when={
-                  info().strokes.length > 0 &&
-                  !(props.onPatch && !info().id.startsWith('I'))
-                }
-              >
+              <Show when={info().strokes.length > 0 && !props.onPatch}>
                 <Section title="Stroke">
                   <For each={[...info().strokes].reverse()}>
                     {(p) => <PaintRow paint={p} />}

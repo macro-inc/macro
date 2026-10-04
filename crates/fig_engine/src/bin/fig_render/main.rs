@@ -43,6 +43,9 @@ enum Command {
     /// Edit each file (move every top-level layer), save, reopen, and check
     /// the saved file renders like the edited one.
     Roundtrip { files: Vec<PathBuf> },
+    /// Override the text of a layer inside an instance, save, reopen, and
+    /// check the override holds and the file renders the same.
+    Override { files: Vec<PathBuf> },
     /// Lay out every auto layout frame again and report the frames whose
     /// children the engine places differently from Figma.
     Relayout {
@@ -75,6 +78,11 @@ fn main() {
         Command::Roundtrip { files } => {
             for path in files {
                 roundtrip(&path);
+            }
+        }
+        Command::Override { files } => {
+            for path in files {
+                override_text(&path);
             }
         }
         Command::Relayout { verbose, files } => {
@@ -460,5 +468,103 @@ fn relayout(path: &Path, verbose: bool) {
         "{}: {} stacks, {same} unchanged, {differ} differ",
         stem(path),
         stacks.len()
+    );
+}
+
+fn override_text(path: &Path) {
+    use fig_engine::edit::{History, Op};
+    use fig_engine::scene::Scene;
+    let Some((bytes, mut doc)) = open(path) else {
+        return;
+    };
+    // The first text layer inside an instance, page by page.
+    let mut target = None;
+    'pages: for &page in &doc.pages {
+        let scene = Scene::build(&doc, page);
+        for i in 0..scene.nodes.len() as u32 {
+            if scene.node(i).path.is_some()
+                && scene.props(&doc, i).node_type() == fig_engine::model::NodeType::Text
+            {
+                target = Some((page, scene.id(&doc, i)));
+                break 'pages;
+            }
+        }
+    }
+    let Some((page, id)) = target else {
+        println!("{}: no text in instances", stem(path));
+        return;
+    };
+    let ops: Vec<Op> = serde_json::from_str(&format!(
+        r#"[{{"op":"set","ids":["{id}"],"props":{{"characters":"Macro override"}}}}]"#
+    ))
+    .expect("ops");
+    if let Err(e) = History::default().apply(&mut doc, &ops, None) {
+        println!("{}: EDIT ERROR {e}", stem(path));
+        return;
+    }
+    let text_of = |d: &Document| {
+        let scene = Scene::build(d, page);
+        scene.find(d, &id).and_then(|i| {
+            scene
+                .props(d, i)
+                .text_content
+                .as_ref()
+                .map(|c| c.characters.to_string())
+        })
+    };
+    let saved = match fig_engine::save::save(&doc, &bytes) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("{}: SAVE ERROR {e}", stem(path));
+            return;
+        }
+    };
+    if let Some(out) = std::env::var_os("FIG_SAVE_TO") {
+        let _ = std::fs::write(out, &saved);
+    }
+    let Ok(reopened) = Document::open(&saved) else {
+        println!("{}: REOPEN ERROR", stem(path));
+        return;
+    };
+    let (a, b) = (small_render(&doc), small_render(&reopened));
+    let same = match (&a, &b) {
+        (Some(a), Some(b)) => a.data() == b.data(),
+        (None, None) => true,
+        _ => false,
+    };
+    if !same && std::env::var_os("FIG_DEBUG").is_some() {
+        let dump = |d: &Document| {
+            let scene = Scene::build(d, page);
+            let mut out = Vec::new();
+            for i in 0..scene.nodes.len() as u32 {
+                let p = scene.props(d, i);
+                out.push(format!(
+                    "{} {} {:?} {:?} glyphs={} fills={}",
+                    scene.id(d, i),
+                    p.name(),
+                    p.size,
+                    p.transform.map(|t| (t.m02, t.m12)),
+                    p.text_layout.as_ref().map_or(0, |l| l.glyphs.len()),
+                    p.fills().len()
+                ));
+            }
+            out
+        };
+        let (x, y) = (dump(&doc), dump(&reopened));
+        for (l, r) in x.iter().zip(&y) {
+            if l != r {
+                println!("  - {l}\n  + {r}");
+            }
+        }
+        if x.len() != y.len() {
+            println!("  node count {} vs {}", x.len(), y.len());
+        }
+    }
+    println!(
+        "{}: {id}: before save {:?}, after {:?}, renders {}",
+        stem(path),
+        text_of(&doc),
+        text_of(&reopened),
+        if same { "identical" } else { "DIFFER" }
     );
 }

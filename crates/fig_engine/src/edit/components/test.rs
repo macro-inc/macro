@@ -156,3 +156,69 @@ fn detaches_instances() {
     assert_eq!(doc.props(i).node_type(), NodeType::Instance);
     assert!(doc.node(i).children.is_empty());
 }
+
+#[test]
+fn overrides_layers_inside_instances() {
+    let original = blank("x");
+    let mut doc = Document::open(&original).unwrap();
+    let mut h = History::default();
+    let (component, fill) = button(&mut doc, &mut h);
+    let label = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"create","parent":"{component}","node":{{"type":"TEXT","name":"Label","x":40,"y":10,"width":1,"height":1,"props":{{"characters":"OK","fontSize":12}}}}}}]"#
+        ),
+    )[0]
+    .clone();
+    let instance = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"instantiate","component":"{component}","parent":"0:1","x":200,"y":0}}]"#
+        ),
+    )[0]
+    .clone();
+    let ok_width = sublayer(&doc, &instance, &label).size().x;
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"set","ids":["I{instance};{fill}"],"props":{{"fills":[{{"color":"00FF00"}}]}}}},
+                {{"op":"set","ids":["I{instance};{label}"],"props":{{"characters":"Continue","name":"CTA"}}}}]"#
+        ),
+    );
+    let f = sublayer(&doc, &instance, &fill);
+    assert!(matches!(f.fills()[0].kind, PaintKind::Solid(c) if c.g == 1.0 && c.r == 0.0));
+    let l = sublayer(&doc, &instance, &label);
+    assert_eq!(
+        l.text_content.as_ref().unwrap().characters.as_ref(),
+        "Continue"
+    );
+    assert!(l.size().x > ok_width);
+    // The component is untouched.
+    let main_fill = doc.props(idx(&doc, &fill));
+    assert!(matches!(main_fill.fills()[0].kind, PaintKind::Solid(c) if c.r == 1.0));
+    // Saved and reopened, the overrides hold.
+    let reopened = Document::open(&save(&doc, &original).unwrap()).unwrap();
+    let l = sublayer(&reopened, &instance, &label);
+    assert_eq!(
+        l.text_content.as_ref().unwrap().characters.as_ref(),
+        "Continue"
+    );
+    assert_eq!(l.name(), "CTA");
+    let f = sublayer(&reopened, &instance, &fill);
+    assert!(matches!(f.fills()[0].kind, PaintKind::Solid(c) if c.g == 1.0));
+    // A second edit updates the same override.
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"set","ids":["I{instance};{label}"],"props":{{"characters":"Go"}}}}]"#),
+    );
+    let i = idx(&doc, &instance);
+    assert_eq!(doc.props(i).symbol.as_ref().unwrap().overrides.len(), 2);
+    h.undo(&mut doc).unwrap();
+    h.undo(&mut doc).unwrap();
+    let l = sublayer(&doc, &instance, &label);
+    assert_eq!(l.text_content.as_ref().unwrap().characters.as_ref(), "OK");
+}

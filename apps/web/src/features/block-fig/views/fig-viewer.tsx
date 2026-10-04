@@ -238,8 +238,7 @@ export function FigViewer() {
       action === 'select-children' &&
       editor.enabled() &&
       viewer.selected().length === 1 &&
-      i?.type === 'TEXT' &&
-      !i.id.startsWith('I')
+      i?.type === 'TEXT'
     )
       return 'edit-text';
     return action;

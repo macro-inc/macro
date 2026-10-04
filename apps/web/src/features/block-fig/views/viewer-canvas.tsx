@@ -652,8 +652,7 @@ export function ViewerCanvas(props: {
     if (editing() && sel.length === 1 && props.info?.()?.id === sel[0].id) {
       // Double-click on a text layer types into it.
       const info = props.info?.();
-      if (info?.type === 'TEXT' && !info.id.startsWith('I'))
-        props.onEditText?.(info.id);
+      if (info?.type === 'TEXT') props.onEditText?.(info.id);
     }
   };
 

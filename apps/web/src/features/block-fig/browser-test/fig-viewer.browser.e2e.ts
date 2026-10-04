@@ -321,6 +321,18 @@ test('makes components, places instances, and detaches them', async ({
   await expect(page.getByTestId('fig-design-panel')).toContainText(
     'of Frame 1'
   );
+  // Layers inside the instance take overrides.
+  await canvas.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
+  await page.getByTestId('fig-fill-0-hex').fill('00FF00');
+  await page.getByTestId('fig-fill-0-hex').press('Enter');
+  await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('00FF00');
+  await canvas.focus();
+  await page.keyboard.press('Shift+Enter');
+  await expect(page.getByTestId('fig-design-panel')).toContainText(
+    'of Frame 1'
+  );
   await page.getByTestId('fig-tab-layers').click();
   await expect(page.getByTestId('fig-layer-row')).toHaveText([
     'Frame 1',

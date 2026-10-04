@@ -79,7 +79,8 @@ export function TextEditor(props: {
     if (done) return;
     done = true;
     await pending;
-    if (latest.trim() === '')
+    // An emptied layer goes (layers in instances are only overridden).
+    if (latest.trim() === '' && !props.id.startsWith('I'))
       await props.editor.apply([{ op: 'delete', ids: [props.id] }], key);
     props.onDone();
   };

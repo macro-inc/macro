@@ -495,8 +495,11 @@ Layout and test hooks:
   text tools (a click places a default size; new layers go into the frame
   under the pointer), double-click or Enter on a text layer to type into it
   (`fig-text-editor`; Escape ends, an emptied layer is removed), and drop or
-  paste image files to place image-filled layers. Layers inside instances are
-  not editable.
+  paste image files to place image-filled layers. Layers inside instances
+  cannot be moved, resized, or deleted, but their name, fills, strokes,
+  opacity, visibility, and text (typing included) are overridden on the
+  instance, as in Figma; text bound to a component text property sets the
+  property.
 - **Design panel** (`fig-design-panel`, toggled with ⌥8): alignment buttons
   (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
   position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|

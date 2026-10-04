@@ -396,10 +396,23 @@ impl<'s> Build<'s> {
                 m.remove(self.schema, f);
             }
         }
+        // Files from before `derivedTextData` keep the layout in `textData`.
+        let target = if self.sub(m.def, "derivedTextData").is_some() {
+            "derivedTextData"
+        } else {
+            "textData"
+        };
         if let Some(layout) = &props.text_layout
-            && let Some(def) = self.sub(m.def, "derivedTextData")
+            && let Some(def) = self.sub(m.def, target)
         {
-            let mut d = Msg::new(def);
+            let mut d = match (target, m.get(self.schema, target)) {
+                ("textData", Some(Value::Msg(t))) => {
+                    let mut t = (**t).clone();
+                    t.remove(self.schema, "baselines");
+                    t
+                }
+                _ => Msg::new(def),
+            };
             self.vector(
                 &mut d,
                 "layoutSize",
@@ -455,7 +468,7 @@ impl<'s> Build<'s> {
                     .collect();
                 self.list_field(&mut d, "decorations", decorations);
             }
-            m.set(self.schema, "derivedTextData", Value::Msg(Box::new(d)));
+            m.set(self.schema, target, Value::Msg(Box::new(d)));
         }
     }
 
@@ -631,6 +644,14 @@ impl<'s> Build<'s> {
             self.guid_field(&mut sm, "symbolID", id);
             m.set(s, "symbolData", Value::Msg(Box::new(sm)));
         }
+        if edits & flags::OVERRIDES != 0 {
+            self.overrides(m, p, doc);
+        }
+        if edits & flags::PROP_ASSIGNMENTS != 0
+            && let Some(list) = p.prop_assignments.as_deref()
+        {
+            self.prop_assignments(m, list);
+        }
         if edits & flags::CONSTRAINTS != 0
             && let Some((h, v)) = &p.constraints
         {
@@ -668,6 +689,208 @@ impl<'s> Build<'s> {
                 );
                 m.set(s, "parentIndex", Value::Msg(Box::new(pm)));
             }
+        }
+    }
+
+    /// Sets text property values in `componentPropAssignments`, keeping the
+    /// file's other values and fields.
+    fn prop_assignments(&self, m: &mut Msg, list: &[crate::model::PropAssignment]) {
+        let s = self.schema;
+        let Some(def) = self.sub(m.def, "componentPropAssignments") else {
+            return;
+        };
+        let mut entries: Vec<Msg> = match m.get(s, "componentPropAssignments") {
+            Some(Value::List(l)) => l
+                .iter()
+                .filter_map(|v| match v {
+                    Value::Msg(m) => Some((**m).clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        for a in list {
+            let crate::model::PropValue::Text(text) = &a.value else {
+                continue;
+            };
+            let k = match entries.iter().position(|e| {
+                matches!(e.get(s, "defID"), Some(Value::Msg(g))
+                    if matches!(g.get(s, "sessionID"), Some(Value::Uint(v)) if *v == a.def_id.session)
+                        && matches!(g.get(s, "localID"), Some(Value::Uint(v)) if *v == a.def_id.local))
+            }) {
+                Some(k) => k,
+                None => {
+                    let mut e = Msg::new(def);
+                    self.guid_field(&mut e, "defID", a.def_id);
+                    entries.push(e);
+                    entries.len() - 1
+                }
+            };
+            let e = &mut entries[k];
+            let Some(vdef) = self.sub(e.def, "value") else {
+                continue;
+            };
+            let mut value = match e.get(s, "value") {
+                Some(Value::Msg(v)) => (**v).clone(),
+                _ => Msg::new(vdef),
+            };
+            if let Some(tdef) = self.sub(vdef, "textValue") {
+                let mut t = match value.get(s, "textValue") {
+                    Some(Value::Msg(t)) => (**t).clone(),
+                    _ => Msg::new(tdef),
+                };
+                t.set(s, "characters", Value::Str(text.as_ref().into()));
+                for f in ["characterStyleIDs", "styleOverrideTable", "lines"] {
+                    t.remove(s, f);
+                }
+                value.set(s, "textValue", Value::Msg(Box::new(t)));
+            }
+            e.set(s, "value", Value::Msg(Box::new(value)));
+        }
+        m.set(
+            s,
+            "componentPropAssignments",
+            Value::List(
+                entries
+                    .into_iter()
+                    .map(|e| Value::Msg(Box::new(e)))
+                    .collect(),
+            ),
+        );
+    }
+
+    fn read_path(&self, m: &Msg) -> Vec<Guid> {
+        let s = self.schema;
+        let Some(Value::Msg(gp)) = m.get(s, "guidPath") else {
+            return Vec::new();
+        };
+        let Some(Value::List(guids)) = gp.get(s, "guids") else {
+            return Vec::new();
+        };
+        guids
+            .iter()
+            .filter_map(|g| {
+                let Value::Msg(g) = g else { return None };
+                let n = |f| match g.get(s, f) {
+                    Some(Value::Uint(v)) => *v,
+                    _ => 0,
+                };
+                Some(Guid {
+                    session: n("sessionID"),
+                    local: n("localID"),
+                })
+            })
+            .collect()
+    }
+
+    fn write_path(&self, m: &mut Msg, path: &[Guid]) {
+        let Some(def) = self.sub(m.def, "guidPath") else {
+            return;
+        };
+        let mut gp = Msg::new(def);
+        if let Some(gdef) = self.sub(def, "guids") {
+            let guids = path
+                .iter()
+                .map(|&g| Value::Msg(Box::new(self.guid(gdef, g))))
+                .collect();
+            gp.set(self.schema, "guids", Value::List(guids));
+        }
+        m.set(self.schema, "guidPath", Value::Msg(Box::new(gp)));
+    }
+
+    /// Writes an instance's overrides into its `symbolData`, patching the
+    /// file's own override records (so fields the engine does not model
+    /// survive), and drops derived layout the edits made stale.
+    fn overrides(&self, m: &mut Msg, p: &Props, doc: &Document) {
+        let s = self.schema;
+        let same = |a: &[Guid], b: &[Guid]| {
+            a.len() == b.len()
+                && a.iter()
+                    .zip(b)
+                    .all(|(x, y)| crate::edit::guid_of(doc, *x) == crate::edit::guid_of(doc, *y))
+        };
+        if let Some(symbol) = p.symbol.as_deref()
+            && let Some(def) = self.sub(m.def, "symbolData")
+            && let Some(odef) = self.sub(def, "symbolOverrides")
+        {
+            let mut sm = match m.get(s, "symbolData") {
+                Some(Value::Msg(sm)) => (**sm).clone(),
+                _ => Msg::new(def),
+            };
+            let mut list: Vec<Msg> = match sm.get(s, "symbolOverrides") {
+                Some(Value::List(l)) => l
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Msg(m) => Some((**m).clone()),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            for o in symbol.overrides.iter() {
+                let Some(path) = o.guid_path.as_deref() else {
+                    continue;
+                };
+                let k = match list.iter().position(|e| same(&self.read_path(e), path)) {
+                    Some(k) => k,
+                    None => {
+                        let mut e = Msg::new(odef);
+                        self.write_path(&mut e, path);
+                        list.push(e);
+                        list.len() - 1
+                    }
+                };
+                let mut edits = 0;
+                for (set, flag) in [
+                    (o.name.is_some(), flags::NAME),
+                    (o.visible.is_some(), flags::VISIBLE),
+                    (o.opacity.is_some(), flags::OPACITY),
+                    (o.fills.is_some(), flags::FILLS),
+                    (o.strokes.is_some(), flags::STROKES),
+                    (o.stroke_weight.is_some(), flags::STROKE_WEIGHT),
+                    (o.stroke_align.is_some(), flags::STROKE_ALIGN),
+                    (o.corner_radius.is_some(), flags::RADIUS),
+                    (o.text_content.is_some(), flags::TEXT),
+                    (o.size.is_some(), flags::SIZE),
+                    (o.prop_assignments.is_some(), flags::PROP_ASSIGNMENTS),
+                ] {
+                    if set {
+                        edits |= flag;
+                    }
+                }
+                let node = Node {
+                    props: o.clone(),
+                    parent: None,
+                    children: Vec::new(),
+                    edits,
+                    removed: false,
+                    source: None,
+                };
+                self.patch(&mut list[k], &node, doc, edits);
+            }
+            sm.set(
+                s,
+                "symbolOverrides",
+                Value::List(list.into_iter().map(|e| Value::Msg(Box::new(e))).collect()),
+            );
+            m.set(s, "symbolData", Value::Msg(Box::new(sm)));
+        }
+        if let Some(derived) = p.derived.as_deref()
+            && let Some(Value::List(list)) = m.get(s, "derivedSymbolData").cloned()
+        {
+            let kept: Vec<Value> = list
+                .into_iter()
+                .filter(|v| match v {
+                    Value::Msg(e) => {
+                        let path = self.read_path(e);
+                        derived
+                            .iter()
+                            .any(|d| d.guid_path.as_deref().is_some_and(|p| same(p, &path)))
+                    }
+                    _ => true,
+                })
+                .collect();
+            m.set(s, "derivedSymbolData", Value::List(kept));
         }
     }
 

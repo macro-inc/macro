@@ -154,7 +154,8 @@ export function createFigEditor(options: FigEditorOptions) {
 
   const enabled = () => options.canEdit();
   const ids = () => viewer.selected().map((s) => s.id);
-  // Instance sublayers are edited in the main component, as in Figma.
+  // Instance sublayers cannot be moved, resized, or removed, as in Figma;
+  // their appearance and text are overridden (`setProps`).
   const editableIds = () => ids().filter((id) => !id.startsWith('I'));
 
   // ---- saving ----------------------------------------------------------
@@ -259,7 +260,8 @@ export function createFigEditor(options: FigEditorOptions) {
   // ---- selection operations ---------------------------------------------
 
   const setProps = (patch: Patch, coalesce?: string) => {
-    const targets = editableIds();
+    // Layers in instances take the patch as overrides.
+    const targets = ids();
     if (targets.length === 0) return Promise.resolve(undefined);
     return apply([{ op: 'set', ids: targets, props: patch }], coalesce);
   };

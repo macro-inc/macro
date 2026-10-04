@@ -12,7 +12,7 @@
 use crate::document::{Document, NodeIdx};
 use crate::error::Result;
 use crate::geometry;
-use crate::model::{Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle, Vec2};
+use crate::model::{Decoration, Glyph, Props, StyleRun, TextContent, TextLayout, TextStyle, Vec2};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use tiny_skia::PathBuilder;
@@ -335,7 +335,19 @@ pub struct Change<'a> {
 /// follow the characters they were on: typed characters take the style of
 /// the character before them, as in Figma.
 pub fn edit(doc: &mut Document, i: NodeIdx, change: &Change) -> Result<()> {
-    let props = doc.props(i).clone();
+    let mut props = doc.props(i).clone();
+    edit_props(doc, &mut props, change)?;
+    let node = &mut doc.nodes[i as usize];
+    node.props.text_content = props.text_content;
+    node.props.text_style = props.text_style;
+    node.props.text_layout = props.text_layout;
+    node.props.size = props.size;
+    Ok(())
+}
+
+/// [`edit`] on a node's properties (a text layer in an instance, say);
+/// sets its text fields and size. Glyph outlines go in `doc`'s blobs.
+pub fn edit_props(doc: &mut Document, props: &mut Props, change: &Change) -> Result<()> {
     let mut style = props.text_style.as_deref().cloned().unwrap_or_default();
     let mut content = props.text_content.as_deref().cloned().unwrap_or_default();
     let mut runs: Vec<StyleRun> = content.styles.to_vec();
@@ -406,11 +418,10 @@ pub fn edit(doc: &mut Document, i: NodeIdx, change: &Change) -> Result<()> {
     }
     let size = props.size();
     let (layout, box_size) = layout(doc, &content, &style, size, auto);
-    let node = &mut doc.nodes[i as usize];
-    node.props.text_content = Some(Arc::new(content));
-    node.props.text_style = Some(Arc::new(style));
-    node.props.text_layout = Some(Arc::new(layout));
-    node.props.size = Some(box_size);
+    props.text_content = Some(Arc::new(content));
+    props.text_style = Some(Arc::new(style));
+    props.text_layout = Some(Arc::new(layout));
+    props.size = Some(box_size);
     Ok(())
 }
 
