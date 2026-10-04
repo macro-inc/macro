@@ -578,8 +578,8 @@ Layout and test hooks:
   (`pptx-review-new-comment`, Insert ▸ Comment, right-click ▸ **New
   Comment**, or Ctrl+Alt+M) opens the Comments pane (`pptx-comments-pane`)
   with a draft attached to the selected shape, else to the slide
-  (`pptx-comment-draft`; Post `pptx-comment-post` or Ctrl+Enter, Cancel
-  `pptx-comment-cancel`). Each `pptx-comment-thread` (`data-comment-id`,
+  (`pptx-comment-draft`, its marker `pptx-comment-marker-draft`; Post
+  `pptx-comment-post` or Ctrl+Enter, Cancel `pptx-comment-cancel`). Each `pptx-comment-thread` (`data-comment-id`,
   `data-resolved`, `aria-current` when picked) shows the author
   (`pptx-comment-author`), a relative time (`pptx-comment-time`, "A few
   seconds ago"), the text (`pptx-comment-text`), replies
