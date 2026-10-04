@@ -1,0 +1,33 @@
+/* Agents page demos. Window chrome comes from ProductDemo. */
+.agent-demo-frame { position: relative; }
+.agent-demo-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; transition: transform 650ms cubic-bezier(.2, .8, .2, 1); }
+.agent-session-composer { width: 100%; max-width: 952px; margin-inline: auto; padding: 4px 16px 12px; }
+
+/* A mention opened from the answer lands in a split beside the session. */
+.agent-split { display: flex; flex: 1; min-height: 0; min-width: 0; position: relative; }
+.agent-split-pane { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; position: relative; }
+.agent-split-item { flex-grow: 1.2; border-left: 1px solid var(--color-edge-muted); background: var(--color-panel); animation: agent-split-in 220ms ease-out both; }
+.agent-split-item [data-view-shell-top-bar] { padding-right: 44px; }
+.agent-split-close { position: absolute; top: 12px; right: 10px; z-index: 6; }
+@keyframes agent-split-in { from { opacity: 0; transform: translateX(12px); } }
+
+/* ModelMenuFrame sits where Kobalte anchors the picker's content. */
+.agent-model-menu { position: absolute; z-index: 20; pointer-events: none; text-align: left; }
+
+/* SettingsPage: max-w-[710px] px-10 pt-14, header inset px-6, cards mt-9. */
+.agent-mcp-page { width: 100%; max-width: 710px; margin-inline: auto; padding: 44px 40px 24px; text-align: left; }
+.agent-mcp-header { display: flex; flex-direction: column; gap: 6px; padding-inline: 24px; }
+.agent-mcp-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }
+
+@media (max-width: 699px) {
+  .agent-session-composer { padding: 4px 8px 8px; }
+  .agent-split-item { position: absolute; inset: 0; z-index: 5; border-left: 0; }
+  .agent-mcp-page { padding: 24px 16px; }
+  .agent-mcp-header { padding-inline: 16px; }
+  .agent-mcp-cards { margin-top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-split-item { animation: none; }
+  .agent-demo-pointer { display: none; }
+}

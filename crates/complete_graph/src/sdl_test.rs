@@ -439,6 +439,10 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
     );
     assert_sdl_line(
         &sdl,
+        "ensureInitiativeDescriptionSurface(initiativeId: ID!): ID!",
+    );
+    assert_sdl_line(
+        &sdl,
         "updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!",
     );
     for obsolete in [

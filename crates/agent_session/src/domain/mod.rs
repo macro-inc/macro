@@ -31,3 +31,6 @@ pub mod turn_state;
 
 /// Repository-matched working branches reported by a session's runtime.
 pub mod working_branch;
+
+/// Recovery of sessions abandoned by crashed replicas.
+pub mod recovery;

@@ -2,8 +2,10 @@ use crate::model::types::Model;
 use rig_core::completion::{
     CompletionError, CompletionModel, CompletionRequest, CompletionResponse,
 };
+use rig_core::message::{AssistantContent, Message, UserContent};
 use rig_core::streaming::StreamingCompletionResponse;
 use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::gemini};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// A Gemini model bound to the native GenerateContent client that serves it.
@@ -77,15 +79,45 @@ impl<H: HttpClientExt + Clone + 'static> CompletionModel for GeminiCompletionMod
         &self,
         request: CompletionRequest,
     ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
-        self.0.completion(native_tool_schemas(request)?).await
+        self.0.completion(prepare_request(request)?).await
     }
 
     async fn stream(
         &self,
         request: CompletionRequest,
     ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
-        self.0.stream(native_tool_schemas(request)?).await
+        self.0.stream(prepare_request(request)?).await
     }
+}
+
+/// Rig uses a tool result's `id` as Gemini's functionResponse.name. Persisted
+/// history uses that field to pair calls and results for other providers, so
+/// restore the actual function name at this provider boundary. Keep call_id and
+/// signatures intact; they carry separate provider correlation information.
+fn prepare_request(mut request: CompletionRequest) -> Result<CompletionRequest, CompletionError> {
+    let mut names = HashMap::new();
+    for message in request.chat_history.iter_mut() {
+        match message {
+            Message::Assistant { content, .. } => {
+                for part in content.iter() {
+                    if let AssistantContent::ToolCall(call) = part {
+                        names.insert(call.id.clone(), call.function.name.clone());
+                    }
+                }
+            }
+            Message::User { content } => {
+                for part in content.iter_mut() {
+                    if let UserContent::ToolResult(result) = part
+                        && let Some(name) = names.get(&result.id)
+                    {
+                        result.id.clone_from(name);
+                    }
+                }
+            }
+            Message::System { .. } => {}
+        }
+    }
+    native_tool_schemas(request)
 }
 
 fn native_tool_schemas(

@@ -1,5 +1,6 @@
 use super::*;
 mod queue;
+mod recovery;
 mod search;
 mod user_cleanup;
 mod working_branch;

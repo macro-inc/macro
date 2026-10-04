@@ -7,6 +7,8 @@ export function createEmailWalkthrough(options: {
   advance: (step: number) => void;
   reset: () => void;
   reduced: () => void;
+  /** Milliseconds before the given step; defaults to 1400ms per step. */
+  delay?: (step: number) => number;
 }) {
   const [playing, setPlaying] = createSignal(true);
   const [reducedMotion, setReducedMotion] = createSignal(false);
@@ -24,11 +26,14 @@ export function createEmailWalkthrough(options: {
   const schedule = () => {
     clear();
     if (!visible || !playing() || reducedMotion() || document.hidden) return;
-    timer = setTimeout(() => {
-      options.advance(++step);
-      if (step >= options.steps) pause();
-      else schedule();
-    }, 1400);
+    timer = setTimeout(
+      () => {
+        options.advance(++step);
+        if (step >= options.steps) pause();
+        else schedule();
+      },
+      options.delay?.(step + 1) ?? 1400
+    );
   };
   const replay = () => {
     step = 0;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use github_pull_requests::domain::models::GithubPullRequestError;
+use github_pull_requests::domain::models::{GithubPullRequestError, PullRequestIndexSummary};
 
 use super::*;
 use crate::domain::models::GithubRepository;
@@ -84,6 +84,7 @@ impl GithubRepositoryClient for FakeClient {
 struct RecordingPullRequests {
     batches: Arc<Mutex<Vec<Vec<GithubRepositoryIdentity>>>>,
     fail: bool,
+    summaries: HashMap<u64, PullRequestIndexSummary>,
 }
 
 impl RecordingPullRequests {
@@ -96,7 +97,7 @@ impl GithubPullRequestIndexer for RecordingPullRequests {
     async fn index_repositories(
         &self,
         repositories: &[GithubRepositoryIdentity],
-    ) -> Result<u64, GithubPullRequestError> {
+    ) -> Result<PullRequestIndexSummary, GithubPullRequestError> {
         if self.fail {
             return Err(GithubPullRequestError::Repository(anyhow::anyhow!(
                 "database unavailable"
@@ -106,7 +107,14 @@ impl GithubPullRequestIndexer for RecordingPullRequests {
             .lock()
             .expect("lock")
             .push(repositories.to_vec());
-        Ok(repositories.len() as u64)
+        Ok(repositories
+            .first()
+            .and_then(|repository| self.summaries.get(&repository.id))
+            .copied()
+            .unwrap_or(PullRequestIndexSummary {
+                inserted: repositories.len() as u64,
+                ..Default::default()
+            }))
     }
 }
 
@@ -163,6 +171,7 @@ async fn pages_through_installations_and_reports_where_to_resume() {
             indexed_pull_requests: 2,
             failed_installation_ids: Vec::new(),
             next_after: Some("2".to_string()),
+            ..Default::default()
         }
     );
 
@@ -181,6 +190,7 @@ async fn pages_through_installations_and_reports_where_to_resume() {
             indexed_pull_requests: 1,
             failed_installation_ids: Vec::new(),
             next_after: None,
+            ..Default::default()
         }
     );
 
@@ -222,19 +232,20 @@ async fn installations_github_will_not_list_are_reported_and_skipped() {
 }
 
 #[tokio::test]
-async fn a_storage_failure_stops_the_page() {
+async fn a_storage_failure_is_reported_without_stopping_later_installations() {
     let pull_requests = RecordingPullRequests {
         fail: true,
-        ..RecordingPullRequests::default()
+        ..Default::default()
     };
-    let service = service(&["1"], two_installation_client(), pull_requests);
-
-    let error = service
+    let service = service(&["1", "3"], two_installation_client(), pull_requests);
+    let page = service
         .index_pull_requests(PullRequestIndexRequest::default())
         .await
-        .expect_err("a storage failure should fail the page");
-
-    assert!(matches!(error, GithubError::Internal(_)));
+        .unwrap();
+    assert_eq!(page.installations, 2);
+    assert_eq!(page.failures, 2);
+    assert_eq!(page.failed_installation_ids, vec!["1", "3"]);
+    assert_eq!(page.next_after, None);
 }
 
 #[tokio::test]
@@ -255,4 +266,61 @@ async fn a_zero_limit_still_processes_one_installation() {
 
     assert_eq!(page.installations, 1);
     assert_eq!(page.next_after, Some("1".to_string()));
+}
+
+#[tokio::test]
+async fn partial_index_failures_preserve_counts_and_continue_installations() {
+    let pull_requests = RecordingPullRequests {
+        summaries: HashMap::from([(
+            100,
+            PullRequestIndexSummary {
+                inserted: 2,
+                already_present: 3,
+                unverified_records: 4,
+                invalid_records: 5,
+                identity_conflicts: 6,
+                failures: 7,
+            },
+        )]),
+        ..Default::default()
+    };
+    let page = service(&["1", "3"], two_installation_client(), pull_requests)
+        .index_pull_requests(PullRequestIndexRequest {
+            limit: Some(2),
+            after: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(page.indexed_pull_requests, 3);
+    assert_eq!(page.already_indexed_pull_requests, 3);
+    assert_eq!(page.unverified_records, 4);
+    assert_eq!(page.invalid_records, 5);
+    assert_eq!(page.identity_conflicts, 6);
+    assert_eq!(page.failures, 7);
+    assert_eq!(page.failed_installation_ids, vec!["1"]);
+    assert_eq!(page.next_after.as_deref(), Some("3"));
+    let json = serde_json::to_value(page).unwrap();
+    assert_eq!(json["indexedPullRequests"], 3);
+    assert_eq!(json["unverifiedRecords"], 4);
+}
+
+#[tokio::test]
+async fn unverified_skips_do_not_mark_an_installation_failed() {
+    let pull_requests = RecordingPullRequests {
+        summaries: HashMap::from([(
+            100,
+            PullRequestIndexSummary {
+                unverified_records: 4,
+                ..Default::default()
+            },
+        )]),
+        ..Default::default()
+    };
+    let page = service(&["1"], two_installation_client(), pull_requests)
+        .index_pull_requests(PullRequestIndexRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(page.unverified_records, 4);
+    assert_eq!(page.indexed_pull_requests, 0);
+    assert!(page.failed_installation_ids.is_empty());
 }

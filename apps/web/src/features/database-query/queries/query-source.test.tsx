@@ -112,10 +112,10 @@ describe('query schema', () => {
       JSON.parse(request.prompt).schema.tables[1].columns[0].relation
     ).toEqual(schema.tables[1].columns[0].relation);
     expect(request.additional_instructions).toContain(
-      'FROM invites i JOIN guests g ON i.guest = g.row_id'
+      'registered QueryDatabase tool reference'
     );
     expect(request.additional_instructions).toContain(
-      'never compare a relation to a name, join by matching display names'
+      'sqlName values are those names already quoted for SQL'
     );
     expect(request.additional_instructions).not.toMatch(
       /json_each|strftime|junction|readSqlName|SQLite/
