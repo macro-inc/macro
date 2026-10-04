@@ -617,7 +617,7 @@ fn invalid_paths_are_refused() {
 }
 
 #[test]
-fn libreoffice_opens_merged_shapes() {
+fn libreoffice_opens_merged_and_edited_shapes() {
     let Ok(status) = std::process::Command::new("soffice")
         .arg("--version")
         .output()
@@ -632,9 +632,37 @@ fn libreoffice_opens_merged_shapes() {
         preset_shape(3, "ellipse", [50 * PT, 50 * PT, 100 * PT, 100 * PT], ""),
         preset_shape(4, "star5", [300 * PT, 50 * PT, 100 * PT, 100 * PT], ""),
         preset_shape(5, "rect", [330 * PT, 80 * PT, 40 * PT, 40 * PT], ""),
+        preset_shape(
+            6,
+            "ellipse",
+            [100 * PT, 250 * PT, 150 * PT, 100 * PT],
+            r#" rot="1200000""#,
+        ),
     ]
     .concat();
     let mut pres = open(&shapes);
+    // Edit Points on the turned ellipse: a notch, a quadratic side, an arc.
+    let notch = GeometryPath {
+        commands: vec![
+            mv(0.0, 50.0),
+            PathCommand::QuadBezTo {
+                x1: 75.0,
+                y1: -40.0,
+                x: 150.0,
+                y: 50.0,
+            },
+            ln(100.0, 50.0),
+            PathCommand::ArcTo {
+                w_r: 25.0,
+                h_r: 25.0,
+                st_ang: 0.0,
+                sw_ang: 180.0,
+            },
+            PathCommand::Close,
+        ],
+        fill: None,
+        stroke: None,
+    };
     apply(
         &mut pres,
         &[
@@ -647,6 +675,12 @@ fn libreoffice_opens_merged_shapes() {
                 slide: SLIDE,
                 shapes: vec![4, 5],
                 mode: MergeMode::Combine,
+            },
+            EditOp::SetCustomGeometry {
+                slide: SLIDE,
+                shape: 6,
+                paths: vec![notch],
+                fit: None,
             },
         ],
     );
