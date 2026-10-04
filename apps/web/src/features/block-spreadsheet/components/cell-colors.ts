@@ -1,14 +1,23 @@
-/** Excel's default black follows the app foreground on an unfilled cell.
- * Explicit fill/text pairs remain workbook colors, including on export: these
- * helpers only choose CSS values and never modify the stored cell style.
+/** Excel's default black follows the app foreground on an unfilled cell, and so
+ * do the darker grays templates use for secondary text ("Text 1, lighter 35%"):
+ * they keep their strength against the app background, which on a light theme
+ * renders the workbook's own gray. Explicit fill/text pairs remain workbook
+ * colors, including on export: these helpers only choose CSS values and never
+ * modify the stored cell style.
  */
 export function cellForeground(
   color?: string,
   fill?: string
 ): string | undefined {
-  if (!color && !fill) return undefined;
-  if (color && (fill || color.toLowerCase() !== '#000000')) return color;
-  if (!fill) return 'var(--color-ink)';
+  if (!fill) {
+    if (!color) return undefined;
+    const strength = inkStrength(color);
+    if (strength === undefined) return color;
+    return strength === 100
+      ? 'var(--color-ink)'
+      : `color-mix(in srgb, var(--color-ink) ${strength}%, transparent)`;
+  }
+  if (color) return color;
 
   // A fill is a literal workbook color rather than a themed surface. Choose
   // the higher-contrast default so both pale fills and dark headers stay legible.
@@ -21,6 +30,19 @@ export function cellForeground(
   const luminance =
     channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
   return luminance > 0.179 ? '#000000' : '#ffffff';
+}
+
+/** How strongly a neutral black or dark gray darkens white, as a percentage. */
+function inkStrength(color: string): number | undefined {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return;
+  const channels = [1, 3, 5].map((offset) =>
+    Number.parseInt(color.slice(offset, offset + 2), 16)
+  );
+  const lightest = Math.max(...channels);
+  // Lighter grays stay legible on both themes and keep their literal color.
+  if (lightest - Math.min(...channels) > 16 || lightest > 128) return;
+  const average = (channels[0] + channels[1] + channels[2]) / 3;
+  return Math.round(100 - (average / 255) * 100);
 }
 
 export function cellBorderColor(color?: string, fill?: string): string {
