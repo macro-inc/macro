@@ -51,13 +51,16 @@ const TRUE_METRICS: &[(&str, [f32; 6])] = &[
     ("georgia", [2048.0, 1878.0, 449.0, 1878.0, 449.0, 0.0]),
 ];
 
-/// Condensed families drawn by squeezing their regular-width substitute:
-/// Arial Narrow is Arial at 82% of its width.
+/// Families drawn by squeezing their wider substitute: Arial Narrow is
+/// Arial at 82% of its width; Lucida Sans runs a little narrower than the
+/// DejaVu Sans that stands in for it.
 const CONDENSED: &[(&str, f32)] = &[
     ("arial narrow", 0.82),
     ("liberation sans narrow", 0.82),
     ("helvetica narrow", 0.82),
     ("helvetica condensed", 0.82),
+    ("lucida sans", 0.965),
+    ("lucida sans unicode", 0.965),
 ];
 
 /// A face whose `n` is at least this wide (em) is not a condensed face.

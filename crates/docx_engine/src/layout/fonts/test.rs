@@ -31,4 +31,6 @@ fn condensed_families_squeeze_regular_substitutes() {
     assert!((f.width_factor("Arial Narrow", narrow.face) - 0.82).abs() < 1e-6);
     let arial = f.select("Arial", false, false).unwrap();
     assert!((f.width_factor("Arial", arial.face) - 1.0).abs() < 1e-6);
+    let lucida = f.select("Lucida Sans", false, false).unwrap();
+    assert!((f.width_factor("Lucida Sans", lucida.face) - 0.965).abs() < 1e-6);
 }
