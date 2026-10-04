@@ -828,29 +828,33 @@ impl<'e, 'a> Flow<'e, 'a> {
     }
 
     /// Whether `blocks[i]` is an empty paragraph that only ends a section of
-    /// several columns before a section going on on the same page: Word
-    /// gives it no room when it ends the columns.
+    /// several columns and takes no room: before a section going on on the
+    /// same page (the columns end with the text), or when it would start a
+    /// page of its own.
     fn bare_section_end(&mut self, blocks: &[&Block], i: usize, section_of: &[usize]) -> bool {
         let (Some(&s), Some(&next)) = (section_of.get(i), section_of.get(i + 1)) else {
             return false;
         };
-        if s == next
-            || self.sections.get(s).is_none_or(|c| c.columns.len() < 2)
-            || self
-                .sections
-                .get(next)
-                .is_none_or(|n| n.start != SectionStart::Continuous)
-        {
+        if s == next || self.sections.get(s).is_none_or(|c| c.columns.len() < 2) {
             return false;
         }
         let (_, width) = self.col_geom();
         let pb = self.para(blocks[i], width);
-        pb.inline.label_len == 0
+        let empty = pb.inline.label_len == 0
             && pb
                 .inline
                 .clusters
                 .iter()
-                .all(|c| matches!(c.kind, Kind::End | Kind::Zero))
+                .all(|c| matches!(c.kind, Kind::End | Kind::Zero));
+        if !empty {
+            return false;
+        }
+        let continuous = self
+            .sections
+            .get(next)
+            .is_some_and(|n| n.start == SectionStart::Continuous);
+        let y = self.cur.as_ref().map_or(0.0, |c| c.y);
+        continuous || y + pb.lines.height > self.avail_bottom() + EPS
     }
 
     /// The pitch lines snap to in the current section, if they do.

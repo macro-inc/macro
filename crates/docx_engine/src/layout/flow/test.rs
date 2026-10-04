@@ -582,3 +582,19 @@ fn paragraphs_going_on_in_a_wider_column_fill_it() {
         wide[0].x
     );
 }
+
+#[test]
+fn ending_full_columns_does_not_start_a_page() {
+    // Two columns of 56 lines each fill the page; the empty paragraph that
+    // ends their section would only fit on a page of its own.
+    let filler: String = (0..112).map(|k| para(&format!("Line {k}"))).collect();
+    let body = format!(
+        "{filler}{}{}<w:sectPr>{PAGE}</w:sectPr>",
+        section_end("nextPage", r#"<w:cols w:num="2" w:space="720"/>"#),
+        para("Next"),
+    );
+    let l = layout(&body, &arial_10());
+    assert_eq!(page_texts(&l, 0).len(), 112);
+    assert_eq!(l.pages.len(), 2);
+    assert_eq!(page_texts(&l, 1), vec!["Next".to_owned()]);
+}
