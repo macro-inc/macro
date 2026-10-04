@@ -4,7 +4,6 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
-  entityPropertyFromApi,
   propertyApiValuesToNormalized,
   propertyValueToApi,
 } from '@property/api/converters';
@@ -17,8 +16,8 @@ import type {
   PropertyOption,
 } from '@property/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { fetchEntityProperties } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
-import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
@@ -156,24 +155,13 @@ async function taskIsInProject(
   taskId: string,
   projectId: string
 ): Promise<boolean | undefined> {
-  const result = await propertiesServiceClient.getEntityProperties({
-    entity_type: 'DOCUMENT',
-    entity_id: taskId,
-    query: {},
-  });
-  if (result.isErr()) return undefined;
-  const project = result.value.properties
-    .flatMap((property) => {
-      try {
-        return [entityPropertyFromApi(property)];
-      } catch {
-        return [];
-      }
-    })
-    .find(
-      (property) =>
-        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
-    );
+  const properties = await fetchEntityProperties('TASK', taskId).catch(
+    () => undefined
+  );
+  if (!properties) return undefined;
+  const project = properties.find(
+    (property) => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+  );
   if (project?.valueType !== 'ENTITY') return false;
   return (
     project.value?.some(

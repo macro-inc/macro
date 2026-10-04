@@ -360,6 +360,23 @@ export function buildTaskProjectDefaultProperty(): Property {
 }
 
 /**
+ * A task's key properties followed by its Project, or the Project placeholder
+ * when the task isn't in a project.
+ */
+export function withTaskProject(
+  keyProperties: Property[],
+  properties: Property[]
+): Property[] {
+  return [
+    ...keyProperties,
+    properties.find(
+      (property) =>
+        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+    ) ?? buildTaskProjectDefaultProperty(),
+  ];
+}
+
+/**
  * Sort properties by the defined sort order (status, priority, assignees first)
  */
 function sortProperties(properties: Property[]): Property[] {

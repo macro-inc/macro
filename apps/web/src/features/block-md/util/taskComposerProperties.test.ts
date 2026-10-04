@@ -9,8 +9,8 @@ const mock = vi.hoisted(() => ({
 vi.mock('@core/util/create', () => ({
   createTaskWithInitialSnapshot: mock.create,
 }));
-vi.mock('@service-properties/client', () => ({
-  propertiesServiceClient: { getEntityProperties: mock.properties },
+vi.mock('@queries/properties/entity', () => ({
+  fetchEntityProperties: mock.properties,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mock.failure },
@@ -29,37 +29,25 @@ import {
 
 afterEach(() => vi.clearAllMocks());
 
-const EPOCH = '1970-01-01T00:00:00Z';
-
 /** The created task's properties as the server reports them. */
 function serverProject(projectId: string | undefined) {
-  mock.properties.mockResolvedValue({
-    isErr: () => false,
-    value: {
-      properties: projectId
-        ? [
-            {
-              property: { id: 'row', created_at: EPOCH, updated_at: EPOCH },
-              definition: {
-                id: SYSTEM_PROPERTY_IDS.PROJECT,
-                owner: { scope: 'system' },
-                display_name: 'Project',
-                data_type: 'ENTITY',
-                is_multi_select: false,
-                specific_entity_type: 'INITIATIVE',
-                is_system: true,
-                created_at: EPOCH,
-                updated_at: EPOCH,
-              },
-              value: {
-                type: 'EntityReference',
-                value: [{ entity_id: projectId, entity_type: 'INITIATIVE' }],
-              },
-            },
-          ]
-        : [],
-    },
-  });
+  mock.properties.mockResolvedValue(
+    projectId
+      ? [
+          {
+            propertyId: 'row',
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+            displayName: 'Project',
+            valueType: 'ENTITY',
+            value: [{ entity_id: projectId, entity_type: 'INITIATIVE' }],
+            isMultiSelect: false,
+            owner: { scope: 'system' },
+            createdAt: '1970-01-01',
+            updatedAt: '1970-01-01',
+          },
+        ]
+      : []
+  );
 }
 
 const create = (projectId?: string) =>

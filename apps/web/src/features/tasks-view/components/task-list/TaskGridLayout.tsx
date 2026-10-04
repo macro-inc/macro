@@ -60,8 +60,6 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
-  /** Show the Project column (Projects enabled). */
-  showProject?: boolean;
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
