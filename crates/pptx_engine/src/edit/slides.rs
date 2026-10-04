@@ -341,7 +341,8 @@ pub fn duplicate_slide(pres: &mut Presentation, id: u32) -> Result<u32> {
 }
 
 /// Removes a copied slide's creation id, which identifies the original
-/// slide for co-authoring.
+/// slide for co-authoring, and the reference to the original's comments
+/// (which are not copied).
 pub(super) fn drop_creation_id(doc: &mut XmlDoc) {
     if let Some(ext_lst) = doc.child(doc.root(), Ns::P, "extLst") {
         let doomed: Vec<NodeId> = doc
@@ -350,6 +351,7 @@ pub(super) fn drop_creation_id(doc: &mut XmlDoc) {
                 doc.descendants(e)
                     .iter()
                     .any(|&n| doc.local(n) == "creationId")
+                    || super::comments::is_comment_rel_ext(doc, e)
             })
             .collect();
         for d in doomed {

@@ -130,13 +130,16 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
             .get(slide)
             .and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
     };
-    // Charts live in parts of their own; editing one changes the slide's rendering.
+    // Charts and comments live in parts of their own; editing one changes the slide.
     let charts_unchanged = |slide: &str| {
         let Some(rels) = rels_of(after, slide) else {
             return true;
         };
         rels.iter()
-            .filter(|r| r.rel_type == rel_type::CHART && r.mode == TargetMode::Internal)
+            .filter(|r| {
+                (r.rel_type == rel_type::CHART || r.rel_type.ends_with("/comments"))
+                    && r.mode == TargetMode::Internal
+            })
             .all(|r| same(&rels.resolve(r)))
     };
     // A master, with its theme, as drawn under its layouts and slides.

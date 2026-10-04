@@ -60,6 +60,8 @@ import {
   ChartGallery,
   sampleChartData,
 } from '../components/chart-controls';
+import { CommentMarkers } from '../components/comment-markers';
+import { CommentsPane } from '../components/comments-pane';
 import { CropOverlay } from '../components/crop-overlay';
 import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { ExportDialog } from '../components/export-dialog';
@@ -87,6 +89,7 @@ import {
   ViewTab,
 } from '../components/ribbon/other-tabs';
 import { PictureFormatTab } from '../components/ribbon/picture-format-tab';
+import { ReviewTab } from '../components/ribbon/review-tab';
 import {
   Ribbon,
   type RibbonEnv,
@@ -104,6 +107,8 @@ import { SelectionPane } from '../components/selection-pane';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
 import { SlideShow } from '../components/slideshow';
+import { SpellSquiggles } from '../components/spell-squiggles';
+import { SpellingPane } from '../components/spelling-pane';
 import {
   type MenuTarget,
   StageMenuItems,
@@ -134,6 +139,7 @@ import {
 } from '../core/table';
 import { paragraphCommand } from '../core/text-commands';
 import { createClipboard } from '../primitives/create-clipboard';
+import { createComments } from '../primitives/create-comments';
 import { createCropMode } from '../primitives/create-crop-mode';
 import { createDeckSetup } from '../primitives/create-deck-setup';
 import {
@@ -151,6 +157,11 @@ import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
+import {
+  createSpellCheck,
+  type Squiggle,
+} from '../primitives/create-spell-check';
+import { createSpellingPane } from '../primitives/create-spelling-pane';
 import { createThumbnails } from '../primitives/create-thumbnails';
 import { createViewOptions } from '../primitives/create-view-options';
 import { shapePicture } from '../primitives/export-pictures';
@@ -900,7 +911,17 @@ export function PptxEditor() {
     const at = toSlide(e);
     const guide = guideUnder(at);
     if (guide !== undefined) {
+      setSpellHit(undefined);
       setMenuTarget({ kind: 'guide', index: guide });
+      return;
+    }
+    const misspelled = readonly() ? undefined : spell.at(at);
+    setSpellHit(misspelled);
+    // Right-clicking a misspelled word puts the caret in it, as in PowerPoint.
+    if (misspelled && !misspelled.cell && !editor.editing()) {
+      setTableRange(null);
+      void editor.startEditing(misspelled.shape, at);
+      setMenuTarget({ kind: 'text' });
       return;
     }
     const edit = editor.editing();
@@ -980,6 +1001,15 @@ export function PptxEditor() {
     }
     if (e.key === 'F10' && e.altKey) {
       toggleSelectionPane();
+      return true;
+    }
+    if (e.key === 'F7') {
+      openSpelling();
+      return true;
+    }
+    // Ctrl+Alt+M: New Comment (Alt changes the key, so match the key's code).
+    if (mod && e.altKey && e.code === 'KeyM') {
+      comments.newComment();
       return true;
     }
     if (!mod) return false;
@@ -1430,6 +1460,74 @@ export function PptxEditor() {
       presenter,
     });
   };
+
+  // ---- review: comments and spelling ------------------------------------
+
+  /** Opening the Comments or Spelling pane closes the other task panes. */
+  const makeWayForReview = () => {
+    setPane(null);
+    setAnimationPane(false);
+    setSelectionPane(false);
+  };
+  const comments = createComments({
+    session,
+    editor,
+    canEdit: context.canEdit,
+    author: () => context.currentUser?.() ?? { name: 'Author' },
+    onShowPane: () => {
+      makeWayForReview();
+      spellingPane.close();
+    },
+  });
+  const spell = createSpellCheck({
+    engine,
+    session,
+    editor,
+    canEdit: context.canEdit,
+    visible: () =>
+      context.canEdit() && !sorter() && presenting() === null && !previewing(),
+  });
+  const spellingPane = createSpellingPane({
+    session,
+    spell,
+    showWord: async (m) => {
+      if (session.slideIndex() !== m.slideIndex) editor.goToSlide(m.slideIndex);
+      const shape = editor.findShape(m.shape);
+      if (!shape) return;
+      if (m.cell) await editCell(shape, m.cell);
+      else await editor.startEditing(m.shape);
+      editor.selectText(
+        { paragraph: m.paragraph, offset: m.start },
+        { paragraph: m.paragraph, offset: m.end }
+      );
+    },
+  });
+  /** The comment being written on this slide, for its marker. */
+  const commentDraft = () => {
+    const d = comments.draft();
+    return d && d.slide === session.currentSlide()?.id ? d : undefined;
+  };
+  /** Review ▸ Spelling (F7). */
+  const openSpelling = () => {
+    if (readonly()) return;
+    makeWayForReview();
+    comments.setPaneOpen(false);
+    void spellingPane.start();
+  };
+  /** The misspelled word right-clicked, for the menu's corrections. */
+  const [spellHit, setSpellHit] = createSignal<Squiggle>();
+  const spellMenu = () => {
+    const hit = spellHit();
+    if (!hit) return undefined;
+    return {
+      word: hit.word,
+      suggestions: spell.suggest(hit.word),
+      readonly: readonly(),
+      replace: (suggestion: string) => void spell.replace([hit], suggestion),
+      ignoreAll: () => spell.ignoreAll(hit.word),
+      addToDictionary: () => spell.addToDictionary(hit.word),
+    };
+  };
   const [recentFonts, setRecentFonts] = createSignal<string[]>([]);
   const setFont = commands.setFont;
   commands.setFont = (font: string) => {
@@ -1602,6 +1700,7 @@ export function PptxEditor() {
     recentFonts,
     deckSetup,
     openSlideMaster: () => void openSlideMaster(),
+    review: { comments, spelling: openSpelling },
   };
 
   const tableTabProps = () => {
@@ -1721,6 +1820,7 @@ export function PptxEditor() {
             label: 'Slide Show',
             content: () => <SlideShowTab />,
           },
+          { id: 'review', label: 'Review', content: () => <ReviewTab /> },
           viewTab,
         ];
     return [
@@ -2269,6 +2369,12 @@ export function PptxEditor() {
                             />
                           )}
                         </Show>
+                        <SpellSquiggles
+                          squiggles={spell.squiggles()}
+                          width={slideW()}
+                          height={slideH()}
+                          unit={unit()}
+                        />
                         <SelectionOverlay
                           width={slideW()}
                           height={slideH()}
@@ -2437,6 +2543,10 @@ export function PptxEditor() {
                                   if (target)
                                     void commands.applyLink(target, '');
                                 },
+                                newComment: readonly()
+                                  ? undefined
+                                  : () => comments.newComment(),
+                                spelling: spellMenu(),
                               }}
                             />
                           </Show>
@@ -2511,10 +2621,66 @@ export function PptxEditor() {
                         scale={scale()}
                       />
                     </Show>
+                    <Show
+                      when={
+                        comments.markup() &&
+                        (comments.threads().length > 0 || commentDraft())
+                      }
+                    >
+                      <CommentMarkers
+                        threads={comments.threads()}
+                        draft={commentDraft()}
+                        scale={scale()}
+                        width={slideW() * scale()}
+                        height={slideH() * scale()}
+                        findShape={editor.findShape}
+                        selected={comments.selected()}
+                        onPick={(id) => comments.select(id)}
+                      />
+                    </Show>
                   </SlideStage>
                 </Show>
               </div>
             </div>
+            <Show
+              when={
+                spellingPane.open() &&
+                !selectionPane() &&
+                !animationPane() &&
+                !pane()
+              }
+            >
+              <SpellingPane
+                pane={spellingPane}
+                readonly={readonly()}
+                onClose={() => {
+                  spellingPane.close();
+                  refocus();
+                }}
+              />
+            </Show>
+            <Show
+              when={
+                comments.paneOpen() &&
+                !spellingPane.open() &&
+                !selectionPane() &&
+                !animationPane() &&
+                !pane() &&
+                session.currentSlide()
+              }
+            >
+              {(slide) => (
+                <CommentsPane
+                  comments={comments}
+                  slideId={slide().id}
+                  readonly={readonly()}
+                  onClose={() => {
+                    comments.setPaneOpen(false);
+                    refocus();
+                  }}
+                />
+              )}
+            </Show>
             <Show
               when={
                 selectionPane() &&

@@ -366,7 +366,7 @@ one-time ~6 MB module download.
 Layout and test hooks:
 
 - **Ribbon** (`pptx-toolbar`): tabs `pptx-tab-<id>` for Home, Insert,
-  Design, Transitions, Slide Show, and View, plus contextual Shape Format,
+  Design, Transitions, Slide Show, Review, and View, plus contextual Shape Format,
   Picture Format, Table Design, Layout (tables), and Chart Design tabs that
   appear for the selection (`pptx-tab-shape-format`,
   `pptx-tab-picture-format`, `pptx-tab-table-design`,
@@ -394,7 +394,7 @@ Layout and test hooks:
   `pptx-insert-audio`; file inputs `pptx-video-input`, `pptx-audio-input`;
   clips up to 50 MB, or 2 MB in a shared presentation because the sync
   service keeps presentations under 4 MB, are embedded with a poster frame
-  or speaker icon), Text
+  or speaker icon), Comment (`pptx-insert-comment`), Text
   box (`pptx-insert-textbox`), and Link (`pptx-insert-link`). A selected
   video or audio shape shows Play (`pptx-media-play`), which plays it over
   the shape (`pptx-media-player`, with `pptx-media-video` or
@@ -641,6 +641,54 @@ Layout and test hooks:
   object, double-click or F2 renames (`pptx-selection-rename`), and dragging a
   row or Bring Forward / Send Backward (`pptx-selection-forward`,
   `pptx-selection-backward`) reorders it among its siblings.
+- **Comments** (Review tab `pptx-tab-review`): New Comment
+  (`pptx-review-new-comment`, Insert ▸ Comment, right-click ▸ **New
+  Comment**, or Ctrl+Alt+M) opens the Comments pane (`pptx-comments-pane`)
+  with a draft attached to the selected shape, else to the slide
+  (`pptx-comment-draft`, its marker `pptx-comment-marker-draft`; Post
+  `pptx-comment-post` or Ctrl+Enter, Cancel `pptx-comment-cancel`). Each `pptx-comment-thread` (`data-comment-id`,
+  `data-resolved`, `aria-current` when picked) shows the author
+  (`pptx-comment-author`), a relative time (`pptx-comment-time`, "A few
+  seconds ago"), the text (`pptx-comment-text`), replies
+  (`pptx-comment-reply-item`), and a reply box (`pptx-comment-reply`, send
+  `pptx-comment-reply-post`). Each comment's "…" (`pptx-comment-menu`) has
+  Edit comment (`pptx-comment-edit`, then `pptx-comment-edit-input` and
+  `pptx-comment-save`), Delete thread or comment (`pptx-comment-delete`), and
+  Resolve or Reopen thread (`pptx-comment-resolve`, `pptx-comment-reopen`);
+  resolved threads collapse and grey out. Speech-bubble markers
+  (`pptx-comment-marker`, `data-comment-id`, `aria-pressed` on the picked
+  one) sit at each thread's anchor: beside its shape's top-right corner, at
+  its position, or at the slide's top-left corner; clicking one opens its
+  thread. Review ▸ Delete (`pptx-review-delete`) offers this comment, all on
+  the slide, or all in the presentation (`pptx-review-delete-comment|slide|all`);
+  Previous and Next (`pptx-review-previous|next`) walk threads across slides;
+  Show Comments (`pptx-review-show-comments`) toggles the pane, and its menu
+  (`pptx-review-show-menu`) toggles Show Markup (`pptx-review-show-markup`,
+  the markers). Thumbnails of slides with comments show
+  `pptx-thumbnail-comments`. Comments are saved as PowerPoint for Microsoft
+  365 writes them (threaded comments with `ppt/authors.xml`); comments in the
+  pre-2021 format show too and can be edited or deleted, but not replied to
+  or resolved. They are signed with the host's user name (the fixture's
+  `?author=`, default "Alex Morgan"). Engine and AI: `addComment`,
+  `replyComment`, `editComment`, `resolveComment`, `deleteComment`, and
+  `deleteAllComments`; slide outlines list `comments`.
+- **Spelling**: misspelled words on the slide being edited get red wavy
+  underlines (`pptx-spell-squiggles`, a `pptx-squiggle` per line piece with
+  `data-word`), checked against an en-US dictionary that loads a moment
+  after the editor opens. Words with digits, ALL-CAPS words, and web and
+  e-mail addresses are skipped; the word being typed waits until the caret
+  leaves it. Right-clicking an underlined word puts the caret in it, and the
+  menu starts with suggestions (`pptx-spelling-menu-suggestion`), Ignore All
+  (`pptx-spelling-menu-ignore-all`), and Add to Dictionary
+  (`pptx-spelling-menu-add`); added and ignored words are remembered in this
+  browser. Review ▸ Spelling (`pptx-review-spelling`, or F7) opens
+  `pptx-spelling-pane`, which walks the deck from the current slide, selecting
+  each word on its slide: the word (`pptx-spelling-word`), Ignore Once,
+  Ignore All, and Add (`pptx-spelling-ignore-once|ignore-all|add`),
+  suggestions (`pptx-spelling-suggestion`, `aria-selected`), and Change and
+  Change All (`pptx-spelling-change|change-all`), ending with
+  `pptx-spelling-complete` ("Spell check complete. You're good to go!", OK
+  `pptx-spelling-ok`).
 - **Links** (Insert ▸ Link, Cmd/Ctrl+K, or **Link…** in the right-click menu)
   open `pptx-link-dialog`. While editing text it links the selection, or the
   whole link around the caret; at a bare caret it inserts the "Text to
@@ -699,7 +747,8 @@ Layout and test hooks:
   duplicates, Cmd/Ctrl+G and Shift+Cmd/Ctrl+G group and ungroup, Cmd/Ctrl+] and
   [ (with Shift: to front/back) reorder, Cmd/Ctrl+M adds a slide, arrows nudge
   (Shift for 10 pt), Delete removes, Tab walks through shapes, PageUp/PageDown
-  change slides, Cmd/Ctrl+±/0 and Cmd/Ctrl+wheel zoom. The status bar shows the
+  change slides, F7 checks spelling, Ctrl+Alt+M adds a comment,
+  Cmd/Ctrl+±/0 and Cmd/Ctrl+wheel zoom. The status bar shows the
   slide number and a zoom slider (`pptx-zoom` fits the slide).
 - **Print** (`pptx-print-open` beside Download, or Cmd/Ctrl+P) opens
   `pptx-print`: layout (`pptx-print-layout-slides|notes|handouts3|handouts6`),

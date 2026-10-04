@@ -23,7 +23,7 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { useUserId } from '@core/context/user';
+import { useAuthor, useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { watchPresentationChanges } from '@core/pptx-engine/changes';
 import { blockMetadataSignal } from '@core/signal/load';
@@ -97,6 +97,7 @@ function PresentationHost(props: {
 }) {
   const [engine, setEngine] = createSignal<PresentationEngine>();
   const [failure, setFailure] = createSignal<string>();
+  const author = useAuthor();
   onMount(() => {
     let disposed = false;
     // A copy is transferred, so a remount can open the original again.
@@ -135,6 +136,7 @@ function PresentationHost(props: {
         ? LARGE_DECK_AUTOSAVE_MS
         : undefined,
     collaboration: props.collaboration,
+    currentUser: () => ({ name: author() }),
   });
 
   return (

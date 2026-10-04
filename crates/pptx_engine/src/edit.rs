@@ -28,6 +28,7 @@ mod text;
 mod xmlutil;
 
 mod clipboard;
+pub(crate) mod comments;
 mod diff;
 pub(crate) mod effects;
 mod find;
@@ -130,7 +131,12 @@ impl EditOp {
             | O::RemoveAnimations { slide, .. }
             | O::CropPicture { slide, .. }
             | O::FormatPicture { slide, .. }
-            | O::SetShapeEffects { slide, .. } => Some(*slide),
+            | O::SetShapeEffects { slide, .. }
+            | O::AddComment { slide, .. }
+            | O::ReplyComment { slide, .. }
+            | O::EditComment { slide, .. }
+            | O::ResolveComment { slide, .. }
+            | O::DeleteComment { slide, .. } => Some(*slide),
             O::RenameLayout { layout, .. }
             | O::DeleteLayout { layout }
             | O::InsertPlaceholder { layout, .. }
@@ -147,7 +153,7 @@ impl EditOp {
             | O::RemoveSection { .. }
             | O::MoveSection { .. }
             | O::SetGuides { .. } => None,
-            O::ReplaceText { slide, .. } => *slide,
+            O::ReplaceText { slide, .. } | O::DeleteAllComments { slide } => *slide,
         }
     }
 
@@ -170,6 +176,8 @@ impl EditOp {
                 | EditOp::FormatPicture { .. }
                 | EditOp::DeleteLayout { .. }
                 | EditOp::SetBackgroundStyle { .. }
+                | EditOp::DeleteComment { .. }
+                | EditOp::DeleteAllComments { .. }
         )
     }
 
@@ -187,8 +195,13 @@ impl EditOp {
             | O::SetTransition { slide, .. }
             | O::SetAnimations { slide, .. }
             | O::AddAnimation { slide, .. }
-            | O::RemoveAnimations { slide, .. } => Some(*slide),
-            O::ReplaceText { slide, .. } => *slide,
+            | O::RemoveAnimations { slide, .. }
+            | O::AddComment { slide, .. }
+            | O::ReplyComment { slide, .. }
+            | O::EditComment { slide, .. }
+            | O::ResolveComment { slide, .. }
+            | O::DeleteComment { slide, .. } => Some(*slide),
+            O::ReplaceText { slide, .. } | O::DeleteAllComments { slide } => *slide,
             _ => None,
         }
     }
@@ -977,6 +990,46 @@ impl Presentation {
             O::SetBackgroundStyle { slide, style } => {
                 masters::set_background_style(self, *slide, *style)?
             }
+            O::AddComment {
+                slide,
+                text,
+                author,
+                initials,
+                x,
+                y,
+                shape,
+            } => {
+                let comment = comments::NewComment {
+                    text,
+                    author,
+                    initials: initials.as_deref(),
+                    at: (x.is_some() || y.is_some())
+                        .then(|| (x.unwrap_or_default(), y.unwrap_or_default())),
+                    shape: *shape,
+                };
+                comments::add_comment(self, *slide, &comment)?;
+            }
+            O::ReplyComment {
+                slide,
+                comment,
+                text,
+                author,
+                initials,
+            } => {
+                comments::reply(self, *slide, comment, text, author, initials.as_deref())?;
+            }
+            O::EditComment {
+                slide,
+                comment,
+                text,
+            } => comments::edit_comment(self, *slide, comment, text)?,
+            O::ResolveComment {
+                slide,
+                comment,
+                resolved,
+            } => comments::resolve(self, *slide, comment, *resolved)?,
+            O::DeleteComment { slide, comment } => comments::delete_comment(self, *slide, comment)?,
+            O::DeleteAllComments { slide } => comments::delete_all(self, *slide)?,
         }
         out.created.extend(created);
         Ok(())

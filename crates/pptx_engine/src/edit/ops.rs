@@ -1014,6 +1014,84 @@ pub enum EditOp {
         /// Style number, 1-12.
         style: u8,
     },
+    // ---- review ----
+    /// Adds a comment thread to a slide (PowerPoint's Review ▸ New
+    /// Comment), attached to a shape or to the slide. Written as PowerPoint
+    /// for Microsoft 365 writes comments. Read threads and their ids from
+    /// the slide outline's `comments`.
+    AddComment {
+        /// Slide id.
+        slide: u32,
+        /// The comment (`\n` separates paragraphs).
+        text: String,
+        /// The author's name, as the Comments pane shows it.
+        author: String,
+        /// The author's initials (omit or null: the first letters of the
+        /// first two words of `author`).
+        #[serde(default)]
+        initials: Option<String>,
+        /// Where the comment's marker sits, in points from the slide's left
+        /// edge, for a comment on the slide (omit or null with `y` for
+        /// PowerPoint's default, the slide's top-left corner). Ignored with
+        /// `shape`.
+        #[serde(default)]
+        x: Option<f32>,
+        /// Marker position in points from the slide's top edge.
+        #[serde(default)]
+        y: Option<f32>,
+        /// Shape id to attach the comment to (its marker sits at the
+        /// shape's top-right corner); omit or null for the slide itself.
+        #[serde(default)]
+        shape: Option<u32>,
+    },
+    /// Replies to a comment thread.
+    ReplyComment {
+        /// Slide id.
+        slide: u32,
+        /// Thread id (a comment's `id` in the outline). Legacy comments
+        /// (`legacy-…` ids) cannot be replied to.
+        comment: String,
+        /// The reply (`\n` separates paragraphs).
+        text: String,
+        /// The author's name.
+        author: String,
+        /// The author's initials (omit or null: derived from `author`).
+        #[serde(default)]
+        initials: Option<String>,
+    },
+    /// Replaces the text of a comment: a thread's first comment or a reply.
+    EditComment {
+        /// Slide id.
+        slide: u32,
+        /// Thread or reply id.
+        comment: String,
+        /// The new text.
+        text: String,
+    },
+    /// Resolves a comment thread, or reopens it (PowerPoint's Resolve
+    /// thread / Reopen). Legacy comments cannot be resolved.
+    ResolveComment {
+        /// Slide id.
+        slide: u32,
+        /// Thread id.
+        comment: String,
+        /// `true` resolves; `false` reopens.
+        resolved: bool,
+    },
+    /// Deletes a comment thread with its replies, or a single reply.
+    DeleteComment {
+        /// Slide id.
+        slide: u32,
+        /// Thread or reply id.
+        comment: String,
+    },
+    /// Deletes every comment on a slide, or with `slide` omitted (or null)
+    /// every comment in the presentation.
+    DeleteAllComments {
+        /// Slide id (omit or null: all slides).
+        #[serde(default)]
+        slide: Option<u32>,
+    },
 }
 
 /// Something an edit created.

@@ -32,9 +32,11 @@ pub use animation::AnimationOutline;
 
 mod animation;
 
+pub use comments::{CommentOutline, CommentReplyOutline};
 pub use links::LinkRegion;
 pub use media::MediaOutline;
 
+mod comments;
 mod links;
 mod masters;
 mod media;
@@ -323,6 +325,9 @@ pub struct SlideOutline {
     /// slide; `setGuides` does not change them).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub layout_guides: Vec<GuideOutline>,
+    /// Comment threads (PowerPoint's Comments pane), in the order they were added.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub comments: Vec<CommentOutline>,
 }
 
 /// What a slide shows of PowerPoint's Header & Footer elements: the slide
@@ -823,6 +828,10 @@ impl Presentation {
             transition: crate::edit::transition::read(&ctx.slide.doc),
             animations: crate::edit::animation::read(&ctx.slide.doc),
             header_footer: crate::edit::header_footer::read(&ctx.slide.doc),
+            comments: match page.slide {
+                Some(_) => comments::read(self, &page.part)?,
+                None => Vec::new(),
+            },
         })
     }
 

@@ -2,6 +2,7 @@
  * The Insert tab: slides, tables, pictures, shapes, text boxes, links.
  */
 
+import ChatText from '@phosphor/chat-text.svg';
 import FilmStrip from '@phosphor/film-strip.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
@@ -230,6 +231,18 @@ export function InsertTab(props: {
             if (file) void c.insertMedia(file, 'audio');
           }}
         />
+      </RibbonGroup>
+      <RibbonGroup label="Comments">
+        <RibbonTextButton
+          label="Comment"
+          tooltip="New Comment (Ctrl+Alt+M)"
+          disabled={ro() || !env.review}
+          data-testid="pptx-insert-comment"
+          onClick={() => env.review?.comments.newComment()}
+        >
+          <ChatText />
+          Comment
+        </RibbonTextButton>
       </RibbonGroup>
       <RibbonGroup label="Text">
         <RibbonTextButton

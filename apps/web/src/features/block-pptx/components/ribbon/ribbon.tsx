@@ -23,6 +23,7 @@ import type { Swatch } from '../../core/palette';
 import type { DeckSetup } from '../../primitives/create-deck-setup';
 import type { EditorCommands } from '../../primitives/create-editor-commands';
 import type { ViewOptionsState } from '../../primitives/create-view-options';
+import type { ReviewEnv } from './review-tab';
 
 export interface RibbonEnv {
   commands: EditorCommands;
@@ -95,6 +96,8 @@ export interface RibbonEnv {
   deckSetup?: DeckSetup;
   /** View ▸ Slide Master: opens Slide Master view (absent where unsupported). */
   openSlideMaster?: () => void;
+  /** Review ▸ Comments and Spelling. */
+  review?: ReviewEnv;
 }
 
 const RibbonContext = createContext<RibbonEnv>();
