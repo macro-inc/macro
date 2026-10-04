@@ -1,20 +1,20 @@
+import ListPlusIcon from '@phosphor/list-plus.svg';
+import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
-import { Button, Dialog } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, Show, Suspense } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
 
-export function AddProjectTasks(props: {
-  project: ProjectDetail;
-  onClose(): void;
-}) {
+export function AddProjectTasks(props: { project: ProjectDetail }) {
   const commands = useProjectsContext().createCommands();
+  const [open, setOpen] = createSignal(false);
   const [selected, setSelected] = createSignal(new Set<string>());
   const [error, setError] = createSignal<string>();
   const [saving, setSaving] = createSignal(false);
   const excludedIds = createMemo(() => new Set(props.project.taskIds));
   const close = () => {
-    if (!saving()) props.onClose();
+    if (!saving()) setOpen(false);
   };
   const add = async () => {
     const taskIds = [...selected()].filter((id) => !excludedIds().has(id));
@@ -25,7 +25,7 @@ export function AddProjectTasks(props: {
       const results = await commands.assignTasks(props.project.id, taskIds);
       const failed = results.filter((result) => result.error);
       if (!failed.length) {
-        props.onClose();
+        setOpen(false);
         return;
       }
       setSelected(new Set(failed.map((result) => result.taskId)));
@@ -44,66 +44,73 @@ export function AddProjectTasks(props: {
   };
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) close();
+    <Dropdown
+      open={open()}
+      onOpenChange={(nextOpen) => {
+        if (saving()) return;
+        if (nextOpen) {
+          setSelected(new Set<string>());
+          setError(undefined);
+        }
+        setOpen(nextOpen);
       }}
-      class="max-w-lg"
+      placement="bottom-end"
     >
-      <div class="flex flex-col gap-3 p-4">
-        <Dialog.Title>Add existing tasks</Dialog.Title>
-        <Dialog.Description class="text-sm text-ink-muted">
-          Select tasks to add to {props.project.name}. Tasks already in another
-          project will move here.
-        </Dialog.Description>
-        <div inert={saving()} classList={{ 'opacity-50': saving() }}>
-          <Suspense fallback={<p role="status">Loading tasks…</p>}>
-            <PropertyEntitySelector
-              config={{
-                specificEntityType: 'TASK',
-                isMultiSelect: true,
-                placeholder: 'Search tasks…',
-                excludedIds,
-              }}
-              selectedOptions={selected}
-              setSelectedOptions={(ids) => {
-                if (!saving()) setSelected(ids);
-              }}
-              onClose={close}
-            />
-          </Suspense>
-        </div>
-        <Show when={error()}>
-          {(message) => (
-            <p role="alert" class="text-sm text-failure">
-              {message()}
-            </p>
-          )}
-        </Show>
-        <div
-          class="flex justify-end gap-2"
-          onKeyDown={(event) => {
-            // The selector owns document-level list navigation; footer buttons
-            // keep their native Enter behavior without toggling another task.
-            if (['Enter', 'ArrowUp', 'ArrowDown'].includes(event.key))
-              event.stopPropagation();
-          }}
-        >
-          <Button disabled={saving()} onClick={close}>
-            Cancel
-          </Button>
-          <Button
-            variant="cta"
-            disabled={saving() || !selected().size}
-            onClick={() => void add()}
+      <Dropdown.Trigger variant="outline" size="md">
+        <ListPlusIcon class="size-4" />
+        Add existing tasks
+      </Dropdown.Trigger>
+      <Show when={open()}>
+        <EditorPopover onClose={close}>
+          <div inert={saving()} classList={{ 'opacity-50': saving() }}>
+            <Suspense fallback={<p role="status">Loading tasks…</p>}>
+              <PropertyEntitySelector
+                config={{
+                  specificEntityType: 'TASK',
+                  isMultiSelect: true,
+                  placeholder: 'Search tasks…',
+                  excludedIds,
+                }}
+                selectedOptions={selected}
+                setSelectedOptions={(ids) => {
+                  if (!saving()) setSelected(ids);
+                }}
+                onClose={close}
+              />
+            </Suspense>
+          </div>
+          <Show when={error()}>
+            {(message) => (
+              <p role="alert" class="px-3 pb-2 text-sm text-failure">
+                {message()}
+              </p>
+            )}
+          </Show>
+          <div
+            class="flex justify-end gap-2 border-t border-edge-muted p-2"
+            onKeyDown={(event) => {
+              // The selector owns document-level list navigation; footer buttons
+              // keep their native Enter behavior without toggling another task.
+              if (['Enter', 'ArrowUp', 'ArrowDown'].includes(event.key))
+                event.stopPropagation();
+            }}
           >
-            {saving()
-              ? 'Adding tasks…'
-              : `Add ${selected().size || ''} ${selected().size === 1 ? 'task' : 'tasks'}`}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
+            <Button size="sm" disabled={saving()} onClick={close}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="cta"
+              disabled={saving() || !selected().size}
+              onClick={() => void add()}
+            >
+              {saving()
+                ? 'Adding tasks…'
+                : `Add ${selected().size || ''} ${selected().size === 1 ? 'task' : 'tasks'}`}
+            </Button>
+          </div>
+        </EditorPopover>
+      </Show>
+    </Dropdown>
   );
 }

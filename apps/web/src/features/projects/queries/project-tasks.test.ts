@@ -68,6 +68,7 @@ it('scopes tasks to the Project property and disables the shared source immediat
         entityId: 'project',
       });
       expect(mock.options?.enabled?.()).toBe(true);
+      expect(mock.options?.loadAll).toBe(true);
       setProject(undefined);
       expect(mock.options?.enabled?.()).toBe(false);
       source

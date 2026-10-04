@@ -26,6 +26,7 @@ export function PropertyTooltip(props: Props) {
   const hasActions = () => actions.toArray().length > 0;
   return (
     <HoverCard
+      triggerClass="min-w-0 max-w-full"
       content={
         <div class="min-w-0">
           <CorePropertyTooltip property={props.property} />
