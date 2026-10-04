@@ -132,6 +132,7 @@ impl EditOp {
             | O::DeleteLayout { layout }
             | O::InsertPlaceholder { layout, .. }
             | O::SetLayoutOptions { layout, .. } => Some(*layout),
+            O::SetBackgroundStyle { slide, .. } => Some(*slide),
             O::AddLayout { .. }
             | O::PasteSlides { .. }
             | O::SetThemeColors { .. }
@@ -164,6 +165,7 @@ impl EditOp {
                 | EditOp::RemoveSection { .. }
                 | EditOp::FormatPicture { .. }
                 | EditOp::DeleteLayout { .. }
+                | EditOp::SetBackgroundStyle { .. }
         )
     }
 
@@ -962,6 +964,9 @@ impl Presentation {
                 *footers,
                 *hide_background_graphics,
             )?,
+            O::SetBackgroundStyle { slide, style } => {
+                masters::set_background_style(self, *slide, *style)?
+            }
         }
         out.created.extend(created);
         Ok(())

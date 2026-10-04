@@ -19,7 +19,10 @@ import Trash from '@phosphor/trash.svg';
 import TreeStructure from '@phosphor/tree-structure.svg';
 import XCircle from '@phosphor/x-circle.svg';
 import { For, type JSX } from 'solid-js';
-import { PLACEHOLDER_CHOICES } from '../../core/master-view';
+import {
+  backgroundStylePreview,
+  PLACEHOLDER_CHOICES,
+} from '../../core/master-view';
 import { COLOR_SETS, FONT_PAIRS } from '../../core/themes';
 import type { MasterView } from '../../primitives/create-master-view';
 import {
@@ -161,6 +164,7 @@ export function SlideMasterTab(props: { master: MasterView }) {
       <RibbonGroup label="Background">
         <ThemeColorsMenu />
         <ThemeFontsMenu />
+        <BackgroundStylesMenu master={m} />
         <RibbonTextButton
           label="Format Background"
           tooltip="Format the background of this master or layout"
@@ -285,6 +289,70 @@ function ThemeFontsMenu() {
               />
             )}
           </For>
+        </div>
+      )}
+    </RibbonPopover>
+  );
+}
+
+/**
+ * Background ▸ Background Styles: the theme's twelve background styles
+ * (three fills by four colors), Format Background, and Reset.
+ */
+function BackgroundStylesMenu(props: { master: MasterView }) {
+  const env = useRibbon();
+  const colors = () => env.deck()?.themeColors ?? [];
+  return (
+    <RibbonPopover
+      label="Background Styles"
+      text="Background Styles"
+      icon={
+        <span
+          class="size-3.5 rounded-sm border border-edge-muted"
+          style={{ background: backgroundStylePreview(colors(), 9) }}
+        />
+      }
+      disabled={env.readonly() || !props.master.page()}
+      testId="pptx-master-background-styles"
+    >
+      {(close) => (
+        <div class="flex w-64 flex-col gap-2">
+          <div class="grid grid-cols-4 gap-1.5 p-1">
+            <For each={Array.from({ length: 12 }, (_, i) => i + 1)}>
+              {(style) => (
+                <button
+                  type="button"
+                  title={`Style ${style}`}
+                  aria-label={`Style ${style}`}
+                  data-testid={`pptx-master-background-style-${style}`}
+                  class="aspect-[4/3] rounded-sm border border-edge-muted hover:outline hover:outline-2 hover:outline-accent"
+                  style={{
+                    background: backgroundStylePreview(colors(), style),
+                  }}
+                  onClick={() => {
+                    close();
+                    void props.master.setBackgroundStyle(style);
+                  }}
+                />
+              )}
+            </For>
+          </div>
+          <PopoverItem
+            label="Format Background…"
+            icon={<PaintBucket class="size-3.5" />}
+            onClick={() => {
+              close();
+              env.openFormatPane('background');
+            }}
+          />
+          <PopoverItem
+            label="Reset Background"
+            testId="pptx-master-background-reset"
+            onClick={() => {
+              close();
+              env.commands.setBackground(null);
+            }}
+          />
         </div>
       )}
     </RibbonPopover>

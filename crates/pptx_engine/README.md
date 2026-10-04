@@ -114,7 +114,8 @@ layout placeholder also writes the list style (or the master's title and body
 text styles) slides inherit. `AddLayout` (PowerPoint's Insert Layout, or a
 copy), `RenameLayout`, `DeleteLayout` (refused while slides use it),
 `InsertPlaceholder`, and `SetLayoutOptions` (Title, Footers, Hide Background
-Graphics) change the layouts; the outline's `masters` lists them with the
+Graphics) change the layouts, and `SetBackgroundStyle` gives a slide, master,
+or layout one of the theme's twelve background styles; the outline's `masters` lists them with the
 slides using each, and edit results report changed masters and layouts in
 `changed_layouts`. Masters and layouts a file lists without ids (PowerPoint
 2008 for Mac) get stable ones, stored when the lists change.

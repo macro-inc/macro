@@ -160,6 +160,15 @@ export function createMasterView(options: MasterViewOptions) {
     ]);
   }
 
+  /** Background Styles: style 1-12 of the theme on the page edited. */
+  async function setBackgroundStyle(style: number) {
+    const target = page();
+    if (!target) return;
+    await session.apply([
+      { op: 'setBackgroundStyle', slide: target.id, style },
+    ]);
+  }
+
   return {
     active,
     page,
@@ -176,6 +185,7 @@ export function createMasterView(options: MasterViewOptions) {
     rename,
     insertPlaceholder,
     setOptions,
+    setBackgroundStyle,
     /** Title and Footers checkbox states of the layout edited. */
     options: () => layoutOptions(session.currentSlide()),
     /** Why the page edited cannot be deleted (`undefined`: it can). */

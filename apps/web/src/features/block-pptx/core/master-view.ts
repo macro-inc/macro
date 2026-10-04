@@ -158,3 +158,21 @@ export function placeholderBox(
     h,
   };
 }
+
+/**
+ * A CSS preview of Background Styles style `style` (1-12): the column's
+ * theme color (Light 1, Dark 1, Light 2, Dark 2) as the theme's first,
+ * second, or third background fill usually draws it (solid, tinted, and
+ * shaded to a gradient).
+ */
+export function backgroundStylePreview(
+  themeColors: [string, string][],
+  style: number
+): string {
+  const slot = ['lt1', 'dk1', 'lt2', 'dk2'][(style - 1) % 4];
+  const color = themeColors.find(([s]) => s === slot)?.[1] ?? '#FFFFFF';
+  const row = Math.floor((style - 1) / 4);
+  if (row === 0) return color;
+  if (row === 1) return `color-mix(in srgb, ${color} 85%, white)`;
+  return `linear-gradient(to bottom, color-mix(in srgb, ${color} 70%, white), color-mix(in srgb, ${color} 80%, black))`;
+}

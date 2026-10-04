@@ -5,6 +5,7 @@ import type {
 } from '@core/pptx-engine/types';
 import { describe, expect, it } from 'vitest';
 import {
+  backgroundStylePreview,
   deleteBlocker,
   findMasterPage,
   layoutOptions,
@@ -180,5 +181,20 @@ describe('layout options', () => {
     expect([second.x, second.y]).toEqual([332, 192]);
     const vertical = placeholderBox(slideSize, true);
     expect(vertical.h).toBeGreaterThan(vertical.w);
+  });
+});
+
+describe('background styles', () => {
+  it('previews each style in its theme color', () => {
+    const colors: [string, string][] = [
+      ['dk1', '#000000'],
+      ['lt1', '#FFFFFF'],
+      ['dk2', '#44546A'],
+      ['lt2', '#E7E6E6'],
+    ];
+    expect(backgroundStylePreview(colors, 1)).toBe('#FFFFFF');
+    expect(backgroundStylePreview(colors, 2)).toBe('#000000');
+    expect(backgroundStylePreview(colors, 8)).toContain('#44546A');
+    expect(backgroundStylePreview(colors, 11)).toMatch(/^linear-gradient/);
   });
 });

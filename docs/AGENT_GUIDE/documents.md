@@ -480,7 +480,10 @@ Layout and test hooks:
   `-vertical` for the vertical content and text ones; it lands in the middle
   of the layout, selected), the layout's Title and Footers checkboxes
   (`pptx-master-title`, `pptx-master-footers`), theme Colors and Fonts
-  (`pptx-master-theme-colors`, `pptx-master-theme-fonts`), Format
+  (`pptx-master-theme-colors`, `pptx-master-theme-fonts`), Background
+  Styles (`pptx-master-background-styles`: the theme's twelve styles,
+  `pptx-master-background-style-<1-12>`, and Reset Background,
+  `pptx-master-background-reset`), Format
   Background (`pptx-master-format-background`, the background pane for the
   master or layout), Hide Background Graphics
   (`pptx-master-hide-background`), Slide Size, and **Close Master View**
@@ -496,7 +499,7 @@ Layout and test hooks:
   (ids, names, layouts with `slideIds` and placeholder types), any slide-id
   operation on shapes, text, tables, pictures, and backgrounds with a
   master's or layout's id, and `addLayout`, `renameLayout`, `deleteLayout`,
-  `insertPlaceholder`, and `setLayoutOptions`.
+  `insertPlaceholder`, `setLayoutOptions`, and `setBackgroundStyle`.
 - **Stage** (`pptx-stage`, focusable): click selects a shape
   (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
   `pptx-rotate-handle`); Shift/Cmd/Ctrl-click adds to the selection, dragging

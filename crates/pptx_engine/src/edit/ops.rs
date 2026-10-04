@@ -994,6 +994,17 @@ pub enum EditOp {
         #[serde(default)]
         hide_background_graphics: Option<bool>,
     },
+    /// Gives a slide, slide master, or layout one of the theme's background
+    /// styles (PowerPoint's Background Styles gallery), which follow the
+    /// theme's colors and background fills. Styles 1-4 are the theme's
+    /// first background fill (usually solid) in Light 1, Dark 1, Light 2,
+    /// and Dark 2; 5-8 its second and 9-12 its third, in the same colors.
+    SetBackgroundStyle {
+        /// Slide, master, or layout id.
+        slide: u32,
+        /// Style number, 1-12.
+        style: u8,
+    },
 }
 
 /// Something an edit created.

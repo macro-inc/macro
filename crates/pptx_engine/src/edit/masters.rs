@@ -886,6 +886,35 @@ fn patch_level(doc: &mut XmlDoc, lvl: NodeId, patch: &ParaPatch) -> Result<()> {
     Ok(())
 }
 
+/// The scheme colors of the Background Styles gallery's columns.
+const BACKGROUND_STYLE_COLORS: [&str; 4] = ["bg1", "tx1", "bg2", "tx2"];
+
+/// Gives a slide, master, or layout background style `style` (1-12) of
+/// the theme (see `EditOp::SetBackgroundStyle`).
+pub(super) fn set_background_style(pres: &mut Presentation, id: u32, style: u8) -> Result<()> {
+    if !(1..=12).contains(&style) {
+        return Err(Error::InvalidEdit(format!(
+            "background style {style} is not 1-12"
+        )));
+    }
+    let index = usize::from(style - 1);
+    let fill = 1001 + index / 4;
+    let color = BACKGROUND_STYLE_COLORS[index % 4];
+    let part = pres.page_part(id)?;
+    let doc = pres.xml_mut(&part)?;
+    let c_sld = doc
+        .child(doc.root(), Ns::P, "cSld")
+        .ok_or_else(|| Error::InvalidEdit("the slide has no cSld".into()))?;
+    doc.remove_children_named(c_sld, Ns::P, "bg");
+    let bg = import_fragment(
+        doc,
+        &format!("<p:bg><p:bgRef idx=\"{fill}\"><a:schemeClr val=\"{color}\"/></p:bgRef></p:bg>"),
+    )?;
+    doc.insert_child(c_sld, 0, bg);
+    doc.drop_redundant_ns_decls(bg);
+    Ok(())
+}
+
 /// Problems with master and layout ids that make PowerPoint repair a file:
 /// ids below 2147483648, and ids used twice.
 pub(crate) fn id_problems(pres: &mut Presentation) -> Result<Vec<String>> {

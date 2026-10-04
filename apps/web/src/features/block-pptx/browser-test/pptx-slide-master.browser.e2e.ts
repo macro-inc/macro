@@ -38,6 +38,20 @@ function firstRun(page: Page, index: number, shape: number) {
   );
 }
 
+/** The top-left pixel of a slide (by position) or master or layout (by id). */
+function cornerPixel(page: Page, index: number) {
+  return page.evaluate(async (i) => {
+    const engine = window.pptxFixture.engine();
+    if (!engine) throw new Error('No presentation is open.');
+    const bitmap = await engine.render(i, 64);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('No canvas.');
+    context.drawImage(bitmap, 0, 0);
+    return [...context.getImageData(1, 1, 1, 1).data];
+  }, index);
+}
+
 async function layoutNames(page: Page) {
   return ((await outline(page)).masters ?? []).flatMap((m) =>
     m.layouts.map((l) => l.name)
@@ -217,6 +231,12 @@ test('Slide Master view inserts, renames, duplicates, and deletes layouts and pl
     })
     .toBe(true);
   await expect(page.getByTestId('pptx-master-hide-background')).toBeChecked();
+
+  // Background Styles ▸ Style 2: the theme's background in Dark 1.
+  expect(await cornerPixel(page, custom.id)).toEqual([255, 255, 255, 255]);
+  await page.getByTestId('pptx-master-background-styles').click();
+  await page.getByTestId('pptx-master-background-style-2').click();
+  await expect.poll(() => cornerPixel(page, custom.id)).toEqual([0, 0, 0, 255]);
 
   // Rename.
   await page.getByTestId('pptx-master-rename').click();

@@ -991,7 +991,13 @@ export type EditOp =
       title?: boolean;
       footers?: boolean;
       hideBackgroundGraphics?: boolean;
-    };
+    }
+  /**
+   * Background Styles: 1-4 the theme's first background fill in Light 1,
+   * Dark 1, Light 2, Dark 2; 5-8 its second; 9-12 its third. `slide` may be
+   * a master or layout id.
+   */
+  | { op: 'setBackgroundStyle'; slide: number; style: number };
 
 /** What a placeholder inserted on a layout holds (Insert Placeholder). */
 export type PlaceholderKind =

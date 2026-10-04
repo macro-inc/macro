@@ -279,6 +279,40 @@ fn backgrounds_set_on_a_layout_show_on_its_slides() {
 }
 
 #[test]
+fn background_styles_follow_the_theme() {
+    let mut pres = kitchen_sink();
+    let title_only = layout(&mut pres, "Title Only");
+    let corner = |pres: &mut Presentation| render(pres, title_only.id as usize)[..4].to_vec();
+    assert_eq!(corner(&mut pres), [255, 255, 255, 255]);
+    // Style 2: the first background fill in Dark 1 (black in this theme).
+    apply(
+        &mut pres,
+        json!([{"op": "setBackgroundStyle", "slide": title_only.id, "style": 2}]),
+    );
+    assert_eq!(corner(&mut pres), [0, 0, 0, 255]);
+    let mut reopened = reopen(&mut pres);
+    let part = reopened.page_part(title_only.id).unwrap();
+    let xml = String::from_utf8(reopened.read_bytes(&part).unwrap()).unwrap();
+    assert!(
+        xml.contains(r#"<p:bg><p:bgRef idx="1001"><a:schemeClr val="tx1"/></p:bgRef></p:bg>"#),
+        "{xml}"
+    );
+    // Theme colors restyle it.
+    apply(
+        &mut pres,
+        json!([{"op": "setThemeColors", "colors": [{"slot": "dk1", "color": "203040"}]}]),
+    );
+    assert_eq!(corner(&mut pres), [0x20, 0x30, 0x40, 255]);
+    assert!(
+        refused(
+            &mut pres,
+            json!([{"op": "setBackgroundStyle", "slide": title_only.id, "style": 13}])
+        )
+        .contains("1-12")
+    );
+}
+
+#[test]
 fn insert_layout_adds_a_titled_layout_with_footers() {
     let mut pres = kitchen_sink();
     let blank = layout(&mut pres, "Blank");
