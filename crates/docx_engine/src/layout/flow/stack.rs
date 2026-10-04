@@ -596,11 +596,16 @@ pub(in crate::layout) fn table_box(
         let mut cells = Vec::with_capacity(row.cells.len());
         let mut content_h: f32 = 0.0;
         for cell in &row.cells {
-            let x = geom.col_x(cell.col);
             let width: f32 = geom.cols
                 [cell.col.min(geom.cols.len())..(cell.col + cell.span).min(geom.cols.len())]
                 .iter()
                 .sum();
+            // Right-to-left tables put the first column at the right.
+            let x = if geom.tbl.bidi == Some(true) {
+                geom.width() - geom.col_x(cell.col) - width
+            } else {
+                geom.col_x(cell.col)
+            };
             let inner = (width - cell.margins[1] - cell.margins[3]).max(4.0);
             let continuation = cell.v_merge == Some(VMerge::Continue);
             let content = if continuation {

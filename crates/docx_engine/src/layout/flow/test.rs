@@ -335,3 +335,85 @@ fn right_to_left_runs_size_lines_by_their_complex_script_size() {
     let (rtl, ltr) = (ls[0].line().height, ls[1].line().height);
     assert!((ltr / rtl - 2.0).abs() < 0.01, "{rtl} {ltr}");
 }
+
+/// A two-column table 500pt wide placed by `tblpPr` attributes `pos`, of
+/// `rows` rows of `lines` paragraphs.
+fn floating_table(pos: &str, rows: usize, lines: usize) -> String {
+    let cell = |c: &str, r: usize| -> String {
+        (0..lines)
+            .map(|i| format!("<w:p><w:r><w:t>{c}{r}.{i}</w:t></w:r></w:p>"))
+            .collect()
+    };
+    let rows: String = (0..rows)
+        .map(|r| {
+            format!(
+                r#"<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc>{}</w:tc><w:tc>{}</w:tc></w:tr>"#,
+                cell("A", r),
+                cell("B", r)
+            )
+        })
+        .collect();
+    format!(
+        r#"<w:tbl><w:tblPr><w:tblpPr {pos}/><w:tblW w:w="10000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/><w:gridCol w:w="5000"/></w:tblGrid>{rows}</w:tbl>"#
+    )
+}
+
+fn find<'a>(l: &'a Layout, page: usize, t: &str) -> &'a PlacedLine {
+    l.pages[page]
+        .lines_of(&StoryRef::Body)
+        .find(|p| text(p) == t)
+        .unwrap_or_else(|| panic!("no line {t:?} on page {page}"))
+}
+
+#[test]
+fn floating_tables_sit_at_their_position() {
+    let pos = r#"w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="400" w:bottomFromText="200""#;
+    let body = format!(
+        "<w:p><w:r><w:t>Before</w:t></w:r></w:p>{}<w:p><w:r><w:t>After</w:t></w:r></w:p>{LETTER}",
+        floating_table(pos, 1, 1)
+    );
+    let l = layout(&body, &arial_10());
+    let before = find(&l, 0, "Before");
+    let cell = find(&l, 0, "A0.0");
+    let after = find(&l, 0, "After");
+    // Centered on the 468pt text area, 20pt below the text it follows.
+    assert!((cell.x - (72.0 - 16.0 + 5.4)).abs() < 0.1, "{}", cell.x);
+    let top = before.y + before.line().height + 20.0;
+    assert!((cell.y - top).abs() < 0.1, "{} {top}", cell.y);
+    // Text goes on below it, at its distance from text.
+    let bottom = cell.y + cell.line().height + 10.0;
+    assert!((after.y - bottom).abs() < 0.1, "{} {bottom}", after.y);
+}
+
+#[test]
+fn page_positioned_floating_tables_go_on_at_the_same_place() {
+    let pos = r#"w:vertAnchor="page" w:horzAnchor="page" w:tblpX="1000" w:tblpY="3000""#;
+    let body = format!("{}<w:p/>{LETTER}", floating_table(pos, 12, 6));
+    let l = layout(&body, &arial_10());
+    assert!(l.pages.len() >= 2);
+    let first = find(&l, 0, "A0.0");
+    assert!((first.y - 150.0).abs() < 0.1, "{}", first.y);
+    assert!((first.x - 55.4).abs() < 0.1, "{}", first.x);
+    let next = l.pages[1]
+        .lines_of(&StoryRef::Body)
+        .next()
+        .expect("the table goes on");
+    assert!((next.y - 150.0).abs() < 0.1, "{}", next.y);
+}
+
+#[test]
+fn right_to_left_tables_start_at_the_right() {
+    let table = r#"<w:tbl><w:tblPr><w:bidiVisual/><w:tblW w:w="4000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>First</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#;
+    let body = format!("{table}<w:p/>{LETTER}");
+    let l = layout(&body, &arial_10());
+    let first = find(&l, 0, "First");
+    let second = find(&l, 0, "Second");
+    // The first column is rightmost, the text of its cell ending at the
+    // right margin (cell margins of 5.4pt, columns 100pt wide).
+    assert!(
+        (first.x - 5.4 + 100.0 - 5.4 - 540.0).abs() < 0.1,
+        "{}",
+        first.x
+    );
+    assert!((first.x - second.x - 100.0).abs() < 0.1, "{}", second.x);
+}

@@ -1,5 +1,7 @@
 //! The body paginator: sections, columns, pages, keep rules, notes.
 
+mod tables;
+
 use super::super::drawing::Wrap;
 use super::super::format::TableCtx;
 use super::super::inline::{FieldValues, Kind};
@@ -7,10 +9,9 @@ use super::super::lines::LineEnd;
 use super::super::{Item, Page, ParaBox, StoryRef};
 use super::anchors::{PageGeom, resolve};
 use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, resolve_frame};
-use super::split::split_row;
 use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
-    emit_row, para_box, placed, prev_record, space_before, stack_story, table_box,
+    para_box, placed, prev_record, space_before, stack_story, table_box,
 };
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
@@ -1057,90 +1058,6 @@ impl<'e, 'a> Flow<'e, 'a> {
                     font: mark.ascii.clone(),
                 });
             }
-        }
-    }
-
-    fn place_table(&mut self, b: &Block) {
-        let (col_left, width) = self.col_geom();
-        if let (Some(prev), Some(c)) = (self.prev.take(), &mut self.cur)
-            && c.placed_any
-        {
-            c.y += prev.after;
-        }
-        let mut tb = table_box(
-            self.env,
-            &self.env.doc.body,
-            b,
-            width,
-            &StoryRef::Body,
-            &self.fields(),
-        );
-        let headers: Vec<usize> = (0..tb.rows.len())
-            .take_while(|&r| tb.rows[r].header)
-            .collect();
-        let mut r = 0;
-        // The row was moved to a fresh column already: place it even if it
-        // does not fit, or a row taller than the page would never land.
-        let mut moved = false;
-        while r < tb.rows.len() {
-            self.skip_bands();
-            let h = tb.rows[r].height;
-            let (y, placed_any) = self
-                .cur
-                .as_ref()
-                .map_or((0.0, false), |c| (c.y, c.placed_any));
-            let avail = self.avail_bottom();
-            if y + h > avail + EPS {
-                if self.jump_band(h) {
-                    continue;
-                }
-                // A row that may break keeps the lines that fit here and
-                // goes on in the next column.
-                let split = split_row(&tb, r, avail - y);
-                let next = split.is_some() || (placed_any && !moved);
-                if let Some((first, rest)) = split {
-                    tb.rows[r] = first;
-                    self.emit_table_row(&tb, r, col_left);
-                    tb.rows[r] = rest;
-                }
-                if next {
-                    self.next_column(false);
-                    moved = true;
-                    // Repeat header rows at the top of the new page.
-                    if r >= headers.len() && !headers.is_empty() {
-                        for &hr in &headers {
-                            self.emit_table_row(&tb, hr, col_left);
-                        }
-                    }
-                    continue;
-                }
-            }
-            self.emit_table_row(&tb, r, col_left);
-            moved = false;
-            r += 1;
-        }
-        self.prev = None;
-    }
-
-    fn emit_table_row(&mut self, tb: &super::stack::TableBox, r: usize, col_left: f32) {
-        let y = self.cur.as_ref().map_or(0.0, |c| c.y);
-        let mut items = Vec::new();
-        let mut anchors = Vec::new();
-        let mut notes: Vec<(bool, i64)> = Vec::new();
-        emit_row(tb, r, col_left, y, &mut items, &mut anchors, &mut notes);
-        let ids: Vec<i64> = notes
-            .iter()
-            .filter(|(e, _)| !e)
-            .map(|(_, id)| *id)
-            .collect();
-        self.add_notes(&ids);
-        let geom = self.page_geom();
-        if let Some(c) = &mut self.cur {
-            c.body.extend(items);
-            place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
-            c.y += tb.rows[r].height;
-            c.placed_any = true;
-            c.hard = false;
         }
     }
 
