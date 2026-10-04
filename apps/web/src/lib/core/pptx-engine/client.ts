@@ -18,6 +18,7 @@ import type {
   FindOptions,
   LinkRegion,
   PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
   TextLayoutInfo,
   TextMatch,
@@ -256,6 +257,20 @@ export async function getMediaBytes(
 ): Promise<Uint8Array> {
   return (await request({ kind: 'mediaBytes', docKey, part }, 'mediaBytes'))
     .bytes;
+}
+
+/** A shape's outline as editable paths with its local → slide transform. */
+export async function getGeometryPaths(
+  docKey: string,
+  index: number,
+  shape: number
+): Promise<ShapeGeometryInfo | null> {
+  return (
+    await request(
+      { kind: 'geometryPaths', docKey, index, shape },
+      'geometryPaths'
+    )
+  ).geometry;
 }
 
 /** The clickable areas of a slide: linked text first, then linked shapes. */

@@ -18,6 +18,7 @@ import type {
   EditOp,
   FillSpec,
   LinePatch,
+  MergeMode,
   NewShape,
   ParaPatch,
   RunPatch,
@@ -1114,6 +1115,22 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     const id = result?.created[0]?.shape;
     if (id !== undefined && id !== null) editor.select(id);
   };
+  /**
+   * Merges the selected shapes (Shape Format ▸ Merge Shapes): the result
+   * takes the first selected shape's look, and is selected.
+   */
+  const mergeShapes = async (mode: MergeMode) => {
+    const s = slide();
+    const list = editor.selection();
+    if (!s || list.length < 2) return;
+    const result = await apply([
+      { op: 'mergeShapes', slide: s.id, shapes: list.map((x) => x.id), mode },
+    ]);
+    const ids = (result?.created ?? [])
+      .map((c) => c.shape)
+      .filter((id): id is number => id !== undefined && id !== null);
+    if (ids.length > 0) editor.setSelection(ids);
+  };
   /** Ungroups every selected group, selecting their members. */
   const ungroup = async () => {
     const s = slide();
@@ -1498,6 +1515,7 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     selectAll,
     group,
     ungroup,
+    mergeShapes,
     setLayout,
     setTransition,
     setAltText,

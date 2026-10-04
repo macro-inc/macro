@@ -45,6 +45,7 @@ import { ShapeEffectsMenu, TextEffectsMenu } from './effects-menu';
 import { ArrangeMenu, FillMenu, OutlineMenu } from './home-tab';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
+import { EditShapeMenu, MergeShapesMenu } from './shape-geometry-menus';
 
 export function DesignTab() {
   const env = useRibbon();
@@ -508,30 +509,8 @@ export function ShapeFormatTab() {
             />
           )}
         </RibbonPopover>
-        <RibbonPopover
-          label="Change shape"
-          text="Change shape"
-          icon={<span class="sr-only">Change shape</span>}
-          disabled={ro() || !env.selection().some((s) => s.geometry)}
-        >
-          {(close) => (
-            <ShapeGallery
-              load={env.presetPaths}
-              categories={[
-                'Rectangles',
-                'Basic shapes',
-                'Block arrows',
-                'Flowchart',
-                'Stars and banners',
-                'Callouts',
-              ]}
-              onPick={(preset) => {
-                close();
-                void c.setGeometry(preset);
-              }}
-            />
-          )}
-        </RibbonPopover>
+        <EditShapeMenu />
+        <MergeShapesMenu />
       </RibbonGroup>
       <RibbonGroup label="Shape styles">
         <ShapeStyles />

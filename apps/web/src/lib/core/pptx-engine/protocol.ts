@@ -15,6 +15,7 @@ import type {
   FindOptions,
   LinkRegion,
   PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
   TextLayoutInfo,
   TextMatch,
@@ -64,6 +65,8 @@ export type PptxRequest =
   | (Base & { kind: 'mediaBytes'; part: string })
   /** The clickable areas of a slide. */
   | (Base & { kind: 'linkRegions'; index: number })
+  /** A shape's outline as editable paths (Edit Points). */
+  | (Base & { kind: 'geometryPaths'; index: number; shape: number })
   | (Base & { kind: 'apply'; ops: string; group?: string })
   | (Base & { kind: 'breakGroup' })
   | (Base & { kind: 'undo' })
@@ -109,6 +112,12 @@ export type PptxResponse =
     }
   | { id: number; ok: true; kind: 'textLayout'; layout: TextLayoutInfo | null }
   | { id: number; ok: true; kind: 'linkRegions'; regions: LinkRegion[] }
+  | {
+      id: number;
+      ok: true;
+      kind: 'geometryPaths';
+      geometry: ShapeGeometryInfo | null;
+    }
   | { id: number; ok: true; kind: 'mediaBytes'; bytes: Uint8Array }
   | {
       id: number;

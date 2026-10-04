@@ -33,6 +33,7 @@ mod diff;
 pub(crate) mod effects;
 mod find;
 mod format_painter;
+mod freeform;
 pub(crate) mod group;
 pub(crate) mod guides;
 pub(crate) mod header_footer;
@@ -57,6 +58,7 @@ pub use ops::{BorderEdges, BorderLine, CellBorders, PlaceholderKind, SlideScale,
 pub use ops::{
     CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
 };
+pub use ops::{GeometryPath, MergeMode, PathCommand, PathFillMode};
 pub use ops::{GuideOrient, GuideSpec, TextDirection};
 pub use slides::{LayoutInfo, layouts};
 
@@ -136,7 +138,9 @@ impl EditOp {
             | O::ReplyComment { slide, .. }
             | O::EditComment { slide, .. }
             | O::ResolveComment { slide, .. }
-            | O::DeleteComment { slide, .. } => Some(*slide),
+            | O::DeleteComment { slide, .. }
+            | O::SetCustomGeometry { slide, .. }
+            | O::MergeShapes { slide, .. } => Some(*slide),
             O::RenameLayout { layout, .. }
             | O::DeleteLayout { layout }
             | O::InsertPlaceholder { layout, .. }
@@ -178,6 +182,7 @@ impl EditOp {
                 | EditOp::SetBackgroundStyle { .. }
                 | EditOp::DeleteComment { .. }
                 | EditOp::DeleteAllComments { .. }
+                | EditOp::MergeShapes { .. }
         )
     }
 
@@ -1030,6 +1035,25 @@ impl Presentation {
             } => comments::resolve(self, *slide, comment, *resolved)?,
             O::DeleteComment { slide, comment } => comments::delete_comment(self, *slide, comment)?,
             O::DeleteAllComments { slide } => comments::delete_all(self, *slide)?,
+            O::SetCustomGeometry {
+                slide,
+                shape,
+                paths,
+                fit,
+            } => freeform::set_custom_geometry(self, *slide, *shape, paths, fit.unwrap_or(true))?,
+            O::MergeShapes {
+                slide,
+                shapes,
+                mode,
+            } => {
+                for id in freeform::merge_shapes(self, *slide, shapes, *mode)? {
+                    out.created.push(Created {
+                        slide: *slide,
+                        shape: Some(id),
+                        section: None,
+                    });
+                }
+            }
         }
         out.created.extend(created);
         Ok(())

@@ -14,6 +14,7 @@ import type {
   FindOptions,
   LinkRegion,
   PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
   TextLayoutInfo,
   TextMatch,
@@ -60,6 +61,14 @@ export interface PresentationEngine {
   mediaBytes?: (part: string) => Promise<Uint8Array>;
   /** A slide's clickable link areas (slide shows follow them). */
   linkRegions?: (index: number) => Promise<LinkRegion[]>;
+  /**
+   * A shape's outline as editable paths in shape-local points, with its
+   * local → slide transform (Edit Points); `null` for groups and frames.
+   */
+  geometryPaths?: (
+    index: number,
+    shape: number
+  ) => Promise<ShapeGeometryInfo | null>;
   /**
    * A shape's text laid out for carets, or with `cell` a table cell's (a
    * merged cell's, for a cell it covers); `null` when it holds no text.
