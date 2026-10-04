@@ -58,6 +58,12 @@
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
+      # pptx_engine compiles in its bundled fonts and the DrawingML preset
+      # shape definitions (`include_bytes!` / `include_str!`).
+      pptxEngineAssetFilter =
+        path: _type:
+        builtins.match ".*/crates/pptx_engine/(fonts/[^/]+\\.ttf|assets/[^/]+\\.xml)$" (toString path)
+        != null;
       srcFilter =
         path: type:
         (sqlxFilter path type)
@@ -65,6 +71,7 @@
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
+        || (pptxEngineAssetFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
         src = ../.;
