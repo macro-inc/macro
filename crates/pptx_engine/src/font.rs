@@ -407,6 +407,14 @@ impl FontDb {
         self.faces[id.0 as usize].metrics
     }
 
+    /// The font file a face comes from and the face's index in it (for
+    /// tables the database does not read itself, such as `MATH`).
+    pub fn face_data(&self, id: FaceId) -> Option<(&[u8], u32)> {
+        self.faces
+            .get(id.0 as usize)
+            .map(|f| (f.data.as_slice(), f.index))
+    }
+
     /// Whether a family is registered (case-insensitive).
     pub fn has_family(&self, family: &str) -> bool {
         let f = family.to_lowercase();
@@ -762,6 +770,7 @@ pub mod embedded {
         include_bytes!("../fonts/LiberationMono-BoldItalic.ttf"),
         include_bytes!("../fonts/DejaVuSans.ttf"),
         include_bytes!("../fonts/DejaVuSans-Bold.ttf"),
+        include_bytes!("../fonts/STIXTwoMath-Regular.ttf"),
     ];
 }
 
@@ -789,6 +798,7 @@ pub const BUNDLED_FONT_FILES: &[(&str, &str)] = &[
     ("Liberation Mono", "LiberationMono-BoldItalic.ttf"),
     ("DejaVu Sans", "DejaVuSans.ttf"),
     ("DejaVu Sans", "DejaVuSans-Bold.ttf"),
+    ("STIX Two Math", "STIXTwoMath-Regular.ttf"),
 ];
 
 /// The bundled family that will serve a requested family (for lazy loading hosts).

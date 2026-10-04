@@ -18,9 +18,34 @@ export type ShapeKind =
   | 'other';
 
 export interface ParagraphOutline {
-  /** Paragraph text; `\u000b` marks a line break. */
+  /** Paragraph text; `\u000b` marks a line break, U+FFFC an equation. */
   text: string;
   level: number;
+  /** The paragraph's equations, in order (absent when none). */
+  equations?: EquationOutline[];
+}
+
+/** An equation in a paragraph; it counts as one character of its text. */
+export interface EquationOutline {
+  /** Character index in the paragraph (what `setEquation` takes). */
+  index: number;
+  /** The equation in the LaTeX-style linear format. */
+  latex: string;
+  /** A display equation (own line, centered) rather than inline. */
+  display: boolean;
+}
+
+/** Where an equation was laid out (`TextLayoutInfo` layout space, points). */
+export interface EquationLayout {
+  paragraph: number;
+  /** Character index in the paragraph. */
+  index: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  latex: string;
+  display: boolean;
 }
 
 export interface TableOutline {
@@ -570,6 +595,8 @@ export interface TextLayoutInfo {
   lines: LineBox[];
   /** Resolved paragraph and run formatting, indexed like `paragraphs`. */
   styles: ParagraphStyle[];
+  /** Laid-out equations (absent when there are none). */
+  equations?: EquationLayout[];
 }
 
 export interface TextPos {
@@ -1090,6 +1117,32 @@ export type EditOp =
    * `created` lists the resulting shapes (Fragment adds pieces).
    */
   | { op: 'mergeShapes'; slide: number; shapes: number[]; mode: MergeMode }
+  /**
+   * Inserts an equation (LaTeX-style linear text) into a shape's text at
+   * `at`, or, without `shape`, in a new text box centered on the slide.
+   * `display` (default: display in an empty paragraph or a new box, inline
+   * otherwise) puts it on a line of its own.
+   */
+  | {
+      op: 'insertEquation';
+      slide: number;
+      shape?: number;
+      cell?: CellRef;
+      at?: TextPos;
+      latex: string;
+      display?: boolean;
+    }
+  /** Replaces the equation at character `index` of `paragraph`. */
+  | {
+      op: 'setEquation';
+      slide: number;
+      shape: number;
+      cell?: CellRef;
+      paragraph: number;
+      index: number;
+      latex: string;
+      display?: boolean;
+    }
   | CommentOp;
 
 /** What a placeholder inserted on a layout holds (Insert Placeholder). */

@@ -31,6 +31,7 @@ mod clipboard;
 pub(crate) mod comments;
 mod diff;
 pub(crate) mod effects;
+mod equation;
 mod find;
 mod format_painter;
 mod freeform;
@@ -140,7 +141,9 @@ impl EditOp {
             | O::ResolveComment { slide, .. }
             | O::DeleteComment { slide, .. }
             | O::SetCustomGeometry { slide, .. }
-            | O::MergeShapes { slide, .. } => Some(*slide),
+            | O::MergeShapes { slide, .. }
+            | O::InsertEquation { slide, .. }
+            | O::SetEquation { slide, .. } => Some(*slide),
             O::RenameLayout { layout, .. }
             | O::DeleteLayout { layout }
             | O::InsertPlaceholder { layout, .. }
@@ -266,6 +269,8 @@ impl Presentation {
             animation::scrub(self, &part)?;
         }
         autofit::refit(self, &refit, fonts)?;
+        equation::recenter(self, &out.center)?;
+        equation::sync_wrapped_shapes(self)?;
         parts::prune_rels(self)?;
         if let Some(gc) = gc {
             parts::collect_garbage(self, &gc)?;
@@ -1054,6 +1059,51 @@ impl Presentation {
                     });
                 }
             }
+            O::InsertEquation {
+                slide,
+                shape,
+                cell,
+                at,
+                latex,
+                display,
+            } => {
+                let part = self.slide_part(*slide)?;
+                let id = match shape {
+                    Some(id) => {
+                        self.edit_text(&part, *id, *cell, |doc, body| {
+                            equation::insert_into_body(doc, body, *at, latex, *display)
+                        })?;
+                        *id
+                    }
+                    None => {
+                        let (id, cx, cy) =
+                            equation::new_equation_box(self, &part, latex, *display)?;
+                        created = Some(Created {
+                            slide: *slide,
+                            shape: Some(id),
+                            section: None,
+                        });
+                        out.center.push((part.clone(), id, cx, cy));
+                        id
+                    }
+                };
+                refit.push((part, id));
+            }
+            O::SetEquation {
+                slide,
+                shape,
+                cell,
+                paragraph,
+                index,
+                latex,
+                display,
+            } => {
+                let part = self.slide_part(*slide)?;
+                self.edit_text(&part, *shape, *cell, |doc, body| {
+                    equation::set_in_body(doc, body, *paragraph, *index, latex, *display)
+                })?;
+                refit.push((part, *shape));
+            }
         }
         out.created.extend(created);
         Ok(())
@@ -1067,6 +1117,9 @@ struct BatchOutput {
     created: Vec<Created>,
     /// Text replacements made.
     replaced: usize,
+    /// Shapes to center on a point once their text has sized them:
+    /// (slide part, shape id, center x, center y).
+    center: Vec<(String, u32, f32, f32)>,
 }
 
 /// A presentation with an undo history, for interactive editing.

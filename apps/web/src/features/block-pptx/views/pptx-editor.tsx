@@ -65,6 +65,7 @@ import { CommentsPane } from '../components/comments-pane';
 import { CropOverlay } from '../components/crop-overlay';
 import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { EditPointsOverlay } from '../components/edit-points-overlay';
+import { EquationEditorPanel } from '../components/equation-editor';
 import { ExportDialog } from '../components/export-dialog';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
@@ -80,6 +81,7 @@ import { PrintDialog } from '../components/print-dialog';
 import { RenameLayoutDialog } from '../components/rename-layout-dialog';
 import { AnimationsTab } from '../components/ribbon/animations-tab';
 import { RibbonButton } from '../components/ribbon/controls';
+import { EquationTab } from '../components/ribbon/equation-tab';
 import { HomeTab } from '../components/ribbon/home-tab';
 import { InsertTab } from '../components/ribbon/insert-tab';
 import {
@@ -116,6 +118,14 @@ import {
 } from '../components/stage-context-menu';
 import { usePptxEditorContext } from '../context/pptx-editor-context';
 import { caretSegment, positionAt, selectionQuads } from '../core/caret';
+import {
+  equationAt,
+  equationOfSelection,
+  equationSelection,
+  insertedEquation,
+  newEquation,
+  sameEquation,
+} from '../core/equations';
 import { baseName } from '../core/export-images';
 import {
   type Box,
@@ -151,6 +161,7 @@ import {
   createEditorCommands,
   type LinkTarget,
 } from '../primitives/create-editor-commands';
+import { createEquationEditor } from '../primitives/create-equation-editor';
 import { createFormatPainter } from '../primitives/create-format-painter';
 import { createGuides } from '../primitives/create-guides';
 import {
@@ -441,6 +452,83 @@ export function PptxEditor() {
     const rect = stage.getBoundingClientRect();
     const s = scale() || 1;
     return { x: (e.clientX - rect.left) / s, y: (e.clientY - rect.top) / s };
+  };
+
+  // ---- equations -------------------------------------------------------------
+
+  /** Switches the ribbon to a tab (set once the ribbon is built). */
+  let showRibbonTab: (id: string) => void = () => {};
+  /** The equation the text selection covers, as laid out. */
+  const selectedEq = createMemo(
+    () => {
+      const slide = session.currentSlide();
+      return slide
+        ? equationOfSelection(slide.id, editor.editing())
+        : undefined;
+    },
+    undefined,
+    { equals: sameEquation }
+  );
+  const selectEquation = (e: { paragraph: number; index: number }) => {
+    const range = equationSelection(e);
+    editor.selectText(range.anchor, range.focus);
+  };
+  const equations = createEquationEditor({
+    engine,
+    selected: selectedEq,
+    apply: async (ops, group) => {
+      const result = await session.apply(ops, group);
+      if (editor.editing()) await editor.refreshEditing();
+      return result;
+    },
+    onInserted: async (where, result) => {
+      if (where.kind === 'box') {
+        const shape = result?.created.find((c) => c.shape !== undefined)?.shape;
+        if (shape === undefined) return;
+        await startEditing(shape);
+        selectEquation({ paragraph: 0, index: 0 });
+      } else {
+        const found = insertedEquation(editor.editing()?.layout, where.at);
+        if (found) selectEquation(found);
+      }
+      showRibbonTab('equation');
+    },
+    onClose: () => refocus(),
+  });
+  /** Where a new equation goes: the caret (taking selected text), or a new box. */
+  const equationPoint = () => {
+    const slide = session.currentSlide();
+    return slide && !readonly()
+      ? newEquation(slide.id, editor.editing(), editor.selectedText())
+      : undefined;
+  };
+  /** Insert ▸ Equation (Alt+=): a new equation, or the selected one's text. */
+  const startEquation = () => {
+    if (selectedEq()) {
+      equations.reveal(true);
+      showRibbonTab('equation');
+      return;
+    }
+    const point = equationPoint();
+    if (!point) return;
+    equations.openNew(point.where, point.text, point.display);
+    showRibbonTab('equation');
+  };
+  /** Inserts a built-in equation where a new one would go. */
+  const insertBuiltInEquation = (latex: string) => {
+    const point = equationPoint();
+    if (!point) return;
+    equations.openNew(point.where, latex, point.display);
+    void equations.commit();
+  };
+  /** Selects the equation under a point of the text being edited. */
+  const pickEquationAt = (at: Point, focusText = false): boolean => {
+    const layout = editor.editing()?.layout;
+    const found = layout && equationAt(layout, at);
+    if (!found) return false;
+    selectEquation(found);
+    equations.reveal(focusText);
+    return true;
   };
 
   // ---- slide selection (rail and sorter) -------------------------------------
@@ -807,6 +895,8 @@ export function PptxEditor() {
     if (editor.editing()) {
       e.preventDefault();
       focusInput();
+      // A click on an equation selects it whole (double-click edits its text).
+      if (!e.shiftKey) pickEquationAt(at, e.detail >= 2);
     } else {
       focusStage();
     }
@@ -911,7 +1001,8 @@ export function PptxEditor() {
       chartEditor(hit);
       return;
     }
-    if (hit.textEditable) void startEditing(hit.id, at);
+    if (hit.textEditable)
+      void startEditing(hit.id, at).then(() => pickEquationAt(at));
   };
 
   // ---- right-click -------------------------------------------------------
@@ -1023,6 +1114,10 @@ export function PptxEditor() {
     // Ctrl+Alt+M: New Comment (Alt changes the key, so match the key's code).
     if (mod && e.altKey && e.code === 'KeyM') {
       comments.newComment();
+      return true;
+    }
+    if (e.altKey && !mod && e.code === 'Equal' && !readonly()) {
+      startEquation();
       return true;
     }
     if (!mod) return false;
@@ -1719,6 +1814,15 @@ export function PptxEditor() {
       editingPoints: editPoints.active,
       merge: (mode) => void commands.mergeShapes(mode),
     },
+    ...(engine.renderEquation
+      ? {
+          equation: {
+            editor: equations,
+            start: startEquation,
+            insertBuiltIn: insertBuiltInEquation,
+          },
+        }
+      : {}),
   };
 
   const tableTabProps = () => {
@@ -1769,6 +1873,12 @@ export function PptxEditor() {
         )}
       </Show>
     ),
+  };
+  const equationTab: RibbonTab = {
+    id: 'equation',
+    label: 'Equation',
+    contextual: true,
+    content: () => <EquationTab editor={equations} readonly={readonly()} />,
   };
   const transitionsTab: RibbonTab = {
     id: 'transitions',
@@ -1895,6 +2005,9 @@ export function PptxEditor() {
         : []),
       ...(list.length === 1 && list[0].kind === 'chart' && !readonly()
         ? [chartTab]
+        : []),
+      ...((selectedEq() || equations.target()) && !readonly()
+        ? [equationTab]
         : []),
     ];
   });
@@ -2130,6 +2243,9 @@ export function PptxEditor() {
         active={ribbonTab()}
         keepFocus={!!editor.editing()}
         onTabChange={setRibbonTab}
+        controller={(set) => {
+          showRibbonTab = set;
+        }}
         start={
           <Show when={!readonly()}>
             <RibbonButton
@@ -2265,6 +2381,9 @@ export function PptxEditor() {
                 {(c) => (
                   <Collaborators peers={c().peers()} status={c().status()} />
                 )}
+              </Show>
+              <Show when={equations.target()}>
+                <EquationEditorPanel editor={equations} readonly={readonly()} />
               </Show>
               <Show when={find()}>
                 {(f) => (

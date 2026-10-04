@@ -6,12 +6,13 @@ import ChatText from '@phosphor/chat-text.svg';
 import FilmStrip from '@phosphor/film-strip.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
+import Pi from '@phosphor/pi.svg';
 import Plus from '@phosphor/plus.svg';
 import ShapesIcon from '@phosphor/shapes.svg';
 import SpeakerHigh from '@phosphor/speaker-high.svg';
 import TableIcon from '@phosphor/table.svg';
 import TextT from '@phosphor/text-t.svg';
-import { createSignal, For, Index, type JSX } from 'solid-js';
+import { createSignal, For, Index, type JSX, Show } from 'solid-js';
 import { ACCEPT } from '../../core/media';
 import {
   PopoverItem,
@@ -20,6 +21,7 @@ import {
   RibbonTextButton,
 } from './controls';
 import { HeaderFooterButtons } from './deck-setup-controls';
+import { BuiltInEquations } from './equation-tab';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
 
@@ -266,6 +268,38 @@ export function InsertTab(props: {
           Link
         </RibbonTextButton>
       </RibbonGroup>
+      <Show when={env.equation}>
+        {(equation) => (
+          <RibbonGroup label="Symbols">
+            <RibbonTextButton
+              label="Equation"
+              tooltip="Insert an equation (Alt+=)"
+              data-testid="pptx-insert-equation"
+              disabled={ro()}
+              onClick={() => equation().start()}
+            >
+              <Pi />
+              Equation
+            </RibbonTextButton>
+            <RibbonPopover
+              label="Built-in equations"
+              icon={<span class="sr-only">Built-in equations</span>}
+              disabled={ro()}
+              testId="pptx-insert-equation-menu"
+            >
+              {(close) => (
+                <BuiltInEquations
+                  editor={equation().editor}
+                  onPick={(picked) => {
+                    close();
+                    equation().insertBuiltIn(picked.latex);
+                  }}
+                />
+              )}
+            </RibbonPopover>
+          </RibbonGroup>
+        )}
+      </Show>
     </>
   );
 }

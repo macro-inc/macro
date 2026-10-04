@@ -60,6 +60,35 @@ pub fn preset_paths(name: &str, w: f64, h: f64) -> Result<String, JsError> {
     to_json(&crate::geometry::preset_svg(name, w, h))
 }
 
+/// Renders an equation written in the LaTeX-style linear format as a PNG,
+/// for the equation editor's preview and galleries: `size` in points,
+/// `scale` pixels per point, `color` as `RRGGBB`; empty slots show as
+/// dotted boxes. Fails with what is wrong with the linear text.
+#[wasm_bindgen(js_name = renderEquation)]
+pub fn render_equation(
+    latex: &str,
+    display: bool,
+    size: f64,
+    scale: f64,
+    color: &str,
+) -> Result<Vec<u8>, JsError> {
+    let color = crate::model::color::Rgba::from_hex(color.trim_start_matches('#'))
+        .unwrap_or(crate::model::color::Rgba::BLACK);
+    let raster = FONTS
+        .with(|f| {
+            crate::math::preview::render_equation(
+                latex,
+                display,
+                size.clamp(1.0, 400.0) as f32,
+                scale.clamp(0.1, 8.0) as f32,
+                color,
+                &f.borrow(),
+            )
+        })
+        .map_err(js_err)?;
+    Ok(raster.to_png())
+}
+
 /// An open presentation with undo history.
 ///
 /// Reads that take a slide `index` (outlines, rendering, text layout,

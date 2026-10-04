@@ -22,6 +22,7 @@ import {
 import type { Swatch } from '../../core/palette';
 import type { DeckSetup } from '../../primitives/create-deck-setup';
 import type { EditorCommands } from '../../primitives/create-editor-commands';
+import type { EquationEditor } from '../../primitives/create-equation-editor';
 import type { ViewOptionsState } from '../../primitives/create-view-options';
 import type { ReviewEnv } from './review-tab';
 import type { ShapeGeometryCommands } from './shape-geometry-menus';
@@ -101,6 +102,14 @@ export interface RibbonEnv {
   review?: ReviewEnv;
   /** Edit Points and Merge Shapes (Shape Format ▸ Insert Shapes). */
   shapeGeometry?: ShapeGeometryCommands;
+  /** Insert ▸ Equation, when equations can be typeset here. */
+  equation?: {
+    editor: EquationEditor;
+    /** Starts a new equation at the caret, or in a new text box. */
+    start: () => void;
+    /** Inserts a built-in equation at once. */
+    insertBuiltIn: (latex: string) => void;
+  };
 }
 
 const RibbonContext = createContext<RibbonEnv>();
@@ -133,12 +142,15 @@ export function Ribbon(props: {
    * with the tab chosen).
    */
   active?: string;
+  /** Receives a function that switches tabs (to show a contextual tab). */
+  controller?: (setActive: (id: string) => void) => void;
 }) {
   const [active, setActiveRaw] = createSignal('home');
   const setActive = (id: string) => {
     setActiveRaw(id);
     props.onTabChange?.(id);
   };
+  props.controller?.(setActive);
   const current = () =>
     props.tabs.find((t) => t.id === (props.active ?? active())) ??
     props.tabs[0];
