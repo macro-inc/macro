@@ -19,6 +19,7 @@ import AlignTop from '@phosphor/align-top.svg';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowLineDown from '@phosphor/arrow-line-down.svg';
 import ArrowLineUp from '@phosphor/arrow-line-up.svg';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
 import CheckIcon from '@phosphor/check.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
@@ -28,6 +29,7 @@ import CopySimple from '@phosphor/copy-simple.svg';
 import CropIcon from '@phosphor/crop.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
+import LinkBreak from '@phosphor/link-break.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
@@ -82,6 +84,66 @@ export interface StageMenuActions {
   isGroup: boolean;
   selectionCount: number;
   textShape: boolean;
+  /** The link of the clicked text or shape, if it has one. */
+  link?: string;
+  /** Opens the Insert/Edit Link dialog. */
+  editLink: () => void;
+  /** Follows a link (opens a web address, goes to a slide). */
+  openLink: (link: string) => void;
+  removeLink: () => void;
+}
+
+/** Link…, or Edit/Open/Copy/Remove Link for something linked. */
+function LinkItems(props: { a: StageMenuActions }) {
+  const ro = () => props.a.readonly;
+  return (
+    <Show
+      when={props.a.link}
+      fallback={
+        <MenuItem
+          text="Link…"
+          icon={LinkIcon}
+          shortcut="cmd+k"
+          disabled={ro()}
+          onClick={() => props.a.editLink()}
+        />
+      }
+    >
+      {(link) => (
+        <>
+          <MenuItem
+            text="Edit link…"
+            icon={LinkIcon}
+            shortcut="cmd+k"
+            disabled={ro()}
+            onClick={() => props.a.editLink()}
+          />
+          <MenuItem
+            text="Open link"
+            icon={ArrowSquareOut}
+            onClick={() => props.a.openLink(link())}
+          />
+          <Show when={!link().startsWith('#')}>
+            <MenuItem
+              text="Copy link"
+              icon={CopyIcon}
+              onClick={() =>
+                void navigator.clipboard.writeText(
+                  link().replace(/^mailto:/i, '')
+                )
+              }
+            />
+          </Show>
+          <MenuItem
+            text="Remove link"
+            icon={LinkBreak}
+            disabled={ro()}
+            onClick={() => props.a.removeLink()}
+          />
+        </>
+      )}
+    </Show>
+  );
 }
 
 function Sub(props: {
@@ -387,16 +449,7 @@ export function StageMenuItems(props: {
             )}
           </For>
         </Sub>
-        <MenuItem
-          text="Link…"
-          icon={LinkIcon}
-          shortcut="cmd+k"
-          disabled={ro()}
-          onClick={() => {
-            const url = window.prompt('Link to (URL)', 'https://');
-            if (url) void c().setLink(url.trim());
-          }}
-        />
+        <LinkItems a={a()} />
         <MenuSeparator />
         <MenuItem
           text="Select all"
@@ -621,6 +674,10 @@ export function StageMenuItems(props: {
           />
         </Show>
         <ArrangeItems a={a()} />
+        <Show when={a().selectionCount > 0}>
+          <MenuSeparator />
+          <LinkItems a={a()} />
+        </Show>
         <MenuSeparator />
         <ColorSub
           text="Fill"

@@ -194,11 +194,9 @@ export function InsertTab(props: {
         <RibbonTextButton
           label="Link"
           tooltip="Insert link (⌘K)"
-          disabled={ro() || !c.textActive()}
-          onClick={() => {
-            const url = window.prompt('Link to (URL)', 'https://');
-            if (url) void c.setLink(url.trim());
-          }}
+          data-testid="pptx-insert-link"
+          disabled={ro() || (!c.textActive() && env.selection().length === 0)}
+          onClick={() => env.openLink()}
         >
           <LinkIcon />
           Link

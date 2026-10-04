@@ -1266,6 +1266,27 @@ export type EditOp =
        */
       slide: number;
       /**
+       * Shape ids.
+       */
+      shapes: number[];
+      /**
+       * An address (`https://…`, `mailto:…`), `#slide=<id>`, a slide show
+       * jump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+       * `#lastslideviewed`, `#endshow`), or `""` to remove the link.
+       */
+      link: string;
+      /**
+       * The ScreenTip shown on hover.
+       */
+      tip?: string | null;
+      op: 'setShapeLink';
+    }
+  | {
+      /**
+       * Slide id.
+       */
+      slide: number;
+      /**
        * Shape id.
        */
       shape: number;
@@ -5396,9 +5417,16 @@ export interface RunPatch {
    */
   baseline?: number | null;
   /**
-   * Hyperlink URL, or `""` to remove.
+   * Hyperlink, or `""` to remove: an address (`https://…`, `mailto:…`),
+   * `#slide=<id>` for another slide by stable id, or a slide show jump
+   * (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+   * `#lastslideviewed`, `#endshow`).
    */
   link?: string | null;
+  /**
+   * The link's ScreenTip (written with `link`).
+   */
+  linkTip?: string | null;
   /**
    * Text shadow (WordArt-style): a preset name, `none`, or options, as
    * for `setShapeEffects`.

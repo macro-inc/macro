@@ -8,12 +8,14 @@
  *
  * Next: click, Space, →, ↓, Enter, PageDown, N. Previous: ←, ↑, Backspace,
  * PageUp, P. Home/End jump; a number then Enter goes to that slide; B or .
- * blacks the screen, W or , whites it; Esc ends.
+ * blacks the screen, W or , whites it; Esc ends. Clicking a link follows it
+ * (`follow`).
  */
 
 import type { DeckOutline, SlideOutline } from '@core/pptx-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
 import { buildTimeline, clickSteps } from '../core/animation-timeline';
+import { linkAction } from '../core/links';
 
 export type ShowScreen = 'slide' | 'black' | 'white';
 
@@ -39,6 +41,12 @@ export function createShow(options: {
   onCleanup(() => clearTimeout(advanceTimer));
 
   const slide = (): SlideOutline | undefined => slides()[index()];
+  /** The slide shown before the current one (Last Slide Viewed links). */
+  let lastViewed: number | undefined;
+  const moveTo = (i: number) => {
+    if (i !== index()) lastViewed = index();
+    setIndex(i);
+  };
 
   /** The next visible slide in a direction from `from`, if any. */
   const nextSlide = (direction: 1 | -1, from = index()): number | undefined => {
@@ -73,14 +81,31 @@ export function createShow(options: {
     }
     // Going back lands on a slide with all its animations played.
     setStep(direction > 0 ? 0 : stepsOf(next));
-    setIndex(next);
+    moveTo(next);
   };
 
   const jump = (i: number) => {
     setEnded(false);
     setScreen('slide');
     setStep(0);
-    setIndex(clamp(i));
+    moveTo(clamp(i));
+  };
+
+  /**
+   * Follows a link clicked in the show: goes to a slide or ends the show.
+   * Returns the web address to open for an address link.
+   */
+  const follow = (link: string): string | undefined => {
+    if (link === '#nextslide' || link === '#previousslide') {
+      const to = nextSlide(link === '#nextslide' ? 1 : -1);
+      if (to !== undefined) jump(to);
+      else if (link === '#nextslide') setEnded(true);
+      return undefined;
+    }
+    const action = linkAction(link, options.deck(), index(), lastViewed);
+    if (action.kind === 'slide') jump(action.index);
+    else if (action.kind === 'end') exit();
+    return action.kind === 'open' ? action.url : undefined;
   };
 
   const exit = () => {
@@ -167,6 +192,7 @@ export function createShow(options: {
     nextSlide,
     go,
     jump,
+    follow,
     exit,
     shown,
     toggleScreen,

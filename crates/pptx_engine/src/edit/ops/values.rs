@@ -54,8 +54,13 @@ pub struct RunPatch {
     pub highlight: Option<String>,
     /// Baseline shift in percent (30 = superscript, -25 = subscript, 0 = normal).
     pub baseline: Option<f32>,
-    /// Hyperlink URL, or `""` to remove.
+    /// Hyperlink, or `""` to remove: an address (`https://…`, `mailto:…`),
+    /// `#slide=<id>` for another slide by stable id, or a slide show jump
+    /// (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+    /// `#lastslideviewed`, `#endshow`).
     pub link: Option<String>,
+    /// The link's ScreenTip (written with `link`).
+    pub link_tip: Option<String>,
     /// Text shadow (WordArt-style): a preset name, `none`, or options, as
     /// for `setShapeEffects`.
     pub shadow: Option<EffectSpec<ShadowOptions>>,

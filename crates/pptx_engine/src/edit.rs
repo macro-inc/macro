@@ -34,6 +34,7 @@ mod find;
 mod format_painter;
 pub(crate) mod group;
 pub(crate) mod header_footer;
+mod links;
 pub(crate) mod picture;
 mod relayout;
 pub(crate) mod sections;
@@ -41,6 +42,7 @@ mod slide_size;
 mod theme;
 pub(crate) mod transition;
 
+pub use links::{JUMPS, link_string};
 pub use notes::notes_text;
 pub use ops::{AnimationClass, AnimationRepeat, AnimationSpec, AnimationStart, RepeatUntil};
 pub use ops::{
@@ -64,7 +66,6 @@ pub use find::{FindOptions, TextMatch};
 use crate::error::{Error, Result};
 use crate::font::FontDb;
 use crate::model::presentation::Presentation;
-use crate::opc::{TargetMode, rel_type};
 use crate::xml::{NodeId, XmlDoc};
 
 /// Maximum number of undo steps an [`Editor`] keeps.
@@ -118,6 +119,7 @@ impl EditOp {
             | O::SetAltText { slide, .. }
             | O::SetShapeName { slide, .. }
             | O::SetShapeHidden { slide, .. }
+            | O::SetShapeLink { slide, .. }
             | O::PasteFormat { slide, .. }
             | O::SetAnimations { slide, .. }
             | O::AddAnimation { slide, .. }
@@ -318,16 +320,12 @@ impl Presentation {
                 props,
             } => {
                 let part = self.slide_part(*slide)?;
-                let rid = match props.link.as_deref().map(str::trim) {
-                    Some(link) if !link.is_empty() => Some(self.rels_mut(&part)?.add(
-                        rel_type::HYPERLINK,
-                        link,
-                        TargetMode::External,
-                    )),
-                    _ => None,
+                let link = match props.link.as_deref() {
+                    Some(link) => links::link_ref(self, &part, link, props.link_tip.as_deref())?,
+                    None => None,
                 };
                 self.edit_text(&part, *shape, *cell, |doc, body| {
-                    text::format_text(doc, body, *start, *end, props, rid.as_deref())
+                    text::format_text(doc, body, *start, *end, props, link.as_ref())
                 })?;
                 refit.push((part, *shape));
             }
@@ -752,6 +750,18 @@ impl Presentation {
             O::SetShapeName { slide, shape, name } => {
                 let part = self.slide_part(*slide)?;
                 shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "name", Some(name))?;
+            }
+            O::SetShapeLink {
+                slide,
+                shapes,
+                link,
+                tip,
+            } => {
+                let part = self.slide_part(*slide)?;
+                for &shape in shapes {
+                    let link = links::link_ref(self, &part, link, tip.as_deref())?;
+                    links::set_shape_link(self.xml_mut(&part)?, shape, link.as_ref())?;
+                }
             }
             O::SetShapeHidden {
                 slide,

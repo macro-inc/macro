@@ -55,6 +55,8 @@ export interface RibbonEnv {
   openFormatPane: (
     section?: 'shape' | 'effects' | 'picture' | 'text' | 'size' | 'background'
   ) => void;
+  /** Opens the Insert/Edit Link dialog for the text or shapes selected. */
+  openLink: () => void;
   /** Starts the slide show; `presenter` opens Presenter View. */
   present: (fromCurrent: boolean, presenter?: boolean) => void;
   find: (replace: boolean) => void;

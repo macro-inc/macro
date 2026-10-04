@@ -384,13 +384,17 @@ Layout and test hooks:
   (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table
   grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
   (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
-  `pptx-chart-<kind>-<grouping>`), Text box (`pptx-insert-textbox`), and Link.
+  `pptx-chart-<kind>-<grouping>`), Text box (`pptx-insert-textbox`), and Link
+  (`pptx-insert-link`).
   Design: slide background, and Variants that restyle every slide through the
   theme: Colors (`pptx-theme-colors`, then `pptx-theme-colors-<set name>`,
   such as `Red Violet`) and Fonts (`pptx-theme-fonts`, then
   `pptx-theme-fonts-<pair name>`, such as `Georgia`). Transitions: `pptx-transition-<kind>`, Effect options, duration
   (`pptx-transition-duration`), automatic advance, and Apply to all
-  (`pptx-transition-all`). Color menus are PowerPoint's theme grid with tints.
+  (`pptx-transition-all`). Color menus are PowerPoint's theme grid with tints,
+  standard colors, Recent colors (`pptx-recent-colors`, custom colors picked
+  lately), More colors… (`pptx-more-colors`), and Eyedropper
+  (`pptx-eyedropper`, in browsers with a screen color picker).
 - **Header & Footer** (Insert ▸ Header & Footer `pptx-insert-header-footer`,
   Date & Time `pptx-insert-date-time`, or Slide Number
   `pptx-insert-slide-number`) opens `pptx-header-footer`, starting from what
@@ -535,12 +539,31 @@ Layout and test hooks:
   `pptx-animation-row`s (click picks one and selects its shape; Delete or
   `pptx-animation-remove` removes it), and numbered `pptx-animation-tag`s
   mark animated shapes while the tab or pane is open.
+- **Links** (Insert ▸ Link, Cmd/Ctrl+K, or **Link…** in the right-click menu)
+  open `pptx-link-dialog`. While editing text it links the selection, or the
+  whole link around the caret; at a bare caret it inserts the "Text to
+  display" (`pptx-link-text`) as linked text. With shapes selected (not their
+  text) it links the shapes themselves. Link to: Web Page or File
+  (`pptx-link-kind-web`, address `pptx-link-address`; `macro.com` becomes
+  `https://macro.com`), Place in This Document (`pptx-link-kind-place`:
+  `pptx-link-place-nextslide` and the other jumps, or
+  `pptx-link-place-slide-<n>`, with a preview `pptx-link-preview`), or E-mail
+  Address (`pptx-link-kind-email`, `pptx-link-email`, `pptx-link-subject`).
+  ScreenTip is `pptx-link-tip`; OK is `pptx-link-ok`; editing an existing link
+  adds **Remove Link** (`pptx-link-remove`). Right-clicking linked text or a
+  linked shape offers Edit link…, Open link (a web page in a new tab, or the
+  linked slide), Copy link, and Remove link; Cmd/Ctrl+click follows a link
+  while editing text. Engine and AI spelling: `formatText` `link` /
+  `linkTip` and `setShapeLink`, with `#slide=<id>` or `#nextslide`-style jumps
+  for places in the deck.
 - **Slide show** (`pptx-slideshow`, F5 from the start, Shift+F5 from the
   current slide): full screen with the slides' transitions; →/Space/click
   play the next animation step, then advance (`pptx-slideshow-canvas` carries
   `data-slide-index` and `data-step`; animated shapes are `[data-piece]`
   layers), ← goes back, a number then Enter jumps, B/W blank the screen, S
-  shows notes, Esc ends.
+  shows notes, Esc ends. Over a link the pointer becomes a hand and its
+  ScreenTip shows (`pptx-slideshow-link-tip`); clicking follows the link
+  instead of advancing.
 - **Presenter View** (Slide Show ▸ Presenter view `pptx-present-presenter`,
   Alt+F5): opens the audience show in a pop-up window (`pptx-audience-canvas`;
   double-click it for full screen) and turns the tab into the speaker

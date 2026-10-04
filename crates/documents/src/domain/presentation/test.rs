@@ -153,6 +153,32 @@ async fn edit_saves_one_new_version_and_describes_the_change() {
 }
 
 #[tokio::test]
+async fn shape_links_are_set_and_described() {
+    let files = MemoryFiles::with(DECK);
+    let service = PresentationService::new(files.clone());
+    let (slide, shape) = first_text_shape(DECK);
+    let outcome = service
+        .edit(
+            receipt(AccessLevel::Edit),
+            &[EditOp::SetShapeLink {
+                slide,
+                shapes: vec![shape],
+                link: "#lastslide".into(),
+                tip: Some("Skip to the end".into()),
+            }],
+        )
+        .await
+        .unwrap();
+    assert!(
+        outcome
+            .changed_slides
+            .contains("link: #lastslide (ScreenTip \"Skip to the end\")"),
+        "{}",
+        outcome.changed_slides
+    );
+}
+
+#[tokio::test]
 async fn animations_are_edited_and_described() {
     let files = MemoryFiles::with(DECK);
     let service = PresentationService::new(files.clone());

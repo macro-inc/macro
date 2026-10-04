@@ -481,21 +481,12 @@ fn resolve_inner(
                 .map(|n| parse.rpr(own_part, n))
                 .unwrap_or_default();
             rp.inherit(&pp.def_rpr);
-            let link = doc
+            let hlink = doc
                 .child(r, Ns::A, "rPr")
-                .and_then(|n| doc.child(n, Ns::A, "hlinkClick"))
-                .map(|h| {
-                    let target = doc
-                        .attr_ns(h, Ns::R, "id")
-                        .and_then(|id| own_part.rels.get(id))
-                        .map(|rel| rel.target.clone());
-                    (
-                        target.unwrap_or_default(),
-                        hyperlink_uses_text_color(doc, h),
-                    )
-                });
+                .and_then(|n| doc.child(n, Ns::A, "hlinkClick"));
+            let link = hlink.and_then(|h| read_link(own_part, h));
             let mut props = finish_run(&rp, &parse.colors);
-            if let Some((_, false)) = &link {
+            if hlink.is_some_and(|h| !hyperlink_uses_text_color(doc, h)) {
                 if let Some(c) = parse.colors.scheme_color("hlink") {
                     props.fill = Fill::Solid(c);
                 }
@@ -521,7 +512,7 @@ fn resolve_inner(
                 text,
                 props,
                 kind,
-                link: link.map(|(t, _)| t),
+                link,
                 node: r,
             });
         }
@@ -541,6 +532,39 @@ fn resolve_inner(
         body,
         paragraphs,
         node: body_node,
+    })
+}
+
+/// Reads an `a:hlinkClick` (on a run or a shape's `p:cNvPr`) of `part`.
+/// Actions other than slide jumps (macros, programs, OLE verbs) read as no
+/// link.
+pub fn read_link(part: &PartRef, hlink: NodeId) -> Option<Link> {
+    let doc = &part.doc;
+    let rel = doc
+        .attr_ns(hlink, Ns::R, "id")
+        .filter(|id| !id.is_empty())
+        .and_then(|id| part.rels.get(id));
+    let target = match doc.attr(hlink, "action").unwrap_or("") {
+        "" => {
+            let rel = rel?;
+            match rel.mode {
+                crate::opc::TargetMode::External => LinkTarget::Url(rel.target.clone()),
+                crate::opc::TargetMode::Internal => LinkTarget::Url(part.rels.resolve(rel)),
+            }
+        }
+        "ppaction://hlinksldjump" => LinkTarget::Slide(part.rels.resolve(rel?)),
+        action => LinkTarget::Jump(
+            action
+                .strip_prefix("ppaction://hlinkshowjump?jump=")?
+                .to_owned(),
+        ),
+    };
+    Some(Link {
+        target,
+        tooltip: doc
+            .attr(hlink, "tooltip")
+            .filter(|t| !t.is_empty())
+            .map(str::to_owned),
     })
 }
 

@@ -2473,6 +2473,7 @@ export const EditPresentation = z.object({
                   highlight: z.union([z.string(), z.null()]).optional(),
                   baseline: z.union([z.number(), z.null()]).optional(),
                   link: z.union([z.string(), z.null()]).optional(),
+                  linkTip: z.union([z.string(), z.null()]).optional(),
                   shadow: z
                     .union([
                       z.union([
@@ -3490,6 +3491,15 @@ export const EditPresentation = z.object({
               shape: z.number().int().gte(0),
               name: z.string(),
               op: z.literal('setShapeName'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shapes: z.array(z.number().int().gte(0)),
+              link: z.string(),
+              tip: z.union([z.string(), z.null()]).optional(),
+              op: z.literal('setShapeLink'),
             })
             .strict(),
           z

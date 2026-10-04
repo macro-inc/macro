@@ -15,6 +15,7 @@ import type {
   DeckOutline,
   EditResult,
   EntryChange,
+  LinkRegion,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
@@ -305,6 +306,15 @@ async function serve(
         documentFor(docKey).textLayout(index, shape, cell?.row, cell?.col)
       ) as TextLayoutInfo | null;
       return [{ id, ok: true, kind: 'textLayout', layout }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'linkRegions' }, ({ docKey, index }) => {
+      const regions = JSON.parse(
+        documentFor(docKey).linkRegions(index)
+      ) as LinkRegion[];
+      return [{ id, ok: true, kind: 'linkRegions', regions }, []] as [
         PptxResponse,
         Transferable[],
       ];

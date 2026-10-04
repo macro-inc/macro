@@ -16,6 +16,7 @@ import type {
   EditResult,
   EntryChange,
   FindOptions,
+  LinkRegion,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
@@ -246,6 +247,15 @@ export async function getTextLayout(
       'textLayout'
     )
   ).layout;
+}
+
+/** The clickable areas of a slide: linked text first, then linked shapes. */
+export async function getLinkRegions(
+  docKey: string,
+  index: number
+): Promise<LinkRegion[]> {
+  return (await request({ kind: 'linkRegions', docKey, index }, 'linkRegions'))
+    .regions;
 }
 
 export interface EditOutcome {

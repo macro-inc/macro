@@ -150,6 +150,10 @@ export interface ShapeOutline {
   flipV: boolean;
   hidden: boolean;
   altText?: string;
+  /** The shape's own hyperlink, as `setShapeLink` takes it. */
+  link?: string;
+  /** The shape link's ScreenTip. */
+  linkTip?: string;
   geometry?: string;
   /** Solid fill as `#RRGGBB`. */
   fill?: string;
@@ -420,6 +424,10 @@ export interface RunStyle {
   highlight?: string;
   /** Text shadow and glow (WordArt effects). */
   effects?: EffectsOutline;
+  /** Hyperlink, as `RunPatch.link` takes it. */
+  link?: string;
+  /** The hyperlink's ScreenTip. */
+  linkTip?: string;
 }
 
 export interface ParagraphStyle {
@@ -463,7 +471,14 @@ export interface RunPatch {
   font?: string;
   highlight?: string;
   baseline?: number;
+  /**
+   * Hyperlink, or `""` to remove: an address, `#slide=<id>`, or a slide
+   * show jump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+   * `#lastslideviewed`, `#endshow`).
+   */
   link?: string;
+  /** The link's ScreenTip. */
+  linkTip?: string;
   /** Text shadow, as `setShapeEffects` takes it. */
   shadow?: ShadowSpec;
   /** Text glow, as `setShapeEffects` takes it. */
@@ -795,6 +810,14 @@ export type EditOp =
   | ({ op: 'setAltText'; text: string } & ShapeTarget)
   | ({ op: 'setShapeName'; name: string } & ShapeTarget)
   | ({ op: 'setShapeHidden'; hidden: boolean } & ShapeTarget)
+  /** Links whole shapes (followed on click in a slide show); `""` removes. */
+  | {
+      op: 'setShapeLink';
+      slide: number;
+      shapes: number[];
+      link: string;
+      tip?: string;
+    }
   /** Format painter: gives `shapes` the look (fill, line, effects, style) of another shape. */
   | {
       op: 'pasteFormat';
@@ -1150,3 +1173,13 @@ export interface TextMatch {
  * `pasteSlides`, in this or another presentation.
  */
 export type ClipboardPayload = string;
+
+/** A clickable area of a slide (`linkRegions`). */
+export interface LinkRegion {
+  shape: number;
+  /** As `RunPatch.link` takes it. */
+  link: string;
+  tip?: string;
+  /** Corners in slide points, clockwise from the top left. */
+  quad: [number, number, number, number, number, number, number, number];
+}

@@ -128,6 +128,14 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     if !s.alt_text.is_empty() {
         let _ = writeln!(out, "{pad}  alt text: {}", quote(&s.alt_text));
     }
+    if let Some(link) = &s.link {
+        let tip = s
+            .link_tip
+            .as_deref()
+            .map(|t| format!(" (ScreenTip {})", quote(t)))
+            .unwrap_or_default();
+        let _ = writeln!(out, "{pad}  link: {link}{tip}");
+    }
     if let Some(line) = s.picture.as_ref().and_then(picture_line) {
         let _ = writeln!(out, "{pad}  picture: {line}");
     }

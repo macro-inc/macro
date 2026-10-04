@@ -235,6 +235,16 @@ impl PptxDocument {
         to_json(&lay)
     }
 
+    /// A slide's clickable areas as JSON (`LinkRegion[]`): linked text, then
+    /// linked shapes.
+    #[wasm_bindgen(js_name = linkRegions)]
+    pub fn link_regions(&mut self, index: usize) -> Result<String, JsError> {
+        let regions = FONTS
+            .with(|f| self.pres().link_regions(index, &f.borrow()))
+            .map_err(js_err)?;
+        to_json(&regions)
+    }
+
     /// Applies a JSON array of edit operations atomically; returns the `EditResult` as JSON.
     ///
     /// Batches with the same `group` merge into one undo step (typing).

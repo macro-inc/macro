@@ -66,6 +66,37 @@ describe('slide show', () => {
     });
   });
 
+  it('follows links to slides, jumps, and addresses', () => {
+    const onExit = vi.fn();
+    createRoot((dispose) => {
+      const show = createShow({
+        deck: () => deck([false, true, false, false]),
+        start: 0,
+        onExit,
+      });
+      // A link to a hidden slide shows it, as in PowerPoint.
+      expect(show.follow('#slide=257')).toBeUndefined();
+      expect(show.index()).toBe(1);
+      // Next and previous skip hidden slides, like the show keys.
+      show.follow('#previousslide');
+      expect(show.index()).toBe(0);
+      show.follow('#nextslide');
+      expect(show.index()).toBe(2);
+      show.follow('#lastslideviewed');
+      expect(show.index()).toBe(0);
+      show.follow('#lastslide');
+      expect(show.index()).toBe(3);
+      show.follow('#nextslide');
+      expect(show.ended()).toBe(true);
+      expect(show.follow('https://macro.com')).toBe('https://macro.com');
+      expect(show.follow('javascript:alert(1)')).toBeUndefined();
+      expect(onExit).not.toHaveBeenCalled();
+      show.follow('#endshow');
+      expect(onExit).toHaveBeenCalledWith(3);
+      dispose();
+    });
+  });
+
   it('formats the presenter timer', () => {
     expect(formatElapsed(65_000)).toBe('01:05');
     expect(formatElapsed(3_725_000)).toBe('1:02:05');

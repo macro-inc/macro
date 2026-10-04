@@ -12,6 +12,7 @@ import type {
   EditOp,
   EditResult,
   FindOptions,
+  LinkRegion,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
@@ -55,6 +56,8 @@ export interface PresentationEngine {
     end: number,
     backdrop: boolean
   ) => Promise<ImageBitmap>;
+  /** A slide's clickable link areas (slide shows follow them). */
+  linkRegions?: (index: number) => Promise<LinkRegion[]>;
   /**
    * A shape's text laid out for carets, or with `cell` a table cell's (a
    * merged cell's, for a cell it covers); `null` when it holds no text.

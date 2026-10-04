@@ -23,11 +23,14 @@ import type {
   RunPatch,
   ShapeOutline,
   SlideOutline,
+  TextPos,
   TransitionPatch,
 } from '@core/pptx-engine/types';
 import type { PptxEditorContext } from '../context/pptx-editor-context';
 import { effectInfo, specOf } from '../core/animation-catalog';
+import { orderRange, textInRange } from '../core/caret';
 import { formatState, stepFontSize } from '../core/formatting';
+import { linkSpan } from '../core/links';
 import { modulate } from '../core/palette';
 import { aspectCrop, NO_CROP } from '../core/picture';
 import {
@@ -38,7 +41,11 @@ import {
   sizeOps,
 } from '../core/selection';
 import { moveSlidesOps } from '../core/slide-selection';
-import { formatCommand, paragraphCommand } from '../core/text-commands';
+import {
+  formatCommand,
+  isCollapsed,
+  paragraphCommand,
+} from '../core/text-commands';
 import { createDeckCommands } from './create-deck-commands';
 import type { PresentationSession } from './create-presentation-session';
 import type { SlideEditor } from './create-slide-editor';
@@ -75,6 +82,23 @@ async function fileToBase64(file: Blob): Promise<string> {
 }
 
 export type TextToggle = 'bold' | 'italic' | 'underline' | 'strike';
+
+/** What the link dialog edits (`linkTarget`). */
+export interface LinkTarget {
+  kind: 'text' | 'cells' | 'shapes';
+  /** The text range, for `text`. */
+  start?: TextPos;
+  end?: TextPos;
+  /** The shapes, for `shapes`. */
+  shapes?: number[];
+  /** The current link and ScreenTip. */
+  link?: string;
+  tip?: string;
+  /** The linked (or selected) text. */
+  text?: string;
+  /** Whether "Text to display" can replace the text. */
+  canSetText: boolean;
+}
 
 export function createEditorCommands(options: EditorCommandsOptions) {
   const { session, editor, context } = options;
@@ -162,6 +186,75 @@ export function createEditorCommands(options: EditorCommandsOptions) {
       highlight: '',
     });
   const setLink = (url: string) => runs({ link: url });
+
+  // ---- links -----------------------------------------------------------------
+
+  /**
+   * What Insert Link edits: the edited text's selection (or the whole link
+   * around the caret), the selected cells, or the selected shapes themselves.
+   */
+  const linkTarget = (): LinkTarget | undefined => {
+    const edit = editor.editing();
+    if (edit?.layout) {
+      const { layout, selection } = edit;
+      const span = isCollapsed(selection)
+        ? linkSpan(layout, selection.focus)
+        : undefined;
+      const [start, end] = span
+        ? [span.start, span.end]
+        : orderRange(selection.anchor, selection.focus);
+      const style = layout.styles[start.paragraph];
+      const run = style?.runs.find(
+        (r) => r.link && r.end > start.offset && r.start <= start.offset
+      );
+      return {
+        kind: 'text',
+        start,
+        end,
+        link: span?.link ?? run?.link,
+        tip: span?.tip ?? run?.linkTip,
+        text: textInRange(layout, start, end),
+        canSetText: start.paragraph === end.paragraph,
+      };
+    }
+    if (cellRange()) return { kind: 'cells', canSetText: false };
+    const shapes = editor.selection();
+    if (shapes.length === 0) return undefined;
+    return {
+      kind: 'shapes',
+      shapes: shapes.map((x) => x.id),
+      link: shapes[0].link,
+      tip: shapes[0].linkTip,
+      canSetText: false,
+    };
+  };
+
+  /** Links (or with `link` `""` unlinks) what `linkTarget` names. */
+  const applyLink = async (
+    target: LinkTarget,
+    link: string,
+    tip?: string,
+    text?: string
+  ) => {
+    const s = slide();
+    if (!s) return;
+    const linkTip = link ? (tip ?? '') : undefined;
+    if (target.kind === 'text' && target.start && target.end) {
+      await editor.linkText(target.start, target.end, link, tip, text);
+      options.refocus();
+    } else if (target.kind === 'cells') {
+      await formatCells({ link, linkTip });
+    } else if (target.kind === 'shapes' && target.shapes)
+      await apply([
+        {
+          op: 'setShapeLink',
+          slide: s.id,
+          shapes: target.shapes,
+          link,
+          tip: linkTip,
+        },
+      ]);
+  };
 
   const align = (value: NonNullable<ParaPatch['align']>) =>
     paragraphs({ align: value });
@@ -1289,6 +1382,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     toggleBaseline,
     clearFormatting,
     setLink,
+    linkTarget,
+    applyLink,
     align,
     setBullets,
     toggleBullets,

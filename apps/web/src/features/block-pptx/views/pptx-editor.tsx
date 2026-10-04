@@ -58,6 +58,7 @@ import { CropOverlay } from '../components/crop-overlay';
 import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
+import { LinkDialog } from '../components/link-dialog';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
 import { PresenterView } from '../components/presenter-view';
@@ -93,8 +94,9 @@ import {
   StageMenuItems,
 } from '../components/stage-context-menu';
 import { usePptxEditorContext } from '../context/pptx-editor-context';
-import { caretSegment, selectionQuads } from '../core/caret';
+import { caretSegment, positionAt, selectionQuads } from '../core/caret';
 import { type Box, boxOf, hitTest, type Point } from '../core/geometry';
+import { linkAction, linkAt } from '../core/links';
 import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
 import { unionBounds } from '../core/selection';
 import { clickSlide, type SlideSelection } from '../core/slide-selection';
@@ -111,7 +113,10 @@ import { paragraphCommand } from '../core/text-commands';
 import { createClipboard } from '../primitives/create-clipboard';
 import { createCropMode } from '../primitives/create-crop-mode';
 import { createDeckSetup } from '../primitives/create-deck-setup';
-import { createEditorCommands } from '../primitives/create-editor-commands';
+import {
+  createEditorCommands,
+  type LinkTarget,
+} from '../primitives/create-editor-commands';
 import { createFormatPainter } from '../primitives/create-format-painter';
 import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
@@ -568,6 +573,17 @@ export function PptxEditor() {
     }
     stage.setPointerCapture(e.pointerId);
     const toggle = e.metaKey || e.ctrlKey;
+    // Ctrl+click follows a link in the text being edited, as in PowerPoint.
+    const editLayout = editor.editing()?.layout;
+    if (toggle && editLayout) {
+      const pos = positionAt(editLayout, at);
+      const link = pos && linkAt(editLayout, pos);
+      if (link) {
+        e.preventDefault();
+        followLink(link);
+        return;
+      }
+    }
     const t = !e.shiftKey && !toggle && !readonly() ? tableHit(at) : undefined;
     if (t) {
       const edit = editor.editing();
@@ -807,6 +823,7 @@ export function PptxEditor() {
     else if (key === 'p') setPrinting(true);
     else if (key === 'f') setFind({ replace: false });
     else if (key === 'h') setFind({ replace: true });
+    else if (key === 'k' && !readonly()) void openLinkDialog();
     else if (key === 'm' && !readonly()) void commands.addSlide();
     else if (key === 'e' && !readonly()) void commands.align('center');
     else if (key === 'l' && !readonly()) void commands.align('left');
@@ -1025,10 +1042,6 @@ export function PptxEditor() {
     } else if (mod && key.toLowerCase() === 'a') {
       handled();
       editor.selectAllText();
-    } else if (mod && key.toLowerCase() === 'k') {
-      handled();
-      const url = window.prompt('Link to (URL)', 'https://');
-      if (url) void commands.setLink(url.trim());
     } else if (sharedShortcut(e)) {
       handled();
     }
@@ -1154,6 +1167,30 @@ export function PptxEditor() {
     slideAnimations().length > 0;
 
   const [printing, setPrinting] = createSignal(false);
+  /** What the Insert/Edit Link dialog links, while it is open. */
+  const [linkEdit, setLinkEdit] = createSignal<LinkTarget>();
+  async function openLinkDialog() {
+    if (readonly()) return;
+    // The dialog starts from the text as it is once typing has landed.
+    await editor.textSettled();
+    const target = commands.linkTarget();
+    if (target) setLinkEdit(target);
+  }
+  /** Follows a link from the editor: a web page in a new tab, or a slide. */
+  const followLink = (link: string) => {
+    const deck = session.outline();
+    if (!deck) return;
+    const action = linkAction(link, deck, session.slideIndex());
+    if (action.kind === 'slide') editor.goToSlide(action.index);
+    else if (action.kind === 'open')
+      window.open(action.url, '_blank', 'noopener,noreferrer');
+  };
+  /** The link of what was right-clicked (the text at the caret, or the shape). */
+  const menuLink = () => {
+    const target = menuTarget();
+    if (target.kind === 'canvas') return undefined;
+    return commands.linkTarget()?.link;
+  };
   const [sorter, setSorterRaw] = createSignal(false);
   const setSorter = (on: boolean) => {
     if (on) {
@@ -1343,6 +1380,7 @@ export function PptxEditor() {
     paste: pasteCommand,
     formatPainter: painter,
     openFormatPane: (section) => setPane(section ?? 'shape'),
+    openLink: () => void openLinkDialog(),
     present,
     find: (replace) => setFind({ replace }),
     zoom,
@@ -2008,6 +2046,13 @@ export function PptxEditor() {
                                 .some((s) => s.kind === 'group'),
                               selectionCount: editor.selection().length,
                               textShape: !!editor.selectedShape()?.textEditable,
+                              link: menuLink(),
+                              editLink: () => void openLinkDialog(),
+                              openLink: followLink,
+                              removeLink: () => {
+                                const target = commands.linkTarget();
+                                if (target) void commands.applyLink(target, '');
+                              },
                             }}
                           />
                         </ContextMenuContent>
@@ -2183,6 +2228,24 @@ export function PptxEditor() {
             onClose={() => {
               setChartDataShape(null);
               queueMicrotask(focusStage);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={linkEdit() && session.outline()}>
+        {(deck) => (
+          <LinkDialog
+            engine={engine}
+            deck={deck()}
+            current={session.slideIndex()}
+            target={linkEdit()!}
+            onApply={(link, tip, text) => {
+              const target = linkEdit();
+              if (target) void commands.applyLink(target, link, tip, text);
+            }}
+            onClose={() => {
+              setLinkEdit(undefined);
+              queueMicrotask(refocus);
             }}
           />
         )}

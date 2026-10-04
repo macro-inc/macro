@@ -455,3 +455,26 @@ test('selects several slides and rearranges them in the slide sorter', async ({
     'Slide 3 of 8'
   );
 });
+
+test('remembers custom colors under Recent colors', async ({ page }) => {
+  await open(page);
+  await selectTitle(page);
+  await page.getByTestId('pptx-fill').click();
+  const picker = page.getByTestId('pptx-fill-colors');
+  await expect(picker.getByTestId('pptx-recent-colors')).toHaveCount(0);
+  await picker.getByTestId('pptx-more-colors').fill('#12a4b6');
+  await expect
+    .poll(
+      async () =>
+        (await outline(page)).slides[0].shapes.find((s) => s.id === 2)?.fill
+    )
+    .toBe('#12A4B6');
+  // The next picker offers it again.
+  await page.getByTestId('pptx-fill').click();
+  await expect(
+    page
+      .getByTestId('pptx-fill-colors')
+      .getByTestId('pptx-recent-colors')
+      .getByRole('button', { name: '#12A4B6' })
+  ).toBeVisible();
+});

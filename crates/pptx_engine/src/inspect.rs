@@ -3,18 +3,18 @@
 //! stops for in-place text editing.
 
 use crate::edit::group::{Frame, GroupSpace};
-use crate::edit::{CellRef, notes_text};
+use crate::edit::{CellRef, link_string, notes_text};
 use crate::error::{Error, Result};
 use crate::font::FontDb;
 use crate::model::fill::Fill;
-use crate::model::presentation::{PartRef, Presentation, SlideContext};
+use crate::model::presentation::{PartRef, Presentation, SlideContext, SlideEntry};
 use crate::model::shape::{
     GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, resolve_tree, sp_tree,
 };
 use crate::model::table::{Table, deck_table_styles, table_style_name};
 use crate::model::table_style::{builtin_style, builtin_styles};
 use crate::model::text::{
-    Align, Anchor, BulletKind, Paragraph, RunKind, RunProps, Strike, Underline,
+    Align, Anchor, BulletKind, Link, Paragraph, RunKind, RunProps, Strike, Underline, read_link,
 };
 use crate::opc::rel_type;
 use crate::path::Affine;
@@ -30,6 +30,10 @@ pub use crate::edit::LayoutInfo;
 pub use animation::AnimationOutline;
 
 mod animation;
+
+pub use links::LinkRegion;
+
+mod links;
 
 pub use picture::{
     CropOutline, EffectsOutline, GlowOutline, PictureOutline, ReflectionOutline, ShadowOutline,
@@ -222,6 +226,13 @@ pub struct ShapeOutline {
     /// Alt text.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub alt_text: String,
+    /// The shape's own hyperlink (clicking the shape in a slide show), as
+    /// `setShapeLink` takes it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
+    /// The shape link's ScreenTip.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_tip: Option<String>,
     /// Preset geometry name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub geometry: Option<String>,
@@ -404,6 +415,13 @@ pub struct RunStyle {
     /// Text shadow and glow (WordArt effects), when the text has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<EffectsOutline>,
+    /// Hyperlink, as `formatText` takes it (an address, `#slide=<id>`, or a
+    /// slide show jump such as `#nextslide`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
+    /// The hyperlink's ScreenTip.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_tip: Option<String>,
 }
 
 /// The resolved formatting of a paragraph.
@@ -558,6 +576,8 @@ fn image_sizes(pres: &Presentation, shapes: &[Shape], out: &mut ImageSizes) {
 struct Media {
     charts: Charts,
     image_sizes: ImageSizes,
+    /// The deck's slides, for links to them.
+    slides: Vec<SlideEntry>,
 }
 
 /// `groups` are the spaces of the groups around `s`, outermost first.
@@ -629,7 +649,12 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], media: &Media) -> ShapeOutlin
         &s.effects,
         !crate::edit::effects::has_own_effects(doc, s.node),
     );
+    let link = crate::model::shape::c_nv_pr(doc, s.node)
+        .and_then(|nv| doc.child(nv, Ns::A, "hlinkClick"))
+        .and_then(|h| read_link(&s.part, h));
     ShapeOutline {
+        link: link.as_ref().and_then(|l| link_string(&media.slides, l)),
+        link_tip: link.and_then(|l| l.tooltip),
         id: s.id,
         name: s.name.clone(),
         kind,
@@ -693,6 +718,7 @@ impl Presentation {
         let mut media = Media {
             charts: Charts::new(),
             image_sizes: ImageSizes::new(),
+            slides: self.slides.clone(),
         };
         chart_outlines(self, &ctx, &shapes, &mut media.charts);
         image_sizes(self, &shapes, &mut media.image_sizes);
@@ -854,7 +880,7 @@ impl Presentation {
         let styles = body
             .paragraphs
             .iter()
-            .map(|p| paragraph_style(&s.part.doc, p))
+            .map(|p| paragraph_style(&s.part.doc, &self.slides, p))
             .collect();
         Ok(Some(TextLayoutInfo {
             transform: [t.a, t.b, t.c, t.d, t.e, t.f],
@@ -940,7 +966,7 @@ impl Presentation {
             styles: body
                 .paragraphs
                 .iter()
-                .map(|p| paragraph_style(&part.doc, p))
+                .map(|p| paragraph_style(&part.doc, &self.slides, p))
                 .collect(),
         }))
     }
@@ -1078,7 +1104,19 @@ fn complete_tables(
 }
 
 fn run_style(props: &RunProps, start: usize, end: usize) -> RunStyle {
+    linked_run_style(props, None, &[], start, end)
+}
+
+fn linked_run_style(
+    props: &RunProps,
+    link: Option<&Link>,
+    slides: &[SlideEntry],
+    start: usize,
+    end: usize,
+) -> RunStyle {
     RunStyle {
+        link: link.and_then(|l| link_string(slides, l)),
+        link_tip: link.and_then(|l| l.tooltip.clone()),
         start,
         end,
         bold: props.bold,
@@ -1094,7 +1132,7 @@ fn run_style(props: &RunProps, start: usize, end: usize) -> RunStyle {
     }
 }
 
-fn paragraph_style(doc: &XmlDoc, p: &Paragraph) -> ParagraphStyle {
+fn paragraph_style(doc: &XmlDoc, slides: &[SlideEntry], p: &Paragraph) -> ParagraphStyle {
     let mut offset = 0;
     let runs = p
         .runs
@@ -1105,7 +1143,7 @@ fn paragraph_style(doc: &XmlDoc, p: &Paragraph) -> ParagraphStyle {
             } else {
                 r.text.chars().count()
             };
-            let style = run_style(&r.props, offset, offset + len);
+            let style = linked_run_style(&r.props, r.link.as_ref(), slides, offset, offset + len);
             offset += len;
             style
         })

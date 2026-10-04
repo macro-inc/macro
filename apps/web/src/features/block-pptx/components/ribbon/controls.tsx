@@ -5,6 +5,7 @@
 
 import { Popover } from '@kobalte/core/popover';
 import CaretDown from '@phosphor/caret-down.svg';
+import Eyedropper from '@phosphor/eyedropper.svg';
 import { cn } from '@ui';
 import { Button, type ButtonProps } from '@ui/components/Button';
 import {
@@ -151,7 +152,55 @@ export function PopoverLabel(props: { children: JSX.Element }) {
   );
 }
 
-/** PowerPoint's color picker: theme grid, standard colors, none, custom. */
+/** The browser's screen color picker (Chromium), where there is one. */
+interface EyeDropperApi {
+  open: () => Promise<{ sRGBHex: string }>;
+}
+const eyeDropper = (): (new () => EyeDropperApi) | undefined =>
+  (window as unknown as { EyeDropper?: new () => EyeDropperApi }).EyeDropper;
+
+/** `#rrggbb` or `rgb(r, g, b)` as `RRGGBB`. */
+function toHex(css: string): string | undefined {
+  const hex = /^#?([0-9a-f]{6})$/i.exec(css.trim());
+  if (hex) return hex[1].toUpperCase();
+  const rgb = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(css.trim());
+  if (!rgb) return undefined;
+  return rgb
+    .slice(1, 4)
+    .map((v) => Math.min(255, Number(v)).toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+}
+
+const RECENT_KEY = 'pptx-recent-colors';
+const isHex = (v: unknown): v is string =>
+  typeof v === 'string' && /^[0-9A-F]{6}$/.test(v);
+function loadRecent(): string[] {
+  try {
+    const stored: unknown = JSON.parse(
+      localStorage.getItem(RECENT_KEY) ?? '[]'
+    );
+    return Array.isArray(stored) ? stored.filter(isHex).slice(0, 10) : [];
+  } catch {
+    return [];
+  }
+}
+/** Custom colors picked lately (More colors, Eyedropper), newest first. */
+const [recentColors, setRecentColors] = createSignal<string[]>(loadRecent());
+function rememberColor(hex: string) {
+  const next = [hex, ...recentColors().filter((c) => c !== hex)].slice(0, 10);
+  setRecentColors(next);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // Storage may be unavailable (private windows); the session keeps them.
+  }
+}
+
+/**
+ * PowerPoint's color picker: theme grid, standard colors, recent colors,
+ * none, custom, and the Eyedropper.
+ */
 export function ColorPicker(props: {
   themeGrid: Swatch[][];
   standard: Swatch[];
@@ -161,6 +210,13 @@ export function ColorPicker(props: {
   testId?: string;
 }) {
   let custom!: HTMLInputElement;
+  /** A color from More colors or the Eyedropper (`#rrggbb` or `rgb(…)`). */
+  const pickCustom = (css: string) => {
+    const hex = toHex(css);
+    if (!hex) return;
+    rememberColor(hex);
+    props.onPick(hex);
+  };
   const swatch = (s: Swatch) => (
     <button
       type="button"
@@ -201,6 +257,14 @@ export function ColorPicker(props: {
       <div class="flex justify-between px-1">
         <For each={props.standard}>{swatch}</For>
       </div>
+      <Show when={recentColors().length > 0}>
+        <PopoverLabel>Recent colors</PopoverLabel>
+        <div class="flex gap-[5px] px-1" data-testid="pptx-recent-colors">
+          <For each={recentColors()}>
+            {(hex) => swatch({ value: hex, css: `#${hex}`, label: `#${hex}` })}
+          </For>
+        </div>
+      </Show>
       <PopoverItem
         label="More colors…"
         icon={
@@ -208,14 +272,30 @@ export function ColorPicker(props: {
         }
         onClick={() => custom.click()}
       />
+      <Show when={eyeDropper()}>
+        {(EyeDropper) => (
+          <PopoverItem
+            label="Eyedropper"
+            icon={<Eyedropper class="size-4" />}
+            testId="pptx-eyedropper"
+            onClick={() => {
+              const Ctor = EyeDropper();
+              new Ctor()
+                .open()
+                .then(({ sRGBHex }) => pickCustom(sRGBHex))
+                // Escape cancels the pick.
+                .catch(() => {});
+            }}
+          />
+        )}
+      </Show>
       <input
         ref={custom}
         type="color"
         class="sr-only"
         tabIndex={-1}
-        onChange={(e) =>
-          props.onPick(e.currentTarget.value.replace('#', '').toUpperCase())
-        }
+        data-testid="pptx-more-colors"
+        onChange={(e) => pickCustom(e.currentTarget.value)}
       />
     </div>
   );

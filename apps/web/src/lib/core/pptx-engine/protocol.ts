@@ -13,6 +13,7 @@ import type {
   EditResult,
   EntryChange,
   FindOptions,
+  LinkRegion,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
@@ -59,6 +60,8 @@ export type PptxRequest =
       shape: number;
       cell?: CellRef;
     })
+  /** The clickable areas of a slide. */
+  | (Base & { kind: 'linkRegions'; index: number })
   | (Base & { kind: 'apply'; ops: string; group?: string })
   | (Base & { kind: 'breakGroup' })
   | (Base & { kind: 'undo' })
@@ -103,6 +106,7 @@ export type PptxResponse =
       millis: number;
     }
   | { id: number; ok: true; kind: 'textLayout'; layout: TextLayoutInfo | null }
+  | { id: number; ok: true; kind: 'linkRegions'; regions: LinkRegion[] }
   | {
       id: number;
       ok: true;

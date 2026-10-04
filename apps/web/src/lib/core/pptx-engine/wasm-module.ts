@@ -44,6 +44,8 @@ export interface WasmPptxDocument {
     row?: number,
     col?: number
   ) => string;
+  /** `LinkRegion[]` JSON: a slide's clickable areas. */
+  linkRegions: (index: number) => string;
   /** Applies an `EditOp[]` JSON batch; returns `EditResult` JSON. */
   apply: (ops: string, group?: string) => string;
   breakGroup: () => void;

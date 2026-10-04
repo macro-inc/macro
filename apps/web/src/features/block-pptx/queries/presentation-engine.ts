@@ -12,6 +12,7 @@ import {
   copySlides,
   enableCollab,
   findText,
+  getLinkRegions,
   getOutline,
   getPresetPaths,
   getSlideOutline,
@@ -73,6 +74,7 @@ function readers(key: string) {
     ) => renderSlideSpan(key, index, width, start, end, backdrop),
     textLayout: (index: number, shape: number, cell?: CellRef) =>
       getTextLayout(key, index, shape, cell),
+    linkRegions: (index: number) => getLinkRegions(key, index),
     presetPaths: getPresetPaths,
     save: () => savePresentation(key),
     close: () => closePresentation(key),

@@ -786,6 +786,9 @@ export function createSlideEditor(options: SlideEditorOptions) {
     }
   }
 
+  /** The latest text batch, settled once its layout is read back. */
+  let lastText: Promise<unknown> = Promise.resolve();
+
   async function runText(
     ops: EditOp[],
     caret: TextPos,
@@ -794,12 +797,22 @@ export function createSlideEditor(options: SlideEditorOptions) {
     if (ops.length === 0) return;
     setEditingSelection({ anchor: caret, focus: caret });
     pendingTextOps++;
-    try {
-      await session.apply(ops, group);
-    } finally {
-      pendingTextOps--;
-    }
-    await refreshEditing();
+    const done = (async () => {
+      try {
+        await session.apply(ops, group);
+      } finally {
+        pendingTextOps--;
+      }
+      await refreshEditing();
+    })();
+    lastText = done.catch(() => {});
+    await done;
+  }
+
+  /** Resolves once editing has started and text edits in flight have landed. */
+  async function textSettled() {
+    await editReady;
+    await lastText;
   }
 
   const typingGroup = (edit: EditingState) =>
@@ -916,6 +929,43 @@ export function createSlideEditor(options: SlideEditorOptions) {
     );
   }
 
+  /**
+   * Links `start`–`end` of the edited text (`link` `""` unlinks it). With
+   * `text`, the range is first replaced by it (the dialog's "Text to
+   * display"); an empty range takes `text` as new linked text.
+   */
+  async function linkText(
+    start: TextPos,
+    end: TextPos,
+    link: string,
+    tip: string | undefined,
+    text?: string
+  ) {
+    await editReady;
+    const edit = editing();
+    const t = edit && target(edit);
+    if (!edit?.layout || !t) return;
+    const ops: EditOp[] = [];
+    let to = end;
+    if (text !== undefined && text !== textInRange(edit.layout, start, end)) {
+      const cmd = insertCommand(t, { anchor: start, focus: end }, text);
+      ops.push(...cmd.ops);
+      to = cmd.caret;
+    }
+    if (start.paragraph === to.paragraph && start.offset === to.offset) {
+      await runText(ops, to, undefined);
+      return;
+    }
+    ops.push({
+      op: 'formatText',
+      ...t,
+      start,
+      end: to,
+      props: { link, linkTip: link ? (tip ?? '') : undefined },
+    });
+    await runText(ops, to, undefined);
+  }
+
   /** Applies formatting to the edited range, or to every selected text shape. */
   async function formatWith(
     build: (target: TextTarget, range: [TextPos, TextPos] | null) => EditOp
@@ -1004,6 +1054,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
     startEditing,
     stopEditing,
     typeText,
+    linkText,
+    textSettled,
     deleteText,
     moveCaret,
     selectAllText,

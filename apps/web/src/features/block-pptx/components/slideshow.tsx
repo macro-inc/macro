@@ -1,15 +1,23 @@
 /**
  * Slide show: the deck full screen, one slide at a time, with the slides'
  * transitions and PowerPoint's keyboard controls (see `createShow`); S shows
- * speaker notes.
+ * speaker notes. Links show a hand and their ScreenTip, and a click follows
+ * them.
  */
 
-import type { DeckOutline } from '@core/pptx-engine/types';
+import type { DeckOutline, LinkRegion } from '@core/pptx-engine/types';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import X from '@phosphor/x.svg';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createResource,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
+import { linkLabel, regionAt } from '../core/links';
 import { createShow } from '../primitives/create-show';
 import { ShowCanvas } from './show-canvas';
 
@@ -37,6 +45,27 @@ export function SlideShow(props: {
     w: window.innerWidth,
     h: window.innerHeight,
   });
+
+  // Links: a hand and the ScreenTip over them; a click follows one.
+  const [regions] = createResource(
+    () => (props.engine.linkRegions ? show.index() : undefined),
+    async (index) => (await props.engine.linkRegions?.(index)) ?? []
+  );
+  const [hover, setHover] = createSignal<{
+    region: LinkRegion;
+    x: number;
+    y: number;
+  }>();
+  /** The link under a pointer event, in slide points. */
+  const regionAtEvent = (e: MouseEvent) => {
+    const list = regions.latest;
+    if (!list?.length || show.ended() || show.screen() !== 'slide') return;
+    const { w, h } = size();
+    const scale = Math.min(w / props.deck.width, h / props.deck.height);
+    const x = (e.clientX - (w - props.deck.width * scale) / 2) / scale;
+    const y = (e.clientY - (h - props.deck.height * scale) / 2) / scale;
+    return regionAt(list, x, y);
+  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     e.stopPropagation();
@@ -80,11 +109,23 @@ export function SlideShow(props: {
       aria-label="Slide show"
       data-testid="pptx-slideshow"
       class="fixed inset-0 z-modal flex items-center justify-center bg-[black] outline-none"
-      classList={{ 'cursor-none': !chrome() }}
+      classList={{ 'cursor-none': !chrome() && !hover() }}
+      style={{ cursor: hover() ? 'pointer' : undefined }}
       onKeyDown={onKeyDown}
-      onPointerMove={showChrome}
+      onPointerMove={(e) => {
+        showChrome();
+        const region = regionAtEvent(e);
+        setHover(region ? { region, x: e.clientX, y: e.clientY } : undefined);
+      }}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest('button')) return;
+        const region = regionAtEvent(e);
+        if (region) {
+          setHover(undefined);
+          const url = show.follow(region.link);
+          if (url) window.open(url, '_blank', 'noopener,noreferrer');
+          return;
+        }
         show.go(1);
       }}
       onContextMenu={(e) => {
@@ -105,6 +146,17 @@ export function SlideShow(props: {
         onShown={show.shown}
         testId="pptx-slideshow-canvas"
       />
+      <Show when={hover()}>
+        {(h) => (
+          <div
+            class="pointer-events-none absolute max-w-80 rounded-sm border border-[#999] bg-[#ffffe1] px-1.5 py-0.5 text-[#000] text-xs shadow"
+            style={{ left: `${h().x + 12}px`, top: `${h().y + 18}px` }}
+            data-testid="pptx-slideshow-link-tip"
+          >
+            {h().region.tip ?? linkLabel(h().region.link, props.deck)}
+          </div>
+        )}
+      </Show>
       <Show when={show.ended()}>
         <div class="absolute inset-0 flex items-start justify-center bg-[black] pt-8 text-[#ccc] text-sm">
           End of slide show, click to exit.

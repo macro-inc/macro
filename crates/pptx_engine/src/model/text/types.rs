@@ -300,6 +300,27 @@ pub enum RunKind {
     Field(String),
 }
 
+/// Where a hyperlink (`a:hlinkClick`) goes.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LinkTarget {
+    /// An external address: a web page, `mailto:`, or a file.
+    Url(String),
+    /// Another slide of the deck, by part name.
+    Slide(String),
+    /// A slide show jump: `firstslide`, `lastslide`, `nextslide`,
+    /// `previousslide`, `lastslideviewed`, or `endshow`.
+    Jump(String),
+}
+
+/// A hyperlink on text or on a shape.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Link {
+    /// Where it goes.
+    pub target: LinkTarget,
+    /// The ScreenTip shown on hover.
+    pub tooltip: Option<String>,
+}
+
 /// A resolved run.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Run {
@@ -309,8 +330,8 @@ pub struct Run {
     pub props: RunProps,
     /// Kind.
     pub kind: RunKind,
-    /// Hyperlink target, if any.
-    pub link: Option<String>,
+    /// Hyperlink, if any.
+    pub link: Option<Link>,
     /// The run element (`a:r`, `a:br`, `a:fld`).
     pub node: NodeId,
 }

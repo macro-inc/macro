@@ -3,6 +3,7 @@
 //! Positions count Unicode scalar values; `a:br` counts as one character and
 //! fields count as their displayed text, matching the layout's caret stops.
 
+use super::links::{LinkRef, set_run_link};
 use super::ops::{BodyPatch, BulletSpec, ParaPatch, RunPatch, TextPos};
 use super::xmlutil::{
     BODY_PR_ORDER, P_PR_ORDER, R_PR_ORDER, color_element, replace_fill, solid_fill,
@@ -393,7 +394,7 @@ pub fn patch_rpr(
     doc: &mut XmlDoc,
     rpr: NodeId,
     patch: &RunPatch,
-    link_rid: Option<&str>,
+    link: Option<&LinkRef>,
 ) -> Result<()> {
     let flag = |v: bool| if v { "1" } else { "0" };
     if let Some(b) = patch.bold {
@@ -445,15 +446,11 @@ pub fn patch_rpr(
             doc.remove_attr(el, "charset");
         }
     }
-    if let Some(link) = &patch.link {
-        doc.remove_children_named(rpr, Ns::A, "hlinkClick");
-        if !link.is_empty() {
-            let rid = link_rid
-                .ok_or_else(|| Error::InvalidEdit("hyperlink relationship missing".into()))?;
-            let el = doc.create_element(Ns::A, "hlinkClick");
-            doc.set_attr_ns(el, Ns::R, "id", rid);
-            doc.insert_in_order(rpr, el, R_PR_ORDER);
+    if let Some(target) = &patch.link {
+        if !target.trim().is_empty() && link.is_none() {
+            return Err(Error::InvalidEdit("hyperlink relationship missing".into()));
         }
+        set_run_link(doc, rpr, link);
     }
     super::effects::patch_run_effects(doc, rpr, patch.shadow.as_ref(), patch.glow.as_ref())
 }
@@ -465,7 +462,7 @@ pub fn format_text(
     start: Option<TextPos>,
     end: Option<TextPos>,
     patch: &RunPatch,
-    link_rid: Option<&str>,
+    link: Option<&LinkRef>,
 ) -> Result<()> {
     let ps = paragraphs(doc, body);
     if ps.is_empty() {
@@ -507,7 +504,7 @@ pub fn format_text(
             for (node, l) in items(doc, p) {
                 if pos >= from && pos + l <= to && doc.local(node) != "br" {
                     let rpr = ensure_rpr(doc, node);
-                    patch_rpr(doc, rpr, patch, link_rid)?;
+                    patch_rpr(doc, rpr, patch, link)?;
                 }
                 pos += l;
             }

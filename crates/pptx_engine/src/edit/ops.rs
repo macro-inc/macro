@@ -646,6 +646,21 @@ pub enum EditOp {
         /// New name.
         name: String,
     },
+    /// Links whole shapes: clicking one in a slide show follows the link.
+    /// Links on text are set with formatText's `link`.
+    SetShapeLink {
+        /// Slide id.
+        slide: u32,
+        /// Shape ids.
+        shapes: Vec<u32>,
+        /// An address (`https://…`, `mailto:…`), `#slide=<id>`, a slide show
+        /// jump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
+        /// `#lastslideviewed`, `#endshow`), or `""` to remove the link.
+        link: String,
+        /// The ScreenTip shown on hover.
+        #[serde(default)]
+        tip: Option<String>,
+    },
     /// Hides or shows a shape (hidden shapes are not drawn).
     SetShapeHidden {
         /// Slide id.
