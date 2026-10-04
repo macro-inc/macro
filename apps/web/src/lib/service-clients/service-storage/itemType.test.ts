@@ -53,7 +53,7 @@ describe('stringToItemType', () => {
     expect(stringToItemType(raw)).toBe(raw);
   });
 
-  test.each(['crm_contact', 'automation', 'channel_message', 'bogus'])(
+  test.each(['crm_contact', 'routine', 'channel_message', 'bogus'])(
     'rejects %s',
     (raw) => {
       expect(stringToItemType(raw)).toBeUndefined();
@@ -69,7 +69,7 @@ describe('blockNameToItemType', () => {
     ['channel', 'channel'],
     ['project', 'project'],
     ['email', 'email'],
-    ['automation', 'automation'],
+    ['routine', 'routine'],
     ['company', 'crm_company'],
     ['contact', 'crm_contact'],
     ['pr', 'foreign'],

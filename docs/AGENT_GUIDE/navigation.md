@@ -476,17 +476,21 @@ time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
 the composer without moving it. Recurring schedules retain their time zones;
 one-off times use the browser’s local time.
 
-**Documents** contains **Document created** (including tasks) and **Document
-details changed** (name, location, or sharing changes, not editor keystrokes).
-**Channels** contains **Message sent**, **Mention added**, **Message edited**,
-**Attachment added**, and **Channel created**. These groups appear directly in
-the trigger menu. Choosing an event shows the channel/document search inside the
-same panel; select specific accessible items or any accessible item, then confirm.
-A mention trigger matches mentions in that channel, not only mentions of the
-routine owner.
-These are Macro activity events, not incoming HTTP webhooks. Hutch’s current
-allowlist does not distinguish task creation from document creation and does not
-include project creation. Bots’ or delegated actions do not retrigger routines.
+The event menu groups Macro activity triggers by surface:
+
+- **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
+- **Documents:** **Document created** and **Document deleted**. Tasks are separate.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+
+For messages, mentions, deletion, and task changes, choose specific accessible
+channels/documents/tasks or any accessible item in the same panel. Creation
+triggers cover newly created accessible items; email covers the owner's inbox.
+Mentions match only @ mentions of the routine owner. **Any property changed**
+also includes status and priority; overlapping selectors start only one run for
+the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
+or delegated changes do not retrigger routines. Saved legacy selectors remain
+editable but are no longer offered in the new-trigger menu.
 
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group;

@@ -1,13 +1,15 @@
 //! Routine-owned event eligibility and exact selector matching.
 //!
 //! Adapters strip the broker envelope into [`IncomingEvent`]. Only explicitly
-//! allowlisted, human-authored events can become compact [`EventReference`]s.
+//! allowlisted human actions and inbound emails become compact [`EventReference`]s.
 
 use activity::Actor;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
+use document_sub_type::DocumentSubType;
 use documents::domain::events::DocumentTopicEvent;
+use email::domain::events::EmailTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::{
@@ -17,7 +19,10 @@ use messages::domain::{
     },
     models::MessageParent,
 };
+use models_properties::EntityType as PropertyEntityType;
+use properties::domain::events::PropertyTopicEvent;
 use serde::{Deserialize, Serialize};
+use system_properties::SystemPropertyKey;
 use utoipa::ToSchema;
 
 use super::models::Schedule;
@@ -27,7 +32,7 @@ mod test;
 
 /// Limits apply before deduplication, including repeated values.
 pub const MAX_FILTERS: usize = 32;
-pub const MAX_EVENTS_PER_FILTER: usize = 7;
+pub const MAX_EVENTS_PER_FILTER: usize = 13;
 pub const MAX_IDS_PER_FILTER: usize = 100;
 
 /// A routine may run on one trigger or any of several schedules and Macro events.
@@ -152,6 +157,18 @@ pub enum EventName {
     DocumentCreated,
     #[serde(rename = "document.updated")]
     DocumentUpdated,
+    #[serde(rename = "document.deleted")]
+    DocumentDeleted,
+    #[serde(rename = "task.created")]
+    TaskCreated,
+    #[serde(rename = "task.status_changed")]
+    TaskStatusChanged,
+    #[serde(rename = "task.priority_changed")]
+    TaskPriorityChanged,
+    #[serde(rename = "task.property_changed")]
+    TaskPropertyChanged,
+    #[serde(rename = "email.message_received")]
+    EmailMessageReceived,
     #[serde(rename = "channel.created")]
     ChannelCreated,
     #[serde(rename = "channel.message_posted")]
@@ -169,6 +186,12 @@ impl EventName {
         match self {
             Self::DocumentCreated => "document.created",
             Self::DocumentUpdated => "document.updated",
+            Self::DocumentDeleted => "document.deleted",
+            Self::TaskCreated => "task.created",
+            Self::TaskStatusChanged => "task.status_changed",
+            Self::TaskPriorityChanged => "task.priority_changed",
+            Self::TaskPropertyChanged => "task.property_changed",
+            Self::EmailMessageReceived => "email.message_received",
             Self::ChannelCreated => "channel.created",
             Self::ChannelMessagePosted => "channel.message_posted",
             Self::ChannelMentioned => "channel.mentioned",
@@ -179,16 +202,36 @@ impl EventName {
 
     pub const fn entity_type(self) -> EventEntityType {
         match self {
-            Self::DocumentCreated | Self::DocumentUpdated => EventEntityType::Document,
+            Self::DocumentCreated
+            | Self::DocumentUpdated
+            | Self::DocumentDeleted
+            | Self::TaskCreated
+            | Self::TaskStatusChanged
+            | Self::TaskPriorityChanged
+            | Self::TaskPropertyChanged => EventEntityType::Document,
+            Self::EmailMessageReceived => EventEntityType::EmailThread,
             _ => EventEntityType::Channel,
         }
     }
 
     const fn has_message(self) -> bool {
-        !matches!(
+        matches!(
             self,
-            Self::DocumentCreated | Self::DocumentUpdated | Self::ChannelCreated
+            Self::ChannelMessagePosted
+                | Self::ChannelMentioned
+                | Self::ChannelMessagePatched
+                | Self::ChannelMessageAttachmentCreated
+                | Self::EmailMessageReceived
         )
+    }
+
+    /// Status and priority also match any-property selectors. The original
+    /// event ID still deduplicates routines that subscribe to both names.
+    pub const fn general_event(self) -> Option<Self> {
+        match self {
+            Self::TaskStatusChanged | Self::TaskPriorityChanged => Some(Self::TaskPropertyChanged),
+            _ => None,
+        }
     }
 }
 
@@ -197,13 +240,14 @@ impl EventName {
 pub enum EventEntityType {
     Document,
     Channel,
+    EmailThread,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum FilterValidationError {
     #[error("expected between 1 and 32 filters")]
     FilterCount,
-    #[error("expected between 1 and 7 event names per filter")]
+    #[error("expected between 1 and 13 event names per filter")]
     EventCount,
     #[error("expected at most 100 entity IDs per filter")]
     IdCount,
@@ -268,7 +312,11 @@ impl EventFilter {
     }
 
     pub fn accepts(&self, name: EventName, entity_id: Uuid) -> bool {
-        self.events.contains(&name) && self.ids.as_ref().is_none_or(|ids| ids.contains(&entity_id))
+        (self.events.contains(&name)
+            || name
+                .general_event()
+                .is_some_and(|general| self.events.contains(&general)))
+            && self.ids.as_ref().is_none_or(|ids| ids.contains(&entity_id))
     }
 }
 
@@ -413,6 +461,8 @@ pub enum EventPayload {
     Document(DocumentTopicEvent),
     Channel(ChannelTopicEvent),
     Message(MessageFact),
+    Property(PropertyTopicEvent),
+    Email(EmailTopicEvent),
 }
 
 /// The message facts routines can trigger on, from `macro.messages`. Anything
@@ -481,10 +531,23 @@ fn document_actor(
 }
 
 impl IncomingEvent {
+    /// Mentions belong to the mentioned user and inbound mail to its inbox
+    /// owner. Entity access is checked separately at admission and dispatch.
+    /// These audience restrictions never turn an event into an access grant.
+    pub fn is_for_owner(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        match &self.payload {
+            EventPayload::Message(MessageFact::Mentioned(data)) => {
+                data.mentioned.entity_type == "user" && data.mentioned.entity_id == owner.as_ref()
+            }
+            EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => &data.owner == owner,
+            _ => true,
+        }
+    }
+
     /// Fail closed on attribution, identity and schema. Wildcard arms are
     /// deliberate: future source variants remain non-triggering by default.
     pub fn normalize(&self) -> Result<EventReference, EventRejection> {
-        // Both currently supported source schemas are version 1. A producer
+        // All currently supported source schemas are version 1. A producer
         // version change requires reviewing eligibility before accepting it.
         if self.schema_version != 1 {
             return Err(EventRejection::UnsupportedSchema);
@@ -495,7 +558,23 @@ impl IncomingEvent {
                 let (name, id) = match event {
                     DocumentTopicEvent::Created(data) => {
                         require_human(data.actor.as_ref(), data.on_behalf_of.is_some())?;
-                        (EventName::DocumentCreated, &data.document_id)
+                        let name = if data.sub_type == Some(DocumentSubType::Task) {
+                            EventName::TaskCreated
+                        } else {
+                            EventName::DocumentCreated
+                        };
+                        (name, &data.document_id)
+                    }
+                    DocumentTopicEvent::Deleted(data) => {
+                        document_actor(
+                            data.actor.as_ref(),
+                            data.actor_user_id.as_ref(),
+                            data.on_behalf_of.is_some(),
+                        )?;
+                        if data.sub_type == Some(DocumentSubType::Task) {
+                            return Err(EventRejection::UnsupportedEvent);
+                        }
+                        (EventName::DocumentDeleted, &data.document_id)
                     }
                     DocumentTopicEvent::Updated(data) => {
                         document_actor(
@@ -530,6 +609,9 @@ impl IncomingEvent {
                 MessageFact::Mentioned(data) => {
                     let channel_id = channel_parent(&data.parent)?;
                     require_human(Some(&data.sender), false)?;
+                    if data.mentioned.entity_type != "user" {
+                        return Err(EventRejection::UnsupportedEvent);
+                    }
                     (
                         EventName::ChannelMentioned,
                         channel_id,
@@ -556,6 +638,24 @@ impl IncomingEvent {
                 }
                 MessageFact::Other => return Err(EventRejection::UnsupportedEvent),
             },
+            EventPayload::Property(event) => {
+                let (name, id) = task_property_event(event)?;
+                let id = Uuid::parse_str(id).map_err(|_| EventRejection::InvalidEntityId)?;
+                (name, id, None)
+            }
+            EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => {
+                // The email domain emits this only for newly received mail,
+                // never sent messages, drafts or historical backfills.
+                if data.is_spam_or_trash {
+                    return Err(EventRejection::UnsupportedEvent);
+                }
+                (
+                    EventName::EmailMessageReceived,
+                    data.thread_id,
+                    Some(data.message_id),
+                )
+            }
+            EventPayload::Email(_) => return Err(EventRejection::UnsupportedEvent),
         };
         Ok(EventReference {
             event_id,
@@ -564,4 +664,50 @@ impl IncomingEvent {
             message_id,
         })
     }
+}
+
+fn task_property_event(event: &PropertyTopicEvent) -> Result<(EventName, &str), EventRejection> {
+    let (entity_type, entity_id, property_id, actor, fallback, delegated) = match event {
+        PropertyTopicEvent::EntityPropertyUpdated(data) => {
+            if data.value == data.previous_value {
+                return Err(EventRejection::UnsupportedEvent);
+            }
+            (
+                &data.entity_type,
+                data.entity_id.as_str(),
+                Some(data.property_definition_id),
+                data.actor.as_ref(),
+                data.actor_user_id.as_ref(),
+                data.on_behalf_of.is_some(),
+            )
+        }
+        PropertyTopicEvent::EntityPropertyDeleted(data) => (
+            &data.entity_type,
+            data.entity_id.as_str(),
+            Some(data.property_definition_id),
+            data.actor.as_ref(),
+            data.actor_user_id.as_ref(),
+            data.on_behalf_of.is_some(),
+        ),
+        PropertyTopicEvent::EntityPropertiesCleared(data) => (
+            &data.entity_type,
+            data.entity_id.as_str(),
+            None,
+            data.actor.as_ref(),
+            data.actor_user_id.as_ref(),
+            data.on_behalf_of.is_some(),
+        ),
+        _ => return Err(EventRejection::UnsupportedEvent),
+    };
+    // The properties domain resolves document subtypes before publishing.
+    if *entity_type != PropertyEntityType::Task {
+        return Err(EventRejection::UnsupportedEvent);
+    }
+    document_actor(actor, fallback, delegated)?;
+    let name = match property_id {
+        Some(SystemPropertyKey::STATUS_UUID) => EventName::TaskStatusChanged,
+        Some(SystemPropertyKey::PRIORITY_UUID) => EventName::TaskPriorityChanged,
+        _ => EventName::TaskPropertyChanged,
+    };
+    Ok((name, entity_id))
 }

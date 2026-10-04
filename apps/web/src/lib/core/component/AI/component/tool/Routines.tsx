@@ -1,5 +1,5 @@
+import { invalidateSchedules } from '@app/features/routines/queries/schedules';
 import Clock from '@phosphor-icons/core/regular/clock.svg';
-import { invalidateSchedules } from '@queries/agent-schedule/schedules';
 import { createSignal } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

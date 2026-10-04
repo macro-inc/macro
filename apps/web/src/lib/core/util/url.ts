@@ -72,7 +72,7 @@ export function buildSimpleEntityUrl(
   entity: { type: string; id: string },
   params?: Record<string, string>
 ): string {
-  const type = entity.type === 'automation' ? 'routines' : entity.type;
+  const type = entity.type === 'routine' ? 'routines' : entity.type;
   const urlString = `${getWebOrigin()}/app/${type}/${entity.id}`;
   const url = new URL(urlString);
   if (params) {

@@ -28,11 +28,16 @@ bot_id = { path = "../../crates/bot_id" }
 channel_sender = { path = "../../crates/channel_sender" }
 channels = { path = "../../crates/channels", default-features = false }
 documents = { path = "../../crates/documents", default-features = false }
+document_sub_type = { path = "../../crates/document_sub_type" }
+email = { path = "../../crates/email", default-features = false }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["ports"] }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
 messages = { path = "../../crates/messages", features = ["broker"] }
+models_properties = { path = "../../crates/models_properties" }
+properties = { path = "../../crates/properties", default-features = false }
+system_properties = { path = "../../crates/system_properties" }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

@@ -124,10 +124,10 @@ describe('application route mentions', () => {
   });
 
   it('resolves canonical routine links and their existing aliases to the same entity', () => {
-    for (const path of [`routines/${mentionId}`, `automation/${mentionId}`]) {
+    for (const path of [`routines/${mentionId}`, `routine/${mentionId}`]) {
       expect(resolveMention(`https://dev.macro.com/app/${path}`)).toEqual({
         id: mentionId,
-        block: 'automation',
+        block: 'routine',
         params: {},
       });
     }

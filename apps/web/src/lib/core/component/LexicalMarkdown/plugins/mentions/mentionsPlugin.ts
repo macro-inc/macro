@@ -148,7 +148,7 @@ export type ItemMention = {
     | 'agent_session'
     | 'foreign'
     | 'group'
-    | 'automation'
+    | 'routine'
     | 'crm_company'
     | 'crm_contact'
     | 'skill';
@@ -321,7 +321,7 @@ const getDocumentMentionItemType = (
     .with('project', () => 'project')
     .with('channel_message', () => 'channel')
     .with('channel_thread', () => 'channel')
-    .with('automation', () => 'automation')
+    .with('routine', () => 'routine')
     .with('call', () => 'call')
     .with('calendar_event', () => 'calendar_event')
     .with('foreign', () => {

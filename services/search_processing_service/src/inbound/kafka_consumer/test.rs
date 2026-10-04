@@ -888,6 +888,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+                sub_type: None,
                 document_id: DOCUMENT_ID.to_string(),
                 actor_user_id: Some(user.clone()),
                 actor: None,

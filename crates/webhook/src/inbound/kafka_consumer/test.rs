@@ -39,6 +39,7 @@ fn decode_message(topic: &str, payload: &[u8]) -> Result<DeclaredMacroEvent, Eve
 
 fn document_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: "doc_1".to_string(),
         actor_user_id: None,
         actor: None,

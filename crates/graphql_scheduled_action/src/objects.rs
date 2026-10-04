@@ -99,6 +99,18 @@ pub(crate) enum GraphqlScheduledActionEventName {
     DocumentCreated,
     /// A document was updated.
     DocumentUpdated,
+    /// A document was deleted.
+    DocumentDeleted,
+    /// A task was created.
+    TaskCreated,
+    /// A task's status changed.
+    TaskStatusChanged,
+    /// A task's priority changed.
+    TaskPriorityChanged,
+    /// A task property changed.
+    TaskPropertyChanged,
+    /// A new email was received.
+    EmailMessageReceived,
     /// A channel was created.
     ChannelCreated,
     /// A channel message was posted.
@@ -116,6 +128,12 @@ impl From<EventName> for GraphqlScheduledActionEventName {
         match name {
             EventName::DocumentCreated => Self::DocumentCreated,
             EventName::DocumentUpdated => Self::DocumentUpdated,
+            EventName::DocumentDeleted => Self::DocumentDeleted,
+            EventName::TaskCreated => Self::TaskCreated,
+            EventName::TaskStatusChanged => Self::TaskStatusChanged,
+            EventName::TaskPriorityChanged => Self::TaskPriorityChanged,
+            EventName::TaskPropertyChanged => Self::TaskPropertyChanged,
+            EventName::EmailMessageReceived => Self::EmailMessageReceived,
             EventName::ChannelCreated => Self::ChannelCreated,
             EventName::ChannelMessagePosted => Self::ChannelMessagePosted,
             EventName::ChannelMentioned => Self::ChannelMentioned,

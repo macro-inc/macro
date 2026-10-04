@@ -62,7 +62,7 @@ export function decodeLegacyPair(
 ): SplitContent | undefined {
   if (!type || !id) return;
 
-  if (type === 'automation') return routineContent(id);
+  if (type === 'routine') return routineContent(id);
 
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) return { type: 'component', id: agentsRoute };
@@ -106,7 +106,7 @@ export function decodeLegacyPair(
 }
 
 function legacyEntry(type: string, id: string): SplitRouterEntry | undefined {
-  if (type === 'automation') return { location: routineLocation(id) };
+  if (type === 'routine') return { location: routineLocation(id) };
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) {
     return {
@@ -204,7 +204,7 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
-  if (content.type === 'automation') return routineLocation(content.id);
+  if (content.type === 'routine') return routineLocation(content.id);
   if (content.type === 'component' && content.id === 'routines') {
     return routineLocation(routineIdFromContent(content));
   }

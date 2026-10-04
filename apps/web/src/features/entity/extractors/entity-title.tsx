@@ -25,8 +25,8 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       .with({ type: 'chat' }, (e) => e.name)
       .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
       .with(
-        { type: 'automation' },
-        (e) => e.name || blockNameToDefaultFile('automation')
+        { type: 'routine' },
+        (e) => e.name || blockNameToDefaultFile('routine')
       )
       .when(isGithubPrEntity, (e) => (
         <>

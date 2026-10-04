@@ -1,7 +1,6 @@
 import { ActivityRouteView } from '@app/features/activity/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { AgentsRouteView } from '@app/features/agents-view/route';
-import { RoutineCreator } from '@app/features/block-automation/component/AutomationComposer';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -29,6 +28,7 @@ import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit
 import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
 import { RemindersRouteView } from '@app/features/reminders/route';
 import { ReviewsRouteView } from '@app/features/reviews-view/route';
+import { RoutineCreator } from '@app/features/routines/routine-creator';
 import { SettingsRouteView } from '@app/features/settings/route';
 import { TasksRouteView } from '@app/features/tasks-view/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';

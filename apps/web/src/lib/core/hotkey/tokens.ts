@@ -288,7 +288,7 @@ export const TOKENS = {
     initiative: 'create.initiative',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
-    automation: 'create.automation',
+    routine: 'create.routine',
     skill: 'create.skill',
     reminder: 'create.reminder',
     agent: 'create.agent',

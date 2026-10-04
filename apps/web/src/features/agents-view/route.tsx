@@ -1,5 +1,6 @@
 import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
+import { useRoutineEntities } from '@app/features/routines/queries/entities';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -14,7 +15,6 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { createRenderEffect, lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
@@ -42,7 +42,7 @@ function LegacyAgentsView() {
     userId: user.userId(),
     isTeamAdmin: false,
   });
-  const entities = useAutomationEntities();
+  const entities = useRoutineEntities();
   return (
     <div class="flex size-full flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
       <div

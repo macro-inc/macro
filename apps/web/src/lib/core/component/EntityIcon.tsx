@@ -409,7 +409,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-chat/20',
     prettyName: 'Skill',
   },
-  automation: {
+  routine: {
     icon: ClockClockwise,
     boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
@@ -629,7 +629,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'calendar_event' }, () => 'calendar')
     .with({ type: 'reminder' }, () => 'reminder')
     .with({ type: 'call' }, () => 'call')
-    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
       if (e.foreignSource !== 'github_pull_request') return 'default';
       return match<unknown, EntityWithValidIcon>(e.metadata?.status)

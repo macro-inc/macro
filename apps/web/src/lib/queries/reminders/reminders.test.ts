@@ -28,7 +28,7 @@ describe('reminderEntityType', () => {
   it('has no mapping for types a reminder cannot attach to', () => {
     expect(reminderEntityType('channel_message')).toBeUndefined();
     expect(reminderEntityType('channel_thread')).toBeUndefined();
-    expect(reminderEntityType('automation')).toBeUndefined();
+    expect(reminderEntityType('routine')).toBeUndefined();
   });
 });
 
@@ -57,7 +57,7 @@ describe('reminderTarget', () => {
 
   it('is undefined for types with no reminder target', () => {
     expect(reminderTarget(entity('channel_message'))).toBeUndefined();
-    expect(reminderTarget(entity('automation'))).toBeUndefined();
+    expect(reminderTarget(entity('routine'))).toBeUndefined();
   });
 });
 

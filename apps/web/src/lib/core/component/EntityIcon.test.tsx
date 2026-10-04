@@ -6,7 +6,7 @@ import SkillIcon from '@phosphor/blueprint.svg';
 import SnippetIcon from '@phosphor/brackets-curly.svg';
 import CompanyIcon from '@phosphor/building-office.svg';
 import CalendarIcon from '@phosphor/calendar.svg';
-import AutomationIcon from '@phosphor/clock-clockwise.svg';
+import RoutineIcon from '@phosphor/clock-clockwise.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
 import FileIcon from '@phosphor/file.svg';
@@ -84,7 +84,7 @@ const entityGlyphs: [
   ['calendar', { type: 'calendar_event' }, CalendarIcon],
   ['reminder', { type: 'reminder' }, ReminderIcon],
   ['call', { type: 'call' }, PhoneIcon],
-  ['automation', { type: 'automation' }, AutomationIcon],
+  ['routine', { type: 'routine' }, RoutineIcon],
   [
     'GitHub pull request',
     { type: 'foreign', foreignSource: 'github_pull_request' },

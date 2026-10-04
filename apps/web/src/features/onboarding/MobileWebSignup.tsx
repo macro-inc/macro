@@ -17,7 +17,7 @@ import MobileWebWelcome from './MobileWebWelcome';
  *   2. {@link MobileWebSignupSent} — confirms "we emailed you a desktop link".
  *
  * Identifying the email also hands it to the analytics providers so downstream
- * marketing automation can pick it up.
+ * marketing routine can pick it up.
  */
 export default function MobileWebSignup() {
   const analytics = useAnalytics();

@@ -304,7 +304,7 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
     .execute(&pool)
     .await
     .unwrap();
-    let too_many_events = action(&pool, json!([{"events": vec!["document.updated"; 8]}])).await;
+    let too_many_events = action(&pool, json!([{"events": vec!["document.updated"; crate::domain::event_trigger::MAX_EVENTS_PER_FILTER + 1]}])).await;
     let first_valid = action(&pool, valid.clone()).await;
     let second_valid = action(&pool, valid.clone()).await;
     // Another entirely invalid page after valid candidates have been admitted.
@@ -901,4 +901,66 @@ async fn a_mixed_routine_admits_events_without_consuming_its_schedule(pool: PgPo
         .await
         .unwrap();
     assert_eq!(actual.unwrap().timestamp_micros(), next.timestamp_micros());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn property_changes_match_general_selectors_without_duplicate_runs(pool: PgPool) {
+    let entity_id = generate_uuid_v7();
+    let general = action(
+        &pool,
+        json!([{"events":["task.property_changed"], "ids":[entity_id]}]),
+    )
+    .await;
+    let both = action(
+        &pool,
+        json!([{"events":["task.status_changed", "task.property_changed"]}]),
+    )
+    .await;
+    let other_task = action(
+        &pool,
+        json!([{"events":["task.property_changed"], "ids":[generate_uuid_v7()]}]),
+    )
+    .await;
+    let priority = action(&pool, json!([{"events":["task.priority_changed"]}])).await;
+    let repo = PgEventRunRepo::new(pool);
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id":generate_uuid_v7(), "event_name":"task.status_changed", "entity_id":entity_id
+    }))
+    .unwrap();
+    let candidates = repo
+        .candidate_actions(&event, None, page(100))
+        .await
+        .unwrap();
+    let mut ids: Vec<_> = candidates
+        .configurations
+        .into_iter()
+        .map(|c| c.action_id)
+        .collect();
+    ids.sort();
+    let mut expected = vec![general, both];
+    expected.sort();
+    assert_eq!(ids, expected);
+    for action_id in expected {
+        assert_eq!(
+            repo.admit(action_id, ConfigurationRevision::INITIAL, &event)
+                .await
+                .unwrap(),
+            AdmissionResult::Admitted
+        );
+        assert_eq!(
+            repo.admit(action_id, ConfigurationRevision::INITIAL, &event)
+                .await
+                .unwrap(),
+            AdmissionResult::AlreadyPresent
+        );
+    }
+    for action_id in [other_task, priority] {
+        assert_eq!(
+            repo.admit(action_id, ConfigurationRevision::INITIAL, &event)
+                .await
+                .unwrap(),
+            AdmissionResult::Ineligible
+        );
+    }
+    assert_eq!(repo.pending_runs(page(100)).await.unwrap().len(), 2);
 }

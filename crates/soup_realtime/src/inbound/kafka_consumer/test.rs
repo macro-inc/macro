@@ -140,6 +140,7 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
         created_at: None,
     });
     let deleted = DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: None,
         actor: None,

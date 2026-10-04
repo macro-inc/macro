@@ -303,7 +303,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         // Server returns nothing useful here — routines are merged
         // into the soup client-side via `additionalEntities`.
         filters: defineQueryFilters({}),
-        clientFilters: { and: ['automation'] },
+        clientFilters: { and: ['routine'] },
       }),
       skills: () => ({
         filters: defineQueryFilters({

@@ -19,6 +19,15 @@ import {
 } from './dateParser';
 
 describe('parseDurationString', () => {
+  it('accepts natural forward durations used by the routine picker', () => {
+    expect(parseDurationString('in 2 hours')).toEqual({ value: 2, unit: 'h' });
+    expect(parseDurationString('In 30 minutes')).toEqual({
+      value: 30,
+      unit: 'min',
+    });
+    expect(parseDurationString('in -2 hours')).toBeNull();
+    expect(parseDurationString('in 0 hours')).toBeNull();
+  });
   it('should parse hours correctly', () => {
     expect(parseDurationString('1h')).toEqual({ value: 1, unit: 'h' });
     expect(parseDurationString('24h')).toEqual({ value: 24, unit: 'h' });

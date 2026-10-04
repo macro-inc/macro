@@ -1871,8 +1871,11 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
 #[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
-    repo.expect_get_document_metadata()
-        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
+    repo.expect_get_document_metadata().returning(|_| {
+        let mut metadata = make_test_metadata();
+        metadata.sub_type = Some(DocumentSubType::Task);
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1896,6 +1899,7 @@ async fn test_delete_document_publishes_document_deleted_event() {
     assert_eq!(event.payload["event_type"], "document.deleted");
     assert_eq!(event.payload["schema_version"], 1);
     assert_eq!(event.payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(event.payload["metadata"]["sub_type"], "task");
     assert_eq!(
         event.payload["metadata"]["actor_user_id"],
         "macro|user@user.com"

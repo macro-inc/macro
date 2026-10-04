@@ -38,7 +38,7 @@ export interface BlockMethodRegistry {
   color: EmptySpec;
   component: EmptySpec;
   task: EmptySpec;
-  automation: EmptySpec;
+  routine: EmptySpec;
   pr: EmptySpec;
   agent: EmptySpec;
 }

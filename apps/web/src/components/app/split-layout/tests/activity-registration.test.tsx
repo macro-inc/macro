@@ -134,7 +134,7 @@ vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch(),
 }));
-vi.mock('@queries/agent-schedule/entities', () => ({}));
+vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('@ui', () => ({
   createVariants: () => () => '',
 }));

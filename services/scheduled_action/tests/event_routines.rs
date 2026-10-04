@@ -107,6 +107,7 @@ impl CurrentOwnerAccess for FakeAccess {
             entity_type: match event.entity_type() {
                 EventEntityType::Document => EntityType::Document,
                 EventEntityType::Channel => EntityType::Channel,
+                EventEntityType::EmailThread => EntityType::EmailThread,
             },
         };
         let access = match event.entity_type() {
@@ -125,6 +126,16 @@ impl CurrentOwnerAccess for FakeAccess {
                     owner.clone(),
                     entity,
                     EntityPermission::ChannelViewOnly,
+                )
+                .unwrap(),
+            ),
+            EventEntityType::EmailThread => EventAccessCapability::EmailThread(
+                EntityAccessReceipt::try_new_authenticated_user(
+                    owner.clone(),
+                    entity,
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::View,
+                    },
                 )
                 .unwrap(),
             ),

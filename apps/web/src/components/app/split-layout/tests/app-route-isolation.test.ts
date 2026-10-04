@@ -68,10 +68,10 @@ describe('application route import isolation', () => {
   it('canonicalizes existing routine links and block navigation', () => {
     const routes = createRoutesManifest(appSplitRoutes);
     for (const id of ['routine-1', 'new']) {
-      const entry = decodeRoute(routes, ['automation', id]);
+      const entry = decodeRoute(routes, ['routine', id]);
       expect(encodeRoute(routes, entry!)).toEqual(['routines', id]);
       const location = splitLocationFromContent(routes, {
-        type: 'automation',
+        type: 'routine',
         id,
       });
       expect(encodeRoute(routes, { location })).toEqual(['routines', id]);

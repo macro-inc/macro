@@ -37,7 +37,7 @@ export const routinesRoute = defineRoute({
 export const routineCreateRoute = defineRoute({
   id: ROUTINE_CREATE_ROUTE_ID,
   path: 'routines/new',
-  aliases: ['automation/new'],
+  aliases: ['routine/new'],
   component: RoutineCreateRouteView,
   claim: () => ({ namespace: 'component', id: 'routine-compose' }),
 });
@@ -45,10 +45,10 @@ export const routineCreateRoute = defineRoute({
 export const routineDetailRoute = defineRoute({
   id: ROUTINE_DETAIL_ROUTE_ID,
   path: 'routines/:routineId',
-  aliases: ['automation/:routineId'],
+  aliases: ['routine/:routineId'],
   params: z.object({ routineId: z.string().min(1) }),
   component: AgentsRouteView,
   remountKey: ({ routineId }) => routineId,
   claim: ({ routineId }) => ({ namespace: 'routine', id: routineId }),
-  toReference: ({ routineId }) => uuidRouteReference(routineId, 'automation'),
+  toReference: ({ routineId }) => uuidRouteReference(routineId, 'routine'),
 });

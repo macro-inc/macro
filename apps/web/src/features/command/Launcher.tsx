@@ -419,7 +419,7 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
-    case 'automation':
+    case 'routine':
       createComponent({ componentId: 'routine-compose', asPopover: true });
       return;
     case 'skill':
@@ -513,15 +513,15 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Routine',
-    icon: getIconConfig('automation').icon,
+    icon: getIconConfig('routine').icon,
     description: 'Run a model or agent on a schedule or Macro activity',
     launcherHint: 'Schedules and activity triggers',
     keywords: ['new', 'make', 'add', 'schedule', 'agent', 'event', 'trigger'],
-    blockName: 'automation',
-    hotkeyToken: TOKENS.create.automation,
+    blockName: 'routine',
+    hotkeyToken: TOKENS.create.routine,
     hotkey: 'u',
     keyDownHandler: () => {
-      runCreateAction('automation');
+      runCreateAction('routine');
       return true;
     },
   },

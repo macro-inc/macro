@@ -52,7 +52,10 @@ const UNIT_ALIASES: Record<string, TimeUnit> = {
  * Returns null if the input doesn't match the expected format
  */
 export function parseDurationString(input: string): ParsedDuration | null {
-  const s = input.trim().toLowerCase();
+  const s = input
+    .trim()
+    .toLowerCase()
+    .replace(/^in\s+/, '');
   if (!s) return null;
 
   const firstLetter = s.search(/[a-z]/);

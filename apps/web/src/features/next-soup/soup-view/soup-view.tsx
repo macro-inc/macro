@@ -265,7 +265,7 @@ interface SoupViewProps {
   initialClientSort?: string[];
   /**
    * Client-side entities to merge into the soup results. Useful for entity
-   * types (e.g. automation) that don't come back from the soup API.
+   * types (e.g. routine) that don't come back from the soup API.
    * Visibility is controlled by the active client filter set — use a tab
    * preset whose `clientFilters` include a predicate that matches them.
    */

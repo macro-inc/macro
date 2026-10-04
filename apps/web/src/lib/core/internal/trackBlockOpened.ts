@@ -23,7 +23,7 @@ function isSoupEntityTag(
       'email',
       'channel_message',
       'channel_thread',
-      'automation',
+      'routine',
       'agent_session',
       'calendar_event',
       'foreign',

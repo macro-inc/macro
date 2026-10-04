@@ -11,7 +11,7 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'agent_session'
-  | 'automation'
+  | 'routine'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
@@ -59,7 +59,7 @@ export function blockNameToItemType(
   blockName: BlockName | BlockAlias
 ): ItemType {
   return match<BlockName | BlockAlias, ItemType>(blockName)
-    .with('chat', 'call', 'channel', 'project', 'email', 'automation', (b) => b)
+    .with('chat', 'call', 'channel', 'project', 'email', 'routine', (b) => b)
     .with('agent', () => 'agent_session')
     .with('calendar', () => 'calendar_event')
     .with('company', () => 'crm_company')
@@ -79,7 +79,7 @@ export const ITEM_TYPES = [
   'channel_thread',
   'call',
   'agent_session',
-  'automation',
+  'routine',
   'calendar_event',
   'foreign',
   'crm_company',

@@ -87,8 +87,8 @@ export function macroEntityToPropertyEntityType(
         'agent sessions are not property-service mutation targets'
       );
     })
-    .with({ type: 'automation' }, () => {
-      throw new Error('automation entities do not support properties');
+    .with({ type: 'routine' }, () => {
+      throw new Error('routine entities do not support properties');
     })
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');

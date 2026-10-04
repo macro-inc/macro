@@ -125,10 +125,11 @@ impl EventRunRepository for PgEventRunRepo {
             WHERE enabled AND event_filters IS NOT NULL
               AND ($1::uuid IS NULL OR id > $1)
               AND event_activated_at <= $2
-              AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))
+              AND (event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))
+                OR ($6::text IS NOT NULL AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($6::text)))))
               AND jsonb_path_exists(event_filters,
-                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $3::text, 'id', $4::text))
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $3::text, 'general', $6::text, 'id', $4::text))
             ORDER BY id
             LIMIT $5
             "#,
@@ -137,6 +138,7 @@ impl EventRunRepository for PgEventRunRepo {
             event.event_name().as_str(),
             event.entity_id().to_string(),
             i64::from(limit.get()),
+            event.event_name().general_event().map(|name| name.as_str()),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -193,8 +195,8 @@ impl EventRunRepository for PgEventRunRepo {
             WHERE id = $1 AND enabled AND event_filters IS NOT NULL
               AND configuration_revision = $2 AND event_activated_at <= $3
               AND jsonb_path_exists(event_filters,
-                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $4::text, 'id', $5::text))
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $4::text, 'general', $6::text, 'id', $5::text))
             FOR UPDATE
             "#,
             action_id,
@@ -202,6 +204,7 @@ impl EventRunRepository for PgEventRunRepo {
             event.published_at(),
             event.event_name().as_str(),
             event.entity_id().to_string(),
+            event.event_name().general_event().map(|name| name.as_str()),
         )
         .fetch_optional(&mut *tx)
         .await?;

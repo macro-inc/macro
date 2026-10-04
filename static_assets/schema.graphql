@@ -4414,6 +4414,30 @@ enum GraphqlScheduledActionEventName {
 	"""
 	DOCUMENT_UPDATED
 	"""
+	A document was deleted.
+	"""
+	DOCUMENT_DELETED
+	"""
+	A task was created.
+	"""
+	TASK_CREATED
+	"""
+	A task's status changed.
+	"""
+	TASK_STATUS_CHANGED
+	"""
+	A task's priority changed.
+	"""
+	TASK_PRIORITY_CHANGED
+	"""
+	A task property changed.
+	"""
+	TASK_PROPERTY_CHANGED
+	"""
+	A new email was received.
+	"""
+	EMAIL_MESSAGE_RECEIVED
+	"""
 	A channel was created.
 	"""
 	CHANNEL_CREATED

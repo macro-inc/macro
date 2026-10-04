@@ -17,7 +17,7 @@ export const BlockRegistry = [
   'email',
   'contact',
   'company',
-  'automation',
+  'routine',
   'pr',
   'agent',
 ] as const;

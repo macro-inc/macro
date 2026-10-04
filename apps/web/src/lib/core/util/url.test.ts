@@ -15,8 +15,7 @@ import {
 
 it('copies routine links using the canonical route', () => {
   expect(
-    new URL(buildSimpleEntityUrl({ type: 'automation', id: 'routine-1' }))
-      .pathname
+    new URL(buildSimpleEntityUrl({ type: 'routine', id: 'routine-1' })).pathname
   ).toBe('/app/routines/routine-1');
 });
 

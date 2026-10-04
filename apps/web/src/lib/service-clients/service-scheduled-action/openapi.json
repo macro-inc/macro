@@ -729,7 +729,7 @@
               },
               {
                 "$ref": "#/components/schemas/AgentTaskAgent",
-                "description": "Absent for legacy model-only tasks."
+                "description": "Absent when using Macro's agent-session runtime with a selected model."
               }
             ]
           },
@@ -810,6 +810,12 @@
         "enum": [
           "document.created",
           "document.updated",
+          "document.deleted",
+          "task.created",
+          "task.status_changed",
+          "task.priority_changed",
+          "task.property_changed",
+          "email.message_received",
           "channel.created",
           "channel.message_posted",
           "channel.mentioned",
