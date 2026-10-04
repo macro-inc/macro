@@ -251,6 +251,69 @@ test('undo and redo cover this person’s own edits', async ({ browser }) => {
   }
 });
 
+test('headers and footers are edited in place and shared', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  const story = (page: Page) =>
+    page.evaluate(() => window.docxFixture?.editor()?.state()?.story.kind);
+  try {
+    await open(alice, documentId, ALICE, { fixture: 'complex-msa.docx' });
+    await open(bob, documentId, BOB, { fixture: 'complex-msa.docx' });
+
+    // Double-click the header of the first page.
+    const sheet = alice.locator('[data-docx-page="0"]');
+    const box = (await sheet.boundingBox())!;
+    const page = (await alice.evaluate(
+      () => window.docxFixture?.editor()?.pages()[0]
+    ))!;
+    const scale = box.width / page.width;
+    const headerY = ((page.header?.top ?? 0) + (page.header?.bottom ?? 0)) / 2;
+    await alice.mouse.dblclick(box.x + box.width / 2, box.y + headerY * scale);
+    await expect.poll(() => story(alice)).toBe('header');
+    await expect(alice.locator('[data-docx-story-label]')).toContainText(
+      'Header'
+    );
+    await alice.keyboard.press('End');
+    await alice.keyboard.type(' (Draft 2)');
+    // The header part reaches Bob through the sync service.
+    await expect
+      .poll(() =>
+        bob.evaluate(() => window.docxFixture?.sharedPart('header1.xml'))
+      )
+      .toContain('(Draft 2)');
+    if (SHOTS) await alice.screenshot({ path: `${SHOTS}/05-header.png` });
+
+    // Escape returns to the body, where typing goes to the body again.
+    await alice.keyboard.press('Escape');
+    await expect.poll(() => story(alice)).toBe('body');
+    await caretAtEnd(alice, 'Either party may terminate');
+    await alice.keyboard.type(' [body]');
+    await expect.poll(() => joined(bob)).toContain('[body]');
+
+    // Bob's download carries the new header.
+    const [download] = await Promise.all([
+      bob.waitForEvent('download'),
+      bob.getByRole('button', { name: 'Download .docx' }).click(),
+    ]);
+    const files = unzipSync(
+      new Uint8Array(await readFile((await download.path())!))
+    );
+    expect(strFromU8(files['word/header1.xml'])).toContain('(Draft 2)');
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('viewers follow along read-only', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([

@@ -157,6 +157,21 @@ pub struct Page {
     pub front: Vec<Item>,
     /// The body text area (for editors).
     pub body: Rect,
+    /// The header area, above the body.
+    pub header: Option<Chrome>,
+    /// The footer area, below the body.
+    pub footer: Option<Chrome>,
+}
+
+/// A page's header or footer area, for editors.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Chrome {
+    /// The part shown there (`None` when the section has none for the page).
+    pub part: Option<String>,
+    /// Top (points).
+    pub top: f32,
+    /// Bottom (points).
+    pub bottom: f32,
 }
 
 impl Page {

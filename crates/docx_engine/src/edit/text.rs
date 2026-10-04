@@ -146,7 +146,7 @@ pub(super) fn split(txn: &mut Txn<'_>, at: &Pos) -> Option<Pos> {
     let len = p.content.len();
     let offset = at.offset.min(len);
     let new_id = txn.new_id();
-    let order = txn.doc.body.key_after(p.parent.as_ref(), Some(&p.id));
+    let order = txn.story().key_after(p.parent.as_ref(), Some(&p.id));
     let mut q = Block::new(
         new_id.clone(),
         BlockKind::Paragraph,
@@ -173,7 +173,7 @@ pub(super) fn split(txn: &mut Txn<'_>, at: &Pos) -> Option<Pos> {
     if offset == 0 && len > 0 {
         // Enter at the start: an empty paragraph goes in front and the
         // text keeps its paragraph (and id, so comments stay anchored).
-        let order = txn.doc.body.key_before(p.parent.as_ref(), &p.id);
+        let order = txn.story().key_before(p.parent.as_ref(), &p.id);
         let mut e = Block::new(
             new_id.clone(),
             BlockKind::Paragraph,
@@ -299,7 +299,7 @@ pub(super) fn delete_range(txn: &mut Txn<'_>, from: &Pos, to: &Pos) -> Pos {
             ..from.clone()
         };
     }
-    let positions = doc_positions(&txn.doc.body);
+    let positions = doc_positions(&txn.story());
     let (Some(&(a_at, _)), Some(&(b_at, _))) =
         (positions.get(&from.block), positions.get(&to.block))
     else {
@@ -312,7 +312,7 @@ pub(super) fn delete_range(txn: &mut Txn<'_>, from: &Pos, to: &Pos) -> Pos {
     };
     // Outermost covered blocks.
     let mut roots: Vec<(usize, BlockId)> = Vec::new();
-    for b in txn.doc.body.blocks() {
+    for b in txn.story().blocks() {
         if !covered(&b.id) {
             continue;
         }
@@ -359,7 +359,7 @@ pub(super) fn delete_range(txn: &mut Txn<'_>, from: &Pos, to: &Pos) -> Pos {
 
 /// Empties a cell: its first paragraph stays (without text), the rest goes.
 fn clear_cell(txn: &mut Txn<'_>, cell: &BlockId) {
-    let kids: Vec<BlockId> = txn.doc.body.children(Some(cell)).to_vec();
+    let kids: Vec<BlockId> = txn.story().children(Some(cell)).to_vec();
     let keep = kids
         .iter()
         .find(|k| txn.get(k).is_some_and(|b| b.kind == BlockKind::Paragraph))
@@ -388,16 +388,15 @@ pub(super) fn ensure_cell_paragraph(txn: &mut Txn<'_>, cell: &BlockId) {
         return;
     }
     let has = txn
-        .doc
-        .body
+        .story()
         .children(Some(cell))
         .iter()
         .any(|k| txn.get(k).is_some_and(|b| b.kind == BlockKind::Paragraph));
     if has {
         return;
     }
-    let last = txn.doc.body.children(Some(cell)).last().cloned();
-    let order = txn.doc.body.key_after(Some(cell), last.as_ref());
+    let last = txn.story().children(Some(cell)).last().cloned();
+    let order = txn.story().key_after(Some(cell), last.as_ref());
     let id = txn.new_id();
     txn.insert(Block::new(
         id,

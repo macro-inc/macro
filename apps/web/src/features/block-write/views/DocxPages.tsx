@@ -116,6 +116,91 @@ function Page(props: {
   );
 }
 
+/**
+ * While a header or footer is being edited: the body dimmed on every page,
+ * a dashed edge around the header or footer area, and a label with a way
+ * back to the body on the page being edited.
+ */
+function StoryChrome(props: {
+  editor: DocxEditor;
+  geometry: PageGeometry;
+  onClose: () => void;
+}) {
+  const story = () => props.editor.state()?.story;
+  const kind = () => {
+    const k = story()?.kind;
+    return k === 'header' || k === 'footer' ? k : undefined;
+  };
+  return (
+    <Show when={kind()}>
+      {(k) => (
+        <For each={props.editor.pages()}>
+          {(page, index) => {
+            const box = () => props.geometry.boxes[index()];
+            const scale = () => props.geometry.scale;
+            const top = () => page.header?.bottom ?? 0;
+            const bottom = () => page.footer?.top ?? page.height;
+            const edge = () =>
+              k() === 'header' ? top() * scale() : bottom() * scale();
+            return (
+              <Show when={box()}>
+                {(b) => (
+                  <>
+                    <div
+                      class="docx-veil absolute"
+                      style={{
+                        left: `${b().left}px`,
+                        top: `${b().top + top() * scale()}px`,
+                        width: `${b().width}px`,
+                        height: `${Math.max(0, (bottom() - top()) * scale())}px`,
+                      }}
+                    />
+                    <div
+                      class="docx-story-edge absolute border-t border-dashed"
+                      style={{
+                        left: `${b().left}px`,
+                        top: `${b().top + edge()}px`,
+                        width: `${b().width}px`,
+                      }}
+                    />
+                    <Show when={story()?.page === index()}>
+                      <div
+                        class="pointer-events-auto absolute flex items-center gap-1 rounded-sm bg-accent px-1.5 py-0.5 text-[11px] text-accent-contrast"
+                        data-docx-story-label
+                        style={{
+                          left: `${b().left + 8}px`,
+                          top:
+                            k() === 'header'
+                              ? `${b().top + edge() + 2}px`
+                              : `${b().top + edge() - 20}px`,
+                        }}
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                          event.preventDefault();
+                        }}
+                        onMouseDown={(event) => event.preventDefault()}
+                      >
+                        <span>{k() === 'header' ? 'Header' : 'Footer'}</span>
+                        <button
+                          type="button"
+                          class="rounded-sm px-1 underline-offset-2 hover:underline"
+                          onClick={() => props.onClose()}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </Show>
+                  </>
+                )}
+              </Show>
+            );
+          }}
+        </For>
+      )}
+    </Show>
+  );
+}
+
 export type DocxPagesProps = {
   editor: DocxEditor;
   /** The scrolling element (for page visibility and caret scrolling). */
@@ -221,28 +306,101 @@ export function DocxPages(props: DocxPagesProps) {
   let dragAnchor: Pos | undefined;
   let dragFrame = 0;
 
-  async function onPointerDown(event: PointerEvent) {
+  // Pointer events carry no click count (`detail` is 0), so double and
+  // triple clicks are counted here: quick presses close together.
+  let lastPress = { time: 0, x: 0, y: 0, count: 0 };
+  function clickCount(event: PointerEvent) {
+    const near =
+      Math.abs(event.clientX - lastPress.x) < 5 &&
+      Math.abs(event.clientY - lastPress.y) < 5;
+    const count =
+      near && event.timeStamp - lastPress.time < 500 ? lastPress.count + 1 : 1;
+    lastPress = {
+      time: event.timeStamp,
+      x: event.clientX,
+      y: event.clientY,
+      count,
+    };
+    return count;
+  }
+
+  /** The header or footer area under a point (points), if any. */
+  function areaAt(point: { page: number; y: number }) {
+    const page = editor.pages()[point.page];
+    if (page?.header && point.y < page.header.bottom)
+      return { kind: 'header' as const, editable: page.header.editable };
+    if (page?.footer && point.y >= page.footer.top)
+      return { kind: 'footer' as const, editable: page.footer.editable };
+    return undefined;
+  }
+
+  /**
+   * Double-clicking a header or footer edits it; while one is open, a click
+   * on another page's header or footer moves there and a click on the body
+   * goes back to it. Returns whether the click was fully handled.
+   */
+  async function switchStory(
+    point: { page: number; x: number; y: number },
+    clicks: number
+  ) {
+    if (!props.editable) return false;
+    const story = editor.state()?.story;
+    const area = areaAt(point);
+    if (!story || story.kind === 'body') {
+      if (clicks !== 2 || !area?.editable) return false;
+      run([{ op: 'enterStory', ...point }]);
+      return true;
+    }
+    if (area?.kind === story.kind && point.page === story.page) return false;
+    if (area?.editable) {
+      run([{ op: 'enterStory', ...point }]);
+      return true;
+    }
+    editor.run([{ op: 'exitStory' }]);
+    await editor.idle();
+    return false;
+  }
+
+  /** Presses are handled one after another, each after the last one's
+   * hit test, so a quick second click never overtakes the first. */
+  let presses: Promise<void> = Promise.resolve();
+  /** Whether the button is still down (a drag extends the selection). */
+  let held = false;
+
+  function onPointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     const point = pointAt(event.clientX, event.clientY);
     if (!point) return;
     event.preventDefault();
     input.focus({ preventScroll: true });
+    const clicks = clickCount(event);
+    const shift = event.shiftKey;
+    held = true;
+    column.setPointerCapture(event.pointerId);
+    presses = presses.then(() => press(point, clicks, shift)).catch(() => {});
+  }
+
+  async function press(
+    point: { page: number; x: number; y: number },
+    clicks: number,
+    shift: boolean
+  ) {
+    if (await switchStory(point, clicks)) return;
     const pos = await editor.hitTest(point.page, point.x, point.y);
     if (!pos) return;
-    if (event.detail === 2) {
+    if (clicks === 2) {
       editor.run([{ op: 'selectWord', at: pos }]);
       return;
     }
-    if (event.detail >= 3) {
+    if (clicks >= 3) {
       editor.run([{ op: 'selectParagraph', at: pos }]);
       return;
     }
     const current = editor.state()?.selection;
-    const anchor = event.shiftKey && current ? current.anchor : pos;
+    const anchor = shift && current ? current.anchor : pos;
     editor.run([{ op: 'select', anchor, focus: pos }]);
-    dragAnchor = anchor;
-    column.setPointerCapture(event.pointerId);
-    if (!event.shiftKey) props.onTextClick?.(pos);
+    if (held) dragAnchor = anchor;
+    if (!shift) props.onTextClick?.(pos);
   }
 
   function onPointerMove(event: PointerEvent) {
@@ -259,6 +417,7 @@ export function DocxPages(props: DocxPagesProps) {
   }
 
   function onPointerUp(event: PointerEvent) {
+    held = false;
     dragAnchor = undefined;
     if (column.hasPointerCapture(event.pointerId))
       column.releasePointerCapture(event.pointerId);
@@ -288,6 +447,11 @@ export function DocxPages(props: DocxPagesProps) {
 
   function onKeyDown(event: KeyboardEvent) {
     if (composing() !== null || event.isComposing) return;
+    if (event.key === 'Escape' && editor.state()?.story.kind !== 'body') {
+      event.preventDefault();
+      run([{ op: 'exitStory' }]);
+      return;
+    }
     const action = keyAction(event, isMac);
     if (!action) return;
     event.preventDefault();
@@ -373,7 +537,7 @@ export function DocxPages(props: DocxPagesProps) {
         width: `${geometry().width}px`,
         height: `${geometry().height}px`,
       }}
-      onPointerDown={(e) => void onPointerDown(e)}
+      onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       data-docx-pages
@@ -393,6 +557,11 @@ export function DocxPages(props: DocxPagesProps) {
         )}
       </For>
       <div class="pointer-events-none absolute inset-0" data-docx-overlay>
+        <StoryChrome
+          editor={editor}
+          geometry={geometry()}
+          onClose={() => run([{ op: 'exitStory' }])}
+        />
         <For each={rects()}>
           {(r) => (
             <div

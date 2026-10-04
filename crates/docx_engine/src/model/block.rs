@@ -413,6 +413,8 @@ impl Story {
 pub struct IdGen {
     next: u64,
     random: Option<Arc<pptx_engine::opc::IdSource>>,
+    /// Put before sequential ids (stories outside the body).
+    prefix: Option<Box<str>>,
 }
 
 impl IdGen {
@@ -421,6 +423,17 @@ impl IdGen {
         Self {
             next: 1,
             random: None,
+            prefix: None,
+        }
+    }
+
+    /// Sequential ids after a prefix: stable for a story read from the same
+    /// XML, and distinct from every other story's.
+    pub fn prefixed(prefix: &str) -> Self {
+        Self {
+            next: 1,
+            random: None,
+            prefix: Some(prefix.into()),
         }
     }
 
@@ -429,6 +442,7 @@ impl IdGen {
         Self {
             next: 1,
             random: Some(Arc::new(pptx_engine::opc::IdSource::new(seed))),
+            prefix: None,
         }
     }
 
@@ -449,7 +463,10 @@ impl IdGen {
             None => {
                 let n = self.next;
                 self.next += 1;
-                BlockId::new(&radix36(n))
+                match &self.prefix {
+                    Some(p) => BlockId::new(&format!("{p}{}", radix36(n))),
+                    None => BlockId::new(&radix36(n)),
+                }
             }
         }
     }

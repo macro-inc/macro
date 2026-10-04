@@ -112,6 +112,44 @@ pub struct PartStory {
     pub story: Story,
     /// Namespace declarations of the part's root (for reading snippets).
     pub decls: Arc<Vec<Decl>>,
+    /// The part's XML before its blocks (through the root start tag).
+    pub(crate) head: String,
+    /// The part's XML after its blocks (from the root end tag).
+    pub(crate) tail: String,
+    /// The prefix the part binds to WordprocessingML.
+    pub(crate) w: String,
+}
+
+/// The story edits apply to.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", content = "part", rename_all = "camelCase")]
+pub enum StoryTarget {
+    /// The body.
+    #[default]
+    Body,
+    /// A header or footer part, by part name.
+    Part(String),
+}
+
+/// An element's markup around its children: through the start tag, and
+/// from the end tag on (a self-closing element is opened and closed).
+fn split_element(tree: &XmlTree, node: crate::xml::NodeId) -> (String, String) {
+    let span = tree.span(node);
+    let src = tree.source();
+    let tag = tree.start_tag(node);
+    if tag.ends_with("/>") {
+        let open = format!("{}>", tag.trim_end_matches("/>").trim_end());
+        (
+            format!("{}{open}", &src[..span.start]),
+            format!("</{}>{}", tree.qname(node), &src[span.end..]),
+        )
+    } else {
+        let close_start = span.end - (tree.qname(node).len() + 3);
+        (
+            src[..span.start + tag.len()].to_owned(),
+            src[close_start..].to_owned(),
+        )
+    }
 }
 
 /// A footnote or endnote.
@@ -219,24 +257,7 @@ impl Document {
         let body = tree
             .w_child(root, "body")
             .ok_or_else(|| Error::NotWord("the document has no body".into()))?;
-        let span = tree.span(body);
-        let src = tree.source();
-        let start_tag_end = span.start + tree.start_tag(body).len();
-        let self_closing = tree.start_tag(body).ends_with("/>");
-        let (head, tail) = if self_closing {
-            let tag = tree.start_tag(body);
-            let open = format!("{}>", tag.trim_end_matches("/>").trim_end());
-            (
-                format!("{}{open}", &src[..span.start]),
-                format!("</{}>{}", tree.qname(body), &src[span.end..]),
-            )
-        } else {
-            let close_start = span.end - (tree.qname(body).len() + 3);
-            (
-                src[..start_tag_end].to_owned(),
-                src[close_start..].to_owned(),
-            )
-        };
+        let (head, tail) = split_element(&tree, body);
         let read = StoryReader::new(&tree, &mut ids).read(body);
         let decls = Arc::new(tree.root_decls().to_vec());
         let w = w_prefix(&decls);
@@ -327,9 +348,10 @@ impl Document {
         self.load_stories()
     }
 
-    /// Parses headers, footers and notes.
+    /// Parses headers, footers and notes. Their blocks get ids prefixed
+    /// with the part (or note), so they never collide with the body's and
+    /// stay the same when the part is read again.
     pub(crate) fn load_stories(&mut self) -> Result<()> {
-        let mut ids = IdGen::sequential();
         self.stories.clear();
         let parts: Vec<String> = self
             .main_rels
@@ -338,24 +360,85 @@ impl Document {
             .map(|r| self.main_rels.resolve(r))
             .collect();
         for name in parts {
+            if self.stories.contains_key(&name) {
+                continue;
+            }
             let Ok(tree) = read_tree(&self.pkg, &name) else {
                 continue;
             };
+            let mut ids = IdGen::prefixed(&format!("{}#", name.trim_start_matches('/')));
             let read = StoryReader::new(&tree, &mut ids).read(tree.root());
+            let (head, tail) = split_element(&tree, tree.root());
+            let decls = Arc::new(tree.root_decls().to_vec());
+            let w = w_prefix(&decls);
             self.stories.insert(
                 name,
                 PartStory {
                     story: read.story,
-                    decls: Arc::new(tree.root_decls().to_vec()),
+                    decls,
+                    head,
+                    tail,
+                    w,
                 },
             );
         }
-        self.footnotes = self.load_notes(rel::FOOTNOTES, "footnote", &mut ids);
-        self.endnotes = self.load_notes(rel::ENDNOTES, "endnote", &mut ids);
+        self.footnotes = self.load_notes(rel::FOOTNOTES, "footnote", "fn");
+        self.endnotes = self.load_notes(rel::ENDNOTES, "endnote", "en");
         Ok(())
     }
 
-    fn load_notes(&self, kind: &str, element: &str, ids: &mut IdGen) -> Notes {
+    /// The story edits to `target` change (the body when the part is gone).
+    pub(crate) fn story(&self, target: &StoryTarget) -> &Story {
+        match target {
+            StoryTarget::Body => &self.body,
+            StoryTarget::Part(name) => self.stories.get(name).map_or(&self.body, |p| &p.story),
+        }
+    }
+
+    /// The story edits to `target` change, for changing.
+    pub(crate) fn story_mut(&mut self, target: &StoryTarget) -> &mut Story {
+        match target {
+            StoryTarget::Part(name) if self.stories.contains_key(name) => {
+                &mut self.stories.get_mut(name).expect("checked").story
+            }
+            _ => &mut self.body,
+        }
+    }
+
+    /// Whether `target` names a story the document has.
+    pub(crate) fn has_story(&self, target: &StoryTarget) -> bool {
+        match target {
+            StoryTarget::Body => true,
+            StoryTarget::Part(name) => self.stories.contains_key(name),
+        }
+    }
+
+    /// The story holding a block, if any.
+    pub(crate) fn story_of(&self, id: &BlockId) -> Option<StoryTarget> {
+        if self.body.contains(id) {
+            return Some(StoryTarget::Body);
+        }
+        self.stories
+            .iter()
+            .find(|(_, p)| p.story.contains(id))
+            .map(|(name, _)| StoryTarget::Part(name.clone()))
+    }
+
+    /// A header or footer part's XML as its story now is.
+    pub(crate) fn part_story_xml(&self, part: &str) -> Option<String> {
+        let ps = self.stories.get(part)?;
+        let writer = Writer { w: &ps.w };
+        Some(format!("{}{}{}", ps.head, writer.story(&ps.story), ps.tail))
+    }
+
+    /// Writes an edited header or footer story back into its part.
+    pub(crate) fn write_part_story(&mut self, part: &str) {
+        if let Some(xml) = self.part_story_xml(part) {
+            self.pkg.write(part, xml.into_bytes(), None);
+        }
+    }
+
+    fn load_notes(&self, kind: &str, element: &str, prefix: &str) -> Notes {
         let Some(name) = self.related(kind) else {
             return Notes::default();
         };
@@ -371,7 +454,8 @@ impl Document {
             let Some(id) = tree.w_attr(n, "id").and_then(crate::xml::parse_int) else {
                 continue;
             };
-            let read = StoryReader::new(&tree, ids).read(n);
+            let mut ids = IdGen::prefixed(&format!("{prefix}{id}#"));
+            let read = StoryReader::new(&tree, &mut ids).read(n);
             notes.by_id.insert(
                 id,
                 Note {

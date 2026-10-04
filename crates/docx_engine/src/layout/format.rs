@@ -7,9 +7,9 @@ use crate::model::section::Section;
 use crate::model::settings::Settings;
 use crate::model::styles::Styles;
 use crate::xml::{Decl, SnippetContext};
-use std::sync::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 /// The table context of a paragraph: which table style and conditional
 /// formats apply to the cell it is in.

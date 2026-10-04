@@ -3,8 +3,8 @@
 //! the blocks afterwards yields the collaborative changes (text deltas,
 //! changed fields, new and removed blocks) and the undo record.
 
-use crate::document::Document;
-use crate::model::block::{Block, BlockId, BlockKind};
+use crate::document::{Document, StoryTarget};
+use crate::model::block::{Block, BlockId, BlockKind, Story};
 use crate::model::content::{Content, DeltaOp, attr_delta};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -237,6 +237,9 @@ pub struct Step {
     pub order: Vec<BlockId>,
     /// Flat-map entries the transaction wrote, with their previous values.
     pub entries: Vec<(String, String, Option<String>, Option<String>)>,
+    /// The story the blocks belong to. Outside the body, blocks are shared
+    /// as their part's XML rather than one by one.
+    pub story: StoryTarget,
 }
 
 impl Step {
@@ -251,7 +254,12 @@ impl Step {
     /// The collaborative changes of the step, parents before children.
     pub fn changes(&self) -> Vec<Change> {
         let mut out = Vec::new();
-        for id in &self.order {
+        let blocks = if self.story == StoryTarget::Body {
+            &self.order[..]
+        } else {
+            &[]
+        };
+        for id in blocks {
             let before = self.before.get(id).and_then(Option::as_ref);
             let after = self.after.get(id).and_then(Option::as_ref);
             match (before, after) {
@@ -287,11 +295,15 @@ impl Step {
                 .rev()
                 .map(|(c, k, old, new)| (c.clone(), k.clone(), new.clone(), old.clone()))
                 .collect(),
+            story: self.story.clone(),
         }
     }
 
     /// Folds a later step into this one (typing runs merge into one undo step).
     pub fn merge(&mut self, later: Step) {
+        if self.order.is_empty() && self.entries.is_empty() {
+            self.story = later.story.clone();
+        }
         for id in later.order {
             if !self.before.contains_key(&id) {
                 self.before
@@ -320,7 +332,7 @@ fn same(a: Option<&Option<Block>>, b: Option<&Option<Block>>) -> bool {
     }
 }
 
-/// An open transaction on a document's body.
+/// An open transaction on one of a document's stories.
 pub struct Txn<'d> {
     /// The document.
     pub doc: &'d mut Document,
@@ -328,17 +340,37 @@ pub struct Txn<'d> {
 }
 
 impl<'d> Txn<'d> {
-    /// Starts a transaction.
-    pub fn new(doc: &'d mut Document) -> Self {
+    /// Starts a transaction on a story.
+    pub fn new(doc: &'d mut Document, story: &StoryTarget) -> Self {
+        let story = if doc.has_story(story) {
+            story.clone()
+        } else {
+            StoryTarget::Body
+        };
         Self {
             doc,
-            step: Step::default(),
+            step: Step {
+                story,
+                ..Step::default()
+            },
         }
+    }
+
+    /// The story being changed.
+    pub fn story(&self) -> &Story {
+        self.doc.story(&self.step.story)
+    }
+
+    fn story_mut(&mut self) -> &mut Story {
+        if self.step.story == StoryTarget::Body {
+            self.doc.body_dirty = true;
+        }
+        self.doc.story_mut(&self.step.story)
     }
 
     fn touch(&mut self, id: &BlockId) {
         if !self.step.before.contains_key(id) {
-            let pre = self.doc.body.get(id).cloned();
+            let pre = self.story().get(id).cloned();
             self.step.before.insert(id.clone(), pre);
             self.step.order.push(id.clone());
         }
@@ -346,42 +378,38 @@ impl<'d> Txn<'d> {
 
     /// A block (read-only).
     pub fn get(&self, id: &BlockId) -> Option<&Block> {
-        self.doc.body.get(id)
+        self.story().get(id)
     }
 
     /// A block, for changing.
     pub fn block_mut(&mut self, id: &BlockId) -> Option<&mut Block> {
-        if !self.doc.body.contains(id) {
+        if !self.story().contains(id) {
             return None;
         }
         self.touch(id);
-        self.doc.body_dirty = true;
-        self.doc.body.get_mut(id)
+        self.story_mut().get_mut(id)
     }
 
     /// Adds (or replaces) a block.
     pub fn insert(&mut self, block: Block) {
         self.touch(&block.id);
-        self.doc.body_dirty = true;
-        self.doc.body.insert(block);
+        self.story_mut().insert(block);
     }
 
     /// Removes a block and everything inside it.
     pub fn remove(&mut self, id: &BlockId) {
         let mut ids = Vec::new();
-        self.doc.body.walk_from(id, &mut |b| ids.push(b.id.clone()));
+        self.story().walk_from(id, &mut |b| ids.push(b.id.clone()));
         for i in &ids {
             self.touch(i);
         }
-        self.doc.body_dirty = true;
-        self.doc.body.remove(id);
+        self.story_mut().remove(id);
     }
 
     /// Moves a block to a new parent and position key.
     pub fn move_block(&mut self, id: &BlockId, parent: Option<BlockId>, order: String) {
         self.touch(id);
-        self.doc.body_dirty = true;
-        self.doc.body.move_block(id, parent, order);
+        self.story_mut().move_block(id, parent, order);
     }
 
     /// A fresh block id.
@@ -396,11 +424,17 @@ impl<'d> Txn<'d> {
             .push((container.to_owned(), key.to_owned(), old, new));
     }
 
-    /// Ends the transaction.
+    /// Ends the transaction. A header or footer is written back to its
+    /// part, which is how other peers receive the change.
     pub fn finish(mut self) -> Step {
         for id in &self.step.order {
-            let post = self.doc.body.get(id).cloned();
+            let post = self.story().get(id).cloned();
             self.step.after.insert(id.clone(), post);
+        }
+        if let StoryTarget::Part(name) = &self.step.story
+            && !self.step.order.is_empty()
+        {
+            self.doc.write_part_story(name);
         }
         self.step
     }
@@ -408,17 +442,24 @@ impl<'d> Txn<'d> {
 
 /// Applies a step's post-images to a document (undo and redo).
 pub fn apply_step(doc: &mut Document, step: &Step) {
+    if !doc.has_story(&step.story) {
+        return;
+    }
+    let story = doc.story_mut(&step.story);
     // Remove first (children before parents is handled by subtree removal),
     // then insert parents before children so ordering keys resolve.
     for id in step.order.iter().rev() {
-        if matches!(step.after.get(id), Some(None)) && doc.body.contains(id) {
-            doc.body.remove_one(id);
+        if matches!(step.after.get(id), Some(None)) && story.contains(id) {
+            story.remove_one(id);
         }
     }
     for id in &step.order {
         if let Some(Some(b)) = step.after.get(id) {
-            doc.body.insert(b.clone());
+            story.insert(b.clone());
         }
     }
-    doc.body_dirty = true;
+    match &step.story {
+        StoryTarget::Body => doc.body_dirty = true,
+        StoryTarget::Part(name) => doc.write_part_story(name),
+    }
 }

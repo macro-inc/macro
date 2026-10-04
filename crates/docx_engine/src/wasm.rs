@@ -218,7 +218,13 @@ impl DocxDocument {
     /// Renders a strip of a page (`top..bottom` in points) at the page width
     /// `width`; returns straight-alpha RGBA rows.
     #[wasm_bindgen(js_name = renderBand)]
-    pub fn render_band(&mut self, page: usize, width: u32, top: f32, bottom: f32) -> Result<Vec<u8>, JsError> {
+    pub fn render_band(
+        &mut self,
+        page: usize,
+        width: u32,
+        top: f32,
+        bottom: f32,
+    ) -> Result<Vec<u8>, JsError> {
         let width = width.clamp(16, 8192);
         FONTS.with(|f| {
             let fonts = f.borrow();

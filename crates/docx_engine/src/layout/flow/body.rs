@@ -2,7 +2,7 @@
 
 use super::super::inline::FieldValues;
 use super::super::lines::LineEnd;
-use super::super::{Item, Page, ParaBox, StoryRef};
+use super::super::{Chrome, Item, Page, ParaBox, StoryRef};
 use super::anchors::{PageGeom, resolve};
 use super::stack::{
     PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines, emit_row,
@@ -174,6 +174,8 @@ impl<'e, 'a> Flow<'e, 'a> {
                 items: Vec::new(),
                 front: Vec::new(),
                 body: Rect::from_xywh(s.left, s.top, s.text_width(), s.page_h - s.top - s.bottom),
+                header: None,
+                footer: None,
             });
             self.page_number += 1;
         }
@@ -194,8 +196,12 @@ impl<'e, 'a> Flow<'e, 'a> {
             section_pages: self.total_pages.max(1),
             page_fmt: s.page_fmt.clone(),
         };
-        let header = self.hf_stack(pick(&headers).as_ref(), &s, &fields);
-        let footer = self.hf_stack(pick(&footers).as_ref(), &s, &fields);
+        let header_rid = pick(&headers);
+        let footer_rid = pick(&footers);
+        let header_part = header_rid.as_ref().and_then(|r| self.env.hf_part(r));
+        let footer_part = footer_rid.as_ref().and_then(|r| self.env.hf_part(r));
+        let header = self.hf_stack(header_rid.as_ref(), &s, &fields);
+        let footer = self.hf_stack(footer_rid.as_ref(), &s, &fields);
         let mut chrome = Vec::new();
         let mut behind = Vec::new();
         let mut front = Vec::new();
@@ -247,6 +253,16 @@ impl<'e, 'a> Flow<'e, 'a> {
             items: Vec::new(),
             front: Vec::new(),
             body: Rect::from_xywh(s.left, top, s.text_width(), bottom - top),
+            header: Some(Chrome {
+                part: header_part,
+                top: 0.0,
+                bottom: top,
+            }),
+            footer: Some(Chrome {
+                part: footer_part,
+                top: bottom,
+                bottom: s.page_h,
+            }),
         };
         self.cur = Some(Cur {
             page,

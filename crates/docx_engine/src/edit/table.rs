@@ -102,7 +102,7 @@ pub(super) fn insert_table(
     // at its end, between its halves in the middle.
     let (parent, after) = if at.offset == 0 && len > 0 {
         let prev = {
-            let kids = txn.doc.body.children(p.parent.as_ref());
+            let kids = txn.story().children(p.parent.as_ref());
             let i = kids.iter().position(|k| *k == p.id)?;
             i.checked_sub(1).map(|j| kids[j].clone())
         };
@@ -115,7 +115,7 @@ pub(super) fn insert_table(
     };
     let col_w = (width / cols as i64).max(200);
     let grid: Vec<i64> = vec![col_w; cols];
-    let order = txn.doc.body.key_after(parent.as_ref(), after.as_ref());
+    let order = txn.story().key_after(parent.as_ref(), after.as_ref());
     let table_id = txn.new_id();
     let mut table = Block::new(table_id.clone(), BlockKind::Table, parent.clone(), order);
     table.props = table_props(&w, grid_style, &grid);
@@ -153,9 +153,9 @@ pub(super) fn insert_table(
         }
     }
     // A table never ends its container: a paragraph follows it.
-    let kids = txn.doc.body.children(parent.as_ref()).to_vec();
+    let kids = txn.story().children(parent.as_ref()).to_vec();
     if kids.last() == Some(&table_id) {
-        let order = txn.doc.body.key_after(parent.as_ref(), Some(&table_id));
+        let order = txn.story().key_after(parent.as_ref(), Some(&table_id));
         let id = txn.new_id();
         txn.insert(Block::new(id, BlockKind::Paragraph, parent.clone(), order));
     }
@@ -187,8 +187,7 @@ fn empty_cell_like(txn: &mut Txn<'_>, cell: &BlockId, row: &BlockId, order: Stri
     e.set("vMerge", None);
     e.set("hMerge", None);
     let first_ppr = txn
-        .doc
-        .body
+        .story()
         .children(Some(cell))
         .iter()
         .filter_map(|k| txn.get(k))
@@ -216,9 +215,9 @@ fn empty_cell_like(txn: &mut Txn<'_>, cell: &BlockId, row: &BlockId, order: Stri
 pub(super) fn insert_row(txn: &mut Txn<'_>, para: &BlockId, below: bool) -> Option<Pos> {
     let (_, row, table) = enclosing(txn, para)?;
     let order = if below {
-        txn.doc.body.key_after(Some(&table), Some(&row))
+        txn.story().key_after(Some(&table), Some(&row))
     } else {
-        txn.doc.body.key_before(Some(&table), &row)
+        txn.story().key_before(Some(&table), &row)
     };
     let source = txn.get(&row)?.clone();
     let id = txn.new_id();
@@ -226,13 +225,13 @@ pub(super) fn insert_row(txn: &mut Txn<'_>, para: &BlockId, below: bool) -> Opti
     r.props = source.props.clone();
     r.attrs = text::strip_ids(&source.attrs);
     txn.insert(r);
-    let cells: Vec<BlockId> = txn.doc.body.children(Some(&row)).to_vec();
+    let cells: Vec<BlockId> = txn.story().children(Some(&row)).to_vec();
     let keys = crate::model::block::initial_keys(cells.len());
     for (c, k) in cells.iter().zip(keys) {
         empty_cell_like(txn, c, &id, k);
     }
-    let first_cell = txn.doc.body.children(Some(&id)).first().cloned()?;
-    let p = txn.doc.body.children(Some(&first_cell)).first().cloned()?;
+    let first_cell = txn.story().children(Some(&id)).first().cloned()?;
+    let p = txn.story().children(Some(&first_cell)).first().cloned()?;
     Some(Pos::new(p, 0))
 }
 
@@ -240,7 +239,7 @@ pub(super) fn insert_row(txn: &mut Txn<'_>, para: &BlockId, below: bool) -> Opti
 /// Returns where the caret goes.
 pub(super) fn delete_row(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
     let (_, row, table) = enclosing(txn, para)?;
-    let rows: Vec<BlockId> = txn.doc.body.children(Some(&table)).to_vec();
+    let rows: Vec<BlockId> = txn.story().children(Some(&table)).to_vec();
     if rows.len() <= 1 {
         return delete_table(txn, para);
     }
@@ -250,8 +249,8 @@ pub(super) fn delete_row(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
         .or_else(|| i.checked_sub(1).and_then(|j| rows.get(j)))
         .cloned()?;
     txn.remove(&row);
-    let cell = txn.doc.body.children(Some(&next)).first().cloned()?;
-    let p = txn.doc.body.children(Some(&cell)).first().cloned()?;
+    let cell = txn.story().children(Some(&next)).first().cloned()?;
+    let p = txn.story().children(Some(&cell)).first().cloned()?;
     Some(Pos::new(p, 0))
 }
 
@@ -259,7 +258,7 @@ pub(super) fn delete_row(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
 pub(super) fn delete_table(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
     let (_, _, table) = enclosing(txn, para)?;
     let parent = txn.get(&table)?.parent.clone();
-    let kids: Vec<BlockId> = txn.doc.body.children(parent.as_ref()).to_vec();
+    let kids: Vec<BlockId> = txn.story().children(parent.as_ref()).to_vec();
     let i = kids.iter().position(|k| *k == table)?;
     txn.remove(&table);
     // The paragraph after the table, or before it, or a new one.
@@ -272,7 +271,7 @@ pub(super) fn delete_table(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
     let p = match near {
         Some(p) => p,
         None => {
-            let order = txn.doc.body.key_after(parent.as_ref(), None);
+            let order = txn.story().key_after(parent.as_ref(), None);
             let id = txn.new_id();
             txn.insert(Block::new(id.clone(), BlockKind::Paragraph, parent, order));
             id
@@ -325,7 +324,7 @@ fn set_grid(txn: &mut Txn<'_>, table: &BlockId, cols: &[i64], parts: Vec<super::
 fn column_of(txn: &Txn<'_>, row: &BlockId, cell: &BlockId) -> usize {
     let decls = txn.doc.decls();
     let mut col = 0;
-    for c in txn.doc.body.children(Some(row)) {
+    for c in txn.story().children(Some(row)) {
         if c == cell {
             return col;
         }
@@ -346,7 +345,7 @@ fn column_of(txn: &Txn<'_>, row: &BlockId, cell: &BlockId) -> usize {
 
 /// The cell of `row` covering grid column `col`.
 fn cell_at(txn: &Txn<'_>, row: &BlockId, col: usize) -> Option<BlockId> {
-    let cells: Vec<BlockId> = txn.doc.body.children(Some(row)).to_vec();
+    let cells: Vec<BlockId> = txn.story().children(Some(row)).to_vec();
     let mut best = None;
     for c in cells {
         if column_of(txn, row, &c) <= col {
@@ -372,20 +371,20 @@ pub(super) fn insert_column(txn: &mut Txn<'_>, para: &BlockId, right: bool) -> O
             *c = (*c * total / sum).max(200);
         }
     }
-    let rows: Vec<BlockId> = txn.doc.body.children(Some(&table)).to_vec();
+    let rows: Vec<BlockId> = txn.story().children(Some(&table)).to_vec();
     let mut result = None;
     for r in rows {
         let Some(source) = cell_at(txn, &r, col) else {
             continue;
         };
         let order = if right {
-            txn.doc.body.key_after(Some(&r), Some(&source))
+            txn.story().key_after(Some(&r), Some(&source))
         } else {
-            txn.doc.body.key_before(Some(&r), &source)
+            txn.story().key_before(Some(&r), &source)
         };
         let id = empty_cell_like(txn, &source, &r, order);
         if r == row {
-            let p = txn.doc.body.children(Some(&id)).first().cloned();
+            let p = txn.story().children(Some(&id)).first().cloned();
             result = p.map(|p| Pos::new(p, 0));
         }
     }
@@ -399,7 +398,7 @@ pub(super) fn delete_column(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
     let (cell, row, table) = enclosing(txn, para)?;
     let col = column_of(txn, &row, &cell);
     let (mut cols, parts) = grid(txn, &table);
-    if cols.len() <= 1 || txn.doc.body.children(Some(&row)).len() <= 1 {
+    if cols.len() <= 1 || txn.story().children(Some(&row)).len() <= 1 {
         return delete_table(txn, para);
     }
     let removed_w = if col < cols.len() {
@@ -413,10 +412,10 @@ pub(super) fn delete_column(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
             *c += removed_w * *c / total;
         }
     }
-    let rows: Vec<BlockId> = txn.doc.body.children(Some(&table)).to_vec();
+    let rows: Vec<BlockId> = txn.story().children(Some(&table)).to_vec();
     for r in &rows {
         if let Some(c) = cell_at(txn, r, col) {
-            if txn.doc.body.children(Some(r)).len() > 1 {
+            if txn.story().children(Some(r)).len() > 1 {
                 txn.remove(&c);
             }
         }
@@ -424,7 +423,7 @@ pub(super) fn delete_column(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
     resize_cells(txn, &table, &cols);
     set_grid(txn, &table, &cols, parts);
     let target = cell_at(txn, &row, col.saturating_sub(1))?;
-    let p = txn.doc.body.children(Some(&target)).first().cloned()?;
+    let p = txn.story().children(Some(&target)).first().cloned()?;
     Some(Pos::new(p, 0))
 }
 
@@ -432,9 +431,9 @@ pub(super) fn delete_column(txn: &mut Txn<'_>, para: &BlockId) -> Option<Pos> {
 fn resize_cells(txn: &mut Txn<'_>, table: &BlockId, cols: &[i64]) {
     let w = txn.doc.w_prefix().to_owned();
     let decls = std::sync::Arc::clone(txn.doc.decls());
-    let rows: Vec<BlockId> = txn.doc.body.children(Some(table)).to_vec();
+    let rows: Vec<BlockId> = txn.story().children(Some(table)).to_vec();
     for r in rows {
-        let cells: Vec<BlockId> = txn.doc.body.children(Some(&r)).to_vec();
+        let cells: Vec<BlockId> = txn.story().children(Some(&r)).to_vec();
         let mut col = 0;
         for c in cells {
             let props = txn.get(&c).map(|b| b.props.clone()).unwrap_or_default();

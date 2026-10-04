@@ -86,7 +86,11 @@ export type EditOp =
   | { op: 'insertColumn'; right: boolean }
   | { op: 'deleteRow' }
   | { op: 'deleteColumn' }
-  | { op: 'deleteTable' };
+  | { op: 'deleteTable' }
+  /** Edit the header, footer or body at a point on a page (points). */
+  | { op: 'enterStory'; page: number; x: number; y: number }
+  /** Back from a header or footer to the body. */
+  | { op: 'exitStory' };
 
 export type CaretRect = { page: number; x: number; y: number; height: number };
 
@@ -98,7 +102,28 @@ export type PageRect = {
   h: number;
 };
 
-export type PageInfo = { width: number; height: number; fingerprint: string };
+/** A page's header or footer area (points). */
+export type PageArea = {
+  top: number;
+  bottom: number;
+  /** Whether the section has a header or footer part there to edit. */
+  editable: boolean;
+};
+
+export type PageInfo = {
+  width: number;
+  height: number;
+  fingerprint: string;
+  header?: PageArea;
+  footer?: PageArea;
+};
+
+/** The story the selection is in. */
+export type StoryState = {
+  kind: 'body' | 'header' | 'footer';
+  /** The page whose header or footer is being edited. */
+  page?: number;
+};
 
 /** A horizontal strip of a page that changed. */
 export type Band = { page: number; top: number; bottom: number };
@@ -171,6 +196,7 @@ export type EditResult = {
   /** Strips of pages that changed since the previous result. */
   bands?: Band[];
   format: FormatState;
+  story: StoryState;
 };
 
 /** The whole shared state of a document. */

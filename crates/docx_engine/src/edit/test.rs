@@ -786,31 +786,236 @@ fn selected_text_joins_paragraphs() {
 }
 
 #[test]
-#[ignore = "timing probe over a corpus document; run with --ignored --nocapture"]
+#[ignore = "timing probe over a long document; run with --ignored --nocapture"]
 fn zz_typing_profile() {
-    let path = std::env::var("DOCX_PROFILE").unwrap_or_default();
-    let Ok(bytes) = std::fs::read(&path) else { return };
-    let doc = Document::open(bytes).unwrap();
-    let mut s = Session::new(doc);
+    // About sixty pages of contract-like paragraphs.
+    let clause = "The Receiving Party shall hold the Disclosing Party's Confidential \
+        Information in strict confidence and shall not disclose it to any third party \
+        except to its Representatives who need to know it for the Purpose.";
+    let body: String = (0..600).map(|i| p(&format!("{i}. {clause}"))).collect();
+    let mut s = open(&body);
     let t = std::time::Instant::now();
     let pages = s.pages(fonts()).len();
     eprintln!("first layout {:?} ({pages} pages)", t.elapsed());
     let target = s.document().body().paragraphs()[20].clone();
-    s.apply(&[EditOp::Select { anchor: Pos::new(target.clone(), 3), focus: Pos::new(target, 3) }], None, fonts()).unwrap();
+    s.apply(
+        &[EditOp::Select {
+            anchor: Pos::new(target.clone(), 3),
+            focus: Pos::new(target, 3),
+        }],
+        None,
+        fonts(),
+    )
+    .unwrap();
     for i in 0..5 {
         let t = std::time::Instant::now();
-        let r = s.apply(&[EditOp::InsertText { text: "x".into() }], Some("typing"), fonts()).unwrap();
+        let r = s
+            .apply(
+                &[EditOp::InsertText { text: "x".into() }],
+                Some("typing"),
+                fonts(),
+            )
+            .unwrap();
         let total = t.elapsed();
         let t2 = std::time::Instant::now();
         let json = serde_json::to_string(&r).unwrap();
-        eprintln!("keystroke {i}: apply {total:?}, json {:?} ({} bytes)", t2.elapsed(), json.len());
+        eprintln!(
+            "keystroke {i}: apply {total:?}, json {:?} ({} bytes)",
+            t2.elapsed(),
+            json.len()
+        );
     }
     // Layout alone.
     let t = std::time::Instant::now();
     let cache = crate::layout::LayoutCache::new();
-    s.document().layout_cached(fonts(), &crate::layout::LayoutOptions::default(), &cache);
+    s.document()
+        .layout_cached(fonts(), &crate::layout::LayoutOptions::default(), &cache);
     eprintln!("cold layout {:?}", t.elapsed());
     let t = std::time::Instant::now();
-    s.document().layout_cached(fonts(), &crate::layout::LayoutOptions::default(), &cache);
+    s.document()
+        .layout_cached(fonts(), &crate::layout::LayoutOptions::default(), &cache);
     eprintln!("warm layout {:?}", t.elapsed());
+}
+
+const WITH_HEADER: &str = r#"<w:p><w:r><w:t>Body text</w:t></w:r></w:p><w:sectPr><w:headerReference w:type="default" r:id="rIdH1"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>"#;
+
+fn header_texts(doc: &Document) -> Vec<String> {
+    let part = doc.part_story("/word/header1.xml").expect("header part");
+    part.story
+        .paragraphs()
+        .iter()
+        .map(|id| part.story.get(id).unwrap().content.text())
+        .collect()
+}
+
+fn open_with_header() -> Session {
+    let header = p("Confidential");
+    open_with(
+        WITH_HEADER,
+        &Parts {
+            header: Some(&header),
+            ..Parts::default()
+        },
+    )
+}
+
+#[test]
+fn headers_are_edited_in_place_and_written_to_their_part() {
+    let mut s = open_with_header();
+    let pages = s.pages(fonts());
+    let area = pages[0].header.clone().expect("header area");
+    assert!(area.editable);
+    assert!(area.bottom >= 72.0 - 0.1, "{area:?}");
+    // Header blocks have ids of their own.
+    let header_id = s
+        .document()
+        .part_story("/word/header1.xml")
+        .unwrap()
+        .story
+        .paragraphs()[0]
+        .clone();
+    assert!(header_id.as_str().starts_with("word/header1.xml#"));
+
+    let r = run(
+        &mut s,
+        EditOp::EnterStory {
+            page: 0,
+            x: 300.0,
+            y: 42.0,
+        },
+    );
+    assert_eq!(r.story.kind, StoryKind::Header);
+    assert_eq!(r.story.page, Some(0));
+    assert_eq!(r.selection.focus.block, header_id);
+    run(
+        &mut s,
+        EditOp::Move {
+            unit: Unit::Document,
+            forward: true,
+            extend: false,
+        },
+    );
+    let r = type_text(&mut s, " draft");
+    // Shared as the part's XML, not as body blocks.
+    assert!(
+        r.changes.iter().any(|c| matches!(
+            c,
+            Change::Entry { container, key, value: Some(v) }
+                if container == "wordParts" && key.ends_with("header1.xml") && v.contains("Confidential draft")
+        )),
+        "{:?}",
+        r.changes
+    );
+    assert!(!r.changes.iter().any(|c| matches!(c, Change::Text { .. })));
+    let caret = r.caret.expect("caret");
+    assert_eq!(caret.page, 0);
+    assert!(caret.y < 72.0, "{caret:?}");
+    assert_eq!(header_texts(s.document()), vec!["Confidential draft"]);
+    assert_eq!(texts(&s), vec!["Body text"]);
+
+    // Back to the body, where the caret was.
+    let r = run(&mut s, EditOp::ExitStory);
+    assert_eq!(r.story.kind, StoryKind::Body);
+    assert_eq!(r.selection.focus.block, para(&s, 0));
+
+    // The saved file has the new header.
+    let saved = Document::open(s.document().save().unwrap()).unwrap();
+    assert_eq!(header_texts(&saved), vec!["Confidential draft"]);
+    assert_eq!(
+        saved
+            .body()
+            .paragraphs()
+            .iter()
+            .map(|id| saved.body().get(id).unwrap().content.text())
+            .collect::<Vec<_>>(),
+        vec!["Body text"]
+    );
+
+    // Undo goes back into the header and removes the typing.
+    let r = s.undo(fonts()).unwrap();
+    assert_eq!(r.story.kind, StoryKind::Header);
+    assert_eq!(header_texts(s.document()), vec!["Confidential"]);
+    s.redo(fonts()).unwrap();
+    assert_eq!(header_texts(s.document()), vec!["Confidential draft"]);
+}
+
+#[test]
+fn double_clicking_the_body_leaves_the_header() {
+    let mut s = open_with_header();
+    run(
+        &mut s,
+        EditOp::EnterStory {
+            page: 0,
+            x: 300.0,
+            y: 42.0,
+        },
+    );
+    // Enter splits the header paragraph within the header.
+    run(&mut s, EditOp::InsertParagraph);
+    assert_eq!(header_texts(s.document()).len(), 2);
+    assert_eq!(texts(&s), vec!["Body text"]);
+    let r = run(
+        &mut s,
+        EditOp::EnterStory {
+            page: 0,
+            x: 100.0,
+            y: 80.0,
+        },
+    );
+    assert_eq!(r.story.kind, StoryKind::Body);
+    assert_eq!(r.selection.focus.block, para(&s, 0));
+}
+
+#[test]
+fn a_remote_header_change_keeps_the_caret_in_the_header() {
+    let mut s = open_with_header();
+    run(
+        &mut s,
+        EditOp::EnterStory {
+            page: 0,
+            x: 300.0,
+            y: 42.0,
+        },
+    );
+    run(
+        &mut s,
+        EditOp::Move {
+            unit: Unit::Document,
+            forward: true,
+            extend: false,
+        },
+    );
+    // Another peer rewrites the header part.
+    let xml = format!(
+        r#"<w:hdr {NS}><w:p><w:r><w:t>Privileged</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p></w:hdr>"#
+    );
+    let r = s
+        .apply_remote(
+            &[RemoteChange::Entry {
+                container: "wordParts".to_owned(),
+                key: "/word/header1.xml".to_owned(),
+                value: Some(xml),
+            }],
+            fonts(),
+        )
+        .unwrap();
+    assert_eq!(header_texts(s.document()), vec!["Privileged", "Second"]);
+    assert_eq!(r.story.kind, StoryKind::Header);
+    let first = s
+        .document()
+        .part_story("/word/header1.xml")
+        .unwrap()
+        .story
+        .paragraphs()[0]
+        .clone();
+    assert_eq!(r.selection.focus.block, first);
+    // Typing continues in the header.
+    type_text(&mut s, "!");
+    assert_eq!(
+        header_texts(s.document())[0]
+            .chars()
+            .filter(|c| *c == '!')
+            .count(),
+        1
+    );
 }

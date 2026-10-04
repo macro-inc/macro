@@ -30,6 +30,7 @@ const RESULT_BASE: Omit<EditResult, 'changes' | 'changed'> = {
   },
   caret: null,
   rects: [],
+  story: { kind: 'body' },
   format: {
     bold: false,
     italic: false,

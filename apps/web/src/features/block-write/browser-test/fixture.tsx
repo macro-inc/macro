@@ -45,6 +45,8 @@ declare global {
       sharedBlock: (
         prefix: string
       ) => { props: string; attrs: Record<string, string>[] } | null;
+      /** XML of the shared part whose name ends with `suffix`. */
+      sharedPart: (suffix: string) => string | null;
     };
   }
 }
@@ -96,6 +98,13 @@ function helpers(
           'insert' in op ? (op.attributes ?? {}) : {}
         ),
       };
+    },
+    sharedPart: (suffix: string) => {
+      const shared = doc();
+      if (!shared) return null;
+      const parts = readCollabState(shared).parts;
+      const name = Object.keys(parts).find((key) => key.endsWith(suffix));
+      return name ? (parts[name] ?? null) : null;
     },
   };
 }

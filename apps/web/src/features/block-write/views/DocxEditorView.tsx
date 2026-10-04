@@ -134,9 +134,11 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     onCleanup(() => observer.disconnect());
   });
 
+  // Comments anchor in the body, not in headers and footers.
   const selectionTop = createMemo<number | null>(() => {
-    const first = editor.state()?.rects[0];
-    if (!first) return null;
+    const state = editor.state();
+    const first = state?.rects[0];
+    if (!first || state.story.kind !== 'body') return null;
     return toColumn(geometry(), first)?.top ?? null;
   });
 
@@ -212,10 +214,17 @@ export function DocxEditorView(props: DocxEditorViewProps) {
 @keyframes docx-blink { 50% { opacity: 0; } }
 .docx-composition { background: #fff; color: #000; text-decoration: underline; }
 .docx-comment { background-color: oklch(from var(--color-yellow) l c h / 0.28); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.7); }
-.docx-comment-active { background-color: oklch(from var(--color-yellow) l c h / 0.55); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.9); }`}</style>
+.docx-comment-active { background-color: oklch(from var(--color-yellow) l c h / 0.55); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.9); }
+.docx-veil { background: rgb(255 255 255 / 0.55); }
+.docx-story-edge { border-color: oklch(from var(--color-accent, #3b82f6) l c h / 0.8); }`}</style>
       <DocxToolbar
         canEdit={props.canEdit}
-        canComment={!!props.commentRoots && props.canComment()}
+        canComment={
+          !!props.commentRoots &&
+          props.canComment() &&
+          editor.state()?.story.kind !== 'header' &&
+          editor.state()?.story.kind !== 'footer'
+        }
         format={{
           bold: format()?.bold,
           italic: format()?.italic,

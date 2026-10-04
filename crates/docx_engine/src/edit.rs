@@ -21,10 +21,10 @@ pub use format::{Alignment, ParaPatch, RunPatch, Spacing, Toggle};
 pub use geometry::{CaretRect, PageRect, ViewIndex};
 pub use txn::{BlockRecord, Change, Step, content_delta};
 
-use crate::document::Document;
+use crate::document::{Document, StoryTarget};
 use crate::layout::format::{Formats, ParaFormat, TableCtx};
 use crate::layout::{Item, Layout, LayoutCache, LayoutOptions, Page, ParaBox};
-use crate::model::block::{BlockId, BlockKind};
+use crate::model::block::{BlockId, BlockKind, Story};
 use crate::model::content::{Attrs, OBJECT_CHAR, key, utf16_len};
 use crate::model::props::Align;
 use crate::xml::SnippetContext;
@@ -245,6 +245,18 @@ pub enum EditOp {
     DeleteColumn,
     /// Deletes the caret's table.
     DeleteTable,
+    /// Starts editing the header, footer or body at a point on a page, with
+    /// the caret there.
+    EnterStory {
+        /// Page index.
+        page: usize,
+        /// X (points).
+        x: f32,
+        /// Y (points).
+        y: f32,
+    },
+    /// Leaves a header or footer for the body, where the caret was.
+    ExitStory,
 }
 
 /// A page's size and a fingerprint of what it shows.
@@ -257,6 +269,58 @@ pub struct PageInfo {
     pub height: f32,
     /// Changes whenever the page's content does (hex).
     pub fingerprint: String,
+    /// The header area.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<Area>,
+    /// The footer area.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub footer: Option<Area>,
+}
+
+/// A page's header or footer area (points).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Area {
+    /// Top.
+    pub top: f32,
+    /// Bottom.
+    pub bottom: f32,
+    /// Whether the section has a part here to edit.
+    pub editable: bool,
+}
+
+impl Area {
+    fn of(chrome: &crate::layout::Chrome) -> Self {
+        Self {
+            top: chrome.top,
+            bottom: chrome.bottom,
+            editable: chrome.part.is_some(),
+        }
+    }
+}
+
+/// Which story the selection is in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StoryKind {
+    /// The body.
+    #[default]
+    Body,
+    /// A header.
+    Header,
+    /// A footer.
+    Footer,
+}
+
+/// The story being edited.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryState {
+    /// Body, header or footer.
+    pub kind: StoryKind,
+    /// The page whose header or footer is being edited.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<usize>,
 }
 
 /// Formatting at the selection, for toolbars.
@@ -319,6 +383,8 @@ pub struct EditResult {
     pub bands: Vec<Band>,
     /// Formatting at the selection.
     pub format: FormatState,
+    /// The story being edited.
+    pub story: StoryState,
 }
 
 /// A selection's ends in document order.
@@ -436,6 +502,14 @@ pub struct Session {
     line_hashes: LineHashes,
     keys: PageKeys,
     fingerprints: Vec<u64>,
+    /// The story being edited.
+    active: StoryTarget,
+    /// The page whose header or footer is being edited.
+    story_page: usize,
+    /// The body's lines (the same as `index` while editing the body).
+    body_index: Arc<ViewIndex>,
+    /// Where the body selection was when a header or footer was entered.
+    body_sel: Option<Selection>,
 }
 
 impl std::fmt::Debug for Session {
@@ -545,7 +619,13 @@ fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
         }
         Item::Fill { rect, color } => {
             1u8.hash(&mut h);
-            (rect.x.to_bits(), rect.y.to_bits(), rect.w.to_bits(), rect.h.to_bits()).hash(&mut h);
+            (
+                rect.x.to_bits(),
+                rect.y.to_bits(),
+                rect.w.to_bits(),
+                rect.h.to_bits(),
+            )
+                .hash(&mut h);
             rgba_bits(color).hash(&mut h);
             (rect.y - 1.0, rect.y + rect.h + 1.0)
         }
@@ -571,7 +651,12 @@ fn item_key(item: &Item, lines: &mut LineHashes) -> (u64, f32, f32) {
         Item::Drawing(d) => {
             3u8.hash(&mut h);
             (Arc::as_ptr(&d.drawing) as usize).hash(&mut h);
-            (d.rect.x.to_bits(), d.rect.y.to_bits(), d.rect.w.to_bits(), d.rect.h.to_bits())
+            (
+                d.rect.x.to_bits(),
+                d.rect.y.to_bits(),
+                d.rect.w.to_bits(),
+                d.rect.h.to_bits(),
+            )
                 .hash(&mut h);
             // Rotated or effect-extended drawings can reach further.
             let pad = d.rect.w.max(d.rect.h) * 0.5;
@@ -627,7 +712,10 @@ fn dirty_bands(old: &Layout, old_keys: &PageKeys, new: &Layout, new_keys: &PageK
             });
             continue;
         };
-        if before.width != page.width || before.height != page.height || before.number != page.number {
+        if before.width != page.width
+            || before.height != page.height
+            || before.number != page.number
+        {
             out.push(Band {
                 page: i,
                 top: 0.0,
@@ -795,6 +883,10 @@ impl Session {
             line_hashes: LineHashes::default(),
             keys: Vec::new(),
             fingerprints: Vec::new(),
+            active: StoryTarget::Body,
+            story_page: 0,
+            body_index: Arc::new(ViewIndex::default()),
+            body_sel: None,
         };
         let first = first.unwrap_or_else(|| s.ensure_paragraph());
         s.sel = Selection::caret(Pos::new(first, 0));
@@ -876,6 +968,8 @@ impl Session {
                 width: p.width,
                 height: p.height,
                 fingerprint: format!("{f:016x}"),
+                header: p.header.as_ref().map(Area::of),
+                footer: p.footer.as_ref().map(Area::of),
             })
             .collect()
     }
@@ -885,7 +979,7 @@ impl Session {
             return false;
         }
         let layout = self.doc.layout_cached(fonts, &self.options, &self.cache);
-        self.index = Arc::new(ViewIndex::build(&layout));
+        self.body_index = Arc::new(ViewIndex::build(&layout));
         let keys = page_keys(&layout, &mut self.line_hashes);
         let bands = dirty_bands(&self.layout, &self.keys, &layout, &keys);
         self.bands.extend(bands);
@@ -897,20 +991,153 @@ impl Session {
             .collect();
         self.keys = keys;
         self.layout = Arc::new(layout);
+        self.reindex();
         // The old layout is gone: forget its paragraphs' hashes.
         self.line_hashes.prune();
         self.stale = false;
         true
     }
 
+    /// Indexes the active story's lines: the body's, or a header's or
+    /// footer's on the page being edited.
+    fn reindex(&mut self) {
+        self.index = match &self.active {
+            StoryTarget::Body => Arc::clone(&self.body_index),
+            StoryTarget::Part(name) => {
+                self.story_page = self
+                    .story_page
+                    .min(self.layout.pages.len().saturating_sub(1));
+                Arc::new(ViewIndex::for_story(
+                    &self.layout,
+                    &crate::layout::StoryRef::Part(name.clone()),
+                    Some(self.story_page),
+                ))
+            }
+        };
+    }
+
+    /// The header or footer area at a point, and the part it shows.
+    fn chrome_at(&self, page: usize, y: f32) -> Option<(StoryKind, Option<String>)> {
+        let p = self.layout.pages.get(page)?;
+        if let Some(h) = &p.header
+            && y < h.bottom
+        {
+            return Some((StoryKind::Header, h.part.clone()));
+        }
+        if let Some(f) = &p.footer
+            && y >= f.top
+        {
+            return Some((StoryKind::Footer, f.part.clone()));
+        }
+        None
+    }
+
+    /// What the selection is in, for the caller.
+    fn story_state(&self) -> StoryState {
+        let StoryTarget::Part(name) = &self.active else {
+            return StoryState::default();
+        };
+        let page = self.layout.pages.get(self.story_page);
+        let kind = if page
+            .and_then(|p| p.footer.as_ref())
+            .is_some_and(|f| f.part.as_ref() == Some(name))
+        {
+            StoryKind::Footer
+        } else {
+            StoryKind::Header
+        };
+        StoryState {
+            kind,
+            page: Some(self.story_page),
+        }
+    }
+
+    /// Switches to editing a header or footer on a page.
+    fn enter_part(&mut self, part: String, page: usize) {
+        if self.active == StoryTarget::Body {
+            self.body_sel = Some(self.sel.clone());
+        }
+        self.active = StoryTarget::Part(part);
+        self.story_page = page;
+        self.order = None;
+        self.pending = None;
+        self.goal_x = None;
+        self.open_group = None;
+        self.reindex();
+    }
+
+    /// Back to the body, with the selection it had.
+    fn leave_story(&mut self) {
+        if self.active == StoryTarget::Body {
+            return;
+        }
+        self.active = StoryTarget::Body;
+        self.story_page = 0;
+        self.order = None;
+        self.pending = None;
+        self.goal_x = None;
+        self.open_group = None;
+        self.sel = self.body_sel.take().unwrap_or_else(|| {
+            let first = self.doc.body().paragraphs().into_iter().next();
+            Selection::caret(Pos::new(first.unwrap_or_else(|| BlockId::new("")), 0))
+        });
+        self.reindex();
+    }
+
+    /// Takes a selection, switching to the story it is in.
+    fn adopt(&mut self, sel: Selection) {
+        match self.doc.story_of(&sel.focus.block) {
+            Some(StoryTarget::Body) => self.leave_story(),
+            Some(StoryTarget::Part(name)) if self.active != StoryTarget::Part(name.clone()) => {
+                // Show it on the first page that has it.
+                let page = self
+                    .layout
+                    .pages
+                    .iter()
+                    .position(|p| {
+                        [&p.header, &p.footer]
+                            .into_iter()
+                            .flatten()
+                            .any(|c| c.part.as_ref() == Some(&name))
+                    })
+                    .unwrap_or(0);
+                self.enter_part(name, page);
+            }
+            _ => {}
+        }
+        self.sel = sel;
+        self.clamp_selection();
+    }
+
+    /// Positions in the active story as (paragraph index, offset), to find
+    /// them again after the story is read anew.
+    fn story_positions(&self) -> Option<[(usize, usize); 2]> {
+        let StoryTarget::Part(_) = &self.active else {
+            return None;
+        };
+        let list = self.story().paragraphs();
+        let at = |p: &Pos| {
+            (
+                list.iter().position(|id| *id == p.block).unwrap_or(0),
+                p.offset,
+            )
+        };
+        Some([at(&self.sel.anchor), at(&self.sel.focus)])
+    }
+
+    /// The story being edited.
+    fn story(&self) -> &Story {
+        self.doc.story(&self.active)
+    }
+
     fn order(&mut self) -> Arc<ParaOrder> {
-        let rev = self.doc.body.revision();
+        let rev = self.story().revision();
         if let Some((r, o)) = &self.order
             && *r == rev
         {
             return Arc::clone(o);
         }
-        let list = self.doc.body.paragraphs();
+        let list = self.story().paragraphs();
         let index = list
             .iter()
             .enumerate()
@@ -946,13 +1173,17 @@ impl Session {
     }
 
     fn para_len(&self, id: &BlockId) -> usize {
-        self.doc.body.get(id).map_or(0, |b| b.content.len())
+        self.story().get(id).map_or(0, |b| b.content.len())
     }
 
     /// Keeps the selection on existing paragraphs and in range.
     fn clamp_selection(&mut self) {
+        if !self.doc.has_story(&self.active) || self.story().paragraphs().is_empty() {
+            // The header or footer went away: back to the body.
+            self.leave_story();
+        }
         let fix = |s: &mut Self, p: Pos| -> Pos {
-            match s.doc.body.get(&p.block) {
+            match s.story().get(&p.block) {
                 Some(b) if b.kind == BlockKind::Paragraph => {
                     let len = b.content.len();
                     Pos {
@@ -961,7 +1192,7 @@ impl Session {
                     }
                 }
                 _ => {
-                    let first = s.doc.body.paragraphs().into_iter().next();
+                    let first = s.story().paragraphs().into_iter().next();
                     let id = first.unwrap_or_else(|| s.ensure_paragraph());
                     Pos::new(id, 0)
                 }
@@ -989,7 +1220,7 @@ impl Session {
         {
             return Some(Arc::clone(&l.para.format));
         }
-        let b = self.doc.body.get(id)?;
+        let b = self.story().get(id)?;
         Some(formats.paragraph(&b.props, &TableCtx::default()))
     }
 
@@ -1001,7 +1232,7 @@ impl Session {
         if let Some(p) = &self.pending {
             return p.clone();
         }
-        let Some(b) = self.doc.body.get(&pos.block) else {
+        let Some(b) = self.story().get(&pos.block) else {
             return Attrs::empty();
         };
         text::typing_attrs(b, pos.offset, self.doc.w_prefix(), &self.snippets())
@@ -1059,7 +1290,7 @@ impl Session {
         if !self.sel.is_collapsed() {
             let mut checked = 0usize;
             'outer: for (k, id) in paras.iter().enumerate() {
-                let Some(b) = self.doc.body.get(id) else {
+                let Some(b) = self.story().get(id) else {
                     continue;
                 };
                 let Some(pf) = self.para_format(&formats, id) else {
@@ -1131,6 +1362,7 @@ impl Session {
             pages: relaid.then(|| self.page_infos()),
             bands: std::mem::take(&mut self.bands),
             format,
+            story: self.story_state(),
         }
     }
 
@@ -1165,7 +1397,7 @@ impl Session {
         let paras = self.paras_between(&s.block, &e.block);
         let mut out = String::new();
         for (k, id) in paras.iter().enumerate() {
-            let Some(b) = self.doc.body.get(id) else {
+            let Some(b) = self.story().get(id) else {
                 continue;
             };
             if k > 0 {
@@ -1243,7 +1475,25 @@ impl Session {
             }
         }
         if !entries.is_empty() {
-            self.doc.apply_entries(&entries)?;
+            let kept = self.story_positions();
+            if self.doc.apply_entries(&entries)? {
+                // Headers and footers were read anew (with fresh blocks).
+                self.order = None;
+                if let Some(kept) = kept {
+                    let list = self.story().paragraphs();
+                    let at = |(i, offset): (usize, usize)| {
+                        list.get(i)
+                            .or(list.last())
+                            .map(|id| Pos::new(id.clone(), offset))
+                    };
+                    if let (Some(a), Some(f)) = (at(kept[0]), at(kept[1])) {
+                        self.sel = Selection {
+                            anchor: a,
+                            focus: f,
+                        };
+                    }
+                }
+            }
         }
         // Keep the caret on the same text.
         for pos in [&mut self.sel.anchor, &mut self.sel.focus] {
@@ -1270,16 +1520,44 @@ impl Session {
         geometry::hit_test(&self.layout, &self.index, page, x, y)
     }
 
+    /// Whether a position is in the body while a header or footer is being
+    /// edited (comments and other people's carets stay on the body).
+    fn body_pos_elsewhere(&self, pos: &Pos) -> bool {
+        self.active != StoryTarget::Body && self.doc.body().contains(&pos.block)
+    }
+
     /// The caret for a position.
     pub fn caret_at(&mut self, pos: &Pos, fonts: &FontDb) -> Option<CaretRect> {
         self.ensure_layout(fonts);
-        geometry::caret(&self.layout, &self.index, pos)
+        let index = if self.body_pos_elsewhere(pos) {
+            &self.body_index
+        } else {
+            &self.index
+        };
+        geometry::caret(&self.layout, index, pos)
     }
 
     /// Highlight rectangles of a range in one paragraph or across several
     /// (comments, search results, other people's selections).
     pub fn range_rects(&mut self, a: &Pos, b: &Pos, fonts: &FontDb) -> Vec<PageRect> {
         self.ensure_layout(fonts);
+        if self.body_pos_elsewhere(a) {
+            let list = self.doc.body().paragraphs();
+            let at = |p: &Pos| list.iter().position(|id| *id == p.block).unwrap_or(0);
+            let (ia, ib) = (at(a), at(b));
+            let (s, e, i, j) = if (ia, a.offset) <= (ib, b.offset) {
+                (a, b, ia, ib)
+            } else {
+                (b, a, ib, ia)
+            };
+            return geometry::range_rects(
+                &self.layout,
+                &self.body_index,
+                s,
+                e,
+                &list[i..=j.max(i)],
+            );
+        }
         let o = self.order();
         let ia = o.index.get(&a.block).copied().unwrap_or(0);
         let ib = o.index.get(&b.block).copied().unwrap_or(0);
@@ -1368,32 +1646,36 @@ impl Session {
     pub fn undo(&mut self, fonts: &FontDb) -> Option<EditResult> {
         let entry = self.undo.pop()?;
         let inverse = entry.step.inverse();
+        let snapshot = self.doc.snapshot();
         txn::apply_step(&mut self.doc, &inverse);
         self.stale = true;
         self.order = None;
-        self.sel = entry.before.clone();
         self.pending = None;
         self.open_group = None;
-        let changes = inverse.changes();
+        let mut changes = inverse.changes();
+        changes.extend(self.doc.entry_changes(&snapshot).unwrap_or_default());
+        let sel = entry.before.clone();
         self.redo.push(entry);
         let relaid = self.ensure_layout(fonts);
-        self.clamp_selection();
+        self.adopt(sel);
         Some(self.result(changes, relaid))
     }
 
     /// Redoes the last undone step.
     pub fn redo(&mut self, fonts: &FontDb) -> Option<EditResult> {
         let entry = self.redo.pop()?;
+        let snapshot = self.doc.snapshot();
         txn::apply_step(&mut self.doc, &entry.step);
         self.stale = true;
         self.order = None;
-        self.sel = entry.after.clone();
         self.pending = None;
         self.open_group = None;
-        let changes = entry.step.changes();
+        let mut changes = entry.step.changes();
+        changes.extend(self.doc.entry_changes(&snapshot).unwrap_or_default());
+        let sel = entry.after.clone();
         self.undo.push(entry);
         let relaid = self.ensure_layout(fonts);
-        self.clamp_selection();
+        self.adopt(sel);
         Some(self.result(changes, relaid))
     }
 
@@ -1430,12 +1712,41 @@ impl Session {
         }
         match op {
             EditOp::Select { anchor, focus } => {
-                self.sel = Selection {
+                self.adopt(Selection {
                     anchor: anchor.clone(),
                     focus: focus.clone(),
-                };
-                self.clamp_selection();
+                });
                 self.pending = None;
+                Ok(None)
+            }
+            EditOp::EnterStory { page, x, y } => {
+                match self.chrome_at(*page, *y) {
+                    Some((_, Some(part))) => {
+                        self.enter_part(part, *page);
+                        let first = self.story().paragraphs().into_iter().next();
+                        let pos = geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                            .or_else(|| first.map(|id| Pos::new(id, 0)));
+                        if let Some(pos) = pos {
+                            self.sel = Selection::caret(pos);
+                        }
+                        self.clamp_selection();
+                    }
+                    // No header or footer to edit on this page.
+                    Some((_, None)) => {}
+                    None => {
+                        self.leave_story();
+                        if let Some(pos) =
+                            geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                        {
+                            self.sel = Selection::caret(pos);
+                        }
+                    }
+                }
+                self.pending = None;
+                Ok(None)
+            }
+            EditOp::ExitStory => {
+                self.leave_story();
                 Ok(None)
             }
             EditOp::SelectAll => {
@@ -1452,8 +1763,7 @@ impl Session {
             }
             EditOp::SelectWord { at } => {
                 let text = self
-                    .doc
-                    .body
+                    .story()
                     .get(&at.block)
                     .map(|b| b.content.text())
                     .unwrap_or_default();
@@ -1577,7 +1887,7 @@ impl Session {
         if all {
             // Back to plain paragraphs.
             let styles = std::sync::Arc::clone(&self.doc.parts().styles);
-            let mut txn = Txn::new(&mut self.doc);
+            let mut txn = Txn::new(&mut self.doc, &self.active);
             for id in &paras {
                 format::edit_ppr(&mut txn, id, |e| {
                     let style = e.get("pStyle").map(str::to_owned);
@@ -1621,7 +1931,7 @@ impl Session {
         };
         self.stale = true;
         let current = self.list_kinds(&paras);
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         for (id, k) in paras.iter().zip(current) {
             let ilvl = k.map_or(base_level, |(_, _, l)| l);
             format::edit_ppr(&mut txn, id, |e| {
@@ -1677,7 +1987,7 @@ impl Session {
                     .map_or(0.0, |pf| pf.props.ind_left)
             })
             .collect();
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         for ((id, k), left) in paras.iter().zip(kinds).zip(lefts) {
             match k {
                 Some((_, num, ilvl)) => {
@@ -1734,7 +2044,7 @@ impl Session {
             .id_by_name("Table Grid")
             .map(str::to_owned);
         let sel = self.sel.clone();
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         let at = if sel.is_collapsed() {
             at
         } else {
@@ -1753,7 +2063,7 @@ impl Session {
 
     fn table_op(&mut self, f: impl FnOnce(&mut Txn<'_>, &BlockId) -> Option<Pos>) -> Option<Step> {
         let at = self.sel.focus.block.clone();
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         let caret = f(&mut txn, &at);
         let step = txn.finish();
         if let Some(c) = caret {
@@ -1768,8 +2078,7 @@ impl Session {
         geometry::para_stops(&self.layout, &self.index, block).unwrap_or_else(|| {
             let len = self.para_len(block);
             let text = self
-                .doc
-                .body
+                .story()
                 .get(block)
                 .map(|b| b.content.text())
                 .unwrap_or_default();
@@ -1813,8 +2122,7 @@ impl Session {
 
     fn step_word(&mut self, from: &Pos, forward: bool) -> Pos {
         let text = self
-            .doc
-            .body
+            .story()
             .get(&from.block)
             .map(|b| b.content.text())
             .unwrap_or_default();
@@ -1914,7 +2222,7 @@ impl Session {
     fn insert_text(&mut self, text: &str) -> Step {
         let pending = self.pending.take();
         let sel = self.sel.clone();
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         let at = delete_selection(&mut txn, &sel);
         let attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
         let end = text::insert_text(&mut txn, &at, text, &attrs);
@@ -1926,7 +2234,7 @@ impl Session {
     fn insert_paragraph(&mut self) -> Step {
         self.pending = None;
         let sel = self.sel.clone();
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         let at = delete_selection(&mut txn, &sel);
         let empty_list_item = txn
             .get(&at.block)
@@ -1959,7 +2267,7 @@ impl Session {
         };
         let pending = self.pending.take();
         let sel = self.sel.clone();
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         let at = delete_selection(&mut txn, &sel);
         let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
         let ch = match &object {
@@ -1986,7 +2294,7 @@ impl Session {
         self.pending = None;
         if !self.sel.is_collapsed() {
             let sel = self.sel.clone();
-            let mut txn = Txn::new(&mut self.doc);
+            let mut txn = Txn::new(&mut self.doc, &self.active);
             let caret = delete_selection(&mut txn, &sel);
             let step = txn.finish();
             self.set_caret(caret);
@@ -2027,7 +2335,7 @@ impl Session {
         if s >= e {
             return None;
         }
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         if let Some(b) = txn.block_mut(&at.block) {
             b.content.delete(s, e);
         }
@@ -2039,13 +2347,12 @@ impl Session {
     /// Backspace at a paragraph's start or Delete at its end.
     fn delete_at_edge(&mut self, at: &Pos, forward: bool) -> Option<Step> {
         let numbered = self
-            .doc
-            .body
+            .story()
             .get(&at.block)
             .is_some_and(|b| text::has_direct_numbering(&b.props));
         if !forward && numbered {
             // Backspace at a list item's start removes its number first.
-            let mut txn = Txn::new(&mut self.doc);
+            let mut txn = Txn::new(&mut self.doc, &self.active);
             format::edit_ppr(&mut txn, &at.block, |e| e.set("numPr", None));
             return Some(txn.finish());
         }
@@ -2055,9 +2362,9 @@ impl Session {
         } else {
             (other.clone(), at.block.clone())
         };
-        let parent = |s: &Self, id: &BlockId| s.doc.body.get(id).and_then(|b| b.parent.clone());
+        let parent = |s: &Self, id: &BlockId| s.story().get(id).and_then(|b| b.parent.clone());
         let siblings = parent(self, &first) == parent(self, &second);
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         let caret = if siblings {
             text::join(&mut txn, &first, &second)
         } else {
@@ -2096,7 +2403,7 @@ impl Session {
         }
         let (s, e) = self.ordered();
         let paras = self.paras_between(&s.block, &e.block);
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         for (k, id) in paras.iter().enumerate() {
             let Some(len) = txn.get(id).map(|b| b.content.len()) else {
                 continue;
@@ -2152,7 +2459,7 @@ impl Session {
             }
         } else {
             for (k, id) in paras.iter().enumerate() {
-                let (Some(b), Some(pf)) = (self.doc.body.get(id), fmts.get(id)) else {
+                let (Some(b), Some(pf)) = (self.story().get(id), fmts.get(id)) else {
                     continue;
                 };
                 let from = if k == 0 { s.offset } else { 0 };
@@ -2184,7 +2491,7 @@ impl Session {
             }
             return None;
         }
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         for (k, id) in paras.iter().enumerate() {
             let Some(pf) = fmts.get(id) else {
                 continue;
@@ -2219,7 +2526,7 @@ impl Session {
     fn map_paragraphs(&mut self, f: impl Fn(&mut Element)) -> Option<Step> {
         let (s, e) = self.ordered();
         let paras = self.paras_between(&s.block, &e.block);
-        let mut txn = Txn::new(&mut self.doc);
+        let mut txn = Txn::new(&mut self.doc, &self.active);
         for id in &paras {
             format::edit_ppr(&mut txn, id, &f);
         }
@@ -2229,7 +2536,7 @@ impl Session {
 
 /// Deletes the selection inside a transaction; returns the caret.
 fn delete_selection(txn: &mut Txn<'_>, sel: &Selection) -> Pos {
-    let list = txn.doc.body.paragraphs();
+    let list = txn.story().paragraphs();
     let index: HashMap<&BlockId, usize> = list.iter().enumerate().map(|(i, id)| (id, i)).collect();
     let (a, f) = (&sel.anchor, &sel.focus);
     let ia = index.get(&a.block).copied().unwrap_or(0);

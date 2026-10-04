@@ -36,24 +36,34 @@ pub struct PageRect {
     pub h: f32,
 }
 
-/// Body paragraphs' placed lines, for finding positions on pages.
+/// One story's placed lines, for finding positions on pages.
 #[derive(Debug, Default)]
 pub struct ViewIndex {
     /// Placed lines of each paragraph in order: (page, item index).
     pub lines: HashMap<BlockId, Vec<(usize, usize)>>,
-    /// Body lines of each page: item indices.
+    /// The story's lines on each page: item indices.
     pub page_lines: Vec<Vec<usize>>,
 }
 
 impl ViewIndex {
-    /// Indexes a layout.
+    /// Indexes the body's lines.
     pub fn build(layout: &Layout) -> Self {
+        Self::for_story(layout, &StoryRef::Body, None)
+    }
+
+    /// Indexes one story's lines, all of them or (for a header or footer,
+    /// which every page repeats) those on one page.
+    pub fn for_story(layout: &Layout, story: &StoryRef, only_page: Option<usize>) -> Self {
         let mut index = ViewIndex::default();
         for (p, page) in layout.pages.iter().enumerate() {
             let mut on_page = Vec::new();
+            if only_page.is_some_and(|only| only != p) {
+                index.page_lines.push(on_page);
+                continue;
+            }
             for (i, item) in page.items.iter().enumerate() {
                 if let Item::Line(l) = item
-                    && l.para.story == StoryRef::Body
+                    && l.para.story == *story
                 {
                     index
                         .lines
