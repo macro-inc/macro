@@ -13,6 +13,7 @@ import Notepad from '@phosphor/notepad.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
 import PenNib from '@phosphor/pen-nib.svg';
 import Play from '@phosphor/play.svg';
+import Presentation from '@phosphor/presentation.svg';
 import ProjectorScreen from '@phosphor/projector-screen.svg';
 import ShapesIcon from '@phosphor/shapes.svg';
 import Stack from '@phosphor/stack.svg';
@@ -231,6 +232,15 @@ export function SlideShowTab() {
         >
           <ProjectorScreen />
           From current slide
+        </RibbonTextButton>
+        <RibbonTextButton
+          label="Presenter view"
+          tooltip="Presenter view: notes, next slide, and timer here; the show in a separate window (⌥F5)"
+          data-testid="pptx-present-presenter"
+          onClick={() => env.present(true, true)}
+        >
+          <Presentation />
+          Presenter view
         </RibbonTextButton>
       </RibbonGroup>
       <RibbonGroup label="Set up">

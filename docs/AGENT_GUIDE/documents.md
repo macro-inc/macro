@@ -434,6 +434,15 @@ Layout and test hooks:
   current slide): full screen with the slides' transitions; →/Space/click
   advance, ← goes back, a number then Enter jumps, B/W blank the screen, S
   shows notes, Esc ends.
+- **Presenter View** (Slide Show ▸ Presenter view `pptx-present-presenter`,
+  Alt+F5): opens the audience show in a pop-up window (`pptx-audience-canvas`;
+  double-click it for full screen) and turns the tab into the speaker
+  console (`pptx-presenter`): current slide (`pptx-presenter-current`), next
+  slide (`pptx-presenter-next`), notes (`pptx-presenter-notes`), timer
+  (`pptx-presenter-timer`), counter (`pptx-presenter-counter`), All slides
+  (`pptx-presenter-grid-toggle`, or G), and End slide show
+  (`pptx-presenter-end`). Show keys work in either window. A blocked pop-up
+  shows **Open audience window** (`pptx-presenter-audience-closed`).
 - **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
   Cmd/Ctrl+S saves now, Cmd/Ctrl+A selects all, Shift+Cmd/Ctrl+C and V copy
   and paste formatting, Cmd/Ctrl+C/X/V copy, cut, and

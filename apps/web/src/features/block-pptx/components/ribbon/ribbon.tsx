@@ -51,7 +51,8 @@ export interface RibbonEnv {
   };
   /** Opens the format pane on a section. */
   openFormatPane: (section?: 'shape' | 'text' | 'size' | 'background') => void;
-  present: (fromCurrent: boolean) => void;
+  /** Starts the slide show; `presenter` opens Presenter View. */
+  present: (fromCurrent: boolean, presenter?: boolean) => void;
   find: (replace: boolean) => void;
   zoom: () => number | 'fit';
   setZoom: (zoom: number | 'fit') => void;

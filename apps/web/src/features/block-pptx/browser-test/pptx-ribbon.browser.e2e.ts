@@ -338,3 +338,48 @@ test('paints formatting with the format painter', async ({ page }) => {
     })
     .toEqual(['#1F4E79', '#1F4E79']);
 });
+
+test('presents with Presenter View and an audience window', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByTestId('pptx-tab-slideshow').click();
+  const audience = page.context().waitForEvent('page');
+  await page.getByTestId('pptx-present-presenter').click();
+  const popup = await audience;
+  await expect(page.getByTestId('pptx-presenter')).toBeVisible();
+  await expect(page.getByTestId('pptx-presenter-counter')).toHaveText(
+    'Slide 1 of 8'
+  );
+  await expect(popup.getByTestId('pptx-audience-canvas')).toHaveAttribute(
+    'data-slide-index',
+    '0'
+  );
+  await expect(page.getByTestId('pptx-presenter-next')).toHaveAttribute(
+    'data-slide-index',
+    '1'
+  );
+  // Either window advances the show.
+  await page.keyboard.press('ArrowRight');
+  await expect(popup.getByTestId('pptx-audience-canvas')).toHaveAttribute(
+    'data-slide-index',
+    '1'
+  );
+  await popup.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('pptx-presenter-counter')).toHaveText(
+    'Slide 3 of 8'
+  );
+  await page.getByTestId('pptx-presenter-grid-toggle').click();
+  await page.getByRole('button', { name: 'Go to slide 6' }).click();
+  await expect(page.getByTestId('pptx-presenter-current')).toHaveAttribute(
+    'data-slide-index',
+    '5'
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('pptx-presenter')).toHaveCount(0);
+  await expect.poll(() => popup.isClosed()).toBe(true);
+  await expect(page.getByTestId('pptx-thumbnail').nth(5)).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
+});

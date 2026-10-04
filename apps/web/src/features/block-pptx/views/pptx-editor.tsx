@@ -50,6 +50,7 @@ import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
+import { PresenterView } from '../components/presenter-view';
 import { RibbonButton } from '../components/ribbon/controls';
 import { HomeTab } from '../components/ribbon/home-tab';
 import { InsertTab } from '../components/ribbon/insert-tab';
@@ -700,7 +701,7 @@ export function PptxEditor() {
     const key = e.key.toLowerCase();
     const mod = isMod(e);
     if (e.key === 'F5') {
-      present(e.shiftKey);
+      present(e.shiftKey, e.altKey);
       return true;
     }
     if (!mod) return false;
@@ -1003,10 +1004,16 @@ export function PptxEditor() {
   const [notesVisible, setNotesVisible] = createSignal(true);
   const [pane, setPane] = createSignal<PaneSection | null>(null);
   const [find, setFind] = createSignal<{ replace: boolean } | null>(null);
-  const [presenting, setPresenting] = createSignal<number | null>(null);
-  const present = (fromCurrent: boolean) => {
+  const [presenting, setPresenting] = createSignal<{
+    start: number;
+    presenter: boolean;
+  } | null>(null);
+  const present = (fromCurrent: boolean, presenter = false) => {
     editor.stopEditing();
-    setPresenting(fromCurrent ? session.slideIndex() : 0);
+    setPresenting({
+      start: fromCurrent ? session.slideIndex() : 0,
+      presenter,
+    });
   };
   const [recentFonts, setRecentFonts] = createSignal<string[]>([]);
   const setFont = commands.setFont;
@@ -1841,19 +1848,34 @@ export function PptxEditor() {
           />
         )}
       </Show>
-      <Show when={presenting() !== null && session.outline()}>
-        {(deck) => (
-          <SlideShow
-            engine={engine}
-            deck={deck()}
-            start={presenting()!}
-            onExit={(index) => {
-              setPresenting(null);
-              editor.goToSlide(index);
-              queueMicrotask(focusStage);
-            }}
-          />
-        )}
+      <Show when={presenting() && session.outline()}>
+        {(deck) => {
+          const onExit = (index: number) => {
+            setPresenting(null);
+            editor.goToSlide(index);
+            queueMicrotask(focusStage);
+          };
+          return (
+            <Show
+              when={presenting()?.presenter}
+              fallback={
+                <SlideShow
+                  engine={engine}
+                  deck={deck()}
+                  start={presenting()?.start ?? 0}
+                  onExit={onExit}
+                />
+              }
+            >
+              <PresenterView
+                engine={engine}
+                deck={deck()}
+                start={presenting()?.start ?? 0}
+                onExit={onExit}
+              />
+            </Show>
+          );
+        }}
       </Show>
     </div>
   );
