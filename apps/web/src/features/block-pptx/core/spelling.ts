@@ -350,7 +350,19 @@ export function createSpeller(lexicon: Lexicon): Speller {
     return undefined;
   }
 
+  /** Recent suggestions (menus and the Spelling pane ask again for a word). */
+  const suggested = new Map<string, string[]>();
   function suggest(word: string, limit = 5): string[] {
+    const key = `${limit}|${word}`;
+    const cached = suggested.get(key);
+    if (cached) return cached;
+    const list = rank(word, limit);
+    if (suggested.size >= 200) suggested.clear();
+    suggested.set(key, list);
+    return list;
+  }
+
+  function rank(word: string, limit: number): string[] {
     const w = normalize(word);
     const lower = w.toLowerCase();
     const scores = new Map<string, number>();

@@ -135,7 +135,10 @@ export function createSpellingPane(options: SpellingPaneOptions) {
         const m = current();
         const word = choice();
         if (!m || !word) return;
-        await spell.replace([m], word);
+        // Text edited meanwhile may have moved or fixed the word.
+        const key = misspellingKey(m);
+        const still = remaining().find((o) => misspellingKey(o) === key);
+        if (still) await spell.replace([still], word);
         await advance(m);
       }),
     changeAll: () =>

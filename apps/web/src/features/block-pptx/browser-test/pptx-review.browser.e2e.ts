@@ -315,6 +315,15 @@ test('F7 walks the deck and Change All fixes every occurrence', async ({
       w: 300,
       h: 40,
     },
+    {
+      op: 'addShape',
+      slide: deck.slides[2].id,
+      shape: { kind: 'textBox', text: 'Teh end' },
+      x: 60,
+      y: 470,
+      w: 300,
+      h: 40,
+    },
   ]);
   await page.keyboard.press('F7');
   const pane = page.getByTestId('pptx-spelling-pane');
@@ -350,7 +359,16 @@ test('F7 walks the deck and Change All fixes every occurrence', async ({
   await page.getByTestId('pptx-spelling-ignore-all').click();
   await expect(word).toHaveText('pts');
   await page.getByTestId('pptx-spelling-ignore-once').click();
+  // Change fixes just this occurrence, with the suggestion picked.
+  await expect(word).toHaveText('Teh');
+  await page.getByTestId('pptx-spelling-suggestion').nth(1).click();
+  await expect(
+    page.getByTestId('pptx-spelling-suggestion').nth(1)
+  ).toHaveAttribute('aria-selected', 'true');
+  await page.getByTestId('pptx-spelling-suggestion').first().click();
+  await page.getByTestId('pptx-spelling-change').click();
   await expect(word).toHaveText('Opex');
+  expect(await textWith(page, 2, ' end')).toEqual(['The end']);
   await page.getByTestId('pptx-spelling-add').click();
   await expect(word).toHaveText('unallocated');
   await page.getByTestId('pptx-spelling-ignore-all').click();
