@@ -598,3 +598,25 @@ fn ending_full_columns_does_not_start_a_page() {
     assert_eq!(l.pages.len(), 2);
     assert_eq!(page_texts(&l, 1), vec!["Next".to_owned()]);
 }
+
+#[test]
+fn suppressed_top_spacing_lifts_the_first_line_of_a_page() {
+    // At least 18pt lines of 10pt text.
+    let body = format!(
+        r#"<w:p><w:pPr><w:spacing w:line="360" w:lineRule="atLeast"/></w:pPr><w:r><w:t>Top</w:t></w:r><w:r><w:br/><w:t>Next</w:t></w:r></w:p><w:sectPr>{PAGE}</w:sectPr>"#
+    );
+    let plain = layout(&body, &arial_10());
+    assert!((find(&plain, 0, "Top").y - 72.0).abs() < 0.01);
+    let settings = "<w:compat><w:suppressTopSpacing/></w:compat>";
+    let l = layout(
+        &body,
+        &Parts {
+            settings: Some(settings),
+            ..arial_10()
+        },
+    );
+    // The first line keeps only its text's size; the next is not lifted.
+    let (top, next) = (find(&l, 0, "Top"), find(&l, 0, "Next"));
+    assert!((top.y - (72.0 - 8.0)).abs() < 0.01, "{}", top.y);
+    assert!((next.y - top.y - 18.0).abs() < 0.01, "{}", next.y);
+}

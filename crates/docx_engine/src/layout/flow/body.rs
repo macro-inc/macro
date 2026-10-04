@@ -15,7 +15,7 @@ use super::stack::{
 };
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
-use crate::model::props::ParaProps;
+use crate::model::props::{LineSpacing, ParaProps};
 use crate::model::section::{HeaderRefs, LineNumberRestart, PageVAlign, Section, SectionStart};
 use floats::{OnPage, place_anchors, place_frames};
 use pptx_engine::path::Rect;
@@ -657,6 +657,7 @@ impl<'e, 'a> Flow<'e, 'a> {
         let mut first_fragment = true;
         while li < lines_len {
             self.skip_bands();
+            self.suppress_top_spacing(&pb, li);
             let (bt, bb) = border_space(&props, join);
             let mut frag_top = self.cur.as_ref().map_or(0.0, |c| c.y);
             if first_fragment {
@@ -855,6 +856,33 @@ impl<'e, 'a> Flow<'e, 'a> {
             .is_some_and(|n| n.start == SectionStart::Continuous);
         let y = self.cur.as_ref().map_or(0.0, |c| c.y);
         continuous || y + pb.lines.height > self.avail_bottom() + EPS
+    }
+
+    /// Lifts the page's first line when the document suppresses extra line
+    /// spacing at the top of the page: an at-least line there is no taller
+    /// than its text's size (`w:suppressTopSpacing`).
+    fn suppress_top_spacing(&mut self, pb: &ParaBox, li: usize) {
+        if !self.env.doc.parts().settings.suppress_top_spacing {
+            return;
+        }
+        let LineSpacing::AtLeast(min) = pb.format.props.line else {
+            return;
+        };
+        let Some(line) = pb.lines.lines.get(li) else {
+            return;
+        };
+        let size = pb.inline.clusters[line.start..line.end]
+            .iter()
+            .map(|c| c.size)
+            .fold(0.0f32, f32::max);
+        if let Some(c) = &mut self.cur
+            && !c.placed_any
+            && c.col == 0
+            && (c.y - c.top).abs() < EPS
+            && size > 0.0
+        {
+            c.y -= (min - size).max(0.0);
+        }
     }
 
     /// The pitch lines snap to in the current section, if they do.
