@@ -478,3 +478,53 @@ test('remembers custom colors under Recent colors', async ({ page }) => {
       .getByRole('button', { name: '#12A4B6' })
   ).toBeVisible();
 });
+
+test('Selection Pane selects, hides, renames, and reorders objects', async ({
+  page,
+}) => {
+  await open(page);
+  const order = async () =>
+    (await outline(page)).slides[0].shapes.map((s) => s.id);
+  const title = async () =>
+    (await outline(page)).slides[0].shapes.find((s) => s.id === 2);
+  const before = await order();
+  await page.getByTestId('pptx-arrange').click();
+  await page.getByTestId('pptx-selection-pane-toggle').click();
+  const pane = page.getByTestId('pptx-selection-pane');
+  await expect(pane).toBeVisible();
+  const rows = pane.getByTestId('pptx-selection-row');
+  // Topmost first.
+  await expect(rows).toHaveCount(before.length);
+  await expect(rows.first()).toHaveAttribute(
+    'data-shape-id',
+    String(before.at(-1))
+  );
+  const row = pane.locator('[data-shape-id="2"]');
+  await row.click();
+  await expect(page.getByTestId('pptx-selection')).toBeVisible();
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+
+  // Hide it with the eye, then Show All.
+  await row.getByTestId('pptx-selection-eye').click();
+  await expect.poll(async () => (await title())?.hidden).toBe(true);
+  await pane.getByTestId('pptx-selection-show-all').click();
+  await expect.poll(async () => (await title())?.hidden).toBe(false);
+
+  // Rename in place.
+  await row.dblclick();
+  await pane.getByTestId('pptx-selection-rename').fill('Headline');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await title())?.name).toBe('Headline');
+
+  // Drag it above the topmost row: it moves to the front.
+  await row.dragTo(rows.first(), { targetPosition: { x: 20, y: 3 } });
+  await expect.poll(async () => (await order()).at(-1)).toBe(2);
+  // Send Backward steps it back one place.
+  await pane.locator('[data-shape-id="2"]').click();
+  await pane.getByTestId('pptx-selection-backward').click();
+  await expect.poll(async () => (await order()).at(-2)).toBe(2);
+  // Alt+F10 closes it.
+  await page.getByTestId('pptx-stage').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Alt+F10');
+  await expect(pane).toBeHidden();
+});

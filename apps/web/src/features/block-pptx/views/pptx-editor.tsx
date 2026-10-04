@@ -86,6 +86,7 @@ import {
 } from '../components/ribbon/table-tabs';
 import { SectionHeaders, SectionMenuItems } from '../components/section-header';
 import { SelectionOverlay } from '../components/selection-overlay';
+import { SelectionPane } from '../components/selection-pane';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
 import { SlideShow } from '../components/slideshow';
@@ -813,6 +814,10 @@ export function PptxEditor() {
       present(e.shiftKey, e.altKey);
       return true;
     }
+    if (e.key === 'F10' && e.altKey) {
+      toggleSelectionPane();
+      return true;
+    }
     if (!mod) return false;
     if (key === 'c' && e.shiftKey) void painter.copy();
     else if (key === 'v' && e.shiftKey && !readonly())
@@ -1115,6 +1120,15 @@ export function PptxEditor() {
 
   const [ribbonTab, setRibbonTab] = createSignal('home');
   const [animationPane, setAnimationPane] = createSignal(false);
+  const [selectionPane, setSelectionPane] = createSignal(false);
+  function toggleSelectionPane() {
+    const next = !selectionPane();
+    if (next) {
+      setAnimationPane(false);
+      setPane(null);
+    }
+    setSelectionPane(next);
+  }
   const [previewing, setPreviewing] = createSignal(false);
   /** The animation picked in the pane, on its slide. */
   const [pickedAnimation, setPickedAnimation] = createSignal<{
@@ -1381,6 +1395,7 @@ export function PptxEditor() {
     formatPainter: painter,
     openFormatPane: (section) => setPane(section ?? 'shape'),
     openLink: () => void openLinkDialog(),
+    selectionPane: { open: selectionPane, toggle: toggleSelectionPane },
     present,
     find: (replace) => setFind({ replace }),
     zoom,
@@ -2070,6 +2085,34 @@ export function PptxEditor() {
                 </Show>
               </div>
             </div>
+            <Show
+              when={
+                selectionPane() &&
+                !animationPane() &&
+                !pane() &&
+                session.currentSlide()
+              }
+            >
+              {(slide) => (
+                <SelectionPane
+                  slide={slide()}
+                  selectedIds={editor.selectedIds()}
+                  readonly={readonly()}
+                  onSelect={(id, toggle) =>
+                    toggle ? editor.toggleSelected(id) : editor.select(id)
+                  }
+                  onRename={(id, name) => void commands.renameShape(id, name)}
+                  onHide={(ids, hidden) =>
+                    void commands.setShapesHidden(ids, hidden)
+                  }
+                  onMove={(id, steps) => void commands.moveInZOrder(id, steps)}
+                  onClose={() => {
+                    setSelectionPane(false);
+                    refocus();
+                  }}
+                />
+              )}
+            </Show>
             <Show when={animationPane() && !pane()}>
               <AnimationPane
                 env={env}

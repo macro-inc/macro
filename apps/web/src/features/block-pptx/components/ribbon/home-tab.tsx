@@ -116,27 +116,39 @@ export function ArrangeMenu(props: { close: () => void }) {
   ];
   return (
     <div class="flex w-56 flex-col">
+      <PopoverItem
+        label="Selection Pane…"
+        icon={<Stack />}
+        hint="⌥F10"
+        active={env.selectionPane.open()}
+        testId="pptx-selection-pane-toggle"
+        onClick={run(env.selectionPane.toggle)}
+      />
       <PopoverLabel>Order objects</PopoverLabel>
       <PopoverItem
         label="Bring to front"
+        disabled={count() === 0}
         icon={<ArrowLineUp />}
         hint="⇧⌘]"
         onClick={run(() => c.arrange('front'))}
       />
       <PopoverItem
         label="Send to back"
+        disabled={count() === 0}
         icon={<ArrowLineDown />}
         hint="⇧⌘["
         onClick={run(() => c.arrange('back'))}
       />
       <PopoverItem
         label="Bring forward"
+        disabled={count() === 0}
         icon={<ArrowUp />}
         hint="⌘]"
         onClick={run(() => c.arrange('forward'))}
       />
       <PopoverItem
         label="Send backward"
+        disabled={count() === 0}
         icon={<ArrowDown />}
         hint="⌘["
         onClick={run(() => c.arrange('backward'))}
@@ -165,7 +177,7 @@ export function ArrangeMenu(props: { close: () => void }) {
             disabled={
               item.mode.startsWith('distribute')
                 ? count() < 3 && count() !== 1
-                : false
+                : count() === 0
             }
             onClick={run(() => c.alignShapes(item.mode))}
           />
@@ -174,21 +186,25 @@ export function ArrangeMenu(props: { close: () => void }) {
       <PopoverLabel>Rotate</PopoverLabel>
       <PopoverItem
         label="Rotate right 90°"
+        disabled={count() === 0}
         icon={<ArrowClockwise />}
         onClick={run(() => c.rotate('right90'))}
       />
       <PopoverItem
         label="Rotate left 90°"
+        disabled={count() === 0}
         icon={<ArrowCounterClockwise />}
         onClick={run(() => c.rotate('left90'))}
       />
       <PopoverItem
         label="Flip vertical"
+        disabled={count() === 0}
         icon={<FlipVertical />}
         onClick={run(() => c.rotate('flipV'))}
       />
       <PopoverItem
         label="Flip horizontal"
+        disabled={count() === 0}
         icon={<FlipHorizontal />}
         onClick={run(() => c.rotate('flipH'))}
       />
@@ -810,7 +826,6 @@ export function HomeTab() {
         <RibbonPopover
           label="Arrange"
           icon={<Stack class="size-3.5" />}
-          disabled={!shapes()}
           testId="pptx-arrange"
         >
           {(close) => <ArrangeMenu close={close} />}

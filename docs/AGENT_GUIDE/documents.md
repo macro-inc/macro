@@ -539,6 +539,14 @@ Layout and test hooks:
   `pptx-animation-row`s (click picks one and selects its shape; Delete or
   `pptx-animation-remove` removes it), and numbered `pptx-animation-tag`s
   mark animated shapes while the tab or pane is open.
+- **Selection Pane** (Arrange ▸ Selection Pane… `pptx-selection-pane-toggle`,
+  or Alt+F10) opens `pptx-selection-pane`: one `pptx-selection-row` per
+  object (`data-shape-id`), topmost first with groups nested. Click selects
+  (Cmd/Ctrl adds), the eye (`pptx-selection-eye`) hides or shows, Show All /
+  Hide All (`pptx-selection-show-all`, `pptx-selection-hide-all`) do every
+  object, double-click or F2 renames (`pptx-selection-rename`), and dragging a
+  row or Bring Forward / Send Backward (`pptx-selection-forward`,
+  `pptx-selection-backward`) reorders it among its siblings.
 - **Links** (Insert ▸ Link, Cmd/Ctrl+K, or **Link…** in the right-click menu)
   open `pptx-link-dialog`. While editing text it links the selection, or the
   whole link around the caret; at a bare caret it inserts the "Text to

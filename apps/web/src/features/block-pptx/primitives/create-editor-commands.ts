@@ -365,6 +365,36 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     if (!s) return;
     void apply(reorderOps(s.id, targets(), s.shapes, to));
   };
+  /** Moves one shape `steps` places toward the front (negative: back). */
+  const moveInZOrder = (shape: number, steps: number) => {
+    const s = slide();
+    if (!s || steps === 0) return;
+    const to = steps > 0 ? 'forward' : 'backward';
+    return apply(
+      Array.from({ length: Math.abs(steps) }, () => ({
+        op: 'reorderShape' as const,
+        slide: s.id,
+        shape,
+        to,
+      }))
+    );
+  };
+  const renameShape = (shape: number, name: string) => {
+    const s = slide();
+    if (s) return apply([{ op: 'setShapeName', slide: s.id, shape, name }]);
+  };
+  const setShapesHidden = (shapes: number[], hidden: boolean) => {
+    const s = slide();
+    if (s)
+      return apply(
+        shapes.map((shape) => ({
+          op: 'setShapeHidden' as const,
+          slide: s.id,
+          shape,
+          hidden,
+        }))
+      );
+  };
   const alignShapes = (mode: AlignMode, toSlide = false) => {
     const s = slide();
     if (!s) return;
@@ -1384,6 +1414,9 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     setLink,
     linkTarget,
     applyLink,
+    moveInZOrder,
+    renameShape,
+    setShapesHidden,
     align,
     setBullets,
     toggleBullets,
