@@ -27,7 +27,15 @@ import {
 } from '../core/camera';
 import { clickTarget, doubleClickTarget } from '../core/selection';
 
-export type Tool = 'move' | 'hand' | 'frame' | 'rectangle' | 'ellipse' | 'text';
+export type Tool =
+  | 'move'
+  | 'hand'
+  | 'frame'
+  | 'rectangle'
+  | 'ellipse'
+  | 'line'
+  | 'arrow'
+  | 'text';
 
 export interface Selected {
   id: string;

@@ -105,7 +105,25 @@ const isShapeTool = (tool: string): tool is ShapeTool =>
   tool === 'frame' ||
   tool === 'rectangle' ||
   tool === 'ellipse' ||
+  tool === 'line' ||
+  tool === 'arrow' ||
   tool === 'text';
+
+const isLineTool = (tool: string) => tool === 'line' || tool === 'arrow';
+
+/** The end of a line drawn to `p`; ⇧ snaps it to 45° steps. */
+export function lineEnd(start: Point, p: Point, snap: boolean): Point {
+  if (!snap) return p;
+  const dx = p.x - start.x;
+  const dy = p.y - start.y;
+  const step = Math.PI / 4;
+  const angle = Math.round(Math.atan2(dy, dx) / step) * step;
+  const len = Math.hypot(dx, dy);
+  return {
+    x: start.x + Math.cos(angle) * len,
+    y: start.y + Math.sin(angle) * len,
+  };
+}
 
 /** New bounds for dragging `handle` of `start` to page point `p`. */
 export function resizeRect(
@@ -251,6 +269,7 @@ export function ViewerCanvas(props: {
   });
 
   let marquee: Rect | undefined;
+  let linePreview: [Point, Point] | undefined;
   let guides: Guide[] = [];
 
   /** Bounds of the layers a moving selection can snap to. */
@@ -291,6 +310,7 @@ export function ViewerCanvas(props: {
       hoverComponent:
         !!hover && (hover.type === 'SYMBOL' || hover.type === 'INSTANCE'),
       marquee,
+      line: linePreview,
       guides,
       measurements: measurements(),
       rulers: viewer.rulers(),
@@ -604,7 +624,9 @@ export function ViewerCanvas(props: {
       drag = { kind: 'pan', last: p };
     } else if (drag.kind === 'create') {
       drag.current = p;
-      marquee = shapeRect(drag.start, p, e.shiftKey);
+      if (isLineTool(drag.tool))
+        linePreview = [drag.start, lineEnd(drag.start, p, e.shiftKey)];
+      else marquee = shapeRect(drag.start, p, e.shiftKey);
       requestDraw();
     } else if (drag.kind === 'resize') {
       const rect = resizeRect(drag.start, drag.handle, pageAt(p), e.shiftKey);
@@ -671,6 +693,18 @@ export function ViewerCanvas(props: {
     const moved =
       Math.hypot(d.current.x - d.start.x, d.current.y - d.start.y) >
       DRAG_THRESHOLD;
+    if (isLineTool(d.tool)) {
+      const from = pageAt(d.start);
+      // A click draws Figma's default 100 px line.
+      const to = moved
+        ? pageAt(lineEnd(d.start, d.current, shift))
+        : { x: from.x + 100, y: from.y };
+      // Back to Move now, so a tool chosen meanwhile is kept.
+      viewer.setTool('move');
+      const parent = await viewer.containerAt(from);
+      await editor.createLine(from, to, d.tool === 'arrow', parent);
+      return;
+    }
     const screen = shapeRect(d.start, d.current, shift);
     const a = screenToPage(c, { x: screen.x, y: screen.y });
     // A click places Figma's default size (text grows as it is typed).
@@ -678,8 +712,8 @@ export function ViewerCanvas(props: {
     const rect = moved
       ? { x: a.x, y: a.y, w: screen.w / c.zoom, h: screen.h / c.zoom }
       : { x: a.x, y: a.y, w: size, h: size };
-    const parent = await viewer.containerAt(pageAt(d.start));
     viewer.setTool('move');
+    const parent = await viewer.containerAt(pageAt(d.start));
     const id = await editor.create(d.tool, rect, parent);
     if (id && d.tool === 'text') props.onEditText?.(id);
   };
@@ -695,6 +729,7 @@ export function ViewerCanvas(props: {
     if (!ended) return;
     if (ended.kind === 'create') {
       marquee = undefined;
+      linePreview = undefined;
       requestDraw();
       void finishCreate(ended, e.shiftKey);
     } else if (ended.kind === 'resize') {

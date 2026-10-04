@@ -194,6 +194,8 @@ export function FigViewer() {
       .with('tool-rectangle', () => viewer.setTool('rectangle'))
       .with('tool-ellipse', () => viewer.setTool('ellipse'))
       .with('tool-text', () => viewer.setTool('text'))
+      .with('tool-line', () => viewer.setTool('line'))
+      .with('tool-arrow', () => viewer.setTool('arrow'))
       .with('undo', () => editor.undo())
       .with('redo', () => editor.redo())
       .with('delete', () => void editor.deleteSelection())

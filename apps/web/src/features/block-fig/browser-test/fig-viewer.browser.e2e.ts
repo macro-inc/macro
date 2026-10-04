@@ -240,6 +240,7 @@ test('lays out with auto layout', async ({ page }) => {
   await canvas.focus();
   await page.keyboard.press('r');
   await dragOnCanvas(page, [200, 100], [260, 160]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
   await canvas.focus();
   await page.keyboard.press('Control+a');
   await expect(page.getByText('2 layers selected')).toBeVisible();
@@ -389,6 +390,22 @@ test('resizes several layers and rotates one', async ({ page }) => {
   // Dragging just beyond a corner turns it.
   await dragOnCanvas(page, [190, 90], [200, 180]);
   await expect(page.getByTestId('fig-field-rotation')).not.toHaveValue('0');
+});
+
+test('draws lines and arrows', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('l');
+  await dragOnCanvas(page, [100, 100], [200, 100]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Line 1');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('100');
+  await expect(page.getByTestId('fig-field-h')).toHaveValue('0');
+  await canvas.focus();
+  await page.keyboard.press('Shift+L');
+  await dragOnCanvas(page, [100, 200], [100, 300]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Arrow');
+  await expect(page.getByTestId('fig-field-rotation')).toHaveValue('-90');
 });
 
 test('edits fills from the design panel and undoes', async ({ page }) => {

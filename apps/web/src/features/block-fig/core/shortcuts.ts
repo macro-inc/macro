@@ -38,6 +38,8 @@ export type ViewerAction =
   | 'tool-rectangle'
   | 'tool-ellipse'
   | 'tool-text'
+  | 'tool-line'
+  | 'tool-arrow'
   | 'undo'
   | 'redo'
   | 'delete'
@@ -153,6 +155,8 @@ export function shortcutAction(
         return 'previous-frame';
       case 'KeyA':
         return 'add-auto-layout';
+      case 'KeyL':
+        return 'tool-arrow';
       case 'KeyR':
         return 'toggle-rulers';
       case 'Quote':
@@ -212,6 +216,8 @@ export function shortcutAction(
       return 'tool-ellipse';
     case 't':
       return 'tool-text';
+    case 'l':
+      return 'tool-line';
     case 'Delete':
     case 'Backspace':
       return 'delete';
@@ -233,6 +239,8 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'tool-rectangle',
   'tool-ellipse',
   'tool-text',
+  'tool-line',
+  'tool-arrow',
   'undo',
   'redo',
   'delete',
@@ -278,6 +286,8 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Frame', keys: ['F'] },
       { action: 'Rectangle', keys: ['R'] },
       { action: 'Ellipse', keys: ['O'] },
+      { action: 'Line', keys: ['L'] },
+      { action: 'Arrow', keys: ['⇧', 'L'] },
       { action: 'Text', keys: ['T'] },
       { action: 'Hand (pan)', keys: ['H'] },
       { action: 'Pan while held', keys: ['Space'] },

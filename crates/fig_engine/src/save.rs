@@ -647,6 +647,11 @@ impl<'s> Build<'s> {
         if edits & flags::OVERRIDES != 0 {
             self.overrides(m, p, doc);
         }
+        if edits & flags::STROKE_CAP != 0
+            && let Some(cap) = &p.stroke_cap
+        {
+            self.set_enum(m, "strokeCap", cap);
+        }
         if edits & flags::PROP_ASSIGNMENTS != 0
             && let Some(list) = p.prop_assignments.as_deref()
         {

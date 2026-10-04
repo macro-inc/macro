@@ -30,6 +30,8 @@ export interface OverlayModel {
   hoverComponent: boolean;
   /** Screen rectangle. */
   marquee?: Rect;
+  /** A line being drawn, in screen coordinates. */
+  line?: [{ x: number; y: number }, { x: number; y: number }];
   /** Smart guides the moving selection snapped to (page coordinates). */
   guides?: Guide[];
   measurements: MeasureLine[];
@@ -218,6 +220,15 @@ function drawGuides(ctx: CanvasRenderingContext2D, m: OverlayModel) {
 }
 
 function drawMarquee(ctx: CanvasRenderingContext2D, m: OverlayModel) {
+  if (m.line) {
+    const [a, b] = m.line;
+    ctx.strokeStyle = SELECTION_BLUE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
   const r = m.marquee;
   if (!r) return;
   ctx.fillStyle = 'rgba(13,153,255,0.08)';

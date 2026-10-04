@@ -61,6 +61,8 @@ pub mod flags {
     pub const OVERRIDES: u32 = 1 << 24;
     /// An instance's component property values.
     pub const PROP_ASSIGNMENTS: u32 = 1 << 25;
+    /// How open paths end (lines, arrows).
+    pub const STROKE_CAP: u32 = 1 << 26;
 }
 
 /// A paint as the editor describes it.
@@ -148,6 +150,8 @@ pub struct Patch {
     pub constraint_vertical: Option<String>,
     /// Replaces the effects, bottom first.
     pub effects: Option<Vec<EffectSpec>>,
+    /// `NONE`, `ROUND`, `SQUARE`, `ARROW_LINES`, or `ARROW_EQUILATERAL`.
+    pub stroke_cap: Option<String>,
 }
 
 /// An effect as the editor describes it: an existing one kept (and
@@ -601,7 +605,13 @@ impl<'a> Txn<'a> {
         let props = self.doc.props(i);
         let old = props.size();
         let w = width.unwrap_or(old.x).max(0.01);
-        let h = height.unwrap_or(old.y).max(0.01);
+        // Lines have no height.
+        let min_h = if props.node_type() == NodeType::Line {
+            0.0
+        } else {
+            0.01
+        };
+        let h = height.unwrap_or(old.y).max(min_h);
         if (w - old.x).abs() < 1e-9 && (h - old.y).abs() < 1e-9 {
             return;
         }
@@ -752,6 +762,11 @@ impl<'a> Txn<'a> {
                 pick(&patch.constraint_horizontal, h),
                 pick(&patch.constraint_vertical, v),
             ));
+        }
+        if let Some(cap) = &patch.stroke_cap {
+            self.edit(i, flags::STROKE_CAP | flags::GEOMETRY).stroke_cap =
+                Some(cap.as_str().into());
+            self.drop_stroke_geometry(i);
         }
         if let Some(specs) = &patch.effects {
             let effects = effects_from(self.doc.props(i).effects(), specs);
@@ -924,7 +939,14 @@ impl<'a> Txn<'a> {
             locked: Some(false),
             opacity: Some(1.0),
             blend_mode: Some(BlendMode::PassThrough),
-            size: Some(Vec2::new(spec.width.max(0.01), spec.height.max(0.01))),
+            size: Some(Vec2::new(
+                spec.width.max(0.01),
+                if node_type == NodeType::Line {
+                    0.0
+                } else {
+                    spec.height.max(0.01)
+                },
+            )),
             transform: Some(Affine::IDENTITY),
             fills: Some(fills.into()),
             strokes: Some(strokes.into()),

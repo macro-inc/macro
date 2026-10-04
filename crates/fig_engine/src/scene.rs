@@ -396,12 +396,26 @@ impl Scene {
         } else if (has_fills || has_strokes || !props.effects().is_empty())
             && local.is_empty()
             && size.x > 0.0
-            && size.y > 0.0
+            && (size.y > 0.0 || node_type == NodeType::Line)
         {
             local = Rect::new(0.0, 0.0, size.x, size.y);
         }
         if local.is_empty() {
             return Rect::EMPTY;
+        }
+        // Strokes drawn from the shape (no stored outline) reach beyond it.
+        if has_strokes && props.stroke_geometry().is_empty() {
+            let w = f64::from(props.stroke_weight());
+            let reach = if node_type == NodeType::Line {
+                w / 2.0 + (w * 3.5).max(6.0)
+            } else {
+                match props.stroke_align() {
+                    crate::model::StrokeAlign::Inside => 0.0,
+                    crate::model::StrokeAlign::Center => w / 2.0,
+                    crate::model::StrokeAlign::Outside => w,
+                }
+            };
+            local = local.outset(reach);
         }
         world.map_rect(&local)
     }

@@ -644,6 +644,9 @@ impl<'a> Painter<'a> {
     /// shapes (or its box) stroked, doubled for inside and outside strokes,
     /// which are clipped to one side afterwards.
     fn fallback_stroke(&self, i: SceneIdx, props: &Props) -> Vec<Shape> {
+        if props.node_type() == NodeType::Line {
+            return line_stroke(props);
+        }
         let weight = props.stroke_weight();
         let width = match props.stroke_align() {
             StrokeAlign::Center => weight,
@@ -760,6 +763,64 @@ enum ClipResult {
     Mask(Mask),
     Unchanged,
     Empty,
+}
+
+/// A line drawn from its size: a segment along x with Figma's caps, and an
+/// arrowhead at the end for the arrow caps.
+fn line_stroke(props: &Props) -> Vec<Shape> {
+    let len = props.size().x as f32;
+    let weight = props.stroke_weight().max(0.01);
+    let cap = props.stroke_cap.as_deref().unwrap_or("NONE");
+    let mut pb = tiny_skia::PathBuilder::new();
+    pb.move_to(0.0, 0.0);
+    pb.line_to(len, 0.0);
+    let arrow = cap.starts_with("ARROW");
+    if arrow {
+        // Arrowhead lines back from the tip, as long as Figma draws them.
+        let head = (weight * 3.5).max(6.0);
+        let (dx, dy) = (head * 0.866, head * 0.5);
+        pb.move_to(len - dx, -dy);
+        pb.line_to(len, 0.0);
+        pb.line_to(len - dx, dy);
+        if cap == "ARROW_EQUILATERAL" {
+            pb.close();
+        }
+    }
+    let Some(path) = pb.finish() else {
+        return Vec::new();
+    };
+    let stroke = tiny_skia::Stroke {
+        width: weight,
+        line_cap: match cap {
+            "ROUND" => tiny_skia::LineCap::Round,
+            "SQUARE" => tiny_skia::LineCap::Square,
+            _ if arrow => tiny_skia::LineCap::Round,
+            _ => tiny_skia::LineCap::Butt,
+        },
+        line_join: if arrow {
+            tiny_skia::LineJoin::Round
+        } else {
+            tiny_skia::LineJoin::Miter
+        },
+        ..Default::default()
+    };
+    let mut shapes: Vec<Shape> = path
+        .stroke(&stroke, 1.0)
+        .map(|p| Shape::Owned(p, FillRule::Winding))
+        .into_iter()
+        .collect();
+    if cap == "ARROW_EQUILATERAL" {
+        let head = (weight * 3.5).max(6.0);
+        let mut tri = tiny_skia::PathBuilder::new();
+        tri.move_to(len, 0.0);
+        tri.line_to(len - head * 0.866, -head * 0.5);
+        tri.line_to(len - head * 0.866, head * 0.5);
+        tri.close();
+        if let Some(t) = tri.finish() {
+            shapes.push(Shape::Owned(t, FillRule::Winding));
+        }
+    }
+    shapes
 }
 
 /// Whether a node's geometry is an open path (lines and open vectors have

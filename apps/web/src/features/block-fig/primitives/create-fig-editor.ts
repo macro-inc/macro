@@ -65,6 +65,7 @@ export interface Patch {
   constraintVertical?: Constraint;
   /** Replaces the effects, bottom first. */
   effects?: EffectSpec[];
+  strokeCap?: 'NONE' | 'ROUND' | 'SQUARE' | 'ARROW_LINES' | 'ARROW_EQUILATERAL';
 }
 
 /** An effect as the editor sends it: an existing one kept, or a new one. */
@@ -95,7 +96,13 @@ export interface PaintSpec {
 }
 
 export type Arrangement = 'forward' | 'backward' | 'front' | 'back';
-export type ShapeTool = 'frame' | 'rectangle' | 'ellipse' | 'text';
+export type ShapeTool =
+  | 'frame'
+  | 'rectangle'
+  | 'ellipse'
+  | 'line'
+  | 'arrow'
+  | 'text';
 
 export type Op =
   | { op: 'set'; ids: string[]; props: Patch }
@@ -151,6 +158,8 @@ const TYPE_FOR_TOOL: Record<ShapeTool, string> = {
   frame: 'FRAME',
   rectangle: 'RECTANGLE',
   ellipse: 'ELLIPSE',
+  line: 'LINE',
+  arrow: 'LINE',
   text: 'TEXT',
 };
 
@@ -608,8 +617,48 @@ export function createFigEditor(options: FigEditorOptions) {
     return result?.created[0];
   };
 
+  /**
+   * Draws a line (or an arrow) between two page points, inside `parent`:
+   * a LINE as long as the drag, turned to its angle.
+   */
+  const createLine = async (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    arrow: boolean,
+    parent: string
+  ): Promise<string | undefined> => {
+    const length = Math.max(1, Math.hypot(to.x - from.x, to.y - from.y));
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+    // Figma's degrees turn counter-clockwise; screen y points down.
+    const rotation =
+      Math.round(
+        ((-Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI) * 100
+      ) / 100;
+    const result = await apply([
+      {
+        op: 'create',
+        parent,
+        node: {
+          type: 'LINE',
+          name: arrow ? 'Arrow' : undefined,
+          x: mid.x - length / 2,
+          y: mid.y,
+          width: length,
+          height: 0,
+          props: {
+            rotation,
+            ...(arrow ? { strokeCap: 'ARROW_LINES' as const } : {}),
+          },
+        },
+      },
+    ]);
+    await selectCreated(result);
+    return result?.created[0];
+  };
+
   return {
     enabled,
+    createLine,
     canUndo,
     canRedo,
     saveState,

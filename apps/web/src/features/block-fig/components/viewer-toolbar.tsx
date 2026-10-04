@@ -6,6 +6,7 @@
 
 import ArrowUUpLeft from '@phosphor/arrow-u-up-left.svg';
 import ArrowUUpRight from '@phosphor/arrow-u-up-right.svg';
+import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import Circle from '@phosphor/circle.svg';
 import CloudArrowUp from '@phosphor/cloud-arrow-up.svg';
@@ -13,6 +14,7 @@ import CloudCheck from '@phosphor/cloud-check.svg';
 import Hand from '@phosphor/hand.svg';
 import Hash from '@phosphor/hash.svg';
 import Keyboard from '@phosphor/keyboard.svg';
+import LineSegment from '@phosphor/line-segment.svg';
 import NavigationArrow from '@phosphor/navigation-arrow.svg';
 import Square from '@phosphor/square.svg';
 import TextT from '@phosphor/text-t.svg';
@@ -37,6 +39,8 @@ const TOOLS: ToolButton[] = [
   { tool: 'frame', label: 'Frame', key: 'F', icon: Hash, edit: true },
   { tool: 'rectangle', label: 'Rectangle', key: 'R', icon: Square, edit: true },
   { tool: 'ellipse', label: 'Ellipse', key: 'O', icon: Circle, edit: true },
+  { tool: 'line', label: 'Line', key: 'L', icon: LineSegment, edit: true },
+  { tool: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowUpRight, edit: true },
   { tool: 'text', label: 'Text', key: 'T', icon: TextT, edit: true },
   { tool: 'hand', label: 'Hand tool', key: 'H', icon: Hand, edit: false },
 ];

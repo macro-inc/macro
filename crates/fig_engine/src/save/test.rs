@@ -218,3 +218,26 @@ fn saves_text_styles() {
     );
     assert_eq!(layout.glyphs.len(), 6);
 }
+
+#[test]
+fn draws_and_saves_arrows() {
+    let bytes = blank("Lines");
+    let mut doc = Document::open(&bytes).unwrap();
+    let created = apply(
+        &mut doc,
+        r#"[{"op":"create","parent":"0:1","node":{"type":"LINE","name":"Arrow","x":0,"y":50,"width":100,"height":0,"props":{"rotation":-90,"strokeCap":"ARROW_LINES","strokeWeight":2}}}]"#,
+    );
+    let line = find(&doc, &created[0]).clone();
+    assert_eq!(line.size().y, 0.0);
+    assert_eq!(line.stroke_cap.as_deref(), Some("ARROW_LINES"));
+    // A quarter turn clockwise about its middle: it runs down from (50, 0).
+    let t = line.transform();
+    assert!((t.m02 - 50.0).abs() < 1e-6 && t.m12.abs() < 1e-6, "{t:?}");
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let b = scene.node(scene.root()).bounds;
+    assert!(b.w >= 8.0 && b.h >= 100.0, "the arrowhead is inside: {b:?}");
+    let reopened = Document::open(&save(&doc, &bytes).unwrap()).unwrap();
+    let r = find(&reopened, &created[0]);
+    assert_eq!(r.stroke_cap.as_deref(), Some("ARROW_LINES"));
+    assert_eq!(r.node_type(), NodeType::Line);
+}

@@ -528,7 +528,8 @@ Layout and test hooks:
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
   it shows the page name and canvas color.
 - **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
-  (O), Text (T), Hand (H) as `fig-tool-<name>`, undo/redo (`fig-undo`,
+  (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Text (T),
+  Hand (H) as `fig-tool-<name>`, undo/redo (`fig-undo`,
   `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
   `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
   shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?).
