@@ -296,8 +296,21 @@ pub struct DeckOutline {
     pub layouts: Vec<LayoutInfo>,
     /// The first master's theme colors as `[slot, #RRGGBB]` (`dk1`, `lt1`, `accent1`...).
     pub theme_colors: Vec<(String, String)>,
+    /// The first master's theme fonts (what `+mj-lt` and `+mn-lt` name).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_fonts: Option<ThemeFonts>,
     /// Table styles to offer: the deck's own, then PowerPoint's built-in ones.
     pub table_styles: Vec<TableStyleInfo>,
+}
+
+/// A theme's heading and body Latin typefaces.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeFonts {
+    /// Headings (`+mj-lt`).
+    pub major: String,
+    /// Body text (`+mn-lt`).
+    pub minor: String,
 }
 
 /// The resolved formatting of a stretch of text (for toolbar state).
@@ -323,6 +336,11 @@ pub struct RunStyle {
     pub color: Option<String>,
     /// Latin typeface.
     pub font: String,
+    /// Baseline shift in percent (positive = superscript, negative = subscript).
+    pub baseline: f32,
+    /// Highlight color as `#RRGGBB`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<String>,
 }
 
 /// The resolved formatting of a paragraph.
@@ -619,10 +637,10 @@ impl Presentation {
         let slides = (0..self.slides.len())
             .map(|i| self.slide_outline_with_fonts(i, fonts))
             .collect::<Result<Vec<_>>>()?;
-        let theme_colors = match self.slides.first() {
+        let (theme_colors, theme_fonts) = match self.slides.first() {
             Some(_) => {
                 let ctx = self.slide_context(0)?;
-                crate::model::color::SCHEME_SLOTS
+                let colors = crate::model::color::SCHEME_SLOTS
                     .iter()
                     .zip(ctx.theme.colors.colors.iter())
                     .map(|(slot, c)| {
@@ -631,9 +649,14 @@ impl Presentation {
                             hex(&Fill::Solid(*c)).unwrap_or_default(),
                         )
                     })
-                    .collect()
+                    .collect();
+                let fonts = ThemeFonts {
+                    major: ctx.theme.resolve_typeface("+mj-lt").to_owned(),
+                    minor: ctx.theme.resolve_typeface("+mn-lt").to_owned(),
+                };
+                (colors, Some(fonts))
             }
-            None => Vec::new(),
+            None => (Vec::new(), None),
         };
         Ok(DeckOutline {
             width: emu_to_pt(self.size.0 as f64),
@@ -641,6 +664,7 @@ impl Presentation {
             slides,
             layouts: crate::edit::layouts(self)?,
             theme_colors,
+            theme_fonts,
             table_styles: self.table_style_gallery()?,
         })
     }
@@ -950,6 +974,8 @@ fn run_style(props: &RunProps, start: usize, end: usize) -> RunStyle {
         size: props.size,
         color: hex(&props.fill),
         font: props.latin.clone(),
+        baseline: props.baseline,
+        highlight: props.highlight.and_then(|c| hex(&Fill::Solid(c))),
     }
 }
 
