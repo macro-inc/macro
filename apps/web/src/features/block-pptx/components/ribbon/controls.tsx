@@ -7,7 +7,14 @@ import { Popover } from '@kobalte/core/popover';
 import CaretDown from '@phosphor/caret-down.svg';
 import { cn } from '@ui';
 import { Button, type ButtonProps } from '@ui/components/Button';
-import { createSignal, For, type JSX, Show, splitProps } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+  splitProps,
+} from 'solid-js';
 import type { Swatch } from '../../core/palette';
 
 /** An icon button; `active` shows a pressed state. */
@@ -231,14 +238,27 @@ export function NumberField(props: {
   testId?: string;
   precision?: number;
 }) {
-  const shown = () =>
-    props.value === undefined
+  const format = (value: number | undefined) =>
+    value === undefined
       ? ''
       : String(
-          Math.round(props.value * 10 ** (props.precision ?? 1)) /
+          Math.round(value * 10 ** (props.precision ?? 1)) /
             10 ** (props.precision ?? 1)
         );
+  const shown = () => format(props.value);
+  let input!: HTMLInputElement;
+  /** Typed text not committed yet. */
+  let dirty = false;
+  // Mirrors the value into the field unless something typed is pending: an
+  // edit landing meanwhile must not wipe it.
+  createEffect(() => {
+    const value = shown();
+    if (!dirty) input.value = value;
+  });
+  /** Commits typed text (blur, Enter, or arrow steps); shows what was set. */
   const commit = (el: HTMLInputElement) => {
+    if (!dirty) return;
+    dirty = false;
     const n = Number.parseFloat(el.value);
     if (!Number.isFinite(n)) {
       el.value = shown();
@@ -248,8 +268,8 @@ export function NumberField(props: {
       props.max ?? Number.POSITIVE_INFINITY,
       Math.max(props.min ?? Number.NEGATIVE_INFINITY, n)
     );
+    el.value = format(clamped);
     if (clamped !== props.value) props.onCommit(clamped);
-    el.value = shown();
   };
   return (
     <label
@@ -259,28 +279,35 @@ export function NumberField(props: {
     >
       <span class="sr-only">{props.label}</span>
       <input
+        ref={input}
         type="text"
         inputmode="decimal"
         data-testid={props.testId}
         disabled={props.disabled}
         class="min-w-0 bg-transparent text-right text-ink tabular-nums outline-none"
         style={{ width: props.width ?? '2.5rem' }}
-        value={shown()}
+        onInput={() => {
+          dirty = true;
+        }}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === 'Enter') {
             e.preventDefault();
             commit(e.currentTarget);
           } else if (e.key === 'Escape') {
+            dirty = false;
             e.currentTarget.value = shown();
             e.currentTarget.blur();
           } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
             const step = (props.step ?? 1) * (e.shiftKey ? 10 : 1);
-            const base = props.value ?? 0;
+            const base = dirty
+              ? Number.parseFloat(e.currentTarget.value) || 0
+              : (props.value ?? 0);
             e.currentTarget.value = String(
               base + (e.key === 'ArrowUp' ? step : -step)
             );
+            dirty = true;
             commit(e.currentTarget);
           }
         }}

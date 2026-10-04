@@ -16,6 +16,7 @@ import {
   For,
   type JSX,
   Show,
+  untrack,
   useContext,
 } from 'solid-js';
 import type { Swatch } from '../../core/palette';
@@ -173,8 +174,10 @@ export function Ribbon(props: {
           aria-label={current()?.label}
           class="flex h-10 items-center overflow-x-auto overflow-y-hidden px-1.5 [scrollbar-width:thin]"
         >
-          <Show when={current()} keyed>
-            {(tab) => tab.content()}
+          {/* Keyed by id: tab lists rebuilt for a new selection must not
+              remount the open tab (and lose a field being typed in). */}
+          <Show when={current()?.id} keyed>
+            {(_id) => untrack(() => current()?.content())}
           </Show>
         </div>
       </div>
