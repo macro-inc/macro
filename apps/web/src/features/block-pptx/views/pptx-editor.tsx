@@ -549,7 +549,7 @@ export function PptxEditor() {
       }
       return;
     }
-    editor.pointerMove(at, { shift: e.shiftKey });
+    editor.pointerMove(at, { shift: e.shiftKey, alt: e.altKey });
   };
 
   const onPointerUp = (e: PointerEvent) => {
@@ -1563,6 +1563,7 @@ export function PptxEditor() {
                           marquee={overlay().marquee}
                           cellRange={overlay().cellRange}
                           guide={overlay().guide}
+                          smartGuides={editor.guides() ?? undefined}
                           caret={overlay().caret}
                           textSelection={overlay().textSelection}
                           editing={!!editor.editing()}

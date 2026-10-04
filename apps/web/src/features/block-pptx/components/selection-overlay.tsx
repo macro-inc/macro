@@ -35,6 +35,8 @@ export function SelectionOverlay(props: {
   cellRange?: Box;
   /** A table border being dragged. */
   guide?: { x1: number; y1: number; x2: number; y2: number };
+  /** Smart guides the dragged shapes snapped to. */
+  smartGuides?: { xs: number[]; ys: number[] };
   caret?: [Point, Point];
   textSelection?: Point[][];
   editing: boolean;
@@ -176,6 +178,34 @@ export function SelectionOverlay(props: {
           />
         )}
       </Show>
+      <For each={props.smartGuides?.xs ?? []}>
+        {(x) => (
+          <line
+            data-testid="pptx-smart-guide"
+            x1={x}
+            y1={0}
+            x2={x}
+            y2={props.height}
+            class="stroke-[#FF3B8A]"
+            stroke-width={props.unit}
+            stroke-dasharray={`${4 * props.unit} ${3 * props.unit}`}
+          />
+        )}
+      </For>
+      <For each={props.smartGuides?.ys ?? []}>
+        {(y) => (
+          <line
+            data-testid="pptx-smart-guide"
+            x1={0}
+            y1={y}
+            x2={props.width}
+            y2={y}
+            class="stroke-[#FF3B8A]"
+            stroke-width={props.unit}
+            stroke-dasharray={`${4 * props.unit} ${3 * props.unit}`}
+          />
+        )}
+      </For>
       <Show when={props.guide}>
         {(g) => (
           <line

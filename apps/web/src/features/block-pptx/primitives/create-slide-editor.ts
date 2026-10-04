@@ -46,12 +46,14 @@ import {
   rotationToward,
 } from '../core/geometry';
 import {
+  boundsOf,
   type Rect,
   rectFromPoints,
   scaleBox,
   shapesInRect,
   unionBounds,
 } from '../core/selection';
+import { type Guides, snapMove } from '../core/snap';
 import {
   clampPos,
   deleteCommand,
@@ -128,6 +130,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
   const { engine, session, queue } = options;
   const [selectedIds, setSelectedIds] = createSignal<number[]>([]);
   const [drag, setDrag] = createSignal<DragState | null>(null);
+  /** Smart guides shown while shapes are moved. */
+  const [guides, setGuides] = createSignal<Guides | null>(null);
   const [editing, setEditing] = createSignal<EditingState | null>(null);
   const [images, setImages] = createSignal<StageImages>({
     layerOffset: { x: 0, y: 0 },
@@ -428,7 +432,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
     beginDrag(kind, list, at, { handle });
   }
 
-  function pointerMove(at: Point, opts: { shift: boolean }) {
+  function pointerMove(at: Point, opts: { shift: boolean; alt?: boolean }) {
     const edit = editing();
     if (edit && textDragAnchor && edit.layout) {
       const pos = positionAt(edit.layout, at);
@@ -444,9 +448,40 @@ export function createSlideEditor(options: SlideEditorOptions) {
     if (active && !d.active && layered) {
       void renderLayers(d.shape!, true);
     }
+    let current = at;
+    if (d.kind === 'move' && active) {
+      let dx = at.x - d.start.x;
+      let dy = at.y - d.start.y;
+      // Shift keeps the move horizontal or vertical.
+      if (opts.shift) {
+        if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+        else dx = 0;
+      }
+      // Alt turns smart guides off, as in PowerPoint.
+      const deck = session.outline();
+      const bounds = unionBounds(d.shapes.map((x) => x.origin));
+      if (!opts.alt && deck && bounds) {
+        const moving = new Set(d.shapes.map((x) => x.id));
+        const others = shapes()
+          .filter((x) => !x.hidden && !moving.has(x.id))
+          .map((x) => boundsOf(boxOf(x)));
+        const snap = snapMove(
+          { ...bounds, x: bounds.x + dx, y: bounds.y + dy },
+          others,
+          { w: deck.width, h: deck.height },
+          5 * options.pointsPerPixel()
+        );
+        dx += opts.shift && dx === 0 ? 0 : snap.dx;
+        dy += opts.shift && dy === 0 ? 0 : snap.dy;
+        setGuides(snap.guides);
+      } else {
+        setGuides(null);
+      }
+      current = { x: d.start.x + dx, y: d.start.y + dy };
+    }
     setDrag({
       ...d,
-      current: at,
+      current,
       active,
       keepAspect:
         d.kind === 'resize' &&
@@ -455,9 +490,9 @@ export function createSlideEditor(options: SlideEditorOptions) {
           findShape(d.shape ?? -1)?.kind === 'picture'),
     });
     if (layered && active) {
-      setImages((current) => ({
-        ...current,
-        layerOffset: { x: at.x - d.start.x, y: at.y - d.start.y },
+      setImages((images) => ({
+        ...images,
+        layerOffset: { x: current.x - d.start.x, y: current.y - d.start.y },
       }));
     }
   }
@@ -515,6 +550,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
     textDragAnchor = null;
     const d = drag();
     setDrag(null);
+    setGuides(null);
     if (!d) return;
     if (!d.active) {
       if (d.collapseTo !== undefined) select(d.collapseTo);
@@ -566,6 +602,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
 
   function cancelDrag() {
     setDrag(null);
+    setGuides(null);
     replaceImages({
       backdrop: undefined,
       layer: undefined,
@@ -947,6 +984,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
     findShape,
     editing,
     drag,
+    guides,
     dragPreview,
     dragBoxes,
     marquee,
