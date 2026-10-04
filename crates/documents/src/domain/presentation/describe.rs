@@ -2,7 +2,7 @@
 //! shapes with their ids, kinds, positions, text, and tables.
 
 use pptx_engine::Presentation;
-use pptx_engine::inspect::{ShapeKindName, ShapeOutline, SlideOutline};
+use pptx_engine::inspect::{ShapeKindName, ShapeOutline, SlideOutline, TableOutline};
 use std::fmt::Write as _;
 
 /// Longest description returned; ask for specific slides beyond this.
@@ -93,16 +93,19 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize) {
     }
     if let Some(table) = &s.table {
         let cols = table.column_widths.len();
+        let style = table
+            .style
+            .as_ref()
+            .map(|st| format!(", style {}", quote(&st.name)))
+            .unwrap_or_default();
         let _ = writeln!(
             out,
-            "{pad}  table {} rows × {cols} columns:",
+            "{pad}  table {} rows × {cols} columns{style}:",
             table.rows.len()
         );
         for (r, row) in table.rows.iter().enumerate().take(60) {
-            let cells: Vec<String> = row
-                .iter()
-                .map(|c| c.replace('\n', " / ").chars().take(80).collect())
-                .collect();
+            let width = row.len().max(table.cells.get(r).map_or(0, Vec::len));
+            let cells: Vec<String> = (0..width).map(|c| table_cell(table, r, c)).collect();
             let _ = writeln!(out, "{pad}  row {r}: | {} |", cells.join(" | "));
         }
         if table.rows.len() > 60 {
@@ -111,6 +114,38 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize) {
     }
     for child in &s.children {
         shape(out, child, depth + 1);
+    }
+}
+
+/// One table cell for a row line: its text, how far a merged cell spans, or
+/// which merged cell covers it.
+fn table_cell(table: &TableOutline, r: usize, c: usize) -> String {
+    let text: String = table.rows[r]
+        .get(c)
+        .map(|t| t.replace('\n', " / ").chars().take(80).collect())
+        .unwrap_or_default();
+    let Some(cell) = table.cells.get(r).and_then(|row| row.get(c)) else {
+        return text;
+    };
+    if cell.merged {
+        // The merged cell whose span covers this one (scanning up and left).
+        let anchor = (0..=r)
+            .rev()
+            .flat_map(|ar| (0..=c).rev().map(move |ac| (ar, ac)))
+            .find(|&(ar, ac)| {
+                let a = &table.cells[ar][ac];
+                !a.merged && ar + a.row_span > r && ac + a.col_span > c
+            });
+        return match anchor {
+            Some((ar, ac)) => format!("{{merged into row {ar} col {ac}}}"),
+            None => "{merged}".to_owned(),
+        };
+    }
+    match (cell.row_span, cell.col_span) {
+        (1, 1) => text,
+        (1, n) => format!("{text} {{spans {n} columns}}"),
+        (n, 1) => format!("{text} {{spans {n} rows}}"),
+        (rows, cols) => format!("{text} {{spans {rows} rows × {cols} columns}}"),
     }
 }
 
