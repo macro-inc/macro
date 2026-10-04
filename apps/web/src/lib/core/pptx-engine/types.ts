@@ -327,6 +327,37 @@ export interface SlideOutline {
   animations?: AnimationOutline[];
   /** The slide number, date, and footer the slide shows (absent: none). */
   headerFooter?: HeaderFooterOutline;
+  /** Comment threads (Review ▸ Comments), in the order they were added. */
+  comments?: CommentOutline[];
+}
+
+/** A comment thread on a slide (`inspect::CommentOutline`). */
+export interface CommentOutline {
+  /** A GUID (`{…}`), or `legacy-<author>-<n>` for a pre-2021 comment. */
+  id: string;
+  author: string;
+  initials?: string;
+  /** `\n` between paragraphs. */
+  text: string;
+  /** ISO 8601: UTC (`…Z`) for threaded comments, local time for legacy ones. */
+  created?: string;
+  /** The shape the comment is attached to (marker at its top-right corner). */
+  shape?: number;
+  /** Marker position in points, when the comment has one. */
+  x?: number;
+  y?: number;
+  resolved: boolean;
+  /** Pre-2021 format: no replies or resolving. */
+  legacy: boolean;
+  replies?: CommentReplyOutline[];
+}
+
+export interface CommentReplyOutline {
+  id: string;
+  author: string;
+  initials?: string;
+  text: string;
+  created?: string;
 }
 
 /** An automatic date format of the Header & Footer dialog (`setHeaderFooter`). */
@@ -908,7 +939,46 @@ export type EditOp =
    */
   | { op: 'removeSection'; id: string; deleteSlides?: boolean }
   /** Moves a section and its slides to a 0-based index among the sections. */
-  | { op: 'moveSection'; id: string; toIndex: number };
+  | { op: 'moveSection'; id: string; toIndex: number }
+  | CommentOp;
+
+/**
+ * Review ▸ Comments (`edit::ops` review operations). Threads and their ids
+ * come from `SlideOutline.comments`; legacy (`legacy-…`) threads can only be
+ * edited and deleted.
+ */
+export type CommentOp =
+  /**
+   * A new thread on the slide (marker at `x`, `y` points, or PowerPoint's
+   * default at the top-left corner), or on `shape` (marker at its top-right
+   * corner). `initials` default to the first letters of `author`.
+   */
+  | {
+      op: 'addComment';
+      slide: number;
+      text: string;
+      author: string;
+      initials?: string;
+      x?: number;
+      y?: number;
+      shape?: number;
+    }
+  | {
+      op: 'replyComment';
+      slide: number;
+      comment: string;
+      text: string;
+      author: string;
+      initials?: string;
+    }
+  /** Replaces the text of a thread's first comment or of a reply. */
+  | { op: 'editComment'; slide: number; comment: string; text: string }
+  /** Resolves a thread, or reopens it with `resolved: false`. */
+  | { op: 'resolveComment'; slide: number; comment: string; resolved: boolean }
+  /** Deletes a thread with its replies, or one reply. */
+  | { op: 'deleteComment'; slide: number; comment: string }
+  /** Deletes every comment on a slide, or in the deck without `slide`. */
+  | { op: 'deleteAllComments'; slide?: number };
 
 /**
  * How content follows a new slide size: `none` keeps it as is; `fit`
