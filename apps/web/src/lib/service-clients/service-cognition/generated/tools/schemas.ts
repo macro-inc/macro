@@ -3194,6 +3194,238 @@ export const EditPresentation = z.object({
             .strict(),
           z
             .object({
+              slide: z.number().int().gte(0),
+              animations: z.array(
+                z
+                  .object({
+                    shapeId: z.number().int().gte(0),
+                    class: z.any().superRefine((x, ctx) => {
+                      const schemas = [
+                        z.literal('entrance'),
+                        z.literal('emphasis'),
+                        z.literal('exit'),
+                        z.literal('path'),
+                        z.literal('media'),
+                        z.literal('other'),
+                      ];
+                      const errors = schemas.reduce<z.ZodError[]>(
+                        (errors, schema) =>
+                          ((result) =>
+                            result.error ? [...errors, result.error] : errors)(
+                            schema.safeParse(x)
+                          ),
+                        []
+                      );
+                      if (schemas.length - errors.length !== 1) {
+                        ctx.addIssue({
+                          path: ctx.path,
+                          code: 'invalid_union',
+                          unionErrors: errors,
+                          message: 'Invalid input: Should pass single schema',
+                        });
+                      }
+                    }),
+                    effect: z.string(),
+                    start: z
+                      .union([
+                        z.any().superRefine((x, ctx) => {
+                          const schemas = [
+                            z.literal('onClick'),
+                            z.literal('withPrevious'),
+                            z.literal('afterPrevious'),
+                          ];
+                          const errors = schemas.reduce<z.ZodError[]>(
+                            (errors, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? [...errors, result.error]
+                                  : errors)(schema.safeParse(x)),
+                            []
+                          );
+                          if (schemas.length - errors.length !== 1) {
+                            ctx.addIssue({
+                              path: ctx.path,
+                              code: 'invalid_union',
+                              unionErrors: errors,
+                              message:
+                                'Invalid input: Should pass single schema',
+                            });
+                          }
+                        }),
+                        z.null(),
+                      ])
+                      .optional(),
+                    durationMs: z
+                      .union([z.number().int().gte(0), z.null()])
+                      .optional(),
+                    delayMs: z
+                      .union([z.number().int().gte(0), z.null()])
+                      .optional(),
+                    direction: z.union([z.string(), z.null()]).optional(),
+                    paragraph: z
+                      .union([z.number().int().gte(0), z.null()])
+                      .optional(),
+                    repeat: z
+                      .union([
+                        z.union([
+                          z.number(),
+                          z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.literal('untilNextClick'),
+                              z.literal('untilEndOfSlide'),
+                            ];
+                            const errors = schemas.reduce<z.ZodError[]>(
+                              (errors, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? [...errors, result.error]
+                                    : errors)(schema.safeParse(x)),
+                              []
+                            );
+                            if (schemas.length - errors.length !== 1) {
+                              ctx.addIssue({
+                                path: ctx.path,
+                                code: 'invalid_union',
+                                unionErrors: errors,
+                                message:
+                                  'Invalid input: Should pass single schema',
+                              });
+                            }
+                          }),
+                        ]),
+                        z.null(),
+                      ])
+                      .optional(),
+                    path: z.union([z.string(), z.null()]).optional(),
+                  })
+                  .strict()
+              ),
+              op: z.literal('setAnimations'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              animation: z
+                .object({
+                  shapeId: z.number().int().gte(0),
+                  class: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('entrance'),
+                      z.literal('emphasis'),
+                      z.literal('exit'),
+                      z.literal('path'),
+                      z.literal('media'),
+                      z.literal('other'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  effect: z.string(),
+                  start: z
+                    .union([
+                      z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.literal('onClick'),
+                          z.literal('withPrevious'),
+                          z.literal('afterPrevious'),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      }),
+                      z.null(),
+                    ])
+                    .optional(),
+                  durationMs: z
+                    .union([z.number().int().gte(0), z.null()])
+                    .optional(),
+                  delayMs: z
+                    .union([z.number().int().gte(0), z.null()])
+                    .optional(),
+                  direction: z.union([z.string(), z.null()]).optional(),
+                  paragraph: z
+                    .union([z.number().int().gte(0), z.null()])
+                    .optional(),
+                  repeat: z
+                    .union([
+                      z.union([
+                        z.number(),
+                        z.any().superRefine((x, ctx) => {
+                          const schemas = [
+                            z.literal('untilNextClick'),
+                            z.literal('untilEndOfSlide'),
+                          ];
+                          const errors = schemas.reduce<z.ZodError[]>(
+                            (errors, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? [...errors, result.error]
+                                  : errors)(schema.safeParse(x)),
+                            []
+                          );
+                          if (schemas.length - errors.length !== 1) {
+                            ctx.addIssue({
+                              path: ctx.path,
+                              code: 'invalid_union',
+                              unionErrors: errors,
+                              message:
+                                'Invalid input: Should pass single schema',
+                            });
+                          }
+                        }),
+                      ]),
+                      z.null(),
+                    ])
+                    .optional(),
+                  path: z.union([z.string(), z.null()]).optional(),
+                })
+                .strict(),
+              index: z.union([z.number().int().gte(0), z.null()]).optional(),
+              op: z.literal('addAnimation'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shapeIds: z
+                .union([z.array(z.number().int().gte(0)), z.null()])
+                .optional(),
+              indexes: z
+                .union([z.array(z.number().int().gte(0)), z.null()])
+                .optional(),
+              op: z.literal('removeAnimations'),
+            })
+            .strict(),
+          z
+            .object({
               find: z.string(),
               replace: z.string(),
               matchCase: z.boolean().optional(),
