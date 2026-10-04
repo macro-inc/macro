@@ -61,6 +61,19 @@ scale ladder) and `spAutoFit` shapes grow to their text, so saved files open
 in PowerPoint without a reflow. Relationships no longer referenced are pruned
 and orphaned parts are removed.
 
+Shapes can be grouped and ungrouped; group members are addressed and edited in
+slide space (their outline frames are where they would sit on the slide, and
+ungrouping bakes the group's offset, scale, rotation, and flips into them).
+`copy_shapes` and `copy_slides` produce self-contained clipboard payloads
+(JSON with every referenced part: pictures, media, charts and their
+workbooks) that `PasteShapes` and `PasteSlides` insert into this or another
+presentation; copied placeholders become ordinary shapes carrying their
+inherited position and text formatting, and theme references follow the
+destination theme. Slides can change layout (placeholders rebind by type and
+index), carry transitions (including the `p14` and `p159` morph forms), and
+`find_text` / `ReplaceText` search and replace across shapes, groups, and
+table cells.
+
 ### Collaboration
 
 `collab` describes a presentation as flat string maps (Loro containers in the

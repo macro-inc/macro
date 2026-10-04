@@ -858,6 +858,33 @@ pub enum EditOp {
         #[serde(default)]
         slide: Option<u32>,
     },
+    /// Sets a shape's alt text (its description for screen readers); `""` removes it.
+    SetAltText {
+        /// Slide id.
+        slide: u32,
+        /// Shape id.
+        shape: u32,
+        /// Alt text.
+        text: String,
+    },
+    /// Renames a shape (the name shown in the selection pane).
+    SetShapeName {
+        /// Slide id.
+        slide: u32,
+        /// Shape id.
+        shape: u32,
+        /// New name.
+        name: String,
+    },
+    /// Hides or shows a shape (hidden shapes are not drawn).
+    SetShapeHidden {
+        /// Slide id.
+        slide: u32,
+        /// Shape id.
+        shape: u32,
+        /// Hidden.
+        hidden: bool,
+    },
 }
 
 /// Something an edit created.

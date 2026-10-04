@@ -99,7 +99,10 @@ impl EditOp {
             | O::UngroupShape { slide, .. }
             | O::PasteShapes { slide, .. }
             | O::SetSlideLayout { slide, .. }
-            | O::SetTransition { slide, .. } => Some(*slide),
+            | O::SetTransition { slide, .. }
+            | O::SetAltText { slide, .. }
+            | O::SetShapeName { slide, .. }
+            | O::SetShapeHidden { slide, .. } => Some(*slide),
             O::PasteSlides { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
@@ -665,6 +668,23 @@ impl Presentation {
                     whole_word: *whole_word,
                 };
                 out.replaced += find::replace_text(self, query, replace, options, *slide, refit)?;
+            }
+            O::SetAltText { slide, shape, text } => {
+                let part = self.slide_part(*slide)?;
+                shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "descr", Some(text))?;
+            }
+            O::SetShapeName { slide, shape, name } => {
+                let part = self.slide_part(*slide)?;
+                shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "name", Some(name))?;
+            }
+            O::SetShapeHidden {
+                slide,
+                shape,
+                hidden,
+            } => {
+                let part = self.slide_part(*slide)?;
+                let value = hidden.then_some("1");
+                shapes::set_c_nv_pr(self.xml_mut(&part)?, *shape, "hidden", value)?;
             }
         }
         out.created.extend(created);

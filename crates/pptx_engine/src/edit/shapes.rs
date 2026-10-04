@@ -763,3 +763,16 @@ fn blip_fill_of(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
         _ => None,
     }
 }
+
+/// Sets (or, with `None` or `""`, removes) an attribute of a shape's
+/// `cNvPr`: `descr` (alt text), `name`, or `hidden`.
+pub fn set_c_nv_pr(doc: &mut XmlDoc, shape: u32, attr: &str, value: Option<&str>) -> Result<()> {
+    let node = find(doc, shape)?;
+    let c_nv_pr = crate::model::shape::c_nv_pr(doc, node)
+        .ok_or_else(|| Error::InvalidEdit(format!("shape {shape} has no properties")))?;
+    match value.filter(|v| !v.is_empty() || attr == "name") {
+        Some(v) => doc.set_attr(c_nv_pr, attr, v),
+        None => doc.remove_attr(c_nv_pr, attr),
+    }
+    Ok(())
+}
