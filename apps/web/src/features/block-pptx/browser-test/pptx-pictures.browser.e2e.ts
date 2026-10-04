@@ -36,6 +36,12 @@ async function screen(page: Page, x: number, y: number) {
   return { x: box.x + x * scale, y: box.y + y * scale };
 }
 
+/** CSS pixels per slide point on the stage. */
+async function pxPerPoint(page: Page) {
+  const box = await page.getByTestId('pptx-stage').boundingBox();
+  return (box?.width ?? 0) / (await outline(page)).width;
+}
+
 async function selectLogo(page: Page) {
   const at = await screen(page, LOGO.x, LOGO.y);
   await page.mouse.click(at.x, at.y);
@@ -191,6 +197,30 @@ test('dragging the picture in crop mode pans the image under the frame', async (
       );
     })
     .toEqual([69, -19, 479]);
+});
+
+test('Shift keeps the aspect ratio and Crop again applies the crop', async ({
+  page,
+}) => {
+  await open(page);
+  await selectLogo(page);
+  const px = await pxPerPoint(page);
+  const crop = page.getByTestId('pptx-picture-crop');
+  await crop.click();
+  await expect(crop).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.down('Shift');
+  await drag(page, 'pptx-crop-handle-se', -30, -10);
+  await page.keyboard.up('Shift');
+  await crop.click();
+  await expect(page.getByTestId('pptx-crop-overlay')).toBeHidden();
+  await expect(crop).toHaveAttribute('aria-pressed', 'false');
+  await expect
+    .poll(async () => {
+      const s = await shape(page, 0, LOGO.id);
+      return [Math.round(s.w), Math.round(s.w - s.h), s.picture?.crop.left];
+    })
+    // The side that moved less wins, as when resizing with Shift.
+    .toEqual([Math.round(108 - 10 / px), 0, 0]);
 });
 
 test('Crop to an aspect ratio, fill, and fit', async ({ page }) => {

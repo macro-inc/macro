@@ -72,9 +72,13 @@ export function PicturePreview(props: {
     ctx.drawImage(image, dx - left * fullW, dy - top * fullH, fullW, fullH);
     ctx.restore();
     if (identity(props.look)) return;
-    const pixels = ctx.getImageData(dx, dy, dw, dh);
-    adjustPixels(pixels.data, props.look);
-    ctx.putImageData(pixels, dx, dy);
+    try {
+      const pixels = ctx.getImageData(dx, dy, dw, dh);
+      adjustPixels(pixels.data, props.look);
+      ctx.putImageData(pixels, dx, dy);
+    } catch {
+      // An image the canvas may not read back shows unadjusted.
+    }
   });
   return (
     <canvas
@@ -110,9 +114,13 @@ export async function adjustedImageUrl(
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return { url, owned: false };
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  adjustPixels(pixels.data, look);
-  ctx.putImageData(pixels, 0, 0);
+  try {
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    adjustPixels(pixels.data, look);
+    ctx.putImageData(pixels, 0, 0);
+  } catch {
+    return { url, owned: false };
+  }
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, 'image/png')
   );
