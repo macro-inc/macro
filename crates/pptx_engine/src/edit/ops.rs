@@ -17,6 +17,16 @@ where
     Ok(Option::<T>::deserialize(de)?.unwrap_or_default())
 }
 
+/// Reads an explicit `null` as `Some(None)`; an omitted field stays `None`
+/// (with `#[serde(default)]`), so "clear" and "keep" differ.
+fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(de).map(Some)
+}
+
 fn nullable_start<'de, D: Deserializer<'de>>(de: D) -> Result<u32, D::Error> {
     Ok(Option::<u32>::deserialize(de)?.unwrap_or_else(one))
 }
@@ -752,6 +762,41 @@ pub enum EditOp {
         slide: u32,
         /// Group id.
         shape: u32,
+    },
+    /// Sets the transition into a slide. Omitted fields keep the slide's
+    /// current value, or take the effect's default for a new transition.
+    SetTransition {
+        /// Slide id.
+        slide: u32,
+        /// Effect: `none` (removes the transition), `cut`, `fade`, `push`,
+        /// `wipe`, `split`, `reveal`, `randomBar`, `shape`, `uncover`,
+        /// `cover`, `zoom`, `dissolve`, `flash`, or `morph`.
+        kind: String,
+        /// Duration in milliseconds (at most 60000).
+        #[serde(default)]
+        duration_ms: Option<u32>,
+        /// Effect option: `fade`: `smooth` or `black`; `push`, `wipe`: `l`,
+        /// `r`, `u`, `d`; `cover`, `uncover`: those or `lu`, `ru`, `ld`, `rd`;
+        /// `split`: `horzOut`, `horzIn`, `vertOut`, `vertIn`; `reveal`: `l`,
+        /// `r`; `randomBar`: `horz`, `vert`; `shape`: `circle`, `diamond`,
+        /// `plus`; `zoom`: `in`, `out`; `morph`: `byObject`, `byWord`,
+        /// `byChar`. Directions are the OOXML `dir` values.
+        #[serde(default)]
+        direction: Option<String>,
+        /// Whether a click advances to the next slide.
+        #[serde(default)]
+        advance_on_click: Option<bool>,
+        /// Advance automatically after this many milliseconds; `null` turns
+        /// automatic advance off and an omitted field keeps the current setting.
+        #[serde(
+            default,
+            deserialize_with = "double_option",
+            skip_serializing_if = "Option::is_none"
+        )]
+        advance_after_ms: Option<Option<u32>>,
+        /// Give every slide of the deck the resulting transition.
+        #[serde(default, deserialize_with = "nullable")]
+        apply_to_all: bool,
     },
 }
 

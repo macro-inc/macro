@@ -256,6 +256,30 @@ pub struct SlideOutline {
     /// Speaker notes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// The transition into the slide.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transition: Option<TransitionOutline>,
+}
+
+/// A slide transition.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransitionOutline {
+    /// Effect: `none` (advance settings only), `cut`, `fade`, `push`, `wipe`,
+    /// `split`, `reveal`, `randomBar`, `shape`, `uncover`, `cover`, `zoom`,
+    /// `dissolve`, `flash`, `morph`, or the element name of another effect
+    /// (`vortex`, `wheel`...), which `setTransition` cannot write.
+    pub kind: String,
+    /// Duration in milliseconds.
+    pub duration_ms: u32,
+    /// Effect option (see `setTransition`), when the effect has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    /// Whether a click advances to the next slide.
+    pub advance_on_click: bool,
+    /// Automatic advance after this many milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advance_after_ms: Option<u32>,
 }
 
 /// The whole deck.
@@ -579,6 +603,7 @@ impl Presentation {
             title,
             shapes: outlines,
             notes: notes_text(self, entry.id)?,
+            transition: crate::edit::transition::read(&ctx.slide.doc),
         })
     }
 

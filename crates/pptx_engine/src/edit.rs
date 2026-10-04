@@ -27,6 +27,7 @@ mod text;
 mod xmlutil;
 
 pub(crate) mod group;
+pub(crate) mod transition;
 
 pub use notes::notes_text;
 pub use ops::{
@@ -85,7 +86,9 @@ impl EditOp {
             | O::SetChartType { slide, .. }
             | O::FormatChart { slide, .. } => Some(*slide),
             O::AddSlide { .. } => None,
-            O::GroupShapes { slide, .. } | O::UngroupShape { slide, .. } => Some(*slide),
+            O::GroupShapes { slide, .. }
+            | O::UngroupShape { slide, .. }
+            | O::SetTransition { slide, .. } => Some(*slide),
         }
     }
 
@@ -591,6 +594,24 @@ impl Presentation {
                         shape: Some(id),
                     });
                 }
+            }
+            O::SetTransition {
+                slide,
+                kind,
+                duration_ms,
+                direction,
+                advance_on_click,
+                advance_after_ms,
+                apply_to_all,
+            } => {
+                let patch = transition::TransitionPatch {
+                    kind,
+                    duration_ms: *duration_ms,
+                    direction: direction.as_deref(),
+                    advance_on_click: *advance_on_click,
+                    advance_after_ms: *advance_after_ms,
+                };
+                transition::set_transition(self, *slide, &patch, *apply_to_all)?;
             }
         }
         out.created.extend(created);
