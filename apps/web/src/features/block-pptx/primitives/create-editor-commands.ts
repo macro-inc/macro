@@ -32,6 +32,7 @@ import {
   rotateOps,
   sizeOps,
 } from '../core/selection';
+import { moveSlidesOps } from '../core/slide-selection';
 import { formatCommand, paragraphCommand } from '../core/text-commands';
 import type { PresentationSession } from './create-presentation-session';
 import type { SlideEditor } from './create-slide-editor';
@@ -47,6 +48,8 @@ export interface EditorCommandsOptions {
   startEditing: (shape: number) => void;
   /** The table cells commands act on: the edited cell or a selected range. */
   tableTarget: () => TableTarget | undefined;
+  /** Ids of the slides selected in the rail or sorter (slide commands act on all). */
+  slideSelection?: () => number[];
 }
 
 /** A table and the cell range table commands act on (inclusive). */
@@ -71,6 +74,13 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const { session, editor, context } = options;
   const slide = () => session.currentSlide();
   const canEdit = () => context.canEdit();
+  /** The selected slides in deck order, or the current one. */
+  const selectedSlides = (): SlideOutline[] => {
+    const ids = options.slideSelection?.() ?? [];
+    const list = session.outline()?.slides.filter((s) => ids.includes(s.id));
+    const current = slide();
+    return list && list.length > 0 ? list : current ? [current] : [];
+  };
 
   const apply = async (ops: EditOp[], group?: string) => {
     if (ops.length === 0) return null;
@@ -487,10 +497,17 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     const id = result?.created[0]?.slide;
     if (id !== undefined) goToSlideId(id);
   };
-  const duplicateSlide = async (id = slide()?.id) => {
-    if (id === undefined) return;
-    const result = await apply([{ op: 'duplicateSlide', slide: id }]);
-    const created = result?.created[0]?.slide;
+  /** Duplicates a slide, or every selected slide when it is one of them. */
+  const duplicateSlide = async (id?: number) => {
+    const selected = selectedSlides();
+    const ids =
+      id === undefined || selected.some((s) => s.id === id)
+        ? selected.map((s) => s.id)
+        : [id];
+    const result = await apply(
+      ids.map((slide) => ({ op: 'duplicateSlide' as const, slide }))
+    );
+    const created = result?.created.at(-1)?.slide;
     if (created !== undefined) goToSlideId(created);
   };
   const deleteSlides = async (ids: number[]) => {
@@ -499,11 +516,35 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     editor.goToSlide(session.slideIndex());
     await apply(ids.map((slide) => ({ op: 'deleteSlide' as const, slide })));
   };
-  const toggleHidden = (s: SlideOutline) =>
-    apply([{ op: 'setSlideHidden', slide: s.id, hidden: !s.hidden }]);
+  /** Hides or shows a slide, and the rest of the selection with it. */
+  const toggleHidden = (s: SlideOutline) => {
+    const selected = selectedSlides();
+    const all = selected.some((x) => x.id === s.id) ? selected : [s];
+    return apply(
+      all.map((x) => ({
+        op: 'setSlideHidden' as const,
+        slide: x.id,
+        hidden: !s.hidden,
+      }))
+    );
+  };
   const moveSlide = async (id: number, to: number) => {
     await apply([{ op: 'moveSlide', slide: id, to }]);
     goToSlideId(id);
+  };
+  /** Moves slides as a block before the slide now at `at`. */
+  const moveSlides = async (ids: number[], at: number) => {
+    const deck = session.outline();
+    const current = slide()?.id;
+    if (!deck) return;
+    await apply(
+      moveSlidesOps(
+        deck.slides.map((s) => s.id),
+        ids,
+        at
+      )
+    );
+    if (current !== undefined) goToSlideId(current);
   };
   let lastBackground: FillSpec | null = null;
   const applyBackgroundToAll = () => {
@@ -522,7 +563,9 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     const s = slide();
     lastBackground = fill;
     if (!deck || !s) return;
-    const ids = all ? deck.slides.map((x) => x.id) : [s.id];
+    const ids = all
+      ? deck.slides.map((x) => x.id)
+      : selectedSlides().map((x) => x.id);
     void apply(
       ids.map((id) => ({
         op: 'setBackground' as const,
@@ -905,17 +948,27 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     if (ids.length > 0) editor.setSelection(ids);
   };
   /** Gives the current slide another layout. */
+  /** Changes the layout of the selected slides. */
   const setLayout = async (layout: string) => {
-    const s = slide();
-    if (!s) return;
-    await apply([{ op: 'setSlideLayout', slide: s.id, layout }]);
+    await apply(
+      selectedSlides().map((s) => ({
+        op: 'setSlideLayout' as const,
+        slide: s.id,
+        layout,
+      }))
+    );
   };
-  /** Changes the current slide's transition (or every slide's). */
-  const setTransition = (patch: Omit<TransitionPatch, 'slide'>) => {
-    const s = slide();
-    if (!s) return Promise.resolve(null);
-    return apply([{ op: 'setTransition', slide: s.id, ...patch }]);
-  };
+  /** Changes the transition of the selected slides (or, with `applyToAll`, every slide). */
+  const setTransition = (patch: Omit<TransitionPatch, 'slide'>) =>
+    apply(
+      (patch.applyToAll ? selectedSlides().slice(0, 1) : selectedSlides()).map(
+        (s) => ({
+          op: 'setTransition' as const,
+          slide: s.id,
+          ...patch,
+        })
+      )
+    );
   /** Recolors the whole deck with a theme color set. */
   const setThemeColors = (colors: Record<string, string>, name?: string) =>
     apply([
@@ -1021,6 +1074,7 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     deleteSlides,
     toggleHidden,
     moveSlide,
+    moveSlides,
     setBackground,
     applyBackgroundToAll,
     paragraphs,

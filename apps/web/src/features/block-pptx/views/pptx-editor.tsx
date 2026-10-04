@@ -27,7 +27,9 @@ import PaintBucket from '@phosphor/paint-bucket.svg';
 import Play from '@phosphor/play.svg';
 import Plus from '@phosphor/plus.svg';
 import Printer from '@phosphor/printer.svg';
+import Rectangle from '@phosphor/rectangle.svg';
 import Scissors from '@phosphor/scissors.svg';
+import SquaresFour from '@phosphor/squares-four.svg';
 import Trash from '@phosphor/trash.svg';
 import WarningIcon from '@phosphor/warning.svg';
 import { Button } from '@ui/components/Button';
@@ -85,6 +87,7 @@ import { caretSegment, selectionQuads } from '../core/caret';
 import { type Box, boxOf, hitTest, type Point } from '../core/geometry';
 import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
 import { unionBounds } from '../core/selection';
+import { clickSlide, type SlideSelection } from '../core/slide-selection';
 import {
   anchorOf,
   boundaryAt,
@@ -317,11 +320,13 @@ export function PptxEditor() {
   const peersOn = (slideId: number) =>
     collaboration?.peers().filter((p) => p.selection.slide === slideId) ?? [];
 
+  /** CSS width thumbnails are drawn at: wider in the slide sorter. */
+  const thumbnailWidth = () => (sorter() ? 280 : 150);
   const thumbnails = createThumbnails({
     engine,
     session,
     queue,
-    width: () => Math.round(150 * dpr()),
+    width: () => Math.round(thumbnailWidth() * dpr()),
   });
 
   // ---- focus ---------------------------------------------------------------
@@ -348,6 +353,53 @@ export function PptxEditor() {
     return { x: (e.clientX - rect.left) / s, y: (e.clientY - rect.top) / s };
   };
 
+  // ---- slide selection (rail and sorter) -------------------------------------
+
+  const [slideSelection, setSlideSelection] = createSignal<SlideSelection>({
+    ids: [],
+    anchor: -1,
+  });
+  /** Selected slide ids in deck order; the current slide alone by default. */
+  const selectedSlideIds = createMemo(() => {
+    const current = session.currentSlide();
+    if (!current) return [];
+    const ids = new Set(slideSelection().ids);
+    const list = (session.outline()?.slides ?? [])
+      .map((s) => s.id)
+      .filter((id) => ids.has(id));
+    return list.includes(current.id) ? list : [current.id];
+  });
+  const selectSlide = (
+    index: number,
+    mods: { shift: boolean; toggle: boolean }
+  ) => {
+    const slides = session.outline()?.slides ?? [];
+    const id = slides[index]?.id;
+    const current = session.currentSlide()?.id;
+    if (id === undefined || current === undefined) return;
+    const ids = selectedSlideIds();
+    const anchor = ids.includes(slideSelection().anchor)
+      ? slideSelection().anchor
+      : current;
+    const next = clickSlide(
+      slides.map((s) => s.id),
+      { ids, anchor },
+      id,
+      mods
+    );
+    setSlideSelection(next);
+    const focus = next.ids.includes(id) ? id : next.ids[next.ids.length - 1];
+    const at = slides.findIndex((s) => s.id === focus);
+    if (at >= 0) editor.goToSlide(at);
+  };
+  const selectAllSlides = () => {
+    const slides = session.outline()?.slides ?? [];
+    setSlideSelection({
+      ids: slides.map((s) => s.id),
+      anchor: session.currentSlide()?.id ?? -1,
+    });
+  };
+
   // ---- commands -------------------------------------------------------------
 
   const commands = createEditorCommands({
@@ -358,6 +410,7 @@ export function PptxEditor() {
     refocus,
     startEditing: (id) => void startEditing(id),
     tableTarget,
+    slideSelection: selectedSlideIds,
   });
 
   const [railFocused, setRailFocused] = createSignal(false);
@@ -367,10 +420,7 @@ export function PptxEditor() {
     editor,
     commands,
     notifyError: context.notifyError,
-    railSelection: () => {
-      const s = session.currentSlide();
-      return railFocused() && s ? [s.id] : undefined;
-    },
+    railSelection: () => (railFocused() ? selectedSlideIds() : undefined),
   });
 
   const painter = createFormatPainter({ engine, session, editor });
@@ -1008,6 +1058,28 @@ export function PptxEditor() {
   const [pane, setPane] = createSignal<PaneSection | null>(null);
   const [find, setFind] = createSignal<{ replace: boolean } | null>(null);
   const [printing, setPrinting] = createSignal(false);
+  const [sorter, setSorterRaw] = createSignal(false);
+  const setSorter = (on: boolean) => {
+    if (on) {
+      editor.stopEditing();
+      editor.setSelection([]);
+    }
+    setSorterRaw(on);
+    queueMicrotask(() =>
+      on
+        ? document
+            .querySelector<HTMLElement>(
+              '[data-testid="pptx-slide-sorter"] [data-testid="pptx-slide-list"]'
+            )
+            ?.focus()
+        : focusStage()
+    );
+  };
+  /** Double-click in the sorter: back to Normal view on that slide. */
+  const openFromSorter = (index: number) => {
+    setSorter(false);
+    editor.goToSlide(index);
+  };
   const [presenting, setPresenting] = createSignal<{
     start: number;
     presenter: boolean;
@@ -1179,6 +1251,8 @@ export function PptxEditor() {
     find: (replace) => setFind({ replace }),
     zoom,
     setZoom,
+    sorter,
+    setSorter,
     notesVisible,
     toggleNotes: () => setNotesVisible((v) => !v),
     download: () => void download(),
@@ -1305,6 +1379,51 @@ export function PptxEditor() {
 
   // ---- slide rail menu -----------------------------------------------------
 
+  /** The slide rail, or with `grid` the slide sorter. */
+  const Slides = (props: { grid?: boolean }) => (
+    <>
+      <Show when={session.outline()}>
+        {(deck) => (
+          <SlideRail
+            slides={deck().slides}
+            current={session.slideIndex()}
+            aspect={slideH() / slideW()}
+            thumbnail={thumbnails.thumbnail}
+            thumbnailPixels={Math.round(thumbnailWidth() * dpr())}
+            readonly={readonly()}
+            selectedIds={selectedSlideIds()}
+            grid={props.grid}
+            onSelect={selectSlide}
+            onSelectAll={selectAllSlides}
+            onOpen={props.grid ? openFromSorter : undefined}
+            onMove={(ids, at) => void commands.moveSlides(ids, at)}
+            onAdd={() => void commands.addSlide()}
+            onDuplicate={(id) => void commands.duplicateSlide(id)}
+            onDelete={(ids) => void commands.deleteSlides(ids)}
+            onToggleHidden={(s) => void commands.toggleHidden(s)}
+            peersOn={collaboration ? peersOn : undefined}
+            menu={railMenu}
+            onCopy={(e) => {
+              if (clipboard.copy(e.clipboardData)) e.preventDefault();
+            }}
+            onCut={(e) => {
+              if (readonly()) return;
+              e.preventDefault();
+              void clipboard.cut(e.clipboardData);
+            }}
+            onPaste={(e) => {
+              if (readonly()) return;
+              e.preventDefault();
+              void clipboard.pasteEvent(e.clipboardData);
+            }}
+            onFocusChange={setRailFocused}
+          />
+        )}
+      </Show>
+    </>
+  );
+
+  const many = () => selectedSlideIds().length > 1;
   const railMenu = (slide: SlideOutline | undefined) => (
     <>
       <Show when={slide}>
@@ -1347,18 +1466,20 @@ export function PptxEditor() {
         {(s) => (
           <>
             <MenuItem
-              text="Duplicate slide"
+              text={many() ? 'Duplicate slides' : 'Duplicate slide'}
               icon={CopySimple}
               disabled={readonly()}
               onClick={() => void commands.duplicateSlide(s().id)}
             />
             <MenuItem
-              text="Delete slide"
+              text={many() ? 'Delete slides' : 'Delete slide'}
               icon={Trash}
               disabled={
-                readonly() || (session.outline()?.slides.length ?? 0) <= 1
+                readonly() ||
+                selectedSlideIds().length >=
+                  (session.outline()?.slides.length ?? 0)
               }
-              onClick={() => void commands.deleteSlides([s().id])}
+              onClick={() => void commands.deleteSlides(selectedSlideIds())}
             />
             <MenuSeparator />
             <ContextMenu.Sub overlap gutter={2}>
@@ -1386,7 +1507,10 @@ export function PptxEditor() {
               onClick={() => setPane('background')}
             />
             <MenuItem
-              text={s().hidden ? 'Unhide slide' : 'Hide slide'}
+              text={
+                (s().hidden ? 'Unhide slide' : 'Hide slide') +
+                (many() ? 's' : '')
+              }
               icon={EyeSlash}
               disabled={readonly()}
               onClick={() => void commands.toggleHidden(s())}
@@ -1478,42 +1602,17 @@ export function PptxEditor() {
         }
       />
       <div class="flex min-h-0 flex-1">
-        <Show when={session.outline()}>
-          {(deck) => (
-            <SlideRail
-              slides={deck().slides}
-              current={session.slideIndex()}
-              aspect={slideH() / slideW()}
-              thumbnail={thumbnails.thumbnail}
-              thumbnailPixels={Math.round(150 * dpr())}
-              readonly={readonly()}
-              onSelect={(i) => editor.goToSlide(i)}
-              onMove={(id, to) => void commands.moveSlide(id, to)}
-              onAdd={() => void commands.addSlide()}
-              onDuplicate={(id) => void commands.duplicateSlide(id)}
-              onDelete={(id) => void commands.deleteSlides([id])}
-              onToggleHidden={(s) => void commands.toggleHidden(s)}
-              peersOn={collaboration ? peersOn : undefined}
-              menu={railMenu}
-              onCopy={(e) => {
-                if (clipboard.copy(e.clipboardData)) e.preventDefault();
-              }}
-              onCut={(e) => {
-                if (readonly()) return;
-                e.preventDefault();
-                void clipboard.cut(e.clipboardData);
-              }}
-              onPaste={(e) => {
-                if (readonly()) return;
-                e.preventDefault();
-                void clipboard.pasteEvent(e.clipboardData);
-              }}
-              onFocusChange={setRailFocused}
-            />
-          )}
+        <Show when={!sorter()}>
+          <Slides />
         </Show>
         <div class="flex min-w-0 flex-1 flex-col">
-          <div class="relative flex min-h-0 flex-1">
+          <Show when={sorter()}>
+            <Slides grid />
+          </Show>
+          <div
+            class="relative flex min-h-0 flex-1"
+            classList={{ hidden: sorter() }}
+          >
             <div
               ref={stageHost}
               class="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
@@ -1762,7 +1861,7 @@ export function PptxEditor() {
               )}
             </Show>
           </div>
-          <Show when={notesVisible() && session.currentSlide()}>
+          <Show when={notesVisible() && !sorter() && session.currentSlide()}>
             {(slide) => (
               <NotesPanel
                 slideId={slide().id}
@@ -1785,6 +1884,11 @@ export function PptxEditor() {
               Slide {session.slideIndex() + 1} of{' '}
               {session.outline()?.slides.length ?? 0}
             </span>
+            <Show when={selectedSlideIds().length > 1}>
+              <span data-testid="pptx-status-selected">
+                {selectedSlideIds().length} slides selected
+              </span>
+            </Show>
             <span class="flex-1" />
             <button
               type="button"
@@ -1796,37 +1900,63 @@ export function PptxEditor() {
             <button
               type="button"
               class="hover:text-ink"
-              aria-label="Zoom out"
-              onClick={() => zoomBy(1 / 1.25)}
+              classList={{ 'text-ink': !sorter() }}
+              aria-pressed={!sorter()}
+              aria-label="Normal view"
+              title="Normal"
+              data-testid="pptx-view-normal"
+              onClick={() => setSorter(false)}
             >
-              −
+              <Rectangle class="size-3.5" />
             </button>
-            <input
-              type="range"
-              aria-label="Zoom"
-              min={10}
-              max={400}
-              value={Math.round((scale() / PX_PER_PT) * 100)}
-              class="w-24 accent-accent"
-              onInput={(e) => setZoom(Number(e.currentTarget.value) / 100)}
-            />
             <button
               type="button"
               class="hover:text-ink"
-              aria-label="Zoom in"
-              onClick={() => zoomBy(1.25)}
+              classList={{ 'text-ink': sorter() }}
+              aria-pressed={sorter()}
+              aria-label="Slide sorter"
+              title="Slide sorter"
+              data-testid="pptx-view-sorter"
+              onClick={() => setSorter(true)}
             >
-              +
+              <SquaresFour class="size-3.5" />
             </button>
-            <button
-              type="button"
-              class="w-10 text-right tabular-nums hover:text-ink"
-              title="Fit slide to window"
-              data-testid="pptx-zoom"
-              onClick={() => setZoom('fit')}
-            >
-              {Math.round((scale() / PX_PER_PT) * 100)}%
-            </button>
+            <Show when={!sorter()}>
+              <button
+                type="button"
+                class="hover:text-ink"
+                aria-label="Zoom out"
+                onClick={() => zoomBy(1 / 1.25)}
+              >
+                −
+              </button>
+              <input
+                type="range"
+                aria-label="Zoom"
+                min={10}
+                max={400}
+                value={Math.round((scale() / PX_PER_PT) * 100)}
+                class="w-24 accent-accent"
+                onInput={(e) => setZoom(Number(e.currentTarget.value) / 100)}
+              />
+              <button
+                type="button"
+                class="hover:text-ink"
+                aria-label="Zoom in"
+                onClick={() => zoomBy(1.25)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                class="w-10 text-right tabular-nums hover:text-ink"
+                title="Fit slide to window"
+                data-testid="pptx-zoom"
+                onClick={() => setZoom('fit')}
+              >
+                {Math.round((scale() / PX_PER_PT) * 100)}%
+              </button>
+            </Show>
           </div>
         </div>
       </div>

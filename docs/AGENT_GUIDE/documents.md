@@ -396,7 +396,16 @@ Layout and test hooks:
   **Duplicate slide**, **Hide slide**/**Show slide**, and **Delete slide**;
   thumbnails reorder by dragging; right-click opens cut/copy/paste, new,
   duplicate, delete, layout, background, and hide. **New slide** is at the
-  bottom.
+  bottom. Shift-click selects a range and Cmd/Ctrl-click adds or removes a
+  slide (`aria-selected`; the status bar shows `pptx-status-selected`);
+  duplicate, delete, hide, layout, transitions, background, copy, cut, and
+  dragging then act on every selected slide. Cmd/Ctrl+A selects all slides
+  and Cmd/Ctrl+D duplicates them while the rail has focus.
+- **Slide Sorter** (View ▸ Slide Sorter, or `pptx-view-sorter` in the status
+  bar; `pptx-view-normal` returns): every slide in a grid
+  (`pptx-slide-sorter`, same `pptx-thumbnail` buttons and menu as the rail),
+  with the same selection and drag-to-reorder; ★ marks a transition;
+  double-click or Enter opens a slide in Normal view.
 - **Stage** (`pptx-stage`, focusable): click selects a shape
   (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
   `pptx-rotate-handle`); Shift/Cmd/Ctrl-click adds to the selection, dragging

@@ -407,3 +407,51 @@ test('prints and saves notes pages as a PDF', async ({ page }) => {
   expect(pdf).toContain('/MediaBox [0 0 612 792]');
   await expect(page.getByTestId('pptx-print')).toHaveCount(0);
 });
+
+test('selects several slides and rearranges them in the slide sorter', async ({
+  page,
+}) => {
+  await open(page);
+  const ids = async () =>
+    (await outline(page)).slides.map((s) => `${s.id}${s.hidden ? 'h' : ''}`);
+  const rail = page.getByTestId('pptx-slide-rail');
+  await rail.getByTestId('pptx-thumbnail').nth(1).click();
+  await rail
+    .getByTestId('pptx-thumbnail')
+    .nth(3)
+    .click({ modifiers: ['Shift'] });
+  await expect(page.getByTestId('pptx-status-selected')).toHaveText(
+    '3 slides selected'
+  );
+  await rail.getByTestId('pptx-thumbnail').nth(2).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Hide slides' }).click();
+  await expect
+    .poll(ids)
+    .toEqual(['256', '257h', '258h', '259h', '260', '261', '262', '263']);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(async () => (await ids()).join(' ')).not.toContain('h');
+
+  await page.getByTestId('pptx-view-sorter').click();
+  const sorter = page.getByTestId('pptx-slide-sorter');
+  const thumbs = sorter.getByTestId('pptx-thumbnail');
+  await expect(thumbs).toHaveCount(8);
+  await thumbs.nth(0).click();
+  await thumbs.nth(4).click({ modifiers: ['ControlOrMeta'] });
+  const from = await thumbs.nth(4).boundingBox();
+  const to = await thumbs.nth(6).boundingBox();
+  if (!from || !to) throw new Error('Thumbnails are not visible.');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width * 0.8, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect
+    .poll(ids)
+    .toEqual(['257', '258', '259', '261', '262', '256', '260', '263']);
+  await thumbs.nth(2).dblclick();
+  await expect(page.getByTestId('pptx-stage')).toBeVisible();
+  await expect(page.getByTestId('pptx-status-slide')).toHaveText(
+    'Slide 3 of 8'
+  );
+});

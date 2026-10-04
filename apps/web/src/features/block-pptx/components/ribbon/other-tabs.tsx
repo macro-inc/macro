@@ -15,7 +15,9 @@ import PenNib from '@phosphor/pen-nib.svg';
 import Play from '@phosphor/play.svg';
 import Presentation from '@phosphor/presentation.svg';
 import ProjectorScreen from '@phosphor/projector-screen.svg';
+import Rectangle from '@phosphor/rectangle.svg';
 import ShapesIcon from '@phosphor/shapes.svg';
+import SquaresFour from '@phosphor/squares-four.svg';
 import Stack from '@phosphor/stack.svg';
 import { For, Show } from 'solid-js';
 import { boxOf } from '../../core/geometry';
@@ -268,6 +270,27 @@ export function ViewTab() {
   };
   return (
     <>
+      <RibbonGroup label="Presentation views">
+        <RibbonTextButton
+          label="Normal"
+          aria-pressed={!env.sorter()}
+          variant={env.sorter() ? 'ghost' : 'accent'}
+          onClick={() => env.setSorter(false)}
+        >
+          <Rectangle />
+          Normal
+        </RibbonTextButton>
+        <RibbonTextButton
+          label="Slide Sorter"
+          aria-pressed={env.sorter()}
+          variant={env.sorter() ? 'accent' : 'ghost'}
+          data-testid="pptx-tab-view-sorter"
+          onClick={() => env.setSorter(true)}
+        >
+          <SquaresFour />
+          Slide Sorter
+        </RibbonTextButton>
+      </RibbonGroup>
       <RibbonGroup label="Zoom">
         <RibbonButton
           label="Zoom out"

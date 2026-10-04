@@ -56,6 +56,9 @@ export interface RibbonEnv {
   find: (replace: boolean) => void;
   zoom: () => number | 'fit';
   setZoom: (zoom: number | 'fit') => void;
+  /** Normal view or the slide sorter. */
+  sorter: () => boolean;
+  setSorter: (on: boolean) => void;
   notesVisible: () => boolean;
   toggleNotes: () => void;
   download: () => void;

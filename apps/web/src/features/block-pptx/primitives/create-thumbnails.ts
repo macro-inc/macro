@@ -12,6 +12,8 @@ import type { RenderQueue } from './create-render-queue';
 interface Entry {
   version: number;
   bitmap?: ImageBitmap;
+  /** Pixel width it was rendered at. */
+  width: number;
   pending: boolean;
 }
 
@@ -19,7 +21,7 @@ export function createThumbnails(options: {
   engine: PresentationEngine;
   session: PresentationSession;
   queue: RenderQueue;
-  /** Pixel width of a thumbnail. */
+  /** Pixel width of a thumbnail (wider ones replace narrower ones). */
   width: Accessor<number>;
 }) {
   const [entries, setEntries] = createSignal<ReadonlyMap<number, Entry>>(
@@ -38,8 +40,18 @@ export function createThumbnails(options: {
   function request(slide: SlideOutline) {
     const version = options.session.slideVersion(slide.id);
     const entry = entries().get(slide.id);
-    if (entry && (entry.version === version || entry.pending)) return;
-    update(slide.id, { version, bitmap: entry?.bitmap, pending: true });
+    const width = options.width();
+    if (
+      entry &&
+      ((entry.version === version && entry.width >= width) || entry.pending)
+    )
+      return;
+    update(slide.id, {
+      version,
+      bitmap: entry?.bitmap,
+      width: entry?.width ?? 0,
+      pending: true,
+    });
     const wanted = () =>
       options.session.outline()?.slides.some((s) => s.id === slide.id) ?? false;
     void options.queue
@@ -50,13 +62,14 @@ export function createThumbnails(options: {
             .outline()
             ?.slides.findIndex((s) => s.id === slide.id) ?? -1;
         if (index < 0) return undefined;
-        return options.engine.render(index, options.width());
+        return options.engine.render(index, width);
       }, wanted)
       .then((bitmap) => {
         const current = entries().get(slide.id);
         update(slide.id, {
           version,
           bitmap: bitmap ?? current?.bitmap,
+          width: bitmap ? width : (current?.width ?? 0),
           pending: false,
         });
         // Changed again while rendering: go round once more.
@@ -69,7 +82,12 @@ export function createThumbnails(options: {
       })
       .catch(() => {
         const current = entries().get(slide.id);
-        update(slide.id, { version, bitmap: current?.bitmap, pending: false });
+        update(slide.id, {
+          version,
+          bitmap: current?.bitmap,
+          width: current?.width ?? 0,
+          pending: false,
+        });
       });
   }
 
@@ -81,7 +99,11 @@ export function createThumbnails(options: {
     /** The latest thumbnail of a slide; requests a fresh one when stale. */
     thumbnail(slide: SlideOutline): ImageBitmap | undefined {
       const entry = entries().get(slide.id);
-      if (!entry || entry.version !== options.session.slideVersion(slide.id)) {
+      if (
+        !entry ||
+        entry.version !== options.session.slideVersion(slide.id) ||
+        entry.width < options.width()
+      ) {
         queueMicrotask(() => request(slide));
       }
       return entry?.bitmap;
