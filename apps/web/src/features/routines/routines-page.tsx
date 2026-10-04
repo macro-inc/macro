@@ -1,3 +1,4 @@
+import { useViewControlHotkeys } from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { modelLabel } from '@core/component/AI/constant/model-label';
@@ -36,6 +37,19 @@ function RoutinesContent() {
     id: string;
     tab: 'settings' | 'history';
   }>();
+  let searchInput: HTMLInputElement | undefined;
+  useViewControlHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && !selected(),
+    search: {
+      description: 'Search routines',
+      run: () => {
+        searchInput?.focus();
+        searchInput?.select();
+        return true;
+      },
+    },
+  });
   createEffect(
     on(
       () => {
@@ -128,6 +142,7 @@ function RoutinesContent() {
       keyed
       fallback={
         <RoutinesList
+          searchRef={(input) => (searchInput = input)}
           rows={rows()}
           loading={query.isPending}
           error={query.isError}

@@ -1,20 +1,24 @@
+import { SearchBar, ViewShell } from '@app/components/view-shell';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
+import { RoutineListRow, RoutineRowLayout } from './routine-row';
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
   loading: boolean;
   error: boolean;
   pendingId?: string;
+  searchRef?: (input: HTMLInputElement) => void;
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
   onRetry: () => void;
 }) {
   const [search, setSearch] = createSignal('');
+  let list: HTMLDivElement | undefined;
   const filtered = () =>
     props.rows.filter((row) =>
       `${row.name} ${row.creator} ${row.target}`
@@ -22,176 +26,113 @@ export function RoutinesList(props: {
         .includes(search().trim().toLowerCase())
     );
   return (
-    <div class="mx-auto w-full max-w-5xl space-y-7 px-5 py-6 sm:px-8 sm:py-9">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 class="text-xl font-medium text-ink">Routines</h1>
-          <p class="mt-1.5 max-w-xl text-sm text-ink-muted">
-            Run agents on a schedule or when an event arrives.
-          </p>
-        </div>
-        <Button variant="strong" size="sm" onClick={() => props.onCreate()}>
-          <PlusIcon class="size-4" />
-          New Routine
-        </Button>
-      </div>
-      <section>
-        <div class="mb-4 flex justify-end">
-          <input
-            type="search"
-            aria-label="Search routines"
-            placeholder="Search routines…"
+    <div class="flex size-full min-h-0 min-w-0 flex-col">
+      <ViewShell.TopBar>
+        <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+          Routines
+        </h1>
+      </ViewShell.TopBar>
+      <ViewShell.Header>
+        <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink not-touch:hidden">
+          Routines
+        </h1>
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <SearchBar
+            ref={props.searchRef}
+            label="Search routines"
+            placeholder="Search routines"
             value={search()}
-            onInput={(e) => setSearch(e.currentTarget.value)}
-            class="w-56 max-w-full rounded-md border border-edge-muted bg-input px-3 py-1.5 text-sm text-ink placeholder:text-ink-placeholder"
+            onValueChange={setSearch}
+            onEscape={() => list?.focus()}
+            class="max-w-md flex-1"
+            hotkey="cmd+f"
           />
-        </div>
-        <Show when={props.error}>
-          <div
-            role="alert"
-            class="mb-3 flex items-center justify-between gap-2 text-sm text-failure"
+          <Button
+            variant="strong"
+            size="lg"
+            class="h-10 px-5 text-sm"
+            onClick={props.onCreate}
           >
-            Could not load routines.
-            <Button variant="ghost" size="sm" onClick={props.onRetry}>
-              Retry
-            </Button>
-          </div>
-        </Show>
-        <div class="overflow-x-auto rounded-lg border border-edge-muted">
-          <table class="w-full text-left text-sm">
-            <thead class="border-b border-edge-muted text-xs font-normal text-ink-muted">
-              <tr>
-                <th scope="col" class="px-4 py-3 font-normal">
-                  Name
-                </th>
-                <th
-                  scope="col"
-                  class="hidden px-4 py-3 font-normal md:table-cell"
-                >
-                  Created by
-                </th>
-                <th scope="col" class="px-4 py-3 font-normal">
-                  Status
-                </th>
-                <th
-                  scope="col"
-                  class="hidden px-4 py-3 font-normal lg:table-cell"
-                >
-                  Runs with
-                </th>
-                <th scope="col" class="px-4 py-3">
-                  <span class="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={filtered()}>
-                {(row) => (
-                  <tr class="border-b border-edge-muted last:border-0 hover:bg-hover/50">
-                    <td class="max-w-72 px-4 py-4">
-                      <button
-                        type="button"
-                        class="block max-w-full truncate text-left text-ink hover:underline"
-                        title={row.name}
-                        onClick={() => props.onOpen(row.id)}
-                      >
-                        {row.name || 'Untitled routine'}
-                      </button>
-                      <p
-                        class="mt-1 truncate text-xs text-ink-extra-muted"
-                        title={row.schedule}
-                      >
-                        {row.schedule}
-                      </p>
-                    </td>
-                    <td class="hidden px-4 py-4 text-ink-muted md:table-cell">
-                      {row.creator}
-                    </td>
-                    <td class="whitespace-nowrap px-4 py-4">
-                      <span
-                        class={cn(
-                          'inline-flex items-center gap-1.5 text-xs',
-                          row.status === 'Active' || row.status === 'Running'
-                            ? 'text-accent'
-                            : 'text-ink-muted'
-                        )}
-                      >
-                        <span
-                          class={cn(
-                            'size-1.5 rounded-full',
-                            row.status === 'Active' || row.status === 'Running'
-                              ? 'bg-accent'
-                              : 'bg-ink-extra-muted'
-                          )}
-                        />
-                        {row.status}
-                      </span>
-                    </td>
-                    <td
-                      class="hidden max-w-40 truncate px-4 py-4 text-xs text-ink-muted lg:table-cell"
-                      title={row.target}
-                    >
-                      {row.target}
-                    </td>
-                    <td class="px-3 py-4">
-                      <div class="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => props.onOpen(row.id, true)}
-                        >
-                          History
-                        </Button>
-                        <Show when={row.editable}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={
-                              props.pendingId === row.id ||
-                              (row.status === 'Running' && !row.enabled) ||
-                              row.status === 'Completed'
-                            }
-                            onClick={() => props.onToggle(row)}
-                          >
-                            {row.enabled ? 'Disable' : 'Enable'}
-                          </Button>
-                        </Show>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
-          <Show when={!filtered().length}>
-            <div class="grid justify-items-center gap-2 px-6 py-14 text-center">
-              <ClockIcon class="mb-1 size-7 text-ink-extra-muted" />
-              <p class="text-sm text-ink">
+            <PlusIcon class="size-4" />
+            Create Routine
+          </Button>
+        </div>
+      </ViewShell.Header>
+      <Show when={props.error}>
+        <div
+          role="alert"
+          class="mx-4 mb-3 flex items-center justify-between gap-2 text-sm text-failure"
+        >
+          Could not load routines.
+          <Button variant="ghost" size="sm" onClick={props.onRetry}>
+            Retry
+          </Button>
+        </div>
+      </Show>
+      <div
+        ref={list}
+        role="table"
+        aria-label="Routines"
+        aria-busy={props.loading}
+        tabIndex={-1}
+        class="min-h-0 min-w-0 flex-1 overflow-auto outline-none"
+      >
+        <div role="rowgroup" class="sticky top-0 z-1 min-w-[788px] bg-panel">
+          <RoutineRowLayout
+            role="row"
+            class="text-xs font-medium text-ink-extra-muted"
+          >
+            <span role="columnheader">Routine</span>
+            <span role="columnheader">Created by</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Runs with</span>
+            <span role="columnheader" class="px-2">
+              Enabled
+            </span>
+            <span role="columnheader" class="sr-only">
+              History
+            </span>
+          </RoutineRowLayout>
+        </div>
+        <div role="rowgroup" class="min-w-[788px]">
+          <For each={filtered()}>
+            {(row) => (
+              <RoutineListRow
+                row={row}
+                pending={props.pendingId === row.id}
+                onOpen={props.onOpen}
+                onToggle={props.onToggle}
+              />
+            )}
+          </For>
+        </div>
+        <Show when={!filtered().length}>
+          <div role="row">
+            <div
+              role="cell"
+              aria-colspan={6}
+              class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
+            >
+              <ClockIcon class="size-6 text-ink-extra-muted" />
+              <p>
                 {props.loading
                   ? 'Loading routines…'
                   : props.error
                     ? 'Routines are unavailable'
-                    : search()
+                    : search().trim()
                       ? 'No matching routines'
-                      : 'Your next routine starts here'}
+                      : 'No routines yet'}
               </p>
-              <Show when={!props.loading && !props.error && !search()}>
-                <p class="max-w-sm text-xs text-ink-muted">
-                  Create a briefing, check on a project, or hand recurring work
-                  to an agent.
+              <Show when={!props.loading && !props.error && !search().trim()}>
+                <p>
+                  Create a routine to run an agent on a schedule or a Macro
+                  event.
                 </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => props.onCreate()}
-                >
-                  Create a routine
-                </Button>
               </Show>
             </div>
-          </Show>
-        </div>
-      </section>
+          </div>
+        </Show>
+      </div>
     </div>
   );
 }

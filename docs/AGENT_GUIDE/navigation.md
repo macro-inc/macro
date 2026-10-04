@@ -446,11 +446,15 @@ the static highlight.
 ## Routines
 
 Open **Agents → Routines** for your routines. On the legacy
-or touch Agents screen, use the **Routines** button above the list. Search by
-routine name or agent. **History** opens that routine's Run History
-tab, including when its Settings tab is already open.
+or touch Agents screen, use the **Routines** button above the list. Routines use
+full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**
+columns. The search field sits below the top bar, as in Projects; search by name,
+creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
+to the right of search. Click a row to open its settings in the same pane. Toggle
+the **Enabled** checkbox property directly in the list to pause or resume it.
+The history button at the end of each row opens that routine's **Run History** tab.
 
-**Create → Routine** (U) and **New Routine** open the same popover host as task
+**Create → Routine** (U) and **Create Routine** open the same popover host as task
 and project creation. Enter a name and instructions, then choose a model or agent
 with the first property chip below the prompt. **Add trigger** follows it; each
 saved trigger becomes a chip, with another **Add trigger** always at the end.

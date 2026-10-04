@@ -207,6 +207,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search agent chats',
+      condition: () => props.activePage !== 'routines',
       run: () => {
         openSearch();
         return true;
