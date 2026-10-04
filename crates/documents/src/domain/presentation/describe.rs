@@ -1,8 +1,11 @@
 //! A compact, model-readable description of a presentation: every slide's
-//! shapes with their ids, kinds, positions, text, and tables.
+//! shapes with their ids, kinds, positions, text, tables, and animations.
 
 use pptx_engine::Presentation;
-use pptx_engine::inspect::{ChartOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline};
+use pptx_engine::edit::{AnimationClass, AnimationRepeat, AnimationStart, RepeatUntil};
+use pptx_engine::inspect::{
+    AnimationOutline, ChartOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline,
+};
 use std::fmt::Write as _;
 
 /// Longest description returned; ask for specific slides beyond this.
@@ -39,7 +42,56 @@ fn kind_name(kind: ShapeKindName) -> &'static str {
     }
 }
 
-fn shape(out: &mut String, s: &ShapeOutline, depth: usize) {
+/// One animation, as `setAnimations` names it: `animation 1: entrance flyIn
+/// left, after previous, delay 250 ms, 500 ms` (the number is its playback index).
+fn animation_line(out: &mut String, pad: &str, index: usize, a: &AnimationOutline) {
+    let class = match a.class {
+        AnimationClass::Entrance => "entrance",
+        AnimationClass::Emphasis => "emphasis",
+        AnimationClass::Exit => "exit",
+        AnimationClass::Path => "path",
+        AnimationClass::Media => "media",
+        AnimationClass::Other => "other",
+    };
+    let mut what = if a.effect == class {
+        a.effect.clone()
+    } else {
+        format!("{class} {}", a.effect)
+    };
+    if let Some(d) = &a.direction {
+        let _ = write!(what, " {d}");
+    }
+    if let Some(p) = a.paragraph {
+        let _ = write!(what, " ¶{p}");
+    }
+    let start = match a.start {
+        AnimationStart::OnClick => "on click",
+        AnimationStart::WithPrevious => "with previous",
+        AnimationStart::AfterPrevious => "after previous",
+    };
+    let mut timing = String::new();
+    if a.delay_ms > 0 {
+        let _ = write!(timing, ", delay {} ms", a.delay_ms);
+    }
+    if a.duration_ms > 0 {
+        let _ = write!(timing, ", {} ms", a.duration_ms);
+    }
+    match a.repeat {
+        Some(AnimationRepeat::Times(n)) => {
+            let _ = write!(timing, ", plays {n} times");
+        }
+        Some(AnimationRepeat::Until(RepeatUntil::UntilNextClick)) => {
+            timing.push_str(", repeats until next click");
+        }
+        Some(AnimationRepeat::Until(RepeatUntil::UntilEndOfSlide)) => {
+            timing.push_str(", repeats until slide end");
+        }
+        None => {}
+    }
+    let _ = writeln!(out, "{pad}  animation {index}: {what}, {start}{timing}");
+}
+
+fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[AnimationOutline]) {
     let pad = "  ".repeat(depth);
     let placeholder = s
         .placeholder
@@ -115,8 +167,13 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize) {
     if let Some(chart) = &s.chart {
         chart_lines(out, chart, &pad);
     }
+    for (i, a) in animations.iter().enumerate() {
+        if a.shape_id == s.id {
+            animation_line(out, &pad, i, a);
+        }
+    }
     for child in &s.children {
-        shape(out, child, depth + 1);
+        shape(out, child, depth + 1, animations);
     }
 }
 
@@ -236,7 +293,7 @@ fn slide(out: &mut String, s: &SlideOutline) {
         let _ = writeln!(out, "  (no shapes)");
     }
     for sh in &s.shapes {
-        shape(out, sh, 1);
+        shape(out, sh, 1, &s.animations);
     }
     if let Some(notes) = &s.notes {
         let _ = writeln!(out, "  speaker notes: {}", quote(notes));

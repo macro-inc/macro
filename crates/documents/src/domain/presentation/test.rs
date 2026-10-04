@@ -150,6 +150,39 @@ async fn edit_saves_one_new_version_and_describes_the_change() {
 }
 
 #[tokio::test]
+async fn animations_are_edited_and_described() {
+    let files = MemoryFiles::with(DECK);
+    let service = PresentationService::new(files.clone());
+    let (slide, shape) = first_text_shape(DECK);
+    let fly_in = serde_json::from_value(serde_json::json!({
+        "shapeId": shape, "class": "entrance", "effect": "flyIn",
+        "direction": "left", "delayMs": 250
+    }))
+    .unwrap();
+    let outcome = service
+        .edit(
+            receipt(AccessLevel::Edit),
+            &[EditOp::SetAnimations {
+                slide,
+                animations: vec![fly_in],
+            }],
+        )
+        .await
+        .unwrap();
+    let line = "animation 0: entrance flyIn left, on click, delay 250 ms, 500 ms";
+    assert!(
+        outcome.changed_slides.contains(line),
+        "{}",
+        outcome.changed_slides
+    );
+    let text = service
+        .read(receipt(AccessLevel::View), Some(&[1]))
+        .await
+        .unwrap();
+    assert!(text.contains(line), "{text}");
+}
+
+#[tokio::test]
 async fn rejected_batches_save_nothing() {
     let files = MemoryFiles::with(DECK);
     let service = PresentationService::new(files.clone());

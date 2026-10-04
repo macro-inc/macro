@@ -16,6 +16,10 @@ fn presentation_tools_have_valid_model_schemas() {
         "addSlide",
         "setCellText",
         "setNotes",
+        "setAnimations",
+        "addAnimation",
+        "removeAnimations",
+        "untilNextClick",
     ] {
         assert!(schema.contains(&format!("\"{op}\"")), "{op} missing");
     }
