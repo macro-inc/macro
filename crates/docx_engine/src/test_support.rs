@@ -26,7 +26,7 @@ pub fn fonts() -> &'static FontDb {
 }
 
 /// The namespaces test documents declare.
-pub const NS: &str = r#"xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml""#;
+pub const NS: &str = r#"xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:v="urn:schemas-microsoft-com:vml""#;
 
 /// Parts of a test document besides the body.
 #[derive(Default)]
@@ -134,4 +134,20 @@ pub fn docx(body: &str, parts: &Parts<'_>) -> Vec<u8> {
         .expect("zip entry");
     }
     w.finish().expect("zip")
+}
+
+/// A paragraph anchoring a 200x100pt shape positioned `from` at (x, y)
+/// points, holding the text `text` when given.
+pub fn shape_paragraph(from: &str, x: i64, y: i64, text: Option<&str>) -> String {
+    const EMU: i64 = 12_700;
+    let txbx = text.map_or(String::new(), |t| {
+        format!("<wps:txbx><w:txbxContent><w:p><w:r><w:t>{t}</w:t></w:r></w:p></w:txbxContent></wps:txbx>")
+    });
+    format!(
+        r#"<w:p><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="{from}"><wp:posOffset>{}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="{from}"><wp:posOffset>{}</wp:posOffset></wp:positionV><wp:extent cx="{}" cy="{}"/><wp:wrapNone/><wp:docPr id="1" name="Box"/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:wsp><wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></wps:spPr>{txbx}<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>"#,
+        x * EMU,
+        y * EMU,
+        200 * EMU,
+        100 * EMU
+    )
 }
