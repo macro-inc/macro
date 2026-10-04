@@ -224,7 +224,9 @@ function configureSheets(model: Model, names: string[]) {
     model.renameSheet(index, names[index]);
 }
 
-const SCIENTIFIC_FORMAT = '0.###############E+00';
+/** Fifteen significant digits, as Excel keeps. IronCalc truncates a sixteenth
+ * digit instead of rounding it, which read 979 as 978.999999999999. */
+const SCIENTIFIC_FORMAT = '0.##############E+00';
 /** Output of SCIENTIFIC_FORMAT; other numeric displays carry an engine format. */
 const scientificDisplay = /^-?\d(?:\.\d*)?E[+-]\d+$/;
 const constantDefinition =

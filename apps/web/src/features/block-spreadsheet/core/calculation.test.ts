@@ -195,6 +195,25 @@ describe('spreadsheet calculation with IronCalc', () => {
     expect(result.A8.display).toBe('0.00');
   });
 
+  it('reads results at Excel’s fifteen significant digits', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: '=979',
+        A2: '=9104+3',
+        A3: '=0.1+0.2',
+        A4: '=1/3',
+        A5: '=-9905',
+        A6: '=2^60',
+      })
+    );
+    expect(result.A1).toEqual({ number: 979, display: '979' });
+    expect(result.A2).toEqual({ number: 9107, display: '9107' });
+    expect(result.A3.number).toBe(0.3);
+    expect(result.A4.number).toBe(0.333333333333333);
+    expect(result.A5.number).toBe(-9905);
+    expect(result.A6.number).toBe(1.15292150460685e18);
+  });
+
   it('shows typed dates and date arithmetic as dates without an explicit format', () => {
     const result = calculator.calculate({
       A1: { value: '9/28/2026' },
