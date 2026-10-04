@@ -22,7 +22,10 @@ export type CalculationSheetPatch = {
   id: string;
   name: string;
   rowCount: number;
-  metadata?: Pick<WorkbookSheetMetadata, 'definedNames' | 'arrayFormulas'>;
+  metadata?: Pick<
+    WorkbookSheetMetadata,
+    'definedNames' | 'arrayFormulas' | 'hiddenRows'
+  >;
   /** Every input, replacing the worker's copy of the sheet. */
   cells?: CalculationCells;
   /** Changed inputs; null removes a cell. */

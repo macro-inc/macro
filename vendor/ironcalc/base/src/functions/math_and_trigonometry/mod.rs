@@ -6,6 +6,9 @@ mod matrix;
 mod mmult;
 mod multinomial;
 mod random;
+// MACRO
+#[cfg(target_arch = "wasm32")]
+pub use random::set_random_seed;
 mod sequence;
 mod seriessum;
 mod sum;

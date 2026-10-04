@@ -287,7 +287,8 @@ fn result_is_not_equal_to_string(calc_result: &CalcResult, target: &str) -> bool
             }
             false
         }
-        _ => false,
+        // MACRO: numbers, booleans and blanks are not that text either.
+        _ => true,
     }
 }
 

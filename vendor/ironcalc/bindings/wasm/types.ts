@@ -451,6 +451,23 @@ export type IconSetType =
   | "Symbols3Uncircled"
   | "Flags3";
 
+/** MACRO: one cell's conditional formatting, from getConditionalFormattingOverlay.
+ *  Colors are #RRGGBB; absent fields leave the cell's own style. */
+export interface CfOverlay {
+  row: number;
+  column: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  color?: string;
+  fill?: string;
+  num_fmt?: string;
+  data_bar?: CfDataBar;
+  icon?: CfIcon;
+  rating?: CfRating;
+}
+
 export interface CfIcon {
   icon: Icon;
   color: Color;

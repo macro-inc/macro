@@ -176,12 +176,18 @@ impl<'a> Model<'a> {
 /// Returns the index of the matching element or the largest element smaller
 /// than `target`. Returns `-2` if `target` is smaller than every element.
 pub(crate) fn binary_search_on_array(target: &CalcResult, array: &[CalcResult]) -> i32 {
+    // MACRO: Excel compares the lookup value only with values of its own
+    // type, numbers with numbers and text with text: LOOKUP("", numbers) is
+    // #N/A and LOOKUP(9.99E+307, A:A) finds the last number in the column.
+    let same: Vec<usize> = (0..array.len())
+        .filter(|&index| same_type(&array[index], target))
+        .collect();
     // We apply binary search leftmost for value in the array
     let mut l = 0;
-    let mut r = array.len();
+    let mut r = same.len();
     while l < r {
         let m = (l + r) / 2;
-        match compare_values(&array[m], target) {
+        match compare_values(&array[same[m]], target) {
             -1 => {
                 l = m + 1;
             }
@@ -189,7 +195,7 @@ pub(crate) fn binary_search_on_array(target: &CalcResult, array: &[CalcResult]) 
                 r = m;
             }
             _ => {
-                return m as i32;
+                return same[m] as i32;
             }
         }
     }
@@ -198,5 +204,15 @@ pub(crate) fn binary_search_on_array(target: &CalcResult, array: &[CalcResult]) 
         return -2;
     }
     // Now l points to the leftmost element
-    (l - 1) as i32
+    same[l - 1] as i32
+}
+
+/// MACRO: whether an approximate lookup compares `value` with `target`.
+fn same_type(value: &CalcResult, target: &CalcResult) -> bool {
+    matches!(
+        (value, target),
+        (CalcResult::Number(_), CalcResult::Number(_))
+            | (CalcResult::String(_), CalcResult::String(_))
+            | (CalcResult::Boolean(_), CalcResult::Boolean(_))
+    )
 }

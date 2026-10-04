@@ -50,6 +50,31 @@ pub fn quote_name(name: &str) -> String {
     quote_name_ic(name)
 }
 
+/// MACRO: fixes the time NOW and TODAY read, in milliseconds since January 1,
+/// 1970, for every model; `undefined` returns to the system clock.
+#[wasm_bindgen(js_name = "setFixedTime")]
+pub fn set_fixed_time(milliseconds: Option<f64>) {
+    ironcalc_base::set_fixed_time(milliseconds.map(|milliseconds| milliseconds as i64));
+}
+
+/// MACRO: makes RAND, RANDBETWEEN and RANDARRAY repeat the sequence of `seed`
+/// in every model; `undefined` returns to `Math.random`.
+#[wasm_bindgen(js_name = "setRandomSeed")]
+pub fn set_random_seed(seed: Option<f64>) {
+    ironcalc_base::set_random_seed(seed.map(|seed| seed as u64));
+}
+
+/// MACRO: the icons and colors of an Excel icon set such as `3Arrows` or
+/// `3TrafficLights1`, lowest bucket first; `null` for sets it does not know.
+#[wasm_bindgen(
+    js_name = "getIconSetIcons",
+    unchecked_return_type = "[Icon, Color][] | null"
+)]
+pub fn get_icon_set_icons(name: &str) -> Result<JsValue, JsError> {
+    serde_wasm_bindgen::to_value(&ironcalc_base::cf_types::icon_set_icons(name))
+        .map_err(|e| to_js_error(e.to_string()))
+}
+
 /// Gets all timezones
 #[wasm_bindgen(js_name = "getAllTimezones")]
 pub fn get_all_timezones() -> Vec<String> {
@@ -1214,6 +1239,17 @@ impl Model {
             .get_conditional_formatting_list(sheet)
             .map_err(|e| to_js_error(e.to_string()))?;
         serde_wasm_bindgen::to_value(&list).map_err(|e| to_js_error(e.to_string()))
+    }
+
+    /// MACRO: the conditional formatting of every cell of `sheet` that a rule
+    /// matched in the last evaluation, in one call.
+    #[wasm_bindgen(
+        js_name = "getConditionalFormattingOverlay",
+        unchecked_return_type = "CfOverlay[]"
+    )]
+    pub fn get_conditional_formatting_overlay(&self, sheet: u32) -> Result<JsValue, JsError> {
+        let overlay = self.model.get_conditional_formatting_overlay(sheet);
+        serde_wasm_bindgen::to_value(&overlay).map_err(|e| to_js_error(e.to_string()))
     }
 
     #[wasm_bindgen(js_name = "addConditionalFormatting")]

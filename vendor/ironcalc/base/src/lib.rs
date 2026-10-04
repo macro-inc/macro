@@ -74,6 +74,13 @@ pub mod mock_time;
 pub use locale::get_supported_locales;
 pub use merged_cells::MergeStructure;
 pub use model::get_milliseconds_since_epoch;
+// MACRO
+#[cfg(not(any(test, feature = "mock_time")))]
+#[cfg(target_arch = "wasm32")]
+pub use model::set_fixed_time;
+// MACRO
+#[cfg(target_arch = "wasm32")]
+pub use functions::set_random_seed;
 pub use model::FmtSettings;
 pub use model::Model;
 pub use user_model::BorderArea;

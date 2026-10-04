@@ -67,7 +67,15 @@ fn text_num_arg(node: &ArrayNode) -> Result<f64, Error> {
         ArrayNode::Number(v) => Ok(*v),
         ArrayNode::Empty => Ok(0.0),
         ArrayNode::Error(e) => Err(e.clone()),
-        ArrayNode::Boolean(_) | ArrayNode::String(_) => Err(Error::VALUE),
+        // MACRO: booleans and text that reads as a number are numbers here,
+        // as in Excel: LEFT("abc", "2") is "ab".
+        ArrayNode::Boolean(b) => Ok(if *b { 1.0 } else { 0.0 }),
+        ArrayNode::String(s) => s
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|n| n.is_finite())
+            .ok_or(Error::VALUE),
     }
 }
 
@@ -358,7 +366,22 @@ impl<'a> Model<'a> {
                         }
                     }
                 }
-                CalcResult::Array(_) | CalcResult::Lambda(_) => {
+                // MACRO: the elements of a computed array, e.g. CONCAT(IF(A1:A9>0,B1:B9,"")).
+                CalcResult::Array(array) => {
+                    for value in array.iter().flatten() {
+                        match value {
+                            ArrayNode::String(value) => result.push_str(value),
+                            ArrayNode::Number(value) => result.push_str(&format!("{value}")),
+                            ArrayNode::Boolean(true) => result.push_str("TRUE"),
+                            ArrayNode::Boolean(false) => result.push_str("FALSE"),
+                            ArrayNode::Empty => {}
+                            ArrayNode::Error(error) => {
+                                return CalcResult::new_error(error.clone(), cell, String::new())
+                            }
+                        }
+                    }
+                }
+                CalcResult::Lambda(_) => {
                     return CalcResult::Error {
                         error: Error::NIMPL,
                         origin: cell,
@@ -1081,7 +1104,23 @@ impl<'a> Model<'a> {
                     }
                 }
                 CalcResult::EmptyArg => {}
-                CalcResult::Array(_) | CalcResult::Lambda(_) => {
+                // MACRO: the elements of a computed array, e.g.
+                // TEXTJOIN(",",TRUE,IF(A1:A9="x",B1:B9,"")).
+                CalcResult::Array(array) => {
+                    for value in array.iter().flatten() {
+                        match value {
+                            ArrayNode::String(value) => values.push(value.clone()),
+                            ArrayNode::Number(value) => values.push(format!("{value}")),
+                            ArrayNode::Boolean(true) => values.push("TRUE".to_string()),
+                            ArrayNode::Boolean(false) => values.push("FALSE".to_string()),
+                            ArrayNode::Empty => values.push(String::new()),
+                            ArrayNode::Error(error) => {
+                                return CalcResult::new_error(error.clone(), cell, String::new())
+                            }
+                        }
+                    }
+                }
+                CalcResult::Lambda(_) => {
                     return CalcResult::Error {
                         error: Error::NIMPL,
                         origin: cell,
@@ -1089,6 +1128,10 @@ impl<'a> Model<'a> {
                     }
                 }
             };
+        }
+        // MACRO: Excel's ignore_empty skips empty strings as well as blank cells.
+        if ignore_empty {
+            values.retain(|value| !value.is_empty());
         }
         let result = values.join(&delimiter);
         CalcResult::String(result)

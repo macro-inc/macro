@@ -423,13 +423,16 @@ describe('Excel workbook files', () => {
       hyperlink: 'https://macro.com',
     };
     sheet.getCell('A6').value = '=SUM(A1:A2)';
-    for (let row = 1; row <= 6; row++) sheet.getCell(`A${row}`).numFmt = '@';
+    sheet.getCell('A7').value = { formula: 'TEXT(A1,"0.0")', result: '12.0' };
+    for (let row = 1; row <= 7; row++) sheet.getCell(`A${row}`).numFmt = '@';
     const imported = await decodeXlsx(await file(workbook));
     const cells = imported.sheets[0].cells;
     expect(cells.A1).toMatchObject({ value: '12' });
     expect(cells.A2).toMatchObject({ value: '=A1*2' });
     expect(cells.A3).toMatchObject({ value: 'TRUE' });
-    for (const address of ['A1', 'A2', 'A3'])
+    // A formula with a text result is still a formula.
+    expect(cells.A7).toMatchObject({ value: '=TEXT(A1,"0.0")' });
+    for (const address of ['A1', 'A2', 'A3', 'A7'])
       expect(cells[address].format).toBeUndefined();
     expect(cells.A4).toMatchObject({ value: 'literal', format: 'text' });
     expect(cells.A5).toMatchObject({ value: '=literal', format: 'text' });

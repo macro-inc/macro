@@ -502,6 +502,21 @@ impl<'a> Model<'a> {
                     }
                 }
                 error @ CalcResult::Error { .. } => return error,
+                // MACRO: the numbers of a computed array, e.g. PRODUCT(IF(A1:A9>0,A1:A9,1)).
+                CalcResult::Array(array) => {
+                    for value in array.iter().flatten() {
+                        match value {
+                            ArrayNode::Number(value) => {
+                                seen_value = true;
+                                result *= value;
+                            }
+                            ArrayNode::Error(error) => {
+                                return CalcResult::new_error(error.clone(), cell, String::new())
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 calc_result => {
                     seen_value = true;
                     let cast_result = self.cast_to_number(calc_result, cell);

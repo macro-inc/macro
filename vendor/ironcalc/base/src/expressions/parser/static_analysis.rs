@@ -382,12 +382,139 @@ pub(crate) fn run_static_analysis_on_node(node: &Node) -> StaticResult {
         }
         Node::NamedVariableKind { .. } => StaticResult::Scalar,
         Node::TableNameKind(_) => StaticResult::Unknown,
-        Node::FunctionKind { kind, args } => static_analysis_on_function(kind, args),
+        Node::FunctionKind { kind, args } => lifted_static_result(kind, args)
+            .unwrap_or_else(|| static_analysis_on_function(kind, args)),
         Node::ImplicitIntersection { .. } => StaticResult::Scalar,
         Node::SpillRangeOperator { .. } => StaticResult::Unknown,
         Node::LambdaDefKind { .. } => StaticResult::Unknown,
         Node::LambdaCallKind { .. } => StaticResult::Unknown,
     }
+}
+
+/// MACRO: parameters evaluated element by element when they receive a range
+/// or an array (see `functions/lift.rs`): every single-value parameter, except
+/// in functions that evaluate arguments lazily, pass references through, or
+/// already build arrays themselves.
+pub(crate) fn lifted_parameters(kind: &Function, arg_count: usize) -> Option<Vec<bool>> {
+    use Function::*;
+    if matches!(
+        kind,
+        If | Ifs
+            | Iferror
+            | Ifna
+            | Switch
+            | Choose
+            | Let
+            | Lambda
+            | Map
+            | Reduce
+            | Scan
+            | Bycol
+            | Byrow
+            | Makearray
+            | Isomitted
+            | Type
+            | Isref
+            | Isformula
+            | Formulatext
+            | Cell
+            | Sheet
+            | Sheets
+            | Areas
+            | Rows
+            | Columns
+            | Row
+            | Column
+            | Offset
+            | Indirect
+            | Trimrange
+            | Sequence
+            | Randarray
+            | Unique
+            | Sort
+            | Sortby
+            | Filter
+            | Transpose
+            | Textsplit
+            | Tocol
+            | Torow
+            | Wrapcols
+            | Wraprows
+            | Take
+            | Drop
+            | Choosecols
+            | Chooserows
+            | Expand
+            | Hstack
+            | Vstack
+            | Frequency
+            | Mmult
+            | Minverse
+            | Munit
+            | Linest
+            | Logest
+            | Trend
+            | Growth
+            | Arraytotext
+            | Valuetotext
+            | Hyperlink
+    ) {
+        return None;
+    }
+    // Some signatures have a fixed length, whatever the number of arguments.
+    let signature = get_function_args_signature(kind, arg_count);
+    let mut lifted: Vec<bool> = (0..arg_count)
+        .map(|index| matches!(signature.get(index), Some(Signature::Scalar)))
+        .collect();
+    // The holidays of WORKDAY and WORKDAY.INTL are a list.
+    match kind {
+        Workday if arg_count > 2 => lifted[2] = false,
+        WorkdayIntl if arg_count > 3 => lifted[3] = false,
+        _ => {}
+    }
+    // The signatures mark lookup values as vectors for legacy intersection,
+    // yet Excel looks up each value of an array: MATCH(A1:A9, B:B, 0).
+    if matches!(kind, Match | Xmatch | Vlookup | Hlookup | Lookup | Xlookup) && arg_count > 0 {
+        lifted[0] = true;
+    }
+    // XLOOKUP returns its if_not_found argument whole.
+    if matches!(kind, Xlookup) && arg_count > 3 {
+        lifted[3] = false;
+    }
+    // Each criterion of the *IFS functions: COUNTIFS(A:A, {"x","y"}).
+    match kind {
+        Countifs => (1..arg_count).step_by(2).for_each(|i| lifted[i] = true),
+        Sumifs | Averageifs | Maxifs | Minifs => {
+            (2..arg_count).step_by(2).for_each(|i| lifted[i] = true)
+        }
+        _ => {}
+    }
+    lifted.contains(&true).then_some(lifted)
+}
+
+/// MACRO: the shape of a call whose lifted parameters receive ranges or
+/// arrays: the broadcast of those arguments, as for `scalar_arguments`.
+fn lifted_static_result(kind: &Function, args: &[Node]) -> Option<StaticResult> {
+    let lifted = lifted_parameters(kind, args.len())?;
+    let mut rows = 0;
+    let mut columns = 0;
+    for (arg, lifted) in args.iter().zip(lifted) {
+        if !lifted {
+            continue;
+        }
+        match run_static_analysis_on_node(arg) {
+            StaticResult::Scalar => {}
+            StaticResult::Array(a, b) | StaticResult::Range(a, b) => {
+                rows = rows.max(a);
+                columns = columns.max(b);
+            }
+            StaticResult::Unknown => return Some(StaticResult::Unknown),
+        }
+    }
+    if rows == 0 && columns == 0 {
+        return None;
+    }
+    Some(StaticResult::Array(rows, columns))
 }
 
 // If all the arguments are scalars the function will return a scalar
@@ -416,6 +543,21 @@ fn scalar_arguments(args: &[Node]) -> StaticResult {
 // We only care if the function can return a range or not
 fn not_implemented(_args: &[Node]) -> StaticResult {
     StaticResult::Scalar
+}
+
+/// MACRO: XLOOKUP returns a whole row (or column) of a return array with
+/// several rows and columns, which spills. Range sizes are differences here:
+/// `B1:B9` is `Range(8, 0)`.
+fn static_analysis_xlookup(args: &[Node]) -> StaticResult {
+    match args.get(2).map(run_static_analysis_on_node) {
+        None | Some(StaticResult::Scalar) => StaticResult::Scalar,
+        Some(StaticResult::Range(rows, columns) | StaticResult::Array(rows, columns))
+            if rows == 0 || columns == 0 =>
+        {
+            StaticResult::Scalar
+        }
+        Some(_) => StaticResult::Unknown,
+    }
 }
 
 /// ROW and COLUMN give a single number for a single cell, and when the
@@ -1315,6 +1457,15 @@ fn get_function_args_signature(kind: &Function, arg_count: usize) -> Vec<Signatu
         Function::Delta => args_signature_scalars(arg_count, 1, 1),
         Function::Gestep => args_signature_scalars(arg_count, 1, 1),
         Function::Subtotal => args_signature_npv(arg_count),
+        // MACRO: the options and function number are single values.
+        Function::Aggregate => {
+            let mut result = vec![Signature::Vector; arg_count];
+            result
+                .iter_mut()
+                .take(2)
+                .for_each(|s| *s = Signature::Scalar);
+            result
+        }
         Function::Rand => args_signature_no_args(arg_count),
         Function::Randbetween => args_signature_scalars(arg_count, 2, 0),
         Function::Formulatext => args_signature_scalars(arg_count, 1, 0),
@@ -1776,7 +1927,7 @@ fn static_analysis_on_function(kind: &Function, args: &[Node]) -> StaticResult {
         Function::Vstack => StaticResult::Unknown,
         Function::Wrapcols => StaticResult::Unknown,
         Function::Wraprows => StaticResult::Unknown,
-        Function::Xlookup => not_implemented(args),
+        Function::Xlookup => static_analysis_xlookup(args), // MACRO
         Function::Xmatch => not_implemented(args),
         Function::Trimrange => StaticResult::Unknown,
         Function::Sort => StaticResult::Unknown,
@@ -1995,6 +2146,7 @@ fn static_analysis_on_function(kind: &Function, args: &[Node]) -> StaticResult {
         Function::Delta => not_implemented(args),
         Function::Gestep => not_implemented(args),
         Function::Subtotal => not_implemented(args),
+        Function::Aggregate => StaticResult::Scalar, // MACRO
         Function::Rand => not_implemented(args),
         Function::Randbetween => scalar_arguments(args),
         Function::Eomonth => scalar_arguments(args),

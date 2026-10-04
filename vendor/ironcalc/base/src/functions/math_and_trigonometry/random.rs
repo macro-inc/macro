@@ -13,7 +13,40 @@ fn random() -> f64 {
 #[cfg(target_arch = "wasm32")]
 fn random() -> f64 {
     use js_sys::Math;
+    // MACRO: a repeatable sequence when the host set a seed.
+    if let Some(value) = SEED.with(|seed| {
+        seed.get().map(|state| {
+            let (next, value) = split_mix(state);
+            seed.set(Some(next));
+            value
+        })
+    }) {
+        return value;
+    }
     Math::random()
+}
+
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static SEED: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// MACRO: makes RAND, RANDBETWEEN and RANDARRAY repeat the same sequence
+/// from `seed`; `None` returns to `Math.random`.
+#[cfg(target_arch = "wasm32")]
+pub fn set_random_seed(seed: Option<u64>) {
+    SEED.with(|state| state.set(seed));
+}
+
+/// SplitMix64: the next state and a number in [0, 1).
+#[cfg(target_arch = "wasm32")]
+fn split_mix(state: u64) -> (u64, f64) {
+    let state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^= z >> 31;
+    (state, (z >> 11) as f64 / (1u64 << 53) as f64)
 }
 
 impl<'a> Model<'a> {

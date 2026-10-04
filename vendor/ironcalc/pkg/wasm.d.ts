@@ -454,6 +454,23 @@ export type IconSetType =
   | "Symbols3Uncircled"
   | "Flags3";
 
+/** MACRO: one cell's conditional formatting, from getConditionalFormattingOverlay.
+ *  Colors are #RRGGBB; absent fields leave the cell's own style. */
+export interface CfOverlay {
+  row: number;
+  column: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  color?: string;
+  fill?: string;
+  num_fmt?: string;
+  data_bar?: CfDataBar;
+  icon?: CfIcon;
+  rating?: CfRating;
+}
+
 export interface CfIcon {
   icon: Icon;
   color: Color;
@@ -643,6 +660,11 @@ export class Model {
     getColumnWidth(sheet: number, column: number): number;
     getColumnsWithData(sheet: number, row: number): Int32Array;
     getConditionalFormattingList(sheet: number): ConditionalFormattingView[];
+    /**
+     * MACRO: the conditional formatting of every cell of `sheet` that a rule
+     * matched in the last evaluation, in one call.
+     */
+    getConditionalFormattingOverlay(sheet: number): CfOverlay[];
     getDefinedNameList(): DefinedName[];
     getDxfForConditionalFormatting(sheet: number, index: number): Dxf | null;
     getFirstNonEmptyInRowAfterColumn(sheet: number, row: number, column: number): number | undefined;
@@ -797,6 +819,12 @@ export function columnNumberFromName(column: string): number;
 export function getAllTimezones(): string[];
 
 /**
+ * MACRO: the icons and colors of an Excel icon set such as `3Arrows` or
+ * `3TrafficLights1`, lowest bucket first; `null` for sets it does not know.
+ */
+export function getIconSetIcons(name: string): [Icon, Color][] | null;
+
+/**
  * Gets all supported locales
  */
 export function getSupportedLocales(): string[];
@@ -819,6 +847,18 @@ export function hexWithTintToRgb(hex: string, tint: number): string;
 
 export function quoteName(name: string): string;
 
+/**
+ * MACRO: fixes the time NOW and TODAY read, in milliseconds since January 1,
+ * 1970, for every model; `undefined` returns to the system clock.
+ */
+export function setFixedTime(milliseconds?: number | null): void;
+
+/**
+ * MACRO: makes RAND, RANDBETWEEN and RANDARRAY repeat the sequence of `seed`
+ * in every model; `undefined` returns to `Math.random`.
+ */
+export function setRandomSeed(seed?: number | null): void;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -827,6 +867,7 @@ export interface InitOutput {
     readonly columnNameFromNumber: (a: number) => [number, number, number, number];
     readonly columnNumberFromName: (a: number, b: number) => [number, number, number];
     readonly getAllTimezones: () => [number, number];
+    readonly getIconSetIcons: (a: number, b: number) => [number, number, number];
     readonly getSupportedLocales: () => [number, number];
     readonly getThemeList: () => any;
     readonly getTokens: (a: number, b: number) => [number, number, number];
@@ -860,6 +901,7 @@ export interface InitOutput {
     readonly model_getColumnWidth: (a: number, b: number, c: number) => [number, number, number];
     readonly model_getColumnsWithData: (a: number, b: number, c: number) => [number, number, number, number];
     readonly model_getConditionalFormattingList: (a: number, b: number) => [number, number, number];
+    readonly model_getConditionalFormattingOverlay: (a: number, b: number) => [number, number, number];
     readonly model_getDefinedNameList: (a: number) => [number, number, number];
     readonly model_getDxfForConditionalFormatting: (a: number, b: number, c: number) => [number, number, number];
     readonly model_getFirstNonEmptyInRowAfterColumn: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -957,6 +999,8 @@ export interface InitOutput {
     readonly model_updateNamedStyle: (a: number, b: number, c: number, d: number, e: number, f: any, g: any) => [number, number];
     readonly model_updateRangeStyle: (a: number, b: any, c: number, d: number, e: number, f: number) => [number, number];
     readonly quoteName: (a: number, b: number) => [number, number];
+    readonly setFixedTime: (a: number, b: number) => void;
+    readonly setRandomSeed: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

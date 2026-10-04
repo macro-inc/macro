@@ -7,9 +7,9 @@ use crate::{
     calc_result::CalcResult,
     cell::CellValue,
     cf_types::{
-        CfCellResult, CfDataBar, CfIcon, CfRating, CfRule, CfRuleInput, Cfvo, ColorScaleThreshold,
-        ConditionalFormatting, ConditionalFormattingView, ExtendedStyle, Icon, IconThreshold,
-        PeriodType, TextOperator, ValueOperator,
+        CfCellResult, CfDataBar, CfIcon, CfOverlay, CfRating, CfRule, CfRuleInput, Cfvo,
+        ColorScaleThreshold, ConditionalFormatting, ConditionalFormattingView, ExtendedStyle, Icon,
+        IconThreshold, PeriodType, TextOperator, ValueOperator,
     },
     expressions::types::{CellReferenceIndex, CellReferenceRC},
     types::{Color, Dxf},
@@ -1213,6 +1213,96 @@ impl<'a> Model<'a> {
             data_bar,
             rating,
         })
+    }
+
+    /// MACRO: the conditional formatting of every cell of `sheet` that a rule
+    /// matched in the last evaluation, in one call (see `CfOverlay`).
+    pub fn get_conditional_formatting_overlay(&self, sheet: u32) -> Vec<CfOverlay> {
+        let theme = &self.workbook.theme;
+        let rgb = |color: &Color| Some(color.to_rgb(theme)).filter(|c| !c.is_empty());
+        let mut overlays = Vec::new();
+        for (&(cell_sheet, row, column), results) in &self.cf_cache {
+            if cell_sheet != sheet {
+                continue;
+            }
+            let mut overlay = CfOverlay {
+                row,
+                column,
+                ..Default::default()
+            };
+            // Results are in priority order: apply the lowest priority first
+            // so that a higher-priority rule's properties win.
+            for result in results.iter().rev() {
+                match result {
+                    CfCellResult::Dxf(dxf_id) => {
+                        let Some(dxf) = self.workbook.styles.dxfs.get(*dxf_id as usize) else {
+                            continue;
+                        };
+                        if let Some(font) = &dxf.font {
+                            overlay.bold = font.b.or(overlay.bold);
+                            overlay.italic = font.i.or(overlay.italic);
+                            overlay.underline = font.u.or(overlay.underline);
+                            overlay.strike = font.strike.or(overlay.strike);
+                            overlay.color = rgb(&font.color).or(overlay.color.take());
+                        }
+                        if let Some(fill) = &dxf.fill {
+                            overlay.fill = rgb(&fill.color).or(overlay.fill.take());
+                        }
+                        if let Some(num_fmt) = &dxf.num_fmt {
+                            overlay.num_fmt = Some(num_fmt.format_code.clone());
+                        }
+                    }
+                    CfCellResult::ColorScale(color) => {
+                        overlay.fill = rgb(color).or(overlay.fill.take());
+                    }
+                    CfCellResult::DataBar {
+                        positive_color,
+                        negative_color,
+                        is_gradient,
+                        value,
+                        axis_position,
+                        show_value,
+                    } => {
+                        overlay.data_bar = Some(CfDataBar {
+                            positive_color: positive_color.clone(),
+                            negative_color: negative_color.clone(),
+                            is_gradient: *is_gradient,
+                            value: *value,
+                            axis_position: *axis_position,
+                            show_value: *show_value,
+                        });
+                    }
+                    CfCellResult::Icon {
+                        icon,
+                        color,
+                        show_value,
+                    } => {
+                        overlay.icon = Some(CfIcon {
+                            icon: icon.clone(),
+                            color: color.clone(),
+                            show_value: *show_value,
+                        });
+                    }
+                    CfCellResult::Rating {
+                        icon,
+                        count,
+                        max,
+                        color,
+                        show_value,
+                    } => {
+                        overlay.rating = Some(CfRating {
+                            icon: icon.clone(),
+                            count: *count,
+                            max: *max,
+                            color: color.clone(),
+                            show_value: *show_value,
+                        });
+                    }
+                }
+            }
+            overlays.push(overlay);
+        }
+        overlays
     }
 
     // -----------------------------------------------------------------------

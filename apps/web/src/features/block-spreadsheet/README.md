@@ -71,8 +71,8 @@ or arbitrary executable code enter the shared document.
 Limits are 500 cells / about 100 KB per read, 20 scratch formulas, 25 operations /
 2,000 affected cells per edit, a 1 MiB request, and a 4 MiB native snapshot/update limit. Truncated reads explicitly ask
 for narrower ranges. Scratch `INDIRECT` is rejected because its text-built references
-cannot be safely rebased into the private calculation sheets. The existing disabled
-volatile functions and sheet-reference lifecycle guards also apply. Worker requests
+cannot be safely rebased into the private calculation sheets. The existing
+sheet-reference lifecycle guards also apply. Worker requests
 have a 30-second deadline and the Rust client a 45-second network timeout; synchronous
 WASM is subject to the platform CPU limit rather than a preemptive JavaScript timer.
 
@@ -224,10 +224,17 @@ Formula assistance uses a separate lazy worker and IronCalc's own incomplete
 formula parser. Keystrokes coalesce while it starts, and stale responses cannot
 replace current help. The cell editor and formula bar share the same accessible
 listbox, keyboard insertion, and argument hints. The function catalog is adapted
-from [IronCalc commit 8fd0a82](https://github.com/ironcalc/IronCalc/blob/8fd0a82a6e36e49f665df21c725cb67806ec24ee/webapp/IronCalc/src/components/FormulaHelper/functions.json),
-filtered against the pinned 0.8.4 engine and Macro's disabled volatile functions.
-Its MIT notice is in `core/formula-functions.LICENSE`; refresh and verify the
-catalog when upgrading the engine.
+from IronCalc's `webapp/IronCalc/src/components/FormulaHelper/functions.json` at
+the vendored engine's upstream commit (`vendor/ironcalc/upstream.json`), without
+HYPERLINK (Macro shows its text) and with Macro's AGGREGATE entry. Its MIT notice
+is in `core/formula-functions.LICENSE`; refresh and verify the catalog when
+updating the engine.
+
+TODAY and NOW read the viewer's clock and time zone, as Excel reads the
+computer's, and RAND is random on each calculation, so collaborators can see
+different values until an edit recalculates. Workbooks with TODAY or NOW
+recalculate at local midnight. `setCalculationClock` fixes the clock and the
+random sequence for tests; the corpus test fixes it to each file's save time.
 
 Formula point selection keeps the original cell and textarea focused while a
 pointer drag inserts or replaces an A1 reference at the caret. Only the local
@@ -353,7 +360,7 @@ bun run test --config src/features/block-spreadsheet/vitest.config.ts
 ```
 
 Calculation tests initialize the actual WASM engine and cover formulas, precision,
-errors, cycles, source ordering, deletion, array spills, and volatile functions.
+errors, cycles, source ordering, deletion, array spills, and the clock functions.
 The real-world XLSX corpus test takes about two minutes.
 Controller tests exercise keyboard selection, draft commit/cancel, atomic paste
 validation, clipboard round trips, formatting, and read-only behavior. Document

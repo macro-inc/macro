@@ -201,6 +201,24 @@ impl<'a> Model<'a> {
     /// and in-formula array literals. Used by the vector-based lookup functions
     /// (MATCH, LOOKUP). Returns the appropriate error `CalcResult` when the value
     /// is not a vector or not a valid source.
+    /// MACRO: a lookup range without the empty rows (columns) of a whole
+    /// column (row) past the used area, which never match: MATCH(x, B:B, 0)
+    /// would otherwise read 1,048,576 cells.
+    fn used_lookup_range(
+        &mut self,
+        left: CellReferenceIndex,
+        right: CellReferenceIndex,
+    ) -> CellReferenceIndex {
+        match self.clip_to_used_area(left.sheet, left.row, left.column, right.row, right.column) {
+            Ok((row, column)) => CellReferenceIndex {
+                sheet: right.sheet,
+                row: row.max(left.row),
+                column: column.max(left.column),
+            },
+            Err(_) => right,
+        }
+    }
+
     fn as_vector(
         &mut self,
         value: CalcResult,
@@ -219,6 +237,7 @@ impl<'a> Model<'a> {
                         message: "Argument must be a vector".to_string(),
                     });
                 };
+                let right = self.used_lookup_range(left, right);
                 Ok(self.prepare_array(&left, &right, is_row_vector))
             }
             CalcResult::Array(array) => {
@@ -251,6 +270,21 @@ impl<'a> Model<'a> {
     // At the moment IronCalc does not support references with multiple areas,
     // so area_num = 1 (or missing).
     pub(crate) fn fn_index(&mut self, args: &[Node], cell: CellReferenceIndex) -> CalcResult {
+        // MACRO: the reference is found by `index_reference`, which gives a
+        // reference to a single cell as well; here that is its value.
+        match self.index_reference(args, cell) {
+            CalcResult::Range { left, right } if left == right => self.evaluate_cell(left),
+            result => result,
+        }
+    }
+
+    /// MACRO: INDEX in a reference context, such as either side of the range
+    /// operator: `A1:INDEX(A:A, 9)`.
+    pub(crate) fn index_reference(
+        &mut self,
+        args: &[Node],
+        cell: CellReferenceIndex,
+    ) -> CalcResult {
         if !(2..=4).contains(&args.len()) {
             return CalcResult::new_args_number_error(cell);
         }
@@ -333,13 +367,7 @@ impl<'a> Model<'a> {
                     let c = left.column + col_eff as i32 - 1;
                     (c, c)
                 };
-                if row_start == row_end && col_start == col_end {
-                    self.evaluate_cell(CellReferenceIndex {
-                        sheet: left.sheet,
-                        row: row_start,
-                        column: col_start,
-                    })
-                } else {
+                {
                     CalcResult::Range {
                         left: CellReferenceIndex {
                             sheet: left.sheet,
@@ -508,7 +536,10 @@ impl<'a> Model<'a> {
         };
         let range = self.evaluate_node_in_context(&args[1], cell);
         let table = match range {
-            CalcResult::Range { left, right } => LookupTable::Range { left, right },
+            CalcResult::Range { left, right } => LookupTable::Range {
+                left,
+                right: self.used_lookup_range(left, right),
+            },
             CalcResult::Array(array) => LookupTable::Array(array),
             error @ CalcResult::Error { .. } => return error,
             CalcResult::String(_) => {
@@ -572,7 +603,10 @@ impl<'a> Model<'a> {
         };
         let range = self.evaluate_node_in_context(&args[1], cell);
         let table = match range {
-            CalcResult::Range { left, right } => LookupTable::Range { left, right },
+            CalcResult::Range { left, right } => LookupTable::Range {
+                left,
+                right: self.used_lookup_range(left, right),
+            },
             CalcResult::Array(array) => LookupTable::Array(array),
             error @ CalcResult::Error { .. } => return error,
             CalcResult::String(_) => {

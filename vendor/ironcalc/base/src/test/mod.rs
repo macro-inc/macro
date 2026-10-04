@@ -57,6 +57,7 @@ mod test_gcd_lcm;
 mod test_general;
 mod test_inverted_ranges;
 mod test_issue_623;
+mod test_macro_patches; // MACRO
 mod test_math;
 mod test_merged_cells;
 mod test_metadata;

@@ -97,7 +97,7 @@ describe('real-world XLSX corpus', () => {
       let values: WorkbookCalculation = {};
       if (entry.skipCalculation) summary.calculation = entry.skipCalculation;
       else {
-        values = calculateImported(calculator, imported);
+        values = calculateImported(calculator, imported, bytes);
         const { examples, ...calculation } = calculationFidelity(
           bytes,
           imported,

@@ -21,16 +21,16 @@ fn fn_concatenate() {
 
     model._set("B1", r#"=CONCATENATE(A1, A2, A3, "!")"#);
     model._set("C2", r#"=CONCATENATE(@A1:A3, "!")"#);
-    // FIXME: this should be an array ["Hello!", " my!", "World!"] and spill
-    // Instead we are doing implicit intersection
+    // MACRO: an array, ["Hello!", " my !", "World!"], that spills
     model._set("B2", r#"=CONCATENATE(A1:A3, "!")"#);
     model._set("D3", r#"=CONCAT(A1:A3, "!")"#);
 
     model.evaluate();
 
     assert_eq!(model._get_text("B1"), *"Hello my World!");
-    // FIXME: this is wrong
-    assert_eq!(model._get_text("B2"), *" my !");
+    assert_eq!(model._get_text("B2"), *"Hello!");
+    assert_eq!(model._get_text("B3"), *" my !");
+    assert_eq!(model._get_text("B4"), *"World!");
     assert_eq!(model._get_text("D3"), *"Hello my World!");
     assert_eq!(model._get_text("C2"), *" my !");
 }

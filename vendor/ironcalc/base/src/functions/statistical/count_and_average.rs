@@ -363,6 +363,16 @@ impl<'a> Model<'a> {
                         }
                     }
                 }
+                // MACRO: the numbers of a computed array, e.g. COUNT(1/(A1:A9>0)).
+                CalcResult::Array(array) => {
+                    for row in &array {
+                        for value in row {
+                            if matches!(value, ArrayNode::Number(_)) {
+                                result += 1.0;
+                            }
+                        }
+                    }
+                }
                 _ => {
                     // Ignore everything else
                 }

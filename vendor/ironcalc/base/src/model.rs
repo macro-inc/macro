@@ -37,6 +37,7 @@ use crate::{
 };
 
 use crate::evaluation::{CellKey, Evaluation, FormulaCell, Seen};
+use crate::functions::Function; // MACRO
 use crate::{cf_types::CfCellResult, tz::Tz};
 
 #[cfg(any(test, feature = "mock_time"))]
@@ -67,7 +68,25 @@ pub fn get_milliseconds_since_epoch() -> i64 {
 #[cfg(target_arch = "wasm32")]
 pub fn get_milliseconds_since_epoch() -> i64 {
     use js_sys::Date;
+    // MACRO: a time the host fixed, see `set_fixed_time`.
+    if let Some(milliseconds) = FIXED_TIME.with(std::cell::Cell::get) {
+        return milliseconds;
+    }
     Date::now() as i64
+}
+
+#[cfg(not(any(test, feature = "mock_time")))]
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static FIXED_TIME: std::cell::Cell<Option<i64>> = const { std::cell::Cell::new(None) };
+}
+
+/// MACRO: fixes the time that NOW and TODAY read, in milliseconds since
+/// January 1, 1970; `None` returns to the JavaScript clock.
+#[cfg(not(any(test, feature = "mock_time")))]
+#[cfg(target_arch = "wasm32")]
+pub fn set_fixed_time(milliseconds: Option<i64>) {
+    FIXED_TIME.with(|time| time.set(milliseconds));
 }
 
 // The structure of a cell.
@@ -391,6 +410,15 @@ impl<'a> Model<'a> {
                 // The implicit intersection of a scalar is the scalar itself.
                 other => other,
             },
+            // MACRO: INDEX gives a reference, also to a single cell. Lifted
+            // calls (an array of row numbers) give their array.
+            Node::FunctionKind {
+                kind: Function::Index,
+                args,
+            } => match self.evaluate_lifted_function(&Function::Index, args, cell) {
+                Some(result) => result,
+                None => self.index_reference(args, cell),
+            },
             // A variable holds what it was bound to, a reference included
             Node::NamedVariableKind { .. } => self.variable_value(node, cell),
             // A defined name that stands for a reference is that reference,
@@ -446,6 +474,8 @@ impl<'a> Model<'a> {
         let left_result = self.evaluate_node_with_reference(left, cell);
         let right_result = self.evaluate_node_with_reference(right, cell);
         match (left_result, right_result) {
+            // MACRO: the smallest range that holds both references, which may
+            // be ranges themselves: `A1:INDEX(B:B, 9)` is A1:B9.
             (
                 CalcResult::Range {
                     left: left1,
@@ -455,23 +485,39 @@ impl<'a> Model<'a> {
                     left: left2,
                     right: right2,
                 },
-            ) => {
-                if left1.row == right1.row
-                    && left1.column == right1.column
-                    && left2.row == right2.row
-                    && left2.column == right2.column
-                {
-                    return CalcResult::Range {
-                        left: left1,
-                        right: right2,
-                    };
-                }
-                CalcResult::Error {
-                    error: Error::VALUE,
-                    origin: cell,
-                    message: "Invalid range".to_string(),
+            ) if left1.sheet == right1.sheet
+                && left2.sheet == right2.sheet
+                && left1.sheet == left2.sheet =>
+            {
+                let corners = [left1, right1, left2, right2];
+                let row = |pick: fn(i32, i32) -> i32| {
+                    corners
+                        .iter()
+                        .map(|corner| corner.row)
+                        .reduce(pick)
+                        .unwrap_or(0)
+                };
+                let column = |pick: fn(i32, i32) -> i32| {
+                    corners
+                        .iter()
+                        .map(|corner| corner.column)
+                        .reduce(pick)
+                        .unwrap_or(0)
+                };
+                CalcResult::Range {
+                    left: CellReferenceIndex {
+                        sheet: left1.sheet,
+                        row: row(i32::min),
+                        column: column(i32::min),
+                    },
+                    right: CellReferenceIndex {
+                        sheet: left1.sheet,
+                        row: row(i32::max),
+                        column: column(i32::max),
+                    },
                 }
             }
+            (error @ CalcResult::Error { .. }, _) | (_, error @ CalcResult::Error { .. }) => error,
             _ => CalcResult::Error {
                 error: Error::VALUE,
                 origin: cell,
@@ -1579,10 +1625,25 @@ impl<'a> Model<'a> {
         left: CellReferenceIndex,
         right: CellReferenceIndex,
     ) -> Vec<Vec<ArrayNode>> {
-        let mut result = Vec::new();
+        // MACRO: a whole column (row) is read cell by cell only within the
+        // used area; the empty cells beyond it are put on record at once.
+        let (last_row, last_column) = self
+            .clip_to_used_area(left.sheet, left.row, left.column, right.row, right.column)
+            .unwrap_or((right.row, right.column));
+        let width = (right.column - left.column + 1).max(0) as usize;
+        let mut result = Vec::with_capacity((right.row - left.row + 1).max(0) as usize);
         for r in left.row..=right.row {
-            let mut row_result = Vec::new();
+            let mut row_result = Vec::with_capacity(width);
+            if r > last_row {
+                row_result.resize(width, ArrayNode::Empty);
+                result.push(row_result);
+                continue;
+            }
             for c in left.column..=right.column {
+                if c > last_column {
+                    row_result.push(ArrayNode::Empty);
+                    continue;
+                }
                 let cell_reference = CellReferenceIndex {
                     sheet: left.sheet,
                     row: r,

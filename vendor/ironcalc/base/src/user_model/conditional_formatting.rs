@@ -1,5 +1,5 @@
 use crate::{
-    cf_types::{CfRule, CfRuleInput, ConditionalFormattingView},
+    cf_types::{CfOverlay, CfRule, CfRuleInput, ConditionalFormattingView},
     types::Dxf,
 };
 
@@ -15,6 +15,12 @@ impl<'a> UserModel<'a> {
         sheet: u32,
     ) -> Result<Vec<ConditionalFormattingView>, String> {
         self.model.get_conditional_formatting_list(sheet)
+    }
+
+    /// MACRO: the conditional formatting of every cell of `sheet` that a rule
+    /// matched in the last evaluation.
+    pub fn get_conditional_formatting_overlay(&self, sheet: u32) -> Vec<CfOverlay> {
+        self.model.get_conditional_formatting_overlay(sheet)
     }
 
     /// Returns the differential format (Dxf) for the CF rule at `index` on `sheet`,

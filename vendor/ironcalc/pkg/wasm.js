@@ -388,6 +388,19 @@ export class Model {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * MACRO: the conditional formatting of every cell of `sheet` that a rule
+     * matched in the last evaluation, in one call.
+     * @param {number} sheet
+     * @returns {CfOverlay[]}
+     */
+    getConditionalFormattingOverlay(sheet) {
+        const ret = wasm.model_getConditionalFormattingOverlay(this.__wbg_ptr, sheet);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
      * @returns {DefinedName[]}
      */
     getDefinedNameList() {
@@ -1508,6 +1521,22 @@ export function getAllTimezones() {
 }
 
 /**
+ * MACRO: the icons and colors of an Excel icon set such as `3Arrows` or
+ * `3TrafficLights1`, lowest bucket first; `null` for sets it does not know.
+ * @param {string} name
+ * @returns {[Icon, Color][] | null}
+ */
+export function getIconSetIcons(name) {
+    const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.getIconSetIcons(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Gets all supported locales
  * @returns {string[]}
  */
@@ -1581,6 +1610,24 @@ export function quoteName(name) {
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
+}
+
+/**
+ * MACRO: fixes the time NOW and TODAY read, in milliseconds since January 1,
+ * 1970, for every model; `undefined` returns to the system clock.
+ * @param {number | null} [milliseconds]
+ */
+export function setFixedTime(milliseconds) {
+    wasm.setFixedTime(!isLikeNone(milliseconds), isLikeNone(milliseconds) ? 0 : milliseconds);
+}
+
+/**
+ * MACRO: makes RAND, RANDBETWEEN and RANDARRAY repeat the sequence of `seed`
+ * in every model; `undefined` returns to `Math.random`.
+ * @param {number | null} [seed]
+ */
+export function setRandomSeed(seed) {
+    wasm.setRandomSeed(!isLikeNone(seed), isLikeNone(seed) ? 0 : seed);
 }
 function __wbg_get_imports() {
     const import0 = {

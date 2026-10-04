@@ -1,4 +1,10 @@
-import { type CompletionContext, getTokens, Model } from '@ironcalc/wasm';
+import {
+  type CompletionContext,
+  getTokens,
+  Model,
+  setFixedTime,
+  setRandomSeed,
+} from '@ironcalc/wasm';
 import { format as formatExcelNumber } from 'ssf';
 import { cellDateMention, cellPlainText } from './cell-mentions';
 import {
@@ -66,14 +72,42 @@ export type SpreadsheetCalculator = {
   dispose: () => void;
 };
 
-const volatileName = /NOW|TODAY|RAND/i;
-const volatileFunctions = new Set([
-  'NOW',
-  'TODAY',
-  'RAND',
-  'RANDBETWEEN',
-  'RANDARRAY',
-]);
+/** A fixed clock and random sequence, for repeatable calculations. */
+let fixedClock: { time?: number; timezone?: string } | undefined;
+
+/**
+ * Fix the time TODAY and NOW read (milliseconds since 1970, in `timezone`)
+ * and the sequence RAND returns, for tests and reproducible imports. Without
+ * a clock, calculations read the viewer's clock and time zone, as Excel reads
+ * the computer's, and RAND is random.
+ */
+export function setCalculationClock(
+  clock: { time?: number; timezone?: string; seed?: number } | undefined
+) {
+  fixedClock = clock;
+  setFixedTime(clock?.time);
+  setRandomSeed(clock?.seed);
+}
+
+/** The time zone TODAY and NOW read. */
+function calculationTimezone(): string {
+  if (fixedClock?.timezone) return fixedClock.timezone;
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** A model that reads the calculation clock; UTC if the engine does not
+ * know the zone. */
+function calculationModel(name: string): Model {
+  try {
+    return new Model(name, 'en', calculationTimezone(), 'en');
+  } catch {
+    return new Model(name, 'en', 'UTC', 'en');
+  }
+}
 
 const numberFormatters = new Map<string, Intl.NumberFormat>();
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -197,18 +231,6 @@ const errorDescriptions: Record<string, string> = {
   '#N/A': 'A value needed by this formula is not available.',
   '#SPILL!': 'This array formula needs empty cells for its results.',
 };
-
-function unsupportedFunction(value: string): string | undefined {
-  if (!value.startsWith('=') || !volatileName.test(value)) return;
-  // Use the engine's tokenizer: text such as ="RAND()" is not a function.
-  for (const { token } of getTokens(value)) {
-    if (typeof token !== 'object' || !('Ident' in token)) continue;
-    // IronCalc accepts these Excel compatibility prefixes and removes them
-    // during formula parsing, after tokenization.
-    const name = token.Ident.toUpperCase().replace(/^_XLFN\.(?:_XLWS\.)?/, '');
-    if (volatileFunctions.has(name)) return name;
-  }
-}
 
 /** Rename through temporary names to avoid collisions with default SheetN names. */
 function configureSheets(model: Model, names: string[]) {
@@ -822,11 +844,23 @@ function prepareSheet(
     width = Math.max(width, last.column + 1);
   }
   styleColumns(model, sheetIndex, entered, width);
+  hideRows(model, sheetIndex, sheet.metadata?.hiddenRows);
   // IronCalc infers a formula's date format from the cells it references when
   // the formula is entered, so plain values go first and formulas follow in
   // grid order, which chained schedules usually read in.
   formulas.sort((a, b) => a.row - b.row || a.column - b.column);
   return { entered, order: [...literals, ...formulas] };
+}
+
+/** Hidden rows, which SUBTOTAL(101-111) and AGGREGATE can leave out. */
+function hideRows(model: Model, sheetIndex: number, rows: number[] = []) {
+  const sorted = [...rows].sort((a, b) => a - b);
+  for (let start = 0; start < sorted.length; ) {
+    let end = start;
+    while (end + 1 < sorted.length && sorted[end + 1] <= sorted[end] + 1) end++;
+    model.setRowsHidden(sheetIndex, sorted[start] + 1, sorted[end] + 1, true);
+    start = end + 1;
+  }
 }
 
 /**
@@ -881,13 +915,8 @@ function enterCell(
   const unsupported = (reason: string) => {
     entered.unsupported.set(address, reason);
   };
-  const fn = literal ? undefined : unsupportedFunction(value);
-  if (fn)
-    unsupported(
-      `${fn} is not supported yet because collaborators need the same calculation clock and random seed.`
-    );
-  let input = fn ? '=NA()' : literal ? `'${value}` : value;
-  if (!fn && !literal && value.startsWith('=')) {
+  let input = literal ? `'${value}` : value;
+  if (!literal && value.startsWith('=')) {
     entered.formulas.set(address, { row, column });
     input = resolveNames(
       value,
@@ -898,12 +927,6 @@ function enterCell(
       names,
       unsupported
     );
-    // An expanded name may itself use a clock or random function.
-    const expandedFn = input === value ? undefined : unsupportedFunction(input);
-    if (expandedFn)
-      unsupported(
-        `${expandedFn} is not supported yet because collaborators need the same calculation clock and random seed.`
-      );
     if (entered.unsupported.has(address)) input = '=NA()';
     else
       input = boundWholeColumnLookups(
@@ -1090,7 +1113,7 @@ function readSpills(
 }
 
 function buildWorkbook(sheets: CalculationSheet[]): EngineWorkbook {
-  const model = new Model('Macro spreadsheet', 'en', 'UTC', 'en');
+  const model = calculationModel('Macro spreadsheet');
   try {
     const bounded = sheets.map((sheet) => ({
       ...sheet,

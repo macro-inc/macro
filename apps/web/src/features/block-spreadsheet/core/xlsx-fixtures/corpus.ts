@@ -3,10 +3,11 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { strFromU8, unzipSync } from 'fflate';
 import { SaxesParser } from 'saxes';
-import type {
-  CalculatedCell,
-  SpreadsheetCalculator,
-  WorkbookCalculation,
+import {
+  type CalculatedCell,
+  type SpreadsheetCalculator,
+  setCalculationClock,
+  type WorkbookCalculation,
 } from '../calculation';
 import type { WorkbookFileData } from '../workbook-file-types';
 
@@ -167,7 +168,8 @@ export type CalculationFidelity = {
 export function calculationFidelity(
   bytes: Uint8Array,
   workbook: WorkbookFileData,
-  values: WorkbookCalculation
+  values: WorkbookCalculation,
+  exampleLimit = 8
 ): CalculationFidelity {
   const cached = cachedFormulaResults(bytes);
   const fidelity: CalculationFidelity = {
@@ -195,7 +197,7 @@ export function calculationFidelity(
       for (const name of names.length ? names : ['(no function)'])
         fidelity.mismatchedFunctions[name] =
           (fidelity.mismatchedFunctions[name] ?? 0) + 1;
-      if (fidelity.examples.length < 8)
+      if (fidelity.examples.length < exampleLimit)
         fidelity.examples.push(
           `${sheet.name}!${address} ${source.slice(0, 80)} → Excel ${JSON.stringify(expected.value)}, Macro ${JSON.stringify(results[address]?.value ?? results[address]?.display ?? null)}`
         );
@@ -204,18 +206,44 @@ export function calculationFidelity(
   return fidelity;
 }
 
+/** When the workbook was last saved, from `docProps/core.xml`. */
+function savedAt(bytes: Uint8Array): number | undefined {
+  const core = unzipSync(bytes, {
+    filter: (file) => file.name === 'docProps/core.xml',
+  })['docProps/core.xml'];
+  const modified =
+    core && /<dcterms:modified[^>]*>([^<]+)</.exec(strFromU8(core));
+  const time = modified ? Date.parse(modified[1]) : Number.NaN;
+  return Number.isFinite(time) ? time : undefined;
+}
+
+/**
+ * Recalculate an imported workbook. TODAY and NOW read the time the file was
+ * saved, when Excel last calculated it, and RAND a fixed sequence, so results
+ * are repeatable and comparable with the cached ones.
+ */
 export function calculateImported(
   calculator: SpreadsheetCalculator,
-  workbook: WorkbookFileData
+  workbook: WorkbookFileData,
+  bytes?: Uint8Array
 ): WorkbookCalculation {
-  return calculator.calculateWorkbook(
-    workbook.sheets.map((sheet, index) => ({
-      id: String(index),
-      name: sheet.name,
-      cells: sheet.cells,
-      rowCount: sheet.rowCount,
-      metadata: sheet.metadata,
-    })),
-    { includeTypes: true }
-  );
+  setCalculationClock({
+    time: bytes ? savedAt(bytes) : undefined,
+    timezone: 'UTC',
+    seed: 1,
+  });
+  try {
+    return calculator.calculateWorkbook(
+      workbook.sheets.map((sheet, index) => ({
+        id: String(index),
+        name: sheet.name,
+        cells: sheet.cells,
+        rowCount: sheet.rowCount,
+        metadata: sheet.metadata,
+      })),
+      { includeTypes: true }
+    );
+  } finally {
+    setCalculationClock(undefined);
+  }
 }

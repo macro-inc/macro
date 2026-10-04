@@ -369,6 +369,7 @@ function readWorksheet(
       return;
     }
     let value = '';
+    let calculated = false;
     const formula = current.formula;
     const cached = (): string => {
       if (current.type === 's')
@@ -520,16 +521,21 @@ function readWorksheet(
             'Some table references could not be converted; those formulas show their last calculated values.'
           );
           value = literal();
-        } else value = `=${resolved}`;
+        } else {
+          value = `=${resolved}`;
+          calculated = true;
+        }
       }
     } else value = literal();
+    // A text format would show a formula as its source, whatever its result.
     if (
       style.format === 'text' &&
       value &&
       !/^'/.test(value) &&
-      current.type !== 's' &&
-      current.type !== 'str' &&
-      current.type !== 'inlineStr'
+      (calculated ||
+        (current.type !== 's' &&
+          current.type !== 'str' &&
+          current.type !== 'inlineStr'))
     ) {
       delete style.format;
       warnings.add(

@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   createSpreadsheetCalculator,
   type SpreadsheetCalculator,
+  setCalculationClock,
 } from './calculation';
 import {
   SPREADSHEET_DEFAULT_STYLE,
@@ -344,24 +345,56 @@ describe('spreadsheet calculation with IronCalc', () => {
     ).toBe('#SPILL!');
   });
 
-  it('makes unsupported volatile functions explicit and deterministic', () => {
-    const result = calculator.calculate(
-      cells({ A1: '=RAND()', A2: '=NOW()', A3: '=A1+1', A4: '="RAND()"' })
-    );
-    expect(result.A1.display).toBe('#N/A');
-    expect(result.A1.error).toContain('same calculation clock');
-    expect(result.A2.display).toBe('#N/A');
-    expect(result.A3.display).toBe('#N/A');
-    expect(result.A4).toEqual({ display: 'RAND()' });
+  it('reads TODAY and NOW from the calculation clock and repeats a seeded RAND', () => {
+    // 23 July 2026, 10:30 UTC: serial 46226.4375.
+    setCalculationClock({
+      time: Date.UTC(2026, 6, 23, 10, 30),
+      timezone: 'UTC',
+      seed: 7,
+    });
+    try {
+      const sources = cells({
+        A1: '=TODAY()',
+        A2: '=NOW()',
+        A3: '=RAND()',
+        A4: '=RANDBETWEEN(1,6)',
+        A5: '=_xlfn.RAND()<1',
+        A6: '="RAND()"',
+        A7: '=TEXT(TODAY(),"yyyy-mm-dd")',
+      });
+      const result = calculator.calculate(sources);
+      expect(result.A1.number).toBe(46226);
+      expect(result.A2.number).toBeCloseTo(46226.4375, 9);
+      expect(result.A3.number).toBeGreaterThanOrEqual(0);
+      expect(result.A3.number).toBeLessThan(1);
+      expect([1, 2, 3, 4, 5, 6]).toContain(result.A4.number);
+      expect(result.A5.display).toBe('TRUE');
+      expect(result.A6).toEqual({ display: 'RAND()' });
+      expect(result.A7.display).toBe('2026-07-23');
+      setCalculationClock({
+        time: Date.UTC(2026, 6, 23, 10, 30),
+        timezone: 'UTC',
+        seed: 7,
+      });
+      expect(calculator.calculate(sources).A3.number).toBe(result.A3.number);
+    } finally {
+      setCalculationClock(undefined);
+    }
   });
 
-  it('also rejects volatile functions with Excel compatibility prefixes', () => {
-    const result = calculator.calculate(
-      cells({ A1: '=_xlfn.RAND()', A2: '=_xlfn._xlws.NOW()', A3: '=rand()' })
-    );
-    expect(result.A1.display).toBe('#N/A');
-    expect(result.A2.display).toBe('#N/A');
-    expect(result.A3.display).toBe('#N/A');
+  it('reads TODAY in the time zone of the clock', () => {
+    // 02:00 UTC on 23 July 2026 is still 22 July in New York.
+    setCalculationClock({
+      time: Date.UTC(2026, 6, 23, 2),
+      timezone: 'America/New_York',
+    });
+    try {
+      expect(calculator.calculate(cells({ A1: '=TODAY()' })).A1.number).toBe(
+        46225
+      );
+    } finally {
+      setCalculationClock(undefined);
+    }
   });
 
   it('ignores source addresses outside the supported grid', () => {

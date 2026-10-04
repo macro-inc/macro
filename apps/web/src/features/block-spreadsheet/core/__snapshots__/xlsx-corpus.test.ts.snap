@@ -290,11 +290,9 @@ exports[`real-world XLSX corpus > ironcalc-tables-structured-references.x… 1`]
 {
   "calculation": {
     "compared": 201,
-    "matched": 165,
+    "matched": 192,
     "mismatchedFunctions": {
-      "COUNT": 1,
-      "SHEET": 4,
-      "SUBTOTAL": 31,
+      "SUBTOTAL": 9,
     },
     "volatile": 4,
   },
@@ -315,13 +313,8 @@ exports[`real-world XLSX corpus > ironcalc-template-gantt-project-tracker… 1`]
 {
   "calculation": {
     "compared": 441,
-    "matched": 121,
-    "mismatchedFunctions": {
-      "(no function)": 200,
-      "DAY": 119,
-      "IF": 119,
-      "MINIFS": 1,
-    },
+    "matched": 441,
+    "mismatchedFunctions": {},
     "volatile": 3,
   },
   "cells": 629,
@@ -332,7 +325,6 @@ exports[`real-world XLSX corpus > ironcalc-template-gantt-project-tracker… 1`]
   "warnings": [
     "Conditional formatting rules are not imported.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
-    "Macro cannot calculate these Excel functions yet, so their formulas show errors: NOW, TODAY.",
   ],
 }
 `;
@@ -341,10 +333,8 @@ exports[`real-world XLSX corpus > ironcalc-template-invoice.xlsx 1`] = `
 {
   "calculation": {
     "compared": 23,
-    "matched": 22,
-    "mismatchedFunctions": {
-      "WORKDAY": 1,
-    },
+    "matched": 23,
+    "mismatchedFunctions": {},
     "volatile": 2,
   },
   "cells": 96,
@@ -355,7 +345,6 @@ exports[`real-world XLSX corpus > ironcalc-template-invoice.xlsx 1`] = `
   "warnings": [
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
-    "Macro cannot calculate these Excel functions yet, so their formulas show errors: NOW, TODAY.",
   ],
 }
 `;
@@ -450,22 +439,17 @@ exports[`real-world XLSX corpus > libreoffice-forum-mso-en4-134670-sales-… 1`]
 {
   "calculation": {
     "compared": 516,
-    "matched": 70,
+    "matched": 398,
     "mismatchedFunctions": {
-      "(no function)": 242,
-      "COUNTIF": 1,
-      "FREQUENCY": 131,
-      "IF": 153,
-      "IFERROR": 153,
-      "INDEX": 22,
-      "ISNA": 22,
-      "MATCH": 153,
-      "OR": 71,
-      "ROUND": 50,
-      "ROW": 131,
-      "SIGN": 44,
-      "SUM": 131,
-      "SUMPRODUCT": 1,
+      "(no function)": 50,
+      "FREQUENCY": 19,
+      "IF": 19,
+      "IFERROR": 19,
+      "MATCH": 19,
+      "ROUND": 49,
+      "ROW": 19,
+      "SIGN": 19,
+      "SUM": 19,
     },
     "volatile": 0,
   },
@@ -487,12 +471,11 @@ exports[`real-world XLSX corpus > libreoffice-functions-excel-2010.xlsx 1`] = `
 {
   "calculation": {
     "compared": 517,
-    "matched": 166,
+    "matched": 513,
     "mismatchedFunctions": {
-      "AGGREGATE": 174,
-      "AND": 2,
+      "AND": 1,
       "RANK.EQ": 1,
-      "ROUND": 174,
+      "ROUND": 2,
     },
     "volatile": 0,
   },
@@ -502,7 +485,6 @@ exports[`real-world XLSX corpus > libreoffice-functions-excel-2010.xlsx 1`] = `
   "sheets": 2,
   "styledCells": 281,
   "warnings": [
-    "Macro cannot calculate these Excel functions yet, so their formulas show errors: AGGREGATE.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
   ],
 }
@@ -534,13 +516,10 @@ exports[`real-world XLSX corpus > nrel-sam-ppa-single-owner-project-finan… 1`]
 {
   "calculation": {
     "compared": 16248,
-    "matched": 15716,
+    "matched": 16158,
     "mismatchedFunctions": {
-      "(no function)": 244,
-      "IF": 52,
-      "ISNUMBER": 22,
-      "LOOKUP": 180,
-      "SUM": 78,
+      "(no function)": 64,
+      "SUM": 26,
     },
     "volatile": 0,
   },
@@ -678,7 +657,6 @@ exports[`real-world XLSX corpus > openxmlsdk-business-startup-costs-pl-te… 1`]
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Font sizes are rounded and limited to 8–36 pt.",
-    "Macro cannot calculate these Excel functions yet, so their formulas show errors: TODAY.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
   ],
@@ -802,9 +780,9 @@ exports[`real-world XLSX corpus > poi-conditional-formatting-samples.xlsx 1`] = 
 {
   "calculation": {
     "compared": 352,
-    "matched": 349,
+    "matched": 351,
     "mismatchedFunctions": {
-      "SUBTOTAL": 3,
+      "SUBTOTAL": 1,
     },
     "volatile": 0,
   },
@@ -879,7 +857,7 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
 {
   "calculation": {
     "compared": 1281,
-    "matched": 1221,
+    "matched": 1226,
     "mismatchedFunctions": {
       "ADDRESS": 1,
       "AND": 1,
@@ -888,14 +866,11 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
       "DAY": 2,
       "DEVSQ": 2,
       "INDEX": 1,
-      "ISBLANK": 1,
-      "LEFT": 3,
       "LOOKUP": 1,
       "MAXA": 1,
       "MINA": 1,
       "MODE": 4,
       "MONTH": 2,
-      "RIGHT": 3,
       "STDEV": 2,
       "SUMIF": 1,
       "SUMPRODUCT": 1,
@@ -903,6 +878,7 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
       "SUMX2MY2": 6,
       "SUMX2PY2": 6,
       "SUMXMY2": 5,
+      "T": 2,
       "VAR": 2,
       "VARP": 2,
       "YEAR": 2,
@@ -929,19 +905,20 @@ exports[`real-world XLSX corpus > poi-number-format-tests-date1904.xlsx 1`] = `
 {
   "calculation": {
     "compared": 325,
-    "matched": 0,
+    "matched": 88,
     "mismatchedFunctions": {
-      "TEXT": 325,
+      "TEXT": 237,
     },
     "volatile": 0,
   },
   "cells": 1314,
-  "formulas": 3,
+  "formulas": 325,
   "roundTrip": "identical",
   "sheets": 2,
   "styledCells": 1322,
   "warnings": [
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
   ],
 }
 `;
@@ -1040,9 +1017,8 @@ exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
 {
   "calculation": {
     "compared": 438,
-    "matched": 413,
+    "matched": 414,
     "mismatchedFunctions": {
-      "AGGREGATE": 1,
       "AREAS": 1,
       "BESSELY": 1,
       "CHAR": 2,
@@ -1072,7 +1048,7 @@ exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
   "sheets": 10,
   "styledCells": 164,
   "warnings": [
-    "Macro cannot calculate these Excel functions yet, so their formulas show errors: AGGREGATE, ECMA.CEILING, JIS, NOW, PHONETIC, RAND, RANDBETWEEN, TODAY, YEN.",
+    "Macro cannot calculate these Excel functions yet, so their formulas show errors: ECMA.CEILING, JIS, PHONETIC, YEN.",
     "Pivot table lookups (GETPIVOTDATA) are imported as their last calculated values.",
     "Pivot tables are not imported; existing cell values are retained.",
   ],
@@ -1148,14 +1124,8 @@ exports[`real-world XLSX corpus > zenodo-ccs-cement-post-tax-dcf-model.xl… 1`]
 {
   "calculation": {
     "compared": 1747,
-    "matched": 1453,
-    "mismatchedFunctions": {
-      "(no function)": 136,
-      "IF": 50,
-      "NPV": 4,
-      "SUM": 103,
-      "XLOOKUP": 1,
-    },
+    "matched": 1747,
+    "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 16138,
@@ -1200,7 +1170,6 @@ exports[`real-world XLSX corpus > zenodo-circular-economy-business-case-c… 1`]
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
-    "Macro cannot calculate these Excel functions yet, so their formulas show errors: TODAY.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
   ],
@@ -1261,14 +1230,8 @@ exports[`real-world XLSX corpus > zenodo-surewave-floating-pv-cost-and-fi… 1`]
 {
   "calculation": {
     "compared": 1888,
-    "matched": 1591,
-    "mismatchedFunctions": {
-      "(no function)": 243,
-      "IF": 27,
-      "IRR": 27,
-      "SEQUENCE": 27,
-      "VLOOKUP": 27,
-    },
+    "matched": 1888,
+    "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 3671,

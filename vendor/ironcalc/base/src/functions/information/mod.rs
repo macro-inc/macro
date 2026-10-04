@@ -337,6 +337,11 @@ impl<'a> Model<'a> {
                 }
             }
             arg => {
+                // MACRO: a reference gives its own sheet: SHEET(Data!A1:B3).
+                if let CalcResult::Range { left, .. } = self.evaluate_node_with_reference(arg, cell)
+                {
+                    return CalcResult::Number(left.sheet as f64 + 1.0);
+                }
                 // Now it should be the name of a sheet
                 let sheet_name = match self.get_string(arg, cell) {
                     Ok(s) => s,

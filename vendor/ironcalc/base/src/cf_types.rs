@@ -508,3 +508,33 @@ pub struct ExtendedStyle {
     /// Set when a rating rule (IconSetRating3/4/5) applies to the cell.
     pub rating: Option<CfRating>,
 }
+
+/// MACRO: the conditional formatting of one cell, for a host that draws it
+/// over the cell's own style: the properties the matching rules' formats set
+/// (the higher-priority rule winning), a color scale's fill, and a data bar,
+/// icon or rating. Colors are `#RRGGBB`.
+#[derive(Serialize, Debug, Default, Clone)]
+pub struct CfOverlay {
+    pub row: i32,
+    pub column: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bold: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub italic: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub underline: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strike: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_fmt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_bar: Option<CfDataBar>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<CfIcon>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rating: Option<CfRating>,
+}

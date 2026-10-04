@@ -44,6 +44,20 @@ function sameInput(
   );
 }
 
+/** Formulas whose results change with the date: TODAY and NOW. */
+const clockFormula = /\b(?:TODAY|NOW)\s*\(/i;
+const readsClock = (input: CalculationCells[string] | undefined) =>
+  !!input &&
+  input.value.startsWith('=') &&
+  clockFormula.test(input.value.replace(/"(?:[^"]|"")*"/g, '""'));
+
+/** Milliseconds until just after the next local midnight. */
+function untilMidnight(now = new Date()) {
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 1, 0);
+  return midnight.getTime() - now.getTime();
+}
+
 /** Workbook state that lets calculation send only changed cells. */
 type IncrementalSource = {
   revision: Accessor<number>;
@@ -129,6 +143,12 @@ export function createCalculation(
     let sentSheets = '';
     let running = false;
     let queued = false;
+    // Cells per sheet whose formulas read the date, recalculated at midnight
+    // even if nothing else changes.
+    const clockCells = new Map<string, Set<string>>();
+    let refresh = false;
+    let midnight: ReturnType<typeof setTimeout> | undefined;
+    onCleanup(() => clearTimeout(midnight));
     const results: WorkbookCalculation = {};
     const patch = () => {
       const epoch = (calculator as { epoch?: () => number }).epoch?.() ?? 0;
@@ -148,6 +168,8 @@ export function createCalculation(
           metadata: {
             definedNames: sheet.metadata?.definedNames,
             arrayFormulas: sheet.metadata?.arrayFormulas,
+            // SUBTOTAL(101-111) and AGGREGATE can leave hidden rows out.
+            hiddenRows: sheet.metadata?.hiddenRows,
           },
         };
         const previous = sent.get(sheet.id);
@@ -158,13 +180,16 @@ export function createCalculation(
         ) {
           const inputs = new Map<string, CalculationCells[string]>();
           const cells: CalculationCells = {};
+          const clock = new Set<string>();
           for (const address in sheet.cells) {
             const input = calculationInput(sheet.cells[address]);
             if (!input) continue;
             cells[address] = input;
             inputs.set(address, input);
+            if (readsClock(input)) clock.add(address);
           }
           sent.set(sheet.id, inputs);
+          clockCells.set(sheet.id, clock);
           changed = true;
           return { ...descriptor, cells };
         }
@@ -174,13 +199,18 @@ export function createCalculation(
           if (sameInput(input, previous.get(address))) continue;
           if (input) previous.set(address, input);
           else previous.delete(address);
+          if (readsClock(input)) clockCells.get(sheet.id)?.add(address);
+          else clockCells.get(sheet.id)?.delete(address);
           delta[address] = input ?? null;
           changed = true;
         }
         return { ...descriptor, changes: delta };
       });
       for (const id of sent.keys())
-        if (!sheets.some((sheet) => sheet.id === id)) sent.delete(id);
+        if (!sheets.some((sheet) => sheet.id === id)) {
+          sent.delete(id);
+          clockCells.delete(id);
+        }
       const layout = JSON.stringify(
         patches.map(({ id, name, rowCount, metadata }) => [
           id,
@@ -193,16 +223,35 @@ export function createCalculation(
       sentSheets = layout;
       return { patches, changed };
     };
+    // TODAY and NOW change at midnight, when no edit may recalculate them.
+    const scheduleMidnight = () => {
+      clearTimeout(midnight);
+      midnight = undefined;
+      const names = workbookOptions
+        .workbook()
+        .some((sheet) =>
+          sheet.metadata?.definedNames?.some(({ formula }) =>
+            clockFormula.test(formula)
+          )
+        );
+      if (!names && ![...clockCells.values()].some((cells) => cells.size))
+        return;
+      midnight = setTimeout(() => {
+        refresh = true;
+        run();
+      }, untilMidnight());
+    };
     const run = () => {
       if (running) {
         queued = true;
         return;
       }
       const { patches, changed } = patch();
-      if (!changed) {
+      if (!changed && !refresh) {
         setBusy(false);
         return;
       }
+      refresh = false;
       running = true;
       setBusy(true);
       setError('');
@@ -238,6 +287,7 @@ export function createCalculation(
             if (!workbookOptions.workbook().some((sheet) => sheet.id === id))
               delete results[id];
           setWorkbookValues(results);
+          scheduleMidnight();
         })
         .catch((cause: unknown) => {
           if (current !== generation) return;

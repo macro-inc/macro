@@ -445,3 +445,70 @@ describe('reactive spreadsheet calculation', () => {
       expect(current.dispose).toHaveBeenCalledOnce();
   });
 });
+
+describe('incremental workbook calculation', () => {
+  function setupIncremental(cells: SpreadsheetCells) {
+    return createRoot((dispose) => {
+      cleanups.push(dispose);
+      const [workbook] = createSignal<SpreadsheetWorkbookSheet[]>([
+        {
+          id: 'sheet1',
+          name: 'Plan',
+          cells,
+          layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+        },
+      ]);
+      const clients: ReturnType<typeof client>[] = [];
+      createCalculation(
+        () => cells,
+        () => 200,
+        {
+          workbook,
+          activeSheetId: () => 'sheet1',
+          incremental: { revision: () => 0, changesSince: () => new Map() },
+          makeClient: () => {
+            const next = client();
+            clients.push(next);
+            return next;
+          },
+        }
+      );
+      return clients;
+    });
+  }
+
+  it('recalculates formulas that read the date at midnight without an edit', async () => {
+    vi.setSystemTime(new Date(2026, 6, 23, 23, 59, 0));
+    const [calculator] = setupIncremental({ A1: { value: '=TODAY()' } });
+    await vi.advanceTimersByTimeAsync(60);
+    expect(calculator.requests).toHaveLength(1);
+    calculator.requests[0].resolve({
+      id: 1,
+      type: 'update-workbook',
+      values: { sheet1: { A1: { display: '46226', number: 46226 } } },
+      replaced: ['sheet1'],
+    });
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(calculator.requests).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(calculator.requests).toHaveLength(2);
+    expect(calculator.requests[1].operation).toMatchObject({
+      type: 'update-workbook',
+      sheets: [{ id: 'sheet1', changes: {} }],
+    });
+  });
+
+  it('leaves workbooks without date formulas alone at midnight', async () => {
+    vi.setSystemTime(new Date(2026, 6, 23, 23, 59, 0));
+    const [calculator] = setupIncremental({ A1: { value: '="TODAY()"&1' } });
+    await vi.advanceTimersByTimeAsync(60);
+    calculator.requests[0].resolve({
+      id: 1,
+      type: 'update-workbook',
+      values: { sheet1: { A1: { display: 'TODAY()1' } } },
+      replaced: ['sheet1'],
+    });
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(calculator.requests).toHaveLength(1);
+  });
+});

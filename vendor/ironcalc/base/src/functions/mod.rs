@@ -7,16 +7,21 @@ use crate::{
     model::Model,
 };
 
+mod aggregate; // MACRO
 pub(crate) mod binary_search;
 mod database;
 pub(crate) mod date_and_time;
 mod engineering;
 mod financial;
 mod information;
+mod lift; // MACRO
 mod logical;
 mod lookup_and_reference;
 mod macros;
 mod math_and_trigonometry;
+// MACRO
+#[cfg(target_arch = "wasm32")]
+pub use math_and_trigonometry::set_random_seed;
 mod spill_functions;
 mod statistical;
 mod subtotal;
@@ -539,6 +544,8 @@ pub enum Function {
     Delta,
     Gestep,
     Subtotal,
+    // MACRO: not in upstream yet
+    Aggregate,
 
     // Database
     Daverage,
@@ -571,7 +578,11 @@ macro_rules! impl_function_lookup {
                         return Some(Function::$variant);
                     }
                 )*
-                None
+                // MACRO: functions the language data does not name yet.
+                match key.as_str() {
+                    "AGGREGATE" => Some(Function::Aggregate),
+                    _ => None,
+                }
             }
         }
     }
@@ -1571,6 +1582,7 @@ impl Function {
             Function::Delta => functions.delta.clone(),
             Function::Gestep => functions.gestep.clone(),
             Function::Subtotal => functions.subtotal.clone(),
+            Function::Aggregate => "AGGREGATE".to_string(), // MACRO
             Function::Daverage => functions.daverage.clone(),
             Function::Dcount => functions.dcount.clone(),
             Function::Dget => functions.dget.clone(),
@@ -1614,7 +1626,8 @@ impl Function {
         }
     }
 
-    pub fn into_iter() -> IntoIter<Function, 496> {
+    pub fn into_iter() -> IntoIter<Function, 497> {
+        // MACRO: AGGREGATE
         [
             Function::And,
             Function::False,
@@ -1950,6 +1963,7 @@ impl Function {
             Function::Delta,
             Function::Gestep,
             Function::Subtotal,
+            Function::Aggregate, // MACRO
             Function::Roman,
             Function::Arabic,
             Function::Combin,
@@ -2311,6 +2325,19 @@ impl<'a> Model<'a> {
         args: &[Node],
         cell: CellReferenceIndex,
     ) -> CalcResult {
+        // MACRO: single-value parameters receiving ranges or arrays.
+        if let Some(result) = self.evaluate_lifted_function(kind, args, cell) {
+            return result;
+        }
+        self.dispatch_function(kind, args, cell)
+    }
+
+    pub(crate) fn dispatch_function(
+        &mut self,
+        kind: &Function,
+        args: &[Node],
+        cell: CellReferenceIndex,
+    ) -> CalcResult {
         match kind {
             Function::And => self.fn_and(args, cell),
             Function::False => self.fn_false(args, cell),
@@ -2611,6 +2638,7 @@ impl<'a> Model<'a> {
             Function::Delta => self.fn_delta(args, cell),
             Function::Gestep => self.fn_gestep(args, cell),
             Function::Subtotal => self.fn_subtotal(args, cell),
+            Function::Aggregate => self.fn_aggregate(args, cell), // MACRO
             Function::Acot => self.fn_acot(args, cell),
             Function::Acoth => self.fn_acoth(args, cell),
             Function::Cot => self.fn_cot(args, cell),
