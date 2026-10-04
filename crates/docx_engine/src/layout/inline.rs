@@ -281,6 +281,63 @@ fn is_complex(c: char) -> bool {
         | 0x1000..=0x109F | 0x1780..=0x17FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF)
 }
 
+/// East Asian punctuation that may not start a line (kinsoku).
+fn no_line_start(c: char) -> bool {
+    matches!(
+        c,
+        '\u{3001}'
+            | '\u{3002}'
+            | '\u{FF0C}'
+            | '\u{FF0E}'
+            | '\u{FF1A}'
+            | '\u{FF1B}'
+            | '\u{FF01}'
+            | '\u{FF1F}'
+            | '\u{FF09}'
+            | '\u{FF3D}'
+            | '\u{FF5D}'
+            | '\u{300D}'
+            | '\u{300F}'
+            | '\u{3009}'
+            | '\u{300B}'
+            | '\u{3011}'
+            | '\u{3015}'
+            | '\u{3017}'
+            | '\u{3019}'
+            | '\u{301B}'
+            | '\u{2019}'
+            | '\u{201D}'
+            | '\u{30FC}'
+            | '\u{3005}'
+            | '\u{309D}'
+            | '\u{309E}'
+            | '\u{30FD}'
+            | '\u{30FE}'
+            | '\u{FF65}'
+    )
+}
+
+/// East Asian punctuation that may not end a line (kinsoku).
+fn no_line_end(c: char) -> bool {
+    matches!(
+        c,
+        '\u{FF08}'
+            | '\u{FF3B}'
+            | '\u{FF5B}'
+            | '\u{300C}'
+            | '\u{300E}'
+            | '\u{3008}'
+            | '\u{300A}'
+            | '\u{3010}'
+            | '\u{3014}'
+            | '\u{3016}'
+            | '\u{3018}'
+            | '\u{301A}'
+            | '\u{2018}'
+            | '\u{201C}'
+    )
+}
+
 /// Characters after which a line may break besides spaces.
 fn breaks_after(c: char, next: Option<char>) -> bool {
     match c {
@@ -288,6 +345,8 @@ fn breaks_after(c: char, next: Option<char>) -> bool {
             next.is_some_and(|n| !n.is_ascii_digit() && !n.is_whitespace())
         }
         '\u{200B}' => true,
+        c if no_line_end(c) => false,
+        _ if next.is_some_and(no_line_start) => false,
         c if is_cjk(c) => true,
         _ => next.is_some_and(is_cjk),
     }

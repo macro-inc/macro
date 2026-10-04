@@ -63,6 +63,16 @@ const CONDENSED: &[(&str, f32)] = &[
 /// A face whose `n` is at least this wide (em) is not a condensed face.
 const REGULAR_N_WIDTH: f32 = 0.5;
 
+/// Whether a character is East Asian wide or full-width (ideographs, kana,
+/// hangul, CJK punctuation and full-width forms): one em in any CJK font.
+pub fn is_wide(c: char) -> bool {
+    matches!(c as u32,
+        0x1100..=0x115F | 0x2E80..=0x303E | 0x3041..=0x33FF | 0x3400..=0x4DBF
+        | 0x4E00..=0x9FFF | 0xA000..=0xA4CF | 0xA960..=0xA97F | 0xAC00..=0xD7A3
+        | 0xF900..=0xFAFF | 0xFE10..=0xFE19 | 0xFE30..=0xFE6F | 0xFF01..=0xFF60
+        | 0xFFE0..=0xFFE6 | 0x20000..=0x2FFFD | 0x30000..=0x3FFFD)
+}
+
 /// A resolved font: face plus synthesis flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Font {
@@ -260,12 +270,18 @@ impl<'a> Fonts<'a> {
                         advance: self.db.advance(c.face, id),
                     },
                     None => {
-                        // No face has it: advance like a space so text keeps its shape.
+                        // No face has it: East Asian wide characters take
+                        // a full em, as in every CJK font; others advance
+                        // like a space so text keeps its shape.
                         let space = self.db.glyph(font.face, ' ');
                         Glyph {
                             font,
                             id: 0,
-                            advance: space.map_or(0.25, |s| self.db.advance(font.face, s)),
+                            advance: if is_wide(ch) {
+                                1.0
+                            } else {
+                                space.map_or(0.25, |s| self.db.advance(font.face, s))
+                            },
                         }
                     }
                 }

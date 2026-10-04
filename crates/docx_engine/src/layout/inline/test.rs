@@ -50,3 +50,13 @@ fn breaks_after_hyphens_and_cjk() {
     assert!(breaks_after('中', Some('文')));
     assert!(!breaks_after('a', Some('b')));
 }
+
+#[test]
+fn east_asian_punctuation_keeps_to_its_text() {
+    // Closing punctuation never starts a line, opening never ends one.
+    assert!(!breaks_after('中', Some('，')));
+    assert!(!breaks_after('中', Some('。')));
+    assert!(breaks_after('，', Some('文')));
+    assert!(!breaks_after('《', Some('文')));
+    assert!(!breaks_after('「', Some('文')));
+}
