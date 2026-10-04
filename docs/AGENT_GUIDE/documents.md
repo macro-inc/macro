@@ -452,6 +452,12 @@ Layout and test hooks:
   (Shift for 10 pt), Delete removes, Tab walks through shapes, PageUp/PageDown
   change slides, Cmd/Ctrl+±/0 and Cmd/Ctrl+wheel zoom. The status bar shows the
   slide number and a zoom slider (`pptx-zoom` fits the slide).
+- **Print** (`pptx-print-open` beside Download, or Cmd/Ctrl+P) opens
+  `pptx-print`: layout (`pptx-print-layout-slides|notes|handouts3|handouts6`),
+  all/current/range slides (`pptx-print-range`, e.g. `1-3, 5`), hidden slides,
+  frames, and paper. **Print** (`pptx-print-go`) uses the browser's print
+  dialog; **Save as PDF** (`pptx-print-pdf`) downloads a PDF directly.
+  `pptx-print-summary` shows the page count or progress.
 - **Speaker notes** (`pptx-notes`) sit below the slide.
 
 Changes save automatically 1.5 s after the last edit, when the tab is hidden,

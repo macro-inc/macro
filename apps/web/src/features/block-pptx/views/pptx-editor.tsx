@@ -26,6 +26,7 @@ import EyeSlash from '@phosphor/eye-slash.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
 import Play from '@phosphor/play.svg';
 import Plus from '@phosphor/plus.svg';
+import Printer from '@phosphor/printer.svg';
 import Scissors from '@phosphor/scissors.svg';
 import Trash from '@phosphor/trash.svg';
 import WarningIcon from '@phosphor/warning.svg';
@@ -51,6 +52,7 @@ import { FormatPane, type PaneSection } from '../components/format-pane';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
 import { PresenterView } from '../components/presenter-view';
+import { PrintDialog } from '../components/print-dialog';
 import { RibbonButton } from '../components/ribbon/controls';
 import { HomeTab } from '../components/ribbon/home-tab';
 import { InsertTab } from '../components/ribbon/insert-tab';
@@ -711,6 +713,7 @@ export function PptxEditor() {
     else if (key === 'z') void (e.shiftKey ? redo() : undo());
     else if (key === 'y') void redo();
     else if (key === 's') void session.save().catch(() => {});
+    else if (key === 'p') setPrinting(true);
     else if (key === 'f') setFind({ replace: false });
     else if (key === 'h') setFind({ replace: true });
     else if (key === 'm' && !readonly()) void commands.addSlide();
@@ -1004,6 +1007,7 @@ export function PptxEditor() {
   const [notesVisible, setNotesVisible] = createSignal(true);
   const [pane, setPane] = createSignal<PaneSection | null>(null);
   const [find, setFind] = createSignal<{ replace: boolean } | null>(null);
+  const [printing, setPrinting] = createSignal(false);
   const [presenting, setPresenting] = createSignal<{
     start: number;
     presenter: boolean;
@@ -1444,6 +1448,14 @@ export function PptxEditor() {
               </button>
             </Show>
             <RibbonButton
+              label="Print"
+              tooltip="Print or save as PDF (⌘P)"
+              data-testid="pptx-print-open"
+              onClick={() => setPrinting(true)}
+            >
+              <Printer />
+            </RibbonButton>
+            <RibbonButton
               label="Download"
               tooltip="Download .pptx"
               onClick={() => void download()}
@@ -1844,6 +1856,22 @@ export function PptxEditor() {
             onClose={() => {
               setChartDataShape(null);
               queueMicrotask(focusStage);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={printing() && session.outline()}>
+        {(deck) => (
+          <PrintDialog
+            engine={engine}
+            deck={deck()}
+            current={session.slideIndex()}
+            fileName={context.fileName()}
+            download={context.download}
+            notifyError={context.notifyError}
+            onClose={() => {
+              setPrinting(false);
+              queueMicrotask(refocus);
             }}
           />
         )}

@@ -76,11 +76,11 @@ import { PptxEditor } from './views/pptx-editor';
 const LARGE_DECK_BYTES = 5 * 1024 * 1024;
 const LARGE_DECK_AUTOSAVE_MS = 5000;
 
-function download(bytes: Uint8Array | Blob, name: string) {
+function download(bytes: Uint8Array | Blob, name: string, mimeType?: string) {
   const blob =
     bytes instanceof Blob
       ? bytes
-      : new Blob([bytes as BlobPart], { type: PPTX_MIME });
+      : new Blob([bytes as BlobPart], { type: mimeType ?? PPTX_MIME });
   void downloadFile(blob, name);
 }
 
@@ -124,7 +124,7 @@ function PresentationHost(props: {
     persist: (bytes) => savePresentationFile(props.documentId, bytes),
     canEdit: props.canEdit,
     fileName: props.fileName,
-    download: (bytes, name) => download(bytes, name),
+    download: (bytes, name, mimeType) => download(bytes, name, mimeType),
     notifyError: (message) => toast.failure(message),
     notifyInfo: (message) => toast.success(message),
     watchStoredFile: (onChange) =>

@@ -383,3 +383,27 @@ test('presents with Presenter View and an audience window', async ({
     'true'
   );
 });
+
+test('prints and saves notes pages as a PDF', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('ControlOrMeta+p');
+  await expect(page.getByTestId('pptx-print')).toBeVisible();
+  await expect(page.getByTestId('pptx-print-summary')).toHaveText('8 pages');
+  await page.getByTestId('pptx-print-layout-handouts6').check();
+  await expect(page.getByTestId('pptx-print-summary')).toHaveText('2 pages');
+  await page.getByTestId('pptx-print-layout-notes').check();
+  await page.getByTestId('pptx-print-range').fill('2-3');
+  await expect(page.getByTestId('pptx-print-summary')).toHaveText('2 pages');
+  const download = page.waitForEvent('download');
+  await page.getByTestId('pptx-print-pdf').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('kitchen-sink-financial.pdf');
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const pdf = Buffer.concat(chunks).toString('latin1');
+  expect(pdf.startsWith('%PDF-')).toBe(true);
+  expect(pdf.match(/\/Type \/Page /g)).toHaveLength(2);
+  expect(pdf).toContain('/MediaBox [0 0 612 792]');
+  await expect(page.getByTestId('pptx-print')).toHaveCount(0);
+});

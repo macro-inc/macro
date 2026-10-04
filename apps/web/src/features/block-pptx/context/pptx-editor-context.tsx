@@ -126,8 +126,8 @@ export interface PptxEditorContext {
   canEdit: Accessor<boolean>;
   /** File name for downloads (with extension). */
   fileName: Accessor<string>;
-  /** Hands a file to the user (download). */
-  download: (bytes: Uint8Array, fileName: string) => void;
+  /** Hands a file to the user (download); a .pptx unless `mimeType` says otherwise. */
+  download: (bytes: Uint8Array, fileName: string, mimeType?: string) => void;
   /** Reports a failure to the user. */
   notifyError: (message: string) => void;
   /** Tells the user about something that is not a failure. */
