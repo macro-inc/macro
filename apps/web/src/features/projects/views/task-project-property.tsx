@@ -1,26 +1,34 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import StackIcon from '@phosphor/stack.svg';
+import { useEntityPropertiesQuery } from '@queries/properties/entity';
 import { Button, Tooltip } from '@ui';
-import { createSignal, Show } from 'solid-js';
-import { useProjectsContext } from '../context/projects-context';
+import { type Accessor, createSignal, Show } from 'solid-js';
+import { useTaskProjectReference } from '../queries/project-identity';
+import { taskProjectId } from '../queries/task-project';
 import { ProjectAssignment } from './project-assignment';
 
-/** Project membership is a task relation, rendered alongside its properties. */
+/** The task's Project property, rendered alongside its other properties. */
 export function TaskProjectProperty(props: {
   taskId: string;
   canEdit: boolean;
+  userId: Accessor<string | undefined>;
 }) {
-  const references = useProjectsContext().createReferencesSource(() => [
-    props.taskId,
-  ]);
+  const properties = useEntityPropertiesQuery(
+    () => 'TASK',
+    () => props.taskId,
+    false
+  );
+  const reference = useTaskProjectReference(
+    () => taskProjectId(properties.data ?? []),
+    props.userId
+  );
   const [open, setOpen] = createSignal(false);
-  const reference = () => references.references().get(props.taskId);
   const label = () => {
     const project = reference();
-    if (project?.state === 'visible') return project.name;
-    if (project?.state === 'unavailable') return 'Unavailable project';
-    if (references.loading()) return 'Loading project…';
-    if (references.error()) return 'Could not load project';
+    if (properties.error) return 'Could not load project';
+    if (properties.isLoading || !project) return 'Loading project…';
+    if (project.state === 'visible') return project.name;
+    if (project.state === 'unavailable') return 'Unavailable project';
     return 'No project';
   };
 

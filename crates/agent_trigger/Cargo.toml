@@ -41,6 +41,7 @@ properties = { path = "../properties", default-features = false }
 initiative = { path = "../initiative", default-features = false, features = ["ports"] }
 models_properties = { path = "../models_properties" }
 system_properties = { path = "../system_properties" }
+rootcause = { workspace = true }
 # Domain vocabulary: channel-parent trigger events keep the channel-only post
 # shape, and the channel topic's `message_posted` can still feed the trigger.
 channels = { path = "../channels", default-features = false }

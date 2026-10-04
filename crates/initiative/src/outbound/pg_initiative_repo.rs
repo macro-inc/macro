@@ -4,7 +4,6 @@ mod create;
 mod list;
 mod members;
 mod share;
-mod tasks;
 
 #[cfg(test)]
 mod test;
@@ -23,7 +22,6 @@ use share_permission_db_utils::team_share::TeamShareError;
 use sqlx::postgres::PgDatabaseError;
 use sqlx::{Executor, PgPool, Postgres};
 
-use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
     CreateInitiativeRepoArgs, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
     InitiativeList, UpdateInitiativeRepoArgs,
@@ -86,23 +84,6 @@ impl InitiativeRepo for PgInitiativeRepo {
         list::list_accessible(&self.pool, user_id).await
     }
 
-    async fn task_memberships(
-        &self,
-        task_ids: Vec<String>,
-    ) -> Result<std::collections::HashMap<String, InitiativeId>, Self::Err> {
-        let rows = sqlx::query!(
-            "SELECT task_id, initiative_id FROM task_initiative WHERE task_id = ANY($1)",
-            &task_ids
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(classify_sqlx)?;
-        Ok(rows
-            .into_iter()
-            .map(|row| (row.task_id, InitiativeId::from_uuid(row.initiative_id)))
-            .collect())
-    }
-
     #[tracing::instrument(err, skip(self, args))]
     async fn update(&self, args: UpdateInitiativeRepoArgs) -> Result<InitiativeDetail, Self::Err> {
         create::update(&self.pool, args).await
@@ -119,29 +100,6 @@ impl InitiativeRepo for PgInitiativeRepo {
         user_id: &MacroUserIdStr<'static>,
     ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
         share::get_team_default_link_share(&self.pool, user_id).await
-    }
-
-    #[tracing::instrument(err, skip(self, task_ids))]
-    async fn assign_tasks(
-        &self,
-        id: InitiativeId,
-        task_ids: Vec<String>,
-    ) -> Result<AssignedTasks, Self::Err> {
-        tasks::assign_tasks(&self.pool, id, task_ids).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn unassign_task(
-        &self,
-        id: InitiativeId,
-        task_id: &str,
-    ) -> Result<Option<TaskMembershipChange>, Self::Err> {
-        tasks::unassign_task(&self.pool, id, task_id).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn clear_task(&self, task_id: &str) -> Result<Option<TaskMembershipChange>, Self::Err> {
-        tasks::clear_task(&self.pool, task_id).await
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -193,7 +151,6 @@ struct InitiativeRecord {
     updated_at: chrono::DateTime<chrono::Utc>,
     share_permission_id: String,
     member_ids: Vec<String>,
-    task_ids: Vec<String>,
     link_share: Option<String>,
     link_share_access_level: Option<AccessLevel>,
     team_share_access_level: Option<AccessLevel>,
@@ -217,7 +174,7 @@ impl InitiativeRecord {
             name: self.name,
             owner_id,
             member_ids: parse_members(self.member_ids)?,
-            task_ids: self.task_ids,
+            task_ids: Vec::new(),
             share_permission,
             user_access_level: DETAIL_ACCESS_WITHOUT_ACTOR,
             created_at: self.created_at,
@@ -343,10 +300,6 @@ async fn load_record(
                 array_agg(DISTINCT m.user_id) FILTER (WHERE m.user_id IS NOT NULL),
                 '{}'::text[]
             ) AS "member_ids!",
-            COALESCE(
-                array_agg(DISTINCT t.task_id) FILTER (WHERE t.task_id IS NOT NULL),
-                '{}'::text[]
-            ) AS "task_ids!",
             sp."linkShare" AS "link_share?",
             sp."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
             sp.team_share_access_level AS "team_share_access_level?: AccessLevel",
@@ -364,7 +317,6 @@ async fn load_record(
         FROM initiative i
         JOIN "SharePermission" sp ON sp.id = i.share_permission_id
         LEFT JOIN initiative_member m ON m.initiative_id = i.id
-        LEFT JOIN task_initiative t ON t.initiative_id = i.id
         WHERE i.id = $1
         GROUP BY
             i.id,
@@ -390,7 +342,6 @@ async fn load_record(
         updated_at: row.updated_at,
         share_permission_id: row.share_permission_id,
         member_ids: row.member_ids,
-        task_ids: row.task_ids,
         link_share: row.link_share,
         link_share_access_level: row.link_share_access_level,
         team_share_access_level: row.team_share_access_level,

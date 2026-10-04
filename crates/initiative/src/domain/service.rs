@@ -4,18 +4,15 @@
 mod test;
 
 use crate::domain::events::{
-    AssignedTasks, InitiativeChange, InitiativeEventPublisher, InitiativeMacroEvent,
-    InitiativeTasksChanged, InitiativeTopicEvent, receipt_attribution,
+    InitiativeChange, InitiativeEventPublisher, InitiativeMacroEvent, InitiativeTopicEvent,
+    receipt_attribution,
 };
 use chrono::Utc;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
 mod reads;
-mod tasks;
-
-pub use tasks::{ClearTaskOutcome, ClearTaskStatus, clear_task_batch};
 
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
@@ -31,10 +28,9 @@ use models_permissions::share_permission::team_share::{
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::domain::models::{
-    AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs,
-    CreateInitiativeRequest, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-    InitiativeList, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES,
-    MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    CreateInitiativeRepoArgs, CreateInitiativeRequest, InitiativeBasic, InitiativeDetail,
+    InitiativeError, InitiativeId, InitiativeList, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
+    MAX_INITIATIVE_NAME_GRAPHEMES, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{InitiativeDescriptionSurfaces, InitiativeRepo, InitiativeService};
 use crate::domain::resources::InitiativeResources;
@@ -156,13 +152,6 @@ where
         self.read_tasks_page(receipt, request).await
     }
 
-    async fn task_references(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        request: crate::domain::reads::TaskInitiativeReferencesRequest,
-    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
-        self.read_task_references(user_id, request).await
-    }
     /// A seeded description surface commits before the initiative row. A failed create
     /// retires it, and a failed property initialization deletes the new initiative.
     #[tracing::instrument(err, skip_all)]
@@ -308,7 +297,9 @@ where
             .map_err(Into::into)?
             .ok_or(InitiativeError::NotFound)?;
         detail.user_access_level = receipt_access_level(&receipt)?;
-        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
+        detail.task_ids = self
+            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
+            .await?;
         Ok(detail)
     }
 
@@ -403,115 +394,10 @@ where
         )
         .await;
         detail.user_access_level = receipt_access_level(&receipt)?;
-        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
+        detail.task_ids = self
+            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
+            .await?;
         Ok(detail)
-    }
-
-    #[tracing::instrument(err, skip_all)]
-    async fn assign_tasks(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-        assignments: Vec<TaskAssignment>,
-    ) -> Result<AssignTasksResponse, InitiativeError> {
-        let id = initiative_id_from_receipt(&receipt)?;
-
-        let assignments = dedupe_assignments(assignments);
-        if assignments.len() > MAX_TASKS_PER_ASSIGN {
-            return Err(InitiativeError::BadRequest(format!(
-                "cannot assign more than {MAX_TASKS_PER_ASSIGN} tasks at once"
-            )));
-        }
-
-        let mut candidate_ids = Vec::new();
-        for assignment in &assignments {
-            if let TaskAssignment::Authorized {
-                receipt: task_receipt,
-            } = assignment
-            {
-                validate_task_receipt(task_receipt)?;
-                require_same_actor(&receipt, task_receipt)?;
-                candidate_ids.push(task_receipt.entity().entity_id.clone());
-            }
-        }
-
-        let committed = if candidate_ids.is_empty() {
-            AssignedTasks::default()
-        } else {
-            self.repo
-                .assign_tasks(id, candidate_ids)
-                .await
-                .map_err(Into::into)?
-        };
-
-        if !committed.changes.is_empty() {
-            self.publish(
-                id,
-                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
-                    attribution: receipt_attribution(&receipt),
-                    changes: committed.changes,
-                    occurred_at: Utc::now(),
-                }),
-            )
-            .await;
-        }
-        Ok(AssignTasksResponse {
-            results: merge_assign_results(&assignments, committed.results),
-        })
-    }
-
-    #[tracing::instrument(err, skip_all)]
-    async fn unassign_task(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<(), InitiativeError> {
-        let id = initiative_id_from_receipt(&receipt)?;
-        validate_task_receipt(&task_receipt)?;
-        require_same_actor(&receipt, &task_receipt)?;
-        let change = self
-            .repo
-            .unassign_task(id, &task_receipt.entity().entity_id)
-            .await
-            .map_err(Into::into)?;
-        if let Some(change) = change {
-            self.publish(
-                id,
-                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
-                    attribution: receipt_attribution(&receipt),
-                    changes: vec![change],
-                    occurred_at: Utc::now(),
-                }),
-            )
-            .await;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(err, skip_all)]
-    async fn clear_task(
-        &self,
-        task_receipt: EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<(), InitiativeError> {
-        validate_task_receipt(&task_receipt)?;
-        let change = self
-            .repo
-            .clear_task(&task_receipt.entity().entity_id)
-            .await
-            .map_err(Into::into)?;
-        if let Some(change) = change
-            && let Some(id) = change.from
-        {
-            self.publish(
-                id,
-                InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
-                    attribution: receipt_attribution(&task_receipt),
-                    changes: vec![change],
-                    occurred_at: Utc::now(),
-                }),
-            )
-            .await;
-        }
-        Ok(())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -523,10 +409,9 @@ where
         super::assignees::grant(&self.repo, &receipt, user_ids).await
     }
 
-    /// Initiative rows first, then the description. The document FK's `ON DELETE RESTRICT`
-    /// would reject a document-first purge while the initiative still names it. Purging the
-    /// document drops its sync-service session, which the surface adopted; the surface row
-    /// is then soft-deleted so no token outlives the initiative.
+    /// Initiative rows first, then cleanup that must not outlive them: the initiative's own
+    /// properties and its tasks' Project values, then the description surface, which is
+    /// retired so no token outlives the initiative.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,
@@ -598,35 +483,6 @@ fn receipt_access_level<T: entity_access::domain::models::RequiredPermission>(
         EntityPermission::AccessLevel { access_level } => Ok(*access_level),
         _ => Err(InitiativeError::Unauthorized),
     }
-}
-
-fn validate_task_receipt(
-    receipt: &EntityAccessReceipt<EditAccessLevel>,
-) -> Result<(), InitiativeError> {
-    if receipt.entity().entity_type != EntityType::Document {
-        return Err(InitiativeError::BadRequest(
-            "requires a task document access receipt".to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn require_same_actor(
-    initiative: &EntityAccessReceipt<EditAccessLevel>,
-    task: &EntityAccessReceipt<EditAccessLevel>,
-) -> Result<(), InitiativeError> {
-    let same_actor = match (initiative.auth(), task.auth()) {
-        (EntityAccessAuth::Authenticated(left), EntityAccessAuth::Authenticated(right)) => {
-            left == right
-        }
-        (EntityAccessAuth::Bot(left), EntityAccessAuth::Bot(right)) => left == right,
-        (EntityAccessAuth::Internal, EntityAccessAuth::Internal) => true,
-        _ => false,
-    };
-    if !same_actor {
-        return Err(InitiativeError::Unauthorized);
-    }
-    Ok(())
 }
 
 fn normalize_name(name: &str) -> Result<String, InitiativeError> {
@@ -728,42 +584,4 @@ fn member_diff(
         .cloned()
         .collect();
     (added, removed)
-}
-
-fn dedupe_assignments(assignments: Vec<TaskAssignment>) -> Vec<TaskAssignment> {
-    let mut seen = HashSet::new();
-    assignments
-        .into_iter()
-        .filter(|assignment| seen.insert(assignment.task_id().to_string()))
-        .collect()
-}
-
-fn merge_assign_results(
-    assignments: &[TaskAssignment],
-    repo_results: Vec<AssignTasksResult>,
-) -> Vec<AssignTasksResult> {
-    let repo_by_id: HashMap<String, AssignTaskStatus> = repo_results
-        .into_iter()
-        .map(|result| (result.task_id, result.status))
-        .collect();
-    assignments
-        .iter()
-        .map(|assignment| match assignment {
-            TaskAssignment::Authorized { receipt } => AssignTasksResult {
-                task_id: receipt.entity().entity_id.clone(),
-                status: repo_by_id
-                    .get(&receipt.entity().entity_id)
-                    .copied()
-                    .unwrap_or(AssignTaskStatus::NotFound),
-            },
-            TaskAssignment::NotFound { task_id } => AssignTasksResult {
-                task_id: task_id.clone(),
-                status: AssignTaskStatus::NotFound,
-            },
-            TaskAssignment::SkippedNoPermission { task_id } => AssignTasksResult {
-                task_id: task_id.clone(),
-                status: AssignTaskStatus::SkippedNoPermission,
-            },
-        })
-        .collect()
 }

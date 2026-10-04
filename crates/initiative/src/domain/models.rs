@@ -3,13 +3,12 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 #[cfg(feature = "ports")]
-use entity_access::domain::models::{AccessError, EditAccessLevel, EntityAccessReceipt};
+use entity_access::domain::models::AccessError;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
@@ -22,9 +21,6 @@ pub const MAX_INITIATIVE_NAME_GRAPHEMES: usize = 100;
 
 /// Maximum length of the create-time description prefill, counted in Unicode grapheme clusters.
 pub const MAX_INITIATIVE_DESCRIPTION_GRAPHEMES: usize = 2_000;
-
-/// Maximum number of tasks accepted in one assign call.
-pub const MAX_TASKS_PER_ASSIGN: usize = 100;
 
 /// Opaque identifier for an initiative. Minted as UUIDv7 in application code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -166,80 +162,6 @@ pub struct UpdateInitiativeRequest {
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
 }
 
-/// Assign-tasks HTTP body.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct AssignTasksRequest {
-    /// Task ids to assign, in request order.
-    pub task_ids: Vec<String>,
-}
-
-/// A bounded, deduplicated task request, validated before looking up access receipts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaskAssignmentBatch(Vec<String>);
-
-impl TaskAssignmentBatch {
-    /// Deduplicate in request order and enforce the assignment limit before access lookup.
-    pub fn try_new(task_ids: Vec<String>) -> Result<Self, InitiativeError> {
-        let mut seen = HashSet::new();
-        let mut unique = Vec::new();
-        for task_id in task_ids {
-            if seen.insert(task_id.clone()) {
-                if unique.len() == MAX_TASKS_PER_ASSIGN {
-                    return Err(InitiativeError::BadRequest(format!(
-                        "cannot assign more than {MAX_TASKS_PER_ASSIGN} tasks at once"
-                    )));
-                }
-                unique.push(task_id);
-            }
-        }
-        Ok(Self(unique))
-    }
-
-    /// Consume the batch for receipt generation.
-    pub fn into_task_ids(self) -> Vec<String> {
-        self.0
-    }
-}
-
-/// Per-task outcome of an assign call.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct AssignTasksResult {
-    /// Task id this outcome describes.
-    pub task_id: String,
-    /// What happened to the task.
-    pub status: AssignTaskStatus,
-}
-
-/// Assign-tasks HTTP response.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct AssignTasksResponse {
-    /// Outcomes in request order after dedupe.
-    pub results: Vec<AssignTasksResult>,
-}
-
-/// Status written onto one assign result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub enum AssignTaskStatus {
-    /// Newly assigned to this initiative.
-    Assigned,
-    /// Moved here from another initiative.
-    Moved,
-    /// The id exists but is not a task.
-    NotATask,
-    /// The id does not exist.
-    NotFound,
-    /// The caller cannot assign this task.
-    SkippedNoPermission,
-}
-
 /// Accessible-initiative list.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -247,62 +169,6 @@ pub enum AssignTaskStatus {
 pub struct InitiativeList {
     /// Initiatives the caller can view.
     pub initiatives: Vec<InitiativeSummary>,
-}
-
-/// One task in an assign-tasks service call, retaining the verified edit capability.
-#[cfg(feature = "ports")]
-#[derive(Debug, Clone)]
-pub enum TaskAssignment {
-    /// The caller can edit this document; persistence confirms its task subtype.
-    Authorized {
-        /// Verified capability for the task, retained through the domain boundary.
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-    },
-    /// Inbound could not find this task.
-    NotFound {
-        /// Task id.
-        task_id: String,
-    },
-    /// Inbound found the task but the caller cannot assign it.
-    SkippedNoPermission {
-        /// Task id.
-        task_id: String,
-    },
-}
-
-#[cfg(feature = "ports")]
-impl TaskAssignment {
-    /// Retain a verified task capability or classify the access failure for a partial batch.
-    pub fn from_access(
-        task_id: String,
-        result: Result<EntityAccessReceipt<EditAccessLevel>, AccessError>,
-    ) -> Result<Self, InitiativeError> {
-        match result {
-            Ok(receipt) if receipt.entity().entity_id == task_id => {
-                Ok(Self::Authorized { receipt })
-            }
-            Ok(_) => Err(InitiativeError::BadRequest(
-                "task receipt does not match the requested task".to_string(),
-            )),
-            Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
-                Ok(Self::SkippedNoPermission { task_id })
-            }
-            Err(AccessError::NotFound(_) | AccessError::BadRequest(_)) => {
-                Ok(Self::NotFound { task_id })
-            }
-            Err(error) => Err(InitiativeError::Internal(
-                rootcause::Report::new(error).into_dynamic(),
-            )),
-        }
-    }
-
-    /// Task id this assignment refers to.
-    pub fn task_id(&self) -> &str {
-        match self {
-            Self::Authorized { receipt } => &receipt.entity().entity_id,
-            Self::NotFound { task_id } | Self::SkippedNoPermission { task_id } => task_id,
-        }
-    }
 }
 
 /// Arguments for creating an initiative row. No serde: repository-only.
@@ -341,9 +207,6 @@ pub enum InitiativeError {
     /// The initiative does not exist.
     #[error("initiative not found")]
     NotFound,
-    /// The document exists but does not have the task subtype.
-    #[error("document is not a task")]
-    NotATask,
     /// The caller cannot perform this action.
     #[error("unauthorized")]
     Unauthorized,

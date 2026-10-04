@@ -2,40 +2,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { assignProjectTasks } from './assignment';
 
 describe('project task assignment', () => {
-  it('preserves successful task results when a later batch fails', async () => {
-    const tasks = Array.from({ length: 105 }, (_, index) => `task-${index}`);
-    const assign = vi.fn(async (_id: string, ids: string[]) =>
-      ids.map((taskId) => ({ taskId }))
-    );
-    assign
-      .mockImplementationOnce(async (_id, ids) =>
-        ids.map((taskId) => ({ taskId }))
-      )
-      .mockRejectedValueOnce(new Error('access changed'));
-    const results = await assignProjectTasks(
-      { assign, clear: vi.fn() },
-      'initiative',
-      [...tasks, tasks[0]]
-    );
-    expect(assign).toHaveBeenCalledTimes(2);
+  it('sets each unique task once and keeps successes when some fail', async () => {
+    const tasks = Array.from({ length: 30 }, (_, index) => `task-${index}`);
+    const setProject = vi.fn(async (taskId: string) => {
+      if (taskId === 'task-27') throw new Error('access changed');
+    });
+    const results = await assignProjectTasks(setProject, 'initiative', [
+      ...tasks,
+      tasks[0],
+    ]);
+    expect(setProject).toHaveBeenCalledTimes(30);
+    expect(setProject).toHaveBeenCalledWith('task-0', 'initiative');
     expect(
       results.filter((result) => result.error).map((result) => result.taskId)
-    ).toEqual(tasks.slice(100));
-    expect(
-      results.filter((result) => !result.error).map((result) => result.taskId)
-    ).toEqual(tasks.slice(0, 100));
-    expect(results).toHaveLength(105);
+    ).toEqual(['task-27']);
+    expect(results).toHaveLength(30);
   });
 
-  it('returns per-task removal failures without discarding successes', async () => {
-    const clear = vi.fn(async (id: string) => {
+  it('clears the project and reports per-task removal failures', async () => {
+    const setProject = vi.fn(async (id: string) => {
       if (id === 'locked') throw new Error('forbidden');
     });
-    const results = await assignProjectTasks(
-      { assign: vi.fn(), clear },
-      undefined,
-      ['editable', 'locked']
-    );
+    const results = await assignProjectTasks(setProject, undefined, [
+      'editable',
+      'locked',
+    ]);
+    expect(setProject).toHaveBeenCalledWith('editable', undefined);
     expect(results[0]).toEqual({ taskId: 'editable', error: undefined });
     expect(results[1].error).toBeTruthy();
   });

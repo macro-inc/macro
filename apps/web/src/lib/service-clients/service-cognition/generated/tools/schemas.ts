@@ -3,44 +3,6 @@
  */
 import { z } from 'zod/v3';
 
-export const AssignTasksToInitiative = z.object({
-  initiativeId: z.string().uuid(),
-  taskIds: z.array(z.string()),
-});
-
-export const AssignTasksToInitiativeResponse = z.object({
-  initiativeId: z.string().uuid(),
-  results: z.array(
-    z.object({
-      taskId: z.string(),
-      status: z.any().superRefine((x, ctx) => {
-        const schemas = [
-          z.literal('assigned'),
-          z.literal('moved'),
-          z.literal('not_a_task'),
-          z.literal('not_found'),
-          z.literal('skipped_no_permission'),
-        ];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-    })
-  ),
-});
-
 export const BashCodeExecution = z.object({ input: z.string() });
 
 export const BashCodeExecutionResponse = z.object({
@@ -5963,40 +5925,6 @@ export const ReadSpreadsheet = z.object({
   includeStyles: z.union([z.boolean(), z.null()]).optional(),
 });
 
-export const ReadTaskInitiatives = z.object({ taskIds: z.array(z.string()) });
-
-export const TaskProjectReferences = z.object({
-  references: z.array(
-    z.any().superRefine((x, ctx) => {
-      const schemas = [
-        z.object({ taskId: z.string(), state: z.literal('none') }),
-        z.object({ taskId: z.string(), state: z.literal('unavailable') }),
-        z.object({
-          taskId: z.string(),
-          initiativeId: z.string().uuid(),
-          name: z.string(),
-          state: z.literal('visible'),
-        }),
-      ];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    })
-  ),
-});
-
 export const RenameChannel = z.object({
   channelId: z.string().uuid(),
   name: z.string(),
@@ -6750,15 +6678,6 @@ export const SetSenderPolicyResponse = z.object({
   summary: z.string(),
 });
 
-export const SetTaskInitiative = z.object({
-  taskIds: z.array(z.string()),
-  initiativeId: z.union([z.string().uuid(), z.null()]).optional(),
-});
-
-export const TaskProjectOutcomes = z.object({
-  results: z.array(z.object({ taskId: z.string(), status: z.string() })),
-});
-
 export const Subagent = z.object({ task: z.string() });
 
 export const SubagentResponse = z.object({ result: z.string() });
@@ -6872,38 +6791,6 @@ export const TextEditorCodeExecutionResponse = z.object({
       });
     }
   }),
-});
-
-export const UnassignTasksFromInitiative = z.object({
-  initiativeId: z.string().uuid(),
-  taskIds: z.array(z.string()),
-});
-
-export const UnassignTasksFromInitiativeResponse = z.object({
-  initiativeId: z.string().uuid(),
-  results: z.array(
-    z.object({
-      taskId: z.string(),
-      status: z.any().superRefine((x, ctx) => {
-        const schemas = [z.literal('unassigned'), z.literal('not_assigned')];
-        const errors = schemas.reduce<z.ZodError[]>(
-          (errors, schema) =>
-            ((result) => (result.error ? [...errors, result.error] : errors))(
-              schema.safeParse(x)
-            ),
-          []
-        );
-        if (schemas.length - errors.length !== 1) {
-          ctx.addIssue({
-            path: ctx.path,
-            code: 'invalid_union',
-            unionErrors: errors,
-            message: 'Invalid input: Should pass single schema',
-          });
-        }
-      }),
-    })
-  ),
 });
 
 export const UpdateCalendarEvent = z.object({

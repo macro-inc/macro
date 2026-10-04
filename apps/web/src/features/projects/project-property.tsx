@@ -1,11 +1,12 @@
+import { useUserId } from '@core/context/user';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import StackIcon from '@phosphor/stack.svg';
 import { Property } from '@property';
 import { Dropdown, HoverCard, Layer } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import type { TaskProjectReference } from './core/project';
 import { Projects } from './projects';
+import { useTaskProjectReference } from './queries/project-identity';
 import { ProjectPicker } from './views/project-picker';
 
 type AnchorRect = { x: number; y: number; width?: number; height?: number };
@@ -49,18 +50,19 @@ export function ProjectPickerPopover(props: {
   );
 }
 
-/** Task list cell for a task's project, matching the other property cells. */
+/** Task list cell for a task's Project property, matching the other property cells. */
 export function ProjectPropertyCell(props: {
   taskId: string;
-  reference?: TaskProjectReference;
+  projectId?: string;
 }) {
   const [anchor, setAnchor] = createSignal<HTMLElement>();
-  const project = () =>
-    props.reference?.state === 'visible' ? props.reference : undefined;
+  const reference = useTaskProjectReference(() => props.projectId, useUserId());
+  const project = () => {
+    const current = reference();
+    return current?.state === 'visible' ? current : undefined;
+  };
   const emptyLabel = () =>
-    props.reference?.state === 'unavailable'
-      ? 'Unavailable project'
-      : 'Project';
+    reference()?.state === 'unavailable' ? 'Unavailable project' : 'Project';
   return (
     <>
       <HoverCard

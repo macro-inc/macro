@@ -47,9 +47,10 @@ pub fn extract_option_ids_from_property_value(value: &Option<PropertyValue>) -> 
 
 /// Check if a property can be attached to the given entity type.
 pub fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> bool {
-    // Task-only properties: Parent Task and Subtasks
+    // Task-only properties: Parent Task, Subtasks and Project
     if property_id == SystemPropertyKey::PARENT_TASK_UUID
         || property_id == SystemPropertyKey::SUBTASKS_UUID
+        || property_id == SystemPropertyKey::PROJECT_UUID
     {
         return entity_type == EntityType::Task;
     }
