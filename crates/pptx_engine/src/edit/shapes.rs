@@ -3,6 +3,7 @@
 
 use super::chart;
 use super::chart_new;
+use super::group;
 use super::ops::{FillSpec, LinePatch, NewShape, ZOrder};
 use super::parts;
 use super::xmlutil::{
@@ -21,7 +22,7 @@ const SP_ORDER: &[&str] = &["nvSpPr", "spPr", "style", "txBody", "extLst"];
 /// Child order of `p:graphicFrame`.
 const FRAME_ORDER: &[&str] = &["nvGraphicFramePr", "xfrm", "graphic", "extLst"];
 /// Elements that occupy a z-order slot in a shape tree.
-const TREE_ITEMS: &[&str] = &[
+pub(super) const TREE_ITEMS: &[&str] = &[
     "sp",
     "grpSp",
     "pic",
@@ -112,7 +113,8 @@ fn sp_pr(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
         .find(|&c| matches!(doc.local(c), "spPr" | "grpSpPr"))
 }
 
-fn xfrm_element(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
+/// The shape's own `xfrm` element (`p:xfrm` for graphic frames), if any.
+pub(super) fn xfrm_element(doc: &XmlDoc, shape: NodeId) -> Option<NodeId> {
     if doc.local(shape) == "graphicFrame" {
         doc.child(shape, Ns::P, "xfrm")
     } else {
@@ -190,6 +192,11 @@ pub fn set_transform(
         let ch_ext = doc.ensure_child(xfrm, Ns::A, "chExt", &["off", "ext", "chOff", "chExt"]);
         doc.set_attr(ch_ext, "cx", &emu(current.w).to_string());
         doc.set_attr(ch_ext, "cy", &emu(current.h).to_string());
+    }
+    if !group::ancestors(doc, node).is_empty() {
+        // Group members store their box in the group's child space.
+        group::set_member_transform(doc, node, xfrm, &current, patch);
+        return Ok(());
     }
     set_off_ext(
         doc,
@@ -570,23 +577,27 @@ fn table_xml(id: u32, n: u32, cells: &[Vec<String>], [x, y, w, h]: [f32; 4]) -> 
 }
 
 /// The element that occupies the shape's z-order slot (its `mc:AlternateContent`, if wrapped).
-fn tree_item(doc: &XmlDoc, shape: NodeId) -> NodeId {
+pub(super) fn tree_item(doc: &XmlDoc, shape: NodeId) -> NodeId {
     match doc.parent(shape) {
         Some(p) if matches!(doc.local(p), "Choice" | "Fallback") => doc.parent(p).unwrap_or(shape),
         _ => shape,
     }
 }
 
-/// Deletes a shape (and a group it leaves empty).
+/// Deletes a shape (and a group it leaves empty); a group it leaves shrinks
+/// to its remaining members.
 pub fn delete_shape(doc: &mut XmlDoc, shape: NodeId) {
     let item = tree_item(doc, shape);
     let parent = doc.parent(item);
     doc.detach(item);
     if let Some(g) = parent
         && doc.local(g) == "grpSp"
-        && !doc.children(g).any(|c| TREE_ITEMS.contains(&doc.local(c)))
     {
-        delete_shape(doc, g);
+        if doc.children(g).any(|c| TREE_ITEMS.contains(&doc.local(c))) {
+            group::refit_group_and_ancestors(doc, g);
+        } else {
+            delete_shape(doc, g);
+        }
     }
 }
 
@@ -646,13 +657,10 @@ pub fn duplicate_shape(
     let new_id = *map
         .get(&i64::from(shape))
         .ok_or_else(|| Error::InvalidEdit("shape has no id".into()))?;
-    let tops: Vec<NodeId> = if doc.local(copy) == "AlternateContent" {
-        doc.children(copy)
-            .flat_map(|branch| doc.children(branch).collect::<Vec<_>>())
-            .collect()
-    } else {
-        vec![copy]
-    };
+    let tops = group::branch_shapes(doc, copy);
+    doc.insert_after(item, copy);
+    // Offsets are in slide space; group members store child-space positions.
+    let nested = !group::ancestors(doc, copy).is_empty();
     if dx != 0.0 || dy != 0.0 {
         for top in tops {
             let xfrm = match xfrm_element(doc, top) {
@@ -663,7 +671,9 @@ pub fn duplicate_shape(
                     x
                 }
             };
-            if let Some(off) = doc.child(xfrm, Ns::A, "off") {
+            if nested {
+                group::shift_member(doc, top, xfrm, f64::from(dx), f64::from(dy));
+            } else if let Some(off) = doc.child(xfrm, Ns::A, "off") {
                 let ox = doc.attr_i64(off, "x").unwrap_or(0) + emu(dx);
                 let oy = doc.attr_i64(off, "y").unwrap_or(0) + emu(dy);
                 doc.set_attr(off, "x", &ox.to_string());
@@ -671,7 +681,9 @@ pub fn duplicate_shape(
             }
         }
     }
-    doc.insert_after(item, copy);
+    if nested {
+        group::refit_ancestors(doc, copy);
+    }
     Ok(new_id)
 }
 

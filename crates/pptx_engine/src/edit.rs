@@ -26,6 +26,8 @@ mod table_style;
 mod text;
 mod xmlutil;
 
+pub(crate) mod group;
+
 pub use notes::notes_text;
 pub use ops::{
     BodyPatch, BulletSpec, CellRef, ChartSeriesColor, ChartSeriesData, Created, EditOp, EditResult,
@@ -83,6 +85,7 @@ impl EditOp {
             | O::SetChartType { slide, .. }
             | O::FormatChart { slide, .. } => Some(*slide),
             O::AddSlide { .. } => None,
+            O::GroupShapes { slide, .. } | O::UngroupShape { slide, .. } => Some(*slide),
         }
     }
 
@@ -122,10 +125,10 @@ impl Presentation {
     ) -> Result<(EditResult, Presentation)> {
         let before = self.clone();
         match self.run_batch(ops, fonts) {
-            Ok(created) => {
+            Ok(out) => {
                 self.flush();
                 let mut result = diff(&before, self);
-                result.created = created;
+                result.created = out.created;
                 Ok((result, before))
             }
             Err(e) => {
@@ -135,25 +138,23 @@ impl Presentation {
         }
     }
 
-    fn run_batch(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<Vec<Created>> {
+    fn run_batch(&mut self, ops: &[EditOp], fonts: &FontDb) -> Result<BatchOutput> {
         let gc = if ops.iter().any(EditOp::may_orphan) {
             Some(parts::baseline(self)?)
         } else {
             None
         };
-        let mut created = Vec::new();
+        let mut out = BatchOutput::default();
         let mut refit = Vec::new();
         for op in ops {
-            if let Some(c) = self.apply_op(op, &mut refit)? {
-                created.push(c);
-            }
+            self.apply_op(op, &mut refit, &mut out)?;
         }
         autofit::refit(self, &refit, fonts)?;
         parts::prune_rels(self)?;
         if let Some(gc) = gc {
             parts::collect_garbage(self, &gc)?;
         }
-        Ok(created)
+        Ok(out)
     }
 
     /// The part name of the slide with stable id `id`.
@@ -198,7 +199,12 @@ impl Presentation {
         Ok(())
     }
 
-    fn apply_op(&mut self, op: &EditOp, refit: &mut Vec<(String, u32)>) -> Result<Option<Created>> {
+    fn apply_op(
+        &mut self,
+        op: &EditOp,
+        refit: &mut Vec<(String, u32)>,
+        out: &mut BatchOutput,
+    ) -> Result<()> {
         use EditOp as O;
         let mut created = None;
         match op {
@@ -569,9 +575,34 @@ impl Presentation {
                 };
                 chart::format(self, &part, *shape, &format)?;
             }
+            O::GroupShapes { slide, shapes } => {
+                let part = self.slide_part(*slide)?;
+                let id = group::group_shapes(self, &part, shapes)?;
+                created = Some(Created {
+                    slide: *slide,
+                    shape: Some(id),
+                });
+            }
+            O::UngroupShape { slide, shape } => {
+                let part = self.slide_part(*slide)?;
+                for id in group::ungroup(self, &part, *shape)? {
+                    out.created.push(Created {
+                        slide: *slide,
+                        shape: Some(id),
+                    });
+                }
+            }
         }
-        Ok(created)
+        out.created.extend(created);
+        Ok(())
     }
+}
+
+/// What a batch reports besides the slides it changed.
+#[derive(Default)]
+struct BatchOutput {
+    /// Ids created, in order.
+    created: Vec<Created>,
 }
 
 /// Which slides differ between two states of the same presentation.

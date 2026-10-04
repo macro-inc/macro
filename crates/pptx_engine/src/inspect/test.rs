@@ -1,5 +1,6 @@
 use super::*;
 use crate::edit::{EditOp, NewShape};
+use crate::path::Rect;
 use crate::test_support::{deck, fonts, text_box};
 
 fn title(text: &str) -> String {

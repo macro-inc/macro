@@ -2,6 +2,7 @@
 //! outline (slides, shapes, text, tables, notes) and text layouts with caret
 //! stops for in-place text editing.
 
+use crate::edit::group::{Frame, GroupSpace};
 use crate::edit::{CellRef, notes_text};
 use crate::error::{Error, Result};
 use crate::font::FontDb;
@@ -16,7 +17,7 @@ use crate::model::text::{
     Align, Anchor, BulletKind, Paragraph, RunKind, RunProps, Strike, Underline,
 };
 use crate::opc::rel_type;
-use crate::path::{Affine, Point, Rect};
+use crate::path::Affine;
 use crate::render::build::{shape_geometry, text_frame};
 use crate::render::table::{cell_text_layout, layout_table, table_style_id, table_styles_part};
 use crate::render::text::{LayoutParams, LineBox, layout};
@@ -228,7 +229,9 @@ pub struct ShapeOutline {
     /// Chart summary (charts only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chart: Option<ChartOutline>,
-    /// Group members.
+    /// Group members, back to front. Their box, rotation, and flips are in
+    /// slide space: where each would sit directly on the slide (what
+    /// `setTransform` takes and ungrouping gives it).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<ShapeOutline>,
 }
@@ -402,25 +405,6 @@ fn hex(fill: &Fill) -> Option<String> {
     }
 }
 
-/// Axis-aligned bounds of a box under a transform.
-fn bounds(t: &Affine, r: Rect) -> Rect {
-    let pts = [
-        Point::new(r.x, r.y),
-        Point::new(r.right(), r.y),
-        Point::new(r.right(), r.bottom()),
-        Point::new(r.x, r.bottom()),
-    ]
-    .map(|p| t.apply(p));
-    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
-    for p in pts {
-        x0 = x0.min(p.x);
-        y0 = y0.min(p.y);
-        x1 = x1.max(p.x);
-        y1 = y1.max(p.y);
-    }
-    Rect::from_ltrb(x0, y0, x1, y1)
-}
-
 /// Chart outlines by chart part name.
 type Charts = HashMap<String, ChartOutline>;
 
@@ -443,15 +427,21 @@ fn chart_outlines(pres: &mut Presentation, ctx: &SlideContext, shapes: &[Shape],
     }
 }
 
-fn shape_outline(s: &Shape, parent: &Affine, charts: &Charts) -> ShapeOutline {
+/// `groups` are the spaces of the groups around `s`, outermost first.
+fn shape_outline(s: &Shape, groups: &[GroupSpace], charts: &Charts) -> ShapeOutline {
     let doc = &s.part.doc;
-    // Top-level shapes report their own box; group members report it mapped to the slide.
-    let (x, y, w, h) = if *parent == Affine::IDENTITY {
-        (s.xfrm.x, s.xfrm.y, s.xfrm.w, s.xfrm.h)
-    } else {
-        let b = bounds(parent, s.xfrm.rect());
-        (b.x, b.y, b.w, b.h)
-    };
+    // Group members report the frame they have in slide space (what
+    // `setTransform` takes and ungrouping gives them).
+    let frame = groups
+        .iter()
+        .rev()
+        .fold(Frame::from_xfrm(&s.xfrm), |f, g| g.bake(&f));
+    let (x, y, w, h) = (
+        frame.x as f32,
+        frame.y as f32,
+        frame.w as f32,
+        frame.h as f32,
+    );
     let tx_body = doc.children(s.node).find(|&c| doc.local(c) == "txBody");
     let (kind, table) = match &s.kind {
         ShapeKind::Group(_) => (ShapeKindName::Group, None),
@@ -479,12 +469,11 @@ fn shape_outline(s: &Shape, parent: &Affine, charts: &Charts) -> ShapeOutline {
     };
     let children = match &s.kind {
         ShapeKind::Group(members) => {
-            let child_parent = parent
-                .pre_concat(&s.xfrm.local_to_parent())
-                .pre_concat(&s.xfrm.child_to_local());
+            let mut inner = groups.to_vec();
+            inner.push(GroupSpace::from_xfrm(&s.xfrm));
             members
                 .iter()
-                .map(|c| shape_outline(c, &child_parent, charts))
+                .map(|c| shape_outline(c, &inner, charts))
                 .collect()
         }
         _ => Vec::new(),
@@ -502,9 +491,9 @@ fn shape_outline(s: &Shape, parent: &Affine, charts: &Charts) -> ShapeOutline {
         y,
         w,
         h,
-        rotation: s.xfrm.rot,
-        flip_h: s.xfrm.flip_h,
-        flip_v: s.xfrm.flip_v,
+        rotation: frame.rot as f32,
+        flip_h: frame.flip_h,
+        flip_v: frame.flip_v,
         hidden: s.hidden,
         alt_text: s.descr.clone(),
         geometry: match &s.geometry {
@@ -556,7 +545,7 @@ impl Presentation {
         chart_outlines(self, &ctx, &shapes, &mut charts);
         let mut outlines: Vec<ShapeOutline> = shapes
             .iter()
-            .map(|s| shape_outline(s, &Affine::IDENTITY, &charts))
+            .map(|s| shape_outline(s, &[], &charts))
             .collect();
         let styles = table_styles_part(&ctx).and_then(|n| self.part(&n).ok());
         complete_tables(&ctx, styles.as_ref(), &shapes, &mut outlines, fonts);

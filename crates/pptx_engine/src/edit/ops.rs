@@ -380,6 +380,8 @@ pub enum EditOp {
         props: BodyPatch,
     },
     /// Moves, resizes, rotates, or flips a shape (omitted fields stay).
+    /// Values are in slide space, also for group members (as the outline
+    /// reports them); their group grows or shrinks to fit.
     SetTransform {
         /// Slide id.
         slide: u32,
@@ -729,6 +731,27 @@ pub enum EditOp {
         /// Series colors.
         #[serde(default)]
         series_colors: Option<Vec<ChartSeriesColor>>,
+    },
+    // ---- shapes and slides ----
+    /// Groups two or more shapes that share a parent (usually top-level
+    /// shapes) into a new group placed at the z-position of the topmost of
+    /// them. They keep their order and exactly where they are. The group's id
+    /// is reported in the result. Placeholders cannot be grouped.
+    GroupShapes {
+        /// Slide id.
+        slide: u32,
+        /// Ids of the shapes to group (at least two).
+        shapes: Vec<u32>,
+    },
+    /// Ungroups a group: its members take its place in the z-order and keep
+    /// exactly where and how they appear (the group's offset, scale,
+    /// rotation, and flips are applied to each). The members' ids are
+    /// reported in the result, back to front.
+    UngroupShape {
+        /// Slide id.
+        slide: u32,
+        /// Group id.
+        shape: u32,
     },
 }
 
