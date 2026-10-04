@@ -320,7 +320,8 @@ fn glyph_index(font: &FontRef<'_>, ch: char) -> Option<u16> {
         if !unicode {
             continue;
         }
-        if let Some(glyph) = subtable.map_codepoint(ch) {
+        // Glyph 0 is "not mapped": a later Unicode subtable may still have one.
+        if let Some(glyph) = subtable.map_codepoint(ch).filter(|g| g.to_u32() != 0) {
             return u16::try_from(glyph.to_u32()).ok();
         }
     }
