@@ -1,5 +1,6 @@
 //! Character and paragraph formatting.
 
+use super::revise::Revisor;
 use super::txn::Txn;
 use super::xmledit::{Element, PPR_ORDER};
 use crate::layout::format::{Formats, ParaFormat};
@@ -366,15 +367,25 @@ impl ParaPatch {
     }
 }
 
-/// Applies a function to the `w:pPr` of a paragraph.
-pub(super) fn edit_ppr(txn: &mut Txn<'_>, id: &BlockId, f: impl FnOnce(&mut Element)) {
+/// Applies a function to the `w:pPr` of a paragraph, recording the
+/// properties from before when tracking changes (`rev`).
+pub(super) fn edit_ppr(
+    txn: &mut Txn<'_>,
+    id: &BlockId,
+    rev: Option<&Revisor>,
+    f: impl FnOnce(&mut Element),
+) {
     let w = txn.doc.w_prefix().to_owned();
     let decls = Arc::clone(txn.doc.decls());
     let Some(b) = txn.get(id) else {
         return;
     };
     let mut e = Element::open(&b.props, "pPr", &w, &decls, PPR_ORDER);
+    let before = rev.map(|_| e.clone());
     f(&mut e);
+    if let (Some(r), Some(before)) = (rev, &before) {
+        r.para_change(before, &mut e, &decls);
+    }
     let xml = e.finish(true);
     if xml != b.props
         && let Some(b) = txn.block_mut(id)

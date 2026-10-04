@@ -69,9 +69,11 @@ other) and returns the matches with their highlight rectangles.
 While the document tracks changes (`w:trackRevisions`, shared through the
 settings part), typed text is recorded as the author's `w:ins`, deleted text
 as `w:del` (an author's own insertions are removed outright) and paragraph
-marks as inserted or deleted. Accept and reject resolve the selection, the
-revision at the caret or everything, including Word's formatting and
-paragraph-property changes.
+marks as inserted or deleted. Formatting text or changing paragraph
+properties keeps the formatting from before (`w:rPrChange`, `w:pPrChange`),
+except in text the author inserted; changing it back drops the record.
+Accept and reject resolve the selection, the revision at the caret or
+everything.
 
 Headers and footers are stories of their own: their blocks get ids prefixed
 with the part, transactions target the active story, and an edited part is
@@ -170,7 +172,8 @@ where Word PDFs exist they decide.
   are computed; a table of contents is not regenerated.
 - Editing does not create footnotes, text boxes or pictures, and does not
   edit inside them (it keeps them); comments are Macro threads anchored in
-  the body. Tracked formatting changes are not recorded (they apply
-  directly), though Word's can be accepted and rejected.
+  the body.
+- Tracked changes show without change bars or balloons; table property
+  changes (`w:tcPrChange`, `w:tblPrChange`) are not recorded.
 - Two people editing the same header or footer at once: the last write of
   the part wins.

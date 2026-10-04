@@ -858,8 +858,10 @@ updates live and shows each collaborator's caret with their name
 - `Track changes` turns tracking on for the whole document (it is saved in
   the file, as in Word): every editor's typing then shows as an underlined
   insertion and deletions stay visible struck through, each under its
-  author's name. Accept and reject act on the selection, the change at the
-  caret, or every change.
+  author's name. Formatting changes (bold, alignment, lists, indents) are
+  recorded too: the text looks formatted, and Accept and Reject appear when
+  the caret is in it. Accept and reject act on the selection, the change at
+  the caret, or every change.
 - Double-click a page's header or footer area to edit it. The body dims, the
   area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
   button; Escape or a click on the body returns to the body. Header and

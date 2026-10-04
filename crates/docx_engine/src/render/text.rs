@@ -58,12 +58,12 @@ impl GlyphBatch {
     }
 }
 
+/// A glyph's outline with its origin at `(x, y)`.
 fn glyph_path(
     r: &Renderer<'_>,
     face: FaceId,
     glyph: u16,
-    x: f32,
-    y: f32,
+    (x, y): (f32, f32),
     size: f32,
     scale_x: f32,
     italic: bool,
@@ -254,8 +254,7 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
                     r,
                     font.face,
                     c.glyph,
-                    x,
-                    y,
+                    (x, y),
                     size,
                     style.props.scale,
                     font.synthetic_italic,
@@ -285,8 +284,7 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
                             r,
                             font.face,
                             g,
-                            pl.x + lines.x[k],
-                            baseline - style.shift,
+                            (pl.x + lines.x[k], baseline - style.shift),
                             style.size,
                             1.0,
                             false,
@@ -473,7 +471,7 @@ fn leader_nodes(
             let mut x = (x0 / adv).ceil() * adv;
             let mut path = Path::new();
             while x + adv <= x1 - adv * 0.5 {
-                if let Some(p) = glyph_path(r, font.face, g, x, baseline, size, 1.0, false) {
+                if let Some(p) = glyph_path(r, font.face, g, (x, baseline), size, 1.0, false) {
                     path.extend(&p);
                 }
                 x += adv;
@@ -489,15 +487,14 @@ fn leader_nodes(
     }
 }
 
-/// Draws a short string (line numbers) ending at `x` when `right_aligned`.
+/// Draws a short string (line numbers) ending at `right`.
 pub(super) fn plain_text(
     r: &mut Renderer<'_>,
     text: &str,
-    x: f32,
+    right: f32,
     baseline: f32,
     size: f32,
     font: &str,
-    right_aligned: bool,
     out: &mut Vec<Node>,
 ) {
     let Some(choice) = r.fonts.select(font, false, false) else {
@@ -513,10 +510,10 @@ pub(super) fn plain_text(
         })
         .collect();
     let width: f32 = glyphs.iter().map(|(_, a)| a).sum();
-    let mut pen = if right_aligned { x - width } else { x };
+    let mut pen = right - width;
     let mut path = Path::new();
     for (g, adv) in glyphs {
-        if let Some(p) = glyph_path(r, face, g, pen, baseline, size, 1.0, false) {
+        if let Some(p) = glyph_path(r, face, g, (pen, baseline), size, 1.0, false) {
             path.extend(&p);
         }
         pen += adv;

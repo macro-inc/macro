@@ -61,6 +61,27 @@ fn rpr_rank(qname: &str) -> usize {
     }
 }
 
+/// The `rPr` of a run's formatting attributes, in schema order, without
+/// its tracked formatting change.
+pub(crate) fn rpr_xml(attrs: &crate::model::content::Attrs, w: &str) -> String {
+    let mut props: Vec<(&str, &str)> = attrs
+        .run_props()
+        .filter(|(q, _)| !q.ends_with("rPrChange"))
+        .collect();
+    props.sort_by_key(|(q, _)| rpr_rank(q));
+    let tag = if w.is_empty() {
+        "rPr".to_owned()
+    } else {
+        format!("{w}:rPr")
+    };
+    let mut out = format!("<{tag}>");
+    for (_, xml) in props {
+        out.push_str(xml);
+    }
+    out.push_str(&format!("</{tag}>"));
+    out
+}
+
 /// Serializes stories with the document's WordprocessingML prefix.
 pub struct Writer<'a> {
     /// Prefix bound to the WordprocessingML namespace (`w` in practice).
