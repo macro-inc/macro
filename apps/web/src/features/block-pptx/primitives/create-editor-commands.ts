@@ -13,6 +13,7 @@ import type {
   CellRef,
   ChartGrouping,
   ChartSeriesData,
+  CropOutline,
   EditableChartKind,
   EditOp,
   FillSpec,
@@ -28,6 +29,7 @@ import type { PptxEditorContext } from '../context/pptx-editor-context';
 import { effectInfo, specOf } from '../core/animation-catalog';
 import { formatState, stepFontSize } from '../core/formatting';
 import { modulate } from '../core/palette';
+import { aspectCrop, NO_CROP } from '../core/picture';
 import {
   type AlignMode,
   alignOps,
@@ -1124,6 +1126,125 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     const after = rest.slice(before.length);
     return writeAnimations([...before, ...replaced, ...after]);
   });
+  // ---- pictures and effects (Picture Format, Shape and Text Effects) --------
+
+  /** The selected pictures, which picture commands act on. */
+  const pictures = () => targets().filter((s) => s.kind === 'picture');
+  /** Corrections, recolor, transparency, or a reset of every selected picture. */
+  const formatPicture = (change: PictureChange, group?: string) => {
+    const s = slide();
+    const list = pictures();
+    if (!s || list.length === 0) return Promise.resolve(null);
+    return apply(
+      [
+        {
+          op: 'formatPicture',
+          slide: s.id,
+          shapes: list.map((p) => p.id),
+          ...change,
+        },
+      ],
+      group
+    );
+  };
+  /** Crops each selected picture to edges (fractions of its image). */
+  const cropPictures = (
+    edges: (picture: ShapeOutline) => Partial<CropOutline>,
+    group?: string
+  ) => {
+    const s = slide();
+    if (!s) return Promise.resolve(null);
+    return apply(
+      pictures().map((p) => ({
+        op: 'cropPicture' as const,
+        slide: s.id,
+        shape: p.id,
+        ...edges(p),
+      })),
+      group
+    );
+  };
+  /** Crops each selected picture to the largest centered `ratio` (w/h) part. */
+  const cropToAspect = (ratio: number) =>
+    cropPictures((p) =>
+      aspectCrop(p.w, p.h, p.picture?.crop ?? NO_CROP, ratio)
+    );
+  /** Fills or fits each selected picture to its frame (Crop ▸ Fill / Fit). */
+  const fitPictures = (mode: 'fill' | 'fit') => {
+    const s = slide();
+    if (!s) return Promise.resolve(null);
+    return apply(
+      pictures().map((p) => ({
+        op: 'cropPicture' as const,
+        slide: s.id,
+        shape: p.id,
+        mode,
+      }))
+    );
+  };
+  /**
+   * Removes the pictures' adjustments and effects (Reset Picture); with
+   * `size`, their crop too, the frame growing back (Reset Picture & Size).
+   */
+  const resetPictures = (size: boolean) => {
+    const s = slide();
+    const ids = pictures().map((p) => p.id);
+    if (!s || ids.length === 0) return Promise.resolve(null);
+    return apply([
+      size
+        ? { op: 'formatPicture', slide: s.id, shapes: ids, reset: true }
+        : {
+            op: 'formatPicture',
+            slide: s.id,
+            shapes: ids,
+            brightness: 0,
+            contrast: 0,
+            recolor: 'none',
+            transparency: 0,
+          },
+      {
+        op: 'setShapeEffects',
+        slide: s.id,
+        shapes: ids,
+        shadow: 'none',
+        glow: 'none',
+        softEdge: 'none',
+        reflection: 'none',
+      },
+    ]);
+  };
+  /** Shadow, glow, soft edges, or reflection of every selected shape, as one step. */
+  const setShapeEffects = (change: EffectsChange, group?: string) => {
+    const s = slide();
+    const list = targets();
+    if (!s || list.length === 0) return Promise.resolve(null);
+    return apply(
+      [
+        {
+          op: 'setShapeEffects',
+          slide: s.id,
+          shapes: list.map((x) => x.id),
+          ...change,
+        },
+      ],
+      group
+    );
+  };
+  /** Text shadow and glow of the selected text (whole shapes when none is). */
+  const setTextEffects = (change: Pick<RunPatch, 'shadow' | 'glow'>) =>
+    runs(change);
+  const pictureCommands = {
+    pictures,
+    formatPicture,
+    cropPictures,
+    cropToAspect,
+    fitPictures,
+    resetPictures,
+    setShapeEffects,
+    setTextEffects,
+  };
+  // ---- end pictures and effects -----------------------------------------------
+
   return {
     canEdit,
     animate,
@@ -1218,7 +1339,19 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     apply,
     // ---- deck setup: header & footer, slide size, sections ----
     ...createDeckCommands({ apply, outline: session.outline }),
+    ...pictureCommands,
   };
 }
 
 export type EditorCommands = ReturnType<typeof createEditorCommands>;
+
+/** The fields of a `formatPicture` op a command sets. */
+export type PictureChange = Omit<
+  Extract<EditOp, { op: 'formatPicture' }>,
+  'op' | 'slide' | 'shapes'
+>;
+/** The fields of a `setShapeEffects` op a command sets. */
+export type EffectsChange = Omit<
+  Extract<EditOp, { op: 'setShapeEffects' }>,
+  'op' | 'slide' | 'shapes'
+>;

@@ -25,6 +25,7 @@ import ClipboardIcon from '@phosphor/clipboard.svg';
 import Columns from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import CopySimple from '@phosphor/copy-simple.svg';
+import CropIcon from '@phosphor/crop.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
@@ -60,8 +61,12 @@ export interface StageMenuActions {
   paste: () => void;
   canPaste: boolean;
   editText?: () => void;
-  openFormatPane: (section?: 'shape' | 'text' | 'size' | 'background') => void;
+  openFormatPane: (
+    section?: 'shape' | 'effects' | 'picture' | 'text' | 'size' | 'background'
+  ) => void;
   replacePicture?: () => void;
+  /** Enters crop mode for the selected picture. */
+  crop?: () => void;
   editChartData?: () => void;
   changeChartType?: () => void;
   selectRows?: () => void;
@@ -607,6 +612,14 @@ export function StageMenuItems(props: {
             onClick={() => a().replacePicture?.()}
           />
         </Show>
+        <Show when={a().isPicture && a().crop}>
+          <MenuItem
+            text="Crop"
+            icon={CropIcon}
+            disabled={ro()}
+            onClick={() => a().crop?.()}
+          />
+        </Show>
         <ArrangeItems a={a()} />
         <MenuSeparator />
         <ColorSub
@@ -631,10 +644,12 @@ export function StageMenuItems(props: {
           onClick={() => a().openFormatPane('size')}
         />
         <MenuItem
-          text="Format shape…"
+          text={a().isPicture ? 'Format picture…' : 'Format shape…'}
           icon={SlidersHorizontal}
           disabled={ro()}
-          onClick={() => a().openFormatPane('shape')}
+          onClick={() =>
+            a().openFormatPane(a().isPicture ? 'picture' : 'shape')
+          }
         />
         <MenuSeparator />
         <MenuItem

@@ -11,10 +11,17 @@ import { createSignal, For, type JSX, Show } from 'solid-js';
 import { boxOf } from '../core/geometry';
 import { swatchCss } from '../core/palette';
 import { unionBounds } from '../core/selection';
+import { EffectsPaneSections, PicturePaneSections } from './effects-pane';
 import { ColorPicker, NumberField } from './ribbon/controls';
 import type { RibbonEnv } from './ribbon/ribbon';
 
-export type PaneSection = 'shape' | 'size' | 'text' | 'background';
+export type PaneSection =
+  | 'shape'
+  | 'effects'
+  | 'size'
+  | 'picture'
+  | 'text'
+  | 'background';
 
 function Section(props: {
   title: string;
@@ -287,12 +294,16 @@ export function FormatPane(props: {
   };
   const [lockAspect, setLockAspect] = createSignal(false);
   const [lineKind, setLineKind] = createSignal<'none' | 'solid' | undefined>();
+  const pictures = () =>
+    shapes().length > 0 && shapes().every((s) => s.kind === 'picture');
   const title = () =>
     props.section === 'background'
       ? 'Format background'
       : props.section === 'text'
         ? 'Format text'
-        : 'Format shape';
+        : pictures()
+          ? 'Format picture'
+          : 'Format shape';
   return (
     <aside
       class="flex w-72 shrink-0 flex-col border-edge-muted border-l bg-panel"
@@ -316,7 +327,11 @@ export function FormatPane(props: {
             each={
               [
                 ['shape', 'Fill & line'],
+                ['effects', 'Effects'],
                 ['size', 'Size'],
+                ...(shapes().some((s) => s.kind === 'picture')
+                  ? [['picture', 'Picture']]
+                  : []),
                 ['text', 'Text'],
               ] as [PaneSection, string][]
             }
@@ -329,6 +344,7 @@ export function FormatPane(props: {
                   'bg-accent-bg text-accent': props.section === section,
                   'text-ink-muted hover:bg-ink/5': props.section !== section,
                 }}
+                data-testid={`pptx-pane-tab-${section}`}
                 onClick={() => props.onSection(section)}
               >
                 {label}
@@ -448,6 +464,12 @@ export function FormatPane(props: {
               />
             </Row>
           </Section>
+        </Show>
+        <Show when={props.section === 'effects' && shapes().length > 0}>
+          <EffectsPaneSections env={env} />
+        </Show>
+        <Show when={props.section === 'picture' && shapes().length > 0}>
+          <PicturePaneSections env={env} />
         </Show>
         <Show when={props.section === 'size' && shapes().length > 0}>
           <Section title="Size">

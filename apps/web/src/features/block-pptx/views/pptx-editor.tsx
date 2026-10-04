@@ -54,6 +54,7 @@ import {
   ChartGallery,
   sampleChartData,
 } from '../components/chart-controls';
+import { CropOverlay } from '../components/crop-overlay';
 import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
@@ -72,6 +73,7 @@ import {
   TransitionsTab,
   ViewTab,
 } from '../components/ribbon/other-tabs';
+import { PictureFormatTab } from '../components/ribbon/picture-format-tab';
 import {
   Ribbon,
   type RibbonEnv,
@@ -107,9 +109,11 @@ import {
 } from '../core/table';
 import { paragraphCommand } from '../core/text-commands';
 import { createClipboard } from '../primitives/create-clipboard';
+import { createCropMode } from '../primitives/create-crop-mode';
 import { createDeckSetup } from '../primitives/create-deck-setup';
 import { createEditorCommands } from '../primitives/create-editor-commands';
 import { createFormatPainter } from '../primitives/create-format-painter';
+import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
@@ -449,6 +453,18 @@ export function PptxEditor() {
   });
 
   const painter = createFormatPainter({ engine, session, editor });
+
+  // Picture Format: the pictures' original images and crop mode.
+  const pictureImages = createPictureImages({ engine, session });
+  const crop = createCropMode({
+    engine,
+    session,
+    editor,
+    queue,
+    canEdit: context.canEdit,
+    renderWidth,
+    onExit: () => queueMicrotask(focusStage),
+  });
 
   // ---- table cell editing ---------------------------------------------------
 
@@ -1399,7 +1415,10 @@ export function PptxEditor() {
   const tabs = createMemo((): RibbonTab[] => {
     const list = ribbonSelection();
     const table = !!selectedTable();
-    const drawable = list.some((s) => s.kind !== 'table' && s.kind !== 'chart');
+    const drawable = list.some(
+      (s) => s.kind !== 'table' && s.kind !== 'chart' && s.kind !== 'picture'
+    );
+    const pictures = list.some((s) => s.kind === 'picture');
     return [
       { id: 'home', label: 'Home', content: () => <HomeTab /> },
       {
@@ -1423,6 +1442,22 @@ export function PptxEditor() {
               label: 'Shape Format',
               contextual: true,
               content: () => <ShapeFormatTab />,
+            },
+          ]
+        : []),
+      ...(pictures && !readonly()
+        ? [
+            {
+              id: 'picture-format',
+              label: 'Picture Format',
+              contextual: true,
+              content: () => (
+                <PictureFormatTab
+                  images={pictureImages}
+                  crop={crop}
+                  onChangePicture={() => replacePictureInput.click()}
+                />
+              ),
             },
           ]
         : []),
@@ -1943,6 +1978,7 @@ export function PptxEditor() {
                               openFormatPane: (section) =>
                                 setPane(section ?? 'shape'),
                               replacePicture: () => replacePictureInput.click(),
+                              crop: () => void crop.enter(),
                               editChartData: () => {
                                 const s = editor.selectedShape();
                                 if (s) chartEditor(s);
@@ -1977,6 +2013,14 @@ export function PptxEditor() {
                         </ContextMenuContent>
                       </ContextMenu.Portal>
                     </ContextMenu>
+                    <Show when={crop.active()}>
+                      <CropOverlay
+                        crop={crop}
+                        images={pictureImages}
+                        themeColors={themeColors()}
+                        scale={scale()}
+                      />
+                    </Show>
                   </SlideStage>
                 </Show>
               </div>

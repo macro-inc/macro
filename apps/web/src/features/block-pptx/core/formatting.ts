@@ -4,6 +4,7 @@
  */
 
 import type {
+  EffectsOutline,
   RunStyle,
   TextLayoutInfo,
   TextPos,
@@ -23,6 +24,8 @@ export interface TextFormatState {
   highlight?: string;
   align?: string;
   bullet: boolean;
+  /** Text shadow and glow of the first character. */
+  effects?: EffectsOutline;
 }
 
 const EMPTY: TextFormatState = {
@@ -85,6 +88,7 @@ export function formatState(
     font: runs[0].font,
     baseline: runs[0].baseline,
     highlight: runs[0].highlight,
+    effects: runs[0].effects,
     align: paras[0]?.align,
     bullet: paras.length > 0 && paras.every((p) => p.bullet),
   };

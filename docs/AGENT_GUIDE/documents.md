@@ -367,8 +367,9 @@ Layout and test hooks:
 
 - **Ribbon** (`pptx-toolbar`): tabs `pptx-tab-<id>` for Home, Insert,
   Design, Transitions, Slide Show, and View, plus contextual Shape Format,
-  Table Design, Layout (tables), and Chart Design tabs that appear for the
-  selection (`pptx-tab-shape-format`, `pptx-tab-table-design`,
+  Picture Format, Table Design, Layout (tables), and Chart Design tabs that
+  appear for the selection (`pptx-tab-shape-format`,
+  `pptx-tab-picture-format`, `pptx-tab-table-design`,
   `pptx-tab-table-layout`, `pptx-tab-chart-design`). Undo/Redo sit left of the
   tabs; the save state (`pptx-save-state`), Download, and **Present**
   (`pptx-present`) sit right. Home: clipboard and **Format Painter**
@@ -468,9 +469,53 @@ Layout and test hooks:
   `pptx-chart-cell-<row>-<col>`, **Apply** `pptx-chart-apply`); Chart Design
   also changes the type (`pptx-chart-type`), title, legend, data labels, and
   colors.
+- **Effects**: Shape Format's **Shape effects** (`pptx-shape-effects`) and
+  Picture Format's **Picture effects** (`pptx-picture-effects`) open
+  PowerPoint's Shadow, Reflection, Glow, and Soft Edges flyouts (hover
+  `pptx-effects-<shadow|reflection|glow|soft-edges>`). Tiles preview each
+  effect: `pptx-effect-shadow-<preset>` (`outerBottomRight`, `innerTop`,
+  `perspectiveBelow`...), `pptx-effect-reflection-<preset>` (`tightTouching`
+  ... `full8pt`), `pptx-effect-glow-<accent1-6>-<5|8|11|18>` (More Glow Colors
+  is `pptx-effect-glow-more`), `pptx-effect-soft-edge-<1|2.5|5|10|25|50>`, and
+  `-none` for each. A choice applies to every selected shape as one undo step.
+  **Text effects** (`pptx-text-effects`, Shape Format's WordArt styles) give
+  the selected text, or whole selected shapes, a shadow or glow
+  (`pptx-text-effects-<shadow|glow>`, tiles `pptx-text-effect-shadow-<preset>`
+  and `pptx-text-effect-glow-<accentN>-<size>`).
+- **Pictures** (Picture Format): **Corrections** (`pptx-picture-corrections`,
+  a 5 × 5 brightness × contrast grid of live previews, tiles
+  `pptx-picture-correction-b<±n>_c<±n>` such as `b+20_c-40`), **Color**
+  (`pptx-picture-color`, Recolor plus dark and light accent variations,
+  `pptx-picture-recolor-<value>` with `:` written `-`, such as
+  `duotone-accent1`), **Transparency** (`pptx-picture-transparency`, tiles
+  `pptx-picture-transparency-<0|15|30|50|65|80|95>`), Change picture
+  (`pptx-picture-change`), Reset (`pptx-picture-reset`, then
+  `pptx-picture-reset-picture` or `pptx-picture-reset-size`), Picture border
+  (`pptx-picture-border`), Arrange, and Size. **Crop** (`pptx-picture-crop`)
+  toggles crop mode; its arrow (`pptx-picture-crop-menu`) offers Crop to
+  Shape (`pptx-crop-to-shape`, then `pptx-shape-<preset>`), Aspect Ratio
+  (`pptx-crop-aspect`, then `pptx-crop-aspect-<w>x<h>`, which crops the
+  centered part and enters crop mode), Fill (`pptx-crop-fill`), and Fit
+  (`pptx-crop-fit`). The picture's right-click menu has Crop and Format
+  picture….
+- **Crop mode** (`pptx-crop-overlay`): the slide without the picture, the
+  whole image ghosted outside the frame, and black crop handles
+  `pptx-crop-handle-<nw|n|ne|e|se|s|sw|w>` (Shift keeps the aspect ratio,
+  Ctrl/Alt crops both sides; dragging past the image pads it). Dragging the
+  picture (`pptx-crop-frame`) or arrow keys move the image under the frame,
+  and the round `pptx-crop-image-handle-<nw|ne|se|sw>` scale it. Enter, Esc,
+  a click outside, or Crop again apply the crop as one undo step; rotated
+  and flipped pictures crop in place too.
 - **Format pane** (`pptx-format-pane`): Format shape… in menus opens fill and
   line, size and position (with alt text `pptx-alt-text`), and text box and
-  paragraph settings; Format background… opens the slide background.
+  paragraph settings; Format background… opens the slide background. Its
+  tabs (`pptx-pane-tab-<shape|effects|size|picture|text>`) include
+  **Effects** (shadow, reflection, glow, and soft edge presets and values,
+  such as `pptx-pane-shadow-blur` and `pptx-pane-glow-size`) and, for
+  pictures, **Picture** (`pptx-pane-brightness`, `pptx-pane-contrast`,
+  `pptx-pane-recolor`, `pptx-pane-transparency`, crop edges in percent
+  `pptx-pane-crop-<left|top|right|bottom>`, and `pptx-pane-picture-reset`).
+  Sliders apply while dragged, one undo step per drag.
 - **Find and replace** (`pptx-find`, Cmd/Ctrl+F and Cmd/Ctrl+H): find input
   `pptx-find-input`, `pptx-replace-input`, count `pptx-find-count`, and
   `pptx-replace-all`; Enter steps through matches, selecting each in its shape

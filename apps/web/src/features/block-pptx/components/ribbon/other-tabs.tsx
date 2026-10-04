@@ -34,6 +34,7 @@ import {
   RibbonTextButton,
 } from './controls';
 import { SlideSizeGroup } from './deck-setup-controls';
+import { ShapeEffectsMenu, TextEffectsMenu } from './effects-menu';
 import { ArrangeMenu, FillMenu, OutlineMenu } from './home-tab';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
@@ -429,6 +430,7 @@ export function ShapeFormatTab() {
         >
           {(close) => <OutlineMenu close={close} />}
         </RibbonPopover>
+        <ShapeEffectsMenu label="Shape effects" testId="pptx-shape-effects" />
         <RibbonTextButton
           label="Format pane"
           disabled={ro()}
@@ -436,6 +438,9 @@ export function ShapeFormatTab() {
         >
           Format pane
         </RibbonTextButton>
+      </RibbonGroup>
+      <RibbonGroup label="WordArt styles">
+        <TextEffectsMenu />
       </RibbonGroup>
       <RibbonGroup label="Arrange">
         <RibbonButton
