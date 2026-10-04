@@ -483,12 +483,10 @@ describe('Excel workbook files', () => {
     };
     workbook.definedNames.add('Original!$A$1', 'Named');
     const entries = unzipSync(await file(workbook));
-    entries['xl/charts/chart1.xml'] = strToU8('<chart/>');
     entries['xl/externalLinks/externalLink1.xml'] = strToU8('<externalLink/>');
     const imported = await decodeXlsx(zipSync(entries));
     const warning = imported.warnings.join('\n');
     for (const term of [
-      'Charts',
       'External workbook',
       'Hidden sheets',
       'Merged ranges',
@@ -497,8 +495,9 @@ describe('Excel workbook files', () => {
       'Rich text',
     ])
       expect(warning).toContain(term);
-    // Notes and data validation are imported.
-    expect(warning).not.toMatch(/validation|comments/i);
+    // Notes and data validation are imported, as are charts
+    // (xlsx-drawings.test.ts).
+    expect(warning).not.toMatch(/validation|comments|charts/i);
     expect(imported.sheets[0].metadata).toMatchObject({
       notes: { C4: 'review' },
       validations: [{ range: 'D1', type: 'list', formulas: ['"a,b"'] }],

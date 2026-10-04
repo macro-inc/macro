@@ -189,12 +189,6 @@ export function openXlsxArchive(bytes: Uint8Array): XlsxArchive {
 export function xlsxFeatureWarnings(names: string[]): string[] {
   const warnings = new Set<string>();
   for (const name of names) {
-    if (/^xl\/(charts|drawings|media)\//.test(name))
-      warnings.add('Charts, drawings and images are not imported.');
-    if (/^xl\/pivot/.test(name))
-      warnings.add(
-        'Pivot tables are not imported; existing cell values are retained.'
-      );
     if (/^xl\/externalLinks\//.test(name))
       warnings.add(
         'External workbook links are not supported; formulas that use them keep their last calculated values.'

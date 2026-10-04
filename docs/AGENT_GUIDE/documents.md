@@ -83,6 +83,16 @@ shows the rule's message in the footer, and a "stop" rule keeps the previous val
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
 
+Imported images and charts (column, bar, line, area, pie, doughnut and scatter)
+are drawn over their cells and move with them; charts redraw as the cells they
+read change. Each is a `figure` named after the chart title ("Chart: Revenue") or
+the image description. Click one to select it, then press Delete to remove it
+(undo restores it) or Escape to return to the cells. Charts cannot be created or
+edited in Macro. Pivot tables show their last values as ordinary cells; the Excel
+download keeps them, and Excel rebuilds them from their data when the file opens.
+A sheet whose data a chart on another sheet reads cannot be deleted until the
+chart is.
+
 Select a cell to inspect its address and input in the formula bar. Double-click
 a cell, start typing, or use the formula bar to edit its value. Formulas begin
 with `=` and may refer to cells or ranges, for example `=SUM(B2:B5)`. Check both
@@ -225,7 +235,7 @@ leaves the workbook untouched; a replacement is blocked if the workbook changed
 while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
-current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas, shapes, text boxes and rich text are not fully supported; review import notes before conversion.
 CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
 calculated values. Clipboard menu actions use the browser clipboard; if access is

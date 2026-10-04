@@ -113,6 +113,7 @@ describe('real-world XLSX corpus', () => {
             ...sheet,
             values: values[String(index)],
           })),
+          images: imported.images,
         });
         summary.roundTrip = roundTripDifference(
           imported,

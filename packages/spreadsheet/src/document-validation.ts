@@ -1,5 +1,6 @@
 import { type LoroDoc, LoroMap } from 'loro-crdt';
 import { match } from 'ts-pattern';
+import { validImageKey, validImageUrl } from './sheet-drawings';
 import {
   isSpreadsheetStyleEntry,
   MAX_COLUMN_WIDTH,
@@ -100,6 +101,7 @@ function validEntry(root: string, key: string, value: unknown): boolean {
       () => textEncoder.encode(key).length <= 200 && isSpreadsheetSheetId(value)
     )
     .with('spreadsheetSheetRetentions', () => retainedSheet(key, value))
+    .with('spreadsheetImages', () => validImageKey(key) && validImageUrl(value))
     .otherwise(() => validCellEntry(root, key, value));
 }
 

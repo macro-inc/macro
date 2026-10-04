@@ -134,15 +134,15 @@ export function createWorkbookActions(options: {
           );
           return;
         }
-        await options.store.replaceWorkbook(
-          current.data.sheets,
-          setImportProgress
-        );
+        await options.store.replaceWorkbook(current.data.sheets, {
+          onProgress: setImportProgress,
+          images: current.data.images,
+        });
       } else
-        await options.store.appendSheets(
-          current.data.sheets,
-          setImportProgress
-        );
+        await options.store.appendSheets(current.data.sheets, {
+          onProgress: setImportProgress,
+          images: current.data.images,
+        });
       setNotice(
         `Imported ${current.data.sheets.length} ${current.data.sheets.length === 1 ? 'sheet' : 'sheets'} from ${current.name}`
       );
@@ -165,9 +165,16 @@ export function createWorkbookActions(options: {
     setBusy('Preparing download…');
     setNotice('');
     try {
+      const workbook = options.store.workbook();
+      const keys = workbook.flatMap((sheet) =>
+        (sheet.metadata?.drawings ?? []).flatMap((drawing) =>
+          drawing.type === 'image' ? [drawing.image] : []
+        )
+      );
       const result = await exportWorkbookFile(
         {
-          sheets: options.store.workbook().map((sheet) => ({
+          ...(keys.length && { images: options.store.images(keys) }),
+          sheets: workbook.map((sheet) => ({
             name: sheet.name,
             metadata: sheet.metadata,
             cells: sheet.cells,

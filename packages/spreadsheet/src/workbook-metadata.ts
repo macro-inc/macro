@@ -1,3 +1,4 @@
+import { type SheetDrawing, validDrawings } from './sheet-drawings';
 import {
   type ConditionalFormat,
   type DataValidation,
@@ -36,7 +37,62 @@ export type WorkbookSheetMetadata = {
   validations?: DataValidation[];
   /** Excel conditional formatting rules, highest priority first. */
   conditionalFormats?: ConditionalFormat[];
+  /** Images and charts drawn over the sheet. */
+  drawings?: SheetDrawing[];
+  /** Excel pivot tables, kept so export writes them back. */
+  pivotTables?: SheetPivotTable[];
 };
+
+/**
+ * An Excel pivot table, kept so export writes it back. Macro shows the
+ * table's last values as cells; Excel rebuilds it from its source when the
+ * exported file opens.
+ */
+export type SheetPivotTable = {
+  /** The pivotTableDefinition part; export writes its cache and location. */
+  table: string;
+  /** The pivotCacheDefinition part, without the records Excel saved. */
+  cache: string;
+  /** The cells the table covers on its sheet. */
+  location: string;
+  /** The cells it summarizes, such as `'Orders'!$A$1:$F$500`. */
+  source?: string;
+  /** Custom number formats the parts use, by `numFmtId`. */
+  formats?: Record<string, string>;
+};
+export const MAX_SHEET_PIVOT_TABLES = 64;
+export const MAX_PIVOT_PART_LENGTH = 300_000;
+
+function validPivotTable(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const pivot = value as Record<string, unknown>;
+  const formats = pivot.formats;
+  return (
+    Object.keys(pivot).every((key) =>
+      ['table', 'cache', 'location', 'source', 'formats'].includes(key)
+    ) &&
+    typeof pivot.table === 'string' &&
+    pivot.table.length <= MAX_PIVOT_PART_LENGTH &&
+    pivot.table.includes('<pivotTableDefinition') &&
+    typeof pivot.cache === 'string' &&
+    pivot.cache.length <= MAX_PIVOT_PART_LENGTH &&
+    pivot.cache.includes('<pivotCacheDefinition') &&
+    validWorkbookRange(pivot.location) &&
+    (pivot.source === undefined ||
+      (typeof pivot.source === 'string' && pivot.source.length <= 1_000)) &&
+    (formats === undefined ||
+      (!!formats &&
+        typeof formats === 'object' &&
+        !Array.isArray(formats) &&
+        Object.entries(formats).length <= 200 &&
+        Object.entries(formats).every(
+          ([id, code]) =>
+            /^\d{1,5}$/.test(id) &&
+            typeof code === 'string' &&
+            code.length <= 255
+        )))
+  );
+}
 
 export function validWorkbookRange(range: unknown): range is string {
   if (typeof range !== 'string') return false;
@@ -78,6 +134,8 @@ export function parseWorkbookMetadata(
             'notes',
             'validations',
             'conditionalFormats',
+            'drawings',
+            'pivotTables',
           ].includes(key)
       )
     )
@@ -157,6 +215,16 @@ export function parseWorkbookMetadata(
     if (value.autoFilter !== undefined && !validWorkbookRange(value.autoFilter))
       return;
     if (value.notes !== undefined && !validNotes(value.notes)) return;
+    if (value.drawings !== undefined && !validDrawings(value.drawings)) return;
+    if (
+      value.pivotTables !== undefined &&
+      !(
+        Array.isArray(value.pivotTables) &&
+        value.pivotTables.length <= MAX_SHEET_PIVOT_TABLES &&
+        value.pivotTables.every(validPivotTable)
+      )
+    )
+      return;
     for (const [key, valid] of [
       ['validations', validDataValidation],
       ['conditionalFormats', validConditionalFormat],
@@ -211,4 +279,79 @@ export function parseWorkbookMetadata(
   } catch {
     return;
   }
+}
+
+const SHEET_PREFIX = /^(?:\[0\]!)?(?:'((?:[^']|'')+)'|([^'!:\s()]+))!/;
+
+/** A reference with its sheet renamed, when it names that sheet. */
+function renamedReference(reference: string, from: string, to: string) {
+  const match = SHEET_PREFIX.exec(reference);
+  const sheet = match && (match[1]?.replace(/''/g, "'") ?? match[2]);
+  if (!match || sheet?.toLowerCase() !== from.toLowerCase()) return reference;
+  return `'${to.replaceAll("'", "''")}'!${reference.slice(match[0].length)}`;
+}
+
+/**
+ * Metadata whose charts and pivot tables follow a renamed sheet, or
+ * undefined when none refer to it. Formulas and names already block renames.
+ */
+export function renameSheetReferences(
+  metadata: WorkbookSheetMetadata | undefined,
+  from: string,
+  to: string
+): WorkbookSheetMetadata | undefined {
+  if (!metadata) return;
+  const rename = (reference: string) => renamedReference(reference, from, to);
+  const escaped = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const result: WorkbookSheetMetadata = {
+    ...metadata,
+    ...(metadata.drawings && {
+      drawings: metadata.drawings.map((drawing) => {
+        if (drawing.type !== 'chart') return drawing;
+        const { source } = drawing.chart;
+        return {
+          ...drawing,
+          chart: {
+            ...drawing.chart,
+            references: drawing.chart.references.map(rename),
+            // A pivot chart names its pivot table's sheet.
+            ...(source && {
+              source: source.replace(
+                /(<(?:[\w.-]+:)?pivotSource>\s*<((?:[\w.-]+:)?name)>)(\[[^\]<]*\])?([^<]*)!([^<!]*)(<\/\2>)/,
+                (
+                  whole,
+                  open,
+                  _name,
+                  book = '',
+                  sheet: string,
+                  table,
+                  close
+                ) => {
+                  const unquoted = sheet
+                    .replace(/^'(.*)'$/, '$1')
+                    .replace(/''/g, "'")
+                    .replace(/&apos;/g, "'")
+                    .replace(/&amp;/g, '&');
+                  return unquoted.toLowerCase() === from.toLowerCase()
+                    ? `${open}${book}${escaped(/[^\w.]/.test(to) ? `'${to.replaceAll("'", "''")}'` : to)}!${table}${close}`
+                    : whole;
+                }
+              ),
+            }),
+          },
+        };
+      }),
+    }),
+    ...(metadata.pivotTables && {
+      pivotTables: metadata.pivotTables.map((pivot) =>
+        pivot.source === undefined
+          ? pivot
+          : { ...pivot, source: rename(pivot.source) }
+      ),
+    }),
+  };
+  return JSON.stringify(result) === JSON.stringify(metadata)
+    ? undefined
+    : result;
 }

@@ -3,7 +3,6 @@ import {
   MAX_SHEET_NOTES,
 } from '@macro-inc/spreadsheet/sheet-rules';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
-import { SaxesParser, type SaxesTagNS } from 'saxes';
 import {
   DEFAULT_COLUMN_WIDTH,
   formatCellAddress,
@@ -27,6 +26,11 @@ import {
 } from './workbook-file-types';
 import type { XlsxArchive } from './xlsx-archive';
 import {
+  type DrawingImports,
+  drawingImports,
+  readSheetDrawings,
+} from './xlsx-drawings';
+import {
   expandSheetRanges,
   formulaFunctionNames,
   hasExternalReference,
@@ -38,6 +42,13 @@ import {
   translateFormula,
   type WorkbookTable,
 } from './xlsx-formula';
+import {
+  type Attributes,
+  attributes,
+  parse,
+  relationships,
+} from './xlsx-parts';
+import { readSheetPivotTables } from './xlsx-pivots';
 import { createSheetRulesReader } from './xlsx-sheet-rules';
 import {
   readXlsxStylesheet,
@@ -116,40 +127,6 @@ const SPILL_FUNCTIONS = new Set([
   'WRAPROWS',
 ]);
 
-type Attributes = Record<string, string>;
-function attributes(node: SaxesTagNS): Attributes {
-  const result: Attributes = {};
-  for (const attribute of Object.values(node.attributes))
-    result[attribute.local] = attribute.value;
-  return result;
-}
-
-/** Feed UTF-8 bytes to a parser in chunks so huge sheets never become one string. */
-function parse(
-  bytes: Uint8Array,
-  name: string,
-  setup: (parser: SaxesParser<{ xmlns: true }>) => void
-) {
-  const parser = new SaxesParser({ xmlns: true });
-  parser.on('doctype', () => {
-    throw new Error(`Unsupported XML document type in ${name}.`);
-  });
-  parser.on('error', () => {
-    throw new Error(`Invalid XML in ${name}.`);
-  });
-  setup(parser);
-  // Some writers leave optional parts (styles, shared strings) empty.
-  if (!bytes.some((byte) => byte > 32)) return;
-  const decoder = new TextDecoder('utf-8', { fatal: false, ignoreBOM: false });
-  const chunk = 1 << 20;
-  for (let offset = 0; offset < bytes.length; offset += chunk)
-    parser.write(
-      decoder.decode(bytes.subarray(offset, offset + chunk), { stream: true })
-    );
-  parser.write(decoder.decode());
-  parser.close();
-}
-
 /** OOXML escapes control characters in text as `_xHHHH_`. */
 function unescapeText(text: string) {
   return text.includes('_x')
@@ -159,38 +136,39 @@ function unescapeText(text: string) {
     : text;
 }
 
-/** Resolve a relationship target relative to its source part. */
-function resolvePath(base: string, target: string) {
-  if (target.startsWith('/')) return target.slice(1);
-  const parts = base.split('/').slice(0, -1);
-  for (const part of target.split('/')) {
-    if (part === '..') parts.pop();
-    else if (part && part !== '.') parts.push(part);
-  }
-  return parts.join('/');
-}
+/** Sheet metadata Macro stores, at most; parts that keep export fidelity
+ * give way first. */
+const MAX_METADATA_LENGTH = 900_000;
 
-function relationships(archive: XlsxArchive, part: string) {
-  const path = resolvePath(part, `_rels/${part.split('/').at(-1)}.rels`);
-  const bytes = archive.read(path);
-  const result = new Map<
-    string,
-    { target: string; type: string; external: boolean }
-  >();
-  if (!bytes) return result;
-  parse(bytes, path, (parser) => {
-    parser.on('opentag', (node) => {
-      if (node.local !== 'Relationship') return;
-      const value = attributes(node);
-      const external = value.TargetMode === 'External';
-      result.set(value.Id, {
-        target: external ? value.Target : resolvePath(part, value.Target ?? ''),
-        type: value.Type?.split('/').at(-1) ?? '',
-        external,
-      });
-    });
-  });
-  return result;
+function fitMetadata(metadata: WorkbookSheetMetadata, warnings: Set<string>) {
+  const length = () => JSON.stringify(metadata).length;
+  if (length() <= MAX_METADATA_LENGTH) return;
+  // Charts keep their data and type without Excel's formatting.
+  const charts = (metadata.drawings ?? [])
+    .flatMap((drawing) => (drawing.type === 'chart' ? [drawing.chart] : []))
+    .filter((chart) => chart.source)
+    .sort((a, b) => b.source!.length - a.source!.length);
+  for (const chart of charts) {
+    delete chart.source;
+    warnings.add(
+      'Some charts keep only their data and type; their formatting is not exported.'
+    );
+    if (length() <= MAX_METADATA_LENGTH) return;
+  }
+  // Pivot tables are only kept for export; their values stay in cells.
+  while (metadata.pivotTables?.length && length() > MAX_METADATA_LENGTH) {
+    metadata.pivotTables.pop();
+    warnings.add(
+      'Pivot tables from other workbooks, data connections or very large layouts keep only their last values.'
+    );
+  }
+  if (metadata.pivotTables && !metadata.pivotTables.length)
+    delete metadata.pivotTables;
+  while (metadata.drawings?.length && length() > MAX_METADATA_LENGTH) {
+    metadata.drawings.pop();
+    warnings.add('Some images and charts are not imported.');
+  }
+  if (metadata.drawings && !metadata.drawings.length) delete metadata.drawings;
 }
 
 /**
@@ -352,6 +330,8 @@ type SheetEntry = {
 
 type WorkbookContext = {
   archive: XlsxArchive;
+  theme: (string | undefined)[];
+  drawings: DrawingImports;
   sharedStrings: { text: string; rich: boolean }[];
   styles: XlsxStylesheet;
   date1904: boolean;
@@ -991,6 +971,36 @@ function readWorksheet(
   if (validations.length) metadata.validations = validations;
   const notes = readNotes(context, entry);
   if (notes) metadata.notes = notes;
+  const drawings = readSheetDrawings({
+    archive: context.archive,
+    sheetPath: entry.path,
+    theme: context.theme,
+    warnings,
+    state: context.drawings,
+    locate: (x, y) => {
+      const width = (column: number) =>
+        columnWidths[column] ?? DEFAULT_COLUMN_WIDTH;
+      const height = (row: number) => (rowHeights[row] ?? defaultHeight) / 0.75;
+      let column = 0;
+      while (x >= width(column) && column < SPREADSHEET_MAX_COLUMNS - 1)
+        x -= width(column++);
+      let row = 0;
+      while (y >= height(row) && row < SPREADSHEET_MAX_ROWS - 1)
+        y -= height(row++);
+      return { row, column, x: Math.round(x), y: Math.round(y) };
+    },
+  });
+  if (drawings.length) metadata.drawings = drawings;
+  const pivotTables = readSheetPivotTables({
+    archive: context.archive,
+    sheetPath: entry.path,
+    sheetName: entry.name,
+    tables: context.tables,
+    customFormat: context.styles.customFormat,
+    warnings,
+  });
+  if (pivotTables.length) metadata.pivotTables = pivotTables;
+  fitMetadata(metadata, warnings);
   if (hiddenRows.length && hiddenRows.length < rowCount)
     metadata.hiddenRows = hiddenRows.filter((row) => row < rowCount);
   if (hiddenColumns.length) metadata.hiddenColumns = hiddenColumns;
@@ -1197,6 +1207,8 @@ export function readXlsxWorkbook(
   }
   const context: WorkbookContext = {
     archive,
+    theme,
+    drawings: drawingImports(),
     sharedStrings: readSharedStrings(archive, sharedPath),
     styles: readXlsxStylesheet(
       stylesBytes ? new TextDecoder().decode(stylesBytes) : '',
@@ -1262,5 +1274,10 @@ export function readXlsxWorkbook(
   for (const sheet of result)
     if (sheet.metadata && !Object.keys(sheet.metadata).length)
       delete sheet.metadata;
-  return { sheets: result, warnings: [...warnings] };
+  const images = context.drawings.images;
+  return {
+    sheets: result,
+    warnings: [...warnings],
+    ...(Object.keys(images).length && { images }),
+  };
 }

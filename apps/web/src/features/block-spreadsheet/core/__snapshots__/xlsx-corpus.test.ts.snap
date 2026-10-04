@@ -115,12 +115,11 @@ exports[`real-world XLSX corpus > closedxml-template-table-source-pivot-t… 1`]
   "sheets": 28,
   "styledCells": 2126,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Macro cannot calculate these Excel functions yet, so their formulas show errors: _XLL.DSSDATA.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
   ],
 }
 `;
@@ -139,7 +138,6 @@ exports[`real-world XLSX corpus > exceljs-test-issue-877-spare-parts-inve… 1`]
   "sheets": 5,
   "styledCells": 3786,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Hyperlinks are imported as display text; link targets are not retained.",
@@ -161,16 +159,15 @@ exports[`real-world XLSX corpus > figshare-ucl-social-enterprise-financia… 1`]
   },
   "cells": 65799,
   "formulas": 1861,
-  "roundTrip": "identical",
+  "roundTrip": "Charts_Labs metadata",
   "sheets": 17,
   "styledCells": 101113,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables from other workbooks, data connections or very large layouts keep only their last values.",
   ],
 }
 `;
@@ -206,7 +203,6 @@ exports[`real-world XLSX corpus > github-alibhatti23-dcf-comps-lbo-merger… 1`]
   "sheets": 8,
   "styledCells": 831,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
   ],
@@ -245,14 +241,13 @@ exports[`real-world XLSX corpus > ironcalc-example-pivots-charts-comments… 1`]
   "styledCells": 128,
   "warnings": [
     "Chart sheets and other non-grid sheets are not imported.",
-    "Charts, drawings and images are not imported.",
     "Diagonal borders are not imported.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Patterned fills are shown as a blended solid color.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
     "Rich text is imported as plain text with the cell’s formatting.",
   ],
 }
@@ -393,7 +388,7 @@ exports[`real-world XLSX corpus > libreoffice-column-style-autofilter-lin… 1`]
   "warnings": [
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables from other workbooks, data connections or very large layouts keep only their last values.",
   ],
 }
 `;
@@ -408,14 +403,13 @@ exports[`real-world XLSX corpus > libreoffice-forum-mso-de-104083-pivot-w… 1`]
   },
   "cells": 9524,
   "formulas": 2303,
-  "roundTrip": "identical",
+  "roundTrip": "Tabelle1 metadata",
   "sheets": 2,
   "styledCells": 12208,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
   ],
 }
 `;
@@ -514,11 +508,11 @@ exports[`real-world XLSX corpus > nrel-sam-ppa-single-owner-project-finan… 1`]
   "sheets": 3,
   "styledCells": 28010,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
   ],
 }
 `;
@@ -537,11 +531,11 @@ exports[`real-world XLSX corpus > nrel-sam-residential-solar-cash-flow.xl… 1`]
   "sheets": 2,
   "styledCells": 32545,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Patterned fills are shown as a blended solid color.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
   ],
 }
 `;
@@ -560,7 +554,6 @@ exports[`real-world XLSX corpus > obr-efo-ready-reckoner-spring-2025.xlsx 1`] = 
   "sheets": 27,
   "styledCells": 12262,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hyperlinks are imported as display text; link targets are not retained.",
@@ -585,13 +578,13 @@ exports[`real-world XLSX corpus > obr-public-finances-databank-2026-09.xl… 1`]
   "styledCells": 20760,
   "warnings": [
     "Chart sheets and other non-grid sheets are not imported.",
-    "Charts, drawings and images are not imported.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Names that refer to other workbooks are not imported.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
     "Special font effects are simplified to the supported text formatting.",
   ],
 }
@@ -692,12 +685,12 @@ exports[`real-world XLSX corpus > packt-wazobia-3-statement-dcf-valuation… 1`]
   "sheets": 6,
   "styledCells": 3821,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Names that refer to other workbooks are not imported.",
+    "Shapes, text boxes and SmartArt are not imported.",
     "What-if data tables are imported as their last calculated values.",
   ],
 }
@@ -719,13 +712,13 @@ exports[`real-world XLSX corpus > packt365-dynamic-array-functions-workbo… 1`]
   "sheets": 3,
   "styledCells": 1411,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Linked data types and pictures in cells are imported as their displayed values.",
     "Names that refer to other workbooks are not imported.",
+    "Shapes, text boxes and SmartArt are not imported.",
   ],
 }
 `;
@@ -765,11 +758,11 @@ exports[`real-world XLSX corpus > poi-conditional-formatting-samples.xlsx 1`] = 
   "sheets": 18,
   "styledCells": 1838,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
     "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
   ],
 }
@@ -813,7 +806,6 @@ exports[`real-world XLSX corpus > poi-data-validation-table-range-county-… 1`]
   "sheets": 2,
   "styledCells": 176,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Font sizes are rounded and limited to 8–36 pt.",
@@ -860,7 +852,6 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
   "sheets": 4,
   "styledCells": 591,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Hyperlinks are imported as display text; link targets are not retained.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
@@ -905,7 +896,6 @@ exports[`real-world XLSX corpus > poi-structured-refs-lots-with-lookups-b… 1`]
   "sheets": 5,
   "styledCells": 4022,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
@@ -929,7 +919,6 @@ exports[`real-world XLSX corpus > sba-table-of-size-standards-2023.xlsx 1`] = `
   "sheets": 6,
   "styledCells": 5739,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Hyperlinks are imported as display text; link targets are not retained.",
@@ -1016,7 +1005,7 @@ exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
   "warnings": [
     "Macro cannot calculate these Excel functions yet, so their formulas show errors: ECMA.CEILING, JIS, PHONETIC, YEN.",
     "Pivot table lookups (GETPIVOTDATA) are imported as their last calculated values.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
   ],
 }
 `;
@@ -1076,11 +1065,11 @@ exports[`real-world XLSX corpus > worldbank-commodity-prices-pink-sheet-m… 1`]
   "sheets": 5,
   "styledCells": 85343,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Shapes, text boxes and SmartArt are not imported.",
     "Special font effects are simplified to the supported text formatting.",
   ],
 }
@@ -1100,15 +1089,15 @@ exports[`real-world XLSX corpus > zenodo-ccs-cement-post-tax-dcf-model.xl… 1`]
   "sheets": 12,
   "styledCells": 20467,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Hyperlinks are imported as display text; link targets are not retained.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Patterned fills are shown as a blended solid color.",
     "Pivot table lookups (GETPIVOTDATA) are imported as their last calculated values.",
-    "Pivot tables are not imported; existing cell values are retained.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
     "Text rotation, shrink-to-fit and right-to-left layout are not imported.",
   ],
 }
@@ -1128,12 +1117,12 @@ exports[`real-world XLSX corpus > zenodo-circular-economy-business-case-c… 1`]
   "sheets": 14,
   "styledCells": 20074,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
   ],
 }
 `;
@@ -1152,12 +1141,12 @@ exports[`real-world XLSX corpus > zenodo-debt-capacity-calculator.xlsx 1`] = `
   "sheets": 2,
   "styledCells": 328,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Names that refer to other workbooks are not imported.",
     "Rich text is imported as plain text with the cell’s formatting.",
+    "Shapes, text boxes and SmartArt are not imported.",
   ],
 }
 `;
@@ -1176,7 +1165,6 @@ exports[`real-world XLSX corpus > zenodo-offshore-wind-lcoe-dcf-model.xlsx 1`] =
   "sheets": 9,
   "styledCells": 6665,
   "warnings": [
-    "Charts, drawings and images are not imported.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hyperlinks are imported as display text; link targets are not retained.",

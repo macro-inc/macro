@@ -78,7 +78,12 @@ function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
   });
   const write = async () => {
     const doc = source.doc()!;
-    const plan = prepareSpreadsheetImport(doc, props.workbook.sheets, true);
+    const plan = prepareSpreadsheetImport(
+      doc,
+      props.workbook.sheets,
+      true,
+      props.workbook.images
+    );
     const formulas = await writeSpreadsheetImportCells(doc, plan, {
       chunk: SPREADSHEET_IMPORT_CHUNK_CELLS,
       pause: yieldToPage,

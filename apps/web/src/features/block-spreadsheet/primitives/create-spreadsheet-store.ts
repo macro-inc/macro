@@ -52,6 +52,7 @@ import {
   deleteSpreadsheetSheet,
   duplicateSpreadsheetSheet,
   prepareSpreadsheetImport,
+  readSpreadsheetImages,
   readSpreadsheetWorkbook,
   registerSpreadsheetImport,
   renameSpreadsheetSheet,
@@ -63,6 +64,13 @@ import {
 import { yieldToPage } from '../core/yield-to-page';
 
 const CELL_MAPS = new Set(SPREADSHEET_CELL_MAPS);
+
+export type SpreadsheetImportOptions = {
+  /** Called with the fraction of cells written. */
+  onProgress?: (fraction: number) => void;
+  /** Images the imported sheets draw, by key. */
+  images?: Record<string, string>;
+};
 
 /** How many changes collaborators have made to the document. */
 function remoteChangeCount(doc: LoroDoc) {
@@ -198,6 +206,7 @@ export function createSpreadsheetStore(options: {
   const [historyError, setHistoryError] = createSignal<string>();
   const [revision, setRevision] = createSignal(0);
   let history: ReturnType<typeof createSpreadsheetHistory> | undefined;
+  const imageCache = new Map<string, string>();
   // Cells are patched in place: copying a large sheet's cell record on every
   // edit costs more than the edit. `revision` identifies each change instead.
   let pending = { ...nothingPending(), full: true };
@@ -465,11 +474,11 @@ export function createSpreadsheetStore(options: {
   async function importSheets(
     inputs: SpreadsheetSheetInput[],
     replace: boolean,
-    onProgress?: (fraction: number) => void
+    { onProgress, images }: SpreadsheetImportOptions = {}
   ): Promise<string[]> {
     const doc = options.source.doc();
     if (!doc || !editable()) return [];
-    const plan = prepareSpreadsheetImport(doc, inputs, replace);
+    const plan = prepareSpreadsheetImport(doc, inputs, replace, images);
     const check = () => {
       if (options.source.doc() !== doc || !editable())
         throw new Error('The spreadsheet closed or became view only.');
@@ -558,12 +567,28 @@ export function createSpreadsheetStore(options: {
     },
     appendSheets: (
       inputs: SpreadsheetSheetInput[],
-      onProgress?: (fraction: number) => void
-    ) => importSheets(inputs, false, onProgress),
+      importOptions?: SpreadsheetImportOptions
+    ) => importSheets(inputs, false, importOptions),
     replaceWorkbook: (
       inputs: SpreadsheetSheetInput[],
-      onProgress?: (fraction: number) => void
-    ) => importSheets(inputs, true, onProgress),
+      importOptions?: SpreadsheetImportOptions
+    ) => importSheets(inputs, true, importOptions),
+    /** The workbook's images by key, for export. */
+    images: (keys: Iterable<string>) => {
+      const doc = options.source.doc();
+      return doc ? readSpreadsheetImages(doc, new Set(keys)) : {};
+    },
+    /** One image's data URL; images never change, so each is read once. */
+    image(key: string) {
+      const doc = options.source.doc();
+      if (!doc) return;
+      let url = imageCache.get(key);
+      if (url === undefined) {
+        url = readSpreadsheetImages(doc, [key])[key];
+        if (url !== undefined) imageCache.set(key, url);
+      }
+      return url;
+    },
     rowCount: () => layout().rowCount,
     columnCount: () => layout().columnCount,
     appendColumns(count: number) {

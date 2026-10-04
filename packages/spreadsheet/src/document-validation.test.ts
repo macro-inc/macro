@@ -31,9 +31,22 @@ describe('spreadsheet document validation outside sync', () => {
       ['spreadsheetBorderBottomColors', '#123456'],
     ])
       doc.getMap(root).set('A1', value);
+    doc
+      .getMap('spreadsheetImages')
+      .set('0123456789abcdef', 'data:image/png;base64,iVBORw0KGgo=');
     doc.getMap('spreadsheetSheetMetadata').set(
       'sheet1',
       JSON.stringify({
+        drawings: [
+          {
+            id: 'logo',
+            type: 'image',
+            image: '0123456789abcdef',
+            from: { row: 0, column: 0, x: 0, y: 0 },
+            width: 120,
+            height: 40,
+          },
+        ],
         merges: ['A1:C1'],
         rowHeights: { 0: 32 },
         hiddenRows: [5],
@@ -66,6 +79,13 @@ describe('spreadsheet document validation outside sync', () => {
     ['spreadsheetColumnAdditions', 'peer', 16_385],
     ['spreadsheetColumnWidths', '16384', 100],
     ['spreadsheetMeta', 'formatVersion', 2],
+    // Only raster images are stored; SVG can carry scripts.
+    [
+      'spreadsheetImages',
+      '0123456789abcdef',
+      'data:image/svg+xml;base64,PHN2Zy8+',
+    ],
+    ['spreadsheetImages', 'logo', 'data:image/png;base64,iVBORw0KGgo='],
   ])('rejects invalid %s entries', (root, key, value) => {
     const doc = workbook();
     doc.getMap(root as string).set(key as string, value);

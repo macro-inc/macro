@@ -29,11 +29,12 @@ export async function decodeXlsx(bytes: Uint8Array): Promise<WorkbookFileData> {
   return {
     sheets: workbook.sheets,
     warnings: [...new Set([...featureWarnings, ...workbook.warnings])],
+    ...(workbook.images && { images: workbook.images }),
   };
 }
 
 export async function encodeXlsx(
-  input: Pick<WorkbookFileData, 'sheets'>
+  input: Pick<WorkbookFileData, 'sheets' | 'images'>
 ): Promise<WorkbookFileExport> {
   const result = writeXlsxWorkbook(input);
   if (result.bytes.length > XLSX_MAX_BYTES)

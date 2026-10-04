@@ -1,4 +1,5 @@
 import { getTokens, Model } from '@ironcalc/wasm';
+import type { DrawingPoint } from './sheet-drawings';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -90,8 +91,9 @@ function prepareDeletion(
 }
 
 /**
- * Formulas kept outside cells, in a stable order: name definitions, then the
- * formulas and threshold values of conditional formats and data validation.
+ * Formulas kept outside cells, in a stable order: name definitions, the
+ * formulas and threshold values of conditional formats and data validation,
+ * then the ranges charts read.
  */
 function sheetFormulas(metadata: WorkbookSheetMetadata | undefined) {
   const formulas = (metadata?.definedNames ?? []).map((name) => name.formula);
@@ -104,6 +106,10 @@ function sheetFormulas(metadata: WorkbookSheetMetadata | undefined) {
       for (const threshold of rule.thresholds ?? [])
         if (threshold.value !== undefined) formulas.push(threshold.value);
   }
+  for (const drawing of metadata?.drawings ?? [])
+    if (drawing.type === 'chart') formulas.push(...drawing.chart.references);
+  for (const pivot of metadata?.pivotTables ?? [])
+    if (pivot.source !== undefined) formulas.push(pivot.source);
   return formulas;
 }
 
@@ -137,6 +143,28 @@ function withSheetFormulas(
       ...rule,
       ...(rule.formulas && { formulas: rule.formulas.map(take) }),
     }));
+  if (metadata.drawings)
+    result.drawings = metadata.drawings.map((drawing) =>
+      drawing.type === 'chart'
+        ? {
+            ...drawing,
+            chart: {
+              ...drawing.chart,
+              references: drawing.chart.references.map(take),
+            },
+          }
+        : drawing
+    );
+  if (metadata.pivotTables) {
+    // A pivot table whose source cells were deleted cannot be rebuilt; its
+    // values stay in the cells.
+    result.pivotTables = metadata.pivotTables.flatMap((pivot) => {
+      if (pivot.source === undefined) return [pivot];
+      const source = take();
+      return source.includes('#REF!') ? [] : [{ ...pivot, source }];
+    });
+    if (!result.pivotTables.length) delete result.pivotTables;
+  }
   return result;
 }
 
@@ -347,6 +375,41 @@ export function changeWorkbookAxis(
             const next = ruleRange(rule.range);
             return next ? [{ ...rule, range: next }] : [];
           });
+        if (metadata.drawings) {
+          // A drawing moves with its cells. One that stretches over cells
+          // that are all deleted goes with them, as it would have no size.
+          // A corner in deleted cells moves to where they were.
+          const corner = (point: DrawingPoint) => {
+            const index = move(point[change.axis]);
+            return index === undefined
+              ? {
+                  ...point,
+                  [change.axis]: change.index,
+                  [change.axis === 'row' ? 'y' : 'x']: 0,
+                }
+              : { ...point, [change.axis]: Math.min(limit - 1, index) };
+          };
+          metadata.drawings = metadata.drawings.flatMap((drawing) => {
+            const deleted = (point: DrawingPoint) =>
+              move(point[change.axis]) === undefined;
+            if (drawing.to && deleted(drawing.from) && deleted(drawing.to))
+              return [];
+            return [
+              {
+                ...drawing,
+                from: corner(drawing.from),
+                ...(drawing.to && { to: corner(drawing.to) }),
+              },
+            ];
+          });
+        }
+        if (metadata.pivotTables) {
+          metadata.pivotTables = metadata.pivotTables.flatMap((pivot) => {
+            const location = ruleRange(pivot.location);
+            return location ? [{ ...pivot, location }] : [];
+          });
+          if (!metadata.pivotTables.length) delete metadata.pivotTables;
+        }
         const hidden = change.axis === 'row' ? 'hiddenRows' : 'hiddenColumns';
         if (metadata[hidden])
           metadata[hidden] = metadata[hidden].flatMap((value) => {

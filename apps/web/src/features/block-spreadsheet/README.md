@@ -304,8 +304,8 @@ compare formula, error, and formatting behavior before replacing it.
   source range in one direction; Cmd/Ctrl+D fills from the top row and Cmd/Ctrl+R
   from the left column. Fill repeats values; it does not infer numeric series.
   Plain-text clipboard data and cut preserve raw formulas verbatim.
-- Filters, charts, editing named ranges, automatic spill expansion, and drag
-  auto-scroll remain future work.
+- Filters, creating or editing charts, editing named ranges, automatic spill
+  expansion, and drag auto-scroll remain future work.
 - CSV import writes a validated rectangle at the active cell, appending rows when
   needed. It preserves existing cell styles and supports quoted multiline fields.
   CSV exports values and drops formatting. XLSX import/export converts supported
@@ -351,6 +351,33 @@ Import keeps what Excel calculates and shows:
   active cell (Alt+Down). Input messages and notes show beside the active cell.
   Inserting or deleting rows and columns moves rule ranges, rule formulas and
   notes.
+- Images and charts. `core/xlsx-drawings.ts` reads a sheet's drawing part
+  (two-cell, one-cell and absolute anchors, and the fallback of Excel 2010
+  content) into `metadata.drawings`, anchored to cells so they move and stretch
+  with rows and columns. PNG, JPEG, GIF, WebP and BMP images up to 2 MB (16 MB
+  per workbook) are stored once each in the `spreadsheetImages` root map, keyed
+  by a hash of their bytes. Column, bar, line, area, pie, doughnut and scatter
+  charts keep their type, grouping, secondary axis, title, legend, series
+  colors and the ranges they read; `core/chart-data.ts` reads those ranges from
+  calculated values, and `core/chart-scene.ts` lays the chart out for
+  `components/SpreadsheetChart.tsx`, so charts follow edits. The chart part is
+  kept without its cached values (theme colors resolved), and export writes it
+  back with its current ranges and fresh caches; charts without it, or too large
+  to keep, are written from what Macro knows. Clicking a drawing selects it;
+  Delete removes it and Escape returns to the cells. Radar, stock, bubble and
+  surface charts are exported but not drawn; shapes, text boxes, SmartArt and
+  EMF/WMF images are not imported.
+- Pivot tables. `core/xlsx-pivots.ts` keeps each pivot table's definition and its
+  cache definition without records, marked to refresh on load, in
+  `metadata.pivotTables`; Macro shows the values Excel last saved, and Excel or
+  LibreOffice rebuilds the table from its source cells when the download opens.
+  A table source becomes its range, custom number formats are rewritten for the
+  exported styles, and area formats are dropped in favor of the pivot style.
+  The location and source move with rows and columns, follow sheet renames,
+  and a pivot table whose source is deleted keeps only its values. Pivot tables
+  over other workbooks or data connections keep only their values, and pivot
+  charts linked to them become ordinary charts. Renaming a sheet updates the
+  charts that read it; deleting it is refused while a chart reads it.
 
 Confirming an import writes its cells in commits of 5,000 under sheet ids no
 reader knows yet, outside undo history, and yields to the page between commits
@@ -365,6 +392,12 @@ Export writes `fullCalcOnLoad`, cached results for every formula and spilled
 cell, `_xlfn` prefixes, dynamic-array metadata for formulas that need array
 evaluation, `@` as Excel stores it, and the same column default as Macro so that
 Excel → Macro → Excel round trips are stable.
+
+`core/xlsx-drawings.test.ts` and `core/xlsx-pivots.test.ts` cover drawings and
+pivot tables with `core/xlsx-fixtures/drawings.xlsx` (charts and an image written
+by openpyxl) and corpus workbooks. Exports were also checked with openpyxl and
+LibreOffice, which draws the same charts and rebuilds pivot tables from edited
+data.
 
 `core/xlsx-corpus.test.ts` imports, recalculates, exports and reimports the
 real-world workbooks in `core/xlsx-fixtures/real-world/` (finance models,
@@ -395,6 +428,7 @@ The [browser fixture](browser-test/README.md) runs the composed editor with real
 calculation and Excel workers. Its Playwright suite covers formula autocomplete
 and range picking, menu/dialog focus, sheet navigation, read-only transitions,
 Excel round trips, imported conditional formatting, data validation and notes,
+imported charts and images (following edits, Delete and undo, and download),
 workbook import undo, and formatting without remounts or flashes.
 Its separate mobile suite uses Android Chrome and iPhone WebKit emulation for
 touch editing, formula suggestions, selection/reference handles, menus, sheets,

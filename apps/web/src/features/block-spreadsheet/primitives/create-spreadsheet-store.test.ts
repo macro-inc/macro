@@ -407,7 +407,7 @@ describe('spreadsheet store', () => {
     const unsubscribe = doc.subscribeLocalUpdates(() => commits.push('update'));
     const [id] = await store.replaceWorkbook(
       [{ name: 'Large', cells, rowCount: 6_000, columnWidths: {} }],
-      (fraction) => progress.push(fraction)
+      { onProgress: (fraction) => progress.push(fraction) }
     );
     unsubscribe();
     // 12,000 cells take several commits, each reported, and a registration.

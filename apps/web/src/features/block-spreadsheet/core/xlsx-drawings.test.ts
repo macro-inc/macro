@@ -1,0 +1,391 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import type { SheetDrawing } from '@macro-inc/spreadsheet/sheet-drawings';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { describe, expect, it } from 'vitest';
+import { type ChartReader, chartData } from './chart-data';
+import { chartScene } from './chart-scene';
+import { formatCellAddress } from './spreadsheet-document';
+import type { WorkbookFileData } from './workbook-file-types';
+import { decodeXlsx, encodeXlsx } from './xlsx-codec';
+import { withLightness } from './xlsx-stylesheet';
+
+const fixture = () =>
+  new Uint8Array(
+    readFileSync(
+      createRequire(import.meta.url).resolve('./xlsx-fixtures/drawings.xlsx')
+    )
+  );
+
+/** Reads literal cells, as the grid does before calculation. */
+function reader(workbook: WorkbookFileData, home: string): ChartReader {
+  return (range) => {
+    const sheet = workbook.sheets.find(
+      (entry) => entry.name === (range.sheet ?? home)
+    );
+    if (!sheet) return;
+    const values = [];
+    for (let row = range.top; row <= range.bottom; row++)
+      for (let column = range.left; column <= range.right; column++) {
+        const text = sheet.cells[formatCellAddress(row, column)]?.value ?? '';
+        const number = text === '' ? Number.NaN : Number(text);
+        values.push({
+          text,
+          ...(Number.isFinite(number) && { number }),
+        });
+      }
+    return values;
+  };
+}
+
+const drawingsOf = (workbook: WorkbookFileData, name: string) =>
+  workbook.sheets.find((sheet) => sheet.name === name)?.metadata?.drawings ??
+  [];
+
+/** Drawings as a round trip should keep them: imported parts are rewritten. */
+const comparable = (drawings: SheetDrawing[]) =>
+  drawings.map((drawing) =>
+    drawing.type === 'image'
+      ? drawing
+      : {
+          ...drawing,
+          chart: {
+            ...drawing.chart,
+            source: undefined,
+            plots: drawing.chart.plots.map((plot) => ({
+              ...plot,
+              // Exports cache series names that cells give.
+              series: plot.series.map(({ name, ...series }) =>
+                series.nameRef === undefined ? { name, ...series } : series
+              ),
+            })),
+          },
+        }
+  );
+
+describe('Excel drawings', () => {
+  it('imports charts and images anchored to cells', async () => {
+    const imported = await decodeXlsx(fixture());
+    expect(imported.warnings).toEqual([]);
+    const sales = drawingsOf(imported, 'Sales');
+    expect(
+      sales.map((drawing) =>
+        drawing.type === 'chart'
+          ? `${drawing.chart.plots.map((plot) => `${plot.kind}${plot.grouping ? `/${plot.grouping}` : ''}`)}: ${drawing.chart.title}`
+          : `image ${drawing.width}x${drawing.height}`
+      )
+    ).toEqual([
+      'column: Revenue and costs',
+      'line: Profit',
+      'pie: Share by region',
+      'bar/stacked: Stacked costs',
+      'area: Revenue area',
+      'scatter: Revenue vs costs',
+      'image 160x60',
+    ]);
+    expect(sales[0]).toMatchObject({
+      from: { row: 1, column: 8, x: 0, y: 0 },
+      width: 454,
+      height: 265,
+      chart: {
+        legend: 'right',
+        references: [
+          "'Sales'!B1",
+          "'Sales'!$A$2:$A$7",
+          "'Sales'!$B$2:$B$7",
+          "'Sales'!C1",
+          "'Sales'!$A$2:$A$7",
+          "'Sales'!$C$2:$C$7",
+        ],
+        // The workbook theme's accents.
+        colors: [
+          '#4F81BD',
+          '#C0504D',
+          '#9BBB59',
+          '#8064A2',
+          '#4BACC6',
+          '#F79646',
+        ],
+      },
+    });
+    const logo = sales[6];
+    expect(logo).toMatchObject({ type: 'image', from: { row: 9, column: 0 } });
+    expect(logo.type === 'image' && imported.images?.[logo.image]).toMatch(
+      /^data:image\/png;base64,iVBORw0KGgo/
+    );
+    // A line on Excel's secondary axis, beside columns.
+    const [doughnut, combination] = drawingsOf(imported, 'Summary');
+    expect(doughnut).toMatchObject({
+      chart: { plots: [{ kind: 'doughnut' }] },
+    });
+    expect(combination.type === 'chart' && combination.chart.plots).toEqual([
+      {
+        kind: 'column',
+        series: [{ values: 2, nameRef: 0, categories: 1 }],
+      },
+      { kind: 'line', series: [{ values: 4, nameRef: 3 }], secondary: true },
+    ]);
+  });
+
+  it('draws charts from the cells they reference, on any sheet', async () => {
+    const imported = await decodeXlsx(fixture());
+    const read = (sheet: string, index: number) => {
+      const drawing = drawingsOf(imported, sheet)[index];
+      if (drawing.type !== 'chart') throw new Error('Expected a chart.');
+      return chartData(drawing.chart, reader(imported, sheet));
+    };
+    const columns = read('Sales', 0);
+    expect(columns.categories).toEqual([
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+    ]);
+    expect(
+      columns.plots[0].series.map(({ name, color, values }) => ({
+        name,
+        color,
+        values,
+      }))
+    ).toEqual([
+      {
+        name: 'Revenue',
+        color: '#4F81BD',
+        values: [1000, 1250, 1500, 1750, 2000, 2250],
+      },
+      {
+        name: 'Costs',
+        color: '#C0504D',
+        values: [700, 820, 940, 1060, 1180, 1300],
+      },
+    ]);
+    const scatter = read('Sales', 5).plots[0].series[0];
+    expect(scatter.x).toEqual([1000, 1250, 1500, 1750, 2000, 2250]);
+    expect(scatter.values).toEqual([700, 820, 940, 1060, 1180, 1300]);
+    const doughnut = read('Summary', 0);
+    expect(doughnut.categories).toEqual(['North', 'South', 'East', 'West']);
+    expect(doughnut.plots[0].series[0].values).toEqual([40, 25, 20, 15]);
+
+    // Bars are proportional to their values, on a zero-based axis.
+    const bars = chartScene(columns, 454, 265).shapes.filter(
+      (shape) => shape.type === 'rect' && shape.tip
+    );
+    expect(bars).toHaveLength(12);
+    const height = (tip: string) => {
+      const bar = bars.find(
+        (shape) => shape.type === 'rect' && shape.tip === tip
+      );
+      return bar?.type === 'rect' ? bar.height : Number.NaN;
+    };
+    expect(
+      height('Revenue · Jun: 2,250') / height('Revenue · Jan: 1,000')
+    ).toBeCloseTo(2.25);
+    const slices = chartScene(doughnut, 378, 265).shapes.filter(
+      (shape) => shape.type === 'path' && shape.translate
+    );
+    expect(slices.map((shape) => shape.type === 'path' && shape.tip)).toEqual([
+      'North: 40%',
+      'South: 25%',
+      'East: 20%',
+      'West: 15%',
+    ]);
+  });
+
+  it('exports drawings with current values that import again unchanged', async () => {
+    const imported = await decodeXlsx(fixture());
+    // The first month's revenue changed since the import.
+    const sales = imported.sheets[0];
+    const exported = await encodeXlsx({
+      ...imported,
+      sheets: [
+        {
+          ...sales,
+          cells: { ...sales.cells, B2: { ...sales.cells.B2, value: '5000' } },
+        },
+        imported.sheets[1],
+      ],
+    });
+    expect(exported.warnings).toEqual([]);
+    const files = unzipSync(exported.bytes);
+    const original = unzipSync(fixture());
+    // One copy of the image, byte for byte.
+    expect(
+      Object.keys(files).filter((name) => name.startsWith('xl/media/'))
+    ).toEqual(['xl/media/image1.png']);
+    expect(files['xl/media/image1.png']).toEqual(
+      original['xl/media/image1.png']
+    );
+    expect(
+      Object.keys(files)
+        .filter((name) => name.startsWith('xl/charts/'))
+        .sort()
+    ).toHaveLength(8);
+    const types = strFromU8(files['[Content_Types].xml']);
+    expect(types).toContain(
+      '<Default Extension="png" ContentType="image/png"/>'
+    );
+    expect(types).toContain('/xl/charts/chart8.xml');
+    expect(types).toContain('/xl/drawings/drawing2.xml');
+    expect(strFromU8(files['xl/worksheets/sheet1.xml'])).toMatch(
+      /<drawing r:id="rId1"\/><\/worksheet>$/
+    );
+    // Imported chart parts are kept, with caches of the cells' values.
+    const chart = strFromU8(files['xl/charts/chart1.xml']);
+    expect(chart).toContain("<f>'Sales'!$B$2:$B$7</f><numCache>");
+    expect(chart).toContain('<pt idx="0"><v>5000</v></pt>');
+    expect(chart).toContain(
+      '<strCache><ptCount val="1"/><pt idx="0"><v>Revenue</v>'
+    );
+
+    const again = await decodeXlsx(exported.bytes);
+    expect(again.warnings).toEqual([]);
+    for (const name of ['Sales', 'Summary'])
+      expect(comparable(drawingsOf(again, name))).toEqual(
+        comparable(drawingsOf(imported, name))
+      );
+    expect(again.images).toEqual(imported.images);
+  });
+
+  it('writes charts Macro describes when the imported part cannot be kept', async () => {
+    const imported = await decodeXlsx(fixture());
+    const withoutSources = {
+      ...imported,
+      sheets: imported.sheets.map((sheet) => ({
+        ...sheet,
+        metadata: {
+          ...sheet.metadata,
+          drawings: sheet.metadata?.drawings?.map((drawing) =>
+            drawing.type === 'chart'
+              ? { ...drawing, chart: { ...drawing.chart, source: undefined } }
+              : drawing
+          ),
+        },
+      })),
+    };
+    const exported = await encodeXlsx(withoutSources);
+    expect(
+      strFromU8(unzipSync(exported.bytes)['xl/charts/chart8.xml'])
+    ).toContain('<c:crosses val="max"/>');
+    const again = await decodeXlsx(exported.bytes);
+    const shape = (drawings: SheetDrawing[]) =>
+      drawings.map((drawing) =>
+        drawing.type === 'chart'
+          ? {
+              title: drawing.chart.title,
+              legend: drawing.chart.legend,
+              references: drawing.chart.references,
+              plots: drawing.chart.plots.map((plot) => ({
+                kind: plot.kind,
+                grouping: plot.grouping,
+                secondary: plot.secondary,
+                series: plot.series.map((series) => [
+                  series.nameRef,
+                  series.categories,
+                  series.values,
+                ]),
+              })),
+            }
+          : drawing
+      );
+    for (const name of ['Sales', 'Summary'])
+      expect(shape(drawingsOf(again, name))).toEqual(
+        shape(drawingsOf(imported, name))
+      );
+  });
+
+  it('reads theme colors, absolute anchors and compatibility fallbacks, and reports what it skips', async () => {
+    const files = unzipSync(fixture());
+    const xdr = (body: string) =>
+      `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">${body}</xdr:wsDr>`;
+    const marker = (local: string, column: number, row: number, offset = 0) =>
+      `<xdr:${local}><xdr:col>${column}</xdr:col><xdr:colOff>${offset}</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>${offset * 2}</xdr:rowOff></xdr:${local}>`;
+    const picture = (id: string, description = '') =>
+      `<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"${description ? ` descr="${description}"` : ''}/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="${id}"/></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="952500" cy="476250"/></a:xfrm></xdr:spPr></xdr:pic>`;
+    const shape =
+      '<xdr:sp><xdr:nvSpPr><xdr:cNvPr id="3" name="Note box"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr/></xdr:sp>';
+    files['xl/drawings/drawing2.xml'] = strToU8(
+      xdr(
+        // Excel 2010 content with a fallback: only the fallback is read.
+        `<mc:AlternateContent><mc:Choice Requires="a14"><xdr:twoCellAnchor>${marker('from', 0, 0)}${marker('to', 2, 2)}${shape}<xdr:clientData/></xdr:twoCellAnchor></mc:Choice><mc:Fallback><xdr:twoCellAnchor editAs="oneCell">${marker('from', 1, 2, 9525)}${marker('to', 3, 6)}${picture('rId1', 'Company logo')}<xdr:clientData/></xdr:twoCellAnchor></mc:Fallback></mc:AlternateContent>` +
+          // A copy of the same picture in another part shares its stored image.
+          `<xdr:oneCellAnchor>${marker('from', 6, 2)}<xdr:ext cx="190500" cy="95250"/>${picture('rId2')}<xdr:clientData/></xdr:oneCellAnchor>` +
+          `<xdr:absoluteAnchor><xdr:pos x="${200 * 9525}" y="${50 * 9525}"/><xdr:ext cx="${300 * 9525}" cy="${150 * 9525}"/><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="4" name="Plan"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="rId3"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:absoluteAnchor>` +
+          `<xdr:oneCellAnchor>${marker('from', 0, 20)}<xdr:ext cx="95250" cy="95250"/>${shape}<xdr:clientData/></xdr:oneCellAnchor>` +
+          `<xdr:oneCellAnchor>${marker('from', 0, 24)}<xdr:ext cx="95250" cy="95250"/>${picture('rId4')}<xdr:clientData/></xdr:oneCellAnchor>`
+      )
+    );
+    const relationship = (id: string, type: string, target: string) =>
+      `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
+    files['xl/drawings/_rels/drawing2.xml.rels'] = strToU8(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationship('rId1', 'image', '../media/image1.png')}${relationship('rId2', 'image', '../media/copy.png')}${relationship('rId3', 'chart', '../charts/plan.xml')}${relationship('rId4', 'image', '../media/vector.emf')}</Relationships>`
+    );
+    files['xl/media/copy.png'] = files['xl/media/image1.png'];
+    files['xl/media/vector.emf'] = new Uint8Array([1, 0, 0, 0, 108, 0, 0, 0]);
+    const series = (name: string, properties: string, column: string) =>
+      `<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>${name}</c:v></c:tx><c:spPr>${properties}</c:spPr><c:val><c:numRef><c:f>Sales!$${column}$2:$${column}$7</c:f></c:numRef></c:val></c:ser>`;
+    files['xl/charts/plan.xml'] = strToU8(
+      `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:chart><c:autoTitleDeleted val="1"/><c:plotArea><c:barChart><c:barDir val="col"/><c:grouping val="percentStacked"/>${series('Plan', '<a:solidFill><a:schemeClr val="accent2"><a:lumMod val="75000"/></a:schemeClr></a:solidFill>', 'B')}${series('Gap', '<a:noFill/><a:ln><a:noFill/></a:ln>', 'C')}<c:axId val="1"/><c:axId val="2"/></c:barChart><c:radarChart><c:radarStyle val="marker"/>${series('Radar', '', 'D')}<c:axId val="1"/><c:axId val="2"/></c:radarChart><c:catAx><c:axId val="1"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx><c:valAx><c:axId val="2"/><c:axPos val="l"/><c:crossAx val="1"/></c:valAx></c:plotArea><c:legend><c:legendPos val="b"/></c:legend></c:chart><c:externalData r:id="rId1"><c:autoUpdate val="0"/></c:externalData></c:chartSpace>`
+    );
+    files['[Content_Types].xml'] = strToU8(
+      strFromU8(files['[Content_Types].xml']).replace(
+        '</Types>',
+        '<Default Extension="emf" ContentType="image/x-emf"/><Override PartName="/xl/charts/plan.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>'
+      )
+    );
+    const imported = await decodeXlsx(zipSync(files));
+    expect(imported.warnings).toEqual([
+      'Radar, bubble, stock and surface charts are kept for export but not drawn.',
+      'Images in formats browsers cannot show, such as EMF and WMF, are not imported.',
+      'Shapes, text boxes and SmartArt are not imported.',
+    ]);
+    expect(Object.keys(imported.images ?? {})).toHaveLength(1);
+    const [logo, copy, plan, ...rest] = drawingsOf(imported, 'Summary');
+    expect(rest).toEqual([]);
+    // A picture that moves but does not size with its cells keeps its size.
+    expect(logo).toEqual({
+      id: 'drawing-1',
+      name: 'Logo',
+      type: 'image',
+      image: copy.type === 'image' ? copy.image : '',
+      description: 'Company logo',
+      from: { row: 2, column: 1, x: 1, y: 2 },
+      width: 100,
+      height: 50,
+    });
+    expect(copy).toMatchObject({ width: 20, height: 10 });
+    // Absolute positions are placed in the sheet's cells: 64-pixel columns
+    // and 20-pixel rows.
+    expect(plan).toMatchObject({
+      name: 'Plan',
+      from: { row: 2, column: 3, x: 8, y: 10 },
+      width: 300,
+      height: 150,
+    });
+    if (plan.type !== 'chart') throw new Error('Expected a chart.');
+    expect(plan.chart).toMatchObject({
+      legend: 'bottom',
+      plots: [
+        {
+          kind: 'column',
+          grouping: 'percentStacked',
+          series: [
+            {
+              name: 'Plan',
+              color: `#${withLightness('C0504D', (lightness) => lightness * 0.75)}`,
+            },
+            { name: 'Gap', noFill: true, noLine: true },
+          ],
+        },
+      ],
+    });
+    expect(plan.chart.title).toBeUndefined();
+    // The kept part names the theme color it used, and drops the embedded
+    // workbook it referred to.
+    expect(plan.chart.source).toContain(
+      '<a:srgbClr val="C0504D"><a:lumMod val="75000"/></a:srgbClr>'
+    );
+    expect(plan.chart.source).not.toContain('externalData');
+  });
+});

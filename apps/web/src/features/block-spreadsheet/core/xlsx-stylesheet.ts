@@ -173,6 +173,16 @@ export function readXlsxTheme(
 /** Excel's tint: scale HSL luminance toward black (negative) or white. */
 function tinted(hex: string, tint: number): string {
   if (!tint) return hex;
+  return withLightness(hex, (lightness) =>
+    tint < 0 ? lightness * (1 + tint) : lightness * (1 - tint) + tint
+  );
+}
+
+/** A color (RRGGBB) with its HSL lightness changed. */
+export function withLightness(
+  hex: string,
+  change: (lightness: number) => number
+): string {
   const [r, g, b] = [0, 2, 4].map(
     (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
   );
@@ -188,7 +198,7 @@ function tinted(hex: string, tint: number): string {
     else hue = (r - g) / delta + 4;
   }
   hue = (hue * 60 + 360) % 360;
-  lightness = tint < 0 ? lightness * (1 + tint) : lightness * (1 - tint) + tint;
+  lightness = Math.min(1, Math.max(0, change(lightness)));
   const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
   const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
   const m = lightness - chroma / 2;
@@ -231,6 +241,8 @@ export type XlsxStylesheet = {
   color: (attributes: Record<string, string>) => string | undefined;
   /** The Excel number format code for a cell's `s` index. */
   numberFormat: (index: number) => string;
+  /** A custom number format's code by its `numFmtId`. */
+  customFormat: (id: number) => string | undefined;
   /** The workbook's Normal font; cells only store differences from it. */
   defaultFont?: { name: string; size: number };
 };
@@ -582,6 +594,7 @@ export function readXlsxStylesheet(
       return style;
     },
     numberFormat: formatCode,
+    customFormat: (id) => formats.get(id),
     defaultFont:
       fonts[0]?.name && fonts[0].size && Number.isFinite(fonts[0].size)
         ? {

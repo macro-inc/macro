@@ -25,11 +25,13 @@ export type WorkbookFileSheet = {
 export type WorkbookFileData = {
   sheets: WorkbookFileSheet[];
   warnings: string[];
+  /** Images the sheets draw, as data URLs by content key. */
+  images?: Record<string, string>;
 };
 export type WorkbookFileExport = { bytes: Uint8Array; warnings: string[] };
 export type WorkbookFileRequest =
   | { kind: 'decode'; bytes: Uint8Array }
-  | { kind: 'encode'; workbook: Pick<WorkbookFileData, 'sheets'> };
+  | { kind: 'encode'; workbook: Pick<WorkbookFileData, 'sheets' | 'images'> };
 export type WorkbookFileReply =
   | { kind: 'decoded'; workbook: WorkbookFileData }
   | { kind: 'encoded'; file: WorkbookFileExport }

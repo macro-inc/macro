@@ -5,6 +5,10 @@ import {
   literalNumber,
   literalNumberDisplay,
 } from '@macro-inc/spreadsheet/number-display';
+import type {
+  SheetChart,
+  SheetDrawing,
+} from '@macro-inc/spreadsheet/sheet-drawings';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -21,6 +25,7 @@ import {
 import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { SPREADSHEET_CLIPBOARD_TYPE } from '../core/cell-copy';
+import type { ChartData } from '../core/chart-data';
 import type { FormulaTextSelection } from '../core/formula-reference';
 import {
   type CellPosition,
@@ -50,6 +55,7 @@ import {
   dataBarBackground,
 } from './cell-colors';
 import { FormulaInput } from './FormulaInput';
+import { type DrawingRect, SheetDrawingLayer } from './SheetDrawingLayer';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
   type HeaderAction,
@@ -186,6 +192,11 @@ export function SpreadsheetGrid(props: {
   /** The active cell's list of allowed values, offered in a dropdown. */
   listItems?: string[];
   onPickListItem?: (item: string) => void;
+  /** Images and charts over the sheet. */
+  drawings?: SheetDrawing[];
+  image?: (key: string) => string | undefined;
+  chartData?: (chart: SheetChart) => ChartData;
+  onDeleteDrawing?: (id: string) => void;
   /** The first calculation is running; formulas without results shimmer. */
   pendingFormulas?: boolean;
   remoteCursors: SpreadsheetCursor[];
@@ -231,6 +242,7 @@ export function SpreadsheetGrid(props: {
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
   // The cell whose list is open; moving the selection closes it.
   const [listOpenAt, setListOpenAt] = createSignal<string>();
+  const [selectedDrawing, setSelectedDrawing] = createSignal<string>();
   const [resizing, setResizing] = createSignal<{
     column: number;
     width: number;
@@ -452,6 +464,31 @@ export function SpreadsheetGrid(props: {
       width: `${offsets[area.right + 1] - offsets[area.left]}px`,
       height: `${rowOffsets()[area.bottom + 1] - rowOffsets()[area.top]}px`,
     };
+  };
+  /** A drawing's box in the grid, when it is near the visible area. */
+  const placeDrawing = (drawing: SheetDrawing): DrawingRect | undefined => {
+    const columns = columnOffsets();
+    const rows = rowOffsets();
+    const at = (index: number, offsets: number[]) =>
+      offsets[Math.min(index, offsets.length - 1)];
+    const left = at(drawing.from.column, columns) + drawing.from.x * scale();
+    const top = at(drawing.from.row, rows) + drawing.from.y * scale();
+    const right = drawing.to
+      ? at(drawing.to.column, columns) + drawing.to.x * scale()
+      : left + (drawing.width ?? 0) * scale();
+    const bottom = drawing.to
+      ? at(drawing.to.row, rows) + drawing.to.y * scale()
+      : top + (drawing.height ?? 0) * scale();
+    if (right - left < 2 || bottom - top < 2) return;
+    const margin = 400;
+    if (
+      bottom < scrollTop() - margin ||
+      top > scrollTop() + (viewport.height ?? 600) + margin ||
+      right < scrollLeft() - margin ||
+      left > scrollLeft() + (viewport.width ?? 1200) + margin
+    )
+      return;
+    return { left, top, width: right - left, height: bottom - top };
   };
   const activeStyle = () => ({
     left: `${columnOffsets()[props.selection.anchor.column]}px`,
@@ -1507,6 +1544,7 @@ export function SpreadsheetGrid(props: {
                               isInput(event.target)
                             )
                               return;
+                            setSelectedDrawing(undefined);
                             setTouchMode(event.pointerType === 'touch');
                             if (event.pointerType === 'touch') {
                               if (event.isPrimary === false) {
@@ -1725,6 +1763,23 @@ export function SpreadsheetGrid(props: {
                 </>
               )}
             </For>
+            <Show when={props.drawings?.length && props.chartData}>
+              <SheetDrawingLayer
+                drawings={props.drawings ?? []}
+                place={placeDrawing}
+                scale={scale()}
+                image={(key) => props.image?.(key)}
+                chartData={(chart) => props.chartData!(chart)}
+                selected={selectedDrawing()}
+                readonly={props.readonly || !props.onDeleteDrawing}
+                onSelect={setSelectedDrawing}
+                onDelete={(id) => {
+                  setSelectedDrawing(undefined);
+                  props.onDeleteDrawing?.(id);
+                }}
+                onReturnFocus={focusGrid}
+              />
+            </Show>
             <div
               aria-hidden="true"
               data-selection-range

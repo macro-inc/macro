@@ -2,9 +2,14 @@ import {
   cellDateMention,
   cellPlainText,
 } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  parseChartReference,
+  type SheetDrawing,
+} from '@macro-inc/spreadsheet/sheet-drawings';
 import { parseWorkbookMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import { strToU8, zipSync } from 'fflate';
 import type { CalculatedCell } from './calculation';
+import type { ChartValue } from './chart-data';
 import {
   DEFAULT_COLUMN_WIDTH,
   formatCellAddress,
@@ -21,11 +26,13 @@ import {
   XLSX_MAX_EXPANDED_BYTES,
   XLSX_MAX_SHEETS,
 } from './workbook-file-types';
+import { chartPart, drawingPart, imageFile, themePart } from './xlsx-drawings';
 import {
   addFunctionPrefixes,
   exportImplicitIntersections,
   markImplicitIntersections,
 } from './xlsx-formula';
+import { pivotParts, pivotTableName } from './xlsx-pivots';
 import {
   conditionalFormattingXml,
   dataValidationsXml,
@@ -135,7 +142,7 @@ class StyleTable {
   }
 
   /** The `numFmtId` of a number format code. */
-  private format(code: string): number {
+  format(code: string): number {
     let format: number | undefined = BUILTIN_FORMATS[code];
     if (format === undefined) {
       format = this.formats.get(code);
@@ -346,9 +353,48 @@ function quoteSheet(name: string) {
   return `'${name.replaceAll("'", "''")}'`;
 }
 
+/**
+ * What a chart reads from a reference: each cell's displayed text and number,
+ * row by row. References without a sheet read `home`.
+ */
+function chartValues(
+  sheets: WorkbookFileData['sheets'],
+  home: WorkbookFileData['sheets'][number]
+) {
+  const byName = new Map(
+    sheets.map((sheet) => [sheet.name.toLowerCase(), sheet])
+  );
+  return (reference: string): ChartValue[] | undefined => {
+    const range = parseChartReference(reference);
+    const sheet = range?.sheet ? byName.get(range.sheet.toLowerCase()) : home;
+    if (!range || !sheet) return;
+    const values: ChartValue[] = [];
+    for (let row = range.top; row <= range.bottom; row++)
+      for (let column = range.left; column <= range.right; column++) {
+        if (values.length >= 100_000) return values;
+        const address = formatCellAddress(row, column);
+        const result = sheet.values?.[address];
+        if (result) {
+          values.push({
+            text: result.display,
+            ...(result.number !== undefined && { number: result.number }),
+          });
+          continue;
+        }
+        const text = sheet.cells[address]?.value ?? '';
+        const number = text.trim() === '' ? Number.NaN : Number(text);
+        values.push({
+          text,
+          ...(Number.isFinite(number) && { number }),
+        });
+      }
+    return values;
+  };
+}
+
 /** Write Macro sheets as a SpreadsheetML package without an intermediate model. */
 export function writeXlsxWorkbook(
-  input: Pick<WorkbookFileData, 'sheets'>
+  input: Pick<WorkbookFileData, 'sheets' | 'images'>
 ): WorkbookFileExport {
   if (!input.sheets.length || input.sheets.length > XLSX_MAX_SHEETS)
     throw new Error(`Export a workbook with 1–${XLSX_MAX_SHEETS} sheets.`);
@@ -413,6 +459,38 @@ export function writeXlsxWorkbook(
   const files: Record<string, Uint8Array> = {};
   // Sheets with notes, by 1-based number.
   const noted: number[] = [];
+  // Drawing parts by number, chart parts, and images written once each.
+  let drawingCount = 0;
+  let chartCount = 0;
+  const media = new Map<string, string | undefined>();
+  const imageExtensions = new Set<string>();
+  // Pivot tables, each with its own cache, numbered from 1.
+  let pivotCount = 0;
+  // Pivot charts stay linked only to pivot tables the download contains.
+  const pivotNames = new Set(
+    input.sheets.flatMap((sheet) =>
+      (sheet.metadata?.pivotTables ?? []).map(
+        (pivot) =>
+          `${sheet.name.toLowerCase()}!${pivotTableName(pivot)?.toLowerCase()}`
+      )
+    )
+  );
+  const pivotExists = (sheet: string, name: string) =>
+    pivotNames.has(`${sheet.toLowerCase()}!${name.toLowerCase()}`);
+  const writeImage = (key: string) => {
+    if (media.has(key)) return media.get(key);
+    const url = input.images?.[key];
+    const file = url ? imageFile(url) : undefined;
+    let path: string | undefined;
+    if (file) {
+      path = `xl/media/image${media.size + 1}.${file.extension}`;
+      files[path] = file.bytes;
+      imageExtensions.add(file.extension);
+    } else
+      warnings.add('Some images were missing and are not in the download.');
+    media.set(key, path);
+    return path;
+  };
   input.sheets.forEach((sheet, sheetIndex) => {
     const metadata = sheet.metadata ?? {};
     const values = sheet.values ?? {};
@@ -622,6 +700,82 @@ export function writeXlsxWorkbook(
         ? `<pane${freeze.columns ? ` xSplit="${freeze.columns}"` : ''}${freeze.rows ? ` ySplit="${freeze.rows}"` : ''} topLeftCell="${formatCellAddress(freeze.rows, freeze.columns)}" activePane="${freeze.rows && freeze.columns ? 'bottomRight' : freeze.rows ? 'bottomLeft' : 'topRight'}" state="frozen"/>`
         : '';
     const notes = notesParts(metadata.notes, sheetIndex + 1);
+    const readValues = chartValues(input.sheets, sheet);
+    const width = (column: number) =>
+      sheet.columnWidths[column] ?? DEFAULT_COLUMN_WIDTH;
+    const height = (row: number) => (heights[row] ?? defaultRowHeight) / 0.75;
+    const drawing = metadata.drawings?.length
+      ? drawingPart({
+          drawings: metadata.drawings,
+          image: writeImage,
+          chart: (chart) => {
+            const path = `xl/charts/chart${++chartCount}.xml`;
+            files[path] = strToU8(chartPart(chart, readValues, pivotExists));
+            return path;
+          },
+          size: (value: SheetDrawing) => {
+            if (!value.to)
+              return { width: value.width ?? 0, height: value.height ?? 0 };
+            let horizontal = value.to.x - value.from.x;
+            for (
+              let column = value.from.column;
+              column < value.to.column;
+              column++
+            )
+              horizontal += width(column);
+            let vertical = value.to.y - value.from.y;
+            for (let row = value.from.row; row < value.to.row; row++)
+              vertical += height(row);
+            return {
+              width: Math.max(1, horizontal),
+              height: Math.max(1, vertical),
+            };
+          },
+        })
+      : undefined;
+    const drawingNumber = drawing ? ++drawingCount : 0;
+    // Relationships of the sheet: its drawing, then its notes' parts.
+    const sheetRelations: string[] = [];
+    const relate = (type: string, target: string) => {
+      sheetRelations.push(
+        `<Relationship Id="rId${sheetRelations.length + 1}" Type="${RELATIONSHIPS}/${type}" Target="${target}"/>`
+      );
+      return `rId${sheetRelations.length}`;
+    };
+    const drawingId = drawing
+      ? relate('drawing', `../drawings/drawing${drawingNumber}.xml`)
+      : undefined;
+    const notesId = notes
+      ? relate('vmlDrawing', `../drawings/vmlDrawing${sheetIndex + 1}.vml`)
+      : undefined;
+    if (notes) relate('comments', `../comments${sheetIndex + 1}.xml`);
+    for (const pivot of metadata.pivotTables ?? []) {
+      const parts = pivotParts(pivot, pivotCount + 1, (code) =>
+        styles.format(code)
+      );
+      if (!parts) {
+        warnings.add(
+          'Some pivot tables lost their data and are downloaded as values.'
+        );
+        continue;
+      }
+      const number = ++pivotCount;
+      files[`xl/pivotTables/pivotTable${number}.xml`] = strToU8(parts.table);
+      files[`xl/pivotTables/_rels/pivotTable${number}.xml.rels`] = strToU8(
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${PACKAGE_RELATIONSHIPS}"><Relationship Id="rId1" Type="${RELATIONSHIPS}/pivotCacheDefinition" Target="../pivotCache/pivotCacheDefinition${number}.xml"/></Relationships>`
+      );
+      files[`xl/pivotCache/pivotCacheDefinition${number}.xml`] = strToU8(
+        parts.cache
+      );
+      relate('pivotTable', `../pivotTables/pivotTable${number}.xml`);
+    }
+    if (drawing) {
+      files[`xl/drawings/drawing${drawingNumber}.xml`] = strToU8(drawing.xml);
+      files[`xl/drawings/_rels/drawing${drawingNumber}.xml.rels`] = strToU8(
+        drawing.rels
+      );
+    }
     const dimension =
       rows.size && occupied.size
         ? `A1:${formatCellAddress(maxRow, maxColumn)}`
@@ -638,18 +792,19 @@ export function writeXlsxWorkbook(
         metadata.conditionalFormats,
         (style) => styles.dxf(style),
         addFunctionPrefixes
-      )}${dataValidationsXml(metadata.validations, addFunctionPrefixes)}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${notes ? '<legacyDrawing r:id="rId1"/>' : ''}</worksheet>`
+      )}${dataValidationsXml(metadata.validations, addFunctionPrefixes)}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${drawingId ? `<drawing r:id="${drawingId}"/>` : ''}${notesId ? `<legacyDrawing r:id="${notesId}"/>` : ''}</worksheet>`
     );
     if (notes) {
       const number = sheetIndex + 1;
       noted.push(number);
       files[`xl/comments${number}.xml`] = strToU8(notes.comments);
       files[`xl/drawings/vmlDrawing${number}.vml`] = strToU8(notes.drawing);
-      files[`xl/worksheets/_rels/sheet${number}.xml.rels`] = strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="${PACKAGE_RELATIONSHIPS}"><Relationship Id="rId1" Type="${RELATIONSHIPS}/vmlDrawing" Target="../drawings/vmlDrawing${number}.vml"/><Relationship Id="rId2" Type="${RELATIONSHIPS}/comments" Target="../comments${number}.xml"/></Relationships>`
-      );
     }
+    if (sheetRelations.length)
+      files[`xl/worksheets/_rels/sheet${sheetIndex + 1}.xml.rels`] = strToU8(
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${PACKAGE_RELATIONSHIPS}">${sheetRelations.join('')}</Relationships>`
+      );
   });
   const definedNames = input.sheets.flatMap((sheet, index) => [
     ...(sheet.metadata?.definedNames ?? []).map(
@@ -671,7 +826,26 @@ export function writeXlsxWorkbook(
   const count = input.sheets.length;
   files['[Content_Types].xml'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${noted.length ? '<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>' : ''}${noted
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${noted.length ? '<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>' : ''}${[
+      ...imageExtensions,
+    ]
+      .map(
+        (extension) =>
+          `<Default Extension="${extension}" ContentType="image/${extension}"/>`
+      )
+      .join('')}${Array.from(
+      { length: drawingCount },
+      (_, index) =>
+        `<Override PartName="/xl/drawings/drawing${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`
+    ).join('')}${Array.from(
+      { length: chartCount },
+      (_, index) =>
+        `<Override PartName="/xl/charts/chart${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`
+    ).join('')}${Array.from(
+      { length: pivotCount },
+      (_, index) =>
+        `<Override PartName="/xl/pivotTables/pivotTable${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/><Override PartName="/xl/pivotCache/pivotCacheDefinition${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>`
+    ).join('')}${noted
       .map(
         (number) =>
           `<Override PartName="/xl/comments${number}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>`
@@ -685,7 +859,7 @@ export function writeXlsxWorkbook(
       )
       .join(
         ''
-      )}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>${dynamicArrays ? '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>' : ''}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`
+      )}<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>${dynamicArrays ? '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/>' : ''}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`
   );
   files['_rels/.rels'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -705,7 +879,15 @@ export function writeXlsxWorkbook(
       definedNames.length
         ? `<definedNames>${definedNames.join('')}</definedNames>`
         : ''
-    }<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`
+    }<calcPr calcId="191029" fullCalcOnLoad="1"/>${
+      pivotCount
+        ? `<pivotCaches>${Array.from(
+            { length: pivotCount },
+            (_, index) =>
+              `<pivotCache cacheId="${index + 1}" r:id="rId${count + 5 + index}"/>`
+          ).join('')}</pivotCaches>`
+        : ''
+    }</workbook>`
   );
   files['xl/_rels/workbook.xml.rels'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -716,7 +898,19 @@ export function writeXlsxWorkbook(
       )
       .join(
         ''
-      )}<Relationship Id="rId${count + 1}" Type="${RELATIONSHIPS}/styles" Target="styles.xml"/><Relationship Id="rId${count + 2}" Type="${RELATIONSHIPS}/sharedStrings" Target="sharedStrings.xml"/>${dynamicArrays ? `<Relationship Id="rId${count + 3}" Type="${RELATIONSHIPS}/sheetMetadata" Target="metadata.xml"/>` : ''}</Relationships>`
+      )}<Relationship Id="rId${count + 1}" Type="${RELATIONSHIPS}/styles" Target="styles.xml"/><Relationship Id="rId${count + 2}" Type="${RELATIONSHIPS}/sharedStrings" Target="sharedStrings.xml"/>${dynamicArrays ? `<Relationship Id="rId${count + 3}" Type="${RELATIONSHIPS}/sheetMetadata" Target="metadata.xml"/>` : ''}<Relationship Id="rId${count + 4}" Type="${RELATIONSHIPS}/theme" Target="theme/theme1.xml"/>${Array.from(
+      { length: pivotCount },
+      (_, index) =>
+        `<Relationship Id="rId${count + 5 + index}" Type="${RELATIONSHIPS}/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition${index + 1}.xml"/>`
+    ).join('')}</Relationships>`
+  );
+  // Charts without their own colors take them from the theme they came with.
+  files['xl/theme/theme1.xml'] = strToU8(
+    themePart(
+      input.sheets
+        .flatMap((sheet) => sheet.metadata?.drawings ?? [])
+        .find((drawing) => drawing.type === 'chart')?.chart.colors
+    )
   );
   files['xl/styles.xml'] = strToU8(styles.xml());
   files['xl/sharedStrings.xml'] = strToU8(strings.xml());

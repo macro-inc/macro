@@ -1,7 +1,9 @@
 import type { LoroDoc } from 'loro-crdt';
+import { validImageKey, validImageUrl } from './sheet-drawings';
 import { formulaReferencesSheet } from './sheet-references';
 import {
   parseWorkbookMetadata,
+  renameSheetReferences,
   type WorkbookSheetMetadata,
 } from './workbook-metadata';
 
@@ -148,6 +150,16 @@ export function renameSpreadsheetSheet(
   assertUnreferenced(doc, sheet);
   reviveSpreadsheetFallback(doc, sheetId);
   doc.getMap('spreadsheetSheetNames').set(sheetId, normalized);
+  // Charts and pivot tables follow the sheet they read.
+  const metadata = doc.getMap('spreadsheetSheetMetadata');
+  for (const current of readSpreadsheetSheets(doc)) {
+    const renamed = renameSheetReferences(
+      parseWorkbookMetadata(metadata.get(current.id)),
+      sheet.name,
+      normalized
+    );
+    if (renamed) metadata.set(current.id, JSON.stringify(renamed));
+  }
   retainSpreadsheetSheets(doc, sheetId);
   doc.commit({ origin: 'spreadsheet-sheet-rename' });
 }
@@ -158,6 +170,34 @@ export function deleteSpreadsheetSheet(doc: LoroDoc, sheetId: string) {
   if (sheets.length <= 1)
     throw new Error('A workbook must have at least one sheet.');
   assertUnreferenced(doc, sheet);
+  const metadata = doc.getMap('spreadsheetSheetMetadata');
+  const readsSheet = (reference: string) =>
+    formulaReferencesSheet(`=${reference.replace(/^\[0\]!/, '')}`, sheet.name);
+  for (const current of sheets) {
+    if (current.id === sheetId) continue;
+    const value = parseWorkbookMetadata(metadata.get(current.id));
+    if (
+      value?.drawings?.some(
+        (drawing) =>
+          drawing.type === 'chart' && drawing.chart.references.some(readsSheet)
+      )
+    )
+      throw new Error(
+        `A chart on “${current.name}” draws data from “${sheet.name}”. Delete the chart before deleting the sheet.`
+      );
+    // Pivot tables summarizing the sheet keep their values as cells.
+    const pivotTables = value?.pivotTables?.filter(
+      (pivot) => pivot.source === undefined || !readsSheet(pivot.source)
+    );
+    if (value && pivotTables?.length !== value.pivotTables?.length)
+      metadata.set(
+        current.id,
+        JSON.stringify({
+          ...value,
+          pivotTables: pivotTables?.length ? pivotTables : undefined,
+        })
+      );
+  }
   tombstoneSpreadsheetSheet(doc, sheetId);
   doc.commit({ origin: 'spreadsheet-sheet-delete' });
 }
@@ -253,19 +293,61 @@ function validateSheetInputs(
 export type SpreadsheetImport = {
   replace: boolean;
   sheets: { id: string; input: SpreadsheetSheetInput }[];
+  /** Images the sheets draw, as data URLs by content key. */
+  images: Record<string, string>;
 };
+
+/** Images of a workbook, as data URLs by the keys its drawings use. */
+export function readSpreadsheetImages(
+  doc: LoroDoc,
+  keys?: Iterable<string>
+): Record<string, string> {
+  const images = doc.getMap('spreadsheetImages');
+  const result: Record<string, string> = {};
+  for (const key of keys ?? images.keys()) {
+    const value = images.get(key);
+    if (typeof value === 'string') result[key] = value;
+  }
+  return result;
+}
 
 /** Validate an import before its first CRDT mutation and choose sheet ids. */
 export function prepareSpreadsheetImport(
   doc: LoroDoc,
   inputs: SpreadsheetSheetInput[],
-  replace = false
+  replace = false,
+  images: Record<string, string> = {}
 ): SpreadsheetImport {
   validateSheetInputs(doc, inputs, replace);
+  const stored = doc.getMap('spreadsheetImages');
+  for (const [key, url] of Object.entries(images))
+    if (!validImageKey(key) || !validImageUrl(url))
+      throw new Error('A workbook image is invalid.');
+  for (const input of inputs)
+    for (const drawing of input.metadata?.drawings ?? [])
+      if (
+        drawing.type === 'image' &&
+        !(drawing.image in images) &&
+        stored.get(drawing.image) === undefined
+      )
+        throw new Error('A workbook image is missing.');
   return {
     replace,
     sheets: inputs.map((input) => ({ id: crypto.randomUUID(), input })),
+    images,
   };
+}
+
+/** Store an import's images that the workbook does not have yet. */
+function writeImportImages(doc: LoroDoc, plan: SpreadsheetImport): boolean {
+  const stored = doc.getMap('spreadsheetImages');
+  let wrote = false;
+  for (const [key, url] of Object.entries(plan.images))
+    if (stored.get(key) === undefined) {
+      stored.set(key, url);
+      wrote = true;
+    }
+  return wrote;
 }
 
 /**
@@ -356,6 +438,13 @@ export async function writeSpreadsheetImportCells(
     (sum, { input }) => sum + Object.keys(input.cells).length,
     0
   );
+  // Images are keyed by content, so an abandoned import leaves only
+  // unreferenced copies.
+  if (writeImportImages(doc, plan)) {
+    options.check?.();
+    doc.commit({ origin: 'spreadsheet-import-cells' });
+    await options.pause();
+  }
   const formulas = new Map<string, string[]>();
   let written = 0;
   for (const { id, input } of plan.sheets) {
@@ -381,9 +470,11 @@ export async function writeSpreadsheetImportCells(
 export function importSpreadsheetSheets(
   doc: LoroDoc,
   inputs: SpreadsheetSheetInput[],
-  replace = false
+  replace = false,
+  images: Record<string, string> = {}
 ): string[] {
-  const plan = prepareSpreadsheetImport(doc, inputs, replace);
+  const plan = prepareSpreadsheetImport(doc, inputs, replace, images);
+  writeImportImages(doc, plan);
   const formulas = new Map(
     plan.sheets.map(({ id, input }) => [
       id,

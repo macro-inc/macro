@@ -92,6 +92,75 @@ describe('collaborative workbook', () => {
     doc.free();
   });
 
+  it('keeps charts and pivot tables reading a renamed sheet, and their data while charts use it', () => {
+    const doc = new LoroDoc();
+    const [data, report] = importSpreadsheetSheets(doc, [
+      {
+        ...blank('Data'),
+        cells: { A1: { value: 'Month' }, B1: { value: 'Sales' } },
+      },
+      {
+        ...blank('Report'),
+        metadata: {
+          drawings: [
+            {
+              id: 'chart',
+              type: 'chart',
+              from: { row: 0, column: 0, x: 0, y: 0 },
+              width: 300,
+              height: 200,
+              chart: {
+                plots: [
+                  { kind: 'line', series: [{ categories: 0, values: 1 }] },
+                ],
+                references: ['Data!$A$2:$A$13', "'Data'!$B$2:$B$13"],
+                source:
+                  '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:pivotSource><c:name>[Book.xlsx]Data!PivotTable1</c:name></c:pivotSource></c:chartSpace>',
+              },
+            },
+          ],
+          pivotTables: [
+            {
+              table: '<pivotTableDefinition name="Summary"/>',
+              cache: '<pivotCacheDefinition/>',
+              location: 'F1:G13',
+              source: 'Data!$A$1:$B$13',
+            },
+          ],
+        },
+      },
+    ]);
+    renameSpreadsheetSheet(doc, data, 'Sales 2024');
+    const metadata = () =>
+      readSpreadsheetWorkbook(doc).find((sheet) => sheet.id === report)
+        ?.metadata;
+    expect(metadata()).toMatchObject({
+      drawings: [
+        {
+          chart: {
+            references: ["'Sales 2024'!$A$2:$A$13", "'Sales 2024'!$B$2:$B$13"],
+            source: expect.stringContaining(
+              "<c:name>[Book.xlsx]'Sales 2024'!PivotTable1</c:name>"
+            ),
+          },
+        },
+      ],
+      pivotTables: [{ source: "'Sales 2024'!$A$1:$B$13" }],
+    });
+    expect(() => deleteSpreadsheetSheet(doc, data)).toThrow(
+      'A chart on “Report” draws data from “Sales 2024”.'
+    );
+    // Without the chart, the pivot table keeps only its values.
+    const current = metadata();
+    doc
+      .getMap('spreadsheetSheetMetadata')
+      .set(report, JSON.stringify({ ...current, drawings: undefined }));
+    doc.commit();
+    deleteSpreadsheetSheet(doc, data);
+    expect(metadata()?.pivotTables).toBeUndefined();
+    doc.free();
+  });
+
   it('merges independent styles, cells and appended rows on a new shared sheet', () => {
     const left = new LoroDoc();
     const right = new LoroDoc();

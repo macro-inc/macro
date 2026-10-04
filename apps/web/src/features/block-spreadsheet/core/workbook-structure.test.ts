@@ -151,6 +151,26 @@ describe('row and column structure', () => {
         { range: 'F2:F99999', type: 'list', formulas: ['Model!$A$1:$A$4'] },
         { range: 'G6', type: 'whole', formulas: ['$B$6', '100'] },
       ],
+      drawings: [
+        {
+          id: 'chart',
+          type: 'chart',
+          from: { row: 4, column: 2, x: 5, y: 6 },
+          to: { row: 9, column: 6, x: 7, y: 8 },
+          chart: {
+            plots: [{ kind: 'column', series: [{ values: 1, categories: 0 }] }],
+            references: ['Inputs!$A$4:$A$9', "'Inputs'!$B$4:$B$9"],
+          },
+        },
+        {
+          id: 'logo',
+          type: 'image',
+          image: '0123456789abcdef',
+          from: { row: 2, column: 0, x: 3, y: 4 },
+          width: 120,
+          height: 40,
+        },
+      ],
     };
     const deleted = changeWorkbookAxis(sheets, {
       sheetId: 'one',
@@ -174,6 +194,16 @@ describe('row and column structure', () => {
       ],
     });
     expect(deleted[0].metadata?.conditionalFormats).toHaveLength(2);
+    // The image's row was deleted: it moves to where the row was.
+    expect(deleted[0].metadata?.drawings).toMatchObject([
+      {
+        id: 'chart',
+        from: { row: 3, column: 2, x: 5, y: 6 },
+        to: { row: 8, column: 6, x: 7, y: 8 },
+        chart: { references: ['Inputs!$A$3:$A$8', 'Inputs!$B$3:$B$8'] },
+      },
+      { id: 'logo', from: { row: 2, column: 0, x: 3, y: 0 } },
+    ]);
     // Rows inserted above move a rule; its range is clipped at the sheet's
     // last row instead of blocking the insertion.
     const inserted = changeWorkbookAxis(sheets, {
@@ -188,6 +218,11 @@ describe('row and column structure', () => {
       formulas: ['$A4>$B$3'],
     });
     expect(inserted[0].metadata?.validations?.[0].range).toBe('F4:F100000');
+    expect(inserted[0].metadata?.drawings?.[0]).toMatchObject({
+      from: { row: 6 },
+      to: { row: 11 },
+      chart: { references: ['Inputs!$A$6:$A$11', 'Inputs!$B$6:$B$11'] },
+    });
     // Another sheet's rows move rules that refer to them.
     const model = changeWorkbookAxis(sheets, {
       sheetId: 'two',
@@ -201,6 +236,56 @@ describe('row and column structure', () => {
       formulas: ['Model!$A$2:$A$5'],
     });
   });
+});
+
+it('moves pivot tables with their cells and source, and drops ones without a source', () => {
+  const sheets = workbook();
+  const pivot = (location: string, source: string) => ({
+    table: '<pivotTableDefinition name="Summary"/>',
+    cache: '<pivotCacheDefinition/>',
+    location,
+    source,
+  });
+  sheets[0].metadata = {
+    pivotTables: [
+      pivot('H3:I8', 'Model!$A$1:$B$4'),
+      pivot('K1', "'Inputs'!$A:$B"),
+    ],
+  };
+  // Rows of the source's sheet move the source; the table stays.
+  const model = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'row',
+    index: 0,
+    count: 1,
+    kind: 'insert',
+  });
+  expect(model[0].metadata?.pivotTables).toMatchObject([
+    { location: 'H3:I8', source: 'Model!$A$2:$B$5' },
+    { location: 'K1', source: 'Inputs!$A:$B' },
+  ]);
+  // Rows of the table's sheet move it; one whose cells all go is removed.
+  const deleted = changeWorkbookAxis(sheets, {
+    sheetId: 'one',
+    axis: 'row',
+    index: 0,
+    count: 2,
+    kind: 'delete',
+  });
+  expect(deleted[0].metadata?.pivotTables).toMatchObject([
+    { location: 'H1:I6', source: 'Model!$A$1:$B$4' },
+  ]);
+  // Without its source cells, a pivot table keeps only its values.
+  const gone = changeWorkbookAxis(sheets, {
+    sheetId: 'two',
+    axis: 'column',
+    index: 0,
+    count: 2,
+    kind: 'delete',
+  });
+  expect(gone[0].metadata?.pivotTables).toMatchObject([
+    { location: 'K1', source: 'Inputs!$A:$B' },
+  ]);
 });
 
 it.each([

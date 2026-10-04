@@ -90,7 +90,7 @@ export async function importWorkbookFile(
 /** Posting to the worker copies the workbook synchronously, so callers may
  * keep editing cells (which change in place) while the export encodes. */
 export async function exportWorkbookFile(
-  workbook: Pick<WorkbookFileData, 'sheets'>,
+  workbook: Pick<WorkbookFileData, 'sheets' | 'images'>,
   signal?: AbortSignal
 ): Promise<WorkbookFileExport> {
   const reply = await requestWorkbookFile({ kind: 'encode', workbook }, signal);
