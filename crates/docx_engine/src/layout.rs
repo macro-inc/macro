@@ -393,3 +393,6 @@ impl Document {
         layout
     }
 }
+
+#[cfg(test)]
+mod test;
