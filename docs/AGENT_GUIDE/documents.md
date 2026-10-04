@@ -491,7 +491,8 @@ gets the stored file read-only.
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
-and chart type and data;
+chart type and data, picture crop and adjustments, and shadow, glow, soft edge,
+and reflection effects;
 `ReadContent` returns the same description) and changes them with
 `EditPresentation`, an atomic batch of the editor's own operations saved as a
 new version (`saveAs` creates an edited copy instead). When an `EditPresentation` result arrives in chat, an open

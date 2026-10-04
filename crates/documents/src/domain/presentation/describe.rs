@@ -4,8 +4,8 @@
 use pptx_engine::Presentation;
 use pptx_engine::edit::{AnimationClass, AnimationRepeat, AnimationStart, RepeatUntil};
 use pptx_engine::inspect::{
-    AnimationOutline, ChartOutline, DeckOutline, HeaderFooterOutline, ShapeKindName, ShapeOutline,
-    SlideOutline, TableOutline,
+    AnimationOutline, ChartOutline, DeckOutline, EffectsOutline, HeaderFooterOutline,
+    PictureOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline,
 };
 use std::fmt::Write as _;
 
@@ -128,6 +128,12 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     if !s.alt_text.is_empty() {
         let _ = writeln!(out, "{pad}  alt text: {}", quote(&s.alt_text));
     }
+    if let Some(line) = s.picture.as_ref().and_then(picture_line) {
+        let _ = writeln!(out, "{pad}  picture: {line}");
+    }
+    if let Some(effects) = &s.effects {
+        let _ = writeln!(out, "{pad}  effects: {}", effects_line(effects));
+    }
     match s.paragraphs.as_slice() {
         [] => {}
         [only] if only.level == 0 => {
@@ -176,6 +182,70 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
     for child in &s.children {
         shape(out, child, depth + 1, animations);
     }
+}
+
+/// A fraction as a whole percentage.
+fn percent(v: f32) -> String {
+    format!("{:.0}%", v * 100.0)
+}
+
+/// A picture's crop and adjustments, when it has any.
+fn picture_line(p: &PictureOutline) -> Option<String> {
+    let mut parts = Vec::new();
+    let c = &p.crop;
+    let edges: Vec<String> = [
+        ("left", c.left),
+        ("top", c.top),
+        ("right", c.right),
+        ("bottom", c.bottom),
+    ]
+    .into_iter()
+    .filter(|(_, v)| *v != 0.0)
+    .map(|(edge, v)| format!("{edge} {}", percent(v)))
+    .collect();
+    if !edges.is_empty() {
+        parts.push(format!("crop {}", edges.join(", ")));
+    }
+    for (name, v) in [("brightness", p.brightness), ("contrast", p.contrast)] {
+        if v != 0.0 {
+            parts.push(format!("{name} {:+.0}%", v * 100.0));
+        }
+    }
+    if p.recolor != "none" {
+        parts.push(format!("recolor {}", p.recolor));
+    }
+    if p.transparency != 0.0 {
+        parts.push(format!("transparency {}", percent(p.transparency)));
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
+}
+
+/// A shape's effects: gallery presets by name, other values in brief.
+fn effects_line(e: &EffectsOutline) -> String {
+    let mut parts = Vec::new();
+    if let Some(s) = &e.shadow {
+        parts.push(match s.preset {
+            Some(preset) => format!("shadow {preset}"),
+            None => format!(
+                "{} shadow {} blur {:.0} pt, {:.0} pt at {:.0}°",
+                s.kind, s.color, s.blur_pt, s.distance_pt, s.angle_deg
+            ),
+        });
+    }
+    if let Some(g) = &e.glow {
+        parts.push(format!("glow {:.0} pt {}", g.size_pt, g.color));
+    }
+    if let Some(s) = &e.soft_edge {
+        parts.push(format!("soft edges {} pt", s.size_pt));
+    }
+    if let Some(r) = &e.reflection {
+        parts.push(match r.preset {
+            Some(preset) => format!("reflection {preset}"),
+            None => format!("reflection {:.0}%", r.size_pct),
+        });
+    }
+    let source = if e.inherited { " (from the theme)" } else { "" };
+    format!("{}{source}", parts.join("; "))
 }
 
 /// A chart's type, labels, and data (what `setChartData` would rewrite).

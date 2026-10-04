@@ -372,3 +372,38 @@ async fn section_edits_report_the_new_section() {
         outcome.changed_slides
     );
 }
+
+#[test]
+fn descriptions_mention_crops_adjustments_and_effects_only_when_present() {
+    let pictures =
+        include_bytes!("../../../../pptx_engine/tests/corpus/generated/pictures-crop-effects.pptx");
+    let text = describe(&mut Presentation::open(pictures.to_vec()).unwrap(), None).unwrap();
+    assert!(text.contains("  picture: crop left 25%\n"), "{text}");
+    assert!(
+        text.contains("picture: crop left -20%, right -20%"),
+        "{text}"
+    );
+    assert!(text.contains("picture: recolor grayscale\n"), "{text}");
+    assert!(text.contains("picture: transparency 50%\n"), "{text}");
+    assert!(
+        text.contains("picture: brightness +30%; contrast +40%\n"),
+        "{text}"
+    );
+    let effects = include_bytes!(
+        "../../../../pptx_engine/tests/corpus/generated/effects-shadow-glow-reflection.pptx"
+    );
+    let text = describe(&mut Presentation::open(effects.to_vec()).unwrap(), None).unwrap();
+    assert!(text.contains("effects: glow 4 pt #FFC000\n"), "{text}");
+    assert!(text.contains("effects: soft edges 2.5 pt\n"), "{text}");
+    assert!(
+        text.contains("effects: shadow outerBottomRight\n")
+            && text.contains("effects: outer shadow #000000 blur 12 pt, 8 pt at 90°\n")
+            && text.contains("blur 3 pt, 2 pt at 90° (from the theme)\n"),
+        "{text}"
+    );
+    let plain = describe(&mut Presentation::open(DECK.to_vec()).unwrap(), None).unwrap();
+    assert!(
+        !plain.contains("picture:") && !plain.contains("effects:"),
+        "{plain}"
+    );
+}

@@ -20,6 +20,9 @@ fn presentation_tools_have_valid_model_schemas() {
         "addAnimation",
         "removeAnimations",
         "untilNextClick",
+        "cropPicture",
+        "formatPicture",
+        "setShapeEffects",
     ] {
         assert!(schema.contains(&format!("\"{op}\"")), "{op} missing");
     }
@@ -51,6 +54,38 @@ fn strict_mode_calls_deserialize() {
     }))
     .unwrap();
     assert_eq!(call.operations.len(), 7);
+}
+
+/// The picture and effect operations read strict-mode `null`s as "keep".
+#[test]
+fn strict_mode_picture_and_effect_calls_deserialize() {
+    let call: EditPresentation = serde_json::from_value(serde_json::json!({
+        "documentId": "019fd3b9-3c6c-7c05-89c2-a27f01218140",
+        "operations": [
+            {"op": "cropPicture", "slide": 256, "shape": 3, "left": 0.1, "top": null,
+             "right": null, "bottom": null, "mode": null},
+            {"op": "formatPicture", "slide": 256, "shapes": [3], "brightness": null,
+             "contrast": null, "recolor": "sepia", "transparency": null, "reset": null},
+            {"op": "setShapeEffects", "slide": 256, "shapes": [3], "shadow": "outerBottom",
+             "glow": {"color": "accent1", "sizePt": 8, "transparency": null},
+             "softEdge": null, "reflection": null},
+            {"op": "formatText", "slide": 256, "shape": 2, "cell": null, "start": null, "end": null,
+             "props": {"bold": null, "italic": null, "underline": null, "strike": null, "size": null,
+                       "color": null, "font": null, "highlight": null, "baseline": null, "link": null,
+                       "shadow": {"preset": "outerBottomRight", "color": null, "transparency": null,
+                                  "sizePct": null, "blurPt": null, "distancePt": null, "angleDeg": null},
+                       "glow": null}}
+        ]
+    }))
+    .unwrap();
+    let EditOp::SetShapeEffects {
+        shadow, soft_edge, ..
+    } = &call.operations[2]
+    else {
+        panic!("{:?}", call.operations[2]);
+    };
+    assert!(matches!(shadow, Some(pptx_engine::edit::EffectSpec::Preset(p)) if p == "outerBottom"));
+    assert!(soft_edge.is_none());
 }
 
 #[test]
