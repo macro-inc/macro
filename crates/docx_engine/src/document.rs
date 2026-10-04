@@ -11,7 +11,7 @@ use crate::model::styles::Styles;
 use crate::model::write::Writer;
 use crate::xml::{Decl, XmlTree};
 use pptx_engine::opc::{Package, Relationships};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 /// The main document part when the package does not say otherwise.
@@ -208,9 +208,20 @@ pub struct Notes {
     pub(crate) w: String,
     /// The part's bytes the notes were read from (or last written as).
     pub(crate) identity: Option<(bool, usize)>,
+    /// Notes edited since the last snapshot (see `Document::snapshot`).
+    pub(crate) edited: BTreeSet<i64>,
+    /// The part was rewritten some other way since the last snapshot.
+    pub(crate) rewritten: bool,
 }
 
 impl Notes {
+    /// One note's XML as it now is.
+    pub(crate) fn note_xml(&self, id: i64) -> Option<String> {
+        let n = self.by_id.get(&id)?;
+        let writer = Writer { w: &self.w };
+        Some(format!("{}{}{}", n.open, writer.story(&n.story), n.close))
+    }
+
     /// The part's XML as its notes now are.
     pub(crate) fn xml(&self) -> String {
         let writer = Writer { w: &self.w };
@@ -566,6 +577,8 @@ impl Document {
             slots: Vec::new(),
             w,
             identity,
+            edited: BTreeSet::new(),
+            rewritten: true,
         };
         for n in tree.children(root) {
             let id = tree
@@ -598,7 +611,7 @@ impl Document {
         notes
     }
 
-    fn notes_of(&self, endnote: bool) -> &Notes {
+    pub(crate) fn notes_of(&self, endnote: bool) -> &Notes {
         if endnote {
             &self.endnotes
         } else {
@@ -606,7 +619,7 @@ impl Document {
         }
     }
 
-    fn notes_of_mut(&mut self, endnote: bool) -> &mut Notes {
+    pub(crate) fn notes_of_mut(&mut self, endnote: bool) -> &mut Notes {
         if endnote {
             &mut self.endnotes
         } else {
@@ -614,8 +627,9 @@ impl Document {
         }
     }
 
-    /// Writes edited notes back into their part.
-    pub(crate) fn write_notes(&mut self, endnote: bool) {
+    /// Writes edited notes back into their part, noting which one changed
+    /// (`None`: any of them) for sharing.
+    pub(crate) fn write_notes(&mut self, endnote: bool, edited: Option<i64>) {
         let notes = self.notes_of(endnote);
         let Some(part) = notes.part.clone() else {
             return;
@@ -623,7 +637,14 @@ impl Document {
         let xml = notes.xml();
         self.pkg.write(&part, xml.into_bytes(), None);
         let identity = self.pkg.part_identity(&part);
-        self.notes_of_mut(endnote).identity = identity;
+        let notes = self.notes_of_mut(endnote);
+        notes.identity = identity;
+        match edited {
+            Some(id) => {
+                notes.edited.insert(id);
+            }
+            None => notes.rewritten = true,
+        }
     }
 
     /// The main part name.

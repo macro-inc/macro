@@ -14,7 +14,6 @@ use crate::model::block::{Block, BlockId, BlockKind};
 use crate::model::section::{HeaderRefs, PageVAlign, Section, SectionStart};
 use floats::{Band, OnPage, place_anchors, place_frames};
 use pptx_engine::path::Rect;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 const EPS: f32 = 0.01;
@@ -64,8 +63,8 @@ pub(in crate::layout) struct Flow<'e, 'a> {
     section_started: Vec<bool>,
     prev: Option<PrevPara>,
     line_no: u32,
-    boxes: HashMap<BlockId, Arc<ParaBox>>,
-    note_stacks: HashMap<i64, Stack>,
+    boxes: crate::hash::FxMap<BlockId, Arc<ParaBox>>,
+    note_stacks: crate::hash::FxMap<i64, Stack>,
     separator: Option<Stack>,
     /// Height of the footnote continuation notice, once measured.
     notice: Option<f32>,
@@ -90,8 +89,8 @@ impl<'e, 'a> Flow<'e, 'a> {
             section_started: vec![false; n],
             prev: None,
             line_no: 0,
-            boxes: HashMap::new(),
-            note_stacks: HashMap::new(),
+            boxes: crate::hash::FxMap::default(),
+            note_stacks: crate::hash::FxMap::default(),
             separator: None,
             notice: None,
             total_pages,

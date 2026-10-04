@@ -1989,22 +1989,30 @@ impl Session {
         self.clamp_selection();
         let before = self.sel.clone();
         let snapshot = self.doc.snapshot();
-        let mut step = Step::default();
+        // One step per story the operations changed, in order (inserting a
+        // note and typing in it changes the body, then the note).
+        let mut steps: Vec<Step> = Vec::new();
         for op in ops {
             if self.stale {
                 relaid |= self.ensure_layout(fonts);
             }
             if let Some(s) = self.run_op(op)? {
-                step.merge(s);
+                match steps.last_mut() {
+                    Some(last) if last.story == s.story => last.merge(s),
+                    _ => steps.push(s),
+                }
                 self.stale = true;
             }
         }
         relaid |= self.ensure_layout(fonts);
         self.clamp_selection();
-        let mut changes = step.changes();
+        let mut changes: Vec<Change> = steps.iter().flat_map(Step::changes).collect();
         changes.extend(self.doc.entry_changes(&snapshot)?);
-        if !step.is_empty() {
-            self.record_undo(step, before, group);
+        steps.retain(|s| !s.is_empty());
+        if !steps.is_empty() {
+            for step in steps {
+                self.record_undo(step, before.clone(), group);
+            }
         } else if ops.iter().any(|op| {
             matches!(
                 op,

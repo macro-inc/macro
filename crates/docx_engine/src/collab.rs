@@ -6,7 +6,7 @@
 //! | container | key | value |
 //! | --- | --- | --- |
 //! | `docxMeta` | `formatVersion` | [`FORMAT_VERSION`] (written by the client) |
-//! | `wordParts` | part name | XML text, or `b64:` + base64; the main part is its shell, with [`Shell::BLOCKS`] where the body's blocks go |
+//! | `wordParts` | part name | XML text, or `b64:` + base64; the main part is its shell, with [`Shell::BLOCKS`] where the body's blocks go; a footnotes or endnotes part is its XML without the notes, each note under `part\|id` |
 //! | `wordTypes` | `default\|ext`, `override\|part` | content type |
 //! | `wordRels` | `relsPart\|rId` | `<Relationship/>` element |
 //! | `wordBlocks` | block id | map: `k` kind, `p` parent, `o` position key, `a` attributes, `x` properties, `t` rich text |
@@ -16,11 +16,14 @@
 //! character, and formatting different properties of the same text merges
 //! too. Block fields are last-writer-wins. Ids of new blocks, parts and
 //! relationships are random per peer so concurrent additions never collide.
+//! Notes are shared one by one, so typing in a footnote shares that note
+//! (not the whole part) and two people can edit different notes at once.
 
 use crate::document::{Document, Shell};
 use crate::edit::{BlockRecord, Change};
 use crate::error::{Error, Result};
 use crate::model::block::{IdGen, Story};
+use crate::xml::XmlTree;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use pptx_engine::opc::{CONTENT_TYPES_PART, ContentTypes, Package, TargetMode};
@@ -193,6 +196,68 @@ fn relationships_xml(rels: &BTreeMap<String, String>, part: &str) -> Option<Stri
     Some(s)
 }
 
+/// A footnotes or endnotes part's XML split into the XML without its notes
+/// and the notes by id (each as written).
+fn split_notes(name: &str, xml: &[u8]) -> Option<(String, BTreeMap<i64, String>)> {
+    let tree = XmlTree::parse(xml, name).ok()?;
+    let root = tree.root();
+    if !(tree.is_w(root, "footnotes") || tree.is_w(root, "endnotes")) {
+        return None;
+    }
+    let src = tree.source();
+    let mut skeleton = String::with_capacity(src.len() / 8);
+    let mut notes = BTreeMap::new();
+    let mut at = 0;
+    for n in tree.children(root) {
+        let is_note = tree.is_w(n, "footnote") || tree.is_w(n, "endnote");
+        let id = is_note
+            .then(|| tree.w_attr(n, "id").and_then(crate::xml::parse_int))
+            .flatten()
+            .filter(|id| !notes.contains_key(id));
+        let Some(id) = id else {
+            continue;
+        };
+        let span = tree.span(n);
+        skeleton.push_str(&src[at..span.start]);
+        at = span.end;
+        notes.insert(id, src[span.start..span.end].to_owned());
+    }
+    skeleton.push_str(&src[at..]);
+    Some((skeleton, notes))
+}
+
+/// A notes part's XML from its shared form: the notes go back in after
+/// the root's start tag, in id order.
+fn join_notes<'a>(name: &str, skeleton: &str, notes: impl Iterator<Item = &'a String>) -> String {
+    let notes: String = notes.map(String::as_str).collect();
+    let Ok(tree) = XmlTree::parse(skeleton.as_bytes(), name) else {
+        return skeleton.to_owned();
+    };
+    let root = tree.root();
+    let src = tree.source();
+    let span = tree.span(root);
+    let tag = tree.start_tag(root);
+    match tag.strip_suffix("/>") {
+        Some(open) => format!(
+            "{}{}>{notes}</{}>{}",
+            &src[..span.start],
+            open.trim_end(),
+            tree.qname(root),
+            &src[span.end..]
+        ),
+        None => {
+            let at = span.start + tag.len();
+            format!("{}{notes}{}", &src[..at], &src[at..])
+        }
+    }
+}
+
+/// The note id a `wordParts` key names (`part|id`), with its part.
+fn note_key(key: &str) -> Option<(&str, i64)> {
+    let (part, id) = key.rsplit_once(KEY_SEPARATOR)?;
+    Some((part, id.parse().ok()?))
+}
+
 /// The block records of a story, parents before children.
 fn story_records(story: &Story) -> Vec<BlockRecord> {
     let mut out = Vec::with_capacity(story.len());
@@ -230,6 +295,15 @@ impl Document {
                 continue;
             }
             let bytes = pkg.read(name)?;
+            if self.is_notes_part(name)
+                && let Some((skeleton, notes)) = split_notes(name, &bytes)
+            {
+                state.parts.insert(name.clone(), skeleton);
+                for (id, xml) in notes {
+                    state.parts.insert(scoped(name, &id.to_string()), xml);
+                }
+                continue;
+            }
             state
                 .parts
                 .insert(name.clone(), encode_part(pkg, name, &bytes));
@@ -258,6 +332,12 @@ impl Document {
         Ok(doc)
     }
 
+    /// Whether a part holds the footnotes or endnotes.
+    pub(crate) fn is_notes_part(&self, name: &str) -> bool {
+        self.footnotes().part.as_deref() == Some(name)
+            || self.endnotes().part.as_deref() == Some(name)
+    }
+
     /// Applies changes to the flat maps made by other peers (parts,
     /// relationships, content types), reloading what they affect. Returns
     /// whether the shared parts (styles, numbering...) were reloaded.
@@ -265,46 +345,56 @@ impl Document {
         if changes.is_empty() {
             return Ok(false);
         }
-        let mut state = self.package_entries()?;
+        let mut links = self.link_entries()?;
+        // Whole parts, and notes by part, as the changes leave them.
+        let mut parts: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut notes: BTreeMap<String, BTreeMap<i64, Option<String>>> = BTreeMap::new();
         let mut touched: BTreeSet<String> = BTreeSet::new();
         let mut types_changed = false;
         for (container, key, value) in changes {
-            let map = match container.as_str() {
-                container::PARTS => &mut state.parts,
-                container::RELS => &mut state.rels,
-                container::TYPES => &mut state.types,
-                _ => continue,
-            };
-            match value {
-                Some(v) => {
-                    map.insert(key.clone(), v.clone());
-                }
-                None => {
-                    map.remove(key);
-                }
-            }
             match container.as_str() {
-                container::PARTS => {
-                    touched.insert(key.clone());
-                }
+                container::PARTS => match note_key(key) {
+                    Some((part, id)) => {
+                        notes
+                            .entry(part.to_owned())
+                            .or_default()
+                            .insert(id, value.clone());
+                        touched.insert(part.to_owned());
+                    }
+                    None => {
+                        parts.insert(key.clone(), value.clone());
+                        touched.insert(key.clone());
+                    }
+                },
                 container::RELS => {
+                    match value {
+                        Some(v) => links.rels.insert(key.clone(), v.clone()),
+                        None => links.rels.remove(key),
+                    };
                     if let Some((part, _)) = key.rsplit_once(KEY_SEPARATOR) {
                         touched.insert(part.to_owned());
                     }
                 }
-                _ => types_changed = true,
+                container::TYPES => {
+                    match value {
+                        Some(v) => links.types.insert(key.clone(), v.clone()),
+                        None => links.types.remove(key),
+                    };
+                    types_changed = true;
+                }
+                _ => {}
             }
         }
         for name in &touched {
             if is_rels_part(name) {
-                match relationships_xml(&state.rels, name) {
+                match relationships_xml(&links.rels, name) {
                     Some(xml) => self.pkg.write(name, xml.into_bytes(), None),
                     None => self.pkg.delete(name),
                 }
                 continue;
             }
             if *name == self.main {
-                if let Some(template) = state.parts.get(name)
+                if let Some(Some(template)) = parts.get(name)
                     && let Some(shell) = Shell::from_template(template)
                 {
                     self.shell = shell;
@@ -312,13 +402,51 @@ impl Document {
                 }
                 continue;
             }
-            match state.parts.get(name) {
-                Some(v) => self.pkg.write(name, decode_part(v), None),
-                None => self.pkg.delete(name),
+            let note_changes = notes.get(name);
+            if note_changes.is_some() || self.is_notes_part(name) {
+                // The notes part as it is, with the changes on top.
+                let current = self.pkg.read(name).ok().and_then(|b| split_notes(name, &b));
+                let (mut skeleton, mut by_id) = current.unwrap_or_default();
+                match parts.get(name) {
+                    Some(None) => {
+                        self.pkg.delete(name);
+                        continue;
+                    }
+                    Some(Some(value)) => {
+                        let bytes = decode_part(value);
+                        match split_notes(name, &bytes) {
+                            // A whole part (with its notes) replaces them all.
+                            Some((s, n)) if !n.is_empty() => (skeleton, by_id) = (s, n),
+                            Some((s, _)) => skeleton = s,
+                            None => {
+                                self.pkg.write(name, bytes, None);
+                                continue;
+                            }
+                        }
+                    }
+                    None => {}
+                }
+                for (id, xml) in note_changes.into_iter().flatten() {
+                    match xml {
+                        Some(x) => by_id.insert(*id, x.clone()),
+                        None => by_id.remove(id),
+                    };
+                }
+                if skeleton.is_empty() {
+                    continue;
+                }
+                let xml = join_notes(name, &skeleton, by_id.values());
+                self.pkg.write(name, xml.into_bytes(), None);
+                continue;
+            }
+            match parts.get(name) {
+                Some(Some(v)) => self.pkg.write(name, decode_part(v), None),
+                Some(None) => self.pkg.delete(name),
+                None => {}
             }
         }
         if types_changed {
-            let types = ContentTypes::parse(content_types_xml(&state.types).as_bytes())?;
+            let types = ContentTypes::parse(content_types_xml(&links.types).as_bytes())?;
             self.pkg.set_content_types(types);
         }
         let main_rels = pptx_engine::opc::rels_part_name(&self.main);
@@ -330,13 +458,6 @@ impl Document {
             self.load_parts()?;
         }
         Ok(reload)
-    }
-
-    /// The flat-map entries (everything but blocks) of the package as it is.
-    pub(crate) fn package_entries(&self) -> Result<CollabState> {
-        let mut state = self.collab_state()?;
-        state.blocks.clear();
-        Ok(state)
     }
 
     /// Identities of every part, for detecting which ones an edit changed.
@@ -380,6 +501,52 @@ impl Document {
                 || *name == self.main
                 || is_rels_part(name)
             {
+                continue;
+            }
+            if let Some(notes) = [self.footnotes(), self.endnotes()]
+                .into_iter()
+                .find(|n| n.part.as_deref() == Some(name.as_str()))
+                .filter(|n| !n.rewritten && !n.edited.is_empty())
+            {
+                // The notes edited in place: only those.
+                for &id in &notes.edited {
+                    out.push(Change::Entry {
+                        container: container::PARTS.to_owned(),
+                        key: scoped(name, &id.to_string()),
+                        value: notes.note_xml(id),
+                    });
+                }
+                continue;
+            }
+            if self.is_notes_part(name)
+                && let Some((skeleton, notes)) =
+                    self.pkg.read(name).ok().and_then(|b| split_notes(name, &b))
+            {
+                // Only the notes that changed.
+                let (old_skeleton, old_notes) = before
+                    .pkg
+                    .read(name)
+                    .ok()
+                    .and_then(|b| split_notes(name, &b))
+                    .unwrap_or_default();
+                let entry = |key: String, value: Option<String>| Change::Entry {
+                    container: container::PARTS.to_owned(),
+                    key,
+                    value,
+                };
+                if skeleton != old_skeleton {
+                    out.push(entry(name.clone(), Some(skeleton)));
+                }
+                for (id, xml) in &notes {
+                    if old_notes.get(id) != Some(xml) {
+                        out.push(entry(scoped(name, &id.to_string()), Some(xml.clone())));
+                    }
+                }
+                for id in old_notes.keys() {
+                    if !notes.contains_key(id) {
+                        out.push(entry(scoped(name, &id.to_string()), None));
+                    }
+                }
                 continue;
             }
             let value = if self.pkg.has_part(name) {
@@ -433,7 +600,13 @@ impl Document {
     }
 
     /// The package's state before an edit, to find the parts it changes.
-    pub(crate) fn snapshot(&self) -> Snapshot {
+    /// It also starts noting which footnotes and endnotes the edit changes.
+    pub(crate) fn snapshot(&mut self) -> Snapshot {
+        for endnote in [false, true] {
+            let notes = self.notes_of_mut(endnote);
+            notes.edited.clear();
+            notes.rewritten = false;
+        }
         Snapshot {
             identities: self.part_identities(),
             shell: self.shell.to_template(),
@@ -508,13 +681,26 @@ fn assemble(state: &CollabState) -> Result<Vec<u8>> {
             files.push((part.trim_start_matches('/').to_owned(), xml.into_bytes()));
         }
     }
+    // Notes by part, in id order.
+    let mut notes: BTreeMap<&str, BTreeMap<i64, &String>> = BTreeMap::new();
+    for (key, value) in &state.parts {
+        if let Some((part, id)) = note_key(key) {
+            notes.entry(part).or_default().insert(id, value);
+        }
+    }
     for (name, value) in &state.parts {
+        if note_key(name).is_some() {
+            continue;
+        }
         let bytes = match value.split_once(Shell::BLOCKS) {
             // The main part's shell: an empty body for now.
             Some((head, tail)) if !value.starts_with("b64:") => {
                 format!("{head}{tail}").into_bytes()
             }
-            _ => decode_part(value),
+            _ => match notes.get(name.as_str()) {
+                Some(by_id) => join_notes(name, value, by_id.values().copied()).into_bytes(),
+                None => decode_part(value),
+            },
         };
         files.push((name.trim_start_matches('/').to_owned(), bytes));
     }

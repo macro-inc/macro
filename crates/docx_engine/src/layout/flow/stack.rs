@@ -300,6 +300,7 @@ pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>
     });
     if let (Some(cache), Some(key)) = (env.cache, key.as_ref())
         && let Some(pb) = cache.get(story, &block.id, key)
+        && pb.inline.notes_current(&env.note_numbers)
     {
         return pb;
     }
@@ -313,6 +314,7 @@ pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>
     };
     if let (Some(cache), Some(key)) = (env.cache, key.as_ref())
         && let Some(pb) = cache.get_dynamic(story, &block.id, field_values, key)
+        && pb.inline.notes_current(&env.note_numbers)
     {
         return pb;
     }
@@ -334,10 +336,9 @@ pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>
         lines,
         format,
     });
-    // Page fields and note numbers change with what comes before.
-    if let (Some(cache), Some(key)) = (env.cache, key)
-        && pb.inline.notes.is_empty()
-    {
+    // Page fields change with what comes before (note numbers are checked
+    // when the box is taken from the cache).
+    if let (Some(cache), Some(key)) = (env.cache, key) {
         if pb.inline.dynamic {
             cache.put_dynamic(story, &block.id, field_values, key, Arc::clone(&pb));
         } else {

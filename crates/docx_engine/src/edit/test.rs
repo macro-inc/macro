@@ -1174,15 +1174,14 @@ fn footnotes_are_edited_in_place_and_written_to_their_part() {
         },
     );
     let r = type_text(&mut s, " Exhibit A.");
-    // Shared as the notes part's XML.
+    // Shared as the note's XML, not the whole notes part.
     assert!(
-        r.changes.iter().any(|c| matches!(
-            c,
-            Change::Entry { container, key, value: Some(v) }
-                if container == "wordParts" && key.ends_with("footnotes.xml")
+        matches!(
+            &r.changes[..],
+            [Change::Entry { container, key, value: Some(v) }]
+                if container == "wordParts" && key == "/word/footnotes.xml|1"
                     && v.contains("See the Agreement. Exhibit A.")
-                    && v.contains(r#"w:type="separator""#)
-        )),
+        ),
         "{:?}",
         r.changes
     );

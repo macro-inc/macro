@@ -283,3 +283,160 @@ fn part_changes_from_peers_reload_styles() {
         .unwrap();
     assert_eq!(r.format.size, Some(20.0));
 }
+
+/// Texts of a peer's footnotes by id.
+fn footnote_texts(doc: &Document) -> BTreeMap<i64, String> {
+    doc.footnotes()
+        .by_id
+        .iter()
+        .filter(|(_, n)| n.is_text())
+        .map(|(id, n)| {
+            let text: Vec<String> = n
+                .story
+                .paragraphs()
+                .iter()
+                .map(|p| n.story.get(p).unwrap().content.text())
+                .collect();
+            (*id, text.join("\n").replace('\u{FFFC}', "^"))
+        })
+        .collect()
+}
+
+#[test]
+fn notes_are_shared_one_by_one_and_merge() {
+    let reference = |id: i64| {
+        format!(
+            r#"<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="{id}"/></w:r>"#
+        )
+    };
+    let body = format!(
+        r#"<w:p><w:r><w:t>Alpha</w:t></w:r>{}</w:p><w:p><w:r><w:t>Beta</w:t></w:r>{}</w:p>"#,
+        reference(1),
+        reference(2)
+    );
+    let note = |id: i64, text: &str| {
+        format!(
+            r#"<w:footnote w:id="{id}"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> {text}</w:t></w:r></w:p></w:footnote>"#
+        )
+    };
+    let notes = format!(
+        r#"<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>{}{}"#,
+        note(1, "First note."),
+        note(2, "Second note.")
+    );
+    let doc = Document::open(docx(
+        &body,
+        &Parts {
+            footnotes: Some(&notes),
+            ..Parts::default()
+        },
+    ))
+    .unwrap();
+    let state = doc.collab_state().unwrap();
+    // The part's own entry holds no notes; each note has its own.
+    let part = "/word/footnotes.xml";
+    assert!(
+        !state.parts[part].contains("<w:footnote "),
+        "{}",
+        state.parts[part]
+    );
+    for id in [-1, 1, 2] {
+        assert!(state.parts.contains_key(&format!("{part}|{id}")), "{id}");
+    }
+    let mut shared = Shared::seed(&state);
+    let mut a = Session::from_collab(&shared.state(), 1).unwrap();
+    let mut b = Session::from_collab(&shared.state(), 2).unwrap();
+    assert_eq!(footnote_texts(a.document()), footnote_texts(&doc));
+
+    // Each types at the end of a different note at the same time.
+    let type_in = |s: &mut Session, id: i64, text: &str| {
+        let para = s.document().footnotes().by_id[&id].story.paragraphs()[0].clone();
+        let len = s.document().footnotes().by_id[&id]
+            .story
+            .get(&para)
+            .unwrap()
+            .content
+            .len();
+        s.apply(
+            &[
+                EditOp::Select {
+                    anchor: Pos::new(para.clone(), len),
+                    focus: Pos::new(para, len),
+                },
+                EditOp::InsertText { text: text.into() },
+            ],
+            None,
+            fonts(),
+        )
+        .unwrap()
+    };
+    let ra = type_in(&mut a, 1, " (A)");
+    let rb = type_in(&mut b, 2, " (B)");
+    // Only the edited note is shared, not the part.
+    let keys = |r: &crate::edit::EditResult| -> Vec<String> {
+        r.changes
+            .iter()
+            .filter_map(|c| match c {
+                Change::Entry { key, .. } => Some(key.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(keys(&ra), vec![format!("{part}|1")]);
+    assert_eq!(keys(&rb), vec![format!("{part}|2")]);
+    let to_b = shared.apply(&ra.changes);
+    let to_a = shared.apply(&rb.changes);
+    a.apply_remote(&to_a, fonts()).unwrap();
+    b.apply_remote(&to_b, fonts()).unwrap();
+    let want: BTreeMap<i64, String> = [
+        (1, "^ First note. (A)".to_owned()),
+        (2, "^ Second note. (B)".to_owned()),
+    ]
+    .into();
+    assert_eq!(footnote_texts(a.document()), want);
+    assert_eq!(footnote_texts(b.document()), want);
+    // A fresh peer, and a saved file, have both.
+    let c = Session::from_collab(&shared.state(), 3).unwrap();
+    assert_eq!(footnote_texts(c.document()), want);
+    let saved = Document::open(c.document().save().unwrap()).unwrap();
+    assert_eq!(footnote_texts(&saved), want);
+    assert_eq!(saved.footnotes().by_id[&-1].kind, "separator");
+}
+
+#[test]
+fn a_new_note_reaches_other_peers() {
+    let doc = Document::open(docx(
+        r#"<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>"#,
+        &Parts::default(),
+    ))
+    .unwrap();
+    let mut shared = Shared::seed(&doc.collab_state().unwrap());
+    let mut a = Session::from_collab(&shared.state(), 1).unwrap();
+    let mut b = Session::from_collab(&shared.state(), 2).unwrap();
+    let first = a.document().body().paragraphs()[0].clone();
+    let r = a
+        .apply(
+            &[
+                EditOp::Select {
+                    anchor: Pos::new(first.clone(), 5),
+                    focus: Pos::new(first, 5),
+                },
+                EditOp::InsertNote { endnote: false },
+                EditOp::InsertText {
+                    text: "Noted.".into(),
+                },
+            ],
+            None,
+            fonts(),
+        )
+        .unwrap();
+    let remote = shared.apply(&r.changes);
+    b.apply_remote(&remote, fonts()).unwrap();
+    let texts_b: Vec<String> = footnote_texts(b.document()).into_values().collect();
+    assert_eq!(texts_b, vec!["^ Noted.".to_owned()]);
+    assert_eq!(footnote_texts(b.document()), footnote_texts(a.document()));
+    let c = Session::from_collab(&shared.state(), 3).unwrap();
+    assert_eq!(footnote_texts(c.document()), footnote_texts(a.document()));
+    // B lays the note out at the foot of its page.
+    assert!(b.pages(fonts())[0].notes.is_some());
+}

@@ -79,7 +79,8 @@ holds a change, and a list label shows its paragraph mark's revision.
 Headers, footers, footnotes and endnotes are stories of their own: their
 blocks get ids prefixed with the part (or note), transactions target the
 active story, and an edited part (`footnotes.xml` for any footnote) is
-written back as XML and shared as one entry. A click in a page's notes
+written back as XML and shared as one entry (footnotes and endnotes one
+note per entry, so typing in a note shares that note only). A click in a page's notes
 area (`PageInfo::notes`) enters the note under it. `insertNote` adds a
 footnote or endnote at the caret, as Word does: the reference in the text
 (Footnote Reference style), the note (Footnote Text, starting with its
@@ -181,8 +182,8 @@ where Word PDFs exist they decide.
   text boxes (it keeps them); comments are Macro threads anchored in the
   body. Undoing a new footnote removes its reference; the empty note stays
   in the notes part, unreferenced.
-- Two people editing the same footnote or endnote part at once: the last
-  write of the part wins, as for headers and footers.
+- Two people editing the same footnote or endnote at once: the last write
+  of the note wins (different notes merge: notes are shared one by one).
 - Tracked changes show without balloons (formatting changes only get a
   change bar); table property changes (`w:tcPrChange`, `w:tblPrChange`)
   are not recorded.

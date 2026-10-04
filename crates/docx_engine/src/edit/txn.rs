@@ -422,7 +422,7 @@ impl<'d> Txn<'d> {
             match &self.step.story {
                 StoryTarget::Body => {}
                 StoryTarget::Part(name) => self.doc.write_part_story(name),
-                StoryTarget::Note { endnote, .. } => self.doc.write_notes(*endnote),
+                StoryTarget::Note { endnote, id } => self.doc.write_notes(*endnote, Some(*id)),
             }
         }
         self.step
@@ -450,6 +450,6 @@ pub fn apply_step(doc: &mut Document, step: &Step) {
     match &step.story {
         StoryTarget::Body => doc.body_dirty = true,
         StoryTarget::Part(name) => doc.write_part_story(name),
-        StoryTarget::Note { endnote, .. } => doc.write_notes(*endnote),
+        StoryTarget::Note { endnote, id } => doc.write_notes(*endnote, Some(*id)),
     }
 }
