@@ -2700,6 +2700,23 @@ export const EditPresentation = z.object({
                       kind: z.literal('table'),
                     })
                     .strict(),
+                  z
+                    .object({
+                      chartType: z.string(),
+                      grouping: z.union([z.string(), z.null()]).optional(),
+                      categories: z.array(z.string()),
+                      series: z.array(
+                        z
+                          .object({
+                            name: z.string(),
+                            values: z.array(z.union([z.number(), z.null()])),
+                          })
+                          .strict()
+                      ),
+                      title: z.union([z.string(), z.null()]).optional(),
+                      kind: z.literal('chart'),
+                    })
+                    .strict(),
                 ];
                 const errors = schemas.reduce<z.ZodError[]>(
                   (errors, schema) =>
@@ -2824,6 +2841,170 @@ export const EditPresentation = z.object({
             .strict(),
           z
             .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              from: z
+                .object({
+                  row: z.number().int().gte(0),
+                  col: z.number().int().gte(0),
+                })
+                .strict(),
+              to: z
+                .object({
+                  row: z.number().int().gte(0),
+                  col: z.number().int().gte(0),
+                })
+                .strict(),
+              op: z.literal('mergeCells'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              cell: z
+                .object({
+                  row: z.number().int().gte(0),
+                  col: z.number().int().gte(0),
+                })
+                .strict(),
+              op: z.literal('splitCell'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              from: z
+                .object({
+                  row: z.number().int().gte(0),
+                  col: z.number().int().gte(0),
+                })
+                .strict(),
+              to: z
+                .object({
+                  row: z.number().int().gte(0),
+                  col: z.number().int().gte(0),
+                })
+                .strict(),
+              fill: z
+                .union([
+                  z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.object({ kind: z.literal('none') }).strict(),
+                      z
+                        .object({
+                          color: z.string(),
+                          alpha: z.union([z.number(), z.null()]).optional(),
+                          kind: z.literal('solid'),
+                        })
+                        .strict(),
+                      z
+                        .object({
+                          colors: z.array(z.string()),
+                          angle: z.number().optional(),
+                          kind: z.literal('gradient'),
+                        })
+                        .strict(),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  z.null(),
+                ])
+                .optional(),
+              borders: z
+                .union([
+                  z
+                    .object({
+                      edges: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.literal('all'),
+                          z.literal('outside'),
+                          z.literal('inside'),
+                          z.literal('top'),
+                          z.literal('bottom'),
+                          z.literal('left'),
+                          z.literal('right'),
+                          z.literal('insideHorizontal'),
+                          z.literal('insideVertical'),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      }),
+                      line: z
+                        .object({
+                          none: z.boolean().optional(),
+                          color: z.union([z.string(), z.null()]).optional(),
+                          width: z.union([z.number(), z.null()]).optional(),
+                          dash: z.union([z.string(), z.null()]).optional(),
+                        })
+                        .strict(),
+                    })
+                    .strict(),
+                  z.null(),
+                ])
+                .optional(),
+              anchor: z.union([z.string(), z.null()]).optional(),
+              margins: z
+                .union([z.array(z.number()).min(4).max(4), z.null()])
+                .optional(),
+              op: z.literal('formatCells'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              style: z.union([z.string(), z.null()]).optional(),
+              firstRow: z.union([z.boolean(), z.null()]).optional(),
+              lastRow: z.union([z.boolean(), z.null()]).optional(),
+              firstCol: z.union([z.boolean(), z.null()]).optional(),
+              lastCol: z.union([z.boolean(), z.null()]).optional(),
+              bandRow: z.union([z.boolean(), z.null()]).optional(),
+              bandCol: z.union([z.boolean(), z.null()]).optional(),
+              op: z.literal('setTableStyle'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              columnWidths: z.union([z.array(z.number()), z.null()]).optional(),
+              rowHeights: z.union([z.array(z.number()), z.null()]).optional(),
+              op: z.literal('setTableGrid'),
+            })
+            .strict(),
+          z
+            .object({
               layout: z.union([z.string(), z.null()]).optional(),
               after: z.union([z.number().int().gte(0), z.null()]).optional(),
               title: z.union([z.string(), z.null()]).optional(),
@@ -2908,6 +3089,141 @@ export const EditPresentation = z.object({
                 ])
                 .optional(),
               op: z.literal('setBackground'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              categories: z.array(z.string()),
+              series: z.array(
+                z
+                  .object({
+                    name: z.string(),
+                    values: z.array(z.union([z.number(), z.null()])),
+                  })
+                  .strict()
+              ),
+              op: z.literal('setChartData'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              kind: z.string(),
+              grouping: z.union([z.string(), z.null()]).optional(),
+              op: z.literal('setChartType'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              title: z.union([z.string(), z.null()]).optional(),
+              legend: z.union([z.string(), z.null()]).optional(),
+              dataLabels: z.union([z.boolean(), z.null()]).optional(),
+              seriesColors: z
+                .union([
+                  z.array(
+                    z
+                      .object({
+                        series: z.number().int().gte(0),
+                        color: z.string(),
+                      })
+                      .strict()
+                  ),
+                  z.null(),
+                ])
+                .optional(),
+              op: z.literal('formatChart'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shapes: z.array(z.number().int().gte(0)),
+              op: z.literal('groupShapes'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              op: z.literal('ungroupShape'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              payload: z.string(),
+              dx: z.number().optional(),
+              dy: z.number().optional(),
+              op: z.literal('pasteShapes'),
+            })
+            .strict(),
+          z
+            .object({
+              after: z.union([z.number().int().gte(0), z.null()]).optional(),
+              payload: z.string(),
+              op: z.literal('pasteSlides'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              layout: z.string(),
+              op: z.literal('setSlideLayout'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              kind: z.string(),
+              durationMs: z
+                .union([z.number().int().gte(0), z.null()])
+                .optional(),
+              direction: z.union([z.string(), z.null()]).optional(),
+              advanceOnClick: z.union([z.boolean(), z.null()]).optional(),
+              advanceAfterMs: z
+                .union([z.number().int().gte(0), z.null()])
+                .optional(),
+              applyToAll: z.boolean().optional(),
+              op: z.literal('setTransition'),
+            })
+            .strict(),
+          z
+            .object({
+              find: z.string(),
+              replace: z.string(),
+              matchCase: z.boolean().optional(),
+              wholeWord: z.boolean().optional(),
+              slide: z.union([z.number().int().gte(0), z.null()]).optional(),
+              op: z.literal('replaceText'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              text: z.string(),
+              op: z.literal('setAltText'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              name: z.string(),
+              op: z.literal('setShapeName'),
+            })
+            .strict(),
+          z
+            .object({
+              slide: z.number().int().gte(0),
+              shape: z.number().int().gte(0),
+              hidden: z.boolean(),
+              op: z.literal('setShapeHidden'),
             })
             .strict(),
         ];

@@ -2,7 +2,7 @@
 //! shapes with their ids, kinds, positions, text, and tables.
 
 use pptx_engine::Presentation;
-use pptx_engine::inspect::{ShapeKindName, ShapeOutline, SlideOutline, TableOutline};
+use pptx_engine::inspect::{ChartOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline};
 use std::fmt::Write as _;
 
 /// Longest description returned; ask for specific slides beyond this.
@@ -112,8 +112,66 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize) {
             let _ = writeln!(out, "{pad}  … {} more rows", table.rows.len() - 60);
         }
     }
+    if let Some(chart) = &s.chart {
+        chart_lines(out, chart, &pad);
+    }
     for child in &s.children {
         shape(out, child, depth + 1);
+    }
+}
+
+/// A chart's type, labels, and data (what `setChartData` would rewrite).
+fn chart_lines(out: &mut String, chart: &ChartOutline, pad: &str) {
+    let grouping = chart
+        .grouping
+        .as_deref()
+        .map(|g| format!(" {g}"))
+        .unwrap_or_default();
+    let title = chart
+        .title
+        .as_deref()
+        .map(|t| format!(", title {}", quote(t)))
+        .unwrap_or_default();
+    let legend = chart
+        .legend
+        .as_deref()
+        .map(|l| format!(", legend {l}"))
+        .unwrap_or_else(|| ", no legend".to_owned());
+    let labels = if chart.data_labels {
+        ", data labels"
+    } else {
+        ""
+    };
+    let editable = if chart.editable {
+        ""
+    } else {
+        " (data and type not editable)"
+    };
+    let _ = writeln!(
+        out,
+        "{pad}  chart {}{grouping}{title}{legend}{labels}{editable}",
+        chart.kind
+    );
+    let categories: Vec<String> = chart.categories.iter().take(60).map(|c| quote(c)).collect();
+    let _ = writeln!(out, "{pad}  categories: [{}]", categories.join(", "));
+    for (i, series) in chart.series.iter().enumerate().take(30) {
+        let values: Vec<String> = series
+            .values
+            .iter()
+            .take(60)
+            .map(|v| v.map_or_else(|| "blank".to_owned(), |v| format!("{v}")))
+            .collect();
+        let color = series
+            .color
+            .as_deref()
+            .map(|c| format!(" color {c}"))
+            .unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "{pad}  series {i} {}{color}: [{}]",
+            quote(&series.name),
+            values.join(", ")
+        );
     }
 }
 
@@ -158,6 +216,22 @@ fn slide(out: &mut String, s: &SlideOutline) {
         s.id,
         quote(&s.layout)
     );
+    if let Some(t) = &s.transition {
+        let direction = t
+            .direction
+            .as_deref()
+            .map(|d| format!(" {d}"))
+            .unwrap_or_default();
+        let after = t
+            .advance_after_ms
+            .map(|ms| format!(", advances after {ms} ms"))
+            .unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "  transition: {}{direction}, {} ms{after}",
+            t.kind, t.duration_ms
+        );
+    }
     if s.shapes.is_empty() {
         let _ = writeln!(out, "  (no shapes)");
     }
