@@ -220,6 +220,10 @@ export type DocxPagesProps = {
   onTextClick?: (pos: Pos) => void;
   /** Start a comment (keyboard shortcut). */
   onComment?: () => void;
+  /** Open the find bar (keyboard shortcut), with the replace field. */
+  onFind?: (replace: boolean) => void;
+  /** Go to the next (or previous) match of the search. */
+  onFindNext?: (forward: boolean) => void;
   /** Called with the input element once mounted (focus management). */
   inputRef?: (input: HTMLTextAreaElement) => void;
   /**
@@ -492,6 +496,12 @@ export function DocxPages(props: DocxPagesProps) {
         break;
       case 'comment':
         props.onComment?.();
+        break;
+      case 'find':
+        props.onFind?.(action.replace);
+        break;
+      case 'findNext':
+        props.onFindNext?.(action.forward);
         break;
       case 'page':
         void pageMove(action.forward, action.extend);

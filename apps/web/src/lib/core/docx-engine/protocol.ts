@@ -10,6 +10,8 @@ import type {
   CaretRect,
   Clip,
   EditResult,
+  FindOptions,
+  FindResult,
   PageInfo,
   PageRect,
   ParagraphText,
@@ -52,6 +54,7 @@ export type DocxRequest =
   | (Base & { kind: 'rangeRects'; from: Pos; to: Pos })
   | (Base & { kind: 'selectedText' })
   | (Base & { kind: 'copySelection' })
+  | (Base & { kind: 'find'; query: string; options: FindOptions })
   | (Base & { kind: 'paragraphs' })
   | (Base & { kind: 'styles' })
   | (Base & { kind: 'save' });
@@ -73,6 +76,7 @@ export type DocxResponse =
   | { id: number; ok: true; kind: 'rects'; rects: PageRect[] }
   | { id: number; ok: true; kind: 'text'; text: string }
   | { id: number; ok: true; kind: 'clip'; clip: Clip }
+  | { id: number; ok: true; kind: 'find'; result: FindResult }
   | { id: number; ok: true; kind: 'paragraphs'; paragraphs: ParagraphText[] }
   | { id: number; ok: true; kind: 'styles'; styles: StyleInfo[] }
   | { id: number; ok: true; kind: 'save'; bytes: ArrayBuffer }

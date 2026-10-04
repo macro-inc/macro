@@ -9,6 +9,7 @@ import EyeSlash from '@phosphor/eye-slash.svg';
 import GitDiff from '@phosphor/git-diff.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
 import ListNumbers from '@phosphor/list-numbers.svg';
+import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import Table from '@phosphor/table.svg';
 import TextAlignCenter from '@phosphor/text-align-center.svg';
 import TextAlignJustify from '@phosphor/text-align-justify.svg';
@@ -59,6 +60,8 @@ export type DocxToolbarProps = {
   /** Reject the change at the selection, or every change. */
   onReject: (all: boolean) => void;
   onComment: () => void;
+  /** Open find (and replace). */
+  onFind: () => void;
   onDownload: () => void;
 };
 
@@ -308,6 +311,13 @@ export function DocxToolbar(props: DocxToolbarProps) {
             <ChatCircleText />
           </Toolbar.Button>
         </Show>
+        <Toolbar.Button
+          label="Find and replace"
+          shortcut="Mod+F"
+          onClick={() => props.onFind()}
+        >
+          <MagnifyingGlass />
+        </Toolbar.Button>
         <Toolbar.Button
           label="Download .docx"
           onClick={() => props.onDownload()}

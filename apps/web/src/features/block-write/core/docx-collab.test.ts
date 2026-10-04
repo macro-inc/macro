@@ -282,6 +282,32 @@ describe('DocxCollab', () => {
     cb.dispose();
   });
 
+  it('typing merges into one undo step; other edits are steps of their own', async () => {
+    const doc = new LoroDoc();
+    writeCollabState(doc, STATE);
+    const engine = new FakeEngine(readCollabState(doc));
+    const collab = new DocxCollab(doc, engine);
+    const at = (offset: number): EditOp => ({
+      op: 'select',
+      anchor: { block: 'p1', offset },
+      focus: { block: 'p1', offset },
+    });
+    // A command (no group), then typing in two batches, then a command.
+    await collab.apply([at(0), { op: 'insertText', text: '1' }]);
+    await collab.apply([at(1), { op: 'insertText', text: 'a' }], 'typing');
+    await collab.apply([{ op: 'insertText', text: 'b' }], 'typing');
+    await collab.apply([at(14), { op: 'insertText', text: '!' }]);
+    expect(paragraph(doc, 'p1')).toBe('1abHello world!');
+    const steps: string[] = [];
+    while (collab.undo()) {
+      await settle();
+      await collab.idle();
+      steps.push(paragraph(doc, 'p1'));
+    }
+    expect(steps).toEqual(['1abHello world', '1Hello world', 'Hello world']);
+    collab.dispose();
+  });
+
   it('undo reverts this peer’s step and tells the engine', async () => {
     const doc = new LoroDoc();
     writeCollabState(doc, STATE);

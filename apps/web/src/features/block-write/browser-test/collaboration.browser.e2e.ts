@@ -379,6 +379,70 @@ test('tracked changes are recorded per author and resolved for everyone', async 
   }
 });
 
+test('find and replace, shared with everyone', async ({ browser }) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  const occurrences = async (page: Page, word: RegExp) =>
+    (await joined(page)).match(word)?.length ?? 0;
+  try {
+    await open(alice, documentId, ALICE);
+    await open(bob, documentId, BOB);
+    const count = await occurrences(alice, /agreement/gi);
+    expect(count).toBeGreaterThan(2);
+
+    // Mod+F in the document opens the find bar; matches are counted and
+    // highlighted on the pages.
+    await caretAtEnd(alice, 'This Agreement shall remain');
+    await alice.keyboard.press('Control+f');
+    const field = alice.locator('[data-docx-find-query]');
+    await expect(field).toBeFocused();
+    await field.fill('agreement');
+    const status = alice.locator('[data-docx-find-status]');
+    await expect(status).toHaveText(new RegExp(`^\\d+ of ${count}$`));
+    await expect(alice.locator('.docx-find-current')).toHaveCount(1);
+    await expect(alice.locator('[data-docx-find-match]')).not.toHaveCount(0);
+    // Enter moves on (wrapping), selecting the match in the document.
+    const first = await status.textContent();
+    await field.press('Enter');
+    await expect(status).not.toHaveText(first ?? '');
+    const selected = () =>
+      alice.evaluate(() => window.docxFixture?.editor()?.selectedText());
+    await expect.poll(selected).toMatch(/^agreement$/i);
+    if (SHOTS) await alice.screenshot({ path: `${SHOTS}/08-find.png` });
+
+    // Replace the current match, then the rest; Bob sees both.
+    await alice.locator('[data-docx-find-replace-toggle]').click();
+    await alice.locator('[data-docx-find-replacement]').fill('Contract');
+    await alice.locator('[data-docx-replace]').click();
+    await expect(status).toHaveText(new RegExp(`^\\d+ of ${count - 1}$`));
+    await expect.poll(() => occurrences(bob, /Contract/g)).toBe(1);
+    await alice.locator('[data-docx-replace-all]').click();
+    await expect(status).toHaveText(`Replaced ${count - 1}`);
+    for (const page of [alice, bob]) {
+      await expect.poll(() => occurrences(page, /agreement/gi)).toBe(0);
+      await expect.poll(() => occurrences(page, /Contract/g)).toBe(count);
+    }
+
+    // Escape closes the bar; one undo takes back the whole replace all.
+    await alice.locator('[data-docx-find-replacement]').press('Escape');
+    await expect(alice.locator('[data-docx-find]')).toHaveCount(0);
+    await expect(alice.locator('[data-docx-input]')).toBeFocused();
+    await alice.keyboard.press('Control+z');
+    for (const page of [alice, bob])
+      await expect.poll(() => occurrences(page, /agreement/gi)).toBe(count - 1);
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('copy and paste keep formatting, from here and from other apps', async ({
   browser,
 }) => {

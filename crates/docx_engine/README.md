@@ -57,10 +57,14 @@ formatting at the selection for toolbars. Operations cover selection and
 movement by character, word, line and document, typing, Enter, breaks,
 deleting across paragraphs and tables, character and paragraph formatting,
 styles, lists, tables (insert, rows, columns), header and footer editing
-(`enterStory`/`exitStory`) and tracked changes (`setTracking`,
-`acceptChanges`, `rejectChanges`). Batches with the same group (typing)
-merge into one undo step; in collaborative mode undo is the shared
-document's instead.
+(`enterStory`/`exitStory`), tracked changes (`setTracking`,
+`acceptChanges`, `rejectChanges`) and replacing search matches (`replace`,
+one or all). Batches with the same group (typing) merge into one undo step;
+in collaborative mode undo is the shared document's instead.
+
+`Session::find` searches the body's visible text (field codes, deleted and
+hidden text are left out; straight and typographic quotes match each
+other) and returns the matches with their highlight rectangles.
 
 While the document tracks changes (`w:trackRevisions`, shared through the
 settings part), typed text is recorded as the author's `w:ins`, deleted text

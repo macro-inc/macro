@@ -823,9 +823,24 @@ updates live and shows each collaborator's caret with their name
   `Paragraph style` select, a `Font size` select, `Bold`, `Italic`,
   `Underline`, `Strikethrough`, `Bulleted list`, `Numbered list`, the
   alignment buttons, `Insert table`, `Track changes`, `Hide tracked changes` /
-  `Show tracked changes`, `Comment on selection` and `Download .docx`. While
-  tracking is on (or the caret is on a tracked change) it also shows `Accept
-  change`, `Reject change`, `Accept all changes` and `Reject all changes`.
+  `Show tracked changes`, `Comment on selection`, `Find and replace` and
+  `Download .docx` (viewers get `Find and replace` and `Download .docx`).
+  While tracking is on (or the caret is on a tracked change) it also shows
+  `Accept change`, `Reject change`, `Accept all changes` and `Reject all
+  changes`.
+- The browser's own find cannot see canvas text, so Mod+F in the document
+  (or `Find and replace`) opens the editor's find bar (`[data-docx-find]`) in
+  the top right; Ctrl+H (Cmd+Shift+H on a Mac) opens it with the replace
+  field. The `Find in document` field (`[data-docx-find-query]`) searches as
+  you type and shows `<n> of <total>` (`[data-docx-find-status]`); matches
+  are highlighted on the pages (`[data-docx-find-match]`). Enter and
+  Shift+Enter (or the arrow buttons, or Mod+G) move between matches and
+  select them; `Match case` and `Whole words only` narrow the search. Straight
+  and curly quotes match each other. The `Replace` toggle shows `Replace
+  with` (`[data-docx-find-replacement]`) with `Replace`
+  (`[data-docx-replace]`) and `Replace all` (`[data-docx-replace-all]`);
+  replacements follow tracked changes and one undo takes back a replace all.
+  Escape closes the bar with the current match selected.
 - Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo your
   own edits only, never a collaborator's. Mod+B/I/U format, Tab and
   Shift+Tab indent list items, Enter splits paragraphs and Shift+Enter

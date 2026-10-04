@@ -1,4 +1,4 @@
-import type { Pos } from '@core/docx-engine/types';
+import type { PageRect, Pos } from '@core/docx-engine/types';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -11,6 +11,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { DocxFindBar } from '../components/DocxFindBar';
 import {
   type DocxAlignment,
   type DocxParagraphStyle,
@@ -25,6 +26,7 @@ import {
   type DocxEditor,
   PX_PER_PT,
 } from '../primitives/create-docx-editor';
+import { createDocxFind } from '../primitives/create-docx-find';
 import type { DocxPeer, DocxSelection } from '../queries/docx-session';
 import { DocxCollaboratorCarets } from './DocxCollaborators';
 import {
@@ -121,6 +123,38 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     canEdit: () => props.canEdit,
   });
 
+  /** Scrolls a page rectangle into view (a third of the way down). */
+  function reveal(rect: PageRect | undefined) {
+    const element = scroller();
+    const column = element?.querySelector<HTMLElement>('[data-docx-pages]');
+    const box = rect && toColumn(geometry(), rect);
+    if (!element || !column || !box) return;
+    const top =
+      column.getBoundingClientRect().top -
+      element.getBoundingClientRect().top +
+      element.scrollTop +
+      box.top;
+    const margin = 96;
+    if (
+      top < element.scrollTop + margin ||
+      top + box.height > element.scrollTop + element.clientHeight - margin
+    )
+      element.scrollTop = Math.max(0, top - element.clientHeight / 3);
+  }
+
+  const find = createDocxFind({
+    search: (query, options) => editor.find(query, options),
+    selectedText: () => editor.selectedText(),
+    revision: editor.revision,
+    run: (ops) => editor.run(ops),
+    reveal: (match) => reveal(match.rects[0]),
+  });
+
+  const closeFind = () => {
+    find.close();
+    input?.focus();
+  };
+
   // Fit the pages to the width available, never above 100%.
   createEffect(() => {
     const element = scroller();
@@ -173,6 +207,43 @@ export function DocxEditorView(props: DocxEditorViewProps) {
 
   const format = () => editor.state()?.format;
 
+  /** At most this many matches are highlighted (the count shows them all). */
+  const HIGHLIGHTED = 5000;
+
+  const findHighlights = (g: Accessor<PageGeometry>) => (
+    <Show when={find.open()}>
+      <For each={find.matches().slice(0, HIGHLIGHTED)}>
+        {(match, index) => (
+          <For each={match.rects}>
+            {(rect) => {
+              const box = () => toColumn(g(), rect);
+              return (
+                <Show when={box()}>
+                  {(b) => (
+                    <div
+                      class="absolute"
+                      classList={{
+                        'docx-find': index() !== find.current(),
+                        'docx-find-current': index() === find.current(),
+                      }}
+                      data-docx-find-match={index()}
+                      style={{
+                        left: `${b().left}px`,
+                        top: `${b().top}px`,
+                        width: `${b().width}px`,
+                        height: `${b().height}px`,
+                      }}
+                    />
+                  )}
+                </Show>
+              );
+            }}
+          </For>
+        )}
+      </For>
+    </Show>
+  );
+
   const commentHighlights = (g: Accessor<PageGeometry>) => (
     <Show when={props.commentRoots}>
       <For each={comments.located()}>
@@ -220,6 +291,8 @@ export function DocxEditorView(props: DocxEditorViewProps) {
 .docx-composition { background: #fff; color: #000; text-decoration: underline; }
 .docx-comment { background-color: oklch(from var(--color-yellow) l c h / 0.28); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.7); }
 .docx-comment-active { background-color: oklch(from var(--color-yellow) l c h / 0.55); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.9); }
+.docx-find { background-color: oklch(from var(--color-orange) l c h / 0.3); }
+.docx-find-current { background-color: oklch(from var(--color-orange) l c h / 0.6); box-shadow: 0 0 0 1px oklch(from var(--color-orange) l c h / 0.9); }
 .docx-veil { background: rgb(255 255 255 / 0.55); }
 .docx-story-edge { border-color: oklch(from var(--color-accent, #3b82f6) l c h / 0.8); }`}</style>
       <DocxToolbar
@@ -275,6 +348,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
         onAccept={(all) => editor.run([{ op: 'acceptChanges', all }])}
         onReject={(all) => editor.run([{ op: 'rejectChanges', all }])}
         onComment={beginComment}
+        onFind={() => find.show(false)}
         onDownload={() => {
           editor
             .idle()
@@ -283,63 +357,99 @@ export function DocxEditorView(props: DocxEditorViewProps) {
             .catch((error: unknown) => props.onError?.(error));
         }}
       />
-      <div
-        ref={setScroller}
-        class="relative min-h-0 flex-1 overflow-auto bg-panel"
-        data-docx-scroller
-      >
+      <div class="relative flex min-h-0 flex-1 flex-col">
         <div
-          class="relative grid gap-x-2 pt-6 pb-24"
-          style={{
-            'grid-template-columns': `minmax(${SIDE_PADDING}px, 1fr) ${geometry().width}px minmax(${
-              props.margin ? MARGIN_WIDTH : 48
-            }px, 1fr)`,
-          }}
+          ref={setScroller}
+          class="relative min-h-0 flex-1 overflow-auto bg-panel"
+          data-docx-scroller
         >
-          <div class="relative col-start-2 min-w-0">
-            <DocxPages
-              editor={editor}
-              scroller={scroller()}
-              editable={props.canEdit}
-              documentId={props.documentId}
-              onTextClick={onTextClick}
-              onComment={props.commentRoots ? beginComment : undefined}
-              inputRef={(el) => {
-                input = el;
-              }}
-              overlay={(g) => (
-                <>
-                  {commentHighlights(g)}
-                  <DocxCollaboratorCarets
-                    peers={props.peers()}
-                    geometry={g}
-                    revision={editor.revision}
-                    caretAt={editor.caretAt}
-                    displayName={props.displayName}
-                  />
-                </>
+          <div
+            class="relative grid gap-x-2 pt-6 pb-24"
+            style={{
+              'grid-template-columns': `minmax(${SIDE_PADDING}px, 1fr) ${geometry().width}px minmax(${
+                props.margin ? MARGIN_WIDTH : 48
+              }px, 1fr)`,
+            }}
+          >
+            <div class="relative col-start-2 min-w-0">
+              <DocxPages
+                editor={editor}
+                scroller={scroller()}
+                editable={props.canEdit}
+                documentId={props.documentId}
+                onTextClick={onTextClick}
+                onComment={props.commentRoots ? beginComment : undefined}
+                onFind={(replace) => find.show(replace && props.canEdit)}
+                onFindNext={(forward) => {
+                  if (!find.open()) return;
+                  if (forward) find.next();
+                  else find.previous();
+                }}
+                inputRef={(el) => {
+                  input = el;
+                }}
+                overlay={(g) => (
+                  <>
+                    {findHighlights(g)}
+                    {commentHighlights(g)}
+                    <DocxCollaboratorCarets
+                      peers={props.peers()}
+                      geometry={g}
+                      revision={editor.revision}
+                      caretAt={editor.caretAt}
+                      displayName={props.displayName}
+                    />
+                  </>
+                )}
+              />
+              <Show when={!editor.ready()}>
+                <div class="absolute inset-x-0 top-24 flex justify-center text-sm text-ink-muted">
+                  Opening document…
+                </div>
+              </Show>
+            </div>
+            <Show when={props.margin}>
+              {(renderMargin) => (
+                <div class="relative col-start-3 min-w-0" data-docx-margin>
+                  {renderMargin()({ comments, geometry, selectionTop })}
+                </div>
               )}
-            />
-            <Show when={!editor.ready()}>
-              <div class="absolute inset-x-0 top-24 flex justify-center text-sm text-ink-muted">
-                Opening document…
-              </div>
             </Show>
           </div>
-          <Show when={props.margin}>
-            {(renderMargin) => (
-              <div class="relative col-start-3 min-w-0" data-docx-margin>
-                {renderMargin()({ comments, geometry, selectionTop })}
+          <Show when={props.footer}>
+            {(renderFooter) => (
+              <div class="mx-auto flex max-w-3xl flex-col gap-6 px-4 pb-16">
+                {renderFooter()(comments)}
               </div>
             )}
           </Show>
         </div>
-        <Show when={props.footer}>
-          {(renderFooter) => (
-            <div class="mx-auto flex max-w-3xl flex-col gap-6 px-4 pb-16">
-              {renderFooter()(comments)}
-            </div>
-          )}
+        <Show when={find.open()}>
+          <div class="absolute top-2 right-4 z-10">
+            <DocxFindBar
+              query={find.query()}
+              replacement={find.replacement()}
+              matchCase={find.matchCase()}
+              wholeWord={find.wholeWord()}
+              count={find.matches().length}
+              current={find.current()}
+              truncated={find.truncated()}
+              replaced={find.replaced()}
+              replacing={find.replacing()}
+              canEdit={props.canEdit}
+              focusRequest={find.focusRequest()}
+              onQuery={find.setQuery}
+              onReplacement={find.setReplacement}
+              onToggleMatchCase={find.toggleMatchCase}
+              onToggleWholeWord={find.toggleWholeWord}
+              onToggleReplace={() => find.setReplacing((v) => !v)}
+              onNext={find.next}
+              onPrevious={find.previous}
+              onReplace={() => find.replace(props.canEdit)}
+              onReplaceAll={() => find.replaceAll(props.canEdit)}
+              onClose={closeFind}
+            />
+          </div>
         </Show>
       </div>
     </div>

@@ -7,6 +7,7 @@
 //! fingerprints so the caller repaints only pages that changed.
 
 mod clip;
+mod find;
 mod format;
 mod geometry;
 mod lists;
@@ -22,6 +23,7 @@ mod test;
 mod test_util;
 
 pub use clip::{Clip, ClipParagraph, ClipRun};
+pub use find::{FindMatch, FindOptions, FindResult};
 pub use format::{Alignment, ParaPatch, RunPatch, Spacing, Toggle};
 pub use geometry::{CaretRect, PageRect, ViewIndex};
 pub use txn::{BlockRecord, Change, Step, content_delta};
@@ -290,6 +292,21 @@ pub enum EditOp {
         /// numbering then stay as they were).
         #[serde(default)]
         same_document: bool,
+    },
+    /// Replaces matches of a search in the body. With `all`, every match;
+    /// otherwise the match the selection holds, then selects the next one
+    /// (when the selection holds no match, selects the next one only).
+    Replace {
+        /// What to search for.
+        query: String,
+        /// How to compare.
+        #[serde(default)]
+        options: FindOptions,
+        /// The replacement text.
+        with: String,
+        /// Replace every match.
+        #[serde(default)]
+        all: bool,
     },
 }
 
@@ -1745,6 +1762,54 @@ impl Session {
         geometry::range_rects(&self.layout, &self.index, s, e, &paras)
     }
 
+    /// The matches of a search in the body, with their highlight
+    /// rectangles, and the match at or after the selection.
+    pub fn find(&mut self, query: &str, options: &FindOptions, fonts: &FontDb) -> FindResult {
+        self.ensure_layout(fonts);
+        let paras = self.doc.body().paragraphs();
+        let (found, truncated) = find::find(self.doc.body(), &paras, query, options, find::LIMIT);
+        let order: HashMap<&BlockId, usize> =
+            paras.iter().enumerate().map(|(i, id)| (id, i)).collect();
+        let key = |p: &Pos| (order.get(&p.block).copied().unwrap_or(0), p.offset);
+        let sel = if self.active == StoryTarget::Body {
+            Some(&self.sel)
+        } else {
+            self.body_sel.as_ref()
+        };
+        let current = sel.and_then(|sel| {
+            let (a, f) = (key(&sel.anchor), key(&sel.focus));
+            let (start, end) = if a <= f { (a, f) } else { (f, a) };
+            found
+                .iter()
+                .position(|(from, to)| key(from) == start && key(to) == end)
+                .or_else(|| found.iter().position(|(from, _)| key(from) >= start))
+                .or((!found.is_empty()).then_some(0))
+        });
+        let index = if self.active == StoryTarget::Body {
+            &self.index
+        } else {
+            &self.body_index
+        };
+        let matches = found
+            .into_iter()
+            .map(|(from, to)| {
+                let rects = geometry::range_rects(
+                    &self.layout,
+                    index,
+                    &from,
+                    &to,
+                    std::slice::from_ref(&from.block),
+                );
+                FindMatch { from, to, rects }
+            })
+            .collect();
+        FindResult {
+            matches,
+            current,
+            truncated,
+        }
+    }
+
     // ----- operations ----------------------------------------------------
 
     /// Applies operations in order as one undo step (merged into the
@@ -1935,6 +2000,12 @@ impl Session {
                 paragraphs,
                 same_document,
             } => self.paste(paragraphs, *same_document),
+            EditOp::Replace {
+                query,
+                options,
+                with,
+                all,
+            } => Ok(self.replace(query, options, with, *all)),
             EditOp::AcceptChanges { all } => Ok(self.resolve(true, *all)),
             EditOp::RejectChanges { all } => Ok(self.resolve(false, *all)),
             EditOp::SelectAll => {
@@ -2630,6 +2701,102 @@ impl Session {
             self.set_caret(c);
         }
         Some(step)
+    }
+
+    /// Replaces the match the selection holds and selects the next one, or
+    /// every match, keeping the caret on its text.
+    fn replace(
+        &mut self,
+        query: &str,
+        options: &FindOptions,
+        with: &str,
+        all: bool,
+    ) -> Option<Step> {
+        self.leave_story();
+        self.pending = None;
+        let matches = |s: &Self| {
+            let paras = s.doc.body().paragraphs();
+            find::find(s.doc.body(), &paras, query, options, usize::MAX).0
+        };
+        let found = matches(self);
+        if found.is_empty() {
+            return None;
+        }
+        let (start, end) = self.ordered();
+        if all {
+            let mut caret = start;
+            let mut step = Step::default();
+            // Last to first, so the earlier matches stay where they were.
+            for (from, to) in found.iter().rev() {
+                let before = self.para_len(&from.block);
+                step.merge(self.replace_range(from, to, with));
+                if caret.block == from.block {
+                    if caret.offset >= to.offset {
+                        caret.offset =
+                            (caret.offset + self.para_len(&from.block)).saturating_sub(before);
+                    } else if caret.offset > from.offset {
+                        caret.offset = from.offset;
+                    }
+                }
+            }
+            self.set_caret(caret);
+            return Some(step);
+        }
+        let held = found
+            .iter()
+            .find(|(from, to)| from.same_place(&start) && to.same_place(&end))
+            .cloned();
+        let Some((from, to)) = held else {
+            self.select_match(&found, &start);
+            return None;
+        };
+        let step = self.replace_range(&from, &to, with);
+        let caret = self.sel.focus.clone();
+        let found = matches(self);
+        if found.is_empty() {
+            self.set_caret(caret);
+        } else {
+            self.select_match(&found, &caret);
+        }
+        Some(step)
+    }
+
+    /// Replaces a range with text in the formatting of its first character.
+    fn replace_range(&mut self, from: &Pos, to: &Pos, with: &str) -> Step {
+        let attrs = self.story().get(&from.block).map(|b| {
+            text::typing_attrs(
+                b,
+                from.offset + 1,
+                self.doc.w_prefix(),
+                &SnippetContext::new(self.doc.decls()),
+            )
+        });
+        self.sel = Selection {
+            anchor: from.clone(),
+            focus: to.clone(),
+        };
+        if with.is_empty() {
+            self.pending = None;
+            return self.delete(true, Unit::Char).unwrap_or_default();
+        }
+        self.pending = attrs;
+        self.insert_text(with)
+    }
+
+    /// Selects the first match at or after a position (or the first).
+    fn select_match(&mut self, found: &[(Pos, Pos)], at: &Pos) {
+        let o = self.order();
+        let key = |p: &Pos| (o.index.get(&p.block).copied().unwrap_or(0), p.offset);
+        let next = found
+            .iter()
+            .find(|(from, _)| key(from) >= key(at))
+            .or(found.first());
+        if let Some((from, to)) = next {
+            self.sel = Selection {
+                anchor: from.clone(),
+                focus: to.clone(),
+            };
+        }
     }
 
     /// Pastes paragraphs over the selection.

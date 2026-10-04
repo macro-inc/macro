@@ -78,6 +78,25 @@ describe('keyAction', () => {
     });
   });
 
+  it('opens find and replace', () => {
+    expect(keyAction(key('f', { ctrlKey: true }), false)).toEqual({
+      kind: 'find',
+      replace: false,
+    });
+    expect(keyAction(key('h', { ctrlKey: true }), false)).toEqual({
+      kind: 'find',
+      replace: true,
+    });
+    // Cmd+H hides the app on macOS.
+    expect(keyAction(key('h', { metaKey: true }), true)).toBeNull();
+    expect(
+      keyAction(key('h', { metaKey: true, shiftKey: true }), true)
+    ).toEqual({ kind: 'find', replace: true });
+    expect(
+      keyAction(key('g', { metaKey: true, shiftKey: true }), true)
+    ).toEqual({ kind: 'findNext', forward: false });
+  });
+
   it('leaves typing and clipboard keys to the browser', () => {
     expect(keyAction(key('a'), false)).toBeNull();
     expect(keyAction(key('c', { ctrlKey: true }), false)).toBeNull();
