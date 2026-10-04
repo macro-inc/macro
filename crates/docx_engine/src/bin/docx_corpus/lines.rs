@@ -48,6 +48,10 @@ struct LineOut {
     first: bool,
     /// The paragraph's space before (points).
     before: f32,
+    /// The paragraph's space after (points).
+    after: f32,
+    /// Whether the line ends its paragraph.
+    last: bool,
     /// Whether the paragraph starts on a new page (`pageBreakBefore`).
     page_break_before: bool,
     /// Room for the line's content (points).
@@ -209,6 +213,8 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
                     spacing: format!("{:?}", l.para.format.props.line),
                     first: line.start == 0,
                     before: l.para.format.props.before,
+                    after: l.para.format.props.after,
+                    last: l.line + 1 == l.para.lines.lines.len(),
                     page_break_before: l.para.format.props.page_break_before,
                     avail: line.right - line.left,
                     fit: fit_stats(l),
