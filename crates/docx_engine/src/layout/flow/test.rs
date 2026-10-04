@@ -238,3 +238,77 @@ fn links_take_their_color_from_their_formatting() {
     assert_eq!(colors[1], Rgba::BLACK);
     assert_eq!(colors[2], Rgba::BLACK);
 }
+
+/// A one-cell table row of `n` paragraphs, preceded by `before` filler
+/// paragraphs; `tr` holds row properties.
+fn tall_row(before: usize, n: usize, tr: &str) -> String {
+    let filler: String = (0..before)
+        .map(|i| format!("<w:p><w:r><w:t>Filler {i}</w:t></w:r></w:p>"))
+        .collect();
+    let cell: String = (0..n)
+        .map(|i| format!("<w:p><w:r><w:t>Cell line {i}</w:t></w:r></w:p>"))
+        .collect();
+    format!(
+        r#"{filler}<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid><w:tr><w:trPr>{tr}</w:trPr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>{cell}</w:tc></w:tr></w:tbl><w:p/>"#
+    )
+}
+
+fn page_texts(l: &Layout, page: usize) -> Vec<String> {
+    l.pages[page]
+        .lines_of(&StoryRef::Body)
+        .map(text)
+        .filter(|t| !t.is_empty())
+        .collect()
+}
+
+#[test]
+fn table_rows_break_across_pages_between_lines() {
+    let l = layout(
+        &tall_row(40, 30, ""),
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let first = page_texts(&l, 0);
+    let second = page_texts(&l, 1);
+    // The row starts below the filler on the first page and goes on.
+    assert!(first.iter().any(|t| t == "Cell line 0"), "{first:?}");
+    assert!(!first.iter().any(|t| t == "Cell line 29"), "{first:?}");
+    assert!(second.iter().any(|t| t == "Cell line 29"), "{second:?}");
+    let last_on_first = first.iter().filter(|t| t.starts_with("Cell")).count();
+    assert_eq!(
+        second.iter().filter(|t| t.starts_with("Cell")).count(),
+        30 - last_on_first
+    );
+}
+
+#[test]
+fn rows_that_cannot_split_move_whole() {
+    let l = layout(
+        &tall_row(40, 30, "<w:cantSplit/>"),
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    assert!(!page_texts(&l, 0).iter().any(|t| t.starts_with("Cell")));
+    assert!(page_texts(&l, 1).iter().any(|t| t == "Cell line 0"));
+}
+
+#[test]
+fn rows_taller_than_a_page_split_instead_of_overflowing() {
+    let l = layout(
+        &tall_row(0, 120, ""),
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    assert!(l.pages.len() >= 3, "{}", l.pages.len());
+    for page in &l.pages {
+        for p in page.lines_of(&StoryRef::Body) {
+            assert!(p.y + p.line().height <= page.height - 72.0 + 0.5, "{}", p.y);
+        }
+    }
+}

@@ -7,6 +7,7 @@ use super::super::lines::LineEnd;
 use super::super::{Item, Page, ParaBox, StoryRef};
 use super::anchors::{PageGeom, resolve};
 use super::frames::{FrameWrap, PendingFrame, emit_frame, frame_box, resolve_frame};
+use super::split::split_row;
 use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
     emit_row, para_box, placed, prev_record, space_before, stack_story, table_box,
@@ -1066,7 +1067,7 @@ impl<'e, 'a> Flow<'e, 'a> {
         {
             c.y += prev.after;
         }
-        let tb = table_box(
+        let mut tb = table_box(
             self.env,
             &self.env.doc.body,
             b,
@@ -1088,19 +1089,31 @@ impl<'e, 'a> Flow<'e, 'a> {
                 .cur
                 .as_ref()
                 .map_or((0.0, false), |c| (c.y, c.placed_any));
-            if y + h > self.avail_bottom() + EPS && placed_any && !moved {
+            let avail = self.avail_bottom();
+            if y + h > avail + EPS {
                 if self.jump_band(h) {
                     continue;
                 }
-                self.next_column(false);
-                moved = true;
-                // Repeat header rows at the top of the new page.
-                if r >= headers.len() && !headers.is_empty() {
-                    for &hr in &headers {
-                        self.emit_table_row(&tb, hr, col_left);
-                    }
+                // A row that may break keeps the lines that fit here and
+                // goes on in the next column.
+                let split = split_row(&tb, r, avail - y);
+                let next = split.is_some() || (placed_any && !moved);
+                if let Some((first, rest)) = split {
+                    tb.rows[r] = first;
+                    self.emit_table_row(&tb, r, col_left);
+                    tb.rows[r] = rest;
                 }
-                continue;
+                if next {
+                    self.next_column(false);
+                    moved = true;
+                    // Repeat header rows at the top of the new page.
+                    if r >= headers.len() && !headers.is_empty() {
+                        for &hr in &headers {
+                            self.emit_table_row(&tb, hr, col_left);
+                        }
+                    }
+                    continue;
+                }
             }
             self.emit_table_row(&tb, r, col_left);
             moved = false;
