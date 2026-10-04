@@ -14,6 +14,7 @@ import {
   Index,
   type JSX,
   onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { clipboardHtml, readClipboardHtml } from '../core/clipboard';
@@ -396,7 +397,106 @@ export function DocxPages(props: DocxPagesProps) {
   /** Whether the button is still down (a drag extends the selection). */
   let held = false;
 
+  /**
+   * A finger on the page: it scrolls natively, a tap places the caret (and
+   * opens the keyboard), a double tap selects a word, and a press held
+   * still selects a word and then extends the selection as it moves.
+   */
+  let touch:
+    | {
+        id: number;
+        x: number;
+        y: number;
+        time: number;
+        timer: ReturnType<typeof setTimeout>;
+      }
+    | undefined;
+  /** A held press is selecting: the finger extends the selection. */
+  let touchSelecting = false;
+  let lastTap = { time: 0, x: 0, y: 0 };
+  onCleanup(() => clearTimeout(touch?.timer));
+
+  /** Movement (CSS pixels) after which a touch is a scroll, not a tap. */
+  const TAP_SLOP = 10;
+  const LONG_PRESS = 500;
+
+  function touchDown(event: PointerEvent) {
+    clearTimeout(touch?.timer);
+    const { clientX, clientY } = event;
+    touch = {
+      id: event.pointerId,
+      x: clientX,
+      y: clientY,
+      time: event.timeStamp,
+      timer: setTimeout(() => longPress(clientX, clientY), LONG_PRESS),
+    };
+  }
+
+  function longPress(clientX: number, clientY: number) {
+    touch = undefined;
+    const point = pointAt(clientX, clientY);
+    if (!point) return;
+    touchSelecting = true;
+    held = true;
+    input.focus({ preventScroll: true });
+    presses = presses
+      .then(async () => {
+        const pos = await editor.hitTest(point.page, point.x, point.y);
+        if (!pos) return;
+        editor.run([{ op: 'selectWord', at: pos }]);
+        await editor.idle();
+        const selection = editor.state()?.selection;
+        if (held && selection) dragAnchor = selection.anchor;
+      })
+      .catch(() => {});
+  }
+
+  function touchUp(event: PointerEvent) {
+    const t = touch;
+    clearTimeout(t?.timer);
+    touch = undefined;
+    if (!t || t.id !== event.pointerId) return;
+    const point = pointAt(t.x, t.y);
+    if (!point) return;
+    const double =
+      event.timeStamp - lastTap.time < 350 &&
+      Math.abs(t.x - lastTap.x) < 24 &&
+      Math.abs(t.y - lastTap.y) < 24;
+    lastTap = double
+      ? { time: 0, x: 0, y: 0 }
+      : { time: event.timeStamp, x: t.x, y: t.y };
+    // Focus inside the tap's own handler, so mobile browsers open the
+    // keyboard.
+    input.focus({ preventScroll: true });
+    presses = presses
+      .then(() => press(point, double ? 2 : 1, false))
+      .catch(() => {});
+  }
+
+  /** Ends any press or drag (also when the browser takes the pointer over
+   * to scroll). */
+  function release() {
+    clearTimeout(touch?.timer);
+    touch = undefined;
+    touchSelecting = false;
+    held = false;
+    dragAnchor = undefined;
+  }
+
+  // While a held press selects, the finger must not scroll the page.
+  onMount(() => {
+    const preventScroll = (event: TouchEvent) => {
+      if (touchSelecting) event.preventDefault();
+    };
+    column.addEventListener('touchmove', preventScroll, { passive: false });
+    onCleanup(() => column.removeEventListener('touchmove', preventScroll));
+  });
+
   function onPointerDown(event: PointerEvent) {
+    if (event.pointerType === 'touch') {
+      touchDown(event);
+      return;
+    }
     if (event.button !== 0) return;
     const point = pointAt(event.clientX, event.clientY);
     if (!point) return;
@@ -433,6 +533,15 @@ export function DocxPages(props: DocxPagesProps) {
   }
 
   function onPointerMove(event: PointerEvent) {
+    if (
+      touch &&
+      touch.id === event.pointerId &&
+      Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > TAP_SLOP
+    ) {
+      // A scroll, not a tap.
+      clearTimeout(touch.timer);
+      touch = undefined;
+    }
     if (!dragAnchor) return;
     const anchor = dragAnchor;
     const { clientX, clientY } = event;
@@ -446,8 +555,8 @@ export function DocxPages(props: DocxPagesProps) {
   }
 
   function onPointerUp(event: PointerEvent) {
-    held = false;
-    dragAnchor = undefined;
+    if (event.pointerType === 'touch' && !touchSelecting) touchUp(event);
+    release();
     if (column.hasPointerCapture(event.pointerId))
       column.releasePointerCapture(event.pointerId);
   }
@@ -611,7 +720,7 @@ export function DocxPages(props: DocxPagesProps) {
   return (
     <div
       ref={column}
-      class="relative mx-auto"
+      class="relative mx-auto select-none [-webkit-touch-callout:none]"
       style={{
         width: `${geometry().width}px`,
         height: `${geometry().height}px`,
@@ -619,6 +728,9 @@ export function DocxPages(props: DocxPagesProps) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={release}
+      // A tap's compatibility mousedown would move focus off the input.
+      onMouseDown={(event) => event.preventDefault()}
       data-docx-pages
     >
       {/* By position: every layout brings new page objects, and a page's

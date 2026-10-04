@@ -515,6 +515,108 @@ test('copy and paste keep formatting, from here and from other apps', async ({
   }
 });
 
+test('on a touch screen, a swipe scrolls and taps place the caret', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 420, height: 760 },
+  });
+  const page = await context.newPage();
+  logErrors(page, 'touch');
+  const cdp = await context.newCDPSession(page);
+  const touch = (
+    type: 'touchStart' | 'touchMove' | 'touchEnd',
+    x: number,
+    y: number
+  ) =>
+    cdp.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
+    });
+  const selection = () =>
+    page.evaluate(() => window.docxFixture?.editor()?.state()?.selection);
+  const focused = () =>
+    page.evaluate(() =>
+      document.activeElement?.hasAttribute('data-docx-input')
+    );
+  try {
+    await open(page, documentId, ALICE);
+    const scroller = page.locator('[data-docx-scroller]');
+    const sheet = await page.locator('[data-docx-page="0"]').boundingBox();
+    if (!sheet) throw new Error('no page');
+    // A point on the first body line.
+    const caret = await page.evaluate(async () => {
+      const editor = window.docxFixture?.editor();
+      const first = (await editor?.paragraphs())?.find((p) => p.text.trim());
+      return first
+        ? editor?.caretAt({ block: first.id, offset: 2 })
+        : undefined;
+    });
+    if (!caret) throw new Error('no caret');
+    const scale =
+      sheet.width /
+      (await page.evaluate(
+        () => window.docxFixture?.editor()?.pages()[0]?.width ?? 1
+      ));
+    const x = sheet.x + caret.x * scale;
+    const y = sheet.y + (caret.y + caret.height / 2) * scale;
+
+    // A swipe scrolls the pages and leaves the keyboard closed.
+    await touch('touchStart', 200, 600);
+    for (let i = 1; i <= 8; i++) await touch('touchMove', 200, 600 - i * 40);
+    await touch('touchEnd', 0, 0);
+    await expect
+      .poll(() => scroller.evaluate((e) => e.scrollTop))
+      .toBeGreaterThan(30);
+    expect(await focused()).toBe(false);
+    await scroller.evaluate((e) => {
+      e.scrollTop = 0;
+    });
+
+    // A tap places the caret there and focuses the text input.
+    await page.touchscreen.tap(x, y);
+    await expect.poll(focused).toBe(true);
+    await expect
+      .poll(async () => {
+        const s = await selection();
+        return s && s.anchor.offset === s.focus.offset ? s.focus.offset : -1;
+      })
+      .toBeGreaterThanOrEqual(0);
+
+    // A double tap selects a word (after a pause: no double tap with the
+    // tap before).
+    await page.waitForTimeout(400);
+    await page.touchscreen.tap(x, y);
+    await page.touchscreen.tap(x, y);
+    await expect
+      .poll(async () => {
+        const s = await selection();
+        return s ? s.focus.offset - s.anchor.offset : 0;
+      })
+      .toBeGreaterThan(1);
+
+    // A long press selects a word too.
+    await page.evaluate(() =>
+      window.docxFixture
+        ?.editor()
+        ?.run([{ op: 'move', unit: 'document', forward: false, extend: false }])
+    );
+    await touch('touchStart', x, y);
+    await page.waitForTimeout(800);
+    await touch('touchEnd', 0, 0);
+    await expect
+      .poll(async () => {
+        const s = await selection();
+        return s ? s.focus.offset - s.anchor.offset : 0;
+      })
+      .toBeGreaterThan(1);
+  } finally {
+    await context.close();
+  }
+});
+
 test('viewers follow along read-only', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([

@@ -161,9 +161,12 @@ export class DocxCollab {
   /** Runs operations in the engine and publishes their changes. */
   apply(ops: EditOp[], group?: string): Promise<EditResult | null> {
     const run = this.serial(async () => {
-      // Changes that arrived since the last flush first: the edit must be
-      // made against the shared text as it is.
-      await this.flushPending();
+      // Changes that arrived since the last flush first, and any arriving
+      // while those are applied: the edit must be made against the shared
+      // text as it is. From the last check on, nothing runs in between
+      // until changes are caught as in flight.
+      do await this.flushPending();
+      while (this.pending.blocks.size || this.pending.entries.size);
       this.inflight = emptyTouched();
       let result: EditResult | null;
       let seen: Touched;
