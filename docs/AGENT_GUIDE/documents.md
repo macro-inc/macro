@@ -887,6 +887,11 @@ updates live and shows each collaborator's caret with their name
   Commented text is highlighted by overlay elements
   (`[data-docx-comment-highlight]`) above the canvas. Comments anchor in the
   body only, not in headers or footers.
+- Comments written in Word (stored in the file) show in the same margin as
+  read-only cards (`[data-docx-word-comment="<id>"]`): author, date, text and
+  replies, marked `In the document` (and `Resolved` when done). Their text is
+  highlighted too (`[data-docx-comment-highlight="word:<id>"]`). They stay in
+  the file on download; reply with a Macro comment.
 - Threads whose text was deleted are listed under `Comments on text that has
   changed`, above the `Discussion` composer.
 - AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to

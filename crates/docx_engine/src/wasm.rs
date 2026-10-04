@@ -215,6 +215,12 @@ impl DocxDocument {
         self.session.selected_text()
     }
 
+    /// The comments stored in the document, Word's (`DocComment[]` JSON).
+    #[wasm_bindgen(js_name = documentComments)]
+    pub fn document_comments(&self) -> Result<String, JsError> {
+        to_json(&self.session.document_comments())
+    }
+
     /// Paragraph ids and texts in document order (`ParagraphText[]` JSON).
     pub fn paragraphs(&self) -> Result<String, JsError> {
         to_json(&self.session.paragraphs())

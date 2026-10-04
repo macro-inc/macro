@@ -41,6 +41,10 @@ pub struct Parts<'a> {
     pub header: Option<&'a str>,
     /// Footnotes (`w:footnotes` children).
     pub footnotes: Option<&'a str>,
+    /// Comments (`w:comments` children).
+    pub comments: Option<&'a str>,
+    /// Comment threads (`w15:commentsEx` children).
+    pub comments_extended: Option<&'a str>,
 }
 
 /// A `.docx` with `body` as the content of `w:body`.
@@ -51,8 +55,15 @@ pub fn docx(body: &str, parts: &Parts<'_>) -> Vec<u8> {
     );
     let mut overrides = String::new();
     let mut add = |name: &str, rel_type: &str, id: &str, ct: &str, xml: String| {
+        let rel_type = if rel_type.contains("://") {
+            rel_type.to_owned()
+        } else {
+            format!(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/{rel_type}"
+            )
+        };
         rels.push_str(&format!(
-            r#"<Relationship Id="{id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/{rel_type}" Target="{name}"/>"#
+            r#"<Relationship Id="{id}" Type="{rel_type}" Target="{name}"/>"#
         ));
         overrides.push_str(&format!(
             r#"<Override PartName="/word/{name}" ContentType="{ct}"/>"#
@@ -103,6 +114,26 @@ pub fn docx(body: &str, parts: &Parts<'_>) -> Vec<u8> {
             "rIdF",
             &format!("{ct}footnotes+xml"),
             format!("<w:footnotes {NS}>{s}</w:footnotes>"),
+        );
+    }
+    if let Some(s) = parts.comments {
+        add(
+            "comments.xml",
+            "comments",
+            "rIdC",
+            &format!("{ct}comments+xml"),
+            format!("<w:comments {NS}>{s}</w:comments>"),
+        );
+    }
+    if let Some(s) = parts.comments_extended {
+        add(
+            "commentsExtended.xml",
+            "http://schemas.microsoft.com/office/2011/relationships/commentsExtended",
+            "rIdCX",
+            &format!("{ct}commentsExtended+xml"),
+            format!(
+                r#"<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">{s}</w15:commentsEx>"#
+            ),
         );
     }
     rels.push_str("</Relationships>");

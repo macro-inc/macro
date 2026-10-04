@@ -288,6 +288,8 @@ export function createDocxEditor(options: DocxEditorOptions) {
     caretAt: (pos: Pos) => engine.caretAt(docKey, pos),
     rangeRects: (from: Pos, to: Pos) => engine.rangeRects(docKey, from, to),
     paragraphs: () => engine.paragraphs(docKey),
+    /** The comments stored in the document (Word's). */
+    documentComments: () => engine.documentComments(docKey),
     selectedText: () => engine.selectedText(docKey),
     /** The matches of a search in the body, with their highlights. */
     find: (query: string, findOptions: FindOptions) =>

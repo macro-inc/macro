@@ -62,6 +62,10 @@ styles, lists, tables (insert, rows, columns), header and footer editing
 one or all). Batches with the same group (typing) merge into one undo step;
 in collaborative mode undo is the shared document's instead.
 
+`Session::document_comments` lists the comments the file carries (Word's
+comments part, with threads and done flags from `commentsExtended`), each
+with the body range it is on, for showing beside the pages.
+
 `Session::find` searches the body's visible text (field codes, deleted and
 hidden text are left out; straight and typographic quotes match each
 other) and returns the matches with their highlight rectangles.
@@ -181,9 +185,10 @@ where Word PDFs exist they decide.
 - Fields are shown with their cached results, except page numbers, which
   are computed; a table of contents is not regenerated.
 - Editing does not create text boxes or pictures and does not edit inside
-  text boxes (it keeps them); comments are Macro threads anchored in the
-  body. Undoing a new footnote removes its reference; the empty note stays
-  in the notes part, unreferenced.
+  text boxes (it keeps them); new comments are Macro threads anchored in the
+  body, and Word's comments in the file are shown read-only. Undoing a new
+  footnote removes its reference; the empty note stays in the notes part,
+  unreferenced.
 - Two people editing the same footnote or endnote at once: the last write
   of the note wins (different notes merge: notes are shared one by one).
 - Tracked changes show without balloons (formatting changes only get a

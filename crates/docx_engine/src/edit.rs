@@ -7,6 +7,7 @@
 //! fingerprints so the caller repaints only pages that changed.
 
 mod clip;
+mod comments;
 mod find;
 mod format;
 mod geometry;
@@ -24,6 +25,7 @@ mod test;
 mod test_util;
 
 pub use clip::{Clip, ClipParagraph, ClipRun};
+pub use comments::DocComment;
 pub use find::{FindMatch, FindOptions, FindResult};
 pub use format::{Alignment, ParaPatch, RunPatch, Spacing, Toggle};
 pub use geometry::{CaretRect, PageRect, ViewIndex};
@@ -1765,6 +1767,12 @@ impl Session {
             }
         }
         out
+    }
+
+    /// The comments stored in the document (Word's), in the order of the
+    /// text they are on.
+    pub fn document_comments(&self) -> Vec<DocComment> {
+        comments::comments(&self.doc)
     }
 
     /// Paragraph ids and texts in document order.

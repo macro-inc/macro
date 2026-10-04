@@ -16,6 +16,7 @@ import type {
   LocatedThread,
 } from '../primitives/create-docx-comments';
 import { type PageGeometry, toColumn } from './DocxPages';
+import { DocxWordCommentCard } from './DocxWordComment';
 
 const CARD_WIDTH = 280;
 
@@ -31,6 +32,7 @@ export function DocxMarginLayout(props: {
   /** Top of the selected text, when there is a selection to comment on. */
   selectionTop: Accessor<number | null>;
   canComment: Accessor<boolean>;
+  /** The card of a Macro thread (the document's own comments have theirs). */
   renderCard: (
     thread: LocatedThread,
     isActive: Accessor<boolean>
@@ -105,7 +107,17 @@ export function DocxMarginLayout(props: {
               style={{ top: `${top()}px`, width: `${CARD_WIDTH}px` }}
               onClick={() => props.comments.setActive(thread.id)}
             >
-              {props.renderCard(thread, isActive)}
+              <Show
+                when={thread.word}
+                fallback={props.renderCard(thread, isActive)}
+              >
+                {(word) => (
+                  <DocxWordCommentCard
+                    comment={word().comment}
+                    replies={word().replies}
+                  />
+                )}
+              </Show>
             </div>
           );
         }}

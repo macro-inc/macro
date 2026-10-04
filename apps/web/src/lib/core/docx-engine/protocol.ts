@@ -11,6 +11,7 @@ import type {
   Clip,
   EditResult,
   FindOptions,
+  DocComment,
   FindResult,
   PageInfo,
   PageRect,
@@ -56,6 +57,7 @@ export type DocxRequest =
   | (Base & { kind: 'copySelection' })
   | (Base & { kind: 'find'; query: string; options: FindOptions })
   | (Base & { kind: 'paragraphs' })
+  | (Base & { kind: 'documentComments' })
   | (Base & { kind: 'styles' })
   | (Base & { kind: 'save' });
 
@@ -78,6 +80,7 @@ export type DocxResponse =
   | { id: number; ok: true; kind: 'clip'; clip: Clip }
   | { id: number; ok: true; kind: 'find'; result: FindResult }
   | { id: number; ok: true; kind: 'paragraphs'; paragraphs: ParagraphText[] }
+  | { id: number; ok: true; kind: 'comments'; comments: DocComment[] }
   | { id: number; ok: true; kind: 'styles'; styles: StyleInfo[] }
   | { id: number; ok: true; kind: 'save'; bytes: ArrayBuffer }
   | { id: number; ok: true; kind: 'done' }

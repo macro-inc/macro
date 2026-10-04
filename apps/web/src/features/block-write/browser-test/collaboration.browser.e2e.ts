@@ -324,41 +324,141 @@ test('headers and footers are edited in place and shared', async ({
   }
 });
 
-/** A short memo with two footnotes, built here rather than kept as a
- * binary fixture, as a data URL the fixture page can fetch. */
-function footnotedMemo() {
-  const W =
-    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
-  const DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-  const superscript = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>';
-  const ref = (id: number) =>
-    `<w:r>${superscript}<w:footnoteReference w:id="${id}"/></w:r>`;
-  const text = (t: string) => `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>`;
-  const note = (id: number, t: string) =>
-    `<w:footnote w:id="${id}"><w:p><w:r>${superscript}<w:footnoteRef/></w:r><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve"> ${t}</w:t></w:r></w:p></w:footnote>`;
-  const body = [
-    `<w:p>${text('The Seller shall deliver the Shares at Closing.')}${ref(1)}${text(' The Purchase Price is payable in cash.')}${ref(2)}</w:p>`,
-    `<w:p>${text('Each party bears its own costs.')}</w:p>`,
-  ].join('');
+const W_NS =
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"';
+const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const WORD_CT =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml';
+const REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** A run of text. */
+const run = (t: string) => `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>`;
+
+/**
+ * A one-page DOCX built here rather than kept as a binary fixture, as a
+ * data URL the fixture page can fetch: `body` paragraphs plus parts, each
+ * with its relationship type (a full URI, or one under the office
+ * relationships), content type suffix and XML.
+ */
+function docxDataUrl(
+  body: string,
+  parts: Record<string, { rel: string; type: string; xml: string }> = {}
+) {
   const sect =
     '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
-  const ct = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
-  const rel =
-    'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const entries = Object.entries(parts);
+  const overrides = entries
+    .map(
+      ([name, p]) =>
+        `<Override PartName="/word/${name}" ContentType="${WORD_CT}.${p.type}+xml"/>`
+    )
+    .join('');
+  const rels = entries
+    .map(
+      ([name, p], i) =>
+        `<Relationship Id="rIdP${i}" Type="${p.rel.includes('://') ? p.rel : `${REL}/${p.rel}`}" Target="${name}"/>`
+    )
+    .join('');
   const files: Record<string, string> = {
-    '[Content_Types].xml': `${DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${ct}.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="${ct}.footnotes+xml"/></Types>`,
-    '_rels/.rels': `${DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="word/document.xml"/></Relationships>`,
-    'word/_rels/document.xml.rels': `${DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${rel}/footnotes" Target="footnotes.xml"/></Relationships>`,
-    'word/document.xml': `${DECL}<w:document ${W}><w:body>${body}${sect}</w:body></w:document>`,
-    'word/footnotes.xml': `${DECL}<w:footnotes ${W}><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${note(1, 'As defined in the Agreement.')}${note(2, 'In United States dollars.')}</w:footnotes>`,
+    '[Content_Types].xml': `${XML_DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${WORD_CT}.document.main+xml"/>${overrides}</Types>`,
+    '_rels/.rels': `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="word/document.xml"/></Relationships>`,
+    'word/_rels/document.xml.rels': `${XML_DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`,
+    'word/document.xml': `${XML_DECL}<w:document ${W_NS}><w:body>${body}${sect}</w:body></w:document>`,
   };
+  for (const [name, p] of entries) files[`word/${name}`] = p.xml;
   const zip = zipSync(
     Object.fromEntries(
       Object.entries(files).map(([name, xml]) => [name, strToU8(xml)])
     )
   );
-  return `data:${ct}.document;base64,${Buffer.from(zip).toString('base64')}`;
+  return `data:${WORD_CT}.document;base64,${Buffer.from(zip).toString('base64')}`;
 }
+
+/** A short memo with two footnotes. */
+function footnotedMemo() {
+  const superscript = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>';
+  const ref = (id: number) =>
+    `<w:r>${superscript}<w:footnoteReference w:id="${id}"/></w:r>`;
+  const note = (id: number, t: string) =>
+    `<w:footnote w:id="${id}"><w:p><w:r>${superscript}<w:footnoteRef/></w:r><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve"> ${t}</w:t></w:r></w:p></w:footnote>`;
+  return docxDataUrl(
+    [
+      `<w:p>${run('The Seller shall deliver the Shares at Closing.')}${ref(1)}${run(' The Purchase Price is payable in cash.')}${ref(2)}</w:p>`,
+      `<w:p>${run('Each party bears its own costs.')}</w:p>`,
+    ].join(''),
+    {
+      'footnotes.xml': {
+        rel: 'footnotes',
+        type: 'footnotes',
+        xml: `${XML_DECL}<w:footnotes ${W_NS}><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${note(1, 'As defined in the Agreement.')}${note(2, 'In United States dollars.')}</w:footnotes>`,
+      },
+    }
+  );
+}
+
+/** A memo carrying Word comments: one with a reply, one resolved. */
+function commentedMemo() {
+  const comment = (id: number, author: string, text: string, para: string) =>
+    `<w:comment w:id="${id}" w:author="${author}" w:date="2026-09-30T10:00:00Z"><w:p w14:paraId="${para}"><w:r><w:t>${text}</w:t></w:r></w:p></w:comment>`;
+  const ranged = (id: number, t: string) =>
+    `<w:commentRangeStart w:id="${id}"/>${run(t)}<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r>`;
+  return docxDataUrl(
+    [
+      `<w:p>${run('The ')}${ranged(0, 'Purchase Price')}<w:r><w:commentReference w:id="1"/></w:r>${run(' is payable at Closing.')}</w:p>`,
+      `<w:p>${run('Each party bears ')}${ranged(2, 'its own costs')}${run('.')}</w:p>`,
+    ].join(''),
+    {
+      'comments.xml': {
+        rel: 'comments',
+        type: 'comments',
+        xml: `${XML_DECL}<w:comments ${W_NS}>${comment(0, 'Opposing Counsel', 'Should this include fees?', '0000000A')}${comment(1, 'Our Firm', 'No, fees are separate.', '0000000B')}${comment(2, 'Opposing Counsel', 'Agreed.', '0000000C')}</w:comments>`,
+      },
+      'commentsExtended.xml': {
+        rel: 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended',
+        type: 'commentsExtended',
+        xml: `${XML_DECL}<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:commentEx w15:paraId="0000000A" w15:done="0"/><w15:commentEx w15:paraId="0000000B" w15:paraIdParent="0000000A" w15:done="0"/><w15:commentEx w15:paraId="0000000C" w15:done="1"/></w15:commentsEx>`,
+      },
+    }
+  );
+}
+
+test('comments in the file show beside their text', async ({ browser }) => {
+  const documentId = crypto.randomUUID();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  logErrors(page, 'alice');
+  try {
+    await open(page, documentId, ALICE, { src: commentedMemo() });
+    // One card per comment, its reply inside it.
+    const first = page.locator('[data-docx-word-comment="0"]');
+    await expect(first).toContainText('Opposing Counsel');
+    await expect(first).toContainText('Should this include fees?');
+    await expect(first).toContainText('No, fees are separate.');
+    await expect(page.locator('[data-docx-word-comment="1"]')).toHaveCount(0);
+    await expect(page.locator('[data-docx-word-comment="2"]')).toContainText(
+      'Resolved'
+    );
+    // The commented text is highlighted.
+    await expect(
+      page.locator('[data-docx-comment-highlight="word:0"]').first()
+    ).toBeVisible();
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/06-word-comments.png` });
+    // The comments stay in the downloaded file.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Download .docx' }).click(),
+    ]);
+    const files = unzipSync(
+      new Uint8Array(await readFile((await download.path())!))
+    );
+    expect(strFromU8(files['word/comments.xml'])).toContain(
+      'Should this include fees?'
+    );
+  } finally {
+    await context.close();
+  }
+});
 
 test('footnotes are edited where they are and shared', async ({ browser }) => {
   const documentId = crypto.randomUUID();

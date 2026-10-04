@@ -48,6 +48,8 @@ export interface WasmDocxDocument {
   find: (query: string, options: string) => string;
   /** `ParagraphText[]` JSON. */
   paragraphs: () => string;
+  /** `DocComment[]` JSON. */
+  documentComments: () => string;
   /** `StyleInfo[]` JSON. */
   styles: () => string;
   /** Shows tracked changes inline or not; returns `EditResult` JSON. */

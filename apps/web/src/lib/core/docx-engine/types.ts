@@ -312,6 +312,24 @@ export type V1State = {
 
 export type ParagraphText = { id: string; text: string };
 
+/** A comment stored in the document (Word's comments part). */
+export type DocComment = {
+  id: string;
+  author: string;
+  initials?: string;
+  /** ISO 8601, as written. */
+  date?: string;
+  /** Paragraphs separated by newlines. */
+  text: string;
+  /** The commented text. */
+  from: Pos;
+  to: Pos;
+  /** The comment it replies to. */
+  parent?: string;
+  /** Marked done (resolved). */
+  done: boolean;
+};
+
 export type StyleInfo = {
   id: string;
   name: string;

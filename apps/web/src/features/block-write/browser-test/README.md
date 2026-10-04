@@ -21,6 +21,8 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
   - header and footer editing in place;
   - footnote editing in place and a new footnote (Ctrl+Alt+F) in a memo
     built by the test, shared and downloaded;
+  - Word comments in the file shown beside their text (a memo built by the
+    test);
   - tracked changes recorded per author, then rejected for everyone;
   - find and replace (one match, then all, undone in one step);
   - toolbar formatting (highlight, color, line spacing) and table rows;

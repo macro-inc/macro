@@ -16,6 +16,7 @@ import type {
   CaretRect,
   Clip,
   EditResult,
+  DocComment,
   FindResult,
   PageInfo,
   PageRect,
@@ -368,6 +369,20 @@ async function serve(request: DocxRequest): Promise<Served> {
           ok: true,
           kind: 'text',
           text: documentFor(docKey).selectedText(),
+        },
+        [],
+      ]
+    )
+    .with(
+      { kind: 'documentComments' },
+      ({ docKey }): Served => [
+        {
+          id,
+          ok: true,
+          kind: 'comments',
+          comments: JSON.parse(
+            documentFor(docKey).documentComments()
+          ) as DocComment[],
         },
         [],
       ]

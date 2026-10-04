@@ -119,6 +119,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     geometry: {
       revision: editor.revision,
       paragraphs: editor.paragraphs,
+      documentComments: editor.documentComments,
       rangeRects: editor.rangeRects,
       selection: () => editor.state()?.range,
     },

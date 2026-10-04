@@ -1,4 +1,9 @@
-import type { PageRect, ParagraphText, Pos } from '@core/docx-engine/types';
+import type {
+  DocComment,
+  PageRect,
+  ParagraphText,
+  Pos,
+} from '@core/docx-engine/types';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -24,7 +29,7 @@ import { DOCX_LORO_CONTAINERS } from '../core/docx-loro';
 export type DocxCommentDraft = { markId: string; mark: CommentMark };
 
 export type LocatedThread = {
-  /** Thread root id, or the draft's mark id. */
+  /** Thread root id, the draft's mark id, or `word:` + a document comment's id. */
   id: string;
   markId: string;
   root: MessageListItem | null;
@@ -33,7 +38,17 @@ export type LocatedThread = {
   mark: CommentMark;
   /** Its highlight rectangles on the pages. */
   rects: PageRect[];
+  /** A comment the document itself carries (Word's), with its replies. */
+  word?: { comment: DocComment; replies: DocComment[] };
 };
+
+/** The highlighted range of a document comment: a comment on a point
+ * (no range) highlights the character before it. */
+function wordRange(comment: DocComment): { from: Pos; to: Pos } {
+  const { from, to } = comment;
+  if (from.block !== to.block || from.offset !== to.offset) return { from, to };
+  return { from: { ...from, offset: Math.max(0, from.offset - 1) }, to };
+}
 
 /** A placeholder mark for a thread known only by its quoted text. */
 function quotedMark(root: MessageListItem): CommentMark | null {
@@ -53,6 +68,8 @@ export function threadMarkId(root: MessageListItem): string | null {
 export type CommentGeometry = {
   revision: Accessor<number>;
   paragraphs: () => Promise<ParagraphText[]>;
+  /** The comments the document itself carries (Word's). */
+  documentComments: () => Promise<DocComment[]>;
   rangeRects: (from: Pos, to: Pos) => Promise<PageRect[]>;
   /** The current selection, in document order. */
   selection: () => { from: Pos; to: Pos } | undefined;
@@ -75,6 +92,7 @@ export function createDocxComments(options: {
   const [draft, setDraft] = createSignal<DocxCommentDraft>();
   const [active, setActive] = createSignal<string | null>(null);
   const [paragraphs, setParagraphs] = createSignal<ParagraphText[]>([]);
+  const [wordComments, setWordComments] = createSignal<DocComment[]>([]);
   const [located, setLocated] = createSignal<LocatedThread[]>([]);
 
   if (options.doc) {
@@ -96,6 +114,10 @@ export function createDocxComments(options: {
         options.geometry
           .paragraphs()
           .then(setParagraphs)
+          .catch(() => {});
+        options.geometry
+          .documentComments()
+          .then(setWordComments)
           .catch(() => {});
       }, 120);
     })
@@ -144,6 +166,30 @@ export function createDocxComments(options: {
     }
     const pending = draft();
     if (pending) place(pending.markId, pending.markId, pending.mark, null);
+    // The document's own comments, replies under the comment they answer.
+    const documentComments = wordComments();
+    const known = new Set(documentComments.map((c) => c.id));
+    for (const comment of documentComments) {
+      if (comment.parent && known.has(comment.parent)) continue;
+      const { from, to } = wordRange(comment);
+      const id = `word:${comment.id}`;
+      out.push({
+        id,
+        markId: id,
+        root: null,
+        resolved: comment.done,
+        mark: {
+          block: from.block,
+          start: from.offset,
+          length: from.block === to.block ? to.offset - from.offset : 0,
+          text: '',
+        },
+        word: {
+          comment,
+          replies: documentComments.filter((c) => c.parent === comment.id),
+        },
+      });
+    }
     return { threads: out, relocations };
   });
 
@@ -153,16 +199,21 @@ export function createDocxComments(options: {
     on([placement, options.geometry.revision], ([{ threads }]) => {
       const current = ++generation;
       Promise.all(
-        threads.map(async (thread) => ({
-          ...thread,
-          rects: await options.geometry.rangeRects(
-            { block: thread.mark.block, offset: thread.mark.start },
-            {
-              block: thread.mark.block,
-              offset: thread.mark.start + thread.mark.length,
-            }
-          ),
-        }))
+        threads.map(async (thread) => {
+          const range = thread.word
+            ? wordRange(thread.word.comment)
+            : {
+                from: { block: thread.mark.block, offset: thread.mark.start },
+                to: {
+                  block: thread.mark.block,
+                  offset: thread.mark.start + thread.mark.length,
+                },
+              };
+          return {
+            ...thread,
+            rects: await options.geometry.rangeRects(range.from, range.to),
+          };
+        })
       )
         .then((next) => {
           if (current === generation) setLocated(next);

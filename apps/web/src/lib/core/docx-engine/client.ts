@@ -14,6 +14,7 @@ import type {
   EditOp,
   EditResult,
   FindOptions,
+  DocComment,
   FindResult,
   PageInfo,
   PageRect,
@@ -283,6 +284,12 @@ export async function find(
 export async function selectedText(docKey: string): Promise<string> {
   const r = await request({ kind: 'selectedText', docKey }, 'text');
   return r.text;
+}
+
+/** The comments stored in the document (Word's). */
+export async function documentComments(docKey: string): Promise<DocComment[]> {
+  const r = await request({ kind: 'documentComments', docKey }, 'comments');
+  return r.comments;
 }
 
 export async function paragraphs(docKey: string): Promise<ParagraphText[]> {
