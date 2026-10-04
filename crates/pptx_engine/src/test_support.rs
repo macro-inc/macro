@@ -209,3 +209,46 @@ pub fn fonts() -> &'static crate::font::FontDb {
         db
     })
 }
+
+/// A table cell holding one paragraph of `text` (an empty one when `text`
+/// is empty). Text starting with `<a:tc` is used as the cell's XML as is.
+pub fn table_cell(text: &str) -> String {
+    if text.starts_with("<a:tc") {
+        return text.to_owned();
+    }
+    let runs = if text.is_empty() {
+        String::new()
+    } else {
+        format!(r#"<a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r>"#)
+    };
+    format!(
+        r#"<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p>{runs}<a:endParaRPr lang="en-US"/></a:p></a:txBody><a:tcPr/></a:tc>"#
+    )
+}
+
+/// A table graphic frame at (72 pt, 72 pt) with `cells` (rows of
+/// [`table_cell`] text), `col_w` × `row_h` EMU grid cells, a header row and
+/// banded rows, and table style `style` (none when empty).
+pub fn table_frame(id: u32, cells: &[&[&str]], col_w: i64, row_h: i64, style: &str) -> String {
+    let ncols = cells.first().map_or(0, |r| r.len()) as i64;
+    let grid: String = (0..ncols)
+        .map(|_| format!(r#"<a:gridCol w="{col_w}"/>"#))
+        .collect();
+    let rows: String = cells
+        .iter()
+        .map(|row| {
+            let tcs: String = row.iter().map(|t| table_cell(t)).collect();
+            format!(r#"<a:tr h="{row_h}">{tcs}</a:tr>"#)
+        })
+        .collect();
+    let style = if style.is_empty() {
+        String::new()
+    } else {
+        format!("<a:tableStyleId>{style}</a:tableStyleId>")
+    };
+    format!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{id}" name="Table {id}"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="914400" y="914400"/><a:ext cx="{}" cy="{}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1">{style}</a:tblPr><a:tblGrid>{grid}</a:tblGrid>{rows}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+        col_w * ncols,
+        row_h * cells.len() as i64
+    )
+}

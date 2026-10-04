@@ -6,13 +6,19 @@ use crate::edit::{CellRef, notes_text};
 use crate::error::{Error, Result};
 use crate::font::FontDb;
 use crate::model::fill::Fill;
-use crate::model::presentation::{Presentation, SlideContext};
+use crate::model::presentation::{PartRef, Presentation, SlideContext};
 use crate::model::shape::{
     GeometryRef, Graphic, Inherit, Shape, ShapeKind, WalkCtx, resolve_tree, sp_tree,
 };
-use crate::model::text::{Align, BulletKind, Paragraph, RunKind, RunProps, Strike, Underline};
+use crate::model::table::{Table, deck_table_styles, table_style_name};
+use crate::model::table_style::{builtin_style, builtin_styles};
+use crate::model::text::{
+    Align, Anchor, BulletKind, Paragraph, RunKind, RunProps, Strike, Underline,
+};
+use crate::opc::rel_type;
 use crate::path::{Affine, Point, Rect};
 use crate::render::build::{shape_geometry, text_frame};
+use crate::render::table::{cell_text_layout, layout_table, table_style_id, table_styles_part};
 use crate::render::text::{LayoutParams, LineBox, layout};
 use crate::units::emu_to_pt;
 use crate::xml::{NodeId, Ns, XmlDoc};
@@ -67,6 +73,68 @@ pub struct TableOutline {
     pub column_widths: Vec<f32>,
     /// Row heights (points).
     pub row_heights: Vec<f32>,
+    /// Cells by row and grid column.
+    pub cells: Vec<Vec<CellOutline>>,
+    /// Row heights as drawn (points), after rows grew to fit their text. Cell
+    /// `(r, c)` starts at the frame's top-left corner plus the sums of the
+    /// first `c` column widths and the first `r` of these heights.
+    pub laid_out_row_heights: Vec<f32>,
+    /// The table style, when one is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<TableStyleOutline>,
+}
+
+/// One grid cell of a table.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CellOutline {
+    /// Rows the cell spans (1 unless merged).
+    pub row_span: usize,
+    /// Grid columns the cell spans (1 unless merged).
+    pub col_span: usize,
+    /// Covered by another cell's span (not drawn; edits go to that cell).
+    pub merged: bool,
+    /// Solid fill as `#RRGGBB`, from the cell or the table style.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fill: Option<String>,
+    /// Vertical text alignment: `top`, `middle`, or `bottom`.
+    pub anchor: &'static str,
+    /// Margins `[left, top, right, bottom]` (points).
+    pub margins: [f32; 4],
+}
+
+/// A table's style and the parts it emphasizes.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableStyleOutline {
+    /// Style id (a GUID).
+    pub id: String,
+    /// Display name ("Medium Style 2 - Accent 1").
+    pub name: String,
+    /// Header row emphasized.
+    pub first_row: bool,
+    /// Total row emphasized.
+    pub last_row: bool,
+    /// First column emphasized.
+    pub first_col: bool,
+    /// Last column emphasized.
+    pub last_col: bool,
+    /// Banded rows.
+    pub band_row: bool,
+    /// Banded columns.
+    pub band_col: bool,
+}
+
+/// A table style tables in the deck can use.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableStyleInfo {
+    /// Style id (a GUID).
+    pub id: String,
+    /// Display name.
+    pub name: String,
+    /// Gallery group: `custom` (defined by the deck), `light`, `medium`, or `dark`.
+    pub category: &'static str,
 }
 
 /// A chart's type, labels, and cached data.
@@ -201,6 +269,8 @@ pub struct DeckOutline {
     pub layouts: Vec<LayoutInfo>,
     /// The first master's theme colors as `[slot, #RRGGBB]` (`dk1`, `lt1`, `accent1`...).
     pub theme_colors: Vec<(String, String)>,
+    /// Table styles to offer: the deck's own, then PowerPoint's built-in ones.
+    pub table_styles: Vec<TableStyleInfo>,
 }
 
 /// The resolved formatting of a stretch of text (for toolbar state).
@@ -315,7 +385,10 @@ fn table_outline(doc: &XmlDoc, tbl: NodeId) -> TableOutline {
     TableOutline {
         rows,
         column_widths,
+        laid_out_row_heights: row_heights.clone(),
         row_heights,
+        cells: Vec::new(),
+        style: None,
     }
 }
 
@@ -452,8 +525,20 @@ fn shape_outline(s: &Shape, parent: &Affine, charts: &Charts) -> ShapeOutline {
 }
 
 impl Presentation {
-    /// The outline of the slide at `index`.
+    /// The outline of the slide at `index`. Table text is measured without
+    /// fonts, so rows that wrapped text grows are reported short; editors use
+    /// [`Presentation::slide_outline_with_fonts`].
     pub fn slide_outline(&mut self, index: usize) -> Result<SlideOutline> {
+        self.slide_outline_with_fonts(index, &FontDb::new())
+    }
+
+    /// The outline of the slide at `index`, with table rows measured with
+    /// `fonts` exactly as the renderer measures them.
+    pub fn slide_outline_with_fonts(
+        &mut self,
+        index: usize,
+        fonts: &FontDb,
+    ) -> Result<SlideOutline> {
         let entry = self
             .slides
             .get(index)
@@ -469,10 +554,12 @@ impl Presentation {
             .unwrap_or_default();
         let mut charts = Charts::new();
         chart_outlines(self, &ctx, &shapes, &mut charts);
-        let outlines: Vec<ShapeOutline> = shapes
+        let mut outlines: Vec<ShapeOutline> = shapes
             .iter()
             .map(|s| shape_outline(s, &Affine::IDENTITY, &charts))
             .collect();
+        let styles = table_styles_part(&ctx).and_then(|n| self.part(&n).ok());
+        complete_tables(&ctx, styles.as_ref(), &shapes, &mut outlines, fonts);
         let title = outlines
             .iter()
             .find(|s| matches!(s.placeholder.as_deref(), Some("title" | "ctrTitle")))
@@ -506,10 +593,17 @@ impl Presentation {
         })
     }
 
-    /// The outline of the whole deck.
+    /// The outline of the whole deck. Table text is measured without fonts;
+    /// editors use [`Presentation::outline_with_fonts`].
     pub fn outline(&mut self) -> Result<DeckOutline> {
+        self.outline_with_fonts(&FontDb::new())
+    }
+
+    /// The outline of the whole deck, with table rows measured with `fonts`
+    /// exactly as the renderer measures them.
+    pub fn outline_with_fonts(&mut self, fonts: &FontDb) -> Result<DeckOutline> {
         let slides = (0..self.slides.len())
-            .map(|i| self.slide_outline(i))
+            .map(|i| self.slide_outline_with_fonts(i, fonts))
             .collect::<Result<Vec<_>>>()?;
         let theme_colors = match self.slides.first() {
             Some(_) => {
@@ -533,7 +627,32 @@ impl Presentation {
             slides,
             layouts: crate::edit::layouts(self)?,
             theme_colors,
+            table_styles: self.table_style_gallery()?,
         })
+    }
+
+    /// The table styles the deck defines that are not built in, then the built-in ones.
+    fn table_style_gallery(&mut self) -> Result<Vec<TableStyleInfo>> {
+        let main = self.main_part.clone();
+        let rels = self.part_rels(&main)?;
+        let styles = rels
+            .first_of_type(rel_type::TABLE_STYLES)
+            .map(|r| rels.resolve(r))
+            .and_then(|n| self.part(&n).ok());
+        let custom = deck_table_styles(styles.as_ref())
+            .into_iter()
+            .filter(|(id, _)| builtin_style(id).is_none())
+            .map(|(id, name)| TableStyleInfo {
+                name: if name.is_empty() { id.clone() } else { name },
+                id,
+                category: "custom",
+            });
+        let builtin = builtin_styles().into_iter().map(|b| TableStyleInfo {
+            id: b.id.to_owned(),
+            name: b.name,
+            category: b.category,
+        });
+        Ok(custom.chain(builtin).collect())
     }
 
     /// Lays out the text of a shape (or table cell) for caret placement.
@@ -547,8 +666,8 @@ impl Presentation {
         cell: Option<CellRef>,
         fonts: &FontDb,
     ) -> Result<Option<TextLayoutInfo>> {
-        if cell.is_some() {
-            return Ok(None);
+        if let Some(cell) = cell {
+            return self.cell_text_layout(index, shape, cell, fonts);
         }
         let ctx = self.slide_context(index)?;
         let walk = WalkCtx {
@@ -596,6 +715,213 @@ impl Presentation {
             lines: lay.lines,
             styles,
         }))
+    }
+
+    /// Lays out the text of a table cell (a merged cell's anchor) exactly
+    /// where the renderer draws it: in the cell's rectangle, with rows grown
+    /// to fit their text, inside the cell's margins and at its anchor. An
+    /// empty cell lays out the empty paragraph that typing into it creates.
+    fn cell_text_layout(
+        &mut self,
+        index: usize,
+        shape: u32,
+        cell: CellRef,
+        fonts: &FontDb,
+    ) -> Result<Option<TextLayoutInfo>> {
+        let ctx = self.slide_context(index)?;
+        let walk = WalkCtx {
+            ctx: &ctx,
+            inherit: Inherit::Slide,
+        };
+        let shapes = sp_tree(&ctx.slide.doc)
+            .map(|t| resolve_tree(&walk, &ctx.slide, t))
+            .unwrap_or_default();
+        let Some((s, parent)) = find_resolved(&shapes, shape, Affine::IDENTITY) else {
+            return Err(Error::NotFound(format!("shape {shape}")));
+        };
+        let ShapeKind::Frame(Graphic::Table(tbl)) = &s.kind else {
+            return Ok(None);
+        };
+        let styles = table_styles_part(&ctx).and_then(|n| self.part(&n).ok());
+        let mut part = s.part.clone();
+        let mut grid = layout_table(&ctx, styles.as_ref(), &part, *tbl, fonts);
+        let (nrows, ncols) = (grid.table.rows.len(), grid.table.cols.len());
+        if cell.row >= nrows || cell.col >= ncols {
+            return Err(Error::NotFound(format!(
+                "cell ({}, {}) of a table with {nrows} rows × {ncols} columns",
+                cell.row, cell.col
+            )));
+        }
+        let (r, c) = merge_anchors(&grid.table)[cell.row][cell.col];
+        let Some(node) = grid.table.rows[r].cells.get(c).map(|x| x.node) else {
+            return Ok(None);
+        };
+        let empty = grid.table.rows[r].cells[c]
+            .text
+            .as_ref()
+            .is_none_or(|t| t.paragraphs.is_empty());
+        if empty {
+            let mut doc = (*part.doc).clone();
+            add_empty_paragraph(&mut doc, node);
+            part.doc = std::sync::Arc::new(doc);
+            grid = layout_table(&ctx, styles.as_ref(), &part, *tbl, fonts);
+        }
+        let cell = &grid.table.rows[r].cells[c];
+        let Some(body) = &cell.text else {
+            return Ok(None);
+        };
+        let rect = grid.cell_rect(cell);
+        let lay = cell_text_layout(body, rect, fonts);
+        let t = parent
+            .pre_concat(&s.xfrm.local_to_parent())
+            .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)))
+            .pre_concat(&lay.transform);
+        Ok(Some(TextLayoutInfo {
+            transform: [t.a, t.b, t.c, t.d, t.e, t.f],
+            size: [rect.w, rect.h],
+            paragraphs: body
+                .paragraphs
+                .iter()
+                .map(crate::render::text::paragraph_text)
+                .collect(),
+            lines: lay.lines,
+            styles: body
+                .paragraphs
+                .iter()
+                .map(|p| paragraph_style(&part.doc, p))
+                .collect(),
+        }))
+    }
+}
+
+/// Gives a table cell (`a:tc`) a text body with one empty paragraph, as an
+/// edit typing into it would.
+fn add_empty_paragraph(doc: &mut XmlDoc, tc: NodeId) {
+    let body = match doc.child(tc, Ns::A, "txBody") {
+        Some(b) => b,
+        None => {
+            let b = doc.create_element(Ns::A, "txBody");
+            for name in ["bodyPr", "lstStyle"] {
+                let e = doc.create_element(Ns::A, name);
+                doc.append_child(b, e);
+            }
+            doc.insert_child(tc, 0, b);
+            b
+        }
+    };
+    let p = doc.create_element(Ns::A, "p");
+    let end = doc.create_element(Ns::A, "endParaRPr");
+    doc.set_attr(end, "lang", "en-US");
+    doc.append_child(p, end);
+    doc.append_child(body, p);
+}
+
+/// For each grid position, the top-left cell of the merged cell covering it
+/// (the position itself when it is not covered).
+fn merge_anchors(t: &Table) -> Vec<Vec<(usize, usize)>> {
+    let (nrows, ncols) = (t.rows.len(), t.cols.len());
+    let mut map: Vec<Vec<(usize, usize)>> = (0..nrows)
+        .map(|r| (0..ncols).map(|c| (r, c)).collect())
+        .collect();
+    let mut covered = vec![vec![false; ncols]; nrows];
+    for cell in t.rows.iter().flat_map(|row| row.cells.iter()) {
+        let (r, c) = (cell.row, cell.col);
+        if cell.h_merge || cell.v_merge || c >= ncols || covered[r][c] {
+            continue;
+        }
+        for rr in r..(r + cell.row_span).min(nrows) {
+            for cc in c..(c + cell.grid_span).min(ncols) {
+                if (rr, cc) != (r, c) {
+                    map[rr][cc] = (r, c);
+                    covered[rr][cc] = true;
+                }
+            }
+        }
+    }
+    map
+}
+
+fn anchor_name(a: Anchor) -> &'static str {
+    match a {
+        Anchor::Top => "top",
+        Anchor::Middle => "middle",
+        Anchor::Bottom => "bottom",
+    }
+}
+
+/// The cells of a laid-out table, by row and grid column.
+fn cell_outlines(t: &Table) -> Vec<Vec<CellOutline>> {
+    let anchors = merge_anchors(t);
+    let plain = CellOutline {
+        row_span: 1,
+        col_span: 1,
+        merged: false,
+        fill: None,
+        anchor: "top",
+        margins: [7.2, 3.6, 7.2, 3.6],
+    };
+    let mut out = vec![vec![plain; t.cols.len()]; t.rows.len()];
+    for cell in t.rows.iter().flat_map(|row| row.cells.iter()) {
+        let (r, c) = (cell.row, cell.col);
+        let Some(slot) = out.get_mut(r).and_then(|row| row.get_mut(c)) else {
+            continue;
+        };
+        let merged = cell.h_merge || cell.v_merge || anchors[r][c] != (r, c);
+        let (rows, cols) = if merged {
+            (1, 1)
+        } else {
+            (
+                cell.row_span.min(t.rows.len() - r),
+                cell.grid_span.min(t.cols.len() - c),
+            )
+        };
+        *slot = CellOutline {
+            row_span: rows,
+            col_span: cols,
+            merged,
+            fill: hex(&cell.fill),
+            anchor: anchor_name(cell.anchor),
+            margins: cell.margins,
+        };
+    }
+    out
+}
+
+/// Fills in what a table outline needs the resolved, laid-out table for:
+/// cells, drawn row heights, and the style.
+fn complete_tables(
+    ctx: &SlideContext,
+    styles: Option<&PartRef>,
+    shapes: &[Shape],
+    outlines: &mut [ShapeOutline],
+    fonts: &FontDb,
+) {
+    for (s, o) in shapes.iter().zip(outlines.iter_mut()) {
+        match &s.kind {
+            ShapeKind::Group(children) => {
+                complete_tables(ctx, styles, children, &mut o.children, fonts);
+            }
+            ShapeKind::Frame(Graphic::Table(tbl)) => {
+                let Some(table) = o.table.as_mut() else {
+                    continue;
+                };
+                let grid = layout_table(ctx, styles, &s.part, *tbl, fonts);
+                table.cells = cell_outlines(&grid.table);
+                table.laid_out_row_heights = grid.row_heights();
+                let flags = grid.table.flags;
+                table.style = table_style_id(&s.part.doc, *tbl).map(|id| TableStyleOutline {
+                    name: table_style_name(styles, &id).unwrap_or_else(|| id.clone()),
+                    id,
+                    first_row: flags.first_row,
+                    last_row: flags.last_row,
+                    first_col: flags.first_col,
+                    last_col: flags.last_col,
+                    band_row: flags.band_row,
+                    band_col: flags.band_col,
+                });
+            }
+            _ => {}
+        }
     }
 }
 
