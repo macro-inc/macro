@@ -12,7 +12,7 @@ use super::stack::{PrevPara, Stack, StackCtx, para_box, stack_story};
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
 use crate::model::section::{HeaderRefs, PageVAlign, Section, SectionStart};
-use floats::{OnPage, place_anchors, place_frames};
+use floats::{Band, OnPage, place_anchors, place_frames};
 use pptx_engine::path::Rect;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,9 +44,9 @@ struct Cur {
     placed_any: bool,
     hard: bool,
     line_on_page: u32,
-    /// Vertical bands of the page that body text skips (frames that allow
-    /// no text beside them).
-    bands: Vec<(f32, f32)>,
+    /// Stretches of the page that body text skips (floats that allow no
+    /// text beside them).
+    bands: Vec<Band>,
     /// Where the columns of the current section start on this page (below
     /// what earlier sections left on it).
     sect_top: f32,

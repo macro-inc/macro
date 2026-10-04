@@ -4,7 +4,7 @@
 use super::super::super::drawing::Wrap;
 use super::super::super::format::TableCtx;
 use super::super::super::inline::{FieldValues, Kind};
-use super::super::super::{Item, ParaBox, StoryRef};
+use super::super::super::{Item, StoryRef};
 use super::super::Env;
 use super::super::anchors::{PageGeom, resolve};
 use super::super::frames::{
@@ -12,6 +12,7 @@ use super::super::frames::{
 };
 use super::super::stack::{PendingAnchor, StackCtx, placed};
 use super::super::textbox::text_box_items;
+use super::paragraphs::Placing;
 use super::{EPS, Flow};
 use crate::model::block::Block;
 use std::sync::Arc;
@@ -20,26 +21,57 @@ use std::sync::Arc;
 /// text beside it.
 const WIDE_FRAME: f32 = 0.66;
 
+/// A stretch of the page that body text skips, below and above a float
+/// that leaves no room beside it: from `top` to `bottom`, in the columns
+/// the float reaches into (between `left` and `right`).
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Band {
+    pub(super) top: f32,
+    pub(super) bottom: f32,
+    pub(super) left: f32,
+    pub(super) right: f32,
+}
+
+impl Band {
+    /// Whether the band reaches into the column from `left`, `width` wide.
+    fn crosses(&self, left: f32, width: f32) -> bool {
+        self.left < left + width - EPS && self.right > left + EPS
+    }
+}
+
 impl Flow<'_, '_> {
-    pub(super) fn avail_bottom(&self) -> f32 {
-        self.cur.as_ref().map_or(0.0, |c| {
-            // Text stops at the next blocked band below it.
+    /// The bands that cross the current column.
+    fn column_bands(&self) -> Vec<Band> {
+        let (left, width) = self.col_geom();
+        self.cur.as_ref().map_or(Vec::new(), |c| {
             c.bands
                 .iter()
-                .filter(|(top, _)| *top >= c.y - EPS)
-                .fold(c.bottom - c.notes_height, |b, (top, _)| b.min(*top))
+                .filter(|b| b.crosses(left, width))
+                .copied()
+                .collect()
+        })
+    }
+
+    pub(super) fn avail_bottom(&self) -> f32 {
+        let bands = self.column_bands();
+        self.cur.as_ref().map_or(0.0, |c| {
+            // Text stops at the next blocked band below it.
+            bands
+                .iter()
+                .filter(|b| b.top >= c.y - EPS)
+                .fold(c.bottom - c.notes_height, |bottom, b| bottom.min(b.top))
         })
     }
 
     /// Moves the current position past a blocked band it is in.
     pub(super) fn skip_bands(&mut self) {
+        let bands = self.column_bands();
         if let Some(c) = &mut self.cur {
-            while let Some(&(_, bottom)) = c
-                .bands
+            while let Some(b) = bands
                 .iter()
-                .find(|(top, bottom)| *top <= c.y + EPS && *bottom > c.y + EPS)
+                .find(|b| b.top <= c.y + EPS && b.bottom > c.y + EPS)
             {
-                c.y = bottom;
+                c.y = b.bottom;
             }
         }
     }
@@ -93,96 +125,107 @@ impl Flow<'_, '_> {
                 c.y = c.y.max(rect.y + rect.h + f.props.v_space);
                 c.placed_any = true;
             } else if blocks_text {
-                c.bands
-                    .push((rect.y - f.props.v_space, rect.y + rect.h + f.props.v_space));
+                c.bands.push(Band {
+                    top: rect.y - f.props.v_space,
+                    bottom: rect.y + rect.h + f.props.v_space,
+                    left: rect.x,
+                    right: rect.x + rect.w,
+                });
             }
         }
         Some(end)
     }
 
-    /// Reserves the bands of the floating drawings in `pb` that leave no
-    /// room for text beside them, for a paragraph whose first line starts
-    /// at the current position, `above` points below the paragraph's own
-    /// top (its space before); moves to the next column first when such a
-    /// drawing does not fit. Returns the paragraph top the drawings are
-    /// positioned from.
-    pub(super) fn reserve_float_bands(
-        &mut self,
-        pb: &Arc<ParaBox>,
-        col_left: f32,
-        width: f32,
-        above: f32,
-    ) -> f32 {
-        let mut above = above;
-        for attempt in 0..2 {
-            let Some(c) = &self.cur else {
-                return 0.0;
-            };
-            let top = c.y;
-            let para_top = top - above;
-            let geom = self.page_geom();
-            let mut bands = Vec::new();
-            for line in &pb.lines.lines {
-                for k in line.start..line.end {
-                    let Kind::Anchor(o) = pb.inline.clusters[k].kind else {
-                        continue;
-                    };
-                    let d = &pb.inline.objects[o as usize];
-                    let Some(anchor) = &d.anchor else {
-                        continue;
-                    };
-                    let a = PendingAnchor {
-                        drawing: Arc::new(d.clone()),
-                        para_top,
-                        line_top: top + line.top,
-                        char_x: col_left + pb.lines.x[k],
-                        story: pb.story.clone(),
-                        block: pb.block.clone(),
-                        object: o,
-                        cell: None,
-                    };
-                    let Some(r) = resolve(&a, &geom) else {
-                        continue;
-                    };
-                    let beside_column = r.x + r.w <= col_left || r.x >= col_left + width;
-                    let no_room = match anchor.wrap {
-                        Wrap::TopAndBottom => true,
-                        Wrap::Square | Wrap::Tight => r.w >= width * WIDE_FRAME,
-                        Wrap::None => false,
-                    };
-                    if no_room && !beside_column && !anchor.behind {
-                        bands.push((r.y - anchor.dist[0], r.y + r.h + anchor.dist[1]));
-                    }
+    /// Reserves the bands of the floating drawings in the lines still to
+    /// place of a paragraph that goes on at the current position, `above`
+    /// points below the paragraph's own top (its space before). When such
+    /// a band does not fit, the paragraph moves to the next column first.
+    /// Returns the paragraph top the drawings are positioned from.
+    pub(super) fn reserve_float_bands(&mut self, p: &mut Placing, above: f32) -> f32 {
+        let Some((top, bottom, placed_any)) = self
+            .cur
+            .as_ref()
+            .map(|c| (c.y, c.bottom - c.notes_height, c.placed_any))
+        else {
+            return 0.0;
+        };
+        let mut para_top = top - above;
+        let mut bands = self.float_bands(p, top, para_top);
+        if placed_any && bands.iter().any(|b| b.bottom > bottom + EPS) {
+            // The paragraph starts the next column, with no space above.
+            self.next_column(false);
+            self.follow_column(p);
+            para_top = self.cur.as_ref().map_or(0.0, |c| c.y);
+            bands = self.float_bands(p, para_top, para_top);
+        }
+        if let Some(c) = &mut self.cur {
+            c.bands.extend(bands);
+        }
+        para_top
+    }
+
+    /// The bands of the floating drawings that leave no room for text
+    /// beside them in the lines of `p` still to place, when those lines
+    /// start at `top` in a paragraph starting at `para_top`.
+    fn float_bands(&self, p: &Placing, top: f32, para_top: f32) -> Vec<Band> {
+        let pb = &p.pb;
+        let geom = self.page_geom();
+        let lines = &pb.lines.lines;
+        let base = lines.get(p.li).map_or(0.0, |l| l.top);
+        let mut bands = Vec::new();
+        for line in lines.iter().skip(p.li) {
+            for k in line.start..line.end {
+                let Kind::Anchor(o) = pb.inline.clusters[k].kind else {
+                    continue;
+                };
+                let d = &pb.inline.objects[o as usize];
+                let Some(anchor) = &d.anchor else {
+                    continue;
+                };
+                let a = PendingAnchor {
+                    drawing: Arc::new(d.clone()),
+                    para_top,
+                    line_top: top + line.top - base,
+                    char_x: p.col_left + pb.lines.x[k],
+                    story: pb.story.clone(),
+                    block: pb.block.clone(),
+                    object: o,
+                    cell: None,
+                };
+                let Some(r) = resolve(&a, &geom) else {
+                    continue;
+                };
+                let no_room = match anchor.wrap {
+                    Wrap::TopAndBottom => true,
+                    Wrap::Square | Wrap::Tight => r.w >= p.width * WIDE_FRAME,
+                    Wrap::None => false,
+                };
+                let band = Band {
+                    top: r.y - anchor.dist[0],
+                    bottom: r.y + r.h + anchor.dist[1],
+                    left: r.x,
+                    right: r.x + r.w,
+                };
+                if no_room && !anchor.behind && band.crosses(p.col_left, p.width) {
+                    bands.push(band);
                 }
             }
-            let bottom = c.bottom - c.notes_height;
-            let overflows = bands.iter().any(|&(_, b)| b > bottom + EPS);
-            if attempt == 0 && overflows && c.placed_any {
-                // The paragraph starts the next column, with no space above.
-                self.next_column(false);
-                above = 0.0;
-                continue;
-            }
-            if let Some(c) = &mut self.cur {
-                c.bands.extend(bands);
-            }
-            return para_top;
         }
-        self.cur.as_ref().map_or(0.0, |c| c.y)
+        bands
     }
 
     /// When a band starts within `next` points below the current position
     /// and there is room below it, moves past it and says so.
     pub(super) fn jump_band(&mut self, next: f32) -> bool {
+        let bands = self.column_bands();
         let Some(c) = &mut self.cur else {
             return false;
         };
         let bottom = c.bottom - c.notes_height;
-        let band = c
-            .bands
+        let band = bands
             .iter()
-            .filter(|(top, _)| *top >= c.y - EPS && *top < c.y + next + EPS)
-            .map(|&(_, b)| b)
+            .filter(|b| b.top >= c.y - EPS && b.top < c.y + next + EPS)
+            .map(|b| b.bottom)
             .fold(None, |acc: Option<f32>, b| {
                 Some(acc.map_or(b, |a| a.max(b)))
             });
@@ -247,3 +290,6 @@ pub(super) fn place_anchors(
         out.extend(text_box_items(page.env, page.fields, a, rect));
     }
 }
+
+#[cfg(test)]
+mod test;
