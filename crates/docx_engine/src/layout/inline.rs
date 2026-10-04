@@ -208,6 +208,26 @@ struct FieldState {
     in_result: bool,
     dynamic: Option<Dynamic>,
     emitted: bool,
+    /// A legacy check box form field: whether it is checked.
+    checkbox: Option<bool>,
+}
+
+/// Whether a field's `w:fldChar` start holds a check box form field, and
+/// its state.
+fn checkbox_state(xml: &str) -> Option<bool> {
+    let start = xml.find(":checkBox")?;
+    let rest = &xml[start..];
+    let on = |name: &str| {
+        rest.find(name).is_some_and(|i| {
+            let tag = &rest[i..rest[i..].find('>').map_or(rest.len(), |e| i + e)];
+            !(tag.contains("\"0\"") || tag.contains("\"false\"") || tag.contains("\"off\""))
+        })
+    };
+    Some(if rest.contains(":checked") {
+        on(":checked")
+    } else {
+        on(":default")
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -436,6 +456,17 @@ impl Builder<'_, '_> {
         }
         if chars.is_empty() && first_len > 0 {
             self.zero(offset, first_len, run);
+        }
+    }
+
+    /// A legacy check box form field: a box as wide as the font is high.
+    fn checkbox(&mut self, checked: bool, offset: usize, len: usize, run: u16) {
+        let ch = if checked { '\u{2612}' } else { '\u{2610}' };
+        self.text_char(ch, None, offset, len, run);
+        if let Some(c) = self.out.clusters.last_mut()
+            && c.kind == Kind::Text
+        {
+            c.advance = c.size.max(1.0);
         }
     }
 
@@ -691,6 +722,7 @@ fn object(
                     in_result: false,
                     dynamic: None,
                     emitted: false,
+                    checkbox: checkbox_state(xml),
                 }),
                 "separate" => {
                     if let Some(f) = fields.last_mut() {
@@ -714,7 +746,17 @@ fn object(
                     }
                 }
                 "end" => {
-                    if let Some(f) = fields.pop()
+                    let f = fields.pop();
+                    if let Some(f) = &f
+                        && let Some(checked) = f.checkbox
+                        && f.instr.split_whitespace().next() == Some("FORMCHECKBOX")
+                        && !hidden
+                        && !fields_hidden(fields)
+                    {
+                        b.checkbox(checked, offset, len, run);
+                        return;
+                    }
+                    if let Some(f) = f
                         && !f.emitted
                         && let Some(kind) = field_kind(&f.instr)
                         && !f.in_result

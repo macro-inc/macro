@@ -182,6 +182,12 @@ impl<'d> Formats<'d> {
             (None, Some(s)) => props.apply(&s.ppr),
             (None, None) => {}
         }
+        if direct.num.num_id == Some(0) && style_num.num_id.is_some_and(|id| id > 0) {
+            // Turning a list style's numbering off also drops the indents
+            // that go with it.
+            props.ind_left = self.styles.doc_ppr.ind_left;
+            props.ind_first = self.styles.doc_ppr.ind_first;
+        }
         props.apply(&direct);
         props.style = style.map(|s| s.id.clone()).or(direct.style.clone());
         // Run base: defaults, table style, paragraph style (toggling).
