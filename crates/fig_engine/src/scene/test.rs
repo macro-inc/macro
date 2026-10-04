@@ -124,3 +124,28 @@ fn survives_an_instance_of_itself() {
     let scene = Scene::build(&doc, doc.pages[0]);
     assert!(scene.nodes.len() < 200);
 }
+
+#[test]
+fn refreshes_in_place_after_property_edits() {
+    use crate::edit::{History, Op};
+    let mut doc = Document::open(&simple_file()).unwrap();
+    let mut scene = Scene::build(&doc, doc.pages[0]);
+    let ops: Vec<Op> = serde_json::from_str(
+        r#"[{"op":"translate","ids":["1:2"],"dx":10,"dy":5},{"op":"set","ids":["1:3"],"props":{"width":40}}]"#,
+    )
+    .unwrap();
+    let applied = History::default().apply(&mut doc, &ops, None).unwrap();
+    assert!(scene.refresh(&doc, &applied.touched));
+    let fresh = Scene::build(&doc, doc.pages[0]);
+    for (a, b) in scene.nodes.iter().zip(&fresh.nodes) {
+        assert_eq!(a.world, b.world);
+        assert_eq!(a.bounds, b.bounds);
+    }
+    // Adding a layer needs a rebuild.
+    let ops: Vec<Op> = serde_json::from_str(
+        r#"[{"op":"create","parent":"1:2","node":{"type":"RECTANGLE","x":0,"y":0,"width":5,"height":5}}]"#,
+    )
+    .unwrap();
+    let applied = History::default().apply(&mut doc, &ops, None).unwrap();
+    assert!(!scene.refresh(&doc, &applied.touched));
+}

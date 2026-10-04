@@ -195,39 +195,154 @@ impl Scene {
         }
     }
 
+    /// Bounds of node `i` from its own geometry and its children's bounds.
+    fn node_bounds(&self, doc: &Document, i: SceneIdx) -> Rect {
+        let own = self.own_bounds(doc, i);
+        let props = self.props(doc, i);
+        let node = &self.nodes[i as usize];
+        let mut content = Rect::EMPTY;
+        if props.node_type().draws_children() {
+            for &c in &node.children {
+                content = content.union(&self.nodes[c as usize].bounds);
+            }
+            if props.clips_content() && !content.is_empty() {
+                let size = props.size();
+                let clip = node.world.map_rect(&Rect::new(0.0, 0.0, size.x, size.y));
+                content = content.intersect(&clip);
+            }
+        }
+        let mut bounds = own.union(&content);
+        if !bounds.is_empty() {
+            bounds = bounds.outset(effect_outset(props, &node.world));
+        }
+        if !props.visible() {
+            bounds = Rect::EMPTY;
+        }
+        bounds
+    }
+
     fn compute_bounds(&mut self, doc: &Document) {
         // Children follow parents, so a reverse pass sees children first.
         for i in (1..self.nodes.len()).rev() {
-            let own = self.own_bounds(doc, i as SceneIdx);
-            let props = self.props(doc, i as SceneIdx);
-            let node_type = props.node_type();
-            let mut content = Rect::EMPTY;
-            if node_type.draws_children() {
-                for &c in &self.nodes[i].children {
-                    content = content.union(&self.nodes[c as usize].bounds);
-                }
-                if props.clips_content() && !content.is_empty() {
-                    let size = props.size();
-                    let clip = self.nodes[i]
-                        .world
-                        .map_rect(&Rect::new(0.0, 0.0, size.x, size.y));
-                    content = content.intersect(&clip);
-                }
-            }
-            let mut bounds = own.union(&content);
-            if !bounds.is_empty() {
-                bounds = bounds.outset(effect_outset(props, &self.nodes[i].world));
-            }
-            if !props.visible() {
-                bounds = Rect::EMPTY;
-            }
-            self.nodes[i].bounds = bounds;
+            self.nodes[i].bounds = self.node_bounds(doc, i as SceneIdx);
         }
+        self.page_bounds();
+    }
+
+    fn page_bounds(&mut self) {
         let mut page = Rect::EMPTY;
         for &c in &self.nodes[0].children {
             page = page.union(&self.nodes[c as usize].bounds);
         }
         self.nodes[0].bounds = page;
+    }
+
+    /// Updates the scene in place after edits that changed `touched` nodes'
+    /// properties but not the tree: their transforms, sizes, and bounds (and
+    /// their ancestors' bounds) are recomputed. Returns `false`, leaving the
+    /// scene unchanged, when that is not enough (layers were added, removed,
+    /// or moved; or a component an instance shows changed), and the scene
+    /// must be built again.
+    pub fn refresh(&mut self, doc: &Document, touched: &[NodeIdx]) -> bool {
+        let mut starts = Vec::new();
+        for &t in touched {
+            let node = doc.node(t);
+            if node.removed || node.props.node_type() == NodeType::Canvas && t != self.page {
+                return false;
+            }
+            if t == self.page {
+                continue;
+            }
+            let Some(&i) = node.props.guid.and_then(|g| self.by_guid.get(&g)) else {
+                // Not on this page (or new): only fine if it is elsewhere.
+                if doc.page_of(t) == Some(self.page) {
+                    return false;
+                }
+                continue;
+            };
+            let sn = &self.nodes[i as usize];
+            // Instances and components feed copies made at build time.
+            if !matches!(sn.props, PropSource::Doc(_))
+                || sn.path.is_some()
+                || matches!(
+                    node.props.node_type(),
+                    NodeType::Instance | NodeType::Symbol
+                )
+                || self.inside_component(doc, t)
+            {
+                return false;
+            }
+            // Same parent and children as when built.
+            let parent_src = sn.parent.map(|p| self.nodes[p as usize].src);
+            if parent_src != node.parent {
+                return false;
+            }
+            let live_children: Vec<NodeIdx> = node
+                .children
+                .iter()
+                .copied()
+                .filter(|&c| !doc.node(c).removed)
+                .collect();
+            let scene_children: Vec<NodeIdx> = sn
+                .children
+                .iter()
+                .map(|&c| self.nodes[c as usize].src)
+                .collect();
+            if live_children != scene_children {
+                return false;
+            }
+            starts.push(i);
+        }
+        let mut dirty = std::collections::HashSet::new();
+        for &i in &starts {
+            // World transforms down the subtree.
+            let mut stack = vec![i];
+            let mut order = Vec::new();
+            while let Some(n) = stack.pop() {
+                let local = self.props(doc, n).transform();
+                let world = match self.nodes[n as usize].parent {
+                    Some(p) => self.nodes[p as usize].world.mul(&local),
+                    None => local,
+                };
+                self.nodes[n as usize].world = if world.is_finite() {
+                    world
+                } else {
+                    Affine::IDENTITY
+                };
+                order.push(n);
+                stack.extend(self.nodes[n as usize].children.iter().copied());
+            }
+            // Bounds bottom-up within the subtree.
+            for &n in order.iter().rev() {
+                self.nodes[n as usize].bounds = self.node_bounds(doc, n);
+            }
+            dirty.insert(i);
+        }
+        // Ancestors' bounds, nearest first.
+        for &i in &starts {
+            let mut at = self.nodes[i as usize].parent;
+            while let Some(p) = at {
+                if p == self.root() {
+                    break;
+                }
+                self.nodes[p as usize].bounds = self.node_bounds(doc, p);
+                at = self.nodes[p as usize].parent;
+            }
+        }
+        self.page_bounds();
+        true
+    }
+
+    /// Whether a document node sits inside a main component (its edits show
+    /// in instances, which copy it at build time).
+    fn inside_component(&self, doc: &Document, mut i: NodeIdx) -> bool {
+        while let Some(p) = doc.node(i).parent {
+            if doc.props(p).node_type() == NodeType::Symbol {
+                return true;
+            }
+            i = p;
+        }
+        false
     }
 
     /// World bounds of the node's own geometry (fills, strokes, text), or of

@@ -135,7 +135,14 @@ impl FigFile {
     ) -> Result<String, JsError> {
         let before = self.touched_bounds(&touched);
         let count_before = self.scene.as_ref().map_or(0, |(_, s)| s.nodes.len());
-        self.scene = None;
+        // Property edits update the scene in place; tree changes rebuild it.
+        let refreshed = match &mut self.scene {
+            Some((p, scene)) if *p == page => scene.refresh(&self.doc, &touched),
+            _ => false,
+        };
+        if !refreshed {
+            self.scene = None;
+        }
         self.scene(page)?;
         let after = self.touched_bounds(&touched);
         let count_after = self.scene.as_ref().map_or(0, |(_, s)| s.nodes.len());
