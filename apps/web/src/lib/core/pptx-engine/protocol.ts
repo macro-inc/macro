@@ -43,6 +43,15 @@ export type PptxRequest =
       mode: 'without' | 'only';
       shape: number;
     })
+  /** Top-level shapes at z-order positions `start..end` (slide show layers). */
+  | (Base & {
+      kind: 'renderSpan';
+      index: number;
+      width: number;
+      start: number;
+      end: number;
+      backdrop: boolean;
+    })
   /** A shape's text, or with `cell` the text of that table cell. */
   | (Base & {
       kind: 'textLayout';

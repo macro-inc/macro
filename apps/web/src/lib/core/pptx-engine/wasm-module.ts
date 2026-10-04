@@ -30,6 +30,13 @@ export interface WasmPptxDocument {
     mode: 'without' | 'only',
     shape: number
   ) => Uint8Array;
+  renderSpan: (
+    index: number,
+    width: number,
+    start: number,
+    end: number,
+    backdrop: boolean
+  ) => Uint8Array;
   /** `TextLayoutInfo` JSON, or `null`; with `row` and `col`, a table cell's. */
   textLayout: (
     index: number,

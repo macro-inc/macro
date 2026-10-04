@@ -189,6 +189,31 @@ impl PptxDocument {
         Ok(raster.to_straight_rgba())
     }
 
+    /// Renders the top-level slide shapes at z-order positions `start..end`
+    /// (see `Layer::Span`), over the background and inherited shapes when
+    /// `backdrop`.
+    #[wasm_bindgen(js_name = renderSpan)]
+    pub fn render_span(
+        &mut self,
+        index: usize,
+        width: u32,
+        start: usize,
+        end: usize,
+        backdrop: bool,
+    ) -> Result<Vec<u8>, JsError> {
+        self.tick();
+        let width = width.clamp(16, 8192);
+        let layer = Layer::Span {
+            start,
+            end,
+            backdrop,
+        };
+        let raster = FONTS
+            .with(|f| self.pres().render_layer(index, layer, width, &f.borrow()))
+            .map_err(js_err)?;
+        Ok(raster.to_straight_rgba())
+    }
+
     /// Lays out a shape's text for carets as JSON (`TextLayoutInfo`, or `null`);
     /// with `row` and `col`, the text of that table cell.
     #[wasm_bindgen(js_name = textLayout)]

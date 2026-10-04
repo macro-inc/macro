@@ -203,6 +203,33 @@ export async function renderSlideLayer(
 }
 
 /**
+ * Renders the top-level shapes at z-order positions `start..end`, over the
+ * background and inherited shapes when `backdrop` (slide show layers).
+ */
+export async function renderSlideSpan(
+  docKey: string,
+  index: number,
+  width: number,
+  start: number,
+  end: number,
+  backdrop: boolean
+): Promise<ImageBitmap> {
+  const r = await request(
+    {
+      kind: 'renderSpan',
+      docKey,
+      index,
+      width: Math.round(width),
+      start,
+      end,
+      backdrop,
+    },
+    'render'
+  );
+  return r.bitmap;
+}
+
+/**
  * Caret stops and lines of a shape's text, or with `cell` of that table
  * cell's text (a merged cell's, for a cell it covers), placed where the
  * renderer draws it. `null` when the shape holds no text.

@@ -33,6 +33,17 @@ pub enum Layer {
     Without(u32),
     /// Only one top-level slide shape (or the group containing it), over transparency.
     Only(u32),
+    /// The top-level slide shapes at z-order positions `start..end`, over
+    /// the background and the layout and master shapes when `backdrop`, else
+    /// over transparency. Slide shows draw animated shapes as layers this way.
+    Span {
+        /// First position (0 = backmost).
+        start: usize,
+        /// One past the last position.
+        end: usize,
+        /// Whether the background and inherited shapes are drawn beneath.
+        backdrop: bool,
+    },
 }
 
 /// Whether `s` is shape `id` or a group containing it.
@@ -65,7 +76,11 @@ impl Builder<'_> {
             ctx.size.1 as f32 / EMU_PER_PT as f32,
         );
         let mut out = Vec::new();
-        let backdrop = !matches!(layer, Layer::Only(_));
+        let backdrop = match layer {
+            Layer::Only(_) => false,
+            Layer::Span { backdrop, .. } => backdrop,
+            Layer::All | Layer::Without(_) => true,
+        };
         if backdrop {
             let page = Rect::from_xywh(0.0, 0.0, w, h);
             let bg = background_fill(ctx);
@@ -113,7 +128,7 @@ impl Builder<'_> {
         };
         let walk = WalkCtx { ctx, inherit };
         let shapes = resolve_tree(&walk, part, tree);
-        for s in &shapes {
+        for (i, s) in shapes.iter().enumerate() {
             if skip_placeholders && s.placeholder.is_some() {
                 continue;
             }
@@ -121,6 +136,7 @@ impl Builder<'_> {
                 Layer::All => true,
                 Layer::Without(id) => !contains_shape(s, id),
                 Layer::Only(id) => contains_shape(s, id),
+                Layer::Span { start, end, .. } => (start..end).contains(&i),
             };
             if selected {
                 self.shape(ctx, s, &Affine::IDENTITY, None, out);

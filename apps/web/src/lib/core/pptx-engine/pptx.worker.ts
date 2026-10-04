@@ -268,6 +268,25 @@ async function serve(
         ];
       }
     )
+    .with(
+      { kind: 'renderSpan' },
+      async ({ docKey, index, width, start, end, backdrop }) => {
+        const started = performance.now();
+        const pixels = documentFor(docKey).renderSpan(
+          index,
+          width,
+          start,
+          end,
+          backdrop
+        );
+        const bitmap = await toBitmap(pixels, width);
+        const millis = performance.now() - started;
+        return [{ id, ok: true, kind: 'render', bitmap, millis }, [bitmap]] as [
+          PptxResponse,
+          Transferable[],
+        ];
+      }
+    )
     .with({ kind: 'presetPaths' }, ({ names, width, height }) => {
       const paths: Record<string, PresetPath[]> = {};
       for (const name of names) {
