@@ -24,7 +24,7 @@ use crate::opc::{IdSource, rel_type};
 use crate::xml::{NodeId, Ns, XmlDoc};
 
 /// Child order of `p:sldMaster`.
-const MASTER_ORDER: &[&str] = &[
+pub(super) const MASTER_ORDER: &[&str] = &[
     "cSld",
     "clrMap",
     "sldLayoutIdLst",

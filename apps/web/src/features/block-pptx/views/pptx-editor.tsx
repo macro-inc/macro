@@ -1,7 +1,8 @@
 /**
  * The presentation editor: ribbon, slide rail, the slide stage with
  * selection, in-place text and table editing, right-click menus, the format
- * pane, speaker notes, find and replace, and the slide show.
+ * pane, speaker notes, find and replace, and the slide show. Slide Master
+ * view edits masters and layouts with the same stage.
  */
 
 import {
@@ -24,12 +25,15 @@ import CopySimple from '@phosphor/copy-simple.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import ImageSquare from '@phosphor/image-square.svg';
+import Layout from '@phosphor/layout.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
+import PencilSimpleLine from '@phosphor/pencil-simple-line.svg';
 import Play from '@phosphor/play.svg';
 import Plus from '@phosphor/plus.svg';
 import Printer from '@phosphor/printer.svg';
 import Rectangle from '@phosphor/rectangle.svg';
 import Scissors from '@phosphor/scissors.svg';
+import SelectionAll from '@phosphor/selection-all.svg';
 import SquaresFour from '@phosphor/squares-four.svg';
 import Trash from '@phosphor/trash.svg';
 import WarningIcon from '@phosphor/warning.svg';
@@ -39,6 +43,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   on,
   onCleanup,
   onMount,
@@ -62,11 +67,14 @@ import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
 import { GuidesOverlay } from '../components/guides';
 import { LinkDialog } from '../components/link-dialog';
+import { MasterRail } from '../components/master-rail';
 import { MediaPlayButton, MediaPlayer } from '../components/media-player';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
+import { PlaceholderOutlines } from '../components/placeholder-outlines';
 import { PresenterView } from '../components/presenter-view';
 import { PrintDialog } from '../components/print-dialog';
+import { RenameLayoutDialog } from '../components/rename-layout-dialog';
 import { AnimationsTab } from '../components/ribbon/animations-tab';
 import { RibbonButton } from '../components/ribbon/controls';
 import { HomeTab } from '../components/ribbon/home-tab';
@@ -84,6 +92,7 @@ import {
   type RibbonEnv,
   type RibbonTab,
 } from '../components/ribbon/ribbon';
+import { SlideMasterTab } from '../components/ribbon/slide-master-tab';
 import {
   TableDesignTab,
   TableLayoutTab,
@@ -110,6 +119,7 @@ import {
   type Point,
 } from '../core/geometry';
 import { linkAction, linkAt } from '../core/links';
+import { deleteBlocker, type MasterPage } from '../core/master-view';
 import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
 import { unionBounds } from '../core/selection';
 import { clickSlide, type SlideSelection } from '../core/slide-selection';
@@ -132,6 +142,10 @@ import {
 } from '../primitives/create-editor-commands';
 import { createFormatPainter } from '../primitives/create-format-painter';
 import { createGuides } from '../primitives/create-guides';
+import {
+  createMasterView,
+  pageAddressedEngine,
+} from '../primitives/create-master-view';
 import { createMediaUrls } from '../primitives/create-media-urls';
 import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
@@ -262,8 +276,17 @@ export function PptxEditor() {
     canEdit: context.canEdit,
     apply: (list) => session.apply([{ op: 'setGuides', guides: list }]),
   });
+  /** Whether Slide Master view is open (masters and layouts on the stage). */
+  const masterActive = () => session.view() === 'master';
+  /**
+   * The engine the stage and its tools read through: in Slide Master view
+   * their slide indexes address the masters and layouts shown.
+   */
+  const viewEngine = pageAddressedEngine(engine, () =>
+    masterActive() ? session.outline()?.slides.map((s) => s.id) : undefined
+  );
   const editor = createSlideEditor({
-    engine,
+    engine: viewEngine,
     session,
     queue,
     canEdit: context.canEdit,
@@ -372,9 +395,9 @@ export function PptxEditor() {
     collaboration?.peers().filter((p) => p.selection.slide === slideId) ?? [];
 
   /** CSS width thumbnails are drawn at: wider in the slide sorter. */
-  const thumbnailWidth = () => (sorter() ? 280 : 150);
+  const thumbnailWidth = () => (sorter() ? 280 : masterActive() ? 176 : 150);
   const thumbnails = createThumbnails({
-    engine,
+    engine: viewEngine,
     session,
     queue,
     width: () => Math.round(thumbnailWidth() * dpr()),
@@ -477,13 +500,17 @@ export function PptxEditor() {
     session,
     commands,
     canEdit: context.canEdit,
-    selectedSlideIds,
+    // Header & Footer applies to the slides, whatever view is open.
+    selectedSlideIds: () =>
+      session.view() === 'master'
+        ? (session.deck()?.slides.map((s) => s.id) ?? [])
+        : selectedSlideIds(),
     selectSlides,
   });
 
   const [railFocused, setRailFocused] = createSignal(false);
   const clipboard = createClipboard({
-    engine,
+    engine: viewEngine,
     session,
     editor,
     commands,
@@ -491,12 +518,12 @@ export function PptxEditor() {
     railSelection: () => (railFocused() ? selectedSlideIds() : undefined),
   });
 
-  const painter = createFormatPainter({ engine, session, editor });
+  const painter = createFormatPainter({ engine: viewEngine, session, editor });
 
   // Picture Format: the pictures' original images and crop mode.
-  const pictureImages = createPictureImages({ engine, session });
+  const pictureImages = createPictureImages({ engine: viewEngine, session });
   const crop = createCropMode({
-    engine,
+    engine: viewEngine,
     session,
     editor,
     queue,
@@ -504,6 +531,42 @@ export function PptxEditor() {
     renderWidth,
     onExit: () => queueMicrotask(focusStage),
   });
+
+  // ---- Slide Master view ------------------------------------------------------
+
+  const master = createMasterView({
+    session,
+    editor,
+    slideSize: () => ({ w: slideW(), h: slideH() }),
+    notifyError: context.notifyError,
+  });
+  /** View ▸ Slide Master: the deck's masters and layouts on the stage. */
+  const openSlideMaster = async () => {
+    if (masterActive()) return;
+    painter.cancel();
+    setSorterRaw(false);
+    setFind(null);
+    setAnimationPane(false);
+    setPreviewing(false);
+    setCellEdit(null);
+    setTableRange(null);
+    setRibbonTab('slide-master');
+    await master.enter();
+    queueMicrotask(focusStage);
+  };
+  /** Close Master View: back to the slides, normal view state intact. */
+  const closeSlideMaster = async () => {
+    if (!masterActive()) return;
+    painter.cancel();
+    setCellEdit(null);
+    setTableRange(null);
+    await master.close();
+    setRibbonTab('home');
+    queueMicrotask(focusStage);
+  };
+  const masterView = { ...master, close: closeSlideMaster };
+  /** The slide position deck-wide tools start from (the first in Slide Master view). */
+  const slidePosition = () => (masterActive() ? 0 : session.slideIndex());
 
   // ---- table cell editing ---------------------------------------------------
 
@@ -927,10 +990,12 @@ export function PptxEditor() {
     else if (key === 'y') void redo();
     else if (key === 's') void session.save().catch(() => {});
     else if (key === 'p') setPrinting(true);
+    else if ((key === 'f' || key === 'h') && masterActive()) return true;
     else if (key === 'f') setFind({ replace: false });
     else if (key === 'h') setFind({ replace: true });
     else if (key === 'k' && !readonly()) void openLinkDialog();
-    else if (key === 'm' && !readonly()) void commands.addSlide();
+    else if (key === 'm' && !readonly())
+      void (masterActive() ? master.insertLayout() : commands.addSlide());
     else if (key === 'e' && !readonly()) void commands.align('center');
     else if (key === 'l' && !readonly()) void commands.align('left');
     else if (key === 'r' && !readonly()) void commands.align('right');
@@ -1298,7 +1363,7 @@ export function PptxEditor() {
     if (!shape) return;
     try {
       const bytes = await shapePicture(
-        engine,
+        viewEngine,
         session.slideIndex(),
         slideW(),
         shape
@@ -1361,7 +1426,7 @@ export function PptxEditor() {
   const present = (fromCurrent: boolean, presenter = false) => {
     editor.stopEditing();
     setPresenting({
-      start: fromCurrent ? session.slideIndex() : 0,
+      start: fromCurrent ? slidePosition() : 0,
       presenter,
     });
   };
@@ -1536,6 +1601,7 @@ export function PptxEditor() {
     download: () => void download(),
     recentFonts,
     deckSetup,
+    openSlideMaster: () => void openSlideMaster(),
   };
 
   const tableTabProps = () => {
@@ -1600,22 +1666,65 @@ export function PptxEditor() {
       (s) => s.kind !== 'table' && s.kind !== 'chart' && s.kind !== 'picture'
     );
     const pictures = list.some((s) => s.kind === 'picture');
+    // Slide Master view has no slides to add or arrange (PowerPoint
+    // disables Home and Insert ▸ Slides there).
+    const slideTools = (tab: () => JSX.Element) => () => (
+      <div
+        class="contents"
+        classList={{
+          '[&_[role=group][aria-label=Slides]]:hidden': masterActive(),
+        }}
+      >
+        {tab()}
+      </div>
+    );
+    const home: RibbonTab = {
+      id: 'home',
+      label: 'Home',
+      content: slideTools(() => <HomeTab />),
+    };
+    const insert: RibbonTab = {
+      id: 'insert',
+      label: 'Insert',
+      content: slideTools(() => <InsertTab chartMenu={chartInsertMenu} />),
+    };
+    const viewTab: RibbonTab = {
+      id: 'view',
+      label: 'View',
+      content: () => <ViewTab />,
+    };
+    // Slide Master view: its tab first, and no slide-only tabs.
+    const main: RibbonTab[] = masterActive()
+      ? [
+          {
+            id: 'slide-master',
+            label: 'Slide Master',
+            contextual: true,
+            content: () => <SlideMasterTab master={masterView} />,
+          },
+          home,
+          insert,
+          viewTab,
+        ]
+      : [
+          home,
+          insert,
+          { id: 'design', label: 'Design', content: () => <DesignTab /> },
+          transitionsTab,
+          {
+            id: 'animations',
+            label: 'Animations',
+            content: () => <AnimationsTab />,
+          },
+          {
+            id: 'slideshow',
+            label: 'Slide Show',
+            content: () => <SlideShowTab />,
+          },
+          viewTab,
+        ];
     return [
-      { id: 'home', label: 'Home', content: () => <HomeTab /> },
-      {
-        id: 'insert',
-        label: 'Insert',
-        content: () => <InsertTab chartMenu={chartInsertMenu} />,
-      },
-      { id: 'design', label: 'Design', content: () => <DesignTab /> },
-      transitionsTab,
-      {
-        id: 'animations',
-        label: 'Animations',
-        content: () => <AnimationsTab />,
-      },
-      { id: 'slideshow', label: 'Slide Show', content: () => <SlideShowTab /> },
-      { id: 'view', label: 'View', content: () => <ViewTab /> },
+      ...main,
       ...(drawable && !readonly()
         ? [
             {
@@ -1845,6 +1954,52 @@ export function PptxEditor() {
     </>
   );
 
+  /** Right-click menu of a master or layout in Slide Master view's pane. */
+  const masterMenu = (page: MasterPage | undefined) => {
+    const deck = session.deck();
+    const blocked = () => (page && deck ? deleteBlocker(deck, page) : 'none');
+    const what = () => (page?.layout ? 'Layout' : 'Master');
+    return (
+      <>
+        <MenuItem
+          text="Insert Layout"
+          icon={Layout}
+          disabled={readonly()}
+          onClick={() => void master.insertLayout(page)}
+        />
+        <Show when={page?.layout}>
+          <MenuItem
+            text="Duplicate Layout"
+            icon={CopySimple}
+            disabled={readonly()}
+            onClick={() => void master.duplicateLayout(page)}
+          />
+        </Show>
+        <Show when={page}>
+          <MenuItem
+            text={`Delete ${what()}`}
+            icon={Trash}
+            disabled={readonly() || !!blocked()}
+            onClick={() => void master.deletePage(page)}
+          />
+          <MenuItem
+            text={`Rename ${what()}`}
+            icon={PencilSimpleLine}
+            disabled={readonly()}
+            onClick={() => master.startRename(page)}
+          />
+        </Show>
+        <MenuSeparator />
+        <MenuItem
+          text="Format background…"
+          icon={PaintBucket}
+          disabled={readonly()}
+          onClick={() => setPane('background')}
+        />
+      </>
+    );
+  };
+
   return (
     <div
       ref={root}
@@ -1854,6 +2009,7 @@ export function PptxEditor() {
       <Ribbon
         env={env}
         tabs={tabs()}
+        active={ribbonTab()}
         keepFocus={!!editor.editing()}
         onTabChange={setRibbonTab}
         start={
@@ -1935,8 +2091,28 @@ export function PptxEditor() {
         }
       />
       <div class="flex min-h-0 flex-1">
-        <Show when={!sorter()}>
-          <Slides />
+        <Show
+          when={masterActive() && session.deck()}
+          fallback={
+            <Show when={!sorter()}>
+              <Slides />
+            </Show>
+          }
+        >
+          {(deck) => (
+            <MasterRail
+              deck={deck()}
+              pages={session.outline()?.slides ?? []}
+              current={session.slideIndex()}
+              aspect={slideH() / slideW()}
+              thumbnail={thumbnails.thumbnail}
+              thumbnailPixels={Math.round(thumbnailWidth() * dpr())}
+              readonly={readonly()}
+              onSelect={(index) => editor.goToSlide(index)}
+              onDelete={(page) => void master.deletePage(page)}
+              menu={masterMenu}
+            />
+          )}
         </Show>
         <div class="flex min-w-0 flex-1 flex-col">
           <Show when={sorter()}>
@@ -2070,6 +2246,16 @@ export function PptxEditor() {
                             />
                           )}
                         </Show>
+                        <Show when={masterActive() && session.currentSlide()}>
+                          {(page) => (
+                            <PlaceholderOutlines
+                              page={page()}
+                              width={slideW()}
+                              height={slideH()}
+                              unit={unit()}
+                            />
+                          )}
+                        </Show>
                         <Show
                           when={showAnimationTags() && session.currentSlide()}
                         >
@@ -2154,82 +2340,106 @@ export function PptxEditor() {
                       </ContextMenu.Trigger>
                       <ContextMenu.Portal>
                         <ContextMenuContent class="w-64">
-                          <StageMenuItems
-                            target={menuTarget()}
-                            a={{
-                              commands,
-                              readonly: readonly(),
-                              copy: copyCommand,
-                              cut: cutCommand,
-                              paste: pasteCommand,
-                              canPaste: true,
-                              editText: () => {
-                                const s = editor.selectedShape();
-                                if (s) void startEditing(s.id);
-                              },
-                              openFormatPane: (section) =>
-                                setPane(section ?? 'shape'),
-                              replacePicture: () => replacePictureInput.click(),
-                              crop: () => void crop.enter(),
-                              editChartData: () => {
-                                const s = editor.selectedShape();
-                                if (s) chartEditor(s);
-                              },
-                              changeChartType: () => {
-                                const s = editor.selectedShape();
-                                if (s) chartEditor(s);
-                              },
-                              selectRows: selectWholeRows,
-                              selectColumns: selectWholeColumns,
-                              selectTable: selectWholeTable,
-                              layouts: (session.outline()?.layouts ?? []).map(
-                                (l) => l.name
-                              ),
-                              currentLayout: session.currentSlide()?.layout,
-                              swatches: swatches(),
-                              newSlide: () => void commands.addSlide(),
-                              hideSlide: () => {
-                                const s = session.currentSlide();
-                                if (s) void commands.toggleHidden(s);
-                              },
-                              slideHidden: !!session.currentSlide()?.hidden,
-                              isPicture:
-                                editor.selectedShape()?.kind === 'picture',
-                              isGroup: editor
-                                .selection()
-                                .some((s) => s.kind === 'group'),
-                              selectionCount: editor.selection().length,
-                              textShape: !!editor.selectedShape()?.textEditable,
-                              savePicture: () => void saveShapePicture(),
-                              link: menuLink(),
-                              editLink: () => void openLinkDialog(),
-                              openLink: followLink,
-                              guides: {
-                                shown: view.options().drawingGuides,
-                                toggle: () =>
-                                  view.set({
-                                    drawingGuides:
-                                      !view.options().drawingGuides,
-                                  }),
-                                gridlines: view.options().gridlines,
-                                toggleGridlines: () =>
-                                  view.set({
-                                    gridlines: !view.options().gridlines,
-                                  }),
-                                smartGuides: view.options().guides,
-                                toggleSmartGuides: () =>
-                                  view.set({ guides: !view.options().guides }),
-                                add: (orient) => void guides.add(orient),
-                                remove: (index) => void guides.remove(index),
-                                recolor: (index, color) =>
-                                  void guides.recolor(index, color),
-                              },
-                              removeLink: () => {
-                                const target = commands.linkTarget();
-                                if (target) void commands.applyLink(target, '');
-                              },
-                            }}
-                          />
+                          <Show
+                            when={
+                              masterActive() && menuTarget().kind === 'canvas'
+                            }
+                          >
+                            <MenuItem
+                              text="Select all"
+                              icon={SelectionAll}
+                              shortcut="cmd+a"
+                              onClick={() => editor.selectAll()}
+                            />
+                            {masterMenu(master.page())}
+                          </Show>
+                          <Show
+                            when={
+                              !masterActive() || menuTarget().kind !== 'canvas'
+                            }
+                          >
+                            <StageMenuItems
+                              target={menuTarget()}
+                              a={{
+                                commands,
+                                readonly: readonly(),
+                                copy: copyCommand,
+                                cut: cutCommand,
+                                paste: pasteCommand,
+                                canPaste: true,
+                                editText: () => {
+                                  const s = editor.selectedShape();
+                                  if (s) void startEditing(s.id);
+                                },
+                                openFormatPane: (section) =>
+                                  setPane(section ?? 'shape'),
+                                replacePicture: () =>
+                                  replacePictureInput.click(),
+                                crop: () => void crop.enter(),
+                                editChartData: () => {
+                                  const s = editor.selectedShape();
+                                  if (s) chartEditor(s);
+                                },
+                                changeChartType: () => {
+                                  const s = editor.selectedShape();
+                                  if (s) chartEditor(s);
+                                },
+                                selectRows: selectWholeRows,
+                                selectColumns: selectWholeColumns,
+                                selectTable: selectWholeTable,
+                                layouts: (session.outline()?.layouts ?? []).map(
+                                  (l) => l.name
+                                ),
+                                currentLayout: session.currentSlide()?.layout,
+                                swatches: swatches(),
+                                newSlide: () => void commands.addSlide(),
+                                hideSlide: () => {
+                                  const s = session.currentSlide();
+                                  if (s) void commands.toggleHidden(s);
+                                },
+                                slideHidden: !!session.currentSlide()?.hidden,
+                                isPicture:
+                                  editor.selectedShape()?.kind === 'picture',
+                                isGroup: editor
+                                  .selection()
+                                  .some((s) => s.kind === 'group'),
+                                selectionCount: editor.selection().length,
+                                textShape:
+                                  !!editor.selectedShape()?.textEditable,
+                                savePicture: () => void saveShapePicture(),
+                                link: menuLink(),
+                                editLink: () => void openLinkDialog(),
+                                openLink: followLink,
+                                guides: {
+                                  shown: view.options().drawingGuides,
+                                  toggle: () =>
+                                    view.set({
+                                      drawingGuides:
+                                        !view.options().drawingGuides,
+                                    }),
+                                  gridlines: view.options().gridlines,
+                                  toggleGridlines: () =>
+                                    view.set({
+                                      gridlines: !view.options().gridlines,
+                                    }),
+                                  smartGuides: view.options().guides,
+                                  toggleSmartGuides: () =>
+                                    view.set({
+                                      guides: !view.options().guides,
+                                    }),
+                                  add: (orient) => void guides.add(orient),
+                                  remove: (index) => void guides.remove(index),
+                                  recolor: (index, color) =>
+                                    void guides.recolor(index, color),
+                                },
+                                removeLink: () => {
+                                  const target = commands.linkTarget();
+                                  if (target)
+                                    void commands.applyLink(target, '');
+                                },
+                              }}
+                            />
+                          </Show>
                         </ContextMenuContent>
                       </ContextMenu.Portal>
                     </ContextMenu>
@@ -2366,7 +2576,14 @@ export function PptxEditor() {
               )}
             </Show>
           </div>
-          <Show when={notesVisible() && !sorter() && session.currentSlide()}>
+          <Show
+            when={
+              notesVisible() &&
+              !sorter() &&
+              !masterActive() &&
+              session.currentSlide()
+            }
+          >
             {(slide) => (
               <NotesPanel
                 slideId={slide().id}
@@ -2386,8 +2603,15 @@ export function PptxEditor() {
           </Show>
           <div class="flex h-6 shrink-0 items-center gap-3 border-edge-muted border-t bg-panel px-3 text-ink-muted text-xs">
             <span data-testid="pptx-status-slide">
-              Slide {session.slideIndex() + 1} of{' '}
-              {session.outline()?.slides.length ?? 0}
+              <Show
+                when={!masterActive()}
+                fallback={
+                  <span data-testid="pptx-status-master">Slide Master</span>
+                }
+              >
+                Slide {session.slideIndex() + 1} of{' '}
+                {session.outline()?.slides.length ?? 0}
+              </Show>
             </span>
             <Show when={selectedSlideIds().length > 1}>
               <span data-testid="pptx-status-selected">
@@ -2405,12 +2629,14 @@ export function PptxEditor() {
             <button
               type="button"
               class="hover:text-ink"
-              classList={{ 'text-ink': !sorter() }}
-              aria-pressed={!sorter()}
+              classList={{ 'text-ink': !sorter() && !masterActive() }}
+              aria-pressed={!sorter() && !masterActive()}
               aria-label="Normal view"
               title="Normal"
               data-testid="pptx-view-normal"
-              onClick={() => setSorter(false)}
+              onClick={() =>
+                masterActive() ? void closeSlideMaster() : setSorter(false)
+              }
             >
               <Rectangle class="size-3.5" />
             </button>
@@ -2422,7 +2648,11 @@ export function PptxEditor() {
               aria-label="Slide sorter"
               title="Slide sorter"
               data-testid="pptx-view-sorter"
-              onClick={() => setSorter(true)}
+              onClick={() =>
+                masterActive()
+                  ? void closeSlideMaster().then(() => setSorter(true))
+                  : setSorter(true)
+              }
             >
               <SquaresFour class="size-3.5" />
             </button>
@@ -2513,12 +2743,12 @@ export function PptxEditor() {
           />
         )}
       </Show>
-      <Show when={exporting() && session.outline()}>
+      <Show when={exporting() && session.deck()}>
         {(deck) => (
           <ExportDialog
             engine={engine}
             deck={deck()}
-            current={session.slideIndex()}
+            current={slidePosition()}
             selected={deck()
               .slides.map((s, i) =>
                 selectedSlideIds().includes(s.id) ? i : -1
@@ -2534,17 +2764,30 @@ export function PptxEditor() {
           />
         )}
       </Show>
-      <Show when={printing() && session.outline()}>
+      <Show when={printing() && session.deck()}>
         {(deck) => (
           <PrintDialog
             engine={engine}
             deck={deck()}
-            current={session.slideIndex()}
+            current={slidePosition()}
             fileName={context.fileName()}
             download={context.download}
             notifyError={context.notifyError}
             onClose={() => {
               setPrinting(false);
+              queueMicrotask(refocus);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={master.renaming()}>
+        {(page) => (
+          <RenameLayoutDialog
+            master={!page().layout}
+            name={page().layout?.name ?? page().master.name}
+            onRename={(name) => void master.rename(page(), name)}
+            onClose={() => {
+              master.stopRename();
               queueMicrotask(refocus);
             }}
           />
@@ -2558,11 +2801,11 @@ export function PptxEditor() {
         readonly={readonly()}
         onClosed={() => queueMicrotask(refocus)}
       />
-      <Show when={presenting() && session.outline()}>
+      <Show when={presenting() && session.deck()}>
         {(deck) => {
           const onExit = (index: number) => {
             setPresenting(null);
-            editor.goToSlide(index);
+            if (!masterActive()) editor.goToSlide(index);
             queueMicrotask(focusStage);
           };
           return (

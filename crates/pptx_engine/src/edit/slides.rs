@@ -474,9 +474,10 @@ pub fn set_hidden(pres: &mut Presentation, id: u32, hidden: bool) -> Result<()> 
     Ok(())
 }
 
-/// Sets (or removes, inheriting the layout's) a slide background.
+/// Sets (or removes, inheriting the layout's) a slide background; a slide
+/// master's or layout's id sets its own background.
 pub fn set_background(pres: &mut Presentation, id: u32, fill: Option<&FillSpec>) -> Result<()> {
-    let part = pres.slide_part(id)?;
+    let part = pres.page_part(id)?;
     let doc = pres.xml_mut(&part)?;
     let c_sld = doc
         .child(doc.root(), Ns::P, "cSld")

@@ -461,6 +461,48 @@ Layout and test hooks:
   (`pptx-slide-sorter`, same `pptx-thumbnail` buttons and menu as the rail),
   with the same selection and drag-to-reorder; ★ marks a transition;
   double-click or Enter opens a slide in Normal view.
+- **Slide Master view** (View ▸ Master views ▸ **Slide Master**,
+  `pptx-view-slide-master`) edits the slide masters and their layouts with
+  the same stage, text editing, and Home/Insert tools as slides; every slide
+  on a layout (or, for a master, on any of its layouts) follows. It opens on
+  the current slide's layout. The rail becomes `pptx-master-rail`: one
+  `pptx-master-thumbnail` per page (`data-kind="master|layout"`,
+  `data-page-id` the engine id, `aria-current` on the one edited, and a
+  PowerPoint tooltip such as "Title Only Layout: used by slide(s) 3-8"),
+  masters numbered with their layouts indented beneath. Placeholders show
+  dotted outlines (`pptx-placeholder-outlines`). The contextual **Slide
+  Master** tab (`pptx-tab-slide-master`, first) has Insert Layout
+  (`pptx-master-insert-layout`: a "Custom Layout" with a title and the
+  master's footers after the selected layout), Delete
+  (`pptx-master-delete`, disabled with a reason in its tooltip while slides
+  use the layout, or for a master's last layout or the last master), Rename
+  (`pptx-master-rename`, dialog `pptx-rename-layout-dialog` with
+  `pptx-rename-layout-name` and `pptx-rename-layout-ok`), Insert Placeholder
+  (`pptx-master-insert-placeholder`, then
+  `pptx-master-placeholder-<content|text|picture|chart|table|smartArt|media>`,
+  `-vertical` for the vertical content and text ones; it lands in the middle
+  of the layout, selected), the layout's Title and Footers checkboxes
+  (`pptx-master-title`, `pptx-master-footers`), theme Colors and Fonts
+  (`pptx-master-theme-colors`, `pptx-master-theme-fonts`), Background
+  Styles (`pptx-master-background-styles`: the theme's twelve styles,
+  `pptx-master-background-style-<1-12>`, and Reset Background,
+  `pptx-master-background-reset`), Format
+  Background (`pptx-master-format-background`, the background pane for the
+  master or layout), Hide Background Graphics
+  (`pptx-master-hide-background`), Slide Size, and **Close Master View**
+  (`pptx-master-close`; the status bar's Normal button does the same).
+  Right-click a page for Insert Layout, Duplicate Layout, Delete
+  Layout/Master, Rename Layout/Master, and Format background…; Delete in the
+  rail deletes the page, and Cmd/Ctrl+M inserts a layout. Formatting a whole
+  placeholder (or whole paragraphs) of a layout or master also sets the text
+  style its slides inherit, so bolding a layout's title bolds the titles of
+  its slides. The status bar reads "Slide Master" (`pptx-status-master`);
+  Design, Transitions, Animations, Slide Show, the Slides groups, notes, and
+  find are not shown there. Engine and AI spelling: the outline's `masters`
+  (ids, names, layouts with `slideIds` and placeholder types), any slide-id
+  operation on shapes, text, tables, pictures, and backgrounds with a
+  master's or layout's id, and `addLayout`, `renameLayout`, `deleteLayout`,
+  `insertPlaceholder`, `setLayoutOptions`, and `setBackgroundStyle`.
 - **Stage** (`pptx-stage`, focusable): click selects a shape
   (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
   `pptx-rotate-handle`); Shift/Cmd/Ctrl-click adds to the selection, dragging

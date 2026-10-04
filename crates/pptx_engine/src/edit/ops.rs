@@ -2,12 +2,19 @@
 //!
 //! Slides are addressed by their stable id (`p:sldId/@id`), shapes by their
 //! `p:cNvPr/@id` (unique within a slide). Positions and sizes are in points.
+//! A slide master's or layout's id (from the deck outline's `masters`, at
+//! least 2147483648) addresses it in place of a slide id in the operations
+//! on shapes, text, tables, charts, pictures, and backgrounds, which edits
+//! the master or layout and every slide based on it (Slide Master view).
 //! Text positions count Unicode scalar values within a paragraph, where a line
 //! break (`a:br`) counts as one character.
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+mod masters;
 mod picture_format;
+
+pub use masters::PlaceholderKind;
 
 pub use picture_format::{
     CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
@@ -911,6 +918,102 @@ pub enum EditOp {
         /// The guides, in order.
         guides: Vec<GuideSpec>,
     },
+    // ---- slide masters and layouts (Slide Master view) ----
+    /// Adds a slide layout to a slide master (PowerPoint's Slide Master ▸
+    /// Insert Layout): a layout with a title placeholder and the master's
+    /// date, footer, and slide number placeholders, or with `duplicate` a
+    /// copy of that layout. Masters and layouts are listed in the deck
+    /// outline's `masters`. The new layout's id is reported in the result
+    /// (as `slide`); it addresses the layout's shapes like a slide id.
+    AddLayout {
+        /// Id of the master to add it to (default: the master of `after`
+        /// or `duplicate`, else the first master).
+        #[serde(default)]
+        master: Option<u32>,
+        /// Id of the layout to insert it after; a master's id puts it first
+        /// (default: right after `duplicate`, else after the master's last
+        /// layout).
+        #[serde(default)]
+        after: Option<u32>,
+        /// Id of a layout to copy, with its shapes and background.
+        #[serde(default)]
+        duplicate: Option<u32>,
+        /// Name (default: "Custom Layout", or for a copy the original's name
+        /// prefixed "1_", numbered further when the master has one already).
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Renames a slide layout, or a slide master (a master's name is its
+    /// theme's name, as PowerPoint shows it).
+    RenameLayout {
+        /// Layout or master id.
+        layout: u32,
+        /// New name.
+        name: String,
+    },
+    /// Deletes a slide layout no slide uses (give those slides another
+    /// layout with `setSlideLayout` first). A master keeps at least one
+    /// layout. With a master's id, deletes that master and its layouts when
+    /// no slide uses any of them and another master remains.
+    DeleteLayout {
+        /// Layout or master id.
+        layout: u32,
+    },
+    /// Adds a placeholder to a slide layout (PowerPoint's Slide Master ▸
+    /// Insert Placeholder). Slides added with the layout afterwards get it,
+    /// empty, where the layout has it; existing slides get it when their
+    /// layout is applied again (`setSlideLayout`). Content and text
+    /// placeholders take the master's text styles. The new shape's id is
+    /// reported in the result.
+    InsertPlaceholder {
+        /// Layout id.
+        layout: u32,
+        /// What it holds: `content`, `text`, `picture`, `chart`, `table`,
+        /// `smartArt`, or `media`.
+        kind: PlaceholderKind,
+        /// Left (points).
+        x: f32,
+        /// Top (points).
+        y: f32,
+        /// Width (points).
+        w: f32,
+        /// Height (points).
+        h: f32,
+        /// Vertical text (PowerPoint's "Content (Vertical)" and "Text
+        /// (Vertical)"); content and text placeholders only.
+        #[serde(default, deserialize_with = "nullable")]
+        vertical: bool,
+    },
+    /// Sets what a slide layout shows (PowerPoint's Slide Master ▸ Title,
+    /// Footers, and Hide Background Graphics). Omitted fields keep the
+    /// layout's current state.
+    SetLayoutOptions {
+        /// Layout id.
+        layout: u32,
+        /// Show a title placeholder (added where the master's title is, or
+        /// removed).
+        #[serde(default)]
+        title: Option<bool>,
+        /// Show the date, footer, and slide number placeholders the master
+        /// has (added where the master has them, or removed).
+        #[serde(default)]
+        footers: Option<bool>,
+        /// Hide the master's shapes (logos, lines, pictures) on the layout
+        /// and its slides.
+        #[serde(default)]
+        hide_background_graphics: Option<bool>,
+    },
+    /// Gives a slide, slide master, or layout one of the theme's background
+    /// styles (PowerPoint's Background Styles gallery), which follow the
+    /// theme's colors and background fills. Styles 1-4 are the theme's
+    /// first background fill (usually solid) in Light 1, Dark 1, Light 2,
+    /// and Dark 2; 5-8 its second and 9-12 its third, in the same colors.
+    SetBackgroundStyle {
+        /// Slide, master, or layout id.
+        slide: u32,
+        /// Style number, 1-12.
+        style: u8,
+    },
 }
 
 /// Something an edit created.
@@ -938,6 +1041,13 @@ pub struct EditResult {
     pub changed_slides: Vec<u32>,
     /// Whether slides were added, removed, or reordered, or the slide size,
     /// sections, or drawing guides changed.
+    /// Slide masters and layouts (by id) whose own rendering changed, as
+    /// Slide Master view shows them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed_layouts: Vec<u32>,
+    /// Whether slides were added, removed, or reordered, or the slide size
+    /// or sections changed, or slide masters or layouts were added,
+    /// removed, reordered, renamed, or hid or showed background graphics.
     pub structure_changed: bool,
     /// Text replacements made by `replaceText` operations.
     #[serde(default)]

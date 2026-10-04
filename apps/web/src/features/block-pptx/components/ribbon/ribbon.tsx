@@ -93,6 +93,8 @@ export interface RibbonEnv {
   extraTabs?: () => RibbonTab[];
   /** Header & Footer, slide size, and sections (dialogs and section view state). */
   deckSetup?: DeckSetup;
+  /** View ▸ Slide Master: opens Slide Master view (absent where unsupported). */
+  openSlideMaster?: () => void;
 }
 
 const RibbonContext = createContext<RibbonEnv>();
@@ -120,6 +122,11 @@ export function Ribbon(props: {
   end?: JSX.Element;
   /** Called with the id of the tab chosen. */
   onTabChange?: (id: string) => void;
+  /**
+   * The tab shown, when the view picks it (it then follows `onTabChange`
+   * with the tab chosen).
+   */
+  active?: string;
 }) {
   const [active, setActiveRaw] = createSignal('home');
   const setActive = (id: string) => {
@@ -127,7 +134,8 @@ export function Ribbon(props: {
     props.onTabChange?.(id);
   };
   const current = () =>
-    props.tabs.find((t) => t.id === active()) ?? props.tabs[0];
+    props.tabs.find((t) => t.id === (props.active ?? active())) ??
+    props.tabs[0];
   // Clicks must not move focus out of the text being edited.
   const holdFocus = (e: Event) => {
     const target = e.target as HTMLElement;

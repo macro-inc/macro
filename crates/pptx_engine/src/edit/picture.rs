@@ -248,7 +248,7 @@ pub(super) fn crop_picture(
     if patch.edges.iter().flatten().any(|v| !v.is_finite()) {
         return Err(Error::InvalidEdit("crop edges must be finite".into()));
     }
-    let part = pres.slide_part(slide)?;
+    let part = pres.page_part(slide)?;
     let (current, rid, frame) = {
         let doc = pres.xml(&part)?;
         let node = find(&doc, shape)?;
@@ -410,7 +410,7 @@ pub(super) fn format_picture(
         }
     }
     let recolor = patch.recolor.map(parse_recolor).transpose()?;
-    let part = pres.slide_part(slide)?;
+    let part = pres.page_part(slide)?;
     for &id in shapes {
         {
             let doc = pres.xml(&part)?;

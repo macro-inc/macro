@@ -61,6 +61,10 @@ pub fn preset_paths(name: &str, w: f64, h: f64) -> Result<String, JsError> {
 }
 
 /// An open presentation with undo history.
+///
+/// Reads that take a slide `index` (outlines, rendering, text layout,
+/// copying shapes) also take the id of a slide master or layout (always at
+/// least 2147483648) in its place, for Slide Master view.
 #[wasm_bindgen]
 pub struct PptxDocument {
     editor: Editor,

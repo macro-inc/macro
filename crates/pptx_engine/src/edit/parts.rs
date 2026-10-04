@@ -411,12 +411,17 @@ fn prunable(rel_type: &str) -> bool {
     PRUNABLE.iter().any(|s| rel_type.ends_with(s))
 }
 
-/// Removes relationships of edited slides that no markup references any more.
+/// Removes relationships of edited slides, layouts, and masters that no
+/// markup references any more.
 pub fn prune_rels(pres: &mut Presentation) -> Result<()> {
     let edited: Vec<String> = pres.dirty_xml.iter().cloned().collect();
     for part in edited {
         let doc = pres.xml(&part)?;
-        if !doc.is(doc.root(), Ns::P, "sld") {
+        let root = doc.root();
+        if !["sld", "sldLayout", "sldMaster"]
+            .iter()
+            .any(|kind| doc.is(root, Ns::P, kind))
+        {
             continue;
         }
         let mut used: HashSet<String> = HashSet::new();

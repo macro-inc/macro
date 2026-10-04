@@ -106,6 +106,21 @@ Other PowerPoint presets read under their names (`blinds`, `basicZoom`,
 `boomerang`, `fontColor`, media `play`...) or as `custom`; those, and media
 and OLE-verb actions, can be kept but not created.
 
+Slide masters and layouts are edited as Slide Master view edits them. Their
+ids (`p:sldMasterId/@id`, `p:sldLayoutId/@id`, at least 2147483648, so
+never a slide's) address them wherever a slide id or index is taken: shape,
+text, table, chart, picture, and background operations, outlines, rendering,
+text layout, and copying shapes. Formatting whole paragraphs of a master or
+layout placeholder also writes the list style (or the master's title and body
+text styles) slides inherit. `AddLayout` (PowerPoint's Insert Layout, or a
+copy), `RenameLayout`, `DeleteLayout` (refused while slides use it),
+`InsertPlaceholder`, and `SetLayoutOptions` (Title, Footers, Hide Background
+Graphics) change the layouts, and `SetBackgroundStyle` gives a slide, master,
+or layout one of the theme's twelve background styles; the outline's `masters` lists them with the
+slides using each, and edit results report changed masters and layouts in
+`changed_layouts`. Masters and layouts a file lists without ids (PowerPoint
+2008 for Mac) get stable ones, stored when the lists change.
+
 Deck-level edits follow PowerPoint's dialogs. Header & Footer adds or removes
 the slide number, date, and footer placeholders (copied from each slide's
 layout) and, applied to all slides, records the choice in the masters' `p:hf`,
