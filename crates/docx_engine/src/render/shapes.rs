@@ -19,6 +19,10 @@ const EMU_PER_PT: f64 = 12_700.0;
 const ANGLE_UNITS: f64 = 60_000.0;
 /// VML's default outline width (points).
 const VML_STROKE: f32 = 0.75;
+/// The VML shape type of text boxes.
+const VML_TEXT_BOX: &str = "_x0000_t202";
+/// The VML shape type of rectangles.
+const VML_RECT: &str = "_x0000_t1";
 
 /// Draws a non-picture graphic in `rect`.
 pub(super) fn graphic_nodes(
@@ -281,7 +285,10 @@ fn vml_shape(t: &XmlTree, node: NodeId, rect: Rect, out: &mut Vec<Node>) {
             p.line_to(Point::new(rect.x + x1, rect.y + y1));
             p
         }
-        _ => Path::rect(rect),
+        "rect" => Path::rect(rect),
+        "shape" if plain_box(t, node) => Path::rect(rect),
+        // Paths, WordArt and other presets are not drawn.
+        _ => return,
     };
     if filled {
         let color = attr(node, "fillcolor")
@@ -320,6 +327,15 @@ fn vml_shape(t: &XmlTree, node: NodeId, rect: Rect, out: &mut Vec<Node>) {
             });
         }
     }
+}
+
+/// Whether a `v:shape` is a plain box (a text box or a rectangle) rather
+/// than a path, WordArt or another preset shape.
+fn plain_box(t: &XmlTree, node: NodeId) -> bool {
+    let kind = t.attr(node, Ns::NONE, "type").unwrap_or("");
+    matches!(kind.trim_start_matches('#'), "" | VML_TEXT_BOX | VML_RECT)
+        && t.attr(node, Ns::NONE, "path").is_none()
+        && !t.children(node).any(|c| t.is(c, Ns::V, "textpath"))
 }
 
 /// An ellipse inscribed in `r`.

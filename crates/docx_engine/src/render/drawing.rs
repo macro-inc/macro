@@ -33,9 +33,17 @@ pub(super) fn target(r: &Renderer<'_>, part: &str, rid: &str) -> Option<String> 
     r.doc.package().rels(part).ok()?.target_part(rid)
 }
 
-/// The `a:blip` of a picture and its crop (left, top, right, bottom fractions).
-fn blip(t: &XmlTree, root: NodeId) -> Option<(String, [f32; 4], f32, bool, bool)> {
-    let pic = t.find(root, Ns::PIC, "pic")?;
+/// A picture's image relationship, crop (left, top, right, bottom
+/// fractions), rotation (degrees) and flips.
+pub(super) type Blip = (String, [f32; 4], f32, bool, bool);
+
+/// The `a:blip` of the picture in `root`.
+fn blip(t: &XmlTree, root: NodeId) -> Option<Blip> {
+    pic_blip(t, t.find(root, Ns::PIC, "pic")?)
+}
+
+/// The `a:blip` of picture `pic` (`pic:pic`).
+pub(super) fn pic_blip(t: &XmlTree, pic: NodeId) -> Option<Blip> {
     let fill = t.child(pic, Ns::PIC, "blipFill")?;
     let blip = t.child(fill, Ns::A, "blip")?;
     let rid = t
@@ -97,7 +105,7 @@ fn vml_image(t: &XmlTree, shape: NodeId) -> Option<(String, [f32; 4])> {
 }
 
 /// Draws a picture part into `rect` with a crop.
-fn picture(
+pub(super) fn picture(
     r: &mut Renderer<'_>,
     part: &str,
     rect: Rect,
@@ -188,6 +196,8 @@ pub(super) fn drawing_nodes(
             && let Some(target) = target(r, &part, &rid)
         {
             picture(r, &target, rect, crop, 0.0, (false, false), out);
+        } else if d.graphic == Graphic::Shape {
+            super::shapes::graphic_nodes(r, d, rect, &part, out);
         }
         return;
     }
