@@ -181,6 +181,29 @@ test('inserts a SmartArt graphic and edits it like PowerPoint', async ({
   expect(await page.evaluate(() => window.pptxFixture.errors())).toEqual([]);
 });
 
+test('keys typed right after Enter go into the new bullet', async ({
+  page,
+}) => {
+  await open(page);
+  await insert(page, 'process', 'process1');
+  const lines = page
+    .getByTestId('pptx-smartart-pane')
+    .getByTestId('pptx-smartart-pane-line');
+  await expect(lines.nth(0)).toBeFocused();
+  // No pause after Enter: the new bullet is still being made.
+  await page.keyboard.type('Ship');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Learn');
+  await expect
+    .poll(async () => (await nodes(page))?.slice(0, 2))
+    .toEqual([
+      ['Ship', 1],
+      ['Learn', 1],
+    ]);
+  await expect(lines.nth(1)).toBeFocused();
+  await expect(lines.nth(1)).toHaveValue('Learn');
+});
+
 test('Backspace on an empty bullet deletes its node', async ({ page }) => {
   await open(page);
   await insert(page, 'list', 'vList2');

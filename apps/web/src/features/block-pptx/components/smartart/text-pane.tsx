@@ -100,27 +100,45 @@ export function SmartArtTextPane(props: {
     for (const id of [...pending.keys()]) void commit(id);
   });
 
-  const focus = (id: string | undefined, at: 'start' | 'end') => {
+  /** Puts the caret in a bullet: at its start, its end, or an offset. */
+  const focus = (id: string | undefined, at: 'start' | 'end' | number) => {
     if (!id) return;
     queueMicrotask(() => {
       const el = inputs.get(id);
       if (!el) return;
       el.focus({ preventScroll: true });
-      const n = at === 'start' ? 0 : el.value.length;
+      const n = at === 'start' ? 0 : at === 'end' ? el.value.length : at;
       el.setSelectionRange(n, n);
     });
   };
+
+  /**
+   * Keys typed while Enter's new bullet is being made: they belong to the
+   * new bullet, not to the one Enter left.
+   */
+  let splitting: { typed: string } | undefined;
 
   const run = async (action: PaneAction, input: HTMLInputElement) => {
     const edit = paneEdit(action);
     switch (action.kind) {
       case 'split': {
-        setDraft(action.node, action.before);
-        await commit(action.node, action.before);
-        const id = await enqueue(() =>
-          s().addNode('after', action.after, action.node)
-        );
-        focus(id, 'start');
+        const typing = { typed: '' };
+        splitting = typing;
+        try {
+          setDraft(action.node, action.before);
+          await commit(action.node, action.before);
+          const id = await enqueue(() =>
+            s().addNode('after', action.after, action.node)
+          );
+          if (id && typing.typed) {
+            const text = typing.typed + action.after;
+            setDraft(id, text);
+            schedule(id, text);
+          }
+          focus(id, typing.typed.length);
+        } finally {
+          if (splitting === typing) splitting = undefined;
+        }
         return;
       }
       case 'delete': {
@@ -153,6 +171,14 @@ export function SmartArtTextPane(props: {
 
   const onKeyDown = (e: KeyboardEvent, id: string) => {
     if (e.isComposing) return;
+    if (splitting) {
+      e.preventDefault();
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey)
+        splitting.typed += e.key;
+      else if (e.key === 'Backspace')
+        splitting.typed = splitting.typed.slice(0, -1);
+      return;
+    }
     const input = e.currentTarget as HTMLInputElement;
     if (e.key === 'Escape') {
       e.preventDefault();
