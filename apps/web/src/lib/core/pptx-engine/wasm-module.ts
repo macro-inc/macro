@@ -48,6 +48,8 @@ export interface WasmPptxDocument {
   mediaBytes: (part: string) => Uint8Array;
   /** `LinkRegion[]` JSON: a slide's clickable areas. */
   linkRegions: (index: number) => string;
+  /** `ShapeGeometryInfo` JSON (or `null`): a shape's outline as paths. */
+  geometryPaths: (index: number, shape: number) => string;
   /** Applies an `EditOp[]` JSON batch; returns `EditResult` JSON. */
   apply: (ops: string, group?: string) => string;
   breakGroup: () => void;

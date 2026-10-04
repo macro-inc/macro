@@ -57,6 +57,7 @@ import {
 } from '../components/chart-controls';
 import { CropOverlay } from '../components/crop-overlay';
 import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
+import { EditPointsOverlay } from '../components/edit-points-overlay';
 import { ExportDialog } from '../components/export-dialog';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
@@ -119,6 +120,10 @@ import { paragraphCommand } from '../core/text-commands';
 import { createClipboard } from '../primitives/create-clipboard';
 import { createCropMode } from '../primitives/create-crop-mode';
 import { createDeckSetup } from '../primitives/create-deck-setup';
+import {
+  canEditPoints,
+  createEditPoints,
+} from '../primitives/create-edit-points';
 import {
   createEditorCommands,
   type LinkTarget,
@@ -483,6 +488,14 @@ export function PptxEditor() {
     queue,
     canEdit: context.canEdit,
     renderWidth,
+    onExit: () => queueMicrotask(focusStage),
+  });
+  // Shape Format ▸ Edit Shape ▸ Edit Points.
+  const editPoints = createEditPoints({
+    engine,
+    session,
+    editor,
+    canEdit: context.canEdit,
     onExit: () => queueMicrotask(focusStage),
   });
 
@@ -1451,6 +1464,11 @@ export function PptxEditor() {
     download: () => void download(),
     recentFonts,
     deckSetup,
+    shapeGeometry: {
+      toggleEditPoints: () => void editPoints.toggle(),
+      editingPoints: editPoints.active,
+      merge: (mode) => void commands.mergeShapes(mode),
+    },
   };
 
   const tableTabProps = () => {
@@ -1999,7 +2017,12 @@ export function PptxEditor() {
                           width={slideW()}
                           height={slideH()}
                           unit={unit()}
-                          selection={overlay().selection}
+                          // Edit Points draws the outline instead.
+                          selection={
+                            editPoints.active()
+                              ? undefined
+                              : overlay().selection
+                          }
                           outlines={overlay().outlines}
                           showHandles={!readonly()}
                           rotatable={overlay().rotatable}
@@ -2083,6 +2106,9 @@ export function PptxEditor() {
                                 setPane(section ?? 'shape'),
                               replacePicture: () => replacePictureInput.click(),
                               crop: () => void crop.enter(),
+                              editPoints: canEditPoints(editor.selectedShape())
+                                ? () => void editPoints.enter()
+                                : undefined,
                               editChartData: () => {
                                 const s = editor.selectedShape();
                                 if (s) chartEditor(s);
@@ -2171,6 +2197,9 @@ export function PptxEditor() {
                           </Show>
                         );
                       }}
+                    </Show>
+                    <Show when={editPoints.active()}>
+                      <EditPointsOverlay points={editPoints} scale={scale()} />
                     </Show>
                     <Show when={crop.active()}>
                       <CropOverlay

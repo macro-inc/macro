@@ -521,6 +521,31 @@ Layout and test hooks:
   and the round `pptx-crop-image-handle-<nw|ne|se|sw>` scale it. Enter, Esc,
   a click outside, or Crop again apply the crop as one undo step; rotated
   and flipped pictures crop in place too.
+- **Edit Shape** (Shape Format ▸ `pptx-edit-shape`): Change Shape
+  (`pptx-change-shape`, then `pptx-shape-<preset>`) and **Edit Points**
+  (`pptx-edit-points`; also right-click a shape ▸ Edit Points). Edit Points
+  (`pptx-edit-points` overlay) draws the outline as a red path
+  (`pptx-edit-points-path`) with black square vertices (`pptx-edit-point`,
+  `data-selected` on the clicked one, whose Bézier handles show as white
+  squares `pptx-edit-points-handle-in|out`; on a straight side they sit a
+  third of the way along it). Drag a vertex or handle to reshape, drag a
+  segment to bend it; Ctrl/Cmd+click a segment adds a point and
+  Ctrl/Cmd+click a vertex (or Delete) removes it. The path follows the
+  pointer live and the shape updates on release, one undo step per gesture
+  (Cmd/Ctrl+Z works in the mode). Right-click a vertex for Delete Point,
+  Open/Close Path, Smooth/Straight/Corner Point; a segment for Add Point,
+  Delete Segment, Open/Close Path, Straight/Curved Segment; anywhere for
+  Exit Edit Points. Esc or a click away from the outline leaves the mode.
+  Rotated, flipped, and grouped shapes edit in place; a preset becomes
+  custom geometry (`setCustomGeometry`) keeping its fill, outline, effects,
+  text and text area, and the box follows the outline.
+- **Merge Shapes** (Shape Format ▸ `pptx-merge-shapes`, enabled with two or
+  more shapes, text boxes, or pictures selected):
+  `pptx-merge-<union|combine|fragment|intersect|subtract>`. The result takes
+  the first selected shape's formatting, text, rotation, and id (a picture
+  stays a picture with its image in place), replaces the shapes, and is
+  selected (Fragment selects every piece); curves stay curves. Engine and
+  AI spelling: `mergeShapes` with `shapes` in selection order.
 - **Format pane** (`pptx-format-pane`): Format shape… in menus opens fill and
   line, size and position (with alt text `pptx-alt-text`), and text box and
   paragraph settings; Format background… opens the slide background. Its

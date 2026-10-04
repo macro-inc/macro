@@ -908,7 +908,22 @@ export type EditOp =
    */
   | { op: 'removeSection'; id: string; deleteSlides?: boolean }
   /** Moves a section and its slides to a 0-based index among the sections. */
-  | { op: 'moveSection'; id: string; toIndex: number };
+  | { op: 'moveSection'; id: string; toIndex: number }
+  /**
+   * Replaces a shape's outline with custom geometry (Edit Points), in
+   * shape-local points. With `fit` (the default) the box follows the paths'
+   * bounds so the outline stays where it is drawn.
+   */
+  | ({
+      op: 'setCustomGeometry';
+      paths: GeometryPath[];
+      fit?: boolean;
+    } & ShapeTarget)
+  /**
+   * Merge Shapes: the result takes the first shape's formatting (and id);
+   * `created` lists the resulting shapes (Fragment adds pieces).
+   */
+  | { op: 'mergeShapes'; slide: number; shapes: number[]; mode: MergeMode };
 
 /**
  * How content follows a new slide size: `none` keeps it as is; `fit`
@@ -1205,4 +1220,65 @@ export interface MediaOutline {
   part?: string;
   /** The address of a linked clip. */
   url?: string;
+}
+
+/**
+ * One drawing command of a custom outline, in shape-local points (`(0, 0)`
+ * is the top-left of the unrotated box). Mirrors `edit::PathCommand`.
+ */
+export type PathCommand =
+  | { cmd: 'moveTo'; x: number; y: number }
+  | { cmd: 'lineTo'; x: number; y: number }
+  | {
+      cmd: 'cubicBezTo';
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      x: number;
+      y: number;
+    }
+  | { cmd: 'quadBezTo'; x1: number; y1: number; x: number; y: number }
+  /** DrawingML `arcTo`: radii in points, angles in degrees (clockwise). */
+  | { cmd: 'arcTo'; wR: number; hR: number; stAng: number; swAng: number }
+  | { cmd: 'close' };
+
+/** How a geometry path is filled (DrawingML's path `fill`). */
+export type PathFillMode =
+  | 'norm'
+  | 'none'
+  | 'lighten'
+  | 'lightenLess'
+  | 'darken'
+  | 'darkenLess';
+
+/** One path of a shape's outline. Mirrors `edit::GeometryPath`. */
+export interface GeometryPath {
+  commands: PathCommand[];
+  /** `norm` when omitted. */
+  fill?: PathFillMode | null;
+  /** True when omitted. */
+  stroke?: boolean | null;
+}
+
+/** Merge Shapes operations. */
+export type MergeMode =
+  | 'union'
+  | 'combine'
+  | 'fragment'
+  | 'intersect'
+  | 'subtract';
+
+/** A shape's outline as editable paths (`geometryPaths`). */
+export interface ShapeGeometryInfo {
+  shape: number;
+  /** The shape's box (points). */
+  w: number;
+  h: number;
+  /** Shape-local → slide points, `[a, b, c, d, e, f]`. */
+  transform: [number, number, number, number, number, number];
+  /** The preset the outline comes from, or absent for custom geometry. */
+  preset?: string;
+  /** Lines, cubic and quadratic curves (arcs come as cubics). */
+  paths: GeometryPath[];
 }

@@ -70,6 +70,8 @@ export interface StageMenuActions {
   replacePicture?: () => void;
   /** Enters crop mode for the selected picture. */
   crop?: () => void;
+  /** Enters Edit Points for the selected shape, when its points can be edited. */
+  editPoints?: () => void;
   editChartData?: () => void;
   changeChartType?: () => void;
   selectRows?: () => void;
@@ -658,6 +660,14 @@ export function StageMenuItems(props: {
             shortcut="enter"
             disabled={ro()}
             onClick={() => a().editText?.()}
+          />
+        </Show>
+        <Show when={a().editPoints && a().selectionCount === 1}>
+          <MenuItem
+            text="Edit Points"
+            icon={PencilSimple}
+            disabled={ro()}
+            onClick={() => a().editPoints?.()}
           />
         </Show>
         <Show when={a().isPicture && a().replacePicture}>

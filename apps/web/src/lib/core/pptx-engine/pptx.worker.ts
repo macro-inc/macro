@@ -17,6 +17,7 @@ import type {
   EntryChange,
   LinkRegion,
   PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
   TextLayoutInfo,
   TextMatch,
@@ -313,6 +314,15 @@ async function serve(
     .with({ kind: 'mediaBytes' }, ({ docKey, part }) => {
       const bytes = documentFor(docKey).mediaBytes(part);
       return [{ id, ok: true, kind: 'mediaBytes', bytes }, [bytes.buffer]] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'geometryPaths' }, ({ docKey, index, shape }) => {
+      const geometry = JSON.parse(
+        documentFor(docKey).geometryPaths(index, shape)
+      ) as ShapeGeometryInfo | null;
+      return [{ id, ok: true, kind: 'geometryPaths', geometry }, []] as [
         PptxResponse,
         Transferable[],
       ];

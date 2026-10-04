@@ -23,6 +23,7 @@ import type { Swatch } from '../../core/palette';
 import type { DeckSetup } from '../../primitives/create-deck-setup';
 import type { EditorCommands } from '../../primitives/create-editor-commands';
 import type { ViewOptionsState } from '../../primitives/create-view-options';
+import type { ShapeGeometryCommands } from './shape-geometry-menus';
 
 export interface RibbonEnv {
   commands: EditorCommands;
@@ -93,6 +94,8 @@ export interface RibbonEnv {
   extraTabs?: () => RibbonTab[];
   /** Header & Footer, slide size, and sections (dialogs and section view state). */
   deckSetup?: DeckSetup;
+  /** Edit Points and Merge Shapes (Shape Format ▸ Insert Shapes). */
+  shapeGeometry?: ShapeGeometryCommands;
 }
 
 const RibbonContext = createContext<RibbonEnv>();
