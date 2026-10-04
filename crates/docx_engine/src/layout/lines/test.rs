@@ -388,3 +388,37 @@ fn tabs_to_stops_past_the_right_edge_go_to_the_next_line() {
         p.para.lines.x[e]
     );
 }
+
+/// Where the text after two leading tabs starts (points from the margin),
+/// on a page with left margin `margin`, the paragraph indented `indent`,
+/// with default stops every `stop` (all twips).
+fn after_two_tabs(margin: u32, indent: u32, stop: u32) -> f32 {
+    let body = format!(
+        r#"<w:p><w:pPr><w:ind w:left="{indent}"/></w:pPr><w:r><w:tab/><w:tab/><w:t>Text</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="{margin}" w:bottom="1440" w:left="{margin}" w:header="720" w:footer="720"/></w:sectPr>"#
+    );
+    let settings = format!(r#"<w:defaultTabStop w:val="{stop}"/>"#);
+    let (_, l) = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            settings: Some(&settings),
+            ..Parts::default()
+        },
+    );
+    let p = lines(&l, 0)[0];
+    let t = p.para.inline.clusters.iter().position(|c| c.ch == 'T');
+    p.para.lines.x[t.expect("the text")]
+}
+
+#[test]
+fn a_line_word_starts_just_before_a_default_stop_tabs_to_it() {
+    // 2 cm margin and indent, 1 cm stops: Word starts the line a device
+    // unit before the 2 cm stop, so the first tab stops there and only the
+    // second reaches 3 cm.
+    let x = after_two_tabs(1134, 1134, 567);
+    assert!((x - 85.05).abs() < 0.01, "{x}");
+    // 1 inch margin, half-inch indent and stops: nothing rounds, and each
+    // tab goes a stop further.
+    let x = after_two_tabs(1440, 720, 720);
+    assert!((x - 108.0).abs() < 0.01, "{x}");
+}

@@ -208,6 +208,7 @@ pub(crate) struct ParaKey {
     pub table: u64,
     pub label: Option<(String, String)>,
     pub grid: u32,
+    pub origin: u32,
     pub markup: bool,
     pub note_number: Option<String>,
 }

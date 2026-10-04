@@ -213,7 +213,13 @@ pub fn prev_record(props: &ParaProps) -> PrevPara {
 
 /// How lines of a paragraph formatted `props` break in a text area `width`
 /// wide.
-fn line_ctx<'a>(env: &Env<'_>, props: &'a ParaProps, width: f32, grid: Option<f32>) -> LineCtx<'a> {
+fn line_ctx<'a>(
+    env: &Env<'_>,
+    props: &'a ParaProps,
+    width: f32,
+    grid: Option<f32>,
+    origin: Option<f32>,
+) -> LineCtx<'a> {
     let settings = &env.doc.parts().settings;
     LineCtx {
         props,
@@ -223,6 +229,7 @@ fn line_ctx<'a>(env: &Env<'_>, props: &'a ParaProps, width: f32, grid: Option<f3
         grid: grid.filter(|_| props.snap_to_grid),
         shrink_spaces: settings.compat_mode >= 15,
         mark_with_page_break: !settings.split_page_break_and_mark,
+        origin,
     }
 }
 
@@ -232,11 +239,11 @@ fn line_ctx<'a>(env: &Env<'_>, props: &'a ParaProps, width: f32, grid: Option<f3
 pub(in crate::layout) fn rebreak(
     env: &Env<'_>,
     pb: &ParaBox,
-    width: f32,
+    (width, origin): (f32, Option<f32>),
     from: usize,
     grid: Option<f32>,
 ) -> Arc<ParaBox> {
-    let ctx = line_ctx(env, &pb.format.props, width, grid);
+    let ctx = line_ctx(env, &pb.format.props, width, grid, origin);
     Arc::new(ParaBox {
         story: pb.story.clone(),
         block: pb.block.clone(),
@@ -261,6 +268,8 @@ pub(in crate::layout) struct ParaCtx<'c> {
     pub note_number: Option<&'c str>,
     /// The line pitch of the document grid its lines snap to.
     pub grid: Option<f32>,
+    /// The page x of the left edge of the text area, when known.
+    pub origin: Option<f32>,
 }
 
 /// Lays out one paragraph into a box.
@@ -272,6 +281,7 @@ pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>
         fields,
         note_number,
         grid,
+        origin,
     } = *cx;
     // Body labels are numbered across the document; other stories (whose
     // block ids may repeat the body's) number their paragraphs themselves.
@@ -294,6 +304,7 @@ pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>
             table: h.finish(),
             label: label.map(|(l, _)| (l.text.clone(), format!("{:?}{:?}", l.suffix, l.jc))),
             grid: grid.map_or(0, f32::to_bits),
+            origin: origin.map_or(u32::MAX, f32::to_bits),
             markup: env.options.markup,
             note_number: note_number.map(str::to_owned),
         }
@@ -326,7 +337,11 @@ pub(in crate::layout) fn para_box(env: &Env<'_>, block: &Block, cx: &ParaCtx<'_>
         markup: env.options.markup,
     };
     let built = inline::build(block, &format, label, &ctx);
-    let lines = break_lines(&built, &line_ctx(env, &format.props, width, grid), None);
+    let lines = break_lines(
+        &built,
+        &line_ctx(env, &format.props, width, grid, origin),
+        None,
+    );
     let pb = Arc::new(ParaBox {
         story: story.clone(),
         block: block.id.clone(),
@@ -593,6 +608,7 @@ pub(in crate::layout) fn stack_blocks(
                         fields: &sc.fields,
                         note_number: sc.note_number.as_deref(),
                         grid: None,
+                        origin: None,
                     },
                 );
                 let props = &pb.format.props;

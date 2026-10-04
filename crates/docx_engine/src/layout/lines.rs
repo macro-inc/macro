@@ -86,6 +86,10 @@ pub struct LineCtx<'a> {
     /// A paragraph mark right after a page break stays on the break's line
     /// rather than going to the next page alone.
     pub mark_with_page_break: bool,
+    /// Page x of the text area's left edge, when known. Word places lines
+    /// in device units, which decides where the first tab of a line that
+    /// starts on a default tab stop goes.
+    pub origin: Option<f32>,
 }
 
 /// Space a wrapping float takes from a line: (left inset, right inset) for
@@ -109,7 +113,32 @@ struct Stop {
     custom: bool,
 }
 
-fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool) -> Stop {
+/// A length in twips in Word's device units (1/600 inch), rounded half to
+/// even.
+fn device_units(twips: i64) -> i64 {
+    let n = twips * 5;
+    let (q, r) = (n.div_euclid(12), n.rem_euclid(12));
+    match (2 * r).cmp(&12) {
+        std::cmp::Ordering::Greater => q + 1,
+        std::cmp::Ordering::Equal => q + (q & 1),
+        std::cmp::Ordering::Less => q,
+    }
+}
+
+/// Whether a line starting `x` points into a text area whose left edge is
+/// at page x `origin` really starts before that point in Word: Word starts
+/// it at the rounded edge plus the rounded indent, and places tab stops at
+/// the rounded sum (A4 pages with 2 cm margins and indents start a device
+/// unit early).
+fn starts_early(origin: f32, x: f32) -> bool {
+    let twips = |v: f32| (v * 20.0).round() as i64;
+    let (origin, x) = (twips(origin), twips(x));
+    device_units(origin) + device_units(x) < device_units(origin + x)
+}
+
+/// The stop a tab at `x` goes to; `line_start` when nothing comes before it
+/// on its line.
+fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool, line_start: bool) -> Stop {
     let p = ctx.props;
     let mut best: Option<Stop> = None;
     for s in &p.tabs {
@@ -150,7 +179,17 @@ fn next_stop(x: f32, ctx: &LineCtx<'_>, first_line: bool) -> Stop {
         .map(|s| s.pos)
         .fold(f32::MIN, f32::max);
     let from = x.max(last_custom);
-    let pos = ((from + EPS) / interval).floor() * interval + interval;
+    let mut pos = ((from + EPS) / interval).floor() * interval + interval;
+    // A line starting on a default stop that Word starts just before it:
+    // its first tab goes to that stop.
+    let on_stop = x > EPS && ((x / interval).round() * interval - x).abs() < EPS;
+    if line_start
+        && on_stop
+        && last_custom < x - EPS
+        && ctx.origin.is_some_and(|o| starts_early(o, x))
+    {
+        pos = x;
+    }
     Stop {
         pos,
         align: TabAlign::Left,
@@ -311,7 +350,7 @@ pub fn break_lines_from(
                                 custom: false,
                             }
                         }
-                        None => next_stop(x, ctx, first),
+                        None => next_stop(x, ctx, first, !has_content),
                     };
                     // A tab to a stop of its own past the right edge goes
                     // to the next line, as a word that does not fit would.
