@@ -44,6 +44,10 @@ pub use picture::{
 
 mod picture;
 
+pub use geometry::ShapeGeometryInfo;
+
+pub(crate) mod geometry;
+
 /// What kind of object a shape is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

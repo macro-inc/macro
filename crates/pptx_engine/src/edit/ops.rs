@@ -7,8 +7,10 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+mod geometry;
 mod picture_format;
 
+pub use geometry::{GeometryPath, MergeMode, PathCommand, PathFillMode};
 pub use picture_format::{
     CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
 };
@@ -780,6 +782,46 @@ pub enum EditOp {
         /// gap); or options.
         #[serde(default)]
         reflection: Option<EffectSpec<ReflectionOptions>>,
+    },
+    // ---- freeform geometry ----
+    /// Replaces a shape's outline with custom geometry (PowerPoint's Edit
+    /// Points; a preset shape becomes a freeform). Fill, outline, effects,
+    /// text, rotation, and flips stay. Works on drawn shapes, text boxes,
+    /// placeholders, and pictures (it reshapes their crop outline). The
+    /// text area keeps its place on the slide.
+    SetCustomGeometry {
+        /// Slide id.
+        slide: u32,
+        /// Shape id.
+        shape: u32,
+        /// The outline's paths, in shape-local points (see `PathCommand`).
+        paths: Vec<GeometryPath>,
+        /// When true (the default when omitted or null), the shape's box is
+        /// moved and resized to the paths' bounds so the outline stays
+        /// exactly where it is drawn on the slide, as PowerPoint does after
+        /// Edit Points; points may then lie outside the current box. When
+        /// false, the box stays and the paths are drawn in it as given
+        /// (resizing the shape later stretches them).
+        #[serde(default)]
+        fit: Option<bool>,
+    },
+    /// Merges shapes into new outlines (PowerPoint's Shape Format ▸ Merge
+    /// Shapes), working in slide space with each shape's rotation, flips,
+    /// and group transform. The result takes the formatting, text, and
+    /// effects of the first shape (and its rotation, so its fill and text
+    /// keep their orientation) and replaces the shapes. The result's shape
+    /// ids are reported as created: the first is the first shape's id, which
+    /// the result keeps (`fragment` adds the other pieces as new shapes).
+    /// Lines, connectors, tables, charts, and groups cannot be merged; a
+    /// merge that leaves nothing is an error.
+    MergeShapes {
+        /// Slide id.
+        slide: u32,
+        /// Ids of two or more shapes in selection order; the first one's
+        /// formatting wins (and `subtract` cuts the others out of it).
+        shapes: Vec<u32>,
+        /// `union`, `combine`, `fragment`, `intersect`, or `subtract`.
+        mode: MergeMode,
     },
     // ---- theme ----
     /// Recolors the deck: sets theme color slots in every slide master's

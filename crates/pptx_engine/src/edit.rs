@@ -32,6 +32,7 @@ mod diff;
 pub(crate) mod effects;
 mod find;
 mod format_painter;
+mod freeform;
 pub(crate) mod group;
 pub(crate) mod header_footer;
 mod links;
@@ -53,6 +54,7 @@ pub use ops::{BorderEdges, BorderLine, CellBorders, SlideScale, ThemeColor};
 pub use ops::{
     CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
 };
+pub use ops::{GeometryPath, MergeMode, PathCommand, PathFillMode};
 pub use slides::{LayoutInfo, layouts};
 
 pub use clipboard::{
@@ -126,7 +128,9 @@ impl EditOp {
             | O::RemoveAnimations { slide, .. }
             | O::CropPicture { slide, .. }
             | O::FormatPicture { slide, .. }
-            | O::SetShapeEffects { slide, .. } => Some(*slide),
+            | O::SetShapeEffects { slide, .. }
+            | O::SetCustomGeometry { slide, .. }
+            | O::MergeShapes { slide, .. } => Some(*slide),
             O::PasteSlides { .. }
             | O::SetThemeColors { .. }
             | O::SetThemeFonts { .. }
@@ -157,6 +161,7 @@ impl EditOp {
                 | EditOp::SetFill { .. }
                 | EditOp::RemoveSection { .. }
                 | EditOp::FormatPicture { .. }
+                | EditOp::MergeShapes { .. }
         )
     }
 }
@@ -875,6 +880,25 @@ impl Presentation {
                     reflection: reflection.as_ref(),
                 };
                 effects::set_shape_effects(self, *slide, shapes, &patch)?;
+            }
+            O::SetCustomGeometry {
+                slide,
+                shape,
+                paths,
+                fit,
+            } => freeform::set_custom_geometry(self, *slide, *shape, paths, fit.unwrap_or(true))?,
+            O::MergeShapes {
+                slide,
+                shapes,
+                mode,
+            } => {
+                for id in freeform::merge_shapes(self, *slide, shapes, *mode)? {
+                    out.created.push(Created {
+                        slide: *slide,
+                        shape: Some(id),
+                        section: None,
+                    });
+                }
             }
         }
         out.created.extend(created);

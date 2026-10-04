@@ -235,6 +235,15 @@ impl PptxDocument {
         to_json(&lay)
     }
 
+    /// A shape's outline as editable paths in shape-local points, with its
+    /// shape-local → slide transform, as JSON (`ShapeGeometryInfo`, or
+    /// `null` for groups and graphic frames). For Edit Points.
+    #[wasm_bindgen(js_name = geometryPaths)]
+    pub fn geometry_paths(&mut self, index: usize, shape: u32) -> Result<String, JsError> {
+        let info = self.pres().geometry_paths(index, shape).map_err(js_err)?;
+        to_json(&info)
+    }
+
     /// The bytes of a video or audio clip (`MediaOutline.part`).
     #[wasm_bindgen(js_name = mediaBytes)]
     pub fn media_bytes(&mut self, part: &str) -> Result<Vec<u8>, JsError> {
