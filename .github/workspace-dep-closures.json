@@ -7676,7 +7676,6 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
       "crates/rate_limit",
