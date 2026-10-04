@@ -96,8 +96,8 @@ pub struct PrevPara {
     pub contextual: bool,
     /// Its space after is automatic.
     pub auto_after: bool,
-    /// It is a list item.
-    pub numbered: bool,
+    /// The list (numbering instance) it is an item of.
+    pub list: Option<i64>,
     /// Its borders and indents, for border groups.
     pub border: BorderBox,
 }
@@ -173,8 +173,10 @@ pub fn space_before(
     if prev.contextual && same_style {
         after = 0.0;
     }
-    if props.before_auto && prev.auto_after && prev.numbered && props.num.is_some() {
-        // HTML-style auto spacing gives list items none.
+    let list = props.num.map(|(id, _)| id);
+    if props.before_auto && prev.auto_after && list.is_some() && prev.list == list {
+        // HTML-style auto spacing leaves none between the items of a list
+        // (but keeps it between two lists).
         return 0.0;
     }
     if sum {
@@ -204,7 +206,7 @@ pub fn prev_record(props: &ParaProps) -> PrevPara {
         after: space_after(props),
         contextual: props.contextual_spacing,
         auto_after: props.after_auto,
-        numbered: props.num.is_some(),
+        list: props.num.map(|(id, _)| id),
         border: BorderBox::of(props),
     }
 }

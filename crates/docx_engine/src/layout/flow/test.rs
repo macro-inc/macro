@@ -933,3 +933,26 @@ fn space_after_must_fit_above_footnotes() {
     assert_eq!(count(true), 26);
     assert_eq!(count(false), 28);
 }
+
+#[test]
+fn auto_spacing_vanishes_between_items_of_one_list_only() {
+    // Two items of list 1, then two of list 2, all spaced automatically:
+    // none between the items of a list, 14pt between the two lists.
+    let numbering = r#"<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="-"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="0"/></w:num>"#;
+    let item = |num: u32| {
+        format!(
+            r#"<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="{num}"/></w:numPr><w:spacing w:before="100" w:beforeAutospacing="1" w:after="100" w:afterAutospacing="1"/></w:pPr><w:r><w:t>Item</w:t></w:r></w:p>"#
+        )
+    };
+    let body = format!("{}{}{}{}{LETTER}", item(1), item(1), item(2), item(2));
+    let parts = Parts {
+        numbering: Some(numbering),
+        ..arial_10()
+    };
+    let l = layout(&body, &parts);
+    let ls = lines(&l, &StoryRef::Body);
+    let gap = |k: usize| ls[k + 1].y - (ls[k].y + ls[k].line().height);
+    assert!(gap(0).abs() < 0.01, "{}", gap(0));
+    assert!((gap(1) - 14.0).abs() < 0.01, "{}", gap(1));
+    assert!(gap(2).abs() < 0.01, "{}", gap(2));
+}
