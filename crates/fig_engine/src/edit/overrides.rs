@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 /// A path element as files write it: the node's override key when it has
 /// one (components from libraries), else its guid.
-fn key_of(doc: &Document, g: Guid) -> Guid {
+pub(super) fn key_of(doc: &Document, g: Guid) -> Guid {
     doc.find(g)
         .and_then(|i| doc.props(i).override_key)
         .unwrap_or(g)
@@ -45,7 +45,7 @@ fn entry_for(doc: &Document, overrides: &mut Vec<Props>, path: &[Guid]) -> usize
     overrides.len() - 1
 }
 
-fn same_path(doc: &Document, a: &[Guid], b: &[Guid]) -> bool {
+pub(super) fn same_path(doc: &Document, a: &[Guid], b: &[Guid]) -> bool {
     a.len() == b.len()
         && a.iter()
             .zip(b)
@@ -130,6 +130,7 @@ impl Txn<'_> {
             entry.size = shown.size;
             relaid = true;
         }
+        entry.recomputed = true;
         overrides[k] = entry;
         // Text bound to a component property is set through the property,
         // on the instance whose component the layer belongs to.
@@ -169,6 +170,7 @@ impl Txn<'_> {
             } else {
                 let o = entry_for(self.doc, &mut overrides, owner);
                 overrides[o].prop_assignments = Some(list.into());
+                overrides[o].recomputed = true;
             }
         }
         if let Some(list) = root_assignments {
@@ -195,6 +197,11 @@ impl Txn<'_> {
         }));
         if let Some(list) = derived {
             p.derived = Some(list.into());
+        }
+        if relaid {
+            // The new text's size moves its neighbors in the instance.
+            let size = self.doc.props(root).size();
+            self.relayout_instance(root, size, &[path])?;
         }
         Ok(())
     }

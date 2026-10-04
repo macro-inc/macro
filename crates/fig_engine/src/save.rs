@@ -73,7 +73,7 @@ message DerivedTextData layoutSize:Vector baselines:Baseline[] glyphs:Glyph[] de
 message TextData characters:string characterStyleIDs:uint[] styleOverrideTable:NodeChange[]
 message GUIDPath guids:GUID[]
 message SymbolData symbolID:GUID symbolOverrides:NodeChange[] uniformScaleFactor:float
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float blendMode:BlendMode size:Vector transform:Matrix mask:bool fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign strokeCap:StrokeCap strokeJoin:StrokeJoin dashPattern:float[] fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float rectangleTopLeftCornerRadius:float rectangleTopRightCornerRadius:float rectangleBottomLeftCornerRadius:float rectangleBottomRightCornerRadius:float rectangleCornerRadiiIndependent:bool cornerSmoothing:float frameMaskDisabled:bool backgroundColor:Color backgroundOpacity:float backgroundEnabled:bool internalOnly:bool textData:TextData derivedTextData:DerivedTextData fontSize:float fontName:FontName lineHeight:Number letterSpacing:Number textAlignHorizontal:TextAlignHorizontal textAlignVertical:TextAlignVertical textAutoResize:TextAutoResize paragraphSpacing:float textDecoration:TextDecoration textCase:TextCase derivedSymbolData:NodeChange[] stackMode:StackMode stackSpacing:float stackHorizontalPadding:float stackVerticalPadding:float stackPaddingRight:float stackPaddingBottom:float stackPrimaryAlignItems:StackJustify stackCounterAlignItems:StackAlign stackPrimarySizing:StackSize stackCounterSizing:StackSize stackWrap:StackWrap stackChildPrimaryGrow:float stackChildAlignSelf:StackCounterAlign stackPositioning:StackPositioning horizontalConstraint:ConstraintType verticalConstraint:ConstraintType symbolData:SymbolData overriddenSymbolID:GUID guidPath:GUIDPath overrideKey:GUID
 message Blob bytes:byte[]
 message Message type:MessageType sessionID:uint ackID:uint nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -644,7 +644,7 @@ impl<'s> Build<'s> {
             self.guid_field(&mut sm, "symbolID", id);
             m.set(s, "symbolData", Value::Msg(Box::new(sm)));
         }
-        if edits & flags::OVERRIDES != 0 {
+        if edits & (flags::OVERRIDES | flags::DERIVED) != 0 {
             self.overrides(m, p, doc);
         }
         if edits & flags::STROKE_CAP != 0
@@ -832,7 +832,9 @@ impl<'s> Build<'s> {
                     .collect(),
                 _ => Vec::new(),
             };
-            for o in symbol.overrides.iter() {
+            // Only overrides the editor changed are written; the file's
+            // others are copied as they are.
+            for o in symbol.overrides.iter().filter(|o| o.recomputed) {
                 let Some(path) = o.guid_path.as_deref() else {
                     continue;
                 };
@@ -882,21 +884,70 @@ impl<'s> Build<'s> {
             m.set(s, "symbolData", Value::Msg(Box::new(sm)));
         }
         if let Some(derived) = p.derived.as_deref()
-            && let Some(Value::List(list)) = m.get(s, "derivedSymbolData").cloned()
+            && let Some(def) = self.sub(m.def, "derivedSymbolData")
         {
-            let kept: Vec<Value> = list
-                .into_iter()
-                .filter(|v| match v {
-                    Value::Msg(e) => {
+            // Entries the edits made stale are gone from memory; drop them.
+            let mut list: Vec<Msg> = match m.get(s, "derivedSymbolData") {
+                Some(Value::List(l)) => l
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Msg(e) => Some((**e).clone()),
+                        _ => None,
+                    })
+                    .filter(|e| {
                         let path = self.read_path(e);
                         derived
                             .iter()
                             .any(|d| d.guid_path.as_deref().is_some_and(|p| same(p, &path)))
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            // Write the ones the editor laid out.
+            for d in derived.iter().filter(|d| d.recomputed) {
+                let Some(path) = d.guid_path.as_deref() else {
+                    continue;
+                };
+                let k = match list.iter().position(|e| same(&self.read_path(e), path)) {
+                    Some(k) => k,
+                    None => {
+                        let mut e = Msg::new(def);
+                        self.write_path(&mut e, path);
+                        list.push(e);
+                        list.len() - 1
                     }
-                    _ => true,
-                })
-                .collect();
-            m.set(s, "derivedSymbolData", Value::List(kept));
+                };
+                let mut edits = 0;
+                for (set, flag) in [
+                    (d.transform.is_some(), flags::TRANSFORM),
+                    (d.size.is_some(), flags::SIZE),
+                    (
+                        d.fill_geometry.is_some() || d.stroke_geometry.is_some(),
+                        flags::GEOMETRY,
+                    ),
+                ] {
+                    if set {
+                        edits |= flag;
+                    }
+                }
+                let node = Node {
+                    props: d.clone(),
+                    parent: None,
+                    children: Vec::new(),
+                    edits,
+                    removed: false,
+                    source: None,
+                };
+                self.patch(&mut list[k], &node, doc, edits);
+                if d.text_layout.is_some() {
+                    self.text(&mut list[k], &d.clone());
+                }
+            }
+            m.set(
+                s,
+                "derivedSymbolData",
+                Value::List(list.into_iter().map(|e| Value::Msg(Box::new(e))).collect()),
+            );
         }
     }
 

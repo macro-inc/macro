@@ -63,6 +63,8 @@ pub mod flags {
     pub const PROP_ASSIGNMENTS: u32 = 1 << 25;
     /// How open paths end (lines, arrows).
     pub const STROKE_CAP: u32 = 1 << 26;
+    /// An instance's derived layout (where its layers are at its size).
+    pub const DERIVED: u32 = 1 << 27;
 }
 
 /// A paint as the editor describes it.
@@ -421,6 +423,7 @@ struct Txn<'a> {
 }
 
 mod components;
+mod instance_layout;
 mod overrides;
 pub(crate) use overrides::guid_of;
 pub(crate) mod layout;
@@ -784,6 +787,9 @@ impl<'a> Txn<'a> {
             let before = self.doc.props(i).size();
             self.resize(i, patch.width, patch.height);
             let after = self.doc.props(i).size();
+            if before != after && self.doc.props(i).node_type() == NodeType::Instance {
+                self.relayout_instance(i, before, &[])?;
+            }
             if text && before != after {
                 // Figma: dragging a width fixes it; a height fixes both.
                 let auto = self

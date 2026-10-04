@@ -443,6 +443,10 @@ pub struct Props {
     pub fill_style: Option<Guid>,
     pub stroke_style: Option<Guid>,
     pub effect_style: Option<Guid>,
+    /// On an instance's override or derived layout entry: made by the
+    /// editor (and written when saving); the file's own are kept as they
+    /// are.
+    pub recomputed: bool,
 }
 
 macro_rules! merge_fields {

@@ -494,8 +494,14 @@ fn override_text(path: &Path) {
         println!("{}: no text in instances", stem(path));
         return;
     };
+    // The outermost instance, widened by 40, then the text overridden.
+    let root = id[1..].split(';').next().unwrap_or_default().to_owned();
+    let width = fig_engine::model::Guid::parse(&root)
+        .and_then(|g| doc.find(g))
+        .map_or(100.0, |i| doc.props(i).size().x + 40.0);
     let ops: Vec<Op> = serde_json::from_str(&format!(
-        r#"[{{"op":"set","ids":["{id}"],"props":{{"characters":"Macro override"}}}}]"#
+        r#"[{{"op":"set","ids":["{root}"],"props":{{"width":{width}}}}},
+            {{"op":"set","ids":["{id}"],"props":{{"characters":"Macro override"}}}}]"#
     ))
     .expect("ops");
     if let Err(e) = History::default().apply(&mut doc, &ops, None) {

@@ -222,3 +222,84 @@ fn overrides_layers_inside_instances() {
     let l = sublayer(&doc, &instance, &label);
     assert_eq!(l.text_content.as_ref().unwrap().characters.as_ref(), "OK");
 }
+
+#[test]
+fn resized_instances_follow_constraints() {
+    let original = blank("x");
+    let mut doc = Document::open(&original).unwrap();
+    let mut h = History::default();
+    let (component, fill) = button(&mut doc, &mut h);
+    // The fill keeps to the right and stretches vertically.
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"set","ids":["{fill}"],"props":{{"constraintHorizontal":"MAX","constraintVertical":"STRETCH"}}}}]"#
+        ),
+    );
+    let instance = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"instantiate","component":"{component}","parent":"0:1","x":200,"y":0}}]"#
+        ),
+    )[0]
+    .clone();
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(r#"[{{"op":"set","ids":["{instance}"],"props":{{"width":200,"height":80}}}}]"#),
+    );
+    let f = sublayer(&doc, &instance, &fill);
+    assert_eq!(f.transform().m02, 110.0, "kept 70 from the right");
+    assert_eq!(f.size(), crate::model::Vec2::new(20.0, 60.0));
+    // The component is unchanged, and the layout is saved.
+    assert_eq!(doc.props(idx(&doc, &fill)).transform().m02, 10.0);
+    let reopened = Document::open(&save(&doc, &original).unwrap()).unwrap();
+    let f = sublayer(&reopened, &instance, &fill);
+    assert_eq!(f.transform().m02, 110.0);
+    assert_eq!(f.size().y, 60.0);
+}
+
+#[test]
+fn longer_labels_grow_hugging_instances() {
+    let original = blank("x");
+    let mut doc = Document::open(&original).unwrap();
+    let mut h = History::default();
+    let (component, fill) = button(&mut doc, &mut h);
+    let label = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"create","parent":"{component}","node":{{"type":"TEXT","name":"Label","x":40,"y":10,"width":1,"height":1,"props":{{"characters":"OK","fontSize":12}}}}}},
+                {{"op":"autoLayout","ids":["{component}"]}}]"#
+        ),
+    )[0]
+    .clone();
+    let main_w = doc.props(idx(&doc, &component)).size().x;
+    let instance = apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"instantiate","component":"{component}","parent":"0:1","x":300,"y":0}}]"#
+        ),
+    )[0]
+    .clone();
+    assert_eq!(doc.props(idx(&doc, &instance)).size().x, main_w);
+    apply(
+        &mut doc,
+        &mut h,
+        &format!(
+            r#"[{{"op":"set","ids":["I{instance};{label}"],"props":{{"characters":"Continue to checkout"}}}}]"#
+        ),
+    );
+    let grown = doc.props(idx(&doc, &instance)).size().x;
+    assert!(grown > main_w + 40.0, "{grown} vs {main_w}");
+    // The component keeps its size; the label sits after the fill.
+    assert_eq!(doc.props(idx(&doc, &component)).size().x, main_w);
+    let f = sublayer(&doc, &instance, &fill);
+    let l = sublayer(&doc, &instance, &label);
+    assert!(l.transform().m02 >= f.transform().m02 + 20.0);
+    let reopened = Document::open(&save(&doc, &original).unwrap()).unwrap();
+    assert_eq!(reopened.props(idx(&reopened, &instance)).size().x, grown);
+}

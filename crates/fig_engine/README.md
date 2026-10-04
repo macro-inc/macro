@@ -78,6 +78,11 @@ instance (keyed by guid path, as Figma does), or sets the component text
 property the layer is bound to; `fig_render override` checks such an edit
 survives saving on real files.
 
+Resizing an instance, or an override that changes a layer's size, lays
+the instance's layers out again with the same constraints and auto layout
+code (on a temporary copy), keeping the result as the instance's derived
+layout, which saving writes to `derivedSymbolData`.
+
 Instances have no stored children: the scene builds their sublayers from the
 component, applying overrides keyed by GUID paths (outer instances win), and
 uses the instance's derived sizes, transforms, and geometry. Rendering is a
