@@ -460,6 +460,7 @@ fn line_height(
     let mut descent: f32 = 0.0;
     let mut leading: f32 = 0.0;
     let mut seen = false;
+    let mut text = false;
     for c in &inline.clusters[start..end] {
         let style = &inline.runs[c.run as usize];
         match c.kind {
@@ -470,8 +471,10 @@ fn line_height(
                 seen = true;
             }
             Kind::End => {
-                // The paragraph mark counts toward the last line's height.
-                if c.ch == '\u{0}' && seen {
+                // The paragraph mark sizes a line without text (empty, or
+                // only pictures, which sit on its baseline); text lines take
+                // their height from the text alone.
+                if text || (c.ch == '\u{0}' && seen) {
                     continue;
                 }
                 ascent = ascent.max(style.ascent);
@@ -484,6 +487,7 @@ fn line_height(
                 descent = descent.max(style.descent);
                 leading = leading.max(style.leading);
                 seen = true;
+                text = true;
             }
         }
     }

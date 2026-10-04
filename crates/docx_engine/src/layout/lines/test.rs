@@ -279,3 +279,22 @@ fn headers_footnotes_and_page_fields() {
     assert!(texts.iter().any(|t| t == "Text1"), "{texts:?}");
     assert!(texts.iter().any(|t| t.contains("1 The note.")), "{texts:?}");
 }
+
+#[test]
+fn the_paragraph_mark_only_sizes_lines_without_text() {
+    // Text at 9pt with a 20pt paragraph mark: the line is as high as the
+    // text; an empty paragraph takes the mark's height.
+    let body = r#"<w:p><w:pPr><w:rPr><w:sz w:val="40"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>Small</w:t></w:r></w:p><w:p><w:pPr><w:rPr><w:sz w:val="40"/></w:rPr></w:pPr></w:p>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    // Arial single spacing is 1.1499 em.
+    let (text, empty) = (ls[0].line().height, ls[1].line().height);
+    assert!((text - 9.0 * 1.1499).abs() < 0.01, "{text}");
+    assert!((empty - 20.0 * 1.1499).abs() < 0.01, "{empty}");
+}
