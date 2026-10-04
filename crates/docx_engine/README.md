@@ -73,7 +73,8 @@ marks as inserted or deleted. Formatting text or changing paragraph
 properties keeps the formatting from before (`w:rPrChange`, `w:pPrChange`),
 except in text the author inserted; changing it back drops the record.
 Accept and reject resolve the selection, the revision at the caret or
-everything.
+everything. With markup, a bar in the left margin marks every line that
+holds a change, and a list label shows its paragraph mark's revision.
 
 Headers and footers are stories of their own: their blocks get ids prefixed
 with the part, transactions target the active story, and an edited part is
@@ -173,7 +174,8 @@ where Word PDFs exist they decide.
 - Editing does not create footnotes, text boxes or pictures, and does not
   edit inside them (it keeps them); comments are Macro threads anchored in
   the body.
-- Tracked changes show without change bars or balloons; table property
-  changes (`w:tcPrChange`, `w:tblPrChange`) are not recorded.
+- Tracked changes show without balloons (formatting changes only get a
+  change bar); table property changes (`w:tcPrChange`, `w:tblPrChange`)
+  are not recorded.
 - Two people editing the same header or footer at once: the last write of
   the part wins.

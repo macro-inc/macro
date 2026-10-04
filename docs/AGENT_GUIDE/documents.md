@@ -860,7 +860,8 @@ updates live and shows each collaborator's caret with their name
   insertion and deletions stay visible struck through, each under its
   author's name. Formatting changes (bold, alignment, lists, indents) are
   recorded too: the text looks formatted, and Accept and Reject appear when
-  the caret is in it. Accept and reject act on the selection, the change at
+  the caret is in it. A thin bar in the left margin marks every line that
+  holds a change. Accept and reject act on the selection, the change at
   the caret, or every change.
 - Double-click a page's header or footer area to edit it. The body dims, the
   area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
