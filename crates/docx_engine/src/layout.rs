@@ -235,6 +235,8 @@ pub struct LayoutCache {
     dynamic: Mutex<crate::hash::FxMap<(StoryRef, BlockId, u64), Cached>>,
     /// Laid-out tables.
     tables: flow::TableCache,
+    /// The body's list labels and note numbers.
+    numbers: flow::NumbersCache,
     /// Resolved formats of one style sheet generation.
     formats: Mutex<Option<(u64, Arc<format::FormatCache>)>>,
     /// Page count of the last layout (the first guess for page-count fields).

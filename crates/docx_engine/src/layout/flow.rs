@@ -3,6 +3,7 @@
 mod anchors;
 mod body;
 mod frames;
+mod numbers;
 mod split;
 mod stack;
 mod textbox;
@@ -12,13 +13,14 @@ use super::format::{Formats, TableCtx};
 use super::{Item, Layout};
 use crate::document::{Document, rel_kind};
 use crate::model::block::{Block, BlockId, BlockKind, Story};
-use crate::model::content::{OBJECT_CHAR, key};
-use crate::model::numbering::{Counters, Label, format_number};
+use crate::model::numbering::{Counters, Label};
 use crate::model::props::RunProps;
 use crate::model::section::{HeaderRefs, Section};
+use numbers::{Labels, NoteNumbers};
 use pptx_engine::font::FontDb;
-use std::collections::HashMap;
+use std::sync::Arc;
 
+pub(super) use numbers::NumbersCache;
 pub(super) use stack::TableCache;
 
 /// Layout choices.
@@ -47,9 +49,9 @@ pub(super) struct Env<'a> {
     pub fonts: Fonts<'a>,
     pub options: &'a LayoutOptions,
     /// Displayed note numbers by (endnote, id).
-    pub note_numbers: HashMap<(bool, i64), String>,
+    pub note_numbers: Arc<NoteNumbers>,
     /// List labels of numbered paragraphs.
-    pub labels: HashMap<BlockId, (Label, RunProps)>,
+    pub labels: Arc<Labels>,
     /// Measurements kept between layouts.
     pub cache: Option<&'a super::LayoutCache>,
 }
@@ -77,62 +79,16 @@ impl<'a> Env<'a> {
             formats,
             fonts: Fonts::new(fonts),
             options,
-            note_numbers: HashMap::new(),
-            labels: HashMap::new(),
+            note_numbers: Arc::default(),
+            labels: Arc::default(),
             cache,
         }
     }
 
     /// Numbers notes in order of reference and computes list labels.
     fn prepare(&mut self) {
-        let body = &self.doc.body;
-        let settings = &self.doc.parts().settings;
-        let mut counters = Counters::default();
-        let mut footnote = settings.footnotes.start;
-        let mut endnote = settings.endnotes.start;
-        let mut labels = HashMap::new();
-        let mut numbers = HashMap::new();
-        let formats = &self.formats;
-        body.walk(|b, _| {
-            if b.kind != BlockKind::Paragraph {
-                return;
-            }
-            let fmt = formats.paragraph(&b.props, &TableCtx::default());
-            if let Some((num_id, ilvl)) = fmt.props.num
-                && !fmt.mark.vanish
-                && let Some(label) = counters.next(formats.numbering, formats.styles, num_id, ilvl)
-            {
-                let props = formats.label_props(&fmt, &label);
-                labels.insert(b.id.clone(), (label, props));
-            }
-            for (_, span) in b.content.spans_at() {
-                let Some(obj) = span.attrs.get(key::OBJ) else {
-                    continue;
-                };
-                for _ in span.text.chars().filter(|c| *c == OBJECT_CHAR) {
-                    let endnote_ref = obj.contains("endnoteReference");
-                    if !(endnote_ref || obj.contains("footnoteReference")) {
-                        continue;
-                    }
-                    let Some(id) = note_id(obj) else {
-                        continue;
-                    };
-                    if numbers.contains_key(&(endnote_ref, id)) {
-                        continue;
-                    }
-                    let (fmt, n) = if endnote_ref {
-                        endnote += 1;
-                        (&settings.endnotes.fmt, endnote - 1)
-                    } else {
-                        footnote += 1;
-                        (&settings.footnotes.fmt, footnote - 1)
-                    };
-                    numbers.insert((endnote_ref, id), format_number(n, fmt));
-                }
-            }
-        });
-        self.labels = labels;
-        self.note_numbers = numbers;
+        let cache = self.cache.map(|c| &c.numbers);
+        (self.labels, self.note_numbers) = numbers::count(self.doc, &self.formats, cache);
     }
 
     /// The list label of a paragraph outside the body (headers, footers,
