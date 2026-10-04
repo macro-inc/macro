@@ -57,10 +57,14 @@ formatting at the selection for toolbars. Operations cover selection and
 movement by character, word, line and document, typing, Enter, breaks,
 deleting across paragraphs and tables, character and paragraph formatting,
 styles, lists, tables (insert, rows, columns), header and footer editing
-(`enterStory`/`exitStory`) and tracked changes (`setTracking`,
-`acceptChanges`, `rejectChanges`). Batches with the same group (typing)
-merge into one undo step; in collaborative mode undo is the shared
-document's instead.
+(`enterStory`/`exitStory`), tracked changes (`setTracking`,
+`acceptChanges`, `rejectChanges`) and replacing search matches (`replace`,
+one or all). Batches with the same group (typing) merge into one undo step;
+in collaborative mode undo is the shared document's instead.
+
+`Session::find` searches the body's visible text (field codes, deleted and
+hidden text are left out; straight and typographic quotes match each
+other) and returns the matches with their highlight rectangles.
 
 While the document tracks changes (`w:trackRevisions`, shared through the
 settings part), typed text is recorded as the author's `w:ins`, deleted text
@@ -88,9 +92,23 @@ the editor's first format.
 ### Fonts
 
 Layout uses `pptx_engine`'s bundled metric-compatible fonts (Liberation,
-Carlito, Caladea, DejaVu and others) and its substitution table. Native
-builds compile them in with the `embedded-fonts` feature; the wasm build
-always does. Hosts can register more fonts.
+Carlito, Caladea, DejaVu and others) and its substitution table, with Noto
+faces for Arabic and Hebrew (in the serif or sans-serif style of the text
+around them). Native builds compile them in with the `embedded-fonts`
+feature; the wasm build always does. Hosts can register more fonts.
+
+### Right-to-left text
+
+`layout::bidi` resolves embedding levels with the Unicode Bidirectional
+Algorithm for paragraphs that are right to left (`w:bidi`) or hold
+right-to-left text, then lays each line out in visual order: a
+right-to-left paragraph's line is mirrored so its start (indent, list
+number, first tab) is on the right, and runs against the paragraph's
+direction are reversed in place; brackets mirror. Word's own behaviour is
+followed where it differs: in runs marked `w:rtl`, separators do not join
+numbers (`78/265` shows as `265/78`) and Latin letters and digits keep the
+Latin font. Carets, hit testing, selections and the arrow keys follow the
+visual order.
 
 ## Using it
 
@@ -132,17 +150,20 @@ when sources changed, and `bun run dev` runs it.
 
 Current state (61 documents, 36 of them legal; references rendered with the
 engine's fonts): against Word's own PDF exports (18 documents) mean SSIM
-0.67 with equal page counts for 14; against LibreOffice 24.2 (61 documents)
-mean SSIM 0.63 with equal page counts for 38. Page SSIM is strict: a line
-that wraps one word differently shifts everything below it, so the page
-counts are the better summary. LibreOffice is a reference, not ground truth;
+0.78 with equal page counts for all 18; against LibreOffice 24.2 (61
+documents) mean SSIM 0.66 with equal page counts for 41. Page SSIM is
+strict: a line that wraps one word differently shifts everything below it,
+so the page counts are the better summary. LibreOffice is a reference, not ground truth;
 where Word PDFs exist they decide.
 
 ## Known gaps
 
-- Text: no bidirectional reordering of right-to-left text and no
-  complex-script shaping (Arabic joining, Indic reordering). No automatic
-  hyphenation (soft hyphens are honoured).
+- Text: Arabic joins through the Unicode presentation forms (contextual
+  letter shapes and the lam-alef ligatures), without OpenType mark
+  positioning; other complex scripts (Indic, Thai) are not shaped. Explicit
+  bidi embedding characters are ignored (Word documents use run and
+  paragraph properties instead). No automatic hyphenation (soft hyphens are
+  honoured).
 - Layout: no vertical text, no text wrapping around tight polygon wraps
   (square wrap is used), no balancing of continuous-section columns.
 - Fields are shown with their cached results, except page numbers, which

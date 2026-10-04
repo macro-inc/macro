@@ -339,6 +339,7 @@ fn moving_by_characters_words_and_lines() {
                 unit,
                 forward,
                 extend: false,
+                visual: false,
             },
         )
         .selection
@@ -364,6 +365,7 @@ fn moving_by_characters_words_and_lines() {
             unit: Unit::Word,
             forward: false,
             extend: true,
+            visual: false,
         },
     );
     assert_eq!(r.selection.anchor.offset, 5);
@@ -833,6 +835,7 @@ fn headers_are_edited_in_place_and_written_to_their_part() {
             unit: Unit::Document,
             forward: true,
             extend: false,
+            visual: false,
         },
     );
     let r = type_text(&mut s, " draft");
@@ -923,6 +926,7 @@ fn a_remote_header_change_keeps_the_caret_in_the_header() {
             unit: Unit::Document,
             forward: true,
             extend: false,
+            visual: false,
         },
     );
     // Another peer rewrites the header part.
@@ -1029,4 +1033,61 @@ fn remote_text_at_the_caret_keeps_the_typists_place() {
         )
         .unwrap();
     assert_eq!(r3.selection.focus.offset, 2);
+}
+
+#[test]
+fn carets_and_selections_in_right_to_left_text() {
+    // "shalom" in a right-to-left paragraph.
+    let mut s = open(
+        r#"<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>שלום</w:t></w:r></w:p>"#,
+    );
+    let block = para(&s, 0);
+    let caret = |s: &mut Session, offset: usize| {
+        s.caret_at(&Pos::new(block.clone(), offset), fonts())
+            .unwrap()
+            .x
+    };
+    // The text starts at the right margin (612 - 72) and runs leftwards.
+    let start = caret(&mut s, 0);
+    let middle = caret(&mut s, 2);
+    let end = caret(&mut s, 4);
+    assert!((start - 540.0).abs() < 1.0, "{start}");
+    assert!(end < middle && middle < start, "{end} {middle} {start}");
+    // A click just left of the right edge lands before the first letter.
+    let hit = s.hit_test(0, start - 1.0, 80.0, fonts()).unwrap();
+    assert_eq!(hit.offset, 0);
+    let hit = s.hit_test(0, end + 1.0, 80.0, fonts()).unwrap();
+    assert_eq!(hit.offset, 4);
+    // The first two letters are selected on the right.
+    let rects = s.range_rects(
+        &Pos::new(block.clone(), 0),
+        &Pos::new(block.clone(), 2),
+        fonts(),
+    );
+    assert_eq!(rects.len(), 1);
+    let r = &rects[0];
+    assert!((r.x - middle).abs() < 0.5 && (r.x + r.w - start).abs() < 0.5);
+}
+
+#[test]
+fn arrow_keys_move_visually_in_right_to_left_text() {
+    let mut s = open(
+        r#"<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>שלום</w:t></w:r></w:p>"#,
+    );
+    caret_at(&mut s, 0, 1);
+    let arrow = |s: &mut Session, right: bool| {
+        run(
+            s,
+            EditOp::Move {
+                unit: Unit::Char,
+                forward: right,
+                extend: false,
+                visual: true,
+            },
+        );
+        s.selection().focus.offset
+    };
+    // Left goes on through the text, right goes back.
+    assert_eq!(arrow(&mut s, false), 2);
+    assert_eq!(arrow(&mut s, true), 1);
 }

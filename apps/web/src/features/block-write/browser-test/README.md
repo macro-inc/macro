@@ -20,6 +20,7 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
   - undo and redo of one person's own edits;
   - header and footer editing in place;
   - tracked changes recorded per author, then rejected for everyone;
+  - find and replace (one match, then all, undone in one step);
   - read-only viewers following along;
   - an offline merge.
 

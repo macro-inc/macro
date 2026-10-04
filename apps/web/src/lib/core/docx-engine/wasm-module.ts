@@ -44,6 +44,8 @@ export interface WasmDocxDocument {
   /** The selected text, for the clipboard. */
   selectedText: () => string;
   copySelection: () => string;
+  /** `FindResult` JSON; `options` is `FindOptions` JSON. */
+  find: (query: string, options: string) => string;
   /** `ParagraphText[]` JSON. */
   paragraphs: () => string;
   /** `StyleInfo[]` JSON. */

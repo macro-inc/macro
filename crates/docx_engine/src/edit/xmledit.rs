@@ -88,25 +88,6 @@ pub(crate) const TBLPR_ORDER: &[&str] = &[
     "tblPrChange",
 ];
 
-/// Schema order of table row property children (CT_TrPr).
-pub(crate) const TRPR_ORDER: &[&str] = &[
-    "cnfStyle",
-    "divId",
-    "gridBefore",
-    "gridAfter",
-    "wBefore",
-    "wAfter",
-    "cantSplit",
-    "trHeight",
-    "tblHeader",
-    "tblCellSpacing",
-    "jc",
-    "hidden",
-    "ins",
-    "del",
-    "trPrChange",
-];
-
 /// One child element: its qualified name and markup.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Child {

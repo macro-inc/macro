@@ -577,10 +577,10 @@ pub(crate) fn ids_at(content: &Content, offset: usize, mark: Option<String>) -> 
                     out.insert(id);
                 }
             }
-            if let Some(change) = a.run_props().find(|(q, _)| q.ends_with(":rPrChange")) {
-                if let Some(id) = attribute(change.1, "id") {
-                    out.insert(id);
-                }
+            if let Some(change) = a.run_props().find(|(q, _)| q.ends_with(":rPrChange"))
+                && let Some(id) = attribute(change.1, "id")
+            {
+                out.insert(id);
             }
         }
     }

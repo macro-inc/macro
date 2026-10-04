@@ -13,6 +13,8 @@ import type {
   CollabState,
   EditOp,
   EditResult,
+  FindOptions,
+  FindResult,
   PageInfo,
   PageRect,
   ParagraphText,
@@ -265,6 +267,16 @@ export async function rangeRects(
 export async function copySelection(docKey: string): Promise<Clip> {
   const r = await request({ kind: 'copySelection', docKey }, 'clip');
   return r.clip;
+}
+
+/** The matches of a search in the body, with their highlights. */
+export async function find(
+  docKey: string,
+  query: string,
+  options: FindOptions = {}
+): Promise<FindResult> {
+  const r = await request({ kind: 'find', docKey, query, options }, 'find');
+  return r.result;
 }
 
 /** The selected text, for the clipboard. */

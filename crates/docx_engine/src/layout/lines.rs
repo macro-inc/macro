@@ -8,6 +8,7 @@
 //! paragraphs, Word 2013 and later also keep a word that crosses the edge
 //! slightly by shrinking the line's spaces.
 
+use super::bidi;
 use super::inline::{Inline, Kind};
 use crate::model::props::{Align, LineSpacing, ParaProps, TabAlign, TabLeader};
 
@@ -464,6 +465,9 @@ pub fn break_lines_from(
                 x_pos[k] += shift;
             }
         }
+        if !inline.levels.is_empty() {
+            visual_order(inline, i, j, ctx, &mut x_pos, &adv);
+        }
         leaders.extend(line_leaders);
         let (mut height, mut baseline) = line_height(inline, i, j, ctx, &adv);
         if matches!(ends, LineEnd::PageBreak | LineEnd::ColumnBreak)
@@ -498,6 +502,46 @@ pub fn break_lines_from(
         adv,
         leaders,
     }
+}
+
+/// Puts a line of bidirectional text (clusters `start..end`, laid out
+/// left to right in logical order) in visual order: a right-to-left
+/// paragraph's line mirrored to start at the right, and runs against the
+/// paragraph's direction reversed in place.
+fn visual_order(
+    inline: &Inline,
+    start: usize,
+    end: usize,
+    ctx: &LineCtx<'_>,
+    x: &mut [f32],
+    adv: &[f32],
+) {
+    let base = u8::from(ctx.props.bidi);
+    let mut levels = inline.levels[start..end].to_vec();
+    // The line's trailing whitespace is at the paragraph's level.
+    for k in (start..end).rev() {
+        if !matches!(
+            inline.clusters[k].kind,
+            Kind::Space
+                | Kind::Zero
+                | Kind::End
+                | Kind::LineBreak
+                | Kind::PageBreak
+                | Kind::ColumnBreak
+                | Kind::Anchor(_)
+                | Kind::SoftHyphen
+        ) {
+            break;
+        }
+        levels[k - start] = base;
+    }
+    bidi::reorder(
+        &mut x[start..end],
+        &adv[start..end],
+        &levels,
+        base,
+        (0.0, ctx.width),
+    );
 }
 
 /// Height and baseline of a line spanning clusters `start..end`.

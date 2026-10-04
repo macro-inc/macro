@@ -14,13 +14,20 @@ fn east_asian_characters_without_a_face_take_an_em() {
 }
 
 #[test]
-fn letters_of_uncovered_scripts_keep_their_typical_width() {
+fn arabic_and_hebrew_letters_come_from_the_bundled_faces() {
     let f = Fonts::new(fonts());
     let font = f.select("Simplified Arabic", false, false).unwrap();
-    // Arabic letters, a vowel mark, Hebrew.
-    assert!((f.glyph(font, 'ب').advance - ARABIC_ADVANCE).abs() < 1e-6);
-    assert!(f.glyph(font, '\u{064E}').advance.abs() < 1e-6);
-    assert!((f.glyph(font, 'ש').advance - HEBREW_ADVANCE).abs() < 1e-6);
+    let beh = f.glyph(font, 'ب');
+    assert_ne!(beh.id, 0);
+    assert_eq!(f.db().family(beh.font.face), "Noto Naskh Arabic");
+    let arial = f.select("Arial", false, false).unwrap();
+    let shin = f.glyph(arial, 'ש');
+    assert_ne!(shin.id, 0);
+    assert_eq!(f.db().family(shin.font.face), "Noto Sans Hebrew");
+    // Without a face for them, letters keep their script's typical width.
+    assert_eq!(missing_advance('ب'), Some(ARABIC_ADVANCE));
+    assert_eq!(missing_advance('\u{064E}'), Some(0.0));
+    assert_eq!(missing_advance('ש'), Some(HEBREW_ADVANCE));
     assert_eq!(missing_advance('a'), None);
 }
 

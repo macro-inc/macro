@@ -66,7 +66,17 @@ export type ParaPatch = {
 
 export type EditOp =
   | { op: 'select'; anchor: Pos; focus: Pos }
-  | { op: 'move'; unit?: Unit; forward: boolean; extend?: boolean }
+  /**
+   * Move the caret (or extend the selection). With `visual` (arrow keys),
+   * `forward` means rightwards, which is backwards in right-to-left text.
+   */
+  | {
+      op: 'move';
+      unit?: Unit;
+      forward: boolean;
+      extend?: boolean;
+      visual?: boolean;
+    }
   | { op: 'selectAll' }
   | { op: 'selectWord'; at: Pos }
   | { op: 'selectParagraph'; at: Pos }
@@ -98,7 +108,19 @@ export type EditOp =
   /** Reject the changes in the selection (the one at a caret), or all. */
   | { op: 'rejectChanges'; all?: boolean }
   /** Paste paragraphs over the selection. */
-  | { op: 'paste'; paragraphs: ClipParagraph[]; sameDocument?: boolean };
+  | { op: 'paste'; paragraphs: ClipParagraph[]; sameDocument?: boolean }
+  /**
+   * Replace matches of a search in the body: every match with `all`,
+   * otherwise the one the selection holds, then select the next one (with
+   * no match selected, only select the next one).
+   */
+  | {
+      op: 'replace';
+      query: string;
+      options?: FindOptions;
+      with: string;
+      all?: boolean;
+    };
 
 export type CaretRect = { page: number; x: number; y: number; height: number };
 
@@ -216,6 +238,21 @@ export type ClipParagraph = {
 
 /** What a selection copies. */
 export type Clip = { paragraphs: ClipParagraph[]; html: string; text: string };
+
+/** How a search compares text. */
+export type FindOptions = { matchCase?: boolean; wholeWord?: boolean };
+
+/** One match of a search, with its highlight rectangles. */
+export type FindMatch = { from: Pos; to: Pos; rects: PageRect[] };
+
+/** The matches of a search in document order. */
+export type FindResult = {
+  matches: FindMatch[];
+  /** The match at the selection, or the first one after it. */
+  current?: number;
+  /** The search stopped at its limit (10,000 matches). */
+  truncated?: boolean;
+};
 
 /** A change other peers made, as the shared maps now hold it. */
 export type RemoteChange =

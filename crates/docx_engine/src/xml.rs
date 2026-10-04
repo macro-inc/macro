@@ -575,8 +575,8 @@ impl Parser<'_> {
             if rest.starts_with("<?") {
                 let end = rest.find("?>").ok_or_else(|| self.err("unterminated PI"))?;
                 self.pos += end + 2;
-            } else if rest.starts_with("<!--") {
-                let end = rest[4..]
+            } else if let Some(comment) = rest.strip_prefix("<!--") {
+                let end = comment
                     .find("-->")
                     .ok_or_else(|| self.err("unterminated comment"))?;
                 self.pos += end + 7;
@@ -756,7 +756,7 @@ impl Parser<'_> {
                     if rest.starts_with("</") {
                         self.pos += 2;
                         let close = self.name()?.to_owned();
-                        if close != &*qname {
+                        if close != *qname {
                             return Err(
                                 self.err(&format!("mismatched end tag </{close}> for <{qname}>"))
                             );
@@ -767,20 +767,20 @@ impl Parser<'_> {
                         }
                         self.pos += 1;
                         break;
-                    } else if rest.starts_with("<!--") {
+                    } else if let Some(comment) = rest.strip_prefix("<!--") {
                         let s = self.pos;
-                        let end = rest[4..]
+                        let end = comment
                             .find("-->")
                             .ok_or_else(|| self.err("unterminated comment"))?;
                         self.pos += end + 7;
                         let c = self.push(Kind::Other, id, s, self.pos);
                         children.push(c);
-                    } else if rest.starts_with("<![CDATA[") {
+                    } else if let Some(cdata) = rest.strip_prefix("<![CDATA[") {
                         let s = self.pos;
-                        let end = rest[9..]
+                        let end = cdata
                             .find("]]>")
                             .ok_or_else(|| self.err("unterminated CDATA"))?;
-                        let text = rest[9..9 + end].to_owned();
+                        let text = cdata[..end].to_owned();
                         self.pos += end + 12;
                         let c = self.push(Kind::Text(text), id, s, self.pos);
                         children.push(c);

@@ -60,6 +60,9 @@ class FakeEngine implements DocxEngine {
   texts = new Map<string, string>();
   private caret = { block: '', offset: 0 };
   gate: Promise<void> | null = null;
+  /** Holds each batch of remote changes in flight until released. */
+  holdRemote = false;
+  private held: Array<() => void> = [];
 
   constructor(state: CollabState) {
     for (const b of state.blocks)
@@ -89,6 +92,8 @@ class FakeEngine implements DocxEngine {
   }
 
   async applyRemote(changes: RemoteChange[]): Promise<EditResult | null> {
+    if (this.holdRemote)
+      await new Promise<void>((resolve) => this.held.push(resolve));
     for (const c of changes) {
       if (c.t === 'block' && c.block.k === 'p') {
         const text = deltaText(c.block.t);
@@ -108,6 +113,11 @@ class FakeEngine implements DocxEngine {
     }
     return { ...RESULT_BASE, changed: false, changes: [] };
   }
+}
+
+/** Lets the oldest held batch of remote changes through. */
+function releaseRemote(engine: FakeEngine) {
+  (engine as unknown as { held: Array<() => void> }).held.shift()?.();
 }
 
 /** The engine's caret mapping: text inserted at the caret goes after it. */
@@ -199,6 +209,49 @@ describe('DocxCollab', () => {
     cb.dispose();
   });
 
+  it('applies changes that arrive while others are applied before a local edit', async () => {
+    const a = new LoroDoc();
+    writeCollabState(a, STATE);
+    const b = new LoroDoc();
+    b.import(a.export({ mode: 'snapshot' }));
+    connect(a, b);
+    const ea = new FakeEngine(readCollabState(a));
+    const eb = new FakeEngine(readCollabState(b));
+    const ca = new DocxCollab(a, ea);
+    const cb = new DocxCollab(b, eb);
+    const at = (offset: number): EditOp => ({
+      op: 'select',
+      anchor: { block: 'p1', offset },
+      focus: { block: 'p1', offset },
+    });
+    await ca.apply([at(11)]);
+    ea.holdRemote = true;
+    // B's first edit reaches A, which starts applying it (held there).
+    await cb.apply([at(0), { op: 'insertText', text: 'X' }]);
+    await settle();
+    // A types at the end; B's second edit arrives before A's turn.
+    const typed = ca.apply([{ op: 'insertText', text: '!' }]);
+    await cb.apply([{ op: 'insertText', text: 'Y' }]);
+    await settle();
+    // A's turn starts by applying that edit (held), and a third arrives.
+    releaseRemote(ea);
+    await settle();
+    await cb.apply([{ op: 'insertText', text: 'Z' }]);
+    await settle();
+    ea.holdRemote = false;
+    releaseRemote(ea);
+    await typed;
+    await settle();
+    await ca.idle();
+    await cb.idle();
+    // A's text went where A typed it, at the end.
+    expect(paragraph(a, 'p1')).toBe('XYZHello world!');
+    expect(paragraph(b, 'p1')).toBe('XYZHello world!');
+    expect(ea.texts.get('p1')).toBe('XYZHello world!');
+    ca.dispose();
+    cb.dispose();
+  });
+
   it('seeds and reads back the shared state', () => {
     const doc = new LoroDoc();
     writeCollabState(doc, STATE);
@@ -280,6 +333,32 @@ describe('DocxCollab', () => {
     expect(eb.texts.get('p1')).toBe('>> Hello world!');
     ca.dispose();
     cb.dispose();
+  });
+
+  it('typing merges into one undo step; other edits are steps of their own', async () => {
+    const doc = new LoroDoc();
+    writeCollabState(doc, STATE);
+    const engine = new FakeEngine(readCollabState(doc));
+    const collab = new DocxCollab(doc, engine);
+    const at = (offset: number): EditOp => ({
+      op: 'select',
+      anchor: { block: 'p1', offset },
+      focus: { block: 'p1', offset },
+    });
+    // A command (no group), then typing in two batches, then a command.
+    await collab.apply([at(0), { op: 'insertText', text: '1' }]);
+    await collab.apply([at(1), { op: 'insertText', text: 'a' }], 'typing');
+    await collab.apply([{ op: 'insertText', text: 'b' }], 'typing');
+    await collab.apply([at(14), { op: 'insertText', text: '!' }]);
+    expect(paragraph(doc, 'p1')).toBe('1abHello world!');
+    const steps: string[] = [];
+    while (collab.undo()) {
+      await settle();
+      await collab.idle();
+      steps.push(paragraph(doc, 'p1'));
+    }
+    expect(steps).toEqual(['1abHello world', '1Hello world', 'Hello world']);
+    collab.dispose();
   });
 
   it('undo reverts this peer’s step and tells the engine', async () => {

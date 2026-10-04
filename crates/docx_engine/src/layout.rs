@@ -6,6 +6,7 @@
 //! columns and pages ([`flow`]) with Word's rules for spacing, keeping lines
 //! together, widows and orphans, sections, headers, footers and notes.
 
+pub mod bidi;
 pub mod drawing;
 mod flow;
 pub mod fonts;
@@ -23,7 +24,6 @@ use lines::Lines;
 use pptx_engine::font::FontDb;
 use pptx_engine::model::color::Rgba;
 use pptx_engine::path::Rect;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub use flow::LayoutOptions;
@@ -223,7 +223,13 @@ struct Cached {
 /// an edit re-measures only the paragraphs the edit touched.
 #[derive(Debug, Default)]
 pub struct LayoutCache {
-    paras: Mutex<(u64, HashMap<(StoryRef, BlockId), Cached>)>,
+    /// Per paragraph, the boxes of its last pass: a few, since one pass can
+    /// lay a paragraph out more than once (a table cell measured for the
+    /// column widths, then laid out at its width).
+    paras: Mutex<(u64, crate::hash::FxMap<(StoryRef, BlockId), Vec<Cached>>)>,
+    /// Paragraphs showing page fields, by the values they show (a footer's
+    /// page number on every page).
+    dynamic: Mutex<crate::hash::FxMap<(StoryRef, BlockId, u64), Cached>>,
     /// Resolved formats of one style sheet generation.
     formats: Mutex<Option<(u64, Arc<format::FormatCache>)>>,
     /// Page count of the last layout (the first guess for page-count fields).
@@ -244,7 +250,42 @@ impl LayoutCache {
     ) -> Option<Arc<ParaBox>> {
         let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = guard.0;
-        let hit = guard.1.get_mut(&(story.clone(), block.clone()))?;
+        let hit = guard
+            .1
+            .get_mut(&(story.clone(), block.clone()))?
+            .iter_mut()
+            .find(|c| c.key == *key)?;
+        hit.epoch = epoch;
+        Some(Arc::clone(&hit.pb))
+    }
+
+    pub(crate) fn put(&self, story: &StoryRef, block: &BlockId, key: ParaKey, pb: Arc<ParaBox>) {
+        /// Boxes kept per paragraph.
+        const KEEP: usize = 4;
+        let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
+        let epoch = guard.0;
+        let list = guard.1.entry((story.clone(), block.clone())).or_default();
+        list.retain(|c| c.key != key);
+        if list.len() >= KEEP {
+            // The least recently used goes.
+            if let Some(oldest) = (0..list.len()).min_by_key(|&i| list[i].epoch) {
+                list.remove(oldest);
+            }
+        }
+        list.push(Cached { key, pb, epoch });
+    }
+
+    /// A paragraph with page fields, as laid out for these field values.
+    pub(crate) fn get_dynamic(
+        &self,
+        story: &StoryRef,
+        block: &BlockId,
+        fields: u64,
+        key: &ParaKey,
+    ) -> Option<Arc<ParaBox>> {
+        let epoch = self.paras.lock().unwrap_or_else(|e| e.into_inner()).0;
+        let mut guard = self.dynamic.lock().unwrap_or_else(|e| e.into_inner());
+        let hit = guard.get_mut(&(story.clone(), block.clone(), fields))?;
         if hit.key != *key {
             return None;
         }
@@ -252,12 +293,22 @@ impl LayoutCache {
         Some(Arc::clone(&hit.pb))
     }
 
-    pub(crate) fn put(&self, story: &StoryRef, block: &BlockId, key: ParaKey, pb: Arc<ParaBox>) {
-        let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = guard.0;
-        guard
-            .1
-            .insert((story.clone(), block.clone()), Cached { key, pb, epoch });
+    pub(crate) fn put_dynamic(
+        &self,
+        story: &StoryRef,
+        block: &BlockId,
+        fields: u64,
+        key: ParaKey,
+        pb: Arc<ParaBox>,
+    ) {
+        let epoch = self.paras.lock().unwrap_or_else(|e| e.into_inner()).0;
+        self.dynamic
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(
+                (story.clone(), block.clone(), fields),
+                Cached { key, pb, epoch },
+            );
     }
 
     /// Starts a layout pass.
@@ -270,7 +321,15 @@ impl LayoutCache {
     pub(crate) fn end(&self) {
         let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = guard.0;
-        guard.1.retain(|_, c| c.epoch == epoch);
+        guard.1.retain(|_, list| {
+            list.retain(|c| c.epoch == epoch);
+            !list.is_empty()
+        });
+        drop(guard);
+        self.dynamic
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|_, c| c.epoch == epoch);
     }
 
     /// The format cache for a style sheet generation.

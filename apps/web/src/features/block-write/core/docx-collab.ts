@@ -17,6 +17,9 @@ import {
   writeChanges,
 } from './docx-loro';
 
+/** Typing within this many milliseconds is one undo step. */
+const MERGE_INTERVAL = 800;
+
 /** The engine as the collaboration bridge drives it. */
 export interface DocxEngine {
   apply(ops: EditOp[], group?: string): Promise<EditResult | null>;
@@ -79,6 +82,8 @@ export class DocxCollab {
   private flushing = false;
   private restored: Selection | undefined;
   private readonly undoManager: UndoManager | undefined;
+  /** The group of the last local edit (typing merges into one step). */
+  private lastGroup: string | undefined;
   private readonly unsubscribe: () => void;
 
   constructor(
@@ -90,7 +95,7 @@ export class DocxCollab {
     this.unsubscribe = doc.subscribe((batch) => this.onEvents(batch));
     if (options.undo === false) return;
     this.undoManager = new UndoManager(doc, {
-      mergeInterval: 800,
+      mergeInterval: MERGE_INTERVAL,
       maxUndoSteps: 300,
       excludeOriginPrefixes: [
         DOCX_ORIGINS.seed,
@@ -156,9 +161,12 @@ export class DocxCollab {
   /** Runs operations in the engine and publishes their changes. */
   apply(ops: EditOp[], group?: string): Promise<EditResult | null> {
     const run = this.serial(async () => {
-      // Changes that arrived since the last flush first: the edit must be
-      // made against the shared text as it is.
-      await this.flushPending();
+      // Changes that arrived since the last flush first, and any arriving
+      // while those are applied: the edit must be made against the shared
+      // text as it is. From the last check on, nothing runs in between
+      // until changes are caught as in flight.
+      do await this.flushPending();
+      while (this.pending.blocks.size || this.pending.entries.size);
       this.inflight = emptyTouched();
       let result: EditResult | null;
       let seen: Touched;
@@ -186,6 +194,12 @@ export class DocxCollab {
           this.pending.blocks.add(id);
           return remote.reduce((l, r) => transform(r, l, true), delta);
         });
+        // Typing (or deleting) merges into one undo step while it goes on;
+        // every other edit is a step of its own.
+        this.undoManager?.setMergeInterval(
+          group !== undefined && group === this.lastGroup ? MERGE_INTERVAL : 0
+        );
+        this.lastGroup = group;
         this.doc.commit({ origin: DOCX_ORIGINS.local });
       }
       // Remote changes made during the edit, as the engine (which has the

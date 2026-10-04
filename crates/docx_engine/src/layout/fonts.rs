@@ -54,9 +54,22 @@ const TRUE_METRICS: &[(&str, [f32; 6])] = &[
     ("verdana", [2048.0, 2059.0, 430.0, 2059.0, 430.0, 0.0]),
     ("tahoma", [2048.0, 2049.0, 423.0, 2049.0, 423.0, 0.0]),
     ("georgia", [2048.0, 1878.0, 449.0, 1878.0, 449.0, 0.0]),
+    (
+        "simplified arabic",
+        [2048.0, 2416.0, 979.0, 2416.0, 979.0, 0.0],
+    ),
+    (
+        "traditional arabic",
+        [2048.0, 2095.0, 1044.0, 2095.0, 1044.0, 0.0],
+    ),
     ("symbol", [2048.0, 2059.0, 443.0, 2059.0, 443.0, 0.0]),
     ("wingdings", [2048.0, 1841.0, 420.0, 1841.0, 420.0, 0.0]),
 ];
+
+/// Arabic families drawn with a Noto substitute: how wide their letters
+/// are relative to the substitute's, and their space (em), measured from
+/// the originals so lines break where Word breaks them.
+const ARABIC_WIDTHS: &[(&str, f32, f32)] = &[("simplified arabic", 0.875, 0.317)];
 
 /// Families drawn by squeezing their wider substitute: Arial Narrow is
 /// Arial at 82% of its width; Lucida Sans runs a little narrower than the
@@ -257,6 +270,16 @@ impl<'a> Fonts<'a> {
             .glyph(face, 'n')
             .map_or(0.0, |g| self.db.advance(face, g));
         if n >= REGULAR_N_WIDTH { *factor } else { 1.0 }
+    }
+
+    /// For an Arabic family drawn by a substitute: the scale of its
+    /// letters' advances and its space's advance (em).
+    pub fn arabic_widths(&self, family: &str) -> Option<(f32, f32)> {
+        let family = family.trim();
+        ARABIC_WIDTHS
+            .iter()
+            .find(|(name, _, _)| name.eq_ignore_ascii_case(family))
+            .map(|&(_, letters, space)| (letters, space))
     }
 
     /// Vertical metrics of a face.

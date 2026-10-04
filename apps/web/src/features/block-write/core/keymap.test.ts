@@ -22,19 +22,44 @@ const key = (
 
 describe('keyAction', () => {
   it('moves by platform word and line conventions', () => {
+    // Left and right arrows move on the page (visually).
     expect(keyAction(key('ArrowLeft', { altKey: true }), true)).toEqual({
       kind: 'ops',
-      ops: [{ op: 'move', unit: 'word', forward: false, extend: false }],
+      ops: [
+        {
+          op: 'move',
+          unit: 'word',
+          forward: false,
+          extend: false,
+          visual: true,
+        },
+      ],
     });
     expect(keyAction(key('ArrowRight', { ctrlKey: true }), false)).toEqual({
       kind: 'ops',
-      ops: [{ op: 'move', unit: 'word', forward: true, extend: false }],
+      ops: [
+        {
+          op: 'move',
+          unit: 'word',
+          forward: true,
+          extend: false,
+          visual: true,
+        },
+      ],
     });
     expect(
       keyAction(key('ArrowRight', { metaKey: true, shiftKey: true }), true)
     ).toEqual({
       kind: 'ops',
-      ops: [{ op: 'move', unit: 'lineBoundary', forward: true, extend: true }],
+      ops: [
+        {
+          op: 'move',
+          unit: 'lineBoundary',
+          forward: true,
+          extend: true,
+          visual: true,
+        },
+      ],
     });
     expect(keyAction(key('End', { ctrlKey: true }), false)).toEqual({
       kind: 'ops',
@@ -76,6 +101,25 @@ describe('keyAction', () => {
     expect(keyAction(key('m', { metaKey: true, altKey: true }), true)).toEqual({
       kind: 'comment',
     });
+  });
+
+  it('opens find and replace', () => {
+    expect(keyAction(key('f', { ctrlKey: true }), false)).toEqual({
+      kind: 'find',
+      replace: false,
+    });
+    expect(keyAction(key('h', { ctrlKey: true }), false)).toEqual({
+      kind: 'find',
+      replace: true,
+    });
+    // Cmd+H hides the app on macOS.
+    expect(keyAction(key('h', { metaKey: true }), true)).toBeNull();
+    expect(
+      keyAction(key('h', { metaKey: true, shiftKey: true }), true)
+    ).toEqual({ kind: 'find', replace: true });
+    expect(
+      keyAction(key('g', { metaKey: true, shiftKey: true }), true)
+    ).toEqual({ kind: 'findNext', forward: false });
   });
 
   it('leaves typing and clipboard keys to the browser', () => {

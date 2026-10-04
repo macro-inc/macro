@@ -8,7 +8,11 @@ export type KeyAction =
   | { kind: 'comment' }
   | { kind: 'page'; forward: boolean; extend: boolean }
   /** Tab: indents list items at their start, else types a tab. */
-  | { kind: 'tab'; forward: boolean };
+  | { kind: 'tab'; forward: boolean }
+  /** Opens the find bar, with the replace field. */
+  | { kind: 'find'; replace: boolean }
+  /** The next (or previous) match of the search. */
+  | { kind: 'findNext'; forward: boolean };
 
 type Key = Pick<
   KeyboardEvent,
@@ -24,16 +28,21 @@ export function keyAction(event: Key, mac: boolean): KeyAction | null {
   const mod = mac ? event.metaKey : event.ctrlKey;
   const word = mac ? event.altKey : event.ctrlKey;
   const extend = event.shiftKey;
-  const move = (unit: Unit, forward: boolean): KeyAction => ({
+  const move = (unit: Unit, forward: boolean, visual = false): KeyAction => ({
     kind: 'ops',
-    ops: [{ op: 'move', unit, forward, extend }],
+    ops: [
+      visual
+        ? { op: 'move', unit, forward, extend, visual }
+        : { op: 'move', unit, forward, extend },
+    ],
   });
   switch (event.key) {
     case 'ArrowLeft':
     case 'ArrowRight': {
+      // Left and right on the page (reversed in right-to-left text).
       const forward = event.key === 'ArrowRight';
-      if (mac && event.metaKey) return move('lineBoundary', forward);
-      return move(word ? 'word' : 'char', forward);
+      if (mac && event.metaKey) return move('lineBoundary', forward, true);
+      return move(word ? 'word' : 'char', forward, true);
     }
     case 'ArrowUp':
     case 'ArrowDown': {
@@ -86,6 +95,14 @@ export function keyAction(event: Key, mac: boolean): KeyAction | null {
       return mac ? null : { kind: 'redo' };
     case 'A':
       return { kind: 'ops', ops: [{ op: 'selectAll' }] };
+    case 'F':
+      return { kind: 'find', replace: false };
+    case 'G':
+      return { kind: 'findNext', forward: !event.shiftKey };
+    case 'H':
+      // Cmd+H hides the app on macOS, so replace is Cmd+Shift+H there.
+      if (mac && !event.shiftKey) return null;
+      return { kind: 'find', replace: true };
     case 'B':
       return { kind: 'ops', ops: [{ op: 'toggleFormat', format: 'bold' }] };
     case 'I':

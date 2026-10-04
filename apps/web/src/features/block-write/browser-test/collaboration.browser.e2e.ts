@@ -379,6 +379,70 @@ test('tracked changes are recorded per author and resolved for everyone', async 
   }
 });
 
+test('find and replace, shared with everyone', async ({ browser }) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  const occurrences = async (page: Page, word: RegExp) =>
+    (await joined(page)).match(word)?.length ?? 0;
+  try {
+    await open(alice, documentId, ALICE);
+    await open(bob, documentId, BOB);
+    const count = await occurrences(alice, /agreement/gi);
+    expect(count).toBeGreaterThan(2);
+
+    // Mod+F in the document opens the find bar; matches are counted and
+    // highlighted on the pages.
+    await caretAtEnd(alice, 'This Agreement shall remain');
+    await alice.keyboard.press('Control+f');
+    const field = alice.locator('[data-docx-find-query]');
+    await expect(field).toBeFocused();
+    await field.fill('agreement');
+    const status = alice.locator('[data-docx-find-status]');
+    await expect(status).toHaveText(new RegExp(`^\\d+ of ${count}$`));
+    await expect(alice.locator('.docx-find-current')).toHaveCount(1);
+    await expect(alice.locator('[data-docx-find-match]')).not.toHaveCount(0);
+    // Enter moves on (wrapping), selecting the match in the document.
+    const first = await status.textContent();
+    await field.press('Enter');
+    await expect(status).not.toHaveText(first ?? '');
+    const selected = () =>
+      alice.evaluate(() => window.docxFixture?.editor()?.selectedText());
+    await expect.poll(selected).toMatch(/^agreement$/i);
+    if (SHOTS) await alice.screenshot({ path: `${SHOTS}/08-find.png` });
+
+    // Replace the current match, then the rest; Bob sees both.
+    await alice.locator('[data-docx-find-replace-toggle]').click();
+    await alice.locator('[data-docx-find-replacement]').fill('Contract');
+    await alice.locator('[data-docx-replace]').click();
+    await expect(status).toHaveText(new RegExp(`^\\d+ of ${count - 1}$`));
+    await expect.poll(() => occurrences(bob, /Contract/g)).toBe(1);
+    await alice.locator('[data-docx-replace-all]').click();
+    await expect(status).toHaveText(`Replaced ${count - 1}`);
+    for (const page of [alice, bob]) {
+      await expect.poll(() => occurrences(page, /agreement/gi)).toBe(0);
+      await expect.poll(() => occurrences(page, /Contract/g)).toBe(count);
+    }
+
+    // Escape closes the bar; one undo takes back the whole replace all.
+    await alice.locator('[data-docx-find-replacement]').press('Escape');
+    await expect(alice.locator('[data-docx-find]')).toHaveCount(0);
+    await expect(alice.locator('[data-docx-input]')).toBeFocused();
+    await alice.keyboard.press('Control+z');
+    for (const page of [alice, bob])
+      await expect.poll(() => occurrences(page, /agreement/gi)).toBe(count - 1);
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
 test('copy and paste keep formatting, from here and from other apps', async ({
   browser,
 }) => {
@@ -448,6 +512,108 @@ test('copy and paste keep formatting, from here and from other apps', async ({
     ).toContain('r:w:b');
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+test('on a touch screen, a swipe scrolls and taps place the caret', async ({
+  browser,
+}) => {
+  const documentId = crypto.randomUUID();
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 420, height: 760 },
+  });
+  const page = await context.newPage();
+  logErrors(page, 'touch');
+  const cdp = await context.newCDPSession(page);
+  const touch = (
+    type: 'touchStart' | 'touchMove' | 'touchEnd',
+    x: number,
+    y: number
+  ) =>
+    cdp.send('Input.dispatchTouchEvent', {
+      type,
+      touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
+    });
+  const selection = () =>
+    page.evaluate(() => window.docxFixture?.editor()?.state()?.selection);
+  const focused = () =>
+    page.evaluate(() =>
+      document.activeElement?.hasAttribute('data-docx-input')
+    );
+  try {
+    await open(page, documentId, ALICE);
+    const scroller = page.locator('[data-docx-scroller]');
+    const sheet = await page.locator('[data-docx-page="0"]').boundingBox();
+    if (!sheet) throw new Error('no page');
+    // A point on the first body line.
+    const caret = await page.evaluate(async () => {
+      const editor = window.docxFixture?.editor();
+      const first = (await editor?.paragraphs())?.find((p) => p.text.trim());
+      return first
+        ? editor?.caretAt({ block: first.id, offset: 2 })
+        : undefined;
+    });
+    if (!caret) throw new Error('no caret');
+    const scale =
+      sheet.width /
+      (await page.evaluate(
+        () => window.docxFixture?.editor()?.pages()[0]?.width ?? 1
+      ));
+    const x = sheet.x + caret.x * scale;
+    const y = sheet.y + (caret.y + caret.height / 2) * scale;
+
+    // A swipe scrolls the pages and leaves the keyboard closed.
+    await touch('touchStart', 200, 600);
+    for (let i = 1; i <= 8; i++) await touch('touchMove', 200, 600 - i * 40);
+    await touch('touchEnd', 0, 0);
+    await expect
+      .poll(() => scroller.evaluate((e) => e.scrollTop))
+      .toBeGreaterThan(30);
+    expect(await focused()).toBe(false);
+    await scroller.evaluate((e) => {
+      e.scrollTop = 0;
+    });
+
+    // A tap places the caret there and focuses the text input.
+    await page.touchscreen.tap(x, y);
+    await expect.poll(focused).toBe(true);
+    await expect
+      .poll(async () => {
+        const s = await selection();
+        return s && s.anchor.offset === s.focus.offset ? s.focus.offset : -1;
+      })
+      .toBeGreaterThanOrEqual(0);
+
+    // A double tap selects a word (after a pause: no double tap with the
+    // tap before).
+    await page.waitForTimeout(400);
+    await page.touchscreen.tap(x, y);
+    await page.touchscreen.tap(x, y);
+    await expect
+      .poll(async () => {
+        const s = await selection();
+        return s ? s.focus.offset - s.anchor.offset : 0;
+      })
+      .toBeGreaterThan(1);
+
+    // A long press selects a word too.
+    await page.evaluate(() =>
+      window.docxFixture
+        ?.editor()
+        ?.run([{ op: 'move', unit: 'document', forward: false, extend: false }])
+    );
+    await touch('touchStart', x, y);
+    await page.waitForTimeout(800);
+    await touch('touchEnd', 0, 0);
+    await expect
+      .poll(async () => {
+        const s = await selection();
+        return s ? s.focus.offset - s.anchor.offset : 0;
+      })
+      .toBeGreaterThan(1);
+  } finally {
+    await context.close();
   }
 });
 

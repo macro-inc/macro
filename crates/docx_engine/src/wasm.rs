@@ -6,7 +6,7 @@
 
 use crate::Document;
 use crate::collab::{CollabState, V1State};
-use crate::edit::{EditOp, Pos, RemoteChange, Session};
+use crate::edit::{EditOp, FindOptions, Pos, RemoteChange, Session};
 use crate::render::ImageCache;
 use pptx_engine::font::FontDb;
 use serde::Serialize;
@@ -195,13 +195,21 @@ impl DocxDocument {
         to_json(&rects)
     }
 
-    /// The selected text, for the clipboard.
     /// The selection for the clipboard (`Clip` JSON: paragraphs, HTML, text).
     #[wasm_bindgen(js_name = copySelection)]
     pub fn copy_selection(&mut self) -> Result<String, JsError> {
         to_json(&self.session.copy_selection())
     }
 
+    /// The matches of a search in the body (`FindResult` JSON); `options`
+    /// is `FindOptions` JSON.
+    pub fn find(&mut self, query: &str, options: &str) -> Result<String, JsError> {
+        let options: FindOptions = serde_json::from_str(options).map_err(js_err)?;
+        let result = FONTS.with(|f| self.session.find(query, &options, &f.borrow()));
+        to_json(&result)
+    }
+
+    /// The selected text, for the clipboard.
     #[wasm_bindgen(js_name = selectedText)]
     pub fn selected_text(&mut self) -> String {
         self.session.selected_text()

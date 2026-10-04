@@ -2,6 +2,7 @@ import * as engine from '@core/docx-engine/client';
 import type {
   EditOp,
   EditResult,
+  FindOptions,
   PageInfo,
   Pos,
   Selection,
@@ -288,6 +289,9 @@ export function createDocxEditor(options: DocxEditorOptions) {
     rangeRects: (from: Pos, to: Pos) => engine.rangeRects(docKey, from, to),
     paragraphs: () => engine.paragraphs(docKey),
     selectedText: () => engine.selectedText(docKey),
+    /** The matches of a search in the body, with their highlights. */
+    find: (query: string, findOptions: FindOptions) =>
+      engine.find(docKey, query, findOptions),
     /** The selection for the clipboard (paragraphs, HTML and text). */
     copySelection: () => engine.copySelection(docKey),
     save: () => engine.saveDocument(docKey),

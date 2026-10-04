@@ -16,6 +16,7 @@ import type {
   CaretRect,
   Clip,
   EditResult,
+  FindResult,
   PageInfo,
   PageRect,
   ParagraphText,
@@ -341,6 +342,20 @@ async function serve(request: DocxRequest): Promise<Served> {
           ok: true,
           kind: 'clip',
           clip: JSON.parse(documentFor(docKey).copySelection()) as Clip,
+        },
+        [],
+      ]
+    )
+    .with(
+      { kind: 'find' },
+      ({ docKey, query, options }): Served => [
+        {
+          id,
+          ok: true,
+          kind: 'find',
+          result: JSON.parse(
+            documentFor(docKey).find(query, JSON.stringify(options))
+          ) as FindResult,
         },
         [],
       ]
