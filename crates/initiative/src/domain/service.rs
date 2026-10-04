@@ -409,10 +409,9 @@ where
         super::assignees::grant(&self.repo, &receipt, user_ids).await
     }
 
-    /// Initiative rows first, then the description. The document FK's `ON DELETE RESTRICT`
-    /// would reject a document-first purge while the initiative still names it. Purging the
-    /// document drops its sync-service session, which the surface adopted; the surface row
-    /// is then soft-deleted so no token outlives the initiative.
+    /// Initiative rows first, then cleanup that must not outlive them: the initiative's own
+    /// properties and its tasks' Project values, then the description surface, which is
+    /// retired so no token outlives the initiative.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,
