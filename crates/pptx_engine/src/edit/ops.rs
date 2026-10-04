@@ -36,6 +36,10 @@ mod values;
 
 pub use values::*;
 
+mod smartart;
+
+pub use smartart::{SmartArtEdit, SmartArtItem, SmartArtPosition, SmartArtTarget};
+
 /// One edit operation.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1196,6 +1200,33 @@ pub enum EditOp {
         /// (or null) to keep.
         #[serde(default)]
         display: Option<bool>,
+    },
+    // ---- SmartArt ----
+    /// Edits a SmartArt graphic (a shape of kind `diagram` whose outline has
+    /// `smartArt`): its nodes and their text as in PowerPoint's text pane,
+    /// its layout, colors, or style. The diagram is laid out again, its text
+    /// shrinking together to fit. Nodes are addressed by the ids in
+    /// `smartArt.nodes`; a new node's id appears there afterwards. Diagrams
+    /// whose layout the outline reports as not `supported` take text edits,
+    /// colors, styles, and a new supported layout, but not node changes.
+    EditSmartArt {
+        /// Slide id.
+        slide: u32,
+        /// The SmartArt graphic frame's id.
+        shape: u32,
+        /// The change.
+        edit: SmartArtEdit,
+    },
+    /// Converts a SmartArt graphic into ordinary shapes (a group that looks
+    /// the same) or into a bulleted text box. The new shape's id is reported
+    /// in the result.
+    ConvertSmartArt {
+        /// Slide id.
+        slide: u32,
+        /// The SmartArt graphic frame's id.
+        shape: u32,
+        /// `shapes` or `text`.
+        to: SmartArtTarget,
     },
 }
 

@@ -367,10 +367,11 @@ Layout and test hooks:
 
 - **Ribbon** (`pptx-toolbar`): tabs `pptx-tab-<id>` for Home, Insert,
   Design, Transitions, Slide Show, Review, and View, plus contextual Shape Format,
-  Picture Format, Table Design, Layout (tables), and Chart Design tabs that
-  appear for the selection (`pptx-tab-shape-format`,
+  Picture Format, Table Design, Layout (tables), Chart Design, and SmartArt
+  Design tabs that appear for the selection (`pptx-tab-shape-format`,
   `pptx-tab-picture-format`, `pptx-tab-table-design`,
-  `pptx-tab-table-layout`, `pptx-tab-chart-design`). Undo/Redo sit left of the
+  `pptx-tab-table-layout`, `pptx-tab-chart-design`,
+  `pptx-tab-smartart-design`). Undo/Redo sit left of the
   tabs; the save state (`pptx-save-state`), Download, and **Present**
   (`pptx-present`) sit right. Home: clipboard and **Format Painter**
   (`pptx-format-painter`: click, then click a shape or select text to paint
@@ -390,7 +391,8 @@ Layout and test hooks:
   (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table
   grid (`pptx-insert-table`, then a cell of `pptx-table-grid`), Pictures
   (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
-  `pptx-chart-<kind>-<grouping>`), Video and Audio (`pptx-insert-video`,
+  `pptx-chart-<kind>-<grouping>`), SmartArt (`pptx-insert-smartart`; see
+  **SmartArt** below), Video and Audio (`pptx-insert-video`,
   `pptx-insert-audio`; file inputs `pptx-video-input`, `pptx-audio-input`;
   clips up to 50 MB, or 2 MB in a shared presentation because the sync
   service keeps presentations under 4 MB, are embedded with a poster frame
@@ -566,6 +568,37 @@ Layout and test hooks:
   (item `n` is `pptx-equation-structure-<gallery>-<n>`). Symbols and
   structures go into the linear text at its caret; a structure wraps the
   selected linear text and puts the caret in its first empty slot.
+- **SmartArt**: Insert ▸ SmartArt opens Choose a SmartArt Graphic
+  (`pptx-smartart-dialog`): categories `pptx-smartart-category-<all|list|process|cycle|hierarchy|relationship|pyramid>`,
+  layouts `pptx-smartart-layout-<id>` (`default` Basic Block List, `vList2`,
+  `hList1`, `process1`, `chevron1`, `cycle2`, `radial1`, `hierarchy1`,
+  `orgChart1`, `venn1`, `pyramid1`), the picked name `pptx-smartart-picked`,
+  and **OK** `pptx-smartart-ok`. The graphic is inserted selected with its
+  Text Pane open (`pptx-smartart-pane`, one `pptx-smartart-pane-line` input
+  per node, its `li` carrying `data-level`; close `pptx-smartart-pane-close`;
+  the tab on the graphic's left edge `pptx-smartart-pane-toggle` shows and
+  hides it). Typing in a bullet edits the node live; Enter adds a node after
+  it (splitting at the caret), Tab/Shift+Tab demote/promote, Backspace on an
+  empty bullet deletes the node, and the arrow keys move between bullets.
+  Empty nodes show "[Text]" (`pptx-smartart-prompt`, editor only). With the
+  graphic selected, click a node to pick it (`pptx-smartart-active-node`,
+  `data-node`), then type (replaces its text), press Enter/F2, or
+  double-click to edit it in place (`pptx-smartart-node-input`; Escape ends);
+  Delete removes the picked node. SmartArt Design: Add Shape
+  (`pptx-smartart-add-shape`, then `pptx-smartart-add-<after|before|above|below|assistant>`),
+  Text Pane (`pptx-smartart-text-pane`), Promote/Demote
+  (`pptx-smartart-promote`, `pptx-smartart-demote`), Move Up/Down
+  (`pptx-smartart-move-up`, `pptx-smartart-move-down`), Layouts
+  (`pptx-smartart-layouts`, then `pptx-smartart-layout-option-<id>`), Change
+  Colors (`pptx-smartart-colors`, then `pptx-smartart-colors-<id>`:
+  `accent0_1`…, `colorful1`…`colorful5`, `accentN_1`…`accentN_5`), SmartArt
+  Styles (`pptx-smartart-styles`, then `pptx-smartart-style-simple1`…`5`),
+  Reset Graphic (`pptx-smartart-reset`), and Convert
+  (`pptx-smartart-convert`, then `pptx-smartart-convert-shapes` or
+  `-text`). The right-click menu offers Add Shape, Change Layout, Change
+  Colors, Reset Graphic, and Convert to Shapes/Text. SmartArt in other
+  layouts (from PowerPoint) keeps its drawing: text edits apply in place and
+  structural edits say "this layout's structure can't be changed here".
 - **Effects**: Shape Format's **Shape effects** (`pptx-shape-effects`) and
   Picture Format's **Picture effects** (`pptx-picture-effects`) open
   PowerPoint's Shadow, Reflection, Glow, and Soft Edges flyouts (hover

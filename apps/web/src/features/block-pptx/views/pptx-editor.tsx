@@ -1,8 +1,8 @@
 /**
  * The presentation editor: ribbon, slide rail, the slide stage with
- * selection, in-place text and table editing, right-click menus, the format
- * pane, speaker notes, find and replace, and the slide show. Slide Master
- * view edits masters and layouts with the same stage.
+ * selection, in-place text, table, and SmartArt editing, right-click menus,
+ * the format pane, speaker notes, find and replace, and the slide show.
+ * Slide Master view edits masters and layouts with the same stage.
  */
 
 import {
@@ -110,6 +110,10 @@ import { SelectionPane } from '../components/selection-pane';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
 import { SlideShow } from '../components/slideshow';
+import { SmartArtDialog } from '../components/smartart/smartart-dialog';
+import { SmartArtMenuItems } from '../components/smartart/smartart-menu';
+import { SmartArtStage } from '../components/smartart/smartart-stage';
+import { SmartArtDesignTab } from '../components/smartart/smartart-tabs';
 import { SpellSquiggles } from '../components/spell-squiggles';
 import { SpellingPane } from '../components/spelling-pane';
 import {
@@ -139,6 +143,7 @@ import { deleteBlocker, type MasterPage } from '../core/master-view';
 import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
 import { unionBounds } from '../core/selection';
 import { clickSlide, type SlideSelection } from '../core/slide-selection';
+import { nodeAt } from '../core/smartart';
 import {
   anchorOf,
   boundaryAt,
@@ -173,6 +178,7 @@ import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
+import { createSmartArt } from '../primitives/create-smart-art';
 import {
   createSpellCheck,
   type Squiggle,
@@ -612,6 +618,19 @@ export function PptxEditor() {
     selectSlides,
   });
 
+  // SmartArt: the selected graphic and node, the Text Pane, and its edits.
+  const smartArt = createSmartArt({
+    apply: (ops, group) => session.apply(ops, group),
+    slide: session.currentSlide,
+    selection: () => editor.selection(),
+    select: (id) => editor.select(id),
+    slideSize: () => ({ w: slideW(), h: slideH() }),
+    themeColors: () => session.outline()?.themeColors ?? [],
+    readonly,
+    previews: engine.smartArtPreviews,
+    catalog: engine.smartArtCatalog,
+  });
+
   const [railFocused, setRailFocused] = createSignal(false);
   const clipboard = createClipboard({
     engine: viewEngine,
@@ -891,6 +910,11 @@ export function PptxEditor() {
     }
     tableGesture = null;
     setTableRange(null);
+    // A click on a selected SmartArt graphic picks the node under it.
+    if (!e.shiftKey && !toggle) {
+      const slide = session.currentSlide();
+      smartArt.pointerDown(slide ? hitTest(slide.shapes, at) : undefined, at);
+    }
     editor.pointerDown(at, { shift: e.shiftKey, toggle, detail: e.detail });
     if (editor.editing()) {
       e.preventDefault();
@@ -1001,6 +1025,11 @@ export function PptxEditor() {
       chartEditor(hit);
       return;
     }
+    if (hit.smartArt) {
+      const node = smartArt.frame()?.id === hit.id && nodeAt(hit, at);
+      if (node) smartArt.startEditing(node.id);
+      return;
+    }
     if (hit.textEditable)
       void startEditing(hit.id, at).then(() => pickEquationAt(at));
   };
@@ -1066,15 +1095,18 @@ export function PptxEditor() {
       setMenuTarget({ kind: 'canvas' });
       return;
     }
+    smartArt.pointerDown(hit, at);
     if (!editor.selectedIds().includes(hit.id)) editor.select(hit.id);
     setTableRange(null);
     setMenuTarget({
       kind:
-        hit.kind === 'chart' && editor.selection().length === 1
-          ? 'chart'
-          : hit.kind === 'table' && editor.selection().length === 1
-            ? 'table'
-            : 'shapes',
+        hit.smartArt && editor.selection().length === 1
+          ? 'smartArt'
+          : hit.kind === 'chart' && editor.selection().length === 1
+            ? 'chart'
+            : hit.kind === 'table' && editor.selection().length === 1
+              ? 'table'
+              : 'shapes',
     });
   };
 
@@ -1218,6 +1250,7 @@ export function PptxEditor() {
     }
     const list = editor.selection();
     if (list.length === 0 && !tableRange()) return;
+    if (smartArtKey(e)) return;
     if (key === 'Escape') {
       e.preventDefault();
       if (tableRange()) setTableRange(null);
@@ -1271,6 +1304,41 @@ export function PptxEditor() {
         await editor.typeText(key);
       })();
     }
+  };
+
+  /**
+   * Keys on a picked SmartArt node: typing replaces its text, Enter or F2
+   * edits it, Delete removes it, and Escape goes back to the graphic.
+   */
+  const smartArtKey = (e: KeyboardEvent): boolean => {
+    const node = smartArt.activeNode();
+    if (!node || !smartArt.frame()) return false;
+    const key = e.key;
+    if (key === 'Escape') {
+      e.preventDefault();
+      smartArt.setActiveNode(undefined);
+      return true;
+    }
+    if (readonly()) return false;
+    if (key === 'Enter' || key === 'F2') {
+      e.preventDefault();
+      smartArt.startEditing(node);
+      return true;
+    }
+    if (key === 'Delete' || key === 'Backspace') {
+      e.preventDefault();
+      // Layouts the engine can't lay out say so (the edit is refused).
+      void (async () => {
+        if (await smartArt.deleteNode(node)) smartArt.setActiveNode(undefined);
+      })();
+      return true;
+    }
+    if (key.length === 1 && !e.altKey) {
+      e.preventDefault();
+      smartArt.startEditing(node, key);
+      return true;
+    }
+    return false;
   };
 
   let root!: HTMLDivElement;
@@ -1913,7 +1981,12 @@ export function PptxEditor() {
     const insert: RibbonTab = {
       id: 'insert',
       label: 'Insert',
-      content: slideTools(() => <InsertTab chartMenu={chartInsertMenu} />),
+      content: slideTools(() => (
+        <InsertTab
+          chartMenu={chartInsertMenu}
+          onSmartArt={() => smartArt.dialog.setOpen(true)}
+        />
+      )),
     };
     const viewTab: RibbonTab = {
       id: 'view',
@@ -2008,6 +2081,16 @@ export function PptxEditor() {
         : []),
       ...((selectedEq() || equations.target()) && !readonly()
         ? [equationTab]
+        : []),
+      ...(list.length === 1 && list[0].smartArt && !readonly()
+        ? [
+            {
+              id: 'smartart-design',
+              label: 'SmartArt Design',
+              contextual: true,
+              content: () => <SmartArtDesignTab smartArt={smartArt} />,
+            },
+          ]
         : []),
     ];
   });
@@ -2637,6 +2720,12 @@ export function PptxEditor() {
                                   const s = editor.selectedShape();
                                   if (s) chartEditor(s);
                                 },
+                                smartArt: () => (
+                                  <SmartArtMenuItems
+                                    smartArt={smartArt}
+                                    readonly={readonly()}
+                                  />
+                                ),
                                 selectRows: selectWholeRows,
                                 selectColumns: selectWholeColumns,
                                 selectTable: selectWholeTable,
@@ -2700,6 +2789,23 @@ export function PptxEditor() {
                         </ContextMenuContent>
                       </ContextMenu.Portal>
                     </ContextMenu>
+                    <SmartArtStage
+                      smartArt={smartArt}
+                      shapes={session.currentSlide()?.shapes ?? []}
+                      scale={scale()}
+                      slideWidth={slideW()}
+                      room={() => {
+                        hostSize();
+                        const host = stageHost.getBoundingClientRect();
+                        const slide = stage.getBoundingClientRect();
+                        return {
+                          left: slide.left - host.left,
+                          right: host.right - slide.right,
+                        };
+                      }}
+                      readonly={readonly()}
+                      onDone={focusStage}
+                    />
                     <Show when={view.options().drawingGuides}>
                       <GuidesOverlay
                         width={slideW()}
@@ -3040,6 +3146,17 @@ export function PptxEditor() {
             }}
           />
         )}
+      </Show>
+      <Show when={smartArt.dialog.open()}>
+        <SmartArtDialog
+          catalog={smartArt.catalog()}
+          preview={smartArt.preview}
+          onInsert={(layout) => void smartArt.insert(layout)}
+          onClose={() => {
+            smartArt.dialog.setOpen(false);
+            queueMicrotask(refocus);
+          }}
+        />
       </Show>
       <Show when={linkEdit() && session.outline()}>
         {(deck) => (

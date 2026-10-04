@@ -44,6 +44,7 @@ pub(crate) mod picture;
 mod relayout;
 pub(crate) mod sections;
 mod slide_size;
+pub(crate) mod smartart;
 mod text_direction;
 mod theme;
 pub(crate) mod transition;
@@ -61,7 +62,13 @@ pub use ops::{
 };
 pub use ops::{GeometryPath, MergeMode, PathCommand, PathFillMode};
 pub use ops::{GuideOrient, GuideSpec, TextDirection};
+pub use ops::{SmartArtEdit, SmartArtItem, SmartArtPosition, SmartArtTarget};
 pub use slides::{LayoutInfo, layouts};
+pub use smartart::{
+    Catalog as SmartArtCatalog, CatalogItem as SmartArtCatalogItem,
+    CatalogLayout as SmartArtCatalogLayout, PreviewPath as SmartArtPreviewPath,
+    PreviewSpec as SmartArtPreviewSpec, catalog as smart_art_catalog, preview as smart_art_preview,
+};
 
 pub use clipboard::{
     CLIPBOARD_FORMAT, ClipFrame, ClipLayout, ClipNotes, ClipPart, ClipRel, ClipSlide,
@@ -143,7 +150,9 @@ impl EditOp {
             | O::SetCustomGeometry { slide, .. }
             | O::MergeShapes { slide, .. }
             | O::InsertEquation { slide, .. }
-            | O::SetEquation { slide, .. } => Some(*slide),
+            | O::SetEquation { slide, .. }
+            | O::EditSmartArt { slide, .. }
+            | O::ConvertSmartArt { slide, .. } => Some(*slide),
             O::RenameLayout { layout, .. }
             | O::DeleteLayout { layout }
             | O::InsertPlaceholder { layout, .. }
@@ -186,6 +195,8 @@ impl EditOp {
                 | EditOp::DeleteComment { .. }
                 | EditOp::DeleteAllComments { .. }
                 | EditOp::MergeShapes { .. }
+                | EditOp::EditSmartArt { .. }
+                | EditOp::ConvertSmartArt { .. }
         )
     }
 
@@ -1103,6 +1114,25 @@ impl Presentation {
                     equation::set_in_body(doc, body, *paragraph, *index, latex, *display)
                 })?;
                 refit.push((part, *shape));
+            }
+            O::EditSmartArt { slide, shape, edit } => {
+                let part = self.slide_part(*slide)?;
+                smartart::edit(self, &part, *shape, edit)?;
+                // The drawing is laid out again with the fonts at the end of the batch.
+                refit.push((part, *shape));
+            }
+            O::ConvertSmartArt { slide, shape, to } => {
+                let part = self.slide_part(*slide)?;
+                let id = smartart::convert(self, &part, *shape, *to)?;
+                if *to == SmartArtTarget::Text {
+                    // The text box shrinks its text to fit, as PowerPoint's does.
+                    refit.push((part, id));
+                }
+                created = Some(Created {
+                    slide: *slide,
+                    shape: Some(id),
+                    section: None,
+                });
             }
         }
         out.created.extend(created);

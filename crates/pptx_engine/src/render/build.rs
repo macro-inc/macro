@@ -610,8 +610,25 @@ pub struct TextFrame {
 
 /// The text frame of `s` drawn through `parent` (the transform of its group).
 pub fn text_frame(s: &Shape, geom: &ShapeGeometry, text: &TextBody, parent: &Affine) -> TextFrame {
-    let rect = geom.text_rect;
-    let base = parent.pre_concat(&s.xfrm.text_to_parent());
+    // SmartArt drawings place text in their own upright box (`dsp:txXfrm`),
+    // which need not follow the shape's geometry; its rotation adds to the
+    // shape's (rotated shapes often carry upright text).
+    let doc = &s.part.doc;
+    let tx_xfrm = (doc.ns(s.node) == crate::xml::Ns::DSP)
+        .then(|| doc.child(s.node, crate::xml::Ns::DSP, "txXfrm"))
+        .flatten()
+        .map(|x| {
+            let mut tx = crate::model::shape::Xfrm::parse(doc, x);
+            tx.rot = (tx.rot + s.xfrm.rot).rem_euclid(360.0);
+            tx
+        });
+    let (rect, base) = match tx_xfrm {
+        Some(x) => (
+            Rect::from_xywh(0.0, 0.0, x.w, x.h),
+            parent.pre_concat(&x.text_to_parent()),
+        ),
+        None => (geom.text_rect, parent.pre_concat(&s.xfrm.text_to_parent())),
+    };
     let axis = |x: f64, y: f64| {
         let len = x.hypot(y);
         if len > 1e-9 { len } else { 1.0 }

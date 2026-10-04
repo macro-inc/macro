@@ -238,6 +238,8 @@ export interface ShapeOutline {
   picture?: PictureOutline;
   /** Shadow, glow, soft edges, and reflection, when the shape has any. */
   effects?: EffectsOutline;
+  /** SmartArt: layout, colors, style, and nodes (SmartArt frames only). */
+  smartArt?: SmartArtOutline;
   /**
    * Group members, back to front. Their box, rotation, and flips are in
    * slide space (what `setTransform` takes and ungrouping gives them).
@@ -755,6 +757,14 @@ export type NewShape =
       categories: string[];
       series: ChartSeriesData[];
       title?: string;
+    }
+  /** A SmartArt graphic (Insert ▸ SmartArt); sample nodes when `items` is omitted. */
+  | {
+      kind: 'smartArt';
+      layout: string;
+      items?: SmartArtItem[];
+      colors?: string;
+      style?: string;
     };
 
 export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
@@ -1142,6 +1152,15 @@ export type EditOp =
       index: number;
       latex: string;
       display?: boolean;
+    }
+  /** Edits a SmartArt graphic's nodes, layout, colors, or style. */
+  | { op: 'editSmartArt'; slide: number; shape: number; edit: SmartArtEdit }
+  /** Converts a SmartArt graphic to shapes (a group) or a text box. */
+  | {
+      op: 'convertSmartArt';
+      slide: number;
+      shape: number;
+      to: SmartArtTarget;
     }
   | CommentOp;
 
@@ -1554,4 +1573,126 @@ export interface ShapeGeometryInfo {
   preset?: string;
   /** Lines, cubic and quadratic curves (arcs come as cubics). */
   paths: GeometryPath[];
+}
+
+/** A SmartArt graphic's layout. */
+export interface SmartArtLayoutOutline {
+  /** Layout id (`urn:microsoft.com/office/officeart/2005/8/layout/process1`). */
+  id: string;
+  /** Display name (`Basic Process`). */
+  name: string;
+  /** Whether nodes can be added, removed, and moved (the engine lays it out). */
+  supported: boolean;
+}
+
+/** One node of a SmartArt graphic: one bullet of its text pane. */
+export interface SmartArtNodeOutline {
+  id: string;
+  /** Text (`\n` between paragraphs, `\u000b` for line breaks). */
+  text: string;
+  /** 1 for top-level nodes. */
+  level: number;
+  parent?: string;
+  children?: string[];
+  assistant?: boolean;
+  /** The box of the shape showing the node, relative to the frame (points). */
+  frame?: [number, number, number, number];
+  /** Its font size there (points). */
+  fontSize?: number;
+  /** Its text color there (`#RRGGBB`). */
+  textColor?: string;
+}
+
+/** A SmartArt graphic (shapes of kind `diagram`). */
+export interface SmartArtOutline {
+  layout: SmartArtLayoutOutline;
+  /** Color variation id; `colorsName` is its display name when known. */
+  colors: string;
+  colorsName?: string;
+  /** SmartArt style id; `styleName` is its display name when known. */
+  style: string;
+  styleName?: string;
+  /** Nodes in text-pane order. */
+  nodes: SmartArtNodeOutline[];
+}
+
+/** One bullet of a SmartArt outline (`level` 1 = top level). */
+export interface SmartArtItem {
+  text: string;
+  level?: number;
+}
+
+/** Where `addNode` adds, relative to the given node. */
+export type SmartArtPosition =
+  | 'after'
+  | 'before'
+  | 'above'
+  | 'below'
+  | 'assistant';
+
+/** One change to a SmartArt graphic. Mirrors `edit::SmartArtEdit`. */
+export type SmartArtEdit =
+  | { action: 'setText'; node: string; text: string }
+  | {
+      action: 'addNode';
+      node?: string;
+      position?: SmartArtPosition;
+      text?: string;
+    }
+  | {
+      action: 'deleteNode' | 'promote' | 'demote' | 'moveUp' | 'moveDown';
+      node: string;
+    }
+  | { action: 'setNodes'; items: SmartArtItem[] }
+  | { action: 'setLayout'; layout: string }
+  | { action: 'setColors'; colors: string }
+  | { action: 'setStyle'; style: string }
+  | { action: 'reset' };
+
+/** What `convertSmartArt` makes. */
+export type SmartArtTarget = 'shapes' | 'text';
+
+/** A layout the SmartArt galleries offer. */
+export interface SmartArtCatalogLayout {
+  id: string;
+  short: string;
+  name: string;
+  /** `list`, `process`, `cycle`, `hierarchy`, `relationship`, `pyramid`. */
+  categories: string[];
+}
+
+/** A color variation or SmartArt style. */
+export interface SmartArtCatalogItem {
+  id: string;
+  short: string;
+  name: string;
+  /** Gallery group (`mainScheme`, `colorful`, `accent1`..., `simple`). */
+  category: string;
+}
+
+/** What the SmartArt galleries list. */
+export interface SmartArtCatalog {
+  layouts: SmartArtCatalogLayout[];
+  colors: SmartArtCatalogItem[];
+  styles: SmartArtCatalogItem[];
+}
+
+/** A gallery preview to draw. */
+export interface SmartArtPreviewSpec {
+  layout: string;
+  colors?: string;
+  style?: string;
+  width: number;
+  height: number;
+  /** Theme colors by slot (`accent1` → `#4472C4`). */
+  theme?: Record<string, string>;
+}
+
+/** One SVG path of a SmartArt preview. */
+export interface SmartArtPreviewPath {
+  d: string;
+  fill?: string;
+  fillOpacity: number;
+  stroke?: string;
+  strokeWidth: number;
 }

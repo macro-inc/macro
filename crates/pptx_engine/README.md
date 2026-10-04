@@ -133,6 +133,29 @@ layout, master, chart, and SmartArt drawing as "Ensure Fit" or "Maximize" do.
 Sections (`p14:sectionLst`) can be added, renamed, removed, and moved, and stay
 consistent when slides are added, duplicated, pasted, moved, or deleted.
 
+### SmartArt
+
+A SmartArt frame's outline (`ShapeOutline.smart_art`) gives its layout (id,
+name, and whether the engine lays it out), color variation, style, and node
+tree in text-pane order (id, text, level, parent, children, assistant flag,
+and the node's frame, font size, and text color in the drawing).
+`EditSmartArt` sets node text, adds (after, before, above, below, assistant),
+deletes, promotes, demotes, and moves nodes, replaces the whole outline,
+changes the layout, colors, or style, and resets the graphic;
+`ConvertSmartArt` turns it into a group of shapes or a bulleted text box, and
+`AddShape` with `smartArt` inserts a new one (data, layout, quick style,
+colors, and drawing parts, with layout definitions written from the schema).
+Every edit updates the data model and the cached drawing PowerPoint shows.
+
+The engine lays out Basic Block List, Vertical and Horizontal Bullet List,
+Basic Process, Basic Chevron Process, Basic Cycle, Basic Radial, Hierarchy,
+Organization Chart, Basic Venn, and Basic Pyramid itself (shapes,
+connectors, and one autofit font size per text level, colored from the color
+and style definitions). Other layouts, and graphics whose shapes were moved
+or restyled in PowerPoint, keep their drawing: text, colors, and style
+change in place, and structural edits are refused with "this layout's
+structure can't be changed here".
+
 ### Collaboration
 
 `collab` describes a presentation as flat string maps (Loro containers in the
@@ -208,10 +231,11 @@ one that differs from PowerPoint (pattern fills, for example).
 - Effects: 3-D bevels and extrusion are not drawn; soft edges and reflections
   are approximations.
 - SmartArt is drawn from the drawing PowerPoint caches with it; the rare
-  diagram saved without one (1 of 16 in the corpus) is left empty, since the
-  SmartArt layout algorithms are not implemented.
-- Editing does not create SmartArt; it keeps the diagrams a deck has.
-  Combination, scatter, bubble, stock, surface, and radar charts take
+  diagram saved without one (1 of 16 in the corpus) stays empty until it is
+  edited in a layout the engine lays out. Only the layouts listed under
+  SmartArt are laid out; per-node formatting from PowerPoint (moved or
+  recolored shapes) is kept but not re-applied after a structural edit.
+- Combination, scatter, bubble, stock, surface, and radar charts take
   formatting edits but not data or type edits.
 - Animations: rendering shows every shape, as PowerPoint's editing view
   does (the web slide show plays the builds); new effects take PowerPoint's gallery

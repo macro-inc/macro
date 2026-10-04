@@ -19,6 +19,8 @@ import type {
   PresetPath,
   ShapeGeometryInfo,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
   TextLayoutInfo,
   TextMatch,
 } from './types';
@@ -312,6 +314,25 @@ async function serve(
         ];
       }
     )
+    .with({ kind: 'smartArtPreviews' }, ({ specs }) => {
+      const previews = specs.map(
+        (spec) =>
+          JSON.parse(wasm.smartArtPreview(JSON.stringify(spec))) as
+            | SmartArtPreviewPath[]
+            | null
+      );
+      return [{ id, ok: true, kind: 'smartArtPreviews', previews }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'smartArtCatalog' }, () => {
+      const catalog = JSON.parse(wasm.smartArtCatalog()) as SmartArtCatalog;
+      return [{ id, ok: true, kind: 'smartArtCatalog', catalog }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
     .with({ kind: 'textLayout' }, ({ docKey, index, shape, cell }) => {
       const layout = JSON.parse(
         documentFor(docKey).textLayout(index, shape, cell?.row, cell?.col)

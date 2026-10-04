@@ -16,6 +16,9 @@ import type {
   PresetPath,
   ShapeGeometryInfo,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
+  SmartArtPreviewSpec,
   TextLayoutInfo,
   TextMatch,
 } from '@core/pptx-engine/types';
@@ -115,6 +118,12 @@ export interface PresentationEngine {
     latex: string,
     options: { display: boolean; size: number; scale: number; color: string }
   ) => Promise<Uint8Array>;
+  /** SmartArt gallery previews, one per spec (`null` for unknown layouts). */
+  smartArtPreviews?: (
+    specs: SmartArtPreviewSpec[]
+  ) => Promise<(SmartArtPreviewPath[] | null)[]>;
+  /** The SmartArt layouts, color variations, and styles the galleries list. */
+  smartArtCatalog?: () => Promise<SmartArtCatalog>;
   /** Whether other people edit the same presentation live. */
   collaborative?: boolean;
   /**

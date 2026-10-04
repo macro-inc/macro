@@ -89,6 +89,22 @@ pub fn render_equation(
     Ok(raster.to_png())
 }
 
+/// The SmartArt layouts, color variations, and styles the galleries list,
+/// as JSON `{layouts, colors, styles}`.
+#[wasm_bindgen(js_name = smartArtCatalog)]
+pub fn smart_art_catalog() -> Result<String, JsError> {
+    to_json(&crate::edit::smart_art_catalog())
+}
+
+/// A SmartArt gallery preview as JSON `[{d, fill, fillOpacity, stroke,
+/// strokeWidth}]` (SVG paths), or `null` for an unknown layout. `spec` is
+/// JSON `{layout, colors?, style?, width, height, theme?}`.
+#[wasm_bindgen(js_name = smartArtPreview)]
+pub fn smart_art_preview(spec: &str) -> Result<String, JsError> {
+    let spec: crate::edit::SmartArtPreviewSpec = serde_json::from_str(spec).map_err(js_err)?;
+    to_json(&crate::edit::smart_art_preview(&spec))
+}
+
 /// An open presentation with undo history.
 ///
 /// Reads that take a slide `index` (outlines, rendering, text layout,

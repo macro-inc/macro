@@ -96,6 +96,10 @@ interface PptxEngineWasmModule {
     scale: number,
     color: string
   ) => Uint8Array;
+  /** `SmartArtCatalog` JSON. */
+  smartArtCatalog: () => string;
+  /** `SmartArtPreviewPath[]` JSON (or `null`) for `SmartArtPreviewSpec` JSON. */
+  smartArtPreview: (spec: string) => string;
 }
 
 let modulePromise: Promise<PptxEngineWasmModule> | undefined;

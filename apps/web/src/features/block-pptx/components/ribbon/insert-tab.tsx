@@ -1,9 +1,11 @@
 /**
- * The Insert tab: slides, tables, pictures, shapes, text boxes, links.
+ * The Insert tab: slides, tables, pictures, shapes, charts, SmartArt, text
+ * boxes, links.
  */
 
 import ChatText from '@phosphor/chat-text.svg';
 import FilmStrip from '@phosphor/film-strip.svg';
+import Graph from '@phosphor/graph.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
 import Pi from '@phosphor/pi.svg';
@@ -71,6 +73,8 @@ export function TableGridPicker(props: {
 
 export function InsertTab(props: {
   chartMenu?: (close: () => void) => JSX.Element;
+  /** Opens Choose a SmartArt Graphic. */
+  onSmartArt?: () => void;
 }) {
   const env = useRibbon();
   const c = env.commands;
@@ -186,6 +190,18 @@ export function InsertTab(props: {
           >
             {(close) => props.chartMenu!(close)}
           </RibbonPopover>
+        ) : null}
+        {props.onSmartArt ? (
+          <RibbonTextButton
+            label="SmartArt"
+            tooltip="Insert a SmartArt graphic"
+            disabled={ro()}
+            data-testid="pptx-insert-smartart"
+            onClick={() => props.onSmartArt?.()}
+          >
+            <Graph />
+            SmartArt
+          </RibbonTextButton>
         ) : null}
       </RibbonGroup>
       <RibbonGroup label="Media">

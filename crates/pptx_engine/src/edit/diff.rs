@@ -130,14 +130,17 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
             .get(slide)
             .and_then(|r| r.first_of_type(rel_type::NOTES_SLIDE).map(|n| r.resolve(n)))
     };
-    // Charts and comments live in parts of their own; editing one changes the slide.
+    // Charts, comments, and SmartArt live in parts of their own; editing one
+    // changes the slide.
     let charts_unchanged = |slide: &str| {
         let Some(rels) = rels_of(after, slide) else {
             return true;
         };
         rels.iter()
             .filter(|r| {
-                (r.rel_type == rel_type::CHART || r.rel_type.ends_with("/comments"))
+                (r.rel_type == rel_type::CHART
+                    || r.rel_type.ends_with("/comments")
+                    || r.rel_type.contains("/diagram"))
                     && r.mode == TargetMode::Internal
             })
             .all(|r| same(&rels.resolve(r)))

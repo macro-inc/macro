@@ -28,6 +28,7 @@ use std::collections::HashMap;
 
 pub use crate::edit::LayoutInfo;
 pub use crate::edit::guides::GuideOutline;
+pub use crate::edit::smartart::{SmartArtLayoutOutline, SmartArtNodeOutline, SmartArtOutline};
 pub use animation::AnimationOutline;
 
 mod animation;
@@ -288,6 +289,9 @@ pub struct ShapeOutline {
     /// Crop and adjustments (pictures only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub picture: Option<PictureOutline>,
+    /// SmartArt: its layout, colors, style, and nodes (SmartArt frames only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smart_art: Option<SmartArtOutline>,
     /// Shadow, glow, soft edges, and reflection, when the shape has any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<EffectsOutline>,
@@ -755,6 +759,7 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], media: &Media) -> ShapeOutlin
         chart,
         picture,
         effects,
+        smart_art: None,
         children,
     }
 }
@@ -797,6 +802,7 @@ impl Presentation {
             .collect();
         let styles = table_styles_part(&ctx).and_then(|n| self.part(&n).ok());
         complete_tables(&ctx, styles.as_ref(), &shapes, &mut outlines, fonts);
+        crate::edit::smartart::complete_outlines(self, &ctx, &shapes, &mut outlines);
         let title = outlines
             .iter()
             .find(|s| matches!(s.placeholder.as_deref(), Some("title" | "ctrTitle")))
