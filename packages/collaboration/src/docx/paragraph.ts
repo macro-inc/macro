@@ -180,6 +180,17 @@ function prune(paragraph: XmlElement, runs: Set<XmlElement>) {
   }
 }
 
+/** Tracked-change markers a paragraph mark's run properties can carry. */
+const MARK_REVISIONS = ['ins', 'del', 'moveFrom', 'moveTo', 'rPrChange'];
+
+/** `rPr` without tracked-change markers, which belong to the original text. */
+function withoutRevisions(rPr: XmlElement, names: Names): XmlElement {
+  rPr.children = rPr.children.filter(
+    (child) => !MARK_REVISIONS.some((local) => isW(child, names, local))
+  );
+  return rPr;
+}
+
 /** Run properties for new text in an empty paragraph: its mark's formatting. */
 function markRunProperties(
   paragraph: XmlElement,
@@ -190,12 +201,7 @@ function markRunProperties(
   );
   const markRPr = pPr && elementChildren(pPr).find((c) => isW(c, names, 'rPr'));
   if (!markRPr) return null;
-  const copy = cloneFresh(markRPr, names);
-  const revision = new Set(['ins', 'del', 'moveFrom', 'moveTo', 'rPrChange']);
-  copy.children = copy.children.filter(
-    (child) => !isElement(child) || !revision.has(localName(child))
-  );
-  return copy;
+  return withoutRevisions(cloneFresh(markRPr, names), names);
 }
 
 /**
@@ -530,6 +536,8 @@ export function createParagraph(
     copy.children = copy.children.filter(
       (child) => !isW(child, names, 'sectPr') && !isW(child, names, 'pPrChange')
     );
+    for (const child of elementChildren(copy))
+      if (isW(child, names, 'rPr')) withoutRevisions(child, names);
     paragraph.children.push(copy);
   }
   const content = contentNodes(names, text);

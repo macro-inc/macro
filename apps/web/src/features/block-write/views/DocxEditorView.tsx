@@ -31,6 +31,8 @@ import { DocxCollaboratorCarets } from './DocxCollaborators';
 const PAGE_WIDTH = 816;
 /** Room for a comment card (280px) and its inset beside the page. */
 const MARGIN_WIDTH = 296;
+/** The narrowest the page gets beside comment cards: about 60% scale. */
+const PAGE_MIN_WIDTH = 480;
 
 /** Paragraph styles offered in the toolbar, when the document defines them. */
 const PREFERRED_STYLES = [
@@ -108,15 +110,15 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     canEdit: () => props.canEdit,
   });
   // The right gutter holds the comment margin. With cards or a draft showing
-  // it keeps their width and the page gives way; otherwise it only needs room
-  // for the comment button beside a selection, so the page stays centered.
+  // it keeps their width and the page gives way, down to a legible width
+  // (narrower panes scroll sideways); otherwise it only needs room for the
+  // comment button beside a selection, so the page stays centered.
   const pageColumns = () => {
-    const gutter = !props.margin
-      ? 0
-      : comments.located().length > 0 || comments.draft()
-        ? MARGIN_WIDTH
-        : 48;
-    return `minmax(0, 1fr) minmax(0, ${PAGE_WIDTH}px) minmax(${gutter}px, 1fr)`;
+    const cards =
+      !!props.margin && (comments.located().length > 0 || !!comments.draft());
+    const gutter = cards ? MARGIN_WIDTH : props.margin ? 48 : 0;
+    const pageMin = cards ? PAGE_MIN_WIDTH : 0;
+    return `minmax(0, 1fr) minmax(${pageMin}px, ${PAGE_WIDTH}px) minmax(${gutter}px, 1fr)`;
   };
 
   const highlightStyles = createCommentHighlights(
@@ -285,7 +287,7 @@ ${highlightStyles}`}</style>
       >
         {/* The page sits centered between equal gutters. The page column
             shrinks so Docxodus zooms the sheet to fit a narrow split instead
-            of scrolling it sideways. */}
+            of scrolling it sideways, unless comment cards need the room. */}
         <div
           class="relative grid gap-x-2 px-4 pt-6 pb-24"
           style={{ 'grid-template-columns': pageColumns() }}

@@ -30,9 +30,17 @@ const post = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
-const body = (request: unknown) => ({
+/** An unsigned token claiming `access_level`; the sync service checks signatures. */
+const token = (access_level: string) =>
+  [
+    'header',
+    btoa(JSON.stringify({ access_level })).replace(/=+$/, ''),
+    'sig',
+  ].join('.');
+
+const body = (request: unknown, documentToken = token('edit')) => ({
   documentId: 'doc',
-  documentToken: 'token',
+  documentToken,
   request,
 });
 
@@ -51,7 +59,7 @@ describe('POST /docx', () => {
       content: 'Word document with 3 blocks.',
     });
     expect(state.urls).toEqual([
-      'wss://sync.test/document/doc/connect?token=token',
+      `wss://sync.test/document/doc/connect?token=${token('edit')}`,
     ]);
     expect(state.run).toHaveBeenCalledWith(expect.anything(), {
       action: 'read',
@@ -103,6 +111,28 @@ describe('POST /docx', () => {
     const response = await post(body({ action: 'read' }));
     expect(response.status).toBe(500);
     expect((await response.json()).error).toMatch(/could not be reached/);
+  });
+
+  it('refuses edits without an edit token before connecting', async () => {
+    for (const access of ['view', 'comment']) {
+      const response = await post(
+        body(
+          { action: 'edit', operations: [{ type: 'delete', id: 'x' }] },
+          token(access)
+        )
+      );
+      expect(response.status).toBe(403);
+    }
+    const garbled = await post(
+      body({ action: 'edit', operations: [{ type: 'delete', id: 'x' }] }, 'x')
+    );
+    expect(garbled.status).toBe(403);
+    expect(state.urls).toHaveLength(0);
+    // Reading needs no more than the view access the sync service checks.
+    state.run.mockResolvedValue({ content: 'ok' });
+    expect((await post(body({ action: 'read' }, token('view')))).status).toBe(
+      200
+    );
   });
 
   it('rejects malformed operations before connecting', async () => {

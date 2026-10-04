@@ -138,14 +138,17 @@ describe('paragraph text', () => {
     expect(paragraphStyle(paragraph, names)).toBe('Heading2');
   });
 
-  it('creates paragraphs without copying a section break', () => {
+  it('creates paragraphs without copying a section break or revisions', () => {
     const pPr = parseElement(
-      '<w:pPr p18:Unid="a"><w:pStyle w:val="ListNumber" p18:Unid="b"/><w:sectPr p18:Unid="c"/></w:pPr>'
+      '<w:pPr p18:Unid="a"><w:pStyle w:val="ListNumber" p18:Unid="b"/><w:rPr p18:Unid="d"><w:ins w:id="1" w:author="Ann" p18:Unid="e"/><w:b p18:Unid="f"/></w:rPr><w:sectPr p18:Unid="c"/></w:pPr>'
     );
     const paragraph = createParagraph(names, 'Item', pPr);
     const xml = serializeXml(paragraph);
     expect(xml).toContain('w:val="ListNumber"');
     expect(xml).not.toContain('sectPr');
+    // The mark's formatting is kept; Ann's tracked insertion is not.
+    expect(xml).toContain('<w:b ');
+    expect(xml).not.toContain('w:ins');
     expect(unids(xml)).not.toContain('b');
     expect(paragraphText(paragraph, names)).toBe('Item');
   });

@@ -67,16 +67,46 @@ const DocxBody = z.object({
   ]),
 });
 
+/** Access levels whose tokens may edit a document's content. */
+const EDIT_ACCESS = new Set(['edit', 'owner']);
+
+/**
+ * The access level a document token claims. The sync service verifies the
+ * token's signature on connect; this only reads the claim.
+ */
+function tokenAccessLevel(token: string): string | undefined {
+  try {
+    const payload = token.split('.')[1] ?? '';
+    const claims = JSON.parse(
+      atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    ) as { access_level?: unknown };
+    return typeof claims.access_level === 'string'
+      ? claims.access_level
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const docx = new Hono<{ Bindings: Bindings }>();
 
 /**
  * Read or edit an uploaded Word document's live collaborative copy. Auth is
- * the document permission token, which the sync service checks on connect:
- * a view token can read, and only an edit token's pushes are accepted.
+ * the document permission token, which the sync service checks on connect.
+ * The socket also accepts comment-level writes, so edits additionally
+ * require a token that grants edit access.
  */
 docx.post('/', zValidator('json', DocxBody), async (c) => {
   const env = getEnv(c.env);
   const { documentId, documentToken, request } = c.req.valid('json');
+  if (
+    request.action === 'edit' &&
+    !EDIT_ACCESS.has(tokenAccessLevel(documentToken) ?? '')
+  )
+    return c.json(
+      { error: 'Editing this Word document requires edit access.' },
+      403
+    );
   const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${documentToken}`;
   const source = createWorkerSyncSource(wsUrl, documentId, c.req.raw.signal);
   try {
