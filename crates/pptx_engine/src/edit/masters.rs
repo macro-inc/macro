@@ -251,6 +251,7 @@ pub(super) fn add_layout(
     duplicate: Option<u32>,
     name: Option<&str>,
 ) -> Result<u32> {
+    store_ids(pres)?;
     let pages = pres.master_pages()?;
     let source = duplicate.map(|id| layout_page(&pages, id)).transpose()?;
     let anchor = after.map(|id| find_page(&pages, id)).transpose()?;
@@ -425,6 +426,7 @@ fn remove_entry(doc: &mut XmlDoc, list: &str, item: &str, id: u32) -> Option<Str
 /// Deletes an unused layout or master (see `EditOp::DeleteLayout`). The
 /// parts left unreachable are removed after the batch.
 pub(super) fn delete(pres: &mut Presentation, id: u32) -> Result<()> {
+    store_ids(pres)?;
     let pages = pres.master_pages()?;
     let page = find_page(&pages, id)?.clone();
     let users = users(pres);
@@ -889,15 +891,81 @@ fn patch_level(doc: &mut XmlDoc, lvl: NodeId, patch: &ParaPatch) -> Result<()> {
 pub(crate) fn id_problems(pres: &mut Presentation) -> Result<Vec<String>> {
     let mut problems = Vec::new();
     let mut seen = HashSet::new();
-    for page in pres.master_pages()? {
-        if page.id < MASTER_ID_BASE {
-            problems.push(format!("{}: id {} is below 2147483648", page.part, page.id));
-        }
-        if !seen.insert(page.id) {
-            problems.push(format!("master or layout id {} is used twice", page.id));
+    let main = pres.main_part.clone();
+    let mut lists = vec![(main, "sldMasterIdLst", "sldMasterId")];
+    for page in pres.master_pages()?.into_iter().filter(|p| !p.is_layout) {
+        lists.push((page.part, "sldLayoutIdLst", "sldLayoutId"));
+    }
+    for (part, list, item) in lists {
+        let doc = pres.xml(&part)?;
+        let Some(list) = doc.child(doc.root(), Ns::P, list) else {
+            continue;
+        };
+        // The ids are optional; a listed one must be valid and unique.
+        for id in doc
+            .children_named(list, Ns::P, item)
+            .filter_map(|e| doc.attr(e, "id"))
+        {
+            match id.parse::<u32>() {
+                Ok(n) if n >= MASTER_ID_BASE => {
+                    if !seen.insert(n) {
+                        problems.push(format!("master or layout id {n} is used twice"));
+                    }
+                }
+                _ => problems.push(format!("{part}: id {id} is not at least 2147483648")),
+            }
         }
     }
     Ok(problems)
+}
+
+/// Writes the ids of masters and layouts the file lists without a valid one
+/// (see [`MasterPage::stored`]) before the lists change, so every page
+/// keeps the id it had.
+fn store_ids(pres: &mut Presentation) -> Result<()> {
+    let pages = pres.master_pages()?;
+    if pages.iter().all(|p| p.stored) {
+        return Ok(());
+    }
+    let main = pres.main_part.clone();
+    let mut lists = vec![(main, "sldMasterIdLst", "sldMasterId", false)];
+    for page in pages.iter().filter(|p| !p.is_layout) {
+        lists.push((page.part.clone(), "sldLayoutIdLst", "sldLayoutId", true));
+    }
+    for (part, list, item, layouts) in lists {
+        let rels = pres.part_rels(&part)?;
+        let doc = pres.xml(&part)?;
+        let Some(list_node) = doc.child(doc.root(), Ns::P, list) else {
+            continue;
+        };
+        let mut writes = Vec::new();
+        for (at, entry) in doc.children_named(list_node, Ns::P, item).enumerate() {
+            let target = doc
+                .attr_ns(entry, Ns::R, "id")
+                .and_then(|rid| rels.target_part(rid))
+                .and_then(|t| pres.pkg.canonical_name(&t).map(str::to_owned));
+            let page = pages.iter().find(|p| {
+                Some(&p.part) == target.as_ref()
+                    && p.is_layout == layouts
+                    && (!layouts || p.master_part == part)
+            });
+            if let Some(page) = page.filter(|p| !p.stored) {
+                writes.push((at, page.id));
+            }
+        }
+        if writes.is_empty() {
+            continue;
+        }
+        let doc = pres.xml_mut(&part)?;
+        let Some(list_node) = doc.child(doc.root(), Ns::P, list) else {
+            continue;
+        };
+        let entries: Vec<NodeId> = doc.children_named(list_node, Ns::P, item).collect();
+        for (at, id) in writes {
+            doc.set_attr(entries[at], "id", &id.to_string());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

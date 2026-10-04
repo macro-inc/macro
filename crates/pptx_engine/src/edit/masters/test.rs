@@ -246,10 +246,14 @@ fn editing_the_master_changes_every_slide_and_page() {
     // Hiding background graphics on a layout keeps master shapes off it.
     let title_only = layout(&mut pres, "Title Only");
     assert_ne!(render(&mut pres, 2), before);
-    apply(
+    let result = apply(
         &mut pres,
         json!([{"op": "setLayoutOptions", "layout": title_only.id,
                 "hideBackgroundGraphics": true}]),
+    );
+    assert!(
+        result.structure_changed,
+        "Slide Master view shows the option"
     );
     assert!(layout(&mut pres, "Title Only").hide_background_graphics);
     assert_eq!(render(&mut pres, 2), before);
@@ -603,4 +607,43 @@ fn libreoffice_opens_a_deck_with_edited_layouts() {
     let pdf = std::fs::metadata(dir.join("layouts.pdf")).unwrap();
     assert!(pdf.len() > 1000);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn masters_and_layouts_listed_without_ids_get_lasting_ones() {
+    // PowerPoint 2008 for Mac lists masters and layouts without ids.
+    let mut pres = Presentation::open(crate::test_support::deck(&[""])).unwrap();
+    for part in [
+        "/ppt/presentation.xml",
+        "/ppt/slideMasters/slideMaster1.xml",
+    ] {
+        let doc = pres.xml_mut(part).unwrap();
+        for node in doc.descendants(doc.root()) {
+            if matches!(doc.local(node), "sldMasterId" | "sldLayoutId") {
+                doc.remove_attr(node, "id");
+            }
+        }
+    }
+    let mut pres = Presentation::open(pres.save().unwrap()).unwrap();
+    let pages = pres.master_pages().unwrap();
+    let ids: Vec<(u32, bool)> = pages.iter().map(|p| (p.id, p.stored)).collect();
+    assert_eq!(ids, [(MASTER_ID_BASE, false), (MASTER_ID_BASE + 1, false)]);
+    assert_eq!(pages[1].master, MASTER_ID_BASE);
+    assert!(pres.integrity_problems().unwrap().is_empty());
+    // They read and render by those ids, and keep them when the lists change.
+    let layout = MASTER_ID_BASE + 1;
+    assert_eq!(page(&mut pres, layout).layout, "Title and Content");
+    let result = apply(&mut pres, json!([{"op": "addLayout", "after": layout}]));
+    assert_eq!(result.created[0].slide, MASTER_ID_BASE + 2);
+    let mut reopened = reopen(&mut pres);
+    let pages = reopened.master_pages().unwrap();
+    let ids: Vec<(u32, bool)> = pages.iter().map(|p| (p.id, p.stored)).collect();
+    assert_eq!(
+        ids,
+        [
+            (MASTER_ID_BASE, true),
+            (MASTER_ID_BASE + 1, true),
+            (MASTER_ID_BASE + 2, true)
+        ]
+    );
 }

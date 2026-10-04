@@ -29,6 +29,11 @@ pub struct MasterPage {
     pub master_part: String,
     /// Whether it is a layout (else a master).
     pub is_layout: bool,
+    /// Whether the file holds the id. Files may list masters and layouts
+    /// without one (PowerPoint 2008 for Mac does), or with an invalid or
+    /// repeated one; those get the next ids above the file's, in Slide
+    /// Master view order, so they stay the same until the file stores them.
+    pub stored: bool,
 }
 
 /// What a page index addresses.
@@ -67,55 +72,93 @@ pub(crate) fn list_pages(
     load: &mut dyn FnMut(&str) -> Option<PartRef>,
 ) -> Vec<MasterPage> {
     let doc = &main.doc;
-    let masters: Vec<(u32, String)> = doc
+    let masters: Vec<(Option<u32>, String)> = doc
         .child(doc.root(), Ns::P, "sldMasterIdLst")
         .map(|list| {
             doc.children_named(list, Ns::P, "sldMasterId")
                 .filter_map(|m| {
-                    let id = entry_id(doc, m)?;
                     let part = main.target(doc.attr_ns(m, Ns::R, "id")?)?;
-                    Some((id, part))
+                    Some((entry_id(doc, m), part))
                 })
                 .collect()
         })
         .unwrap_or_default();
-    let mut out = Vec::new();
+    // Each page with the id its list entry has, in view order; a layout's
+    // `master` is its master's position until ids are settled.
+    let mut pages: Vec<(Option<u32>, MasterPage)> = Vec::new();
     for (id, part) in masters {
         let Some(master) = load(&part) else {
             continue;
         };
-        out.push(MasterPage {
+        let master_at = pages.len() as u32;
+        pages.push((
             id,
-            part: master.name.clone(),
-            master: id,
-            master_part: master.name.clone(),
-            is_layout: false,
-        });
+            MasterPage {
+                id: 0,
+                part: master.name.clone(),
+                master: master_at,
+                master_part: master.name.clone(),
+                is_layout: false,
+                stored: false,
+            },
+        ));
         let doc = &master.doc;
         let Some(list) = doc.child(doc.root(), Ns::P, "sldLayoutIdLst") else {
             continue;
         };
         for l in doc.children_named(list, Ns::P, "sldLayoutId") {
-            let (Some(layout_id), Some(target)) = (
-                entry_id(doc, l),
-                doc.attr_ns(l, Ns::R, "id")
-                    .and_then(|rid| master.target(rid)),
-            ) else {
+            let Some(target) = doc
+                .attr_ns(l, Ns::R, "id")
+                .and_then(|rid| master.target(rid))
+            else {
                 continue;
             };
             let Some(layout) = load(&target) else {
                 continue;
             };
-            out.push(MasterPage {
-                id: layout_id,
-                part: layout.name,
-                master: id,
-                master_part: master.name.clone(),
-                is_layout: true,
-            });
+            pages.push((
+                entry_id(doc, l),
+                MasterPage {
+                    id: 0,
+                    part: layout.name,
+                    master: master_at,
+                    master_part: master.name.clone(),
+                    is_layout: true,
+                    stored: false,
+                },
+            ));
         }
     }
-    out
+    // Valid ids are kept (the first of repeated ones); the others count on
+    // from the largest.
+    let mut taken = std::collections::HashSet::new();
+    for (id, page) in &mut pages {
+        page.stored = id.is_some_and(|id| id >= MASTER_ID_BASE && taken.insert(id));
+    }
+    let mut next = taken.iter().copied().max().unwrap_or(MASTER_ID_BASE - 1);
+    for (id, page) in &mut pages {
+        page.id = match *id {
+            Some(id) if page.stored => id,
+            _ => {
+                next = match next.checked_add(1) {
+                    Some(n) if !taken.contains(&n) => n,
+                    _ => (MASTER_ID_BASE..=u32::MAX)
+                        .find(|n| !taken.contains(n))
+                        .unwrap_or(u32::MAX),
+                };
+                taken.insert(next);
+                next
+            }
+        };
+    }
+    let ids: Vec<u32> = pages.iter().map(|(_, p)| p.id).collect();
+    pages
+        .into_iter()
+        .map(|(_, mut page)| {
+            page.master = ids[page.master as usize];
+            page
+        })
+        .collect()
 }
 
 impl Presentation {

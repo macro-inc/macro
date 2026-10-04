@@ -5,6 +5,7 @@
 use super::{EditResult, sections};
 use crate::model::masters::{MasterPage, list_pages};
 use crate::model::presentation::{PartRef, Presentation};
+use crate::model::shape::shows_master_shapes;
 use crate::opc::{Relationships, TargetMode, rel_type, rels_part_name};
 use crate::xml::{Ns, XmlDoc};
 use std::sync::Arc;
@@ -42,9 +43,12 @@ fn related(p: &Presentation, part: &str, kind: &str) -> Option<String> {
     p.pkg.canonical_name(&target).map(str::to_owned)
 }
 
-/// The masters and layouts of state `p`, with the name Slide Master view
-/// shows for each.
-fn master_list(p: &Presentation) -> Vec<(MasterPage, String)> {
+/// How Slide Master view lists a master or layout: its name, and whether
+/// it hides the master's background graphics.
+type Listing = (String, bool);
+
+/// The masters and layouts of state `p`, as Slide Master view lists them.
+fn master_list(p: &Presentation) -> Vec<(MasterPage, Listing)> {
     let Some(main) = part_of(p, &p.main_part) else {
         return Vec::new();
     };
@@ -70,7 +74,8 @@ fn master_list(p: &Presentation) -> Vec<(MasterPage, String)> {
             } else {
                 theme().unwrap_or_default()
             };
-            (page, name)
+            let hides = doc.is_some_and(|d| !shows_master_shapes(&d));
+            (page, (name, hides))
         })
         .collect()
 }
@@ -97,7 +102,7 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
         .part_names()
         .chain(before.pkg.part_names())
         .any(|name| shared(name) && !same(name));
-    // Slide Master view lists masters and layouts by name.
+    // Slide Master view lists masters and layouts by name and options.
     let (masters_before, masters_after) = if shared_changed || !same(&after.main_part) {
         (master_list(before), master_list(after))
     } else {

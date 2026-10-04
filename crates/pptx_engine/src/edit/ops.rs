@@ -1025,7 +1025,7 @@ pub struct EditResult {
     pub changed_layouts: Vec<u32>,
     /// Whether slides were added, removed, or reordered, or the slide size
     /// or sections changed, or slide masters or layouts were added,
-    /// removed, reordered, or renamed.
+    /// removed, reordered, renamed, or hid or showed background graphics.
     pub structure_changed: bool,
     /// Text replacements made by `replaceText` operations.
     #[serde(default)]

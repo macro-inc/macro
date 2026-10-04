@@ -19,6 +19,7 @@ fn master_pages_list_each_master_then_its_layouts() {
                 master: MASTER_ID_BASE,
                 master_part: "/ppt/slideMasters/slideMaster1.xml".into(),
                 is_layout: false,
+                stored: true,
             },
             MasterPage {
                 id: MASTER_ID_BASE + 1,
@@ -26,6 +27,7 @@ fn master_pages_list_each_master_then_its_layouts() {
                 master: MASTER_ID_BASE,
                 master_part: "/ppt/slideMasters/slideMaster1.xml".into(),
                 is_layout: true,
+                stored: true,
             },
         ]
     );
