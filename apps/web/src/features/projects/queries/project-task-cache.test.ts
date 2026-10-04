@@ -1,4 +1,5 @@
 import { buildTaskQuery } from '@app/features/tasks-view/queries/task-query';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import { soupKeys } from '@queries/soup/keys';
 import { QueryClient } from '@tanstack/solid-query';
 import { expect, it, vi } from 'vitest';
@@ -58,6 +59,43 @@ it('inserts a normal task into the next membership query before any network resp
     ],
   });
 });
+
+it.each(['reset', 'different-viewer'] as const)(
+  'does not publish after a cache read crosses %s',
+  async (change) => {
+    const cache = new QueryClient();
+    const key = projectKeys.detail('viewer', 'project').queryKey;
+    cache.setQueryData(key, { project: { taskIds: [] }, properties: [] });
+    let current = true;
+    const host = { ...createNoopCacheHost(), disabled: false };
+    vi.spyOn(host, 'readQuery').mockImplementation(async () => {
+      if (change === 'reset') current = false;
+      return {
+        kind: 'hit',
+        data: { user: { id: change === 'reset' ? 'viewer' : 'other' } },
+      };
+    });
+    const write = vi.spyOn(host, 'writeQuery');
+    await updateProjectTaskCache(
+      cache,
+      host,
+      'viewer',
+      'project',
+      undefined,
+      optimisticProjectTask('temp', 'viewer', [
+        'New',
+        '',
+        [],
+        new Map(),
+        vi.fn(),
+      ]),
+      { isCurrent: () => current }
+    );
+    expect(write).not.toHaveBeenCalled();
+    expect(cache.getQueryData(key)).toMatchObject({ project: { taskIds: [] } });
+    cache.clear();
+  }
+);
 
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -188,7 +226,8 @@ it.each(['none', 'status'] as const)(
     );
     const host: Pick<CacheHost, 'readQuery' | 'writeQuery' | 'deleteRecords'> =
       {
-        readQuery: vi.fn(async ({ variables }: CacheReadArgs) =>
+        readQuery: vi.fn(async ({ variables, operationName }: CacheReadArgs) =>
+          operationName !== 'Initiative' &&
           data.has(hashKey([variables?.input]))
             ? {
                 kind: 'hit' as const,

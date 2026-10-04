@@ -992,7 +992,9 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     const refresh = refetchGraphqlInitiativeProperties('initiative-1');
     await vi.waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[1].operation.context.requestPolicy).toBe('network-only');
-    requests[1].next({ data });
+    // HTTP returns a new snapshot; reusing the prior object would advertise
+    // unchanged data to the live query selector despite changing the mapper.
+    requests[1].next({ data: structuredClone(data) });
     await refresh;
     await vi.waitFor(() =>
       expect(query.result.data?.[0].value).toBe('In progress')

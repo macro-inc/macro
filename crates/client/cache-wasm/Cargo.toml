@@ -5,7 +5,7 @@ publish = false
 # Expose identity confirmation on queue claims so superseded draft creates replay.
 # Rebuild with read-path optimizations, scoped invalidation, and bounded filter selection.
 # Rebuild with identity-aware resumable reads after merging the draft changes.
-version = "0.6.40"
+version = "0.6.41"
 
 [features]
 default = []

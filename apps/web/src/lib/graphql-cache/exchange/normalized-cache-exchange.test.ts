@@ -214,9 +214,11 @@ type FakeHost = CacheHost & {
   ) => void;
   pushAffected: AffectedOperationsListener;
   pushGeneration: (change: CacheGenerationChange) => void;
+  resetStorage: () => void;
 };
 
 function makeFakeHost(): FakeHost {
+  let nextTransaction = 0;
   let readResult: ReadResult = { kind: 'miss' };
   const subscribers = new Set<AffectedOperationsListener>();
   const generationSubscribers = new Set<
@@ -227,19 +229,24 @@ function makeFakeHost(): FakeHost {
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0];
     attemptCount: number;
     leased: boolean;
+    leaseExpiresAtMs?: number;
     nextAttemptAtMs?: number;
   }> = [];
 
-  function claimQueueHead(nowMs: number): ClaimedMutation | undefined {
+  function claimQueueHead(
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): ClaimedMutation | undefined {
     const head = queue[0];
     if (
       !head ||
-      head.leased ||
+      (head.leased && (head.leaseExpiresAtMs ?? Infinity) > nowMs) ||
       (head.nextAttemptAtMs !== undefined && head.nextAttemptAtMs > nowMs)
     ) {
       return undefined;
     }
     head.leased = true;
+    head.leaseExpiresAtMs = leaseExpiresAtMs;
     head.nextAttemptAtMs = undefined;
     head.attemptCount += 1;
     host.claims.push(head.transactionId);
@@ -258,6 +265,12 @@ function makeFakeHost(): FakeHost {
 
   const host: FakeHost = {
     clientId: 'test-client',
+    resetStorage() {
+      queue.length = 0;
+      nextTransaction = 0;
+      readResult = { kind: 'miss' };
+      host.pushGeneration({ storage: 'reset' });
+    },
     reads: [],
     writes: [],
     begins: [],
@@ -345,9 +358,9 @@ function makeFakeHost(): FakeHost {
         data: args.data,
         linkPatches: args.linkPatches,
       });
-      const transactionId = `txn-${host.begins.length}`;
+      const transactionId = `txn-${++nextTransaction}`;
       queue.push({ transactionId, args, attemptCount: 0, leased: false });
-      const mutation = claimQueueHead(claim.nowMs);
+      const mutation = claimQueueHead(claim.nowMs, claim.leaseExpiresAtMs);
       return {
         transactionId,
         revision: INITIAL_CACHE_REVISION,
@@ -369,9 +382,10 @@ function makeFakeHost(): FakeHost {
     },
     async claimNextMutation(
       _owner,
-      nowMs
+      nowMs,
+      leaseExpiresAtMs
     ): Promise<ClaimedMutation | undefined> {
-      return claimQueueHead(nowMs);
+      return claimQueueHead(nowMs, leaseExpiresAtMs);
     },
     async deferOptimisticWrite(
       transactionId,
@@ -675,6 +689,51 @@ describe('normalizedCacheExchange', () => {
   beforeEach(() => {
     host = makeFakeHost();
   });
+
+  it.each(['constructor', 'prototype', '__proto__'])(
+    'updates the %s alias through the Solid query adapter without mutating snapshots',
+    async (alias) => {
+      const query = gql(
+        `query Reserved { ${alias}: name nested { ${alias}: name } }`
+      );
+      const original = { [alias]: 'old', nested: { [alias]: 'old' } };
+      host.scriptRead({ kind: 'hit', data: original });
+      const client = createClient({
+        url: '/graphql',
+        exchanges: [normalizedCacheExchange(host)],
+      });
+      const { state, dispose } = createRoot((dispose) => ({
+        state: createUrqlQuery(() => ({
+          client,
+          query,
+          variables: {},
+          requestPolicy: 'cache-only' as const,
+        })),
+        dispose,
+      }));
+      try {
+        await vi.waitFor(() => expect(state.isSuccess).toBe(true));
+        expect(JSON.parse(JSON.stringify(state.data))).toEqual(original);
+        for (const data of [
+          { [alias]: 'new', nested: { [alias]: 'new' } },
+          { name: 'ordinary', nested: { name: 'ordinary' } },
+          { [alias]: 'returned', nested: { [alias]: 'returned' } },
+        ]) {
+          host.scriptRead({ kind: 'hit', data });
+          host.pushAffected([host.reads[0].opKey!]);
+          await vi.waitFor(() =>
+            expect(JSON.parse(JSON.stringify(state.data))).toEqual(data)
+          );
+        }
+        expect(original).toEqual({
+          [alias]: 'old',
+          nested: { [alias]: 'old' },
+        });
+      } finally {
+        dispose();
+      }
+    }
+  );
 
   it('keeps live objects reactive through full reads on older cache hosts', async () => {
     type Rows = { rows: { __typename: string; id: string; isRead: boolean }[] };
@@ -2806,6 +2865,48 @@ describe('normalizedCacheExchange', () => {
     });
 
     describe('mutation drain after cache restoration', () => {
+      it.each(['failed', 'pending', 'late network'] as const)(
+        'does not reuse an old mutation response after storage resets (%s)',
+        async (oldResponse) => {
+          const commit = vi.spyOn(host, 'commitOptimisticWrite');
+          const pending = deferred<CommitOptimisticWriteResult>();
+          if (oldResponse === 'failed')
+            commit.mockRejectedValueOnce(new Error('local disk unavailable'));
+          if (oldResponse === 'pending')
+            commit.mockImplementationOnce(() => pending.promise);
+          const { ops, network, forwarded } = controlledQueryHarness(host);
+          const oldData = { setEntityProperty: { id: 'old-effect' } };
+          const newData = { setEntityProperty: { id: 'new-effect' } };
+          ops.next(makeMutationOp(1, oldData));
+          await vi.advanceTimersByTimeAsync(1);
+          const oldOperation = forwarded[0];
+          if (oldResponse !== 'late network') {
+            network.next(queryResult(oldOperation, oldData));
+            await vi.advanceTimersByTimeAsync(1);
+          }
+          host.resetStorage();
+          ops.next(makeMutationOp(2, newData));
+          await vi.advanceTimersByTimeAsync(1);
+          expect(forwarded).toHaveLength(2);
+          if (oldResponse === 'late network') {
+            network.next(queryResult(oldOperation, oldData));
+          } else if (oldResponse === 'pending') {
+            pending.reject(new CacheNavigationError());
+          }
+          await vi.advanceTimersByTimeAsync(1);
+          network.next(queryResult(forwarded[1], newData));
+          await vi.advanceTimersByTimeAsync(1);
+          expect(host.commits).toEqual([
+            {
+              transactionId: 'txn-1',
+              query: stringifyDocument(MUTATION),
+              data: newData,
+            },
+          ]);
+          await vi.advanceTimersByTimeAsync(300_000);
+          expect(forwarded).toHaveLength(2);
+        }
+      );
       beforeEach(() => vi.useFakeTimers());
       afterEach(() => {
         vi.clearAllTimers();
@@ -2857,7 +2958,7 @@ describe('normalizedCacheExchange', () => {
             const sendsBeforeWake = forwarded.length;
             await vi.advanceTimersByTimeAsync(100);
             if (wake === 'online') events.dispatchEvent(new Event('online'));
-            else host.pushGeneration({ storage: 'reset' });
+            else host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             deferring.resolve();
             await vi.advanceTimersByTimeAsync(1);
@@ -2888,7 +2989,7 @@ describe('normalizedCacheExchange', () => {
           .spyOn(host, 'claimNextMutation')
           .mockResolvedValue(undefined);
         await vi.advanceTimersByTimeAsync(100);
-        host.pushGeneration({ storage: 'reset' });
+        host.pushGeneration({ storage: 'preserved' });
         await vi.advanceTimersByTimeAsync(0);
         expect(claim).toHaveBeenCalledOnce();
         await vi.advanceTimersByTimeAsync(1_000);
@@ -2912,7 +3013,7 @@ describe('normalizedCacheExchange', () => {
           expect(claim).toHaveBeenCalledOnce();
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledOnce();
           }
@@ -2920,7 +3021,7 @@ describe('normalizedCacheExchange', () => {
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
             expect(forwarded).toHaveLength(0);
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -2960,14 +3061,14 @@ describe('normalizedCacheExchange', () => {
           const claimsBeforeRestore = claim.mock.calls.length;
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledTimes(claimsBeforeRestore);
           }
           pendingCommit.reject(new CacheNavigationError());
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -2987,6 +3088,14 @@ describe('normalizedCacheExchange', () => {
           // be claimed on restore; the durable queue still controls eligibility.
           expect(claim.mock.calls.length).toBeGreaterThan(claimsAfterRestore);
           expect(forwarded).toHaveLength(committed ? 2 : 1);
+          // Once the old lease expires, retry persistence of the known server
+          // response. A local cache failure must not repeat the server effect.
+          await vi.advanceTimersByTimeAsync(300_000);
+          expect(host.commits).toHaveLength(2);
+          expect(forwarded).toHaveLength(2);
+          expect(
+            host.commits.map(({ transactionId }) => transactionId)
+          ).toEqual(['txn-1', committed ? 'restored-1' : 'restored-2']);
         }
       );
     });
@@ -3596,69 +3705,99 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
-    it('replays mixed explicit cache effects in order after an optimistic commit', async () => {
-      const deletion = {
-        __typename: 'GraphqlCacheDeletion',
-        graphqlTypeName: 'GraphqlSoupDocument',
-        entityId: 'document-1',
-      };
-      const update = {
-        __typename: 'SoupUpdated',
-        item: {
-          __typename: 'GraphqlSoupDocument',
-          id: 'document-1',
-          displayName: 'Renamed',
-        },
-      };
-      const data = {
-        renameEntities: {
-          results: [
-            {
-              __typename: 'GraphqlMutationSuccess',
-              effects: [deletion, update],
-            },
-          ],
-        },
-      };
-      const base = makeRenameMutationOp(10);
-      const operation = makeOperation(base.kind, base, {
-        ...base.context,
-        normalizedCacheOptimistic: {
-          uuid: crypto.randomUUID(),
-          optimisticResponse: {
-            renameEntities: { results: [] },
+    it.each(['none', 'reported deletion', 'explicit effect'] as const)(
+      'fences postcommit effects across a reset during %s',
+      async (resetDuring) => {
+        const pending = deferred<void>();
+        if (resetDuring !== 'none') {
+          const remove = host.deleteRecords.bind(host);
+          vi.spyOn(host, 'deleteRecords').mockImplementationOnce(
+            async (...args) => {
+              const result = await remove(...args);
+              await pending.promise;
+              return result;
+            }
+          );
+        }
+        const deletion = {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'document-1',
+        };
+        const update = {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'document-1',
+            displayName: 'Renamed',
           },
-        },
-      });
-      const { ops, results } = harness(host, (op) =>
-        op.kind === 'mutation' ? { data } : {}
-      );
-
-      ops.next(operation);
-      await tick();
-
-      expect(host.commits).toHaveLength(1);
-      expect(host.cacheActions).toEqual([
-        {
-          kind: 'delete',
-          value: ['GraphqlSoupDocument:document-1'],
-        },
-        {
-          kind: 'write',
-          value: {
-            renameEntities: {
-              results: [
-                {
-                  __typename: 'GraphqlMutationSuccess',
-                  effects: [update],
-                },
-              ],
+        };
+        const data = {
+          renameEntities: {
+            results: [
+              {
+                __typename: 'GraphqlMutationSuccess',
+                effects: [deletion, update],
+              },
+            ],
+          },
+        };
+        const base = makeRenameMutationOp(10);
+        const operation = makeOperation(base.kind, base, {
+          ...base.context,
+          normalizedCacheOptimistic: {
+            uuid: crypto.randomUUID(),
+            optimisticResponse: {
+              renameEntities: { results: [] },
             },
           },
-        },
-      ]);
-      expect(results[0]?.data).toBe(data);
-    });
+        });
+        const { ops, results } = harness(
+          host,
+          (op) => (op.kind === 'mutation' ? { data } : {}),
+          resetDuring === 'reported deletion'
+            ? { deletedRecordKeys: () => ['GraphqlSoupDocument:document-1'] }
+            : {}
+        );
+
+        ops.next(operation);
+        await tick();
+
+        expect(host.commits).toHaveLength(1);
+        if (resetDuring !== 'none') {
+          host.resetStorage();
+          pending.resolve();
+          await tick();
+          expect(host.cacheActions).toEqual([
+            { kind: 'delete', value: ['GraphqlSoupDocument:document-1'] },
+          ]);
+          expect(optimisticMutationDispositionOf(results[0])?.kind).toBe(
+            'committed'
+          );
+          return;
+        }
+        expect(host.cacheActions).toEqual([
+          {
+            kind: 'delete',
+            value: ['GraphqlSoupDocument:document-1'],
+          },
+          {
+            kind: 'write',
+            value: {
+              renameEntities: {
+                results: [
+                  {
+                    __typename: 'GraphqlMutationSuccess',
+                    effects: [update],
+                  },
+                ],
+              },
+            },
+          },
+        ]);
+        expect(results[0]?.data).toBe(data);
+      }
+    );
 
     it('skips stale explicit effects and revalidations for a superseded commit', async () => {
       const deletion = {

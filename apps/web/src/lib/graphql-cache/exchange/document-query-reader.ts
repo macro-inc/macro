@@ -17,6 +17,7 @@ export function createDocumentQueryReader(
     sequence: number;
     accepted: number;
     snapshot?: Snapshot;
+    latest?: { revision?: CacheRevision; result: ReadResult };
   };
   const states = new Map<number, State>();
 
@@ -24,8 +25,7 @@ export function createDocumentQueryReader(
     forget: (key: number) => states.delete(key),
     clear: () => states.clear(),
     async read(args: CacheReadArgs): Promise<ReadResult> {
-      if (!host.watchQuery || args.opKey === undefined)
-        return host.readQuery(args);
+      if (args.opKey === undefined) return host.readQuery(args);
       const key = args.opKey;
       const signature = JSON.stringify([
         args.query,
@@ -41,32 +41,55 @@ export function createDocumentQueryReader(
       const sequence = ++state.sequence;
       const base = state.snapshot;
       try {
-        const result = await host.watchQuery({
+        const update = await host.watchQuery?.({
           ...args,
           opKey: key,
           since: base?.revision,
         });
-        if (result.kind === 'unsupported') return host.readQuery(args);
-        const revision = parseCacheRevision(result.revision);
-        if (base && BigInt(revision) < BigInt(base.revision))
+        const full = !update || update.kind === 'unsupported';
+        const fallback = full ? await host.readQuery(args) : undefined;
+        if (states.get(key) !== state)
+          throw new Error('query read was invalidated');
+        const revision = !full
+          ? parseCacheRevision(update.revision)
+          : undefined;
+        if (
+          state.latest &&
+          (revision !== undefined && state.latest.revision !== undefined
+            ? BigInt(revision) < BigInt(state.latest.revision) ||
+              (revision === state.latest.revision && sequence < state.accepted)
+            : sequence < state.accepted)
+        )
+          return state.latest.result;
+        if (
+          base &&
+          revision !== undefined &&
+          BigInt(revision) < BigInt(base.revision)
+        )
           throw new Error('query revision moved backwards');
         const data =
-          result.kind === 'patch'
+          update?.kind === 'patch'
             ? base
-              ? applyQueryPatches(base.data, result.patches)
+              ? applyQueryPatches(base.data, update.patches)
               : undefined
-            : result.kind === 'hit'
-              ? result.data
-              : undefined;
-        if (result.kind === 'patch' && !base)
+            : update?.kind === 'hit'
+              ? update.data
+              : fallback?.kind === 'hit'
+                ? fallback.data
+                : undefined;
+        if (update?.kind === 'patch' && !base)
           throw new Error('query patch has no snapshot');
-        if (states.get(key) === state && sequence >= state.accepted) {
-          state.accepted = sequence;
-          state.snapshot = isQueryObject(data) ? { data, revision } : undefined;
-        }
-        return result.kind === 'miss'
-          ? { kind: 'miss' }
-          : { kind: 'hit', data };
+        const result: ReadResult =
+          update?.kind === 'miss' || fallback?.kind === 'miss'
+            ? { kind: 'miss' }
+            : { kind: 'hit', data };
+        state.accepted = Math.max(sequence, state.accepted);
+        state.snapshot =
+          revision !== undefined && isQueryObject(data)
+            ? { data, revision }
+            : undefined;
+        state.latest = { revision, result };
+        return result;
       } catch (error) {
         if (states.get(key) === state && sequence >= state.accepted)
           state.snapshot = undefined;

@@ -452,6 +452,16 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
+    if ('variables' in request && request.variables !== undefined) {
+      // Structured clone retains undefined object fields; serde-wasm-bindgen
+      // reads them as null. Match the JSON sent to GraphQL and stored in durable
+      // link recipes, or a query and its optimistic updates address different
+      // cache fields. Explicit nulls (including array slots) remain distinct.
+      request = {
+        ...request,
+        variables: JSON.parse(JSON.stringify(request.variables)),
+      };
+    }
     return await match(request)
       .with({ kind: 'init' }, async (request) => {
         await this.init(request.scope, request.hotCapacity);
@@ -608,7 +618,7 @@ export class CacheWorkerCore {
           request.query,
           request.operationName,
           request.path,
-          request.variableFilters ?? []
+          JSON.parse(JSON.stringify(request.variableFilters ?? []))
         );
       })
       .with({ kind: 'claim-next-mutation' }, async (request) => {

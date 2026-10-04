@@ -13,20 +13,43 @@ export function applyQueryPatches(
   base: QueryObject,
   patches: readonly QueryFieldPatch[]
 ): QueryObject {
-  for (const { path } of patches) {
+  type Paths = {
+    children: Map<string | number, Paths>;
+    patch?: QueryFieldPatch;
+  };
+  const root: Paths = { children: new Map() };
+  const distinct: QueryFieldPatch[] = [];
+  for (const patch of patches) {
+    const { path } = patch;
     if (!path.length) throw new Error('query patch must target a field');
     let value: unknown = base;
+    let node = root;
     for (const part of path) {
+      if (node.patch) throw new Error('query patches overlap');
       if (
         value === null ||
         typeof value !== 'object' ||
-        (typeof part === 'number'
-          ? !Number.isSafeInteger(part) || part < 0 || !Array.isArray(value)
-          : ['__proto__', 'prototype', 'constructor'].includes(part)) ||
+        (Array.isArray(value)
+          ? typeof part !== 'number' || !Number.isSafeInteger(part) || part < 0
+          : typeof part !== 'string') ||
         !Object.hasOwn(value, part)
       )
         throw new Error('query patch has no matching base');
       value = (value as Container)[part];
+      let child = node.children.get(part);
+      if (!child) {
+        child = { children: new Map() };
+        node.children.set(part, child);
+      }
+      node = child;
+    }
+    if (node.children.size) throw new Error('query patches overlap');
+    if (node.patch) {
+      if (JSON.stringify(node.patch.value) !== JSON.stringify(patch.value))
+        throw new Error('query patches conflict');
+    } else {
+      node.patch = patch;
+      distinct.push(patch);
     }
   }
   if (!patches.length) return base;
@@ -41,7 +64,7 @@ export function applyQueryPatches(
     return next;
   };
   const next = copy(base);
-  for (const { path, value } of patches) {
+  for (const { path, value } of distinct) {
     let old = base as Container;
     let target = next;
     for (const part of path.slice(0, -1)) {
@@ -54,6 +77,6 @@ export function applyQueryPatches(
   }
   // The current snapshot must not retain a chain of every earlier delta.
   deltas.delete(base);
-  deltas.set(next, { base, patches });
+  deltas.set(next, { base, patches: distinct });
   return next;
 }

@@ -43,6 +43,18 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+Property edits should update the visible task before the save finishes. To verify,
+delay the GraphQL mutation and change Status, an existing Priority, and an unset
+Priority in the list and task detail. In a view grouped by that property, the task
+should move groups and update both counts immediately. Reject a save to check that
+the value, group membership, and counts all roll back without refreshing the page.
+
+For tags, include a task with no prior tag assignment. Delay
+`UpdateEntityPropertyOptions` and the following `EntityProperties` query: the tag
+should appear immediately and stay visible through both responses in the list,
+task header, side panel, and a reopened picker. A rejected save should remove only
+the optimistic tag. Repeat with an existing assignment and with removal.
+
 ## Reviews view
 
 With `enable-tasks-reviews` enabled (on by default in development), a

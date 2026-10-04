@@ -1,4 +1,5 @@
 import { catchToResult, ThrownResultError } from '@core/util/result';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type {
   AnyVariables,
   Client,
@@ -216,16 +217,21 @@ export function createInitiativeClient(client: () => Client) {
         )
       ),
     update: (id: string, input: InitiativeUpdate) =>
-      catchToResult(async () =>
-        mapInitiativeDetail(
-          (
-            await mutation(UpdateInitiativeDocument, {
-              initiativeId: id,
-              input: initiativeUpdateInput(input),
-            })
-          ).updateInitiative
-        )
-      ),
+      catchToResult(async () => {
+        const result = await client()
+          .mutation(UpdateInitiativeDocument, {
+            initiativeId: id,
+            input: initiativeUpdateInput(input),
+          })
+          .toPromise();
+        const disposition = optimisticMutationDispositionOf(result);
+        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'permanently-failed')
+          operationData({ ...result, error: disposition.error });
+        // Detail consumers subscribe to the normalized record. A queued partial
+        // response is an acknowledgement, never a complete project snapshot.
+        operationData(result);
+      }),
     delete: (id: string) =>
       catchToResult(
         async () =>

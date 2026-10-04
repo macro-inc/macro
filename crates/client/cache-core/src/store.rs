@@ -270,6 +270,16 @@ pub trait Storage: MaybeSend {
     /// Drops records, queued mutations, and optimistic layers (logout or
     /// identity mismatch).
     fn clear(&mut self) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Atomically replaces the entire cache, including its identity witness.
+    /// A definite failure preserves the previous records, projections, and queue.
+    /// An uncertain commit must retire the adapter until durable recovery; it
+    /// must never expose a partially applied reset through a usable connection.
+    fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 }
 
 /// Hash-map storage for tests and as the Phase 1 default.
@@ -791,6 +801,15 @@ impl Storage for InMemoryStorage {
         self.optimistic_projections.clear();
         self.mutations.clear();
         Ok(())
+    }
+
+    async fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.clear().await?;
+        self.put_batch_with_projections(entries, projections).await
     }
 }
 

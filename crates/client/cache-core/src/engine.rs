@@ -529,6 +529,18 @@ impl<S: Storage> Engine<S> {
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
+        self.rebuild_queued_layers_with_staged(queued, strict_tail, &RecordUpdates::new())
+            .await
+    }
+
+    /// Prepare the visible layers against a proposed durable write. All reads
+    /// and recipe validation finish before that write can commit.
+    async fn rebuild_queued_layers_with_staged(
+        &mut self,
+        queued: Vec<QueuedMutation>,
+        strict_tail: Option<MutationId>,
+        staged: &RecordUpdates,
+    ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
         for queued in queued {
             let variables: Json = serde_json::from_str(&queued.mutation.request.variables_json)
@@ -548,7 +560,7 @@ impl<S: Storage> Engine<S> {
                     detail: format!("invalid optimistic response: {detail}"),
                 })?;
             let identities = self
-                .load_identity_bindings(&source.identity_bindings)
+                .load_identity_bindings(&source.identity_bindings, staged)
                 .await?;
             for patch in &mut source.link_patches {
                 identity::remap_patch(patch, &source.identity_bindings, &identities);
@@ -580,7 +592,7 @@ impl<S: Storage> Engine<S> {
             })?;
             let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
             let (candidates, bases) = self
-                .load_link_patch_bases(candidates, &layers, &updates, &patches)
+                .load_link_patch_bases(candidates, &layers, &updates, &patches, staged)
                 .await?;
             let composed = effective_records(&bases, &layers, &candidates);
             let mut effective = present_records(composed);
@@ -629,6 +641,7 @@ impl<S: Storage> Engine<S> {
     async fn load_identity_bindings(
         &self,
         bindings: &[IdentityBinding],
+        staged: &RecordUpdates,
     ) -> Result<IdentityMap, EngineError<S::Error>> {
         let keys = bindings
             .iter()
@@ -650,7 +663,8 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             let mut advanced = false;
             for ((target, record), visited) in targets.iter_mut().zip(records).zip(&mut visited) {
-                if let Some(next) = record.as_ref().and_then(identity::alias_target) {
+                let record = staged.get(target).or(record.as_ref());
+                if let Some(next) = record.and_then(identity::alias_target) {
                     if !visited.insert(next.clone()) {
                         return Err(EngineError::InvalidOptimisticProjection(
                             "cyclic identity binding".into(),
@@ -1332,24 +1346,59 @@ impl<S: Storage> Engine<S> {
             crate::page_retention::omit_hydration_pages(&mut updates);
         }
 
-        let mut reset = false;
         if let Some(observed) = identity {
             match self.bound_identity().await? {
                 IdentityState::NotHydrated => unreachable!("bound_identity hydrates"),
                 IdentityState::Missing => self.bind_identity(observed).await?,
                 IdentityState::Bound(bound) if bound == observed => {}
                 IdentityState::Bound(_) => {
-                    self.hot.clear();
-                    self.live_queries = live_query::LiveQueries::default();
-                    self.query_watches = watch_query::QueryWatches::default();
-                    // A different user's session: in-flight optimistic
-                    // mutations belong to the old identity — discard them.
-                    self.optimistic.clear();
+                    let changed = updates.keys().cloned().collect();
+                    let mut witness = Record::default();
+                    witness.fields.insert(
+                        IDENTITY_VALUE_FIELD.into(),
+                        crate::value::CacheValue::String(observed.into()),
+                    );
+                    updates.insert(EntityKey(IDENTITY_META_KEY.into()), witness);
+                    let entries: Vec<_> = updates.into_iter().collect();
+                    // Identity, records, and old queue removal are one transaction.
+                    // There is no reset to publish if any part of it fails.
+                    self.storage
+                        .reset_with_records(entries.clone(), projections)
+                        .await
+                        .map_err(EngineError::Storage)?;
+                    self.external_reset()?;
+                    self.identity = IdentityState::Bound(observed.into());
                     self.optimistic_hydrated = true;
-                    self.search_catalogs.clear();
-                    self.storage.clear().await.map_err(EngineError::Storage)?;
-                    self.bind_identity(observed).await?;
-                    reset = true;
+                    for (key, record) in entries {
+                        self.hot.put(key, record);
+                    }
+                    let mut affected_ops = self.deps.all_ops();
+                    if let Some(origin) = origin_op {
+                        affected_ops.remove(&origin);
+                    }
+                    if let Some(registration) = registration {
+                        if normalized.completeness == DependencyCompleteness::Exact {
+                            self.deps
+                                .set_query_deps(registration.op_id, normalized.dependencies);
+                        } else {
+                            self.deps.set_op_broad(registration.op_id);
+                        }
+                    }
+                    return Ok((
+                        WriteResult {
+                            field_changes: None,
+                            identity_errors: Vec::new(),
+                            mutation_uuid: None,
+                            revision: self.revision,
+                            revision_advanced: true,
+                            search_changed_buckets: None,
+                            changed,
+                            affected_ops,
+                            reset: true,
+                            revalidations: Vec::new(),
+                        },
+                        BTreeSet::new(),
+                    ));
                 }
             }
         }
@@ -1357,76 +1406,78 @@ impl<S: Storage> Engine<S> {
         // Without optimistic layers, durable changes are exactly the visible
         // changes. Avoid loading/cloning the whole batch again on both sides
         // of an ordinary network refresh.
-        let optimistic_before = if self.optimistic.is_empty() {
+        let optimistic_update = if self.optimistic.is_empty() {
             None
         } else {
             let mut candidates = layer_keys(&self.optimistic);
             candidates.extend(updates.keys().cloned());
             let bases = self.load_bases(&candidates).await?;
             let before = effective_records(&bases, &self.optimistic, &candidates);
-            Some((candidates, before))
-        };
-        let PersistedChanges {
-            mut field_changes,
-            changed,
-            mut revision,
-            mut revision_advanced,
-            mut search_changed_buckets,
-            viewer_fields: mut viewer_changes,
-        } = self.persist_updates(updates, projections).await?;
-        if reset && !revision_advanced {
-            revision = self.advance_revision()?;
-            revision_advanced = true;
-        }
-
-        let visible_changed = if let Some((mut candidates, before)) = optimistic_before {
+            let staged: RecordUpdates = stage_updates(&bases, updates.clone())
+                .1
+                .into_iter()
+                .collect();
             let queued = self
                 .storage
                 .load_mutation_queue()
                 .await
                 .map_err(EngineError::Storage)?;
-            self.optimistic = self.rebuild_queued_layers(queued).await?;
-            candidates.extend(layer_keys(&self.optimistic));
-            let bases_after = self.load_bases(&candidates).await?;
-            let after = effective_records(&bases_after, &self.optimistic, &candidates);
-            field_changes = crate::field_changes::between(&before, &after);
-            if revision_advanced {
-                self.live_queries.extend(
-                    revision,
-                    candidates.iter().cloned(),
-                    live_query::projection_keys(&self.optimistic),
-                );
-            }
-            // Compare the composed view: a hydration hidden beneath a pending
-            // edit must not invalidate the search projection it did not change.
-            search_changed_buckets.clear();
-            viewer_changes.clear();
-            for key in &candidates {
-                if let Some(fields) = changed_viewer_fields(
-                    before.get(key).and_then(Option::as_ref),
-                    after.get(key).and_then(Option::as_ref),
-                ) {
-                    viewer_changes.insert(key.clone(), fields);
-                }
-                collect_search_changes(
-                    key,
-                    before.get(key).and_then(Option::as_ref),
-                    after.get(key).and_then(Option::as_ref),
-                    &mut search_changed_buckets,
-                );
-            }
-            candidates
-                .into_iter()
-                .filter(|key| before.get(key) != after.get(key))
-                .collect()
-        } else {
-            changed.clone()
+            let replacement = self
+                .rebuild_queued_layers_with_staged(queued, None, &staged)
+                .await?;
+            candidates.extend(layer_keys(&replacement));
+            let mut staged_bases = self.load_bases(&candidates).await?;
+            staged_bases.extend(staged);
+            let after = effective_records(&staged_bases, &replacement, &candidates);
+            Some((candidates, before, replacement, after))
         };
+        let PersistedChanges {
+            mut field_changes,
+            changed,
+            revision,
+            revision_advanced,
+            mut search_changed_buckets,
+            viewer_fields: mut viewer_changes,
+        } = self.persist_updates(updates, projections).await?;
 
-        let mut affected_ops = if reset {
-            // Everything anyone had cached is gone: re-execute all ops.
-            self.deps.all_ops()
-        } else if is_query {
+        let visible_changed =
+            if let Some((candidates, before, replacement, after)) = optimistic_update {
+                self.optimistic = replacement;
+                field_changes = crate::field_changes::between(&before, &after);
+                if revision_advanced {
+                    self.live_queries.extend(
+                        revision,
+                        candidates.iter().cloned(),
+                        live_query::projection_keys(&self.optimistic),
+                    );
+                }
+                // Compare the composed view: a hydration hidden beneath a pending
+                // edit must not invalidate the search projection it did not change.
+                search_changed_buckets.clear();
+                viewer_changes.clear();
+                for key in &candidates {
+                    if let Some(fields) = changed_viewer_fields(
+                        before.get(key).and_then(Option::as_ref),
+                        after.get(key).and_then(Option::as_ref),
+                    ) {
+                        viewer_changes.insert(key.clone(), fields);
+                    }
+                    collect_search_changes(
+                        key,
+                        before.get(key).and_then(Option::as_ref),
+                        after.get(key).and_then(Option::as_ref),
+                        &mut search_changed_buckets,
+                    );
+                }
+                candidates
+                    .into_iter()
+                    .filter(|key| before.get(key) != after.get(key))
+                    .collect()
+            } else {
+                changed.clone()
+            };
+
+        let mut affected_ops = if is_query {
             self.deps.ops_for_changes(&visible_changed, &viewer_changes)
         } else {
             self.deps.ops_for_keys(visible_changed.iter())
@@ -1446,16 +1497,15 @@ impl<S: Storage> Engine<S> {
         }
         Ok((
             WriteResult {
-                field_changes: (!reset).then_some(field_changes),
+                field_changes: Some(field_changes),
                 identity_errors: Vec::new(),
                 mutation_uuid: None,
                 revision,
                 revision_advanced,
-                search_changed_buckets: (is_query && !reset)
-                    .then(|| search_changed_buckets.clone()),
+                search_changed_buckets: is_query.then(|| search_changed_buckets.clone()),
                 changed,
                 affected_ops,
-                reset,
+                reset: false,
                 revalidations: Vec::new(),
             },
             search_changed_buckets,
@@ -2422,14 +2472,16 @@ impl<S: Storage> Engine<S> {
             );
         }
 
-        let stored_identities = self.load_identity_bindings(&bindings).await?;
+        let stored_identities = self
+            .load_identity_bindings(&bindings, &RecordUpdates::new())
+            .await?;
         let mut settled_identities = stored_identities;
         settled_identities.extend(identities.clone());
         identity::apply_record_lifecycle(&mut updates, &bindings, &settled_identities);
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
         let (mut candidates, bases) = self
-            .load_link_patch_bases(candidates, &[], &updates, &recipes)
+            .load_link_patch_bases(candidates, &[], &updates, &recipes, &RecordUpdates::new())
             .await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
 
@@ -2443,6 +2495,20 @@ impl<S: Storage> Engine<S> {
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
             .await?;
+        let staged: RecordUpdates = entries.iter().cloned().collect();
+        let mut queued = self
+            .storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?;
+        queued.retain(|entry| entry.id != transaction);
+        let replacement = self
+            .rebuild_queued_layers_with_staged(queued, None, &staged)
+            .await?;
+        candidates.extend(layer_keys(&replacement));
+        let mut settled_bases = self.load_bases(&candidates).await?;
+        settled_bases.extend(staged);
+        let after = effective_records(&settled_bases, &replacement, &candidates);
         if !self
             .storage
             .complete_mutation_with_shadow(
@@ -2463,18 +2529,7 @@ impl<S: Storage> Engine<S> {
             self.hot.put(key, record);
         }
 
-        // Reconstruct every later recipe against the settled base. This is
-        // required when an earlier layer is committed or rolled back: later
-        // layers must not retain a whole-field snapshot of the old base.
-        let queued = self
-            .storage
-            .load_mutation_queue()
-            .await
-            .map_err(EngineError::Storage)?;
-        let replacement = self.rebuild_queued_layers(queued).await?;
-        candidates.extend(layer_keys(&replacement));
-        let settled_bases = self.load_bases(&candidates).await?;
-        let after = effective_records(&settled_bases, &replacement, &candidates);
+        // No fallible reads after settlement: publish exactly the staged view.
         self.optimistic = replacement;
         live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
         let live_records = candidates.clone();
@@ -2564,6 +2619,16 @@ impl<S: Storage> Engine<S> {
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &[], &IdentityMap::new())
             .await?;
+        let mut queued = self
+            .storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?;
+        queued.retain(|entry| entry.id != transaction);
+        let replacement = self.rebuild_queued_layers(queued).await?;
+        candidates.extend(layer_keys(&replacement));
+        let current_bases = self.load_bases(&candidates).await?;
+        let after = effective_records(&current_bases, &replacement, &candidates);
         if !self
             .storage
             .discard_mutation_with_shadow(transaction, claim, reconciliation)
@@ -2573,15 +2638,6 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
         let revision = self.advance_revision()?;
-        let queued = self
-            .storage
-            .load_mutation_queue()
-            .await
-            .map_err(EngineError::Storage)?;
-        let replacement = self.rebuild_queued_layers(queued).await?;
-        candidates.extend(layer_keys(&replacement));
-        let current_bases = self.load_bases(&candidates).await?;
-        let after = effective_records(&current_bases, &replacement, &candidates);
         self.optimistic = replacement;
         live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
         let live_records = candidates.clone();
@@ -2619,6 +2675,7 @@ impl<S: Storage> Engine<S> {
         layers: &[OptimisticLayer],
         pending_updates: &RecordUpdates,
         patches: &[OptimisticLinkPatch],
+        staged: &RecordUpdates,
     ) -> Result<
         (
             BTreeSet<EntityKey<'static>>,
@@ -2628,7 +2685,12 @@ impl<S: Storage> Engine<S> {
     > {
         candidates.extend(patches.iter().map(OptimisticLinkPatch::root_key));
         loop {
-            let bases = self.load_bases(&candidates).await?;
+            let mut bases = self.load_bases(&candidates).await?;
+            for key in &candidates {
+                if let Some(record) = staged.get(key) {
+                    bases.insert(key.clone(), record.clone());
+                }
+            }
             let composed = effective_records(&bases, layers, &candidates);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, pending_updates);
@@ -2835,6 +2897,7 @@ impl<S: Storage> Engine<S> {
     /// optimistic layers.
     pub async fn clear(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        self.storage.clear().await.map_err(EngineError::Storage)?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
         self.query_watches = watch_query::QueryWatches::default();
@@ -2844,7 +2907,6 @@ impl<S: Storage> Engine<S> {
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
-        self.storage.clear().await.map_err(EngineError::Storage)?;
         self.advance_revision()
     }
 

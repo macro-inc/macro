@@ -9,15 +9,13 @@ const optimisticMutationDispositionOfMock = vi.hoisted(() => vi.fn());
 const inspectMock = vi.hoisted(() => vi.fn());
 const cacheHostState = vi.hoisted(() => ({ current: {} as unknown }));
 
-vi.mock('@graphql-cache/index', () => {
-  const selection = {
-    field: () => selection,
-  };
+vi.mock('@graphql-cache/index', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@graphql-cache/index')>();
   return {
+    ...actual,
     executeOptimisticMutation: executeOptimisticMutationMock,
     optimisticMutationDispositionOf: optimisticMutationDispositionOfMock,
     inspect: inspectMock,
-    selectAll: () => selection,
   };
 });
 
@@ -27,7 +25,8 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 vi.mock('./entity', () => ({
-  toGraphqlPropertyTargetEntityType: (entityType: string) => entityType,
+  toGraphqlPropertyTargetEntityType: (entityType: string) =>
+    entityType === 'TASK' ? 'DOCUMENT' : entityType,
 }));
 
 import { updateGraphqlEntityPropertyOptions } from './entity-options';
@@ -131,6 +130,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
       },
     ]);
     // The record already exists, so the entity's property link list is intact.
+    expect(options.updates).toEqual([]);
     expect(options.revalidations).toEqual([]);
     expect(validateUuid(options.uuid)).toBe(true);
     expect(inspectMock).not.toHaveBeenCalled();
@@ -180,8 +180,32 @@ describe('updateGraphqlEntityPropertyOptions', () => {
         removeOptionIds: [],
       },
     ]);
-    // No assignment id exists yet, so nothing can be patched before the commit.
-    expect(optimisticData.updateEntityPropertyOptions).toEqual([]);
+    const temporaryId = 'optimistic-property:DOCUMENT:doc-1:tag-def';
+    expect(optimisticData.updateEntityPropertyOptions).toMatchObject([
+      {
+        id: temporaryId,
+        propertyDefinitionId: 'tag-def',
+        dataType: 'TAG',
+        value: { optionIds: ['spotlight'] },
+      },
+    ]);
+    // Every query reading the parent sees the new assignment immediately.
+    // Commit resolves its server ID from the matching response record.
+    expect(options.updates).toMatchObject([
+      {
+        recordRoot: {
+          fragmentName: 'PropertyAssignmentParent',
+          entityKey: 'GraphqlSoupDocument:doc-1',
+        },
+        path: [{ field: 'properties' }],
+        operation: {
+          kind: 'upsertByField',
+          entityKey: `GraphqlProperty:${temporaryId}`,
+          whereField: 'propertyDefinitionId',
+          equals: 'tag-def',
+        },
+      },
+    ]);
     expect(options.revalidations).toEqual([
       {
         document: EntityPropertiesDocument,
@@ -235,9 +259,14 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(inspectMock).not.toHaveBeenCalled();
   });
 
-  it.each(['TASK', 'THREAD', 'INITIATIVE', 'CALL_RECORD'] as const)(
-    'durably revalidates only the %s target after a queued first-tag commit',
-    async (entityType) => {
+  it.each([
+    ['TASK', 'GraphqlSoupDocument'],
+    ['THREAD', 'GraphqlSoupEmailThread'],
+    ['INITIATIVE', 'GraphqlSoupInitiative'],
+    ['CALL_RECORD', 'GraphqlSoupCall'],
+  ] as const)(
+    'durably links and revalidates only the %s target after a queued first-tag commit',
+    async (entityType, typename) => {
       optimisticMutationDispositionOfMock.mockReturnValue({
         kind: 'queued',
         transactionId: 'txn-1',
@@ -258,6 +287,16 @@ describe('updateGraphqlEntityPropertyOptions', () => {
       ).resolves.toEqual([
         { propertyDefinitionId: 'tag-def', optionIds: ['spotlight'] },
       ]);
+      expect(optimisticArgs().options.updates).toMatchObject([
+        {
+          recordRoot: { entityKey: `${typename}:target-1` },
+          operation: {
+            kind: 'upsertByField',
+            whereField: 'propertyDefinitionId',
+            equals: 'tag-def',
+          },
+        },
+      ]);
       expect(optimisticArgs().options.revalidations).toEqual([
         {
           document: EntityPropertiesDocument,
@@ -269,6 +308,39 @@ describe('updateGraphqlEntityPropertyOptions', () => {
       expect(inspectMock).not.toHaveBeenCalled();
     }
   );
+
+  it('links each new tag set independently in one mutation', async () => {
+    await updateGraphqlEntityPropertyOptions({
+      entityType: 'DOCUMENT',
+      entityId: 'doc-1',
+      properties: [
+        {
+          property: tagDefinition,
+          currentOptionIds: [],
+          nextOptionIds: ['spotlight'],
+        },
+        {
+          property: { ...tagDefinition, id: 'team-tag-def' },
+          currentOptionIds: [],
+          nextOptionIds: ['roadmap'],
+        },
+      ],
+    });
+
+    const { optimisticData, options } = optimisticArgs();
+    expect(optimisticData.updateEntityPropertyOptions).toMatchObject([
+      { propertyDefinitionId: 'tag-def', value: { optionIds: ['spotlight'] } },
+      {
+        propertyDefinitionId: 'team-tag-def',
+        value: { optionIds: ['roadmap'] },
+      },
+    ]);
+    expect(options.updates).toMatchObject([
+      { operation: { kind: 'upsertByField', equals: 'tag-def' } },
+      { operation: { kind: 'upsertByField', equals: 'team-tag-def' } },
+    ]);
+    expect(options.revalidations).toHaveLength(1);
+  });
 
   it('resolves a queued commit with the requested selection', async () => {
     optimisticMutationDispositionOfMock.mockReturnValue({

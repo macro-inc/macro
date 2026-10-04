@@ -45,3 +45,18 @@ export function containsReactiveStore(
     containsReactiveStore(child, seen)
   );
 }
+
+const reconcilable = new WeakMap<object, boolean>();
+/** Check immutable query snapshots for property names Solid reconcile skips. */
+export function supportsStoreReconciliation(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return true;
+  const cached = reconcilable.get(value);
+  if (cached !== undefined) return cached;
+  const result = Object.entries(value).every(
+    ([key, child]) =>
+      !['__proto__', 'constructor', 'prototype'].includes(key) &&
+      supportsStoreReconciliation(child)
+  );
+  reconcilable.set(value, result);
+  return result;
+}

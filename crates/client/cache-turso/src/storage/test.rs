@@ -6,6 +6,7 @@ mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
+mod optimistic_atomicity;
 mod page_retention;
 mod predicate_cost;
 mod projection_writes;

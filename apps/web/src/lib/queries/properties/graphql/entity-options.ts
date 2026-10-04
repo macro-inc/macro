@@ -27,11 +27,15 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
-import { buildOptimisticEntityPropertyOptions } from '../graphql-optimistic';
+import {
+  buildOptimisticEntityPropertyOptions,
+  isTemporaryGraphqlProperty,
+} from '../graphql-optimistic';
 import {
   type EntityPropertyOptionSelection,
   getEntityPropertyOptionDeltas,
 } from '../option-deltas';
+import { buildPropertyAssignmentLinks } from './assignment-links';
 import { toGraphqlPropertyTargetEntityType } from './entity';
 
 export type GraphqlEntityPropertyOptionsInput = {
@@ -55,8 +59,8 @@ function getPropertyDefinitionId(
 }
 
 /**
- * A new assignment must be linked into its entity's properties list. Re-reading
- * that one entity updates the normalized parent for every list/detail consumer.
+ * Recover an absent/evicted parent after a new assignment commits. Cached
+ * parents are linked atomically by the mutation's response-derived recipe.
  * Never inspect all cached Soup variants here: backfills can exceed the cache's
  * inspection budget, and cache bookkeeping must not prevent the mutation.
  * The descriptor is durable, so an offline commit also reconciles on replay.
@@ -80,9 +84,10 @@ function newPropertyLinkRevalidations(
 export async function updateGraphqlEntityPropertyOptions(
   input: GraphqlEntityPropertyOptionsInput
 ): Promise<EntityPropertyOptionSelection[]> {
+  const entityType = toGraphqlPropertyTargetEntityType(input.entityType);
   const variables: UpdateEntityPropertyOptionsMutationVariables = {
     input: {
-      entityType: toGraphqlPropertyTargetEntityType(input.entityType),
+      entityType,
       entityId: input.entityId,
       properties: input.properties.map((update) => {
         const deltas = getEntityPropertyOptionDeltas(
@@ -109,12 +114,24 @@ export async function updateGraphqlEntityPropertyOptions(
     const record = buildOptimisticEntityPropertyOptions(
       update.property,
       update.nextOptionIds,
-      update.assignmentId
+      update.assignmentId,
+      { entityType, entityId: input.entityId }
     );
     return record ? [record] : [];
   });
+  const newAssignments = optimisticProperties.filter((property) =>
+    isTemporaryGraphqlProperty(property.id)
+  );
+  const updates = newAssignments.flatMap((property) =>
+    buildPropertyAssignmentLinks(
+      entityType,
+      input.entityId,
+      property.id,
+      property.propertyDefinitionId
+    )
+  );
   const revalidations =
-    optimisticProperties.length < input.properties.length
+    newAssignments.length > 0
       ? newPropertyLinkRevalidations(input.entityType, input.entityId)
       : [];
 
@@ -123,7 +140,7 @@ export async function updateGraphqlEntityPropertyOptions(
     UpdateEntityPropertyOptionsDocument,
     variables,
     { updateEntityPropertyOptions: optimisticProperties },
-    { uuid: crypto.randomUUID(), revalidations }
+    { uuid: crypto.randomUUID(), updates, revalidations }
   ).toPromise();
 
   const disposition = optimisticMutationDispositionOf<

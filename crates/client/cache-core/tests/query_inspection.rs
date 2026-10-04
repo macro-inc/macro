@@ -185,6 +185,14 @@ impl Storage for OwnerOnlyStorage {
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.0.clear().await
     }
+
+    async fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.0.reset_with_records(entries, projections).await
+    }
 }
 
 #[test]

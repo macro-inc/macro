@@ -1,8 +1,10 @@
 import { buildTaskQuery } from '@app/features/tasks-view/queries/task-query';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { soupKeys } from '@queries/soup/keys';
 import { QueryClient } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
@@ -129,6 +131,77 @@ it.each(['saved', 'failed', 'assignment-failed'] as const)(
       if (outcome === 'assignment-failed')
         expect(mock.failure).toHaveBeenCalledOnce();
       expect(refresh).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+      cache.clear();
+    }
+  }
+);
+
+it.each(['viewer', 'host', 'reset'] as const)(
+  'ignores a deferred task completion after the %s changes',
+  async (change) => {
+    const cache = new QueryClient();
+    cache.setQueryData(projectKeys.detail('viewer', 'project').queryKey, {
+      project: { taskIds: [] },
+      properties: [],
+    });
+    let reset!: Parameters<CacheHost['onCacheGenerationChanged']>[0];
+    const unsubscribe = vi.fn();
+    const host: CacheHost = {
+      ...createNoopCacheHost(),
+      disabled: false,
+      onCacheGenerationChanged: (callback) => {
+        reset = callback;
+        return unsubscribe;
+      },
+    };
+    const write = vi.spyOn(host, 'writeQuery');
+    const replacement = createNoopCacheHost();
+    const replacementWrite = vi.spyOn(replacement, 'writeQuery');
+    const [viewer, setViewer] = createSignal('viewer');
+    const [currentHost, setHost] = createSignal(host);
+    let complete!: (value: {
+      documentId: string;
+      initialSnapshot: undefined;
+    }) => void;
+    mock.create.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        })
+    );
+    const assignTasks = vi.fn(async () =>
+      ok({ results: [{ taskId: 'saved', status: 'assigned' as const }] })
+    );
+    const refresh = vi.fn(async () => {});
+    let dispose!: () => void;
+    const create = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createProjectTaskMutation(
+        { assignTasks },
+        currentHost,
+        cache,
+        viewer,
+        refresh
+      );
+    });
+    try {
+      const pending = create('project', 'New task', '', [], new Map(), vi.fn());
+      await vi.waitFor(() => expect(mock.create).toHaveBeenCalledOnce());
+      const before = write.mock.calls.length;
+      if (change === 'viewer') setViewer('replacement-viewer');
+      if (change === 'host') setHost(replacement);
+      if (change === 'reset') reset({ storage: 'reset' });
+      cache.clear();
+      complete({ documentId: 'saved', initialSnapshot: undefined });
+      expect(await pending).toBeNull();
+      expect(write).toHaveBeenCalledTimes(before);
+      expect(replacementWrite).not.toHaveBeenCalled();
+      expect(assignTasks).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+      expect(unsubscribe).toHaveBeenCalledOnce();
+      expect(cache.getQueryCache().getAll()).toHaveLength(0);
     } finally {
       dispose();
       cache.clear();

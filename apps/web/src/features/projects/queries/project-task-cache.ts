@@ -1,5 +1,6 @@
 import { taskMembershipScope } from '@app/features/tasks-view/queries/task-membership';
 import type { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
+import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Property } from '@property/types';
 import { apiValuesToGraphqlPropertyValue } from '@queries/properties/graphql-optimistic';
@@ -20,11 +21,14 @@ import {
 import {
   GroupSoupDocument,
   type GroupSoupQuery,
+  InitiativeDocument,
+  type InitiativeQuery,
   SoupDocument,
   type SoupItemFieldsFragment,
   type SoupQuery,
 } from '@service-storage/graphql/generated/graphql';
 import { mapGraphqlSoupItem } from '@service-storage/graphql-soup';
+import { mapInitiativeDetail } from '@service-storage/initiative';
 import {
   hashKey,
   type InfiniteData,
@@ -33,6 +37,7 @@ import {
 import { stringifyDocument } from '@urql/core';
 import type { ProjectDetail } from '../core/project';
 import { projectKeys } from './keys';
+import { projectDetailData } from './project-identity';
 
 export type ProjectTaskDraft = Parameters<typeof createTaskWithProperties>;
 type TaskRecord = Extract<
@@ -108,11 +113,40 @@ export async function updateProjectTaskCache(
   userId: string,
   projectId: string,
   removeId?: string,
-  task?: TaskRecord
+  task?: TaskRecord,
+  options: {
+    isCurrent?: () => boolean;
+    pendingTaskIds?: () => string[];
+    onReady?: () => void;
+  } = {}
 ) {
+  const isCurrent = options.isCurrent ?? (() => true);
+  if (!isCurrent()) return;
   const detailKey = projectKeys.detail(userId, projectId).queryKey;
   await cache.cancelQueries({ queryKey: detailKey, exact: true });
-  const detail = cache.getQueryData<DetailData>(detailKey);
+  if (!isCurrent()) return;
+  let detail = cache.getQueryData<DetailData>(detailKey);
+  if (host && !host.disabled) {
+    const read = await host.readQuery({
+      query: stringifyDocument(InitiativeDocument),
+      operationName: 'Initiative',
+      variables: { initiativeId: projectId },
+      priority: 'user-visible',
+    });
+    const data =
+      read.kind === 'hit' ? (read.data as InitiativeQuery) : undefined;
+    if (!isCurrent() || (data && data.user.id !== userId)) return;
+    if (data?.user.initiative) {
+      detail = projectDetailData(mapInitiativeDetail(data.user.initiative));
+      detail.project.taskIds = [
+        ...new Set([
+          ...detail.project.taskIds,
+          ...(options.pendingTaskIds?.() ?? []),
+        ]),
+      ];
+      cache.setQueryData(detailKey, detail);
+    }
+  }
   if (!detail) return;
   const previousIds = detail.project.taskIds;
   const nextIds = [
@@ -154,6 +188,7 @@ export async function updateProjectTaskCache(
       },
     };
     await cache.cancelQueries({ queryKey: query.queryKey, exact: true });
+    if (!isCurrent()) return;
     const previous = cache.getQueryData<InfiniteData<SoupAstItemsPage>>(
       query.queryKey
     ) ?? {
@@ -239,6 +274,7 @@ export async function updateProjectTaskCache(
         read.kind === 'hit'
           ? (read.data as GroupSoupQuery)
           : { user: { id: userId, groupSoup: { bins: [] } } };
+      if (!isCurrent() || data.user.id !== userId) return;
       const bins = data.user.groupSoup.bins.map((bin) => {
         const items = bin.items.filter(
           (row) => !removeIds.has(row.id) && row.id !== task?.id
@@ -293,6 +329,7 @@ export async function updateProjectTaskCache(
           user: { ...data.user, groupSoup: { bins: previousBins } },
         } satisfies GroupSoupQuery,
       });
+      if (!isCurrent()) return;
       await host.writeQuery({
         query: queryText,
         operationName: 'GroupSoup',
@@ -320,6 +357,7 @@ export async function updateProjectTaskCache(
                 soup: { items: [], nextCursor: null },
               },
             };
+      if (!isCurrent() || data.user.id !== userId) return;
       await host.writeQuery({
         query: queryText,
         operationName: 'Soup',
@@ -338,7 +376,7 @@ export async function updateProjectTaskCache(
           },
         } satisfies SoupQuery,
       });
-
+      if (!isCurrent()) return;
       await host.writeQuery({
         query: queryText,
         operationName: 'Soup',
@@ -360,10 +398,10 @@ export async function updateProjectTaskCache(
         } satisfies SoupQuery,
       });
     }
+    if (!isCurrent()) return;
   }
-  // Lists no longer hold the optimistic record, but Quick Access would.
-  if (removeId && host && !host.disabled)
-    await host.deleteRecords([`GraphqlSoupDocument:${removeId}`]);
+  if (!isCurrent()) return;
+  options.onReady?.();
   cache.setQueryData<DetailData>(detailKey, (current) =>
     current
       ? {
@@ -372,4 +410,24 @@ export async function updateProjectTaskCache(
         }
       : current
   );
+  if (host && !host.disabled) {
+    await host.writeQuery({
+      query: stringifyDocument(InitiativeDocument),
+      operationName: 'Initiative',
+      variables: { initiativeId: projectId },
+      data: {
+        user: {
+          id: userId,
+          initiative: {
+            __typename: 'GraphqlSoupInitiative',
+            id: projectId,
+            taskIds: nextIds,
+          },
+        },
+      } satisfies OptimisticResponse<InitiativeQuery>,
+    });
+    // Publish replacement membership before removing its temporary record.
+    if (removeId && isCurrent())
+      await host.deleteRecords([`GraphqlSoupDocument:${removeId}`]);
+  }
 }

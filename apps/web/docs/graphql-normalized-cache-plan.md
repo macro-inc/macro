@@ -5,6 +5,8 @@ Status: **draft / pre-implementation**
 Implementation note: document-based live projections are implemented on the
 local-resolvers branch; see [Live query API](#8-live-query-api). Earlier sections
 describe the original cache design.
+See [Testing optimistic live queries](graphql-cache-testing.md) for generated
+state-machine coverage, replay commands, and remaining confidence boundaries.
 
 ## 1. Problem
 
@@ -583,6 +585,62 @@ query author supplies no optimistic callbacks, result traversal or cache writes.
 Both the list and a detail query for that thread observe the same effective
 value. Changes to `isRead` preserve row objects and do not notify subscribers to
 unrelated fields.
+
+### Adoption and mutation coverage
+
+Mounted project details, project identity chips, task-to-project references, and
+agent-session mentions now use this live path as well. Reference and mention
+lookups share stable batches: adding another visible item does not clear an
+existing item's data or restart its request. Project creation links the complete
+server-normalized record to its detail query, including when the user root is
+not cached yet. REST task creation still owns its explicit temporary membership;
+only those known temporary/just-created tasks may supply a reference fallback.
+Pending membership survives unrelated full entity responses, and canonical task
+IDs are published only after their Soup rows are seeded. Async creation bridges
+stop publishing after viewer changes, cache replacement, or storage reset.
+
+Permissions and server-owned membership still revalidate on activity, focus, and
+the existing project polling interval. A denied mounted read stays hidden across
+cache hits until an authorized network response succeeds. Disabled detail reads
+and results for another viewer are not exposed. Mentions also refresh on session
+rename, deletion, metadata updates, and reconnect when the normalized cache is
+unavailable.
+Invalidations arriving during a refresh cause a trailing authorized read instead
+of being discarded; simultaneous refresh requests share one read.
+
+[Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
+26 mutation documents and fails when a document has no declared strategy:
+
+| Strategy | Operations |
+| --- | --- |
+| Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
+| Existing domain optimistic recipe (6) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions |
+| Authoritative outcome (6) | CreateInitiative, DeleteInitiative, AssignInitiativeTasks, ClearTaskInitiative, RecordChannelActivity, UpdateNotificationsForEntity |
+| Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
+
+The project resolver predicts names and members; sharing waits for the server.
+Notification optimism predicts MARK_DONE; conditional seen/reopen transitions
+remain authoritative. Renames patch both displayName and the selected source-name
+alias. Property removal unlinks only the assignment from its parent, retaining a
+rollbackable link until the server confirms deletion.
+
+Server-generated identities, per-task permission outcomes, and exact notification
+IDs used by undo are not fabricated. A queued acknowledgement is not a completed
+server response. GraphQL renames keep optimism in the normalized layer; remaining
+legacy readers revalidate on final settlement instead of retaining independent
+optimistic writes that cannot roll back after an offline queue returns.
+
+```ts
+// Names, members, and property removal require no caller-owned cache writes.
+await client.mutation(UpdateInitiativeDocument, {
+  initiativeId: projectId,
+  input: { name: 'Launch', memberIds: [] },
+}).toPromise();
+
+await client.mutation(DeleteEntityPropertyDocument, {
+  entityType: 'DOCUMENT', entityId: taskId, entityPropertyId: assignmentId,
+}).toPromise();
+```
 
 ### Projection contract
 

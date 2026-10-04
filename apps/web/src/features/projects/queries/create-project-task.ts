@@ -4,13 +4,34 @@ import { throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { initiativeClient } from '@service-storage/initiative';
 import { type QueryClient, useMutation } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { projectKeys } from './keys';
+import {
+  captureProjectCacheScope,
+  type ProjectCacheScope,
+} from './project-cache-scope';
 import {
   optimisticProjectTask,
   type ProjectTaskDraft,
   updateProjectTaskCache,
 } from './project-task-cache';
+
+export type ProjectTaskMutationVariables = {
+  projectId: string;
+  draft: ProjectTaskDraft;
+  id: string;
+  ownerId: string;
+  scope: ProjectCacheScope;
+};
+export type ProjectTaskMutationData = {
+  result: NonNullable<Awaited<ReturnType<typeof createTaskWithProperties>>>;
+  assigned: boolean;
+};
+export type ProjectTaskMutationContext = {
+  task: ReturnType<typeof optimisticProjectTask>;
+  membershipId: Accessor<string | undefined>;
+  setMembershipId: Setter<string | undefined>;
+};
 
 /** Owns task creation and membership as one optimistic mutation. */
 export function createProjectTaskMutation(
@@ -27,43 +48,65 @@ export function createProjectTaskMutation(
     writes = next.catch(() => {});
     return next;
   };
+  const pendingTaskIds = (input: ProjectTaskMutationVariables) =>
+    cache
+      .getMutationCache()
+      .findAll({
+        mutationKey: projectKeys.createTask._def,
+        status: 'pending',
+      })
+      .flatMap((mutation) => {
+        const variables = mutation.state.variables as
+          | ProjectTaskMutationVariables
+          | undefined;
+        const context = mutation.state.context as
+          | ProjectTaskMutationContext
+          | undefined;
+        const id = context?.membershipId();
+        return id &&
+          variables?.ownerId === input.ownerId &&
+          variables.projectId === input.projectId &&
+          variables.scope?.isCurrent()
+          ? [id]
+          : [];
+      });
   const mutation = useMutation(
     () => ({
       mutationKey: projectKeys.createTask._def,
-      onMutate: async (input: {
-        projectId: string;
-        draft: ProjectTaskDraft;
-        id: string;
-        ownerId: string;
-      }) => {
+      onMutate: async (input: ProjectTaskMutationVariables) => {
         const task = optimisticProjectTask(
           input.id,
           input.ownerId,
           input.draft
         );
+        const [membershipId, setMembershipId] = createSignal<
+          string | undefined
+        >(input.id);
         try {
           await update(
             cache,
-            cacheHost(),
+            input.scope.host,
             input.ownerId,
             input.projectId,
             undefined,
-            task
+            task,
+            {
+              isCurrent: input.scope.isCurrent,
+              pendingTaskIds: () => pendingTaskIds(input),
+            }
           );
         } finally {
-          input.draft[5]?.onMutate?.();
+          if (input.scope.isCurrent()) input.draft[5]?.onMutate?.();
         }
-        return { task };
+        return { task, membershipId, setMembershipId };
       },
       mutationFn: async ({
         projectId,
         draft,
-      }: {
-        projectId: string;
-        draft: ProjectTaskDraft;
-        id: string;
-        ownerId: string;
-      }) => {
+        scope,
+      }: ProjectTaskMutationVariables) => {
+        if (!scope.isCurrent())
+          throw new Error('Task creation session changed');
         const [title, content, properties, definitions, history] = draft;
         const result = await createTaskWithProperties(
           title,
@@ -74,6 +117,7 @@ export function createProjectTaskMutation(
           { revalidateSoup: false, shareWithTeam: draft[5]?.shareWithTeam }
         );
         if (!result) throw new Error('Task creation failed');
+        if (!scope.isCurrent()) return { result, assigned: false };
         let assigned = false;
         try {
           const response = await throwOnErr(() =>
@@ -85,7 +129,7 @@ export function createProjectTaskMutation(
         } catch {
           /* Preserve the saved task if only project assignment failed. */
         }
-        if (!assigned)
+        if (!assigned && scope.isCurrent())
           toast.failure(
             'Task created, but could not be added to the project. Use Set project from the task menu to try again.'
           );
@@ -94,22 +138,36 @@ export function createProjectTaskMutation(
       onSuccess: async ({ result, assigned }, input, context) => {
         await update(
           cache,
-          cacheHost(),
+          input.scope.host,
           input.ownerId,
           input.projectId,
           input.id,
           assigned && context
             ? { ...context.task, id: result.documentId }
-            : undefined
+            : undefined,
+          {
+            isCurrent: input.scope.isCurrent,
+            pendingTaskIds: () => pendingTaskIds(input),
+            onReady: () =>
+              context?.setMembershipId(
+                assigned ? result.documentId : undefined
+              ),
+          }
         );
       },
-      onError: async (_error, input) => {
+      onError: async (_error, input, context) => {
         await update(
           cache,
-          cacheHost(),
+          input.scope.host,
           input.ownerId,
           input.projectId,
-          input.id
+          input.id,
+          undefined,
+          {
+            isCurrent: input.scope.isCurrent,
+            pendingTaskIds: () => pendingTaskIds(input),
+            onReady: () => context?.setMembershipId(undefined),
+          }
         );
       },
     }),
@@ -118,20 +176,25 @@ export function createProjectTaskMutation(
   return async (projectId: string, ...draft: ProjectTaskDraft) => {
     const ownerId = userId();
     if (!ownerId) return null;
+    const scope = captureProjectCacheScope(userId, cacheHost);
     try {
-      return (
-        await mutation.mutateAsync({
-          projectId,
-          draft,
-          ownerId,
-          id: crypto.randomUUID(),
-        })
-      ).result;
+      const data = await mutation.mutateAsync({
+        projectId,
+        draft,
+        ownerId,
+        id: crypto.randomUUID(),
+        scope,
+      });
+      return scope.isCurrent() ? data.result : null;
     } catch {
       return null;
     } finally {
-      if (!cache.isMutating({ mutationKey: projectKeys.createTask._def }))
+      if (
+        scope.isCurrent() &&
+        !cache.isMutating({ mutationKey: projectKeys.createTask._def })
+      )
         void refresh();
+      scope.dispose();
     }
   };
 }
