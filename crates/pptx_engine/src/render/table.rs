@@ -113,11 +113,17 @@ fn grid_positions(fonts: &FontDb, t: &Table) -> (Vec<f32>, Vec<f32>) {
                 let end_col = (cell.col + cell.grid_span).min(ncols);
                 let w = xs[end_col] - xs[cell.col];
                 let lay = layout(text, w, 1.0e6, fonts, LayoutParams::from_body(text));
-                let lines = lay
-                    .lines
-                    .last()
-                    .map_or(0.0, |l| l.bottom - lay.lines[0].top);
-                let needed = lines + cell.margins[1] + cell.margins[3];
+                let needed = if text.body.vert.is_vertical() {
+                    // Vertical text runs down the cell: the row grows to its
+                    // longest line (the layout's width includes the margins).
+                    lay.content_width
+                } else {
+                    let lines = lay
+                        .lines
+                        .last()
+                        .map_or(0.0, |l| l.bottom - lay.lines[0].top);
+                    lines + cell.margins[1] + cell.margins[3]
+                };
                 let end_row = (r + cell.row_span).min(heights.len());
                 let have: f32 = heights[r..end_row].iter().sum();
                 if needed > have + 0.01 {

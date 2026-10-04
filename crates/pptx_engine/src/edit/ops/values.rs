@@ -137,6 +137,80 @@ pub struct BodyPatch {
     pub insets: Option<[f32; 4]>,
     /// Number of columns.
     pub columns: Option<u32>,
+    /// Text direction (PowerPoint's Text Direction): `horz` (horizontal),
+    /// `vert` (rotate all text 90°: lines run top to bottom, stacking right
+    /// to left), `vert270` (rotate all text 270°: lines run bottom to top,
+    /// stacking left to right), `wordArtVert` (stacked: upright letters one
+    /// under another), `eaVert` (East Asian vertical: CJK upright, other
+    /// text rotated 90°), `mongolianVert` (like `eaVert`, lines stacking
+    /// left to right), or `wordArtVertRtl` (stacked, lines stacking right to
+    /// left). Insets stay on the shape's sides; `anchor` `top` is where the
+    /// first line goes (the right edge for `vert`). Switching a text box that
+    /// resizes to fit its text between horizontal and vertical swaps its
+    /// width and height first. Applies to table cells too. Omitted or null
+    /// keeps the direction.
+    pub direction: Option<TextDirection>,
+}
+
+/// Which way a drawing guide runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum GuideOrient {
+    /// A line across the slide, at a distance from its top edge.
+    Horizontal,
+    /// A line down the slide, at a distance from its left edge.
+    Vertical,
+}
+
+/// One drawing guide of [`EditOp::SetGuides`](super::EditOp::SetGuides).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GuideSpec {
+    /// `horizontal` (a line across the slide) or `vertical` (a line down it).
+    pub orient: GuideOrient,
+    /// Distance in points from the slide's top edge (horizontal guides) or
+    /// left edge (vertical guides), from 0 to the slide's height or width.
+    /// The slide's center is half its height or width.
+    pub position: f32,
+    /// Color as `RRGGBB` or a theme color name (`accent1`, `tx1`...).
+    /// Omitted or null keeps the color of the guide `id` names, and gives a
+    /// new guide PowerPoint's gray.
+    #[serde(default)]
+    pub color: Option<String>,
+    /// The id (from the deck outline's `guides`) of the guide this entry
+    /// keeps, with anything else the file stores on it. Omitted or null for
+    /// a new guide.
+    #[serde(default)]
+    pub id: Option<u32>,
+}
+
+/// A text direction (`ST_TextVerticalType`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum TextDirection {
+    /// Horizontal.
+    #[serde(rename = "horz")]
+    Horz,
+    /// Rotate all text 90°.
+    #[serde(rename = "vert")]
+    Vert,
+    /// Rotate all text 270°.
+    #[serde(rename = "vert270")]
+    Vert270,
+    /// Stacked.
+    #[serde(rename = "wordArtVert")]
+    WordArtVert,
+    /// East Asian vertical.
+    #[serde(rename = "eaVert")]
+    EaVert,
+    /// Mongolian vertical.
+    #[serde(rename = "mongolianVert")]
+    MongolianVert,
+    /// Stacked, lines right to left.
+    #[serde(rename = "wordArtVertRtl")]
+    WordArtVertRtl,
 }
 
 /// A fill specification.

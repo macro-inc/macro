@@ -33,12 +33,14 @@ pub(crate) mod effects;
 mod find;
 mod format_painter;
 pub(crate) mod group;
+pub(crate) mod guides;
 pub(crate) mod header_footer;
 mod links;
 pub(crate) mod picture;
 mod relayout;
 pub(crate) mod sections;
 mod slide_size;
+mod text_direction;
 mod theme;
 pub(crate) mod transition;
 
@@ -53,6 +55,7 @@ pub use ops::{BorderEdges, BorderLine, CellBorders, SlideScale, ThemeColor};
 pub use ops::{
     CropMode, EffectSpec, GlowOptions, ReflectionOptions, ShadowOptions, SoftEdgeOptions,
 };
+pub use ops::{GuideOrient, GuideSpec, TextDirection};
 pub use slides::{LayoutInfo, layouts};
 
 pub use clipboard::{
@@ -135,7 +138,8 @@ impl EditOp {
             | O::AddSection { .. }
             | O::RenameSection { .. }
             | O::RemoveSection { .. }
-            | O::MoveSection { .. } => None,
+            | O::MoveSection { .. }
+            | O::SetGuides { .. } => None,
             O::ReplaceText { slide, .. } => *slide,
         }
     }
@@ -357,9 +361,14 @@ impl Presentation {
                         let node = shapes::find(doc, *shape)?;
                         table::format_cell_body(doc, node, *c, props)?;
                     }
-                    None => self.edit_text(&part, *shape, None, |doc, body| {
-                        text::format_body(doc, body, props)
-                    })?,
+                    None => {
+                        if let Some(d) = props.direction {
+                            text_direction::turn_autofit_box(self, &part, *shape, d)?;
+                        }
+                        self.edit_text(&part, *shape, None, |doc, body| {
+                            text::format_body(doc, body, props)
+                        })?
+                    }
                 }
                 refit.push((part, *shape));
             }
@@ -827,6 +836,7 @@ impl Presentation {
                 sections::remove_section(self, id, *delete_slides)?
             }
             O::MoveSection { id, to_index } => sections::move_section(self, id, *to_index)?,
+            O::SetGuides { guides: list } => guides::set_guides(self, list)?,
             O::CropPicture {
                 slide,
                 shape,

@@ -615,13 +615,10 @@ fn resolve_body_props(sources: &[(&PartRef, NodeId)]) -> BodyProps {
             .and_then(|v| crate::xml::parse_bool(&v))
             .unwrap_or(false),
         wrap: get("wrap").is_none_or(|w| w != "none"),
-        vert: match get("vert").as_deref() {
-            Some("vert") => Vert::Vert,
-            Some("vert270") => Vert::Vert270,
-            Some("eaVert") | Some("mongolianVert") => Vert::EaVert,
-            Some("wordArtVert") | Some("wordArtVertRtl") => Vert::Stacked,
-            _ => Vert::Horz,
-        },
+        vert: get("vert")
+            .as_deref()
+            .and_then(Vert::parse)
+            .unwrap_or_default(),
         rot: num("rot").map_or(0.0, |v| (v / 60000.0) as f32),
         num_col: num("numCol").map_or(1, |v| v.clamp(1.0, 16.0) as u32),
         spc_col: num("spcCol").map_or(0.0, emu_to_pt),

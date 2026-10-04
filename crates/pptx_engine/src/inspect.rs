@@ -27,6 +27,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 pub use crate::edit::LayoutInfo;
+pub use crate::edit::guides::GuideOutline;
 pub use animation::AnimationOutline;
 
 mod animation;
@@ -118,6 +119,10 @@ pub struct CellOutline {
     pub anchor: &'static str,
     /// Margins `[left, top, right, bottom]` (points).
     pub margins: [f32; 4],
+    /// Text direction as `formatBody` takes it (`vert`, `vert270`,
+    /// `wordArtVert`...), when not horizontal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_direction: Option<&'static str>,
 }
 
 /// A table's style and the parts it emphasizes.
@@ -246,6 +251,11 @@ pub struct ShapeOutline {
     pub fill: Option<String>,
     /// Whether the shape can hold text (text ops apply).
     pub text_editable: bool,
+    /// Text direction as `formatBody` takes it (`vert`, `vert270`,
+    /// `wordArtVert`, `eaVert`, `mongolianVert`, `wordArtVertRtl`), when the
+    /// text is not horizontal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_direction: Option<&'static str>,
     /// Text paragraphs.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub paragraphs: Vec<ParagraphOutline>,
@@ -297,6 +307,10 @@ pub struct SlideOutline {
     /// The slide number, date, and footer the slide shows (absent: none).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_footer: Option<HeaderFooterOutline>,
+    /// Drawing guides the slide's layout and master define (shown over the
+    /// slide; `setGuides` does not change them).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layout_guides: Vec<GuideOutline>,
 }
 
 /// What a slide shows of PowerPoint's Header & Footer elements: the slide
@@ -365,6 +379,10 @@ pub struct DeckOutline {
     /// exactly one; a section may be empty.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sections: Option<Vec<SectionOutline>>,
+    /// The drawing guides shown over every slide (View ▸ Guides), as
+    /// `setGuides` takes them (absent when there are none).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<GuideOutline>,
 }
 
 /// A named run of consecutive slides (PowerPoint's slide sections).
@@ -690,6 +708,12 @@ fn shape_outline(s: &Shape, groups: &[GroupSpace], media: &Media) -> ShapeOutlin
         },
         fill: hex(&s.fill),
         text_editable: doc.local(s.node) == "sp",
+        text_direction: s
+            .text
+            .as_ref()
+            .map(|t| t.body.vert)
+            .filter(|v| v.is_vertical())
+            .map(|v| v.as_str()),
         paragraphs: tx_body.map(|b| paragraphs_of(doc, b)).unwrap_or_default(),
         table,
         chart,
@@ -762,7 +786,13 @@ impl Presentation {
             })
             .unwrap_or_default();
         let hidden = ctx.slide.doc.attr_bool(ctx.slide.doc.root(), "show") == Some(false);
+        let layout_guides = [ctx.layout.as_ref(), ctx.master.as_ref()]
+            .into_iter()
+            .flatten()
+            .flat_map(|p| crate::edit::guides::read_part(&p.doc))
+            .collect();
         Ok(SlideOutline {
+            layout_guides,
             id: entry.id,
             index,
             layout,
@@ -818,6 +848,7 @@ impl Presentation {
             theme_fonts,
             table_styles: self.table_style_gallery()?,
             sections: crate::edit::sections::read(&*self.xml(&self.main_part.clone())?),
+            guides: crate::edit::guides::deck_guides(self)?,
         })
     }
 
@@ -1049,6 +1080,7 @@ fn cell_outlines(t: &Table) -> Vec<Vec<CellOutline>> {
         fill: None,
         anchor: "top",
         margins: [7.2, 3.6, 7.2, 3.6],
+        text_direction: None,
     };
     let mut out = vec![vec![plain; t.cols.len()]; t.rows.len()];
     for cell in t.rows.iter().flat_map(|row| row.cells.iter()) {
@@ -1072,6 +1104,7 @@ fn cell_outlines(t: &Table) -> Vec<Vec<CellOutline>> {
             fill: hex(&cell.fill),
             anchor: anchor_name(cell.anchor),
             margins: cell.margins,
+            text_direction: cell.vert.is_vertical().then(|| cell.vert.as_str()),
         };
     }
     out

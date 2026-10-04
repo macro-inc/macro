@@ -125,6 +125,8 @@ pub(super) fn make_bullet(
             shift: 0.0,
             break_after: false,
             ch: shown,
+            upright: false,
+            glyph_w: adv,
         });
         width += adv;
     }

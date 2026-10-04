@@ -929,7 +929,7 @@ pub fn format_cell_body(
 ) -> Result<()> {
     if props.wrap.is_some() || props.autofit.is_some() || props.columns.is_some() {
         return Err(Error::InvalidEdit(
-            "table cells always wrap their text and cannot autofit or use columns; a cell takes only `anchor` and `insets`".into(),
+            "table cells always wrap their text and cannot autofit or use columns; a cell takes only `anchor`, `insets`, and `direction`".into(),
         ));
     }
     let anchor = props.anchor.as_deref().map(anchor_value).transpose()?;
@@ -944,6 +944,9 @@ pub fn format_cell_body(
     }
     if let Some(m) = props.insets {
         set_margins(doc, pr, m);
+    }
+    if let Some(d) = props.direction {
+        super::text_direction::write(doc, pr, d);
     }
     Ok(())
 }

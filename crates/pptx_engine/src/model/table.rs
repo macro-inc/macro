@@ -372,12 +372,10 @@ pub fn resolve_table(
                 Some("b") => Anchor::Bottom,
                 _ => Anchor::Top,
             };
-            let vert = match tc_pr.and_then(|p| doc.attr(p, "vert")) {
-                Some("vert") => Vert::Vert,
-                Some("vert270") => Vert::Vert270,
-                Some("eaVert") => Vert::EaVert,
-                _ => Vert::Horz,
-            };
+            let vert = tc_pr
+                .and_then(|p| doc.attr(p, "vert"))
+                .and_then(Vert::parse)
+                .unwrap_or_default();
             let mut text_style = CellTextStyle::default();
             if let Some(s) = style {
                 for (n, _) in parts.iter().rev() {

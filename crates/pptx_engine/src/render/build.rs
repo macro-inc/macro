@@ -508,8 +508,13 @@ pub fn text_layout_nodes(
             let Some(outline) = fonts.outline(run.face, g.id) else {
                 continue;
             };
-            let gt = t
-                .pre_concat(&Affine::translate(f64::from(g.x), f64::from(g.y)))
+            let origin = t.pre_concat(&Affine::translate(f64::from(g.x), f64::from(g.y)));
+            let origin = if g.upright {
+                origin.pre_concat(&Affine::rotate(-90.0))
+            } else {
+                origin
+            };
+            let gt = origin
                 .pre_concat(&Affine {
                     a: 1.0,
                     b: 0.0,

@@ -15,19 +15,72 @@ pub enum Anchor {
     Bottom,
 }
 
-/// Text direction of a body.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Text direction of a body (`a:bodyPr/@vert`, `a:tcPr/@vert`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Vert {
     /// Horizontal.
+    #[default]
     Horz,
-    /// Rotated 90° clockwise.
+    /// Every line rotated 90° clockwise: lines run top to bottom and stack
+    /// right to left ("Rotate all text 90°").
     Vert,
-    /// Rotated 270° clockwise.
+    /// Every line rotated 270°: lines run bottom to top and stack left to
+    /// right ("Rotate all text 270°").
     Vert270,
-    /// East Asian vertical (approximated as rotated 90°).
+    /// Stacked letters, upright, one under the other; lines stack left to
+    /// right ("Stacked").
+    WordArtVert,
+    /// East Asian vertical: lines as in [`Vert::Vert`], with CJK characters
+    /// upright and other text rotated.
     EaVert,
-    /// Stacked letters.
-    Stacked,
+    /// Mongolian vertical: as [`Vert::EaVert`], but lines stack left to right.
+    MongolianVert,
+    /// Stacked letters with lines stacking right to left.
+    WordArtVertRtl,
+}
+
+impl Vert {
+    /// Every direction, in `ST_TextVerticalType` order.
+    pub const ALL: [Vert; 7] = [
+        Vert::Horz,
+        Vert::Vert,
+        Vert::Vert270,
+        Vert::WordArtVert,
+        Vert::EaVert,
+        Vert::MongolianVert,
+        Vert::WordArtVertRtl,
+    ];
+
+    /// The `ST_TextVerticalType` value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Vert::Horz => "horz",
+            Vert::Vert => "vert",
+            Vert::Vert270 => "vert270",
+            Vert::WordArtVert => "wordArtVert",
+            Vert::EaVert => "eaVert",
+            Vert::MongolianVert => "mongolianVert",
+            Vert::WordArtVertRtl => "wordArtVertRtl",
+        }
+    }
+
+    /// Parses an `ST_TextVerticalType` value.
+    pub fn parse(value: &str) -> Option<Vert> {
+        Vert::ALL.into_iter().find(|v| v.as_str() == value)
+    }
+
+    /// Whether lines run vertically (every direction but [`Vert::Horz`]).
+    pub fn is_vertical(self) -> bool {
+        self != Vert::Horz
+    }
+
+    /// Whether lines stack left to right (the first line at the left edge).
+    pub fn lines_left_to_right(self) -> bool {
+        matches!(
+            self,
+            Vert::Vert270 | Vert::WordArtVert | Vert::MongolianVert
+        )
+    }
 }
 
 /// Autofit behavior.

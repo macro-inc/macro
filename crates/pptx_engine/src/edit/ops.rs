@@ -902,6 +902,15 @@ pub enum EditOp {
         /// New index among the sections.
         to_index: usize,
     },
+    /// Replaces the deck's drawing guides (PowerPoint's View ▸ Guides): the
+    /// dashed lines shown over every slide for lining shapes up, which
+    /// shapes snap to while dragged. Pass the whole list (the deck outline's
+    /// `guides`, changed); an empty list removes every guide. Guides that
+    /// slide layouts and masters define are not affected.
+    SetGuides {
+        /// The guides, in order.
+        guides: Vec<GuideSpec>,
+    },
 }
 
 /// Something an edit created.
@@ -927,8 +936,8 @@ pub struct EditResult {
     pub created: Vec<Created>,
     /// Slides whose rendering changed.
     pub changed_slides: Vec<u32>,
-    /// Whether slides were added, removed, or reordered, or the slide size
-    /// or sections changed.
+    /// Whether slides were added, removed, or reordered, or the slide size,
+    /// sections, or drawing guides changed.
     pub structure_changed: bool,
     /// Text replacements made by `replaceText` operations.
     #[serde(default)]

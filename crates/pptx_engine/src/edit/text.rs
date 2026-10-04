@@ -680,6 +680,9 @@ pub fn format_body(doc: &mut XmlDoc, body: NodeId, patch: &BodyPatch) -> Result<
     if let Some(c) = patch.columns {
         doc.set_attr(bpr, "numCol", &c.clamp(1, 16).to_string());
     }
+    if let Some(d) = patch.direction {
+        super::text_direction::write(doc, bpr, d);
+    }
     if let Some(a) = &patch.autofit {
         for name in ["noAutofit", "normAutofit", "spAutoFit"] {
             doc.remove_children_named(bpr, Ns::A, name);

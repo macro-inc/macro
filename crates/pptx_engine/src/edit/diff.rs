@@ -1,7 +1,7 @@
 //! What an edit changed: the slides whose rendering differs between two
 //! states of a presentation, and the caches an undo can carry over.
 
-use super::{EditResult, sections};
+use super::{EditResult, guides, sections};
 use crate::model::presentation::Presentation;
 use crate::opc::{TargetMode, rel_type, rels_part_name};
 
@@ -14,7 +14,16 @@ pub(crate) fn diff(before: &Presentation, after: &Presentation) -> EditResult {
         before.size != after.size || before.first_slide_number != after.first_slide_number;
     let sections_changed =
         !same(&after.main_part) && sections::snapshot(before) != sections::snapshot(after);
-    let structure_changed = ids(before) != ids(after) || deck_changed || sections_changed;
+    // Guides live in the presentation part (or, in older files, the view
+    // properties) and show on every slide.
+    let guides_changed = (!same(&after.main_part)
+        || after
+            .pkg
+            .part_names()
+            .any(|n| n.ends_with("/viewProps.xml") && !same(n)))
+        && guides::snapshot(before) != guides::snapshot(after);
+    let structure_changed =
+        ids(before) != ids(after) || deck_changed || sections_changed || guides_changed;
     let notes_part = |p: &Presentation, slide: &str| {
         p.rels
             .get(slide)

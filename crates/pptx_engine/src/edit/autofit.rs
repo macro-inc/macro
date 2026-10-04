@@ -8,7 +8,7 @@ use crate::error::Result;
 use crate::font::FontDb;
 use crate::model::presentation::Presentation;
 use crate::model::shape::{Inherit, WalkCtx, resolve_shape};
-use crate::model::text::{Autofit, Vert};
+use crate::model::text::Autofit;
 use crate::render::build::shape_geometry;
 use crate::render::table::{layout_table, table_styles_part};
 use crate::render::text::{LayoutParams, layout};
@@ -67,10 +67,10 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
     let Some(text) = shape.text.as_ref() else {
         return Ok(());
     };
-    if !matches!(text.body.vert, Vert::Horz) {
-        return Ok(());
-    }
     let rect = shape_geometry(&shape).text_rect;
+    // Vertical text stacks its lines across the shape's width.
+    let vertical = text.body.vert.is_vertical();
+    let across = if vertical { rect.w } else { rect.h };
     match text.body.autofit {
         Autofit::Normal {
             font_scale,
@@ -87,7 +87,7 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
                         line_reduction: r,
                     },
                 );
-                lay.content_height <= rect.h + TOLERANCE
+                lay.content_height <= across + TOLERANCE
             };
             let (scale, reduction) = LADDER
                 .iter()
@@ -137,22 +137,40 @@ fn refit_shape(pres: &mut Presentation, part: &str, id: u32, fonts: &FontDb) -> 
                 return Ok(());
             }
             let lay = layout(text, rect.w, rect.h, fonts, LayoutParams::from_body(text));
-            let h = (lay.content_height + (shape.xfrm.h - rect.h)).max(1.0);
-            let w = if text.body.wrap {
-                shape.xfrm.w
+            // The lines' stack sets the size across them; unwrapped lines
+            // set the size along them.
+            let (stack, length) = (
+                lay.content_height,
+                (!text.body.wrap).then_some(lay.content_width),
+            );
+            let x = shape.xfrm;
+            let (w, h) = if vertical {
+                (
+                    (stack + (x.w - rect.w)).max(1.0),
+                    length.map_or(x.h, |l| (l + (x.h - rect.h)).max(1.0)),
+                )
             } else {
-                (lay.content_width + (shape.xfrm.w - rect.w)).max(1.0)
+                (
+                    length.map_or(x.w, |l| (l + (x.w - rect.w)).max(1.0)),
+                    (stack + (x.h - rect.h)).max(1.0),
+                )
             };
-            if (h - shape.xfrm.h).abs() < TOLERANCE && (w - shape.xfrm.w).abs() < TOLERANCE {
+            if (h - x.h).abs() < TOLERANCE && (w - x.w).abs() < TOLERANCE {
                 return Ok(());
             }
-            let x = shape.xfrm;
+            // The edge the first line starts at stays put: the right edge of
+            // text whose lines stack right to left.
+            let left = if vertical && !text.body.vert.lines_left_to_right() {
+                x.x + x.w - w
+            } else {
+                x.x
+            };
             let doc = pres.xml_mut(part)?;
             let Some(node) = find_shape(doc, id) else {
                 return Ok(());
             };
             let xfrm = ensure_xfrm(doc, node);
-            set_off_ext(doc, xfrm, x.x, x.y, w, h);
+            set_off_ext(doc, xfrm, left, x.y, w, h);
         }
         Autofit::None => {}
     }
