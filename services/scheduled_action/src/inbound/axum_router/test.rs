@@ -503,6 +503,13 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
     );
     let mut model = legacy();
     model["task"]["agent"] = Value::Null;
+    // Model selections also require the session service; they cannot bypass it
+    // by falling back to the legacy chat runner.
+    assert_eq!(
+        request(&app, "PUT", &url, "owner", model.clone()).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    *sessions.error.lock().unwrap() = None;
     assert_eq!(
         request(&app, "PUT", &url, "owner", model).await.0,
         StatusCode::OK

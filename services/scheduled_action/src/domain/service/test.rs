@@ -7,7 +7,6 @@ use crate::domain::models::{
     MAX_ACTION_TIME,
 };
 use crate::domain::{
-    event_trigger::EventReference,
     execution::ExecutionHandle,
     ports::{ScheduledActionReadService, ScheduledAgentRunner},
     read_service::ScheduledActionReadServiceImpl,
@@ -327,25 +326,6 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
     }
 }
 
-struct NoModelFallback;
-
-impl ScheduledAgentRunner for NoModelFallback {
-    async fn prepare(&self, _: &ScheduledAction, _: &mut ExecutionHandle) -> Result<()> {
-        panic!("must not fall back")
-    }
-    async fn run(
-        &self,
-        _: &ScheduledAction,
-        _: &ExecutionHandle,
-        _: Option<&EventReference>,
-    ) -> Result<()> {
-        panic!("must not fall back")
-    }
-    async fn cancel(&self, _: &ScheduledAction, _: &ExecutionHandle) -> Result<()> {
-        panic!("must not fall back")
-    }
-}
-
 #[tokio::test]
 async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_revocation() {
     for denial in [
@@ -368,7 +348,7 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             .unwrap();
         assert!(sessions.preparations.lock().unwrap().is_empty());
         *sessions.error.lock().unwrap() = Some(denial);
-        let runner = TargetRunner::new(Arc::new(NoModelFallback), sessions.clone());
+        let runner = TargetRunner::new(sessions.clone());
         let mut handle = ExecutionHandle::default();
         let error = runner.prepare(&created, &mut handle).await.unwrap_err();
         assert_eq!(error.downcast_ref(), Some(&denial));

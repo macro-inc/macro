@@ -501,7 +501,10 @@ their own permissions.
 
 **Run History** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows
-open the chat or agent session created by that run. Unavailable conversations
+open the agent session created by that run. Selecting a model uses the same
+Macro agent-session runtime as the new AI chat composer, with that model;
+selecting an agent uses its runtime and default model or selected override.
+Historical runs that created legacy chats still open those chats. Unavailable conversations
 remain non-clickable. Macro event routines also support editing, history, and
 activation.
 
