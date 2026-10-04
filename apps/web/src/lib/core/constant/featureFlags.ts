@@ -224,6 +224,16 @@ export const ENABLE_DOCX_TO_PDF = defineFlag({
   default: true,
 }).enabled;
 
+/**
+ * Open DOCX files in the collaborative DOCX editor instead of the converted
+ * PDF. On in development; deployed environments defer to PostHog.
+ */
+export const enableDocxEditor = defineFlag({
+  key: 'enable-docx-editor',
+  env: 'ENABLE_DOCX_EDITOR',
+  default: DEV_MODE_ENV || undefined,
+});
+
 export const ENABLE_MARKDOWN_LIVE_COLLABORATION = defineFlag({
   env: 'ENABLE_MARKDOWN_LIVE_COLLABORATION',
   default: true,
@@ -597,10 +607,11 @@ export function isCalendarSearchUiEnabled(): boolean {
 }
 
 // Scheduling settings, calendar shortcuts, and public booking/receipt pages.
-// Off until PostHog enables it, including in dev.
+// On in dev; production defers to PostHog.
 export const enableCalendarScheduling = defineFlag({
   key: 'enable-calendar-scheduling',
   env: 'ENABLE_CALENDAR_SCHEDULING',
+  default: onInDev,
 });
 
 // The "Enable calendar" prompt on phones. Off by default everywhere,

@@ -47,16 +47,27 @@ pub struct PullRequestIndexRequest {
 }
 
 /// What one page of pull request indexing did.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestIndexPage {
     /// Installations processed in this page, including those that failed.
     pub installations: u32,
     /// Repositories listed across the page's installations.
     pub repositories: u32,
-    /// Pull request rows written.
+    /// Typed PR rows newly initialized; existing rows and retries do not count.
     pub indexed_pull_requests: u64,
-    /// Installations whose repositories GitHub would not list, such as suspended ones.
+    /// Initialization attempts that found a matching existing row without changing it.
+    pub already_indexed_pull_requests: u64,
+    /// Source records skipped because repository identity is absent.
+    pub unverified_records: u64,
+    /// Malformed source records or invalid keys/numbers.
+    pub invalid_records: u64,
+    /// Source records or initialization attempts rejected for conflicting identity.
+    pub identity_conflicts: u64,
+    /// Failed repository listings, source reads, row writes, or invalid repository identities.
+    pub failures: u64,
+    /// Installations with listing/storage failures, malformed records, or identity conflicts.
+    /// Retry the original page request: using a failed ID as `after` skips that installation.
     pub failed_installation_ids: Vec<String>,
     /// Pass as `after` to continue; absent once every installation has been processed.
     pub next_after: Option<String>,

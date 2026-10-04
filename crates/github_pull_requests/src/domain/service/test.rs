@@ -1,3 +1,4 @@
+mod index;
 mod initialization;
 mod refresh;
 use std::convert::Infallible;
@@ -26,7 +27,7 @@ use crate::domain::{
         GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestLabel,
         GithubPullRequestReviewDecision, GithubPullRequestRow, GithubPullRequestSortDirection,
         GithubPullRequestStatus, GithubPullRequestWrite, GithubRepositoryIdentity,
-        UpsertGithubPullRequest,
+        PullRequestIndexOutcome, PullRequestIndexRecord, UpsertGithubPullRequest,
     },
     ports::{
         GithubPullRequestFacetRepository, GithubPullRequestFacetService,
@@ -171,8 +172,9 @@ impl ForeignEntityService for StubForeignEntityService {
 #[derive(Clone, Default)]
 struct StubPullRequestRows {
     rows: Arc<Mutex<Vec<GithubPullRequestRow>>>,
-    /// Stored pull request metadata by repository owner and name.
-    stored: Arc<Mutex<Vec<(String, String, serde_json::Value)>>>,
+    stored: Arc<Mutex<Vec<PullRequestIndexRecord>>>,
+    index_read_failures: Arc<Mutex<Vec<String>>>,
+    index_write_failures: Arc<Mutex<Vec<i64>>>,
     listing_calls: Arc<Mutex<Vec<ListingCall>>>,
     fail_listings: Arc<Mutex<bool>>,
     facet_requests: Arc<Mutex<Vec<Vec<SourceId>>>>,
@@ -250,21 +252,62 @@ impl GithubPullRequestRepository for StubPullRequestRows {
 }
 
 impl GithubPullRequestIndexRepository for StubPullRequestRows {
-    type Err = Infallible;
+    type Err = anyhow::Error;
 
-    async fn latest_pull_request_metadata(
+    async fn pull_request_index_records(
         &self,
         owner: &str,
         name: &str,
-    ) -> Result<Vec<serde_json::Value>, Self::Err> {
+    ) -> Result<Vec<PullRequestIndexRecord>, Self::Err> {
+        let prefix = format!("{owner}/{name}/pull/").to_ascii_lowercase();
+        if self.index_read_failures.lock().unwrap().contains(&prefix) {
+            anyhow::bail!("source read failed");
+        }
         Ok(self
             .stored
             .lock()
             .unwrap()
             .iter()
-            .filter(|(stored_owner, stored_name, _)| stored_owner == owner && stored_name == name)
-            .map(|(_, _, metadata)| metadata.clone())
+            .filter(|record| record.github_key.to_ascii_lowercase().starts_with(&prefix))
+            .cloned()
             .collect())
+    }
+
+    async fn initialize_indexed_row(
+        &self,
+        row: &GithubPullRequestRow,
+    ) -> Result<PullRequestIndexOutcome, Self::Err> {
+        if self
+            .index_write_failures
+            .lock()
+            .unwrap()
+            .contains(&row.number)
+        {
+            anyhow::bail!("initialization failed");
+        }
+        let mut rows = self.rows.lock().unwrap();
+        let existing: Vec<_> = rows
+            .iter()
+            .filter(|stored| {
+                stored.github_key.eq_ignore_ascii_case(&row.github_key)
+                    || (stored.repository_id == row.repository_id && stored.number == row.number)
+            })
+            .collect();
+        if existing.is_empty() {
+            rows.push(row.clone());
+            return Ok(PullRequestIndexOutcome::Inserted);
+        }
+        Ok(
+            if existing.len() == 1
+                && existing[0].github_key.eq_ignore_ascii_case(&row.github_key)
+                && existing[0].repository_id == row.repository_id
+                && existing[0].number == row.number
+            {
+                PullRequestIndexOutcome::AlreadyPresent
+            } else {
+                PullRequestIndexOutcome::IdentityConflict
+            },
+        )
     }
 }
 
@@ -679,58 +722,6 @@ async fn upsert_after_a_repository_rename_moves_every_record_and_the_row() {
     assert_eq!(stored_rows[0].status, Some(GithubPullRequestStatus::Merged));
 }
 
-#[tokio::test]
-async fn index_writes_a_row_for_each_stored_pull_request_of_each_known_repository() {
-    let metadata = |key: &str, number: u64, status: &str| {
-        serde_json::json!({
-            "githubKey": key,
-            "owner": "Macro",
-            "repo": "App",
-            "number": number,
-            "url": format!("https://github.com/{key}"),
-            "displayName": key,
-            "status": status,
-        })
-    };
-    let rows = StubPullRequestRows::default();
-    rows.stored.lock().unwrap().extend([
-        (
-            "macro".to_string(),
-            "app".to_string(),
-            metadata("Macro/App/pull/7", 7, "closed"),
-        ),
-        (
-            "macro".to_string(),
-            "app-web".to_string(),
-            metadata("macro/app-web/pull/1", 1, "open"),
-        ),
-    ]);
-    let service = service(&StubForeignEntityService::default(), &rows);
-
-    let indexed = service
-        .index_repositories(&[
-            GithubRepositoryIdentity {
-                id: 99,
-                owner: "macro".to_string(),
-                name: "app".to_string(),
-            },
-            GithubRepositoryIdentity {
-                id: 0,
-                owner: "macro".to_string(),
-                name: "app-web".to_string(),
-            },
-        ])
-        .await
-        .unwrap();
-
-    assert_eq!(indexed, 1);
-    let stored_rows = rows.rows();
-    assert_eq!(stored_rows.len(), 1);
-    assert_eq!(stored_rows[0].github_key, "Macro/App/pull/7");
-    assert_eq!(stored_rows[0].repository_id, Some(99));
-    assert_eq!(stored_rows[0].status, Some(GithubPullRequestStatus::Closed));
-}
-
 fn listing_query() -> ForeignEntityListQuery {
     Query::Sort(SimpleSortMethod::UpdatedAt, None)
 }
@@ -906,47 +897,6 @@ async fn facets_reject_a_receipt_for_anything_but_a_team() {
     assert!(rows.facet_requests.lock().unwrap().is_empty());
 }
 
-#[tokio::test]
-async fn index_rebuild_keeps_richer_shared_row_when_latest_record_is_sparse() {
-    let rows = StubPullRequestRows::default();
-    let rich = serde_json::json!({
-        "githubKey": GITHUB_KEY, "owner": "macro", "repo": "app", "number": 7,
-        "url": "https://github.com/macro/app/pull/7", "displayName": "PR",
-        "draft": true, "assignees": [{"githubUserId":"7"}], "labels": [{"name":"bug"}],
-        "requestedReviewerGithubUserIds": ["8"], "participantGithubUserIds": ["7"]
-    });
-    rows.rows
-        .lock()
-        .unwrap()
-        .push(GithubPullRequestRow::from_metadata(&rich).unwrap());
-    rows.stored.lock().unwrap().push((
-        "macro".into(),
-        "app".into(),
-        serde_json::json!({
-            "githubKey": GITHUB_KEY, "owner": "macro", "repo": "app", "number": 7,
-            "url": "https://github.com/macro/app/pull/7", "displayName": "PR",
-            "status": "closed"
-        }),
-    ));
-    let service = service(&StubForeignEntityService::default(), &rows);
-    assert_eq!(
-        service
-            .index_repositories(&[GithubRepositoryIdentity {
-                id: 99,
-                owner: "macro".into(),
-                name: "app".into(),
-            }])
-            .await
-            .unwrap(),
-        1
-    );
-    let result = rows.rows();
-    assert!(result[0].draft);
-    assert_eq!(result[0].assignees.len(), 1);
-    assert_eq!(result[0].labels.len(), 1);
-    assert_eq!(result[0].requested_reviewer_github_user_ids, vec!["8"]);
-    assert_eq!(result[0].status, Some(GithubPullRequestStatus::Closed));
-}
 fn view_receipt(record: &ForeignEntity) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
         facet_user(),

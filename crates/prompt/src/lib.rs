@@ -75,6 +75,10 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// Database-only agent instructions, without unrelated tool capabilities.
 pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&databases::PROMPT);
 
+/// Database question instructions for hosts that only discover and read data.
+pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
+    BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
+
 /// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
 /// item-linking rules for the model's own replies are not, because they

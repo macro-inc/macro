@@ -14,7 +14,8 @@ use super::models::{
     EnrichedGithubPullRequest, GithubPullRequestChangesError, GithubPullRequestChangeset,
     GithubPullRequestDiff, GithubPullRequestDiffError, GithubPullRequestError,
     GithubPullRequestFacets, GithubPullRequestRow, GithubPullRequestSortDirection,
-    GithubPullRequestWrite, GithubRepositoryIdentity, PullRequestRef, StoredGithubPullRequest,
+    GithubPullRequestWrite, GithubRepositoryIdentity, PullRequestIndexOutcome,
+    PullRequestIndexRecord, PullRequestIndexSummary, PullRequestRef, StoredGithubPullRequest,
     UpsertGithubPullRequest, UpsertedGithubPullRequest,
 };
 
@@ -49,14 +50,14 @@ pub trait GithubPullRequestService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<StoredGithubPullRequest, GithubPullRequestError>> + Send;
 }
 
-/// Writes typed rows for pull requests stored before rows existed.
+/// Initializes missing typed rows from identity-verified source records; never refreshes existing rows.
 pub trait GithubPullRequestIndexer: Send + Sync + 'static {
-    /// Write rows for the stored pull requests of each of `repositories`, matched by owner and
-    /// name. Returns how many rows were written.
+    /// Reconstruct missing rows from all verified source records of `repositories`.
+    /// Missing source identity remains untyped. Independent failures are counted and logged.
     fn index_repositories(
         &self,
         repositories: &[GithubRepositoryIdentity],
-    ) -> impl Future<Output = Result<u64, GithubPullRequestError>> + Send;
+    ) -> impl Future<Output = Result<PullRequestIndexSummary, GithubPullRequestError>> + Send;
 }
 
 /// Persists the typed columns of pull requests.
@@ -74,6 +75,8 @@ pub trait GithubPullRequestRepository: Send + Sync + 'static {
     /// Atomically merge supplied typed columns with the shared row. Omitted fields retain
     /// stored values. Concurrent creation and updates for the same key serialize before reading.
     /// A provided base/head ref replaces its name and SHA together, including missing components.
+    /// A non-null stored identity cannot be reassigned. A case-only fallback requires the same
+    /// verified identity and retains the stored key; repository renames remain a separate operation.
     fn upsert_row(
         &self,
         row: &GithubPullRequestWrite,
@@ -99,13 +102,23 @@ pub trait GithubPullRequestIndexRepository: Send + Sync + 'static {
     /// Error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
-    /// The metadata of the most recently updated record of each pull request stored under the
-    /// repository `owner/name`, compared case-insensitively.
-    fn latest_pull_request_metadata(
+    /// All PR source records under `owner/name`, compared case-insensitively and literally.
+    /// Retain older and case-variant records for domain validation and sparse reconstruction.
+    fn pull_request_index_records(
         &self,
         owner: &str,
         name: &str,
-    ) -> impl Future<Output = Result<Vec<serde_json::Value>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<PullRequestIndexRecord>, Self::Err>> + Send;
+
+    /// Atomically initialize a verified row only if its key and stable identity are absent.
+    /// Serialize case-insensitive keys before checking, including concurrent creation.
+    /// Return AlreadyPresent only for an unambiguous matching key, repository ID, and number.
+    /// Different-key stable identities, conflicting IDs, and unverified existing rows conflict.
+    /// Never update, delete, or rename existing rows, including their timestamps.
+    fn initialize_indexed_row(
+        &self,
+        row: &GithubPullRequestRow,
+    ) -> impl Future<Output = Result<PullRequestIndexOutcome, Self::Err>> + Send;
 }
 
 /// Lists the GitHub pull requests a caller can see.

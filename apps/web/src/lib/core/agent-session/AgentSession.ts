@@ -20,8 +20,10 @@ import {
   readSession,
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
+import { fetchAgentSessionLog } from '@queries/agent-session/log';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
 import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
+import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedStreamEvent,
   TurnState,
@@ -90,6 +92,8 @@ function occupiesTurn(action: AgentAction): boolean {
   return action.type === 'prompt' || action.type === 'compact';
 }
 
+const RESYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
+
 export class AgentSession {
   private static readonly open = new Map<string, AgentSession>();
 
@@ -134,6 +138,11 @@ export class AgentSession {
   private buffered: FoldInput[] = [];
   private readonly listeners = new Set<AgentSessionListener>();
   private readonly unsubscribeSocket: () => void;
+  private readonly unsubscribeUpdated: () => void;
+  private syncing = false;
+  private resyncRequested = false;
+  private resyncRetry = 0;
+  private resyncTimer?: ReturnType<typeof setTimeout>;
   /**
    * Serializes worker pushes so inputs reach the machine in the order this
    * class saw them, even though each push is its own await.
@@ -162,6 +171,9 @@ export class AgentSession {
     // that arrive during the load are buffered and folded after the snapshot.
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
       void this.resync();
+    });
+    this.unsubscribeUpdated = subscribeAgentSessionUpdated((event) => {
+      if (event.agentSessionId === this.id) void this.resync();
     });
     this.trace = new SessionLoadTrace(id);
     this.loading = this.startLoad();
@@ -238,7 +250,7 @@ export class AgentSession {
     // confirms it by content whatever id the harness accepted it under.
     const accepted = result.value.actionId;
     if (accepted !== actionId && action.type !== 'stop') {
-      void this.apply([
+      void this.enqueueAll([
         { kind: 'retracted', actionId },
         {
           kind: 'speculated',
@@ -343,6 +355,8 @@ export class AgentSession {
     this.trace.end('released');
     this.listeners.clear();
     this.unsubscribeSocket();
+    this.unsubscribeUpdated();
+    clearTimeout(this.resyncTimer);
     closeSession(this.id);
   }
 
@@ -366,7 +380,7 @@ export class AgentSession {
   private async fetchAndFold(): Promise<AgentSessionRecord> {
     const [session, log] = await Promise.all([
       agentHarnessServiceClient.get(this.id),
-      agentHarnessServiceClient.getLog(this.id),
+      fetchAgentSessionLog(this.id),
     ]);
     if (session.isErr()) {
       if (accessDenied(session.error)) {
@@ -385,14 +399,10 @@ export class AgentSession {
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
     // Inputs can keep arriving while each push is in flight; drain until a
     // check finds nothing, then flip ready so the next one goes straight in.
-    while (this.buffered.length > 0) {
-      const inputs = this.buffered;
-      this.buffered = [];
-      await this.apply(inputs);
-    }
-    this.ready = true;
+    await this.drainBuffered();
     this.trace.folded(foldStartedAt);
     this.setTurn((await readSession(this.id)).metadata.turn);
+    if (this.resyncRequested) void this.resync();
     return { session: session.value, bot: log.value.bot };
   }
 
@@ -401,11 +411,54 @@ export class AgentSession {
    * while it was down. Refetch, and let the machine reconcile the overlap
    * and settle any speculation the log confirmed meanwhile.
    */
-  private async resync(): Promise<void> {
-    if (!this.ready || this.closed) return;
-    const log = await agentHarnessServiceClient.getLog(this.id);
-    if (log.isErr() || this.closed) return;
-    await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+  private async resync(retrying = false): Promise<void> {
+    if (this.closed) return;
+    if (!retrying) {
+      clearTimeout(this.resyncTimer);
+      this.resyncRetry = 0;
+    }
+    this.resyncRequested = true;
+    if (!this.ready || this.syncing) return;
+    this.syncing = true;
+    this.ready = false;
+    let failed = false;
+    try {
+      do {
+        this.resyncRequested = false;
+        const log = await fetchAgentSessionLog(this.id);
+        if (this.closed) return;
+        failed = log.isErr() && !accessDenied(log.error);
+        if (log.isOk()) {
+          await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+          this.resyncRetry = 0;
+        }
+      } while (this.resyncRequested);
+    } catch (error: unknown) {
+      failed = true;
+      console.warn('[agent-session] log could not be refreshed', error);
+    } finally {
+      // A snapshot may predate frames received during its fetch. Replay those
+      // frames after it, retaining speculation and the fold's overlap deduping.
+      await this.drainBuffered();
+      this.syncing = false;
+      if (!this.closed && this.resyncRequested) {
+        void this.resync(true);
+      } else if (!this.closed && failed) {
+        const delay = RESYNC_RETRY_DELAYS_MS[this.resyncRetry++];
+        if (delay !== undefined)
+          this.resyncTimer = setTimeout(() => void this.resync(true), delay);
+      }
+    }
+  }
+
+  private async drainBuffered(): Promise<void> {
+    while (!this.closed && this.buffered.length > 0) {
+      const inputs = this.buffered;
+      this.buffered = [];
+      await this.apply(inputs);
+    }
+    // No await between observing an empty buffer and accepting live inputs.
+    if (!this.closed) this.ready = true;
   }
 
   private enqueue(input: FoldInput): Promise<void> {
