@@ -19,14 +19,6 @@ where
 
 /// Reads an explicit `null` as `Some(None)`; an omitted field stays `None`
 /// (with `#[serde(default)]`), so "clear" and "keep" differ.
-fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(de).map(Some)
-}
-
 fn nullable_start<'de, D: Deserializer<'de>>(de: D) -> Result<u32, D::Error> {
     Ok(Option::<u32>::deserialize(de)?.unwrap_or_else(one))
 }
@@ -827,14 +819,11 @@ pub enum EditOp {
         /// Whether a click advances to the next slide.
         #[serde(default)]
         advance_on_click: Option<bool>,
-        /// Advance automatically after this many milliseconds; `null` turns
-        /// automatic advance off and an omitted field keeps the current setting.
-        #[serde(
-            default,
-            deserialize_with = "double_option",
-            skip_serializing_if = "Option::is_none"
-        )]
-        advance_after_ms: Option<Option<u32>>,
+        /// Advance automatically after this many milliseconds; `0` turns
+        /// automatic advance off, and an omitted (or null) field keeps the
+        /// current setting.
+        #[serde(default)]
+        advance_after_ms: Option<u32>,
         /// Give every slide of the deck the resulting transition.
         #[serde(default, deserialize_with = "nullable")]
         apply_to_all: bool,

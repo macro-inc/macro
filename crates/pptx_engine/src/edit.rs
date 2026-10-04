@@ -652,7 +652,8 @@ impl Presentation {
                     duration_ms: *duration_ms,
                     direction: direction.as_deref(),
                     advance_on_click: *advance_on_click,
-                    advance_after_ms: *advance_after_ms,
+                    // 0 turns automatic advance off.
+                    advance_after_ms: advance_after_ms.map(|ms| (ms > 0).then_some(ms)),
                 };
                 transition::set_transition(self, *slide, &patch, *apply_to_all)?;
             }

@@ -1008,7 +1008,7 @@ fn group_clipboard_layout_transition_and_find_ops_read_camel_case_json() {
         {"op":"pasteShapes","slide":256,"payload":"{}","dx":null},
         {"op":"pasteSlides","payload":"{}","after":null},
         {"op":"setSlideLayout","slide":256,"layout":"Blank"},
-        {"op":"setTransition","slide":256,"kind":"fade","durationMs":500,"direction":"smooth","advanceOnClick":true,"advanceAfterMs":null,"applyToAll":null},
+        {"op":"setTransition","slide":256,"kind":"fade","durationMs":500,"direction":"smooth","advanceOnClick":true,"advanceAfterMs":0,"applyToAll":null},
         {"op":"setTransition","slide":256,"kind":"push"},
         {"op":"replaceText","find":"a","replace":"b","matchCase":true,"wholeWord":null,"slide":null},
         {"op":"setAltText","slide":256,"shape":2,"text":"x"},
@@ -1019,7 +1019,7 @@ fn group_clipboard_layout_transition_and_find_ops_read_camel_case_json() {
     assert!(matches!(
         &ops[5],
         EditOp::SetTransition {
-            advance_after_ms: Some(None),
+            advance_after_ms: Some(0),
             apply_to_all: false,
             ..
         }

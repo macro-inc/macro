@@ -135,7 +135,7 @@ fn writes_every_kind_in_schema_position_and_reads_it_back() {
                     duration_ms: Some(duration),
                     direction: direction.map(str::to_owned),
                     advance_on_click: Some(false),
-                    advance_after_ms: Some(Some(4000)),
+                    advance_after_ms: Some(4000),
                     apply_to_all: false,
                 }],
             );
@@ -182,7 +182,8 @@ fn omitted_fields_keep_the_current_transition() {
         ),
         ("push", 2000, Some("l"), Some(3000))
     );
-    // The same effect keeps its option; `null` turns automatic advance off.
+    // `null` (as AI tool calls send for fields they leave out) keeps the
+    // automatic advance; `0` turns it off.
     let op: EditOp = serde_json::from_str(
         r#"{"op":"setTransition","slide":256,"kind":"push","advanceAfterMs":null,"durationMs":500}"#,
     )
@@ -191,8 +192,15 @@ fn omitted_fields_keep_the_current_transition() {
     let t = transition(&mut pres, 0).unwrap();
     assert_eq!(
         (t.duration_ms, t.direction.as_deref(), t.advance_after_ms),
-        (500, Some("l"), None)
+        (500, Some("l"), Some(3000))
     );
+    let op: EditOp = serde_json::from_str(
+        r#"{"op":"setTransition","slide":256,"kind":"push","advanceAfterMs":0}"#,
+    )
+    .unwrap();
+    apply(&mut pres, vec![op]);
+    let t = transition(&mut pres, 0).unwrap();
+    assert_eq!(t.advance_after_ms, None);
     assert!(!slide_xml(&mut pres, 0).contains("AlternateContent"));
     // "none" removes it.
     apply(&mut pres, vec![set(256, "none")]);

@@ -603,8 +603,8 @@ export interface TransitionPatch {
    */
   direction?: string;
   advanceOnClick?: boolean;
-  /** `null` turns automatic advance off; omitted keeps it. */
-  advanceAfterMs?: number | null;
+  /** `0` turns automatic advance off; omitted keeps it. */
+  advanceAfterMs?: number;
   /** Give every slide the resulting transition. */
   applyToAll?: boolean;
 }

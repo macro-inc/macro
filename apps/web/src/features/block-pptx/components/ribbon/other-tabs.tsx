@@ -655,7 +655,7 @@ export function TransitionsTab() {
             onChange={(e) =>
               void c.setTransition({
                 kind: kind(),
-                advanceAfterMs: e.currentTarget.checked ? 5000 : null,
+                advanceAfterMs: e.currentTarget.checked ? 5000 : 0,
               })
             }
           />
