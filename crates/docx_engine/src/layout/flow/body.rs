@@ -529,15 +529,20 @@ impl<'e, 'a> Flow<'e, 'a> {
         self.place_endnotes();
     }
 
-    /// Whether `blocks[i]` is an empty paragraph that only ends a section of
-    /// several columns and takes no room: before a section going on on the
-    /// same page (the columns end with the text), or when it would start a
-    /// page of its own.
+    /// Whether `blocks[i]` is an empty paragraph that only ends a section and
+    /// takes no room: before a section going on on the same page below text
+    /// (for a section of several columns, the columns end with the text),
+    /// or, ending columns, when it would start a page of its own.
     fn bare_section_end(&mut self, blocks: &[&Block], i: usize, section_of: &[usize]) -> bool {
         let (Some(&s), Some(&next)) = (section_of.get(i), section_of.get(i + 1)) else {
             return false;
         };
-        if s == next || self.sections.get(s).is_none_or(|c| c.columns.len() < 2) {
+        if s == next {
+            return false;
+        }
+        let columns = self.sections.get(s).is_some_and(|c| c.columns.len() > 1);
+        let placed_any = self.cur.as_ref().is_some_and(|c| c.placed_any);
+        if !columns && !placed_any {
             return false;
         }
         let (_, width) = self.col_geom();
@@ -556,7 +561,7 @@ impl<'e, 'a> Flow<'e, 'a> {
             .get(next)
             .is_some_and(|n| n.start == SectionStart::Continuous);
         let y = self.cur.as_ref().map_or(0.0, |c| c.y);
-        continuous || y + pb.lines.height > self.avail_bottom() + EPS
+        continuous || (columns && y + pb.lines.height > self.avail_bottom() + EPS)
     }
 
     /// The pitch lines snap to in the current section, if they do.

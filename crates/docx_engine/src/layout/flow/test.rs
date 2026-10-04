@@ -640,9 +640,10 @@ fn sections_on_one_page_stack_their_columns() {
         find(&l, 0, "Right"),
         find(&l, 0, "After"),
     );
-    // The two columns start below the first section (its empty section
-    // break paragraph included), the second at 72 + 216 + 36.
-    assert!((left.y - (72.0 + 2.0 * h)).abs() < 0.01, "{}", left.y);
+    // The two columns start right below the first section's text (its
+    // empty section break paragraph takes no room), the second at
+    // 72 + 216 + 36.
+    assert!((left.y - (72.0 + h)).abs() < 0.01, "{}", left.y);
     assert!((right.y - left.y).abs() < 0.01, "{}", right.y);
     assert!((right.x - 324.0).abs() < 0.01, "{}", right.x);
     // The next section starts below both columns: the column break and the
@@ -685,6 +686,30 @@ fn ending_full_columns_does_not_start_a_page() {
     assert_eq!(page_texts(&l, 0).len(), 112);
     assert_eq!(l.pages.len(), 2);
     assert_eq!(page_texts(&l, 1), vec!["Next".to_owned()]);
+}
+
+#[test]
+fn empty_breaks_to_continuous_sections_take_no_room_below_text() {
+    // An empty paragraph ending a section before a continuous one adds no
+    // line below text; one that starts the page keeps its line.
+    let continuous = format!("<w:sectPr><w:type w:val=\"continuous\"/>{PAGE}</w:sectPr>");
+    let body = format!(
+        "{}{}{}{continuous}",
+        para("One"),
+        section_end("continuous", ""),
+        para("Two"),
+    );
+    let l = layout(&body, &arial_10());
+    let (one, two) = (find(&l, 0, "One"), find(&l, 0, "Two"));
+    assert!(
+        (two.y - (one.y + one.line().height)).abs() < 0.01,
+        "{}",
+        two.y
+    );
+    let body = format!("{}{}{continuous}", section_end("nextPage", ""), para("Two"));
+    let l = layout(&body, &arial_10());
+    let two = find(&l, 0, "Two");
+    assert!(two.y > 72.0 + 1.0, "{}", two.y);
 }
 
 #[test]
