@@ -258,3 +258,14 @@ fn placeholders_mark_empty_slots() {
     assert_eq!(rules(&plain).len(), 1, "just the bar");
     assert!(rules(&editing).len() > 8, "dotted boxes");
 }
+
+#[test]
+fn empty_script_bases_and_case_rows_are_slots() {
+    for latex in [r"{}^{}", r"{}_{}^{}{}", r"\begin{cases}{}\\{}\end{cases}"] {
+        let eq = parse_latex(latex, true).unwrap();
+        let plain = typeset(&eq, &math_props(SIZE, Rgba::BLACK), 1.0, fonts(), false);
+        let editing = typeset(&eq, &math_props(SIZE, Rgba::BLACK), 1.0, fonts(), true);
+        let slots = (rules(&editing).len() - rules(&plain).len()) / 8;
+        assert!(slots >= 2, "{latex}: {slots} dotted boxes");
+    }
+}

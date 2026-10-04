@@ -484,3 +484,63 @@ fn equations_can_be_replaced_inside_powerpoint_shapes() {
     assert_eq!(xml.matches("<mc:AlternateContent").count(), 1);
     assert!(xml.contains("<a:t>1/2</a:t>"), "{xml}");
 }
+
+/// Saves a deck with equations the engine wrote (inline, display, in a new
+/// box, and in a PowerPoint equation shape) and has LibreOffice convert it
+/// to PDF: LibreOffice shows the text fallbacks. Needs `soffice` and
+/// `pdftotext`.
+#[test]
+#[ignore = "needs LibreOffice (soffice) and pdftotext; run with --ignored"]
+fn libreoffice_opens_decks_with_equations() {
+    let mut pres = open(&format!(
+        "{}{}",
+        text_box(2, 0, 0, 4_000_000, 1_000_000, &para("Area: ")),
+        POWERPOINT_EQUATION
+    ));
+    apply(&mut pres, insert(Some(2), Some((0, 6)), r"A=\pi r^2", None));
+    apply(
+        &mut pres,
+        insert(None, None, r"x=\frac{-b\pm\sqrt{b^2-4ac}}{2a}", None),
+    );
+    apply(
+        &mut pres,
+        EditOp::SetEquation {
+            slide: SLIDE,
+            shape: 4,
+            cell: None,
+            paragraph: 0,
+            index: 0,
+            latex: r"\sum_{i=1}^n i".into(),
+            display: None,
+        },
+    );
+    let bytes = pres.save().unwrap();
+    let dir = std::env::temp_dir().join(format!("pptx-equations-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let input = dir.join("equations.pptx");
+    std::fs::write(&input, bytes).unwrap();
+    let status = std::process::Command::new("soffice")
+        .arg(format!(
+            "-env:UserInstallation=file://{}",
+            dir.join("profile").display()
+        ))
+        .args(["--headless", "--convert-to", "pdf", "--outdir"])
+        .arg(&dir)
+        .arg(&input)
+        .status();
+    let Ok(status) = status else {
+        eprintln!("soffice is not installed; skipping");
+        return;
+    };
+    assert!(status.success());
+    let out = std::process::Command::new("pdftotext")
+        .arg(dir.join("equations.pdf"))
+        .arg("-")
+        .output()
+        .expect("pdftotext runs");
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    for fallback in ["Area:", "π", "√(b^2−4ac)", "∑", "tail"] {
+        assert!(text.contains(fallback), "{fallback} in {text}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

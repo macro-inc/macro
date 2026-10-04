@@ -16,7 +16,7 @@ pub(super) fn layout(env: &Env, node: &Node, st: &St) -> MathBox {
             props,
         } => frac(env, *kind, num, den, props.as_deref(), st),
         Node::Scripts { base, sub, sup } => {
-            let b = env.hlist(base, st);
+            let b = env.arg(base, st);
             let single = is_single_char(base);
             scripts(env, b, single, sub.as_ref(), sup.as_ref(), st)
         }
@@ -323,7 +323,7 @@ fn scripts(
 
 fn prescripts(env: &Env, base: &List, sub: &List, sup: &List, st: &St) -> MathBox {
     let em = env.em(st);
-    let b = env.hlist(base, st);
+    let b = env.arg(base, st);
     let sp = env.arg(sup, &sup_style(st));
     let sb = env.arg(sub, &st.sub());
     let (u, v) = script_shifts(env, &b, is_single_char(base), Some(&sb), Some(&sp), st);
@@ -869,10 +869,12 @@ fn eq_array(env: &Env, rows: &[List], st: &St, left: bool) -> MathBox {
     let cells: Vec<Vec<MathBox>> = rows
         .iter()
         .map(|row| {
-            split_at_marks(row)
-                .iter()
-                .map(|cell| env.hlist(cell, st))
-                .collect()
+            let cells = split_at_marks(row);
+            // An empty row is an empty slot; an empty aligned cell is not.
+            if let [cell] = cells.as_slice() {
+                return vec![env.arg(cell, st)];
+            }
+            cells.iter().map(|cell| env.hlist(cell, st)).collect()
         })
         .collect();
     grid(
