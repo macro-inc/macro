@@ -15,6 +15,9 @@ backend or Docker.
   - an offline merge;
   - comments, including table cells;
   - the downloaded `.docx`.
+- `agent.browser.e2e.ts` runs the AI tools' `runDocxAgentRequest` as its own
+  sync peer, exactly as the editing worker does, and checks that reads see
+  the live document and that edits reach an open editor and survive a reopen.
 
 ```sh
 (\cd services/sync-service && just worker-build)   # once, builds build/worker/shim.mjs

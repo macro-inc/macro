@@ -1,7 +1,8 @@
 // @vitest-environment node
+
+import { readDocxState } from '@macro-inc/collaboration/docx/schema';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bridge, fixture, loadEngine, TestPeer } from '../tests/docx-test-peer';
-import { readDocxState } from './docx-loro';
 
 beforeAll(loadEngine, 60_000);
 

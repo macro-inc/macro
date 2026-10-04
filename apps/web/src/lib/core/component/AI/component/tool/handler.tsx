@@ -127,6 +127,10 @@ import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
+import {
+  editWordDocumentHandler,
+  readWordDocumentHandler,
+} from './WordDocument';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
@@ -135,6 +139,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   EditSpreadsheet: editSpreadsheetHandler,
   ReadPresentation: readPresentationHandler,
   EditPresentation: editPresentationHandler,
+  ReadWordDocument: readWordDocumentHandler,
+  EditWordDocument: editWordDocumentHandler,
   ConfigureAgent: configureAgentHandler,
   ListAgents: listAgentsHandler,
   ConfigureBot: configureBotHandler,

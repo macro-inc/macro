@@ -837,7 +837,13 @@ updates live and shows each collaborator's caret with their name.
   Comments stay in Macro threads and are not written into the file.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
-- AI `EditDocument` edits Markdown documents only and rejects DOCX files.
+- AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
+  open editors patch agent edits in as they land. `ReadWordDocument` lists
+  every paragraph, table cell and content control with its id. `EditWordDocument`
+  applies an atomic batch of `replaceText`, `setText`, `formatText`,
+  `insertParagraph`, `setStyle` and `delete` operations to those ids. Both
+  refuse a DOCX nobody has opened in the editor yet: it has no live copy.
+  `EditDocument` still rejects DOCX.
 
 ## Document history
 

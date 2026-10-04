@@ -1,8 +1,8 @@
+import { readDocxState } from '@macro-inc/collaboration/docx/schema';
 import type { DocxEditor } from 'docxodus';
 import type { LoroDoc } from 'loro-crdt';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { bridgeEngine, type DocxEngine } from '../core/docx-engine';
-import { readDocxState } from '../core/docx-loro';
 import { assemblePackage } from '../core/docx-package';
 import { DOCX_SYNC_SESSION_SETTINGS } from '../core/docx-seed';
 import { DocxSyncController } from '../core/docx-sync';

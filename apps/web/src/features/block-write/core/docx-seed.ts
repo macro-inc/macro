@@ -1,6 +1,6 @@
+import { seedDocxState } from '@macro-inc/collaboration/docx/schema';
 import { LoroDoc } from 'loro-crdt';
 import { bridgeEngine, type DocxSyncBridge } from './docx-engine';
-import { seedDocxState } from './docx-loro';
 
 /** Settings every session in a collaborative editor is opened with. */
 export const DOCX_SYNC_SESSION_SETTINGS = {

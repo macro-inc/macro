@@ -1,13 +1,14 @@
-import type { LoroDoc } from 'loro-crdt';
-import type { DocxEngine } from './docx-engine';
 import {
   type DocxChanges,
+  type DocxPackageState,
   diffDocxStates,
   hasChanges,
   readDocxState,
   writeDocxChanges,
-} from './docx-loro';
-import { assemblePackage, type DocxPackageState } from './docx-package';
+} from '@macro-inc/collaboration/docx/schema';
+import type { LoroDoc } from 'loro-crdt';
+import type { DocxEngine } from './docx-engine';
+import { assemblePackage } from './docx-package';
 
 /** What the sync controller needs from the editor that owns the session. */
 export type DocxSyncHost = {

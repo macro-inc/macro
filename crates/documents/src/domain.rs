@@ -34,6 +34,10 @@ pub mod response;
 #[cfg(feature = "ai_tools")]
 pub mod spreadsheet;
 
+/// Reading and editing uploaded Word documents through their live copy.
+#[cfg(feature = "ai_tools")]
+pub mod word_document;
+
 /// Reading and editing PowerPoint presentations with the native engine.
 #[cfg(feature = "ai_tools")]
 pub mod presentation;

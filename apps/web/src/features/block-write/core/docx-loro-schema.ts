@@ -1,5 +1,5 @@
 import { schema } from '@loro-mirror/core';
-import { DOCX_LORO_CONTAINERS } from './docx-loro';
+import { DOCX_LORO_CONTAINERS } from '@macro-inc/collaboration/docx/schema';
 
 const strings = () =>
   schema.LoroMap({} as Record<string, ReturnType<typeof schema.String>>);
