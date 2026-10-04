@@ -1,4 +1,10 @@
-import type { CaretRect, EditOp, PageRect, Pos } from '@core/docx-engine/types';
+import type {
+  CaretRect,
+  Clip,
+  EditOp,
+  PageRect,
+  Pos,
+} from '@core/docx-engine/types';
 import {
   type Accessor,
   createEffect,
@@ -10,6 +16,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { clipboardHtml, readClipboardHtml } from '../core/clipboard';
 import { keyAction } from '../core/keymap';
 import { type DocxEditor, PX_PER_PT } from '../primitives/create-docx-editor';
 
@@ -215,6 +222,11 @@ export type DocxPagesProps = {
   onComment?: () => void;
   /** Called with the input element once mounted (focus management). */
   inputRef?: (input: HTMLTextAreaElement) => void;
+  /**
+   * The document's id: content copied from the same document pastes back
+   * with its pictures, links and list numbering.
+   */
+  documentId?: string;
 };
 
 /**
@@ -229,8 +241,16 @@ export function DocxPages(props: DocxPagesProps) {
   let input!: HTMLTextAreaElement;
   const [focused, setFocused] = createSignal(false);
   const [composing, setComposing] = createSignal<string | null>(null);
-  /** Kept current so a copy can fill the clipboard synchronously. */
-  let selectedText = '';
+  /**
+   * The selection's clipboard content, fetched once the selection settles,
+   * so a copy can fill the clipboard synchronously.
+   */
+  let clipboard: { key: string; clip: Clip } | undefined;
+  let clipTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(clipTimer));
+  const selectionKey = () =>
+    JSON.stringify([editor.state()?.selection, editor.revision()]);
+  const documentId = () => props.documentId ?? editor.docKey;
 
   const caret = createMemo(() => {
     const c = editor.state()?.caret;
@@ -243,23 +263,27 @@ export function DocxPages(props: DocxPagesProps) {
       .filter((r) => r !== undefined)
   );
 
-  // Prefetch the selected text for the clipboard.
+  // Prefetch the clipboard content of a selection (an engine round trip).
   createEffect(() => {
     const selection = editor.state()?.selection;
+    const key = selectionKey();
+    clearTimeout(clipTimer);
     if (
       !selection ||
       (selection.anchor.block === selection.focus.block &&
         selection.anchor.offset === selection.focus.offset)
     ) {
-      selectedText = '';
+      clipboard = undefined;
       return;
     }
-    editor
-      .selectedText()
-      .then((text) => {
-        selectedText = text;
-      })
-      .catch(() => {});
+    clipTimer = setTimeout(() => {
+      editor
+        .copySelection()
+        .then((clip) => {
+          if (selectionKey() === key) clipboard = { key, clip };
+        })
+        .catch(() => {});
+    }, 120);
   });
 
   // Keep the caret in view after keyboard edits and moves.
@@ -513,18 +537,62 @@ export function DocxPages(props: DocxPagesProps) {
   function onPaste(event: ClipboardEvent) {
     event.preventDefault();
     if (!props.editable) return;
+    const html = event.clipboardData?.getData('text/html') ?? '';
     const text = event.clipboardData?.getData('text/plain') ?? '';
+    const rich = html ? readClipboardHtml(html, documentId()) : undefined;
+    if (rich?.paragraphs.some((p) => p.runs.length)) {
+      run([
+        {
+          op: 'paste',
+          paragraphs: rich.paragraphs,
+          sameDocument: rich.sameDocument,
+        },
+      ]);
+      return;
+    }
     if (text) run([{ op: 'insertText', text: text.replace(/\r\n?/g, '\n') }]);
   }
 
-  function onCopy(event: ClipboardEvent) {
+  /** Puts the selection on the clipboard; false when nothing is selected. */
+  function copy(event: ClipboardEvent): boolean {
     event.preventDefault();
-    event.clipboardData?.setData('text/plain', selectedText);
+    const selection = editor.state()?.selection;
+    if (
+      !selection ||
+      (selection.anchor.block === selection.focus.block &&
+        selection.anchor.offset === selection.focus.offset)
+    )
+      return false;
+    const ready = clipboard?.key === selectionKey() ? clipboard.clip : null;
+    if (ready && event.clipboardData) {
+      event.clipboardData.setData('text/plain', ready.text);
+      event.clipboardData.setData(
+        'text/html',
+        clipboardHtml(ready, documentId())
+      );
+      return true;
+    }
+    // Not fetched yet: the clipboard API takes the content when it is.
+    const clip = editor.copySelection();
+    const blob = (type: string, data: (c: Clip) => string) =>
+      clip.then((c) => new Blob([data(c)], { type }));
+    void navigator.clipboard
+      ?.write([
+        new ClipboardItem({
+          'text/plain': blob('text/plain', (c) => c.text),
+          'text/html': blob('text/html', (c) => clipboardHtml(c, documentId())),
+        }),
+      ])
+      .catch(() => {});
+    return true;
+  }
+
+  function onCopy(event: ClipboardEvent) {
+    copy(event);
   }
 
   function onCut(event: ClipboardEvent) {
-    onCopy(event);
-    if (props.editable && selectedText) run([{ op: 'delete', forward: false }]);
+    if (copy(event) && props.editable) run([{ op: 'delete', forward: false }]);
   }
 
   // Blink the caret only while the input has focus and nothing is selected.

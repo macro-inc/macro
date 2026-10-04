@@ -6,6 +6,7 @@
 //! with its geometry, the formatting at the selection, and page
 //! fingerprints so the caller repaints only pages that changed.
 
+mod clip;
 mod format;
 mod geometry;
 mod lists;
@@ -20,6 +21,7 @@ mod test;
 #[cfg(test)]
 mod test_util;
 
+pub use clip::{Clip, ClipParagraph, ClipRun};
 pub use format::{Alignment, ParaPatch, RunPatch, Spacing, Toggle};
 pub use geometry::{CaretRect, PageRect, ViewIndex};
 pub use txn::{BlockRecord, Change, Step, content_delta};
@@ -127,7 +129,7 @@ pub enum BreakKind {
 }
 
 /// A kind of list.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ListKind {
     /// Bullets.
@@ -279,6 +281,15 @@ pub enum EditOp {
         /// Every change in the story.
         #[serde(default)]
         all: bool,
+    },
+    /// Pastes paragraphs over the selection.
+    Paste {
+        /// What to paste.
+        paragraphs: Vec<ClipParagraph>,
+        /// They were copied from this document (pictures, links and list
+        /// numbering then stay as they were).
+        #[serde(default)]
+        same_document: bool,
     },
 }
 
@@ -1917,6 +1928,10 @@ impl Session {
                 }
                 Ok(None)
             }
+            EditOp::Paste {
+                paragraphs,
+                same_document,
+            } => self.paste(paragraphs, *same_document),
             EditOp::AcceptChanges { all } => Ok(self.resolve(true, *all)),
             EditOp::RejectChanges { all } => Ok(self.resolve(false, *all)),
             EditOp::SelectAll => {
@@ -2612,6 +2627,128 @@ impl Session {
             self.set_caret(c);
         }
         Some(step)
+    }
+
+    /// Pastes paragraphs over the selection.
+    fn paste(
+        &mut self,
+        paragraphs: &[ClipParagraph],
+        same_document: bool,
+    ) -> crate::Result<Option<Step>> {
+        if paragraphs.is_empty() {
+            return Ok(None);
+        }
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let base = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        let before = char_before(&txn, &at);
+        let end = clip::paste(
+            &mut txn,
+            &at,
+            paragraphs,
+            &base,
+            before,
+            same_document,
+            rev.as_ref(),
+        )?;
+        let step = txn.finish();
+        self.set_caret(end);
+        Ok(Some(step))
+    }
+
+    /// The selection for the clipboard: Macro's own form, HTML and text.
+    pub fn copy_selection(&mut self) -> Clip {
+        let (s, e) = self.ordered();
+        if s.same_place(&e) {
+            return Clip::default();
+        }
+        let paras = self.paras_between(&s.block, &e.block);
+        let kinds = self.list_kinds(&paras);
+        let (parts, decls) = self.style_env();
+        let formats = Formats::new(
+            &parts.styles,
+            &parts.numbering,
+            &parts.settings,
+            &parts.theme,
+            &decls,
+        );
+        let w = self.doc.w_prefix().to_owned();
+        let mut out = Clip::default();
+        let mut html = String::from("<meta charset=\"utf-8\">");
+        let mut open_list: Option<ListKind> = None;
+        let last = paras.len().saturating_sub(1);
+        for (k, id) in paras.iter().enumerate() {
+            let Some(b) = self.story().get(id) else {
+                continue;
+            };
+            if b.kind != BlockKind::Paragraph {
+                continue;
+            }
+            let from = if k == 0 { s.offset } else { 0 };
+            let to = if k == last { e.offset } else { b.content.len() };
+            let runs = clip::copy_spans(&b.content, from, to);
+            let Some(pf) = self.para_format(&formats, id) else {
+                continue;
+            };
+            let heading = pf.props.outline_lvl.filter(|l| *l < 9).map(|l| l + 1);
+            let list = kinds.get(k).copied().flatten();
+            // The mark's revision and the section break stay behind.
+            let mut props = revise::set_mark_revision(&b.props, None, &w, &decls);
+            if props.contains("sectPr") {
+                let mut el = xmledit::Element::open(&props, "pPr", &w, &decls, xmledit::PPR_ORDER);
+                el.set("sectPr", None);
+                props = el.finish(true);
+            }
+            match (list, open_list) {
+                (Some((kind, _, _)), Some(open)) if kind == open => {}
+                (list, open) => {
+                    if let Some(open) = open {
+                        html.push_str(if open == ListKind::Bullet {
+                            "</ul>"
+                        } else {
+                            "</ol>"
+                        });
+                    }
+                    if let Some((kind, _, _)) = list {
+                        html.push_str(if kind == ListKind::Bullet {
+                            "<ul>"
+                        } else {
+                            "<ol>"
+                        });
+                    }
+                    open_list = list.map(|(kind, _, _)| kind);
+                }
+            }
+            let tag = match (list, heading) {
+                (Some(_), _) => "li".to_owned(),
+                (None, Some(h)) if h <= 6 => format!("h{h}"),
+                _ => "p".to_owned(),
+            };
+            clip::paragraph_html(&mut html, &runs, &formats, &pf, &tag);
+            out.paragraphs.push(ClipParagraph {
+                runs,
+                props: Some(props),
+                heading,
+                list: list.map(|(kind, _, _)| kind),
+                level: list.map_or(0, |(_, _, l)| l),
+            });
+        }
+        if let Some(open) = open_list {
+            html.push_str(if open == ListKind::Bullet {
+                "</ul>"
+            } else {
+                "</ol>"
+            });
+        }
+        out.html = html;
+        out.text = self.selected_text();
+        out
     }
 
     /// Accepts or rejects tracked changes: every one in the story, those in

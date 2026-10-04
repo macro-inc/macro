@@ -288,6 +288,8 @@ export function createDocxEditor(options: DocxEditorOptions) {
     rangeRects: (from: Pos, to: Pos) => engine.rangeRects(docKey, from, to),
     paragraphs: () => engine.paragraphs(docKey),
     selectedText: () => engine.selectedText(docKey),
+    /** The selection for the clipboard (paragraphs, HTML and text). */
+    copySelection: () => engine.copySelection(docKey),
     save: () => engine.saveDocument(docKey),
     /** Waits until queued operations and remote changes are applied. */
     async idle() {

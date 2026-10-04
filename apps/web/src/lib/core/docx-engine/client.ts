@@ -9,6 +9,7 @@
 import type { DocxRequest, DocxResponse } from './protocol';
 import type {
   CaretRect,
+  Clip,
   CollabState,
   EditOp,
   EditResult,
@@ -258,6 +259,12 @@ export async function rangeRects(
 ): Promise<PageRect[]> {
   const r = await request({ kind: 'rangeRects', docKey, from, to }, 'rects');
   return r.rects;
+}
+
+/** The selection for the clipboard: paragraphs, HTML and plain text. */
+export async function copySelection(docKey: string): Promise<Clip> {
+  const r = await request({ kind: 'copySelection', docKey }, 'clip');
+  return r.clip;
 }
 
 /** The selected text, for the clipboard. */

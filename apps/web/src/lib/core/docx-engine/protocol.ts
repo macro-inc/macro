@@ -8,6 +8,7 @@
 
 import type {
   CaretRect,
+  Clip,
   EditResult,
   PageInfo,
   PageRect,
@@ -50,6 +51,7 @@ export type DocxRequest =
   | (Base & { kind: 'caretAt'; pos: Pos })
   | (Base & { kind: 'rangeRects'; from: Pos; to: Pos })
   | (Base & { kind: 'selectedText' })
+  | (Base & { kind: 'copySelection' })
   | (Base & { kind: 'paragraphs' })
   | (Base & { kind: 'styles' })
   | (Base & { kind: 'save' });
@@ -70,6 +72,7 @@ export type DocxResponse =
   | { id: number; ok: true; kind: 'caret'; caret: CaretRect | null }
   | { id: number; ok: true; kind: 'rects'; rects: PageRect[] }
   | { id: number; ok: true; kind: 'text'; text: string }
+  | { id: number; ok: true; kind: 'clip'; clip: Clip }
   | { id: number; ok: true; kind: 'paragraphs'; paragraphs: ParagraphText[] }
   | { id: number; ok: true; kind: 'styles'; styles: StyleInfo[] }
   | { id: number; ok: true; kind: 'save'; bytes: ArrayBuffer }

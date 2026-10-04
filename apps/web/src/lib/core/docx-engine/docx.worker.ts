@@ -14,6 +14,7 @@ import { match } from 'ts-pattern';
 import type { DocxRequest, DocxResponse } from './protocol';
 import type {
   CaretRect,
+  Clip,
   EditResult,
   PageInfo,
   PageRect,
@@ -328,6 +329,18 @@ async function serve(request: DocxRequest): Promise<Served> {
               JSON.stringify(to)
             )
           ) as PageRect[],
+        },
+        [],
+      ]
+    )
+    .with(
+      { kind: 'copySelection' },
+      ({ docKey }): Served => [
+        {
+          id,
+          ok: true,
+          kind: 'clip',
+          clip: JSON.parse(documentFor(docKey).copySelection()) as Clip,
         },
         [],
       ]

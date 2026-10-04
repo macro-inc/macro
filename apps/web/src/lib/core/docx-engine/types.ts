@@ -96,7 +96,9 @@ export type EditOp =
   /** Accept the changes in the selection (the one at a caret), or all. */
   | { op: 'acceptChanges'; all?: boolean }
   /** Reject the changes in the selection (the one at a caret), or all. */
-  | { op: 'rejectChanges'; all?: boolean };
+  | { op: 'rejectChanges'; all?: boolean }
+  /** Paste paragraphs over the selection. */
+  | { op: 'paste'; paragraphs: ClipParagraph[]; sameDocument?: boolean };
 
 export type CaretRect = { page: number; x: number; y: number; height: number };
 
@@ -186,6 +188,34 @@ export type Change =
   | { t: 'text'; id: string; delta: DeltaOp[] }
   | { t: 'remove'; id: string }
   | { t: 'entry'; container: string; key: string; value: string | null };
+
+/** A run of copied or pasted text. */
+export type ClipRun = {
+  text: string;
+  /** The run's attributes, from a copy in this editor. */
+  attrs?: Record<string, string>;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  superscript?: boolean;
+  subscript?: boolean;
+};
+
+/** A copied or pasted paragraph. */
+export type ClipParagraph = {
+  runs: ClipRun[];
+  /** Paragraph properties (`w:pPr`), from a copy in this editor. */
+  props?: string;
+  /** Heading level, 1 to 9. */
+  heading?: number;
+  list?: ListKind;
+  /** List level, 0 for the outermost. */
+  level?: number;
+};
+
+/** What a selection copies. */
+export type Clip = { paragraphs: ClipParagraph[]; html: string; text: string };
 
 /** A change other peers made, as the shared maps now hold it. */
 export type RemoteChange =
