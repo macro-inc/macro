@@ -209,6 +209,8 @@ pub struct Inline {
     pub objects: Vec<Drawing>,
     /// Note references: (cluster index, endnote, note id).
     pub notes: Vec<(usize, bool, i64)>,
+    /// The number each note reference shows (as `notes`).
+    pub note_labels: Vec<String>,
     /// Whether the paragraph shows page-dependent fields.
     pub dynamic: bool,
     /// Clusters belonging to the list label.
@@ -296,7 +298,7 @@ struct Builder<'a, 'b> {
     para: &'b Arc<ParaFormat>,
     out: Inline,
     /// Style index by (properties, revision, link, complex script).
-    run_index: HashMap<(usize, Revision, bool, bool), u16>,
+    run_index: crate::hash::FxMap<(usize, Revision, bool, bool), u16>,
     /// Each style's properties as given (before condensing).
     run_props: Vec<Arc<RunProps>>,
 }
@@ -687,6 +689,21 @@ fn wrapper_instr(open: &str) -> Option<String> {
     Some(rest[..end].replace("&quot;", "\"").replace("&amp;", "&"))
 }
 
+impl Inline {
+    /// Whether the note references show the numbers their notes have now
+    /// (numbers follow the references' order through the document).
+    pub fn notes_current(&self, numbers: &HashMap<(bool, i64), String>) -> bool {
+        self.notes
+            .iter()
+            .zip(&self.note_labels)
+            .all(|(&(_, endnote, id), shown)| {
+                numbers
+                    .get(&(endnote, id))
+                    .map_or(shown.is_empty(), |n| n == shown)
+            })
+    }
+}
+
 /// Builds the clusters of a paragraph.
 pub fn build(
     block: &Block,
@@ -698,7 +715,7 @@ pub fn build(
         ctx,
         para,
         out: Inline::default(),
-        run_index: HashMap::new(),
+        run_index: crate::hash::FxMap::default(),
         run_props: Vec::new(),
     };
     let mark_run = {
@@ -988,6 +1005,7 @@ fn object(
                 b.synthetic(&number, offset, len, run);
             }
             b.out.notes.push((at, endnote, id));
+            b.out.note_labels.push(number);
         }
         "footnoteRef" | "endnoteRef" => {
             let number = b.ctx.note_number.unwrap_or("").to_owned();

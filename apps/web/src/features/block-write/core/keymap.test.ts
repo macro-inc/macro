@@ -103,6 +103,31 @@ describe('keyAction', () => {
     });
   });
 
+  it('inserts footnotes and endnotes with Word’s shortcuts', () => {
+    const footnote = {
+      kind: 'ops',
+      ops: [{ op: 'insertNote', endnote: false }],
+    };
+    const endnote = { kind: 'ops', ops: [{ op: 'insertNote', endnote: true }] };
+    expect(keyAction(key('f', { ctrlKey: true, altKey: true }), false)).toEqual(
+      footnote
+    );
+    expect(keyAction(key('d', { ctrlKey: true, altKey: true }), false)).toEqual(
+      endnote
+    );
+    expect(keyAction(key('f', { metaKey: true, altKey: true }), true)).toEqual(
+      footnote
+    );
+    expect(keyAction(key('e', { metaKey: true, altKey: true }), true)).toEqual(
+      endnote
+    );
+    // Plain Mod+F still finds.
+    expect(keyAction(key('f', { ctrlKey: true }), false)).toEqual({
+      kind: 'find',
+      replace: false,
+    });
+  });
+
   it('opens find and replace', () => {
     expect(keyAction(key('f', { ctrlKey: true }), false)).toEqual({
       kind: 'find',

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { Miniflare } from 'miniflare';
 import { fixtureUrl, startSyncServer } from './sync-server';
 
@@ -319,6 +319,130 @@ test('headers and footers are edited in place and shared', async ({
       new Uint8Array(await readFile((await download.path())!))
     );
     expect(strFromU8(files['word/header1.xml'])).toContain('(Draft 2)');
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+/** A short memo with two footnotes, built here rather than kept as a
+ * binary fixture, as a data URL the fixture page can fetch. */
+function footnotedMemo() {
+  const W =
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const superscript = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>';
+  const ref = (id: number) =>
+    `<w:r>${superscript}<w:footnoteReference w:id="${id}"/></w:r>`;
+  const text = (t: string) => `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>`;
+  const note = (id: number, t: string) =>
+    `<w:footnote w:id="${id}"><w:p><w:r>${superscript}<w:footnoteRef/></w:r><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve"> ${t}</w:t></w:r></w:p></w:footnote>`;
+  const body = [
+    `<w:p>${text('The Seller shall deliver the Shares at Closing.')}${ref(1)}${text(' The Purchase Price is payable in cash.')}${ref(2)}</w:p>`,
+    `<w:p>${text('Each party bears its own costs.')}</w:p>`,
+  ].join('');
+  const sect =
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+  const ct = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
+  const rel =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const files: Record<string, string> = {
+    '[Content_Types].xml': `${DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="${ct}.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="${ct}.footnotes+xml"/></Types>`,
+    '_rels/.rels': `${DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="word/document.xml"/></Relationships>`,
+    'word/_rels/document.xml.rels': `${DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${rel}/footnotes" Target="footnotes.xml"/></Relationships>`,
+    'word/document.xml': `${DECL}<w:document ${W}><w:body>${body}${sect}</w:body></w:document>`,
+    'word/footnotes.xml': `${DECL}<w:footnotes ${W}><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>${note(1, 'As defined in the Agreement.')}${note(2, 'In United States dollars.')}</w:footnotes>`,
+  };
+  const zip = zipSync(
+    Object.fromEntries(
+      Object.entries(files).map(([name, xml]) => [name, strToU8(xml)])
+    )
+  );
+  return `data:${ct}.document;base64,${Buffer.from(zip).toString('base64')}`;
+}
+
+test('footnotes are edited where they are and shared', async ({ browser }) => {
+  const documentId = crypto.randomUUID();
+  const contexts = await Promise.all([
+    browser.newContext(),
+    browser.newContext(),
+  ]);
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
+  const story = (page: Page) =>
+    page.evaluate(() => window.docxFixture?.editor()?.state()?.story.kind);
+  const src = footnotedMemo();
+  try {
+    await open(alice, documentId, ALICE, { src });
+    await open(bob, documentId, BOB, { src });
+
+    // One click in the first footnote's text puts the caret there.
+    const sheet = alice.locator('[data-docx-page="0"]');
+    await sheet.evaluate((el) => el.scrollIntoView({ block: 'end' }));
+    let box = (await sheet.boundingBox())!;
+    const page = (await alice.evaluate(
+      () => window.docxFixture?.editor()?.pages()[0]
+    ))!;
+    expect(page.notes).toBeTruthy();
+    const scale = box.width / page.width;
+    const notes = page.notes!;
+    // The first note's line is the area's top line.
+    await alice.mouse.click(
+      box.x + box.width / 2,
+      box.y + (notes.top + 6) * scale
+    );
+    await expect.poll(() => story(alice)).toBe('footnote');
+    await alice.keyboard.press('End');
+    await alice.keyboard.type(' (as amended)');
+    // The notes part reaches Bob through the sync service.
+    await expect
+      .poll(() =>
+        bob.evaluate(() => window.docxFixture?.sharedPart('footnotes.xml'))
+      )
+      .toContain('As defined in the Agreement. (as amended)');
+    if (SHOTS) await alice.screenshot({ path: `${SHOTS}/05b-footnote.png` });
+
+    // A click on the body goes back to it.
+    await sheet.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    box = (await sheet.boundingBox())!;
+    await alice.mouse.click(box.x + box.width / 2, box.y + 76 * scale);
+    await expect.poll(() => story(alice)).toBe('body');
+    await caretAtEnd(alice, 'Each party bears');
+    await alice.keyboard.type(' [body]');
+    await expect.poll(() => joined(bob)).toContain('[body]');
+
+    // Ctrl+Alt+F adds a footnote at the caret and moves into it.
+    await alice.keyboard.press('Control+Alt+KeyF');
+    await expect.poll(() => story(alice)).toBe('footnote');
+    await alice.keyboard.type('Including counsel fees.');
+    await expect
+      .poll(() =>
+        bob.evaluate(() => window.docxFixture?.sharedPart('footnotes.xml'))
+      )
+      .toContain('Including counsel fees.');
+    if (SHOTS)
+      await alice.screenshot({ path: `${SHOTS}/05c-new-footnote.png` });
+    await alice.keyboard.press('Escape');
+    await expect.poll(() => story(alice)).toBe('body');
+
+    // Bob's download carries the edited note and keeps the separators.
+    const [download] = await Promise.all([
+      bob.waitForEvent('download'),
+      bob.getByRole('button', { name: 'Download .docx' }).click(),
+    ]);
+    const files = unzipSync(
+      new Uint8Array(await readFile((await download.path())!))
+    );
+    const saved = strFromU8(files['word/footnotes.xml']);
+    expect(saved).toContain('(as amended)');
+    expect(saved).toContain('w:type="separator"');
+    expect(saved).toContain('In United States dollars.');
+    expect(saved).toContain('Including counsel fees.');
+    expect(
+      strFromU8(files['word/document.xml']).match(/footnoteReference/g)
+    ).toHaveLength(3);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

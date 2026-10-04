@@ -828,7 +828,8 @@ updates live and shows each collaborator's caret with their name
   `Numbered list`, the alignment buttons, `Decrease indent`, `Increase
   indent`, the `Line spacing` menu, `Insert table` (inside a table also the
   `Table rows and columns` menu, `[data-docx-menu="table"]`, to insert or
-  delete rows and columns or the table), `Track changes`, `Hide tracked
+  delete rows and columns or the table), the `Insert footnote or endnote`
+  menu (`[data-docx-menu="notes"]`, in the body), `Track changes`, `Hide tracked
   changes` / `Show tracked changes`, `Comment on selection`, `Find and
   replace` and `Download .docx` (viewers get `Find and replace` and
   `Download .docx`).
@@ -867,6 +868,14 @@ updates live and shows each collaborator's caret with their name
   area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
   button; Escape or a click on the body returns to the body. Header and
   footer edits reach collaborators and the download like body edits.
+- Click a footnote or endnote at the bottom of the page (or after the body)
+  to type in it, as in Word; nothing dims. Escape or a click on the body
+  returns to the body. Comments stay with the body text.
+- To add a footnote or endnote at the caret, use the toolbar's asterisk
+  menu (`Insert footnote or endnote` → `Footnote` / `Endnote`) or Word's
+  shortcuts (Ctrl+Alt+F / Ctrl+Alt+D; Cmd+Option+F / Cmd+Option+E on a
+  Mac). The number appears in the text and the caret moves into the new
+  note at the foot of the page (endnotes go after the body).
 - Clicking a DOCX in the Home list opens the editor in the Home preview pane.
   Viewers and commenters see the same paginated pages, read-only.
 - To comment on any text, including table cells: select it, then click the

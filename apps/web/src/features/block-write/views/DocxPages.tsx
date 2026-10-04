@@ -210,6 +210,9 @@ function StoryChrome(props: {
   );
 }
 
+/** How far (points) outside the notes' lines a click still edits a note. */
+const NOTE_SLOP = 4;
+
 export type DocxPagesProps = {
   editor: DocxEditor;
   /** The scrolling element (for page visibility and caret scrolling). */
@@ -354,20 +357,28 @@ export function DocxPages(props: DocxPagesProps) {
     return count;
   }
 
-  /** The header or footer area under a point (points), if any. */
+  /** The header, footer or notes area under a point (points), if any. */
   function areaAt(point: { page: number; y: number }) {
     const page = editor.pages()[point.page];
     if (page?.header && point.y < page.header.bottom)
       return { kind: 'header' as const, editable: page.header.editable };
     if (page?.footer && point.y >= page.footer.top)
       return { kind: 'footer' as const, editable: page.footer.editable };
+    const notes = page?.notes;
+    if (
+      notes &&
+      point.y >= notes.top - NOTE_SLOP &&
+      point.y <= notes.bottom + NOTE_SLOP
+    )
+      return { kind: 'note' as const, editable: notes.editable };
     return undefined;
   }
 
   /**
-   * Double-clicking a header or footer edits it; while one is open, a click
-   * on another page's header or footer moves there and a click on the body
-   * goes back to it. Returns whether the click was fully handled.
+   * A click in a footnote or endnote edits it, as in Word. Double-clicking
+   * a header or footer edits it; while one is open, a click on another
+   * page's header or footer moves there and a click on the body goes back
+   * to it. Returns whether the click was fully handled.
    */
   async function switchStory(
     point: { page: number; x: number; y: number },
@@ -376,10 +387,24 @@ export function DocxPages(props: DocxPagesProps) {
     if (!props.editable) return false;
     const story = editor.state()?.story;
     const area = areaAt(point);
-    if (!story || story.kind === 'body') {
-      if (clicks !== 2 || !area?.editable) return false;
+    if (area?.kind === 'note') {
+      // The engine enters the note under the point (keeping the selection
+      // when it is already there); the press goes on to place the caret.
       run([{ op: 'enterStory', ...point }]);
-      return true;
+      await editor.idle();
+      return false;
+    }
+    if (!story || (story.kind !== 'header' && story.kind !== 'footer')) {
+      if (clicks === 2 && area?.editable) {
+        run([{ op: 'enterStory', ...point }]);
+        return true;
+      }
+      if (story && story.kind !== 'body') {
+        // Out of a note, back to the body.
+        editor.run([{ op: 'exitStory' }]);
+        await editor.idle();
+      }
+      return false;
     }
     if (area?.kind === story.kind && point.page === story.page) return false;
     if (area?.editable) {

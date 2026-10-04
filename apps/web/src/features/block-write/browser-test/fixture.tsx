@@ -45,7 +45,8 @@ declare global {
       sharedBlock: (
         prefix: string
       ) => { props: string; attrs: Record<string, string>[] } | null;
-      /** XML of the shared part whose name ends with `suffix`. */
+      /** XML of the shared part whose name ends with `suffix` (a notes part
+       * with its notes). */
       sharedPart: (suffix: string) => string | null;
       /** How many shared blocks there are of a kind (`p`, `tbl`, `tr`, `tc`...). */
       sharedCount: (kind: string) => number;
@@ -112,7 +113,13 @@ function helpers(
       if (!shared) return null;
       const parts = readCollabState(shared).parts;
       const name = Object.keys(parts).find((key) => key.endsWith(suffix));
-      return name ? (parts[name] ?? null) : null;
+      if (!name) return null;
+      // Footnotes and endnotes are shared note by note (`part|id`).
+      const notes = Object.keys(parts)
+        .filter((key) => key.startsWith(`${name}|`))
+        .map((key) => parts[key])
+        .join('');
+      return (parts[name] ?? '') + notes;
     },
   };
 }

@@ -9,9 +9,9 @@ use crate::model::section::Section;
 use crate::model::settings::Settings;
 use crate::model::styles::Styles;
 use crate::model::write::Writer;
-use crate::xml::{Decl, Ns, XmlTree};
+use crate::xml::{Decl, XmlTree};
 use pptx_engine::opc::{Package, Relationships};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 /// The main document part when the package does not say otherwise.
@@ -131,6 +131,13 @@ pub enum StoryTarget {
     Body,
     /// A header or footer part, by part name.
     Part(String),
+    /// A footnote or endnote.
+    Note {
+        /// An endnote (else a footnote).
+        endnote: bool,
+        /// The note's id.
+        id: i64,
+    },
 }
 
 /// An element's markup around its children: through the start tag, and
@@ -161,6 +168,26 @@ pub struct Note {
     pub kind: String,
     /// The note's content.
     pub story: Story,
+    /// The note element's start tag.
+    pub(crate) open: String,
+    /// Its end tag.
+    pub(crate) close: String,
+}
+
+impl Note {
+    /// Whether people write in it (not a separator or notice).
+    pub fn is_text(&self) -> bool {
+        self.kind.is_empty() || self.kind == "normal"
+    }
+}
+
+/// A child of a notes part, in order.
+#[derive(Clone, Debug)]
+pub(crate) enum NoteSlot {
+    /// A note, by id.
+    Note(i64),
+    /// Anything else, as written.
+    Other(String),
 }
 
 /// The notes of one notes part.
@@ -172,6 +199,48 @@ pub struct Notes {
     pub by_id: BTreeMap<i64, Note>,
     /// Root declarations of the part.
     pub decls: Arc<Vec<Decl>>,
+    /// The part's markup through the root's start tag, and from its end tag.
+    pub(crate) head: String,
+    pub(crate) tail: String,
+    /// The root's children in order.
+    pub(crate) slots: Vec<NoteSlot>,
+    /// The part's WordprocessingML prefix.
+    pub(crate) w: String,
+    /// The part's bytes the notes were read from (or last written as).
+    pub(crate) identity: Option<(bool, usize)>,
+    /// Notes edited since the last snapshot (see `Document::snapshot`).
+    pub(crate) edited: BTreeSet<i64>,
+    /// The part was rewritten some other way since the last snapshot.
+    pub(crate) rewritten: bool,
+}
+
+impl Notes {
+    /// One note's XML as it now is.
+    pub(crate) fn note_xml(&self, id: i64) -> Option<String> {
+        let n = self.by_id.get(&id)?;
+        let writer = Writer { w: &self.w };
+        Some(format!("{}{}{}", n.open, writer.story(&n.story), n.close))
+    }
+
+    /// The part's XML as its notes now are.
+    pub(crate) fn xml(&self) -> String {
+        let writer = Writer { w: &self.w };
+        let mut out = self.head.clone();
+        for slot in &self.slots {
+            match slot {
+                NoteSlot::Note(id) => {
+                    if let Some(n) = self.by_id.get(id) {
+                        out.push_str(&n.open);
+                        out.push_str(&writer.story(&n.story));
+                        out.push_str(&n.close);
+                    }
+                }
+                NoteSlot::Other(xml) => out.push_str(xml),
+            }
+        }
+        out.push_str(&self.tail);
+        out
+    }
 }
 
 /// Parsed parts shared by layout.
@@ -395,8 +464,10 @@ impl Document {
                 },
             );
         }
-        self.footnotes = self.load_notes(rel::FOOTNOTES, "footnote", "fn");
-        self.endnotes = self.load_notes(rel::ENDNOTES, "endnote", "en");
+        let footnotes = std::mem::take(&mut self.footnotes);
+        self.footnotes = self.load_notes(rel::FOOTNOTES, "footnote", "fn", footnotes);
+        let endnotes = std::mem::take(&mut self.endnotes);
+        self.endnotes = self.load_notes(rel::ENDNOTES, "endnote", "en", endnotes);
         Ok(())
     }
 
@@ -405,6 +476,11 @@ impl Document {
         match target {
             StoryTarget::Body => &self.body,
             StoryTarget::Part(name) => self.stories.get(name).map_or(&self.body, |p| &p.story),
+            StoryTarget::Note { endnote, id } => self
+                .notes_of(*endnote)
+                .by_id
+                .get(id)
+                .map_or(&self.body, |n| &n.story),
         }
     }
 
@@ -413,6 +489,10 @@ impl Document {
         match target {
             StoryTarget::Part(name) if self.stories.contains_key(name) => {
                 &mut self.stories.get_mut(name).expect("checked").story
+            }
+            StoryTarget::Note { endnote, id } if self.notes_of(*endnote).by_id.contains_key(id) => {
+                let notes = self.notes_of_mut(*endnote);
+                &mut notes.by_id.get_mut(id).expect("checked").story
             }
             _ => &mut self.body,
         }
@@ -423,6 +503,11 @@ impl Document {
         match target {
             StoryTarget::Body => true,
             StoryTarget::Part(name) => self.stories.contains_key(name),
+            StoryTarget::Note { endnote, id } => self
+                .notes_of(*endnote)
+                .by_id
+                .get(id)
+                .is_some_and(Note::is_text),
         }
     }
 
@@ -431,10 +516,17 @@ impl Document {
         if self.body.contains(id) {
             return Some(StoryTarget::Body);
         }
-        self.stories
-            .iter()
-            .find(|(_, p)| p.story.contains(id))
-            .map(|(name, _)| StoryTarget::Part(name.clone()))
+        if let Some((name, _)) = self.stories.iter().find(|(_, p)| p.story.contains(id)) {
+            return Some(StoryTarget::Part(name.clone()));
+        }
+        [false, true].into_iter().find_map(|endnote| {
+            let (note, _) = self
+                .notes_of(endnote)
+                .by_id
+                .iter()
+                .find(|(_, n)| n.story.contains(id))?;
+            Some(StoryTarget::Note { endnote, id: *note })
+        })
     }
 
     /// A header or footer part's XML as its story now is.
@@ -455,33 +547,104 @@ impl Document {
         }
     }
 
-    fn load_notes(&self, kind: &str, element: &str, prefix: &str) -> Notes {
+    /// Reads a notes part. Notes whose part did not change since they were
+    /// read (`previous`) stay as they are, with the blocks an editor may be
+    /// positioned in.
+    fn load_notes(&self, kind: &str, element: &str, prefix: &str, previous: Notes) -> Notes {
         let Some(name) = self.related(kind) else {
             return Notes::default();
         };
+        let identity = self.pkg.part_identity(&name);
+        if previous.part.as_deref() == Some(name.as_str())
+            && previous.identity.is_some()
+            && previous.identity == identity
+        {
+            return previous;
+        }
         let Ok(tree) = read_tree(&self.pkg, &name) else {
             return Notes::default();
         };
+        let root = tree.root();
+        let (head, tail) = split_element(&tree, root);
+        let decls = Arc::new(tree.root_decls().to_vec());
+        let w = w_prefix(&decls);
         let mut notes = Notes {
             part: Some(name),
             by_id: BTreeMap::new(),
-            decls: Arc::new(tree.root_decls().to_vec()),
+            decls,
+            head,
+            tail,
+            slots: Vec::new(),
+            w,
+            identity,
+            edited: BTreeSet::new(),
+            rewritten: true,
         };
-        for n in tree.children_named(tree.root(), Ns::W, element) {
-            let Some(id) = tree.w_attr(n, "id").and_then(crate::xml::parse_int) else {
+        for n in tree.children(root) {
+            let id = tree
+                .is_w(n, element)
+                .then(|| tree.w_attr(n, "id").and_then(crate::xml::parse_int))
+                .flatten()
+                .filter(|id| !notes.by_id.contains_key(id));
+            let Some(id) = id else {
+                notes.slots.push(NoteSlot::Other(tree.raw(n).to_owned()));
                 continue;
             };
             let mut ids = IdGen::prefixed(&format!("{prefix}{id}#"));
             let read = StoryReader::new(&tree, &mut ids).read(n);
+            let tag = tree.start_tag(n);
+            let open = match tag.strip_suffix("/>") {
+                Some(t) => format!("{}>", t.trim_end()),
+                None => tag.to_owned(),
+            };
             notes.by_id.insert(
                 id,
                 Note {
                     kind: tree.w_attr(n, "type").unwrap_or("").to_owned(),
                     story: read.story,
+                    open,
+                    close: format!("</{}>", tree.qname(n)),
                 },
             );
+            notes.slots.push(NoteSlot::Note(id));
         }
         notes
+    }
+
+    pub(crate) fn notes_of(&self, endnote: bool) -> &Notes {
+        if endnote {
+            &self.endnotes
+        } else {
+            &self.footnotes
+        }
+    }
+
+    pub(crate) fn notes_of_mut(&mut self, endnote: bool) -> &mut Notes {
+        if endnote {
+            &mut self.endnotes
+        } else {
+            &mut self.footnotes
+        }
+    }
+
+    /// Writes edited notes back into their part, noting which one changed
+    /// (`None`: any of them) for sharing.
+    pub(crate) fn write_notes(&mut self, endnote: bool, edited: Option<i64>) {
+        let notes = self.notes_of(endnote);
+        let Some(part) = notes.part.clone() else {
+            return;
+        };
+        let xml = notes.xml();
+        self.pkg.write(&part, xml.into_bytes(), None);
+        let identity = self.pkg.part_identity(&part);
+        let notes = self.notes_of_mut(endnote);
+        notes.identity = identity;
+        match edited {
+            Some(id) => {
+                notes.edited.insert(id);
+            }
+            None => notes.rewritten = true,
+        }
     }
 
     /// The main part name.

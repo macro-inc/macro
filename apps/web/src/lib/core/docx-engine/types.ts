@@ -83,6 +83,8 @@ export type EditOp =
   | { op: 'insertText'; text: string }
   | { op: 'insertParagraph' }
   | { op: 'insertBreak'; kind: BreakKind }
+  /** A footnote (or endnote) at the caret; the caret moves into it. */
+  | { op: 'insertNote'; endnote?: boolean }
   | { op: 'delete'; forward: boolean; unit?: Unit }
   | { op: 'toggleFormat'; format: Toggle }
   | ({ op: 'setFormat' } & RunPatch)
@@ -146,12 +148,15 @@ export type PageInfo = {
   fingerprint: string;
   header?: PageArea;
   footer?: PageArea;
+  /** Where the page's footnotes and endnotes are. */
+  notes?: PageArea;
 };
 
 /** The story the selection is in. */
 export type StoryState = {
-  kind: 'body' | 'header' | 'footer';
-  /** The page whose header or footer is being edited. */
+  kind: 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
+  /** The page whose header or footer (or the first showing the note) is
+   * being edited. */
   page?: number;
 };
 

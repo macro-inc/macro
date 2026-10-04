@@ -86,7 +86,14 @@ export function keyAction(event: Key, mac: boolean): KeyAction | null {
   if (!mod) return null;
   const letter = event.code.startsWith('Key') ? event.code.slice(3) : '';
   if (event.altKey) {
-    return letter === 'M' ? { kind: 'comment' } : null;
+    if (letter === 'M') return { kind: 'comment' };
+    // Word's note shortcuts: Ctrl+Alt+F and Ctrl+Alt+D, or Cmd+Option+F
+    // and Cmd+Option+E on a Mac.
+    if (letter === 'F')
+      return { kind: 'ops', ops: [{ op: 'insertNote', endnote: false }] };
+    if (letter === (mac ? 'E' : 'D'))
+      return { kind: 'ops', ops: [{ op: 'insertNote', endnote: true }] };
+    return null;
   }
   switch (letter) {
     case 'Z':

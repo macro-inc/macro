@@ -11,6 +11,7 @@ mod find;
 mod format;
 mod geometry;
 mod lists;
+mod notes;
 mod revise;
 mod table;
 mod text;
@@ -190,6 +191,13 @@ pub enum EditOp {
         /// Which.
         kind: BreakKind,
     },
+    /// Inserts a footnote (or endnote) at the caret: its reference in the
+    /// text and a new note, which the caret moves into, as in Word.
+    InsertNote {
+        /// An endnote (else a footnote).
+        #[serde(default)]
+        endnote: bool,
+    },
     /// Deletes the selection, or one unit beside the caret.
     Delete {
         /// Forward (Delete) or backward (Backspace).
@@ -330,6 +338,9 @@ pub struct PageInfo {
     /// The footer area.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub footer: Option<Area>,
+    /// The area of the footnotes and endnotes on the page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Area>,
 }
 
 /// A page's header or footer area (points).
@@ -354,6 +365,55 @@ impl Area {
     }
 }
 
+/// How far (points) outside the notes' lines a click still lands in a note.
+const NOTE_SLOP: f32 = 4.0;
+
+/// The layout story of a footnote or endnote.
+fn note_story(endnote: bool, id: i64) -> crate::layout::StoryRef {
+    if endnote {
+        crate::layout::StoryRef::Endnote(id)
+    } else {
+        crate::layout::StoryRef::Footnote(id)
+    }
+}
+
+/// The story edits to a note's text go to.
+fn note_target(story: &crate::layout::StoryRef) -> Option<StoryTarget> {
+    match story {
+        crate::layout::StoryRef::Footnote(id) => Some(StoryTarget::Note {
+            endnote: false,
+            id: *id,
+        }),
+        crate::layout::StoryRef::Endnote(id) => Some(StoryTarget::Note {
+            endnote: true,
+            id: *id,
+        }),
+        _ => None,
+    }
+}
+
+/// The band of a page its footnotes' and endnotes' lines take up.
+fn notes_area(page: &Page) -> Option<Area> {
+    let mut band: Option<(f32, f32)> = None;
+    for item in &page.items {
+        // The separator and continuation notice (negative ids) are not notes.
+        if let Item::Line(l) = item
+            && matches!(
+                l.para.story,
+                crate::layout::StoryRef::Footnote(id) | crate::layout::StoryRef::Endnote(id) if id >= 0
+            )
+        {
+            let (top, bottom) = (l.y, l.y + l.line().height);
+            band = Some(band.map_or((top, bottom), |(t, b)| (t.min(top), b.max(bottom))));
+        }
+    }
+    band.map(|(top, bottom)| Area {
+        top,
+        bottom,
+        editable: true,
+    })
+}
+
 /// Which story the selection is in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -365,6 +425,10 @@ pub enum StoryKind {
     Header,
     /// A footer.
     Footer,
+    /// A footnote.
+    Footnote,
+    /// An endnote.
+    Endnote,
 }
 
 /// The story being edited.
@@ -1125,6 +1189,7 @@ impl Session {
                 fingerprint: format!("{f:016x}"),
                 header: p.header.as_ref().map(Area::of),
                 footer: p.footer.as_ref().map(Area::of),
+                notes: notes_area(p),
             })
             .collect()
     }
@@ -1168,6 +1233,12 @@ impl Session {
                     Some(self.story_page),
                 ))
             }
+            // A note can run on over the next page.
+            StoryTarget::Note { endnote, id } => Arc::new(ViewIndex::for_story(
+                &self.layout,
+                &note_story(*endnote, *id),
+                None,
+            )),
         };
     }
 
@@ -1187,8 +1258,67 @@ impl Session {
         None
     }
 
+    /// The footnote or endnote whose text is nearest a point in a page's
+    /// notes area.
+    fn note_at(&self, page: usize, x: f32, y: f32) -> Option<StoryTarget> {
+        let p = self.layout.pages.get(page)?;
+        let area = notes_area(p)?;
+        if y < area.top - NOTE_SLOP || y > area.bottom + NOTE_SLOP {
+            return None;
+        }
+        let distance = |l: &crate::layout::PlacedLine| {
+            let line = l.line();
+            let dy = if y < l.y {
+                l.y - y
+            } else {
+                (y - (l.y + line.height)).max(0.0)
+            };
+            let left = l.x + line.left;
+            let dx = if x < left {
+                left - x
+            } else {
+                (x - (l.x + line.right)).max(0.0)
+            };
+            (dy, dx)
+        };
+        p.items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Line(l) => {
+                    let target = note_target(&l.para.story)?;
+                    self.doc.has_story(&target).then(|| (distance(l), target))
+                }
+                _ => None,
+            })
+            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(_, target)| target)
+    }
+
+    /// The first page showing a note.
+    fn note_page(&self, note: &StoryTarget) -> Option<usize> {
+        let StoryTarget::Note { endnote, id } = note else {
+            return None;
+        };
+        let story = note_story(*endnote, *id);
+        self.layout.pages.iter().position(|p| {
+            p.items
+                .iter()
+                .any(|i| matches!(i, Item::Line(l) if l.para.story == story))
+        })
+    }
+
     /// What the selection is in, for the caller.
     fn story_state(&self) -> StoryState {
+        if let StoryTarget::Note { endnote, .. } = &self.active {
+            return StoryState {
+                kind: if *endnote {
+                    StoryKind::Endnote
+                } else {
+                    StoryKind::Footnote
+                },
+                page: self.note_page(&self.active).or(Some(self.story_page)),
+            };
+        }
         let StoryTarget::Part(name) = &self.active else {
             return StoryState::default();
         };
@@ -1209,10 +1339,15 @@ impl Session {
 
     /// Switches to editing a header or footer on a page.
     fn enter_part(&mut self, part: String, page: usize) {
+        self.enter(StoryTarget::Part(part), page);
+    }
+
+    /// Switches to editing a story other than the body, shown on a page.
+    fn enter(&mut self, target: StoryTarget, page: usize) {
         if self.active == StoryTarget::Body {
             self.body_sel = Some(self.sel.clone());
         }
-        self.active = StoryTarget::Part(part);
+        self.active = target;
         self.story_page = page;
         self.order = None;
         self.pending = None;
@@ -1258,6 +1393,10 @@ impl Session {
                     .unwrap_or(0);
                 self.enter_part(name, page);
             }
+            Some(note @ StoryTarget::Note { .. }) if self.active != note => {
+                let page = self.note_page(&note).unwrap_or(0);
+                self.enter(note, page);
+            }
             _ => {}
         }
         self.sel = sel;
@@ -1267,9 +1406,9 @@ impl Session {
     /// Positions in the active story as (paragraph index, offset), to find
     /// them again after the story is read anew.
     fn story_positions(&self) -> Option<[(usize, usize); 2]> {
-        let StoryTarget::Part(_) = &self.active else {
+        if self.active == StoryTarget::Body {
             return None;
-        };
+        }
         let list = self.story().paragraphs();
         let at = |p: &Pos| {
             (
@@ -1850,22 +1989,30 @@ impl Session {
         self.clamp_selection();
         let before = self.sel.clone();
         let snapshot = self.doc.snapshot();
-        let mut step = Step::default();
+        // One step per story the operations changed, in order (inserting a
+        // note and typing in it changes the body, then the note).
+        let mut steps: Vec<Step> = Vec::new();
         for op in ops {
             if self.stale {
                 relaid |= self.ensure_layout(fonts);
             }
             if let Some(s) = self.run_op(op)? {
-                step.merge(s);
+                match steps.last_mut() {
+                    Some(last) if last.story == s.story => last.merge(s),
+                    _ => steps.push(s),
+                }
                 self.stale = true;
             }
         }
         relaid |= self.ensure_layout(fonts);
         self.clamp_selection();
-        let mut changes = step.changes();
+        let mut changes: Vec<Change> = steps.iter().flat_map(Step::changes).collect();
         changes.extend(self.doc.entry_changes(&snapshot)?);
-        if !step.is_empty() {
-            self.record_undo(step, before, group);
+        steps.retain(|s| !s.is_empty());
+        if !steps.is_empty() {
+            for step in steps {
+                self.record_undo(step, before.clone(), group);
+            }
         } else if ops.iter().any(|op| {
             matches!(
                 op,
@@ -1999,14 +2146,27 @@ impl Session {
                     }
                     // No header or footer to edit on this page.
                     Some((_, None)) => {}
-                    None => {
-                        self.leave_story();
-                        if let Some(pos) =
-                            geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
-                        {
-                            self.sel = Selection::caret(pos);
+                    None => match self.note_at(*page, *x, *y) {
+                        // Already in it: the selection stays.
+                        Some(note) if note == self.active => {}
+                        Some(note) => {
+                            self.enter(note, *page);
+                            if let Some(pos) =
+                                geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                            {
+                                self.sel = Selection::caret(pos);
+                            }
+                            self.clamp_selection();
                         }
-                    }
+                        None => {
+                            self.leave_story();
+                            if let Some(pos) =
+                                geometry::hit_test(&self.layout, &self.index, *page, *x, *y)
+                            {
+                                self.sel = Selection::caret(pos);
+                            }
+                        }
+                    },
                 }
                 self.pending = None;
                 Ok(None)
@@ -2083,6 +2243,7 @@ impl Session {
             EditOp::InsertText { text } => Ok(Some(self.insert_text(text))),
             EditOp::InsertParagraph => Ok(Some(self.insert_paragraph())),
             EditOp::InsertBreak { kind } => Ok(Some(self.insert_break(*kind))),
+            EditOp::InsertNote { endnote } => self.insert_note(*endnote),
             EditOp::Delete { forward, unit } => Ok(self.delete(*forward, *unit)),
             EditOp::ToggleFormat { format } => Ok(self.toggle(*format)),
             EditOp::SetFormat { patch } => {
@@ -2557,6 +2718,85 @@ impl Session {
         let step = txn.finish();
         self.set_caret(caret);
         step
+    }
+
+    fn insert_note(&mut self, endnote: bool) -> crate::Result<Option<Step>> {
+        // Notes are referenced from the body, as in Word.
+        if self.active != StoryTarget::Body {
+            return Ok(None);
+        }
+        let note = notes::add_note(&mut self.doc, endnote)?;
+        self.stale = true;
+        let w = self.doc.w_prefix().to_owned();
+        let q = |l: &str| {
+            if w.is_empty() {
+                l.to_owned()
+            } else {
+                format!("{w}:{l}")
+            }
+        };
+        let local = if endnote {
+            "endnoteReference"
+        } else {
+            "footnoteReference"
+        };
+        let object = format!("<{} {}=\"{}\"/>", q(local), q("id"), note.id);
+        let pending = self.pending.take();
+        let sel = self.sel.clone();
+        let rev = self.revisor();
+        let mut txn = Txn::new(&mut self.doc, &self.active);
+        let at = match &rev {
+            Some(r) => tracked_delete_selection(&mut txn, &sel, r).1,
+            None => delete_selection(&mut txn, &sel),
+        };
+        let mut attrs = pending.unwrap_or_else(|| typing_in(&txn, &at));
+        attrs = match &note.reference_style {
+            Some(id) => attrs.with(
+                &format!("{}{}", key::RUN_PROP, q("rStyle")),
+                Some(&format!("<{} {}=\"{id}\"/>", q("rStyle"), q("val"))),
+            ),
+            None => attrs.with(
+                &format!("{}{}", key::RUN_PROP, q("vertAlign")),
+                Some(&format!(
+                    "<{} {}=\"superscript\"/>",
+                    q("vertAlign"),
+                    q("val")
+                )),
+            ),
+        };
+        if let Some(r) = &rev {
+            attrs = revise::inserted(&attrs, char_before(&txn, &at).as_ref(), r);
+        }
+        attrs = attrs.with(key::OBJ, Some(&object));
+        let mut after = at.clone();
+        if let Some(b) = txn.block_mut(&at.block) {
+            let o = at.offset.min(b.content.len());
+            b.content.insert(o, &OBJECT_CHAR.to_string(), attrs);
+            after = Pos::new(at.block.clone(), o + 1);
+        }
+        let step = txn.finish();
+        // Into the new note, after its mark and space; leaving it comes
+        // back to just after the reference.
+        let target = StoryTarget::Note {
+            endnote,
+            id: note.id,
+        };
+        let first = self.doc.story(&target).paragraphs().into_iter().next();
+        if let Some(first) = first
+            && self.doc.has_story(&target)
+        {
+            let len = self
+                .doc
+                .story(&target)
+                .get(&first)
+                .map_or(0, |b| b.content.len());
+            self.enter(target, 0);
+            self.body_sel = Some(Selection::caret(after));
+            self.sel = Selection::caret(Pos::new(first, len));
+        } else {
+            self.set_caret(after);
+        }
+        Ok(Some(step))
     }
 
     fn insert_break(&mut self, kind: BreakKind) -> Step {

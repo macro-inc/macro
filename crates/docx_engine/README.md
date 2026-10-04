@@ -76,9 +76,16 @@ Accept and reject resolve the selection, the revision at the caret or
 everything. With markup, a bar in the left margin marks every line that
 holds a change, and a list label shows its paragraph mark's revision.
 
-Headers and footers are stories of their own: their blocks get ids prefixed
-with the part, transactions target the active story, and an edited part is
-written back as XML and shared as one entry.
+Headers, footers, footnotes and endnotes are stories of their own: their
+blocks get ids prefixed with the part (or note), transactions target the
+active story, and an edited part (`footnotes.xml` for any footnote) is
+written back as XML and shared as one entry (footnotes and endnotes one
+note per entry, so typing in a note shares that note only). A click in a page's notes
+area (`PageInfo::notes`) enters the note under it. `insertNote` adds a
+footnote or endnote at the caret, as Word does: the reference in the text
+(Footnote Reference style), the note (Footnote Text, starting with its
+mark), the notes part with its separators and the styles when the document
+lacks them; the caret moves into the new note.
 
 ### Collaboration
 
@@ -171,9 +178,12 @@ where Word PDFs exist they decide.
   (square wrap is used), no balancing of continuous-section columns.
 - Fields are shown with their cached results, except page numbers, which
   are computed; a table of contents is not regenerated.
-- Editing does not create footnotes, text boxes or pictures, and does not
-  edit inside them (it keeps them); comments are Macro threads anchored in
-  the body.
+- Editing does not create text boxes or pictures and does not edit inside
+  text boxes (it keeps them); comments are Macro threads anchored in the
+  body. Undoing a new footnote removes its reference; the empty note stays
+  in the notes part, unreferenced.
+- Two people editing the same footnote or endnote at once: the last write
+  of the note wins (different notes merge: notes are shared one by one).
 - Tracked changes show without balloons (formatting changes only get a
   change bar); table property changes (`w:tcPrChange`, `w:tblPrChange`)
   are not recorded.

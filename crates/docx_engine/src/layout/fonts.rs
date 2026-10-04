@@ -10,9 +10,9 @@ mod widths;
 
 pub use widths::Widths;
 
+use crate::hash::FxMap;
 use pptx_engine::font::{FaceId, FontChoice, FontDb, SymbolFont, remap_symbol};
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 /// Vertical metrics of a face in em units, as Word uses them.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -196,9 +196,12 @@ pub struct Glyph {
 /// free to measure through shared references.
 pub struct Fonts<'a> {
     db: &'a FontDb,
-    choices: RefCell<HashMap<(String, bool, bool), Font>>,
-    glyphs: RefCell<HashMap<(Font, char), Glyph>>,
-    metrics: RefCell<HashMap<FaceId, VMetrics>>,
+    /// Per family, the font for each of regular, italic, bold and bold
+    /// italic (`Some(None)`: none). Looked up for every character, so by
+    /// `&str` without allocating.
+    choices: RefCell<FxMap<String, [Option<Option<Font>>; 4]>>,
+    glyphs: RefCell<FxMap<(Font, char), Glyph>>,
+    metrics: RefCell<FxMap<FaceId, VMetrics>>,
 }
 
 impl<'a> Fonts<'a> {
@@ -206,9 +209,9 @@ impl<'a> Fonts<'a> {
     pub fn new(db: &'a FontDb) -> Self {
         Self {
             db,
-            choices: RefCell::new(HashMap::new()),
-            glyphs: RefCell::new(HashMap::new()),
-            metrics: RefCell::new(HashMap::new()),
+            choices: RefCell::new(FxMap::default()),
+            glyphs: RefCell::new(FxMap::default()),
+            metrics: RefCell::new(FxMap::default()),
         }
     }
 
@@ -219,10 +222,19 @@ impl<'a> Fonts<'a> {
 
     /// The font for a family name and style.
     pub fn select(&self, family: &str, bold: bool, italic: bool) -> Option<Font> {
-        let key = (family.to_owned(), bold, italic);
-        if let Some(f) = self.choices.borrow().get(&key) {
-            return Some(*f);
+        let style = usize::from(bold) * 2 + usize::from(italic);
+        if let Some(Some(known)) = self.choices.borrow().get(family).map(|c| c[style]) {
+            return known;
         }
+        let font = self.choose(family, bold, italic);
+        self.choices
+            .borrow_mut()
+            .entry(family.to_owned())
+            .or_default()[style] = Some(font);
+        font
+    }
+
+    fn choose(&self, family: &str, bold: bool, italic: bool) -> Option<Font> {
         let lower = family.trim().to_lowercase();
         let symbol = SymbolFont::from_family(&lower).map(SymbolKind::from_font);
         let choice: FontChoice = if symbol.is_some() {
@@ -231,15 +243,13 @@ impl<'a> Fonts<'a> {
         } else {
             self.db.select(family, bold, italic)?
         };
-        let font = Font {
+        Some(Font {
             face: choice.face,
             synthetic_bold: choice.synthetic_bold,
             synthetic_italic: choice.synthetic_italic,
             symbol,
             widths: Widths::for_family(&lower, bold),
-        };
-        self.choices.borrow_mut().insert(key, font);
-        Some(font)
+        })
     }
 
     /// Vertical metrics for text a document set in `family`, drawn with

@@ -411,17 +411,19 @@ impl<'d> Txn<'d> {
         self.doc.next_block_id()
     }
 
-    /// Ends the transaction. A header or footer is written back to its
-    /// part, which is how other peers receive the change.
+    /// Ends the transaction. A header, footer or note is written back to
+    /// its part, which is how other peers receive the change.
     pub fn finish(mut self) -> Step {
         for id in &self.step.order {
             let post = self.story().get(id).cloned();
             self.step.after.insert(id.clone(), post);
         }
-        if let StoryTarget::Part(name) = &self.step.story
-            && !self.step.order.is_empty()
-        {
-            self.doc.write_part_story(name);
+        if !self.step.order.is_empty() {
+            match &self.step.story {
+                StoryTarget::Body => {}
+                StoryTarget::Part(name) => self.doc.write_part_story(name),
+                StoryTarget::Note { endnote, id } => self.doc.write_notes(*endnote, Some(*id)),
+            }
         }
         self.step
     }
@@ -448,5 +450,6 @@ pub fn apply_step(doc: &mut Document, step: &Step) {
     match &step.story {
         StoryTarget::Body => doc.body_dirty = true,
         StoryTarget::Part(name) => doc.write_part_story(name),
+        StoryTarget::Note { endnote, id } => doc.write_notes(*endnote, Some(*id)),
     }
 }
