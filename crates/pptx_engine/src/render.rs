@@ -74,6 +74,11 @@ impl PartLoader for RenderLoader<'_> {
 }
 
 /// Rasterizes a metafile at about 150 DPI (capped at 2048 pixels per side).
+/// The longest side, in pixels, of a rendered slide.
+const MAX_RASTER_SIDE: u32 = 16_384;
+/// The most pixels a slide render allocates (128 MiB of RGBA).
+const MAX_RASTER_PIXELS: u32 = 1 << 25;
+
 fn metafile_raster(m: &metafile::Metafile) -> Raster {
     let scale = (150.0 / 72.0f32).min(2048.0 / m.width_pt.max(m.height_pt).max(1.0));
     let w = ((m.width_pt * scale).ceil() as u32).max(1);
@@ -120,9 +125,13 @@ impl Presentation {
         let (cx, cy) = self.slide_size();
         let w_pt = cx as f32 / EMU_PER_PT as f32;
         let h_pt = cy as f32 / EMU_PER_PT as f32;
-        let scale = width_px as f32 / w_pt;
-        let height_px = (h_pt * scale).round().max(1.0) as u32;
-        Ok(raster::rasterize(&nodes, width_px.max(1), height_px, scale))
+        let width_px = width_px.clamp(1, MAX_RASTER_SIDE);
+        // Callers size the image from its width, so a slide too tall for the
+        // pixel budget is drawn smaller rather than given a narrower raster.
+        let max_height = (MAX_RASTER_PIXELS / width_px).min(MAX_RASTER_SIDE);
+        let scale = (width_px as f32 / w_pt).min(max_height as f32 / h_pt);
+        let height_px = (h_pt * scale).round().clamp(1.0, max_height as f32) as u32;
+        Ok(raster::rasterize(&nodes, width_px, height_px, scale))
     }
 }
 

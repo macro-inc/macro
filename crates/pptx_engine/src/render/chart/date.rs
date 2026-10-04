@@ -75,7 +75,11 @@ fn days_in_month(y: i64, m: u32) -> u32 {
 /// `serial` plus `n` calendar months (the day clamped to the month's length).
 fn add_months(s: f64, n: i64, date1904: bool) -> Option<f64> {
     let (y, m, d, _) = serial_to_date(s, date1904)?;
-    let total = y * 12 + i64::from(m) - 1 + n;
+    // A huge axis step stops the labels instead of overflowing.
+    let total = (y * 12 + i64::from(m) - 1).checked_add(n)?;
+    if !(0..=12 * 10_000).contains(&total) {
+        return None;
+    }
     let (ny, nm) = (total.div_euclid(12), (total.rem_euclid(12) + 1) as u32);
     Some(serial(ny, nm, d.clamp(1, days_in_month(ny, nm)), date1904))
 }
@@ -194,7 +198,9 @@ impl DateAxis {
             let s = match unit {
                 TimeUnit::Days => Some(self.start + n as f64),
                 TimeUnit::Months => add_months(self.start, n, self.date1904),
-                TimeUnit::Years => add_months(self.start, n * 12, self.date1904),
+                TimeUnit::Years => n
+                    .checked_mul(12)
+                    .and_then(|n| add_months(self.start, n, self.date1904)),
             };
             let Some(s) = s else { break };
             if s > self.end + 0.5 {

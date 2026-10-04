@@ -162,8 +162,8 @@ impl Theme {
     /// The fill-style entry for a `fillRef`/`bgRef` index (1-3 fills, 1001+ backgrounds).
     pub fn fill_style(&self, idx: u32) -> Option<NodeId> {
         match idx {
-            0 => None,
-            1000.. => self.bg_fill_styles.get((idx - 1001) as usize).copied(),
+            0 | 1000 => None,
+            1001.. => self.bg_fill_styles.get((idx - 1001) as usize).copied(),
             n => self.fill_styles.get((n - 1) as usize).copied(),
         }
     }

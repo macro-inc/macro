@@ -15,14 +15,16 @@ export function NotesPanel(props: {
   const [draft, setDraft] = createSignal<{
     slideId: number;
     text: string;
+    /** `props.notes` when this draft was committed; unset while typing. */
+    base?: string;
   } | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const commit = () => {
     clearTimeout(timer);
     const d = draft();
-    if (d) {
-      setDraft(null);
+    if (d && d.base === undefined) {
+      setDraft({ ...d, base: props.notes });
       props.onCommit(d.slideId, d.text);
     }
   };
@@ -30,7 +32,11 @@ export function NotesPanel(props: {
 
   const value = () => {
     const d = draft();
-    return d && d.slideId === props.slideId ? d.text : props.notes;
+    if (!d || d.slideId !== props.slideId) return props.notes;
+    // A committed draft shows until the stored notes move on.
+    return d.base === undefined || d.base === props.notes
+      ? d.text
+      : props.notes;
   };
 
   return (

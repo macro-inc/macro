@@ -1,7 +1,7 @@
 //! Small DOM helpers for edits: schema child orders, colors, fills, lookups.
 
 use crate::error::{Error, Result};
-use crate::model::shape::{c_nv_pr, sp_tree};
+use crate::model::shape::{alternate_content_choice, c_nv_pr, sp_tree};
 use crate::units::pt_to_emu;
 use crate::xml::{NodeId, Ns, XmlDoc};
 
@@ -117,11 +117,8 @@ pub fn find_shape(doc: &XmlDoc, id: u32) -> Option<NodeId> {
     while let Some(n) = stack.pop() {
         for c in doc.children(n) {
             if doc.local(c) == "AlternateContent" {
-                stack.extend(doc.children(c));
-                continue;
-            }
-            if matches!(doc.local(c), "Choice" | "Fallback") {
-                stack.push(c);
+                // Edit the branch the renderer shows (and PowerPoint reads).
+                stack.extend(alternate_content_choice(doc, c));
                 continue;
             }
             if c_nv_pr(doc, c).and_then(|p| doc.attr_i64(p, "id")) == Some(i64::from(id)) {

@@ -111,7 +111,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/{document_id}/simple_save",
             put(simple_save::handler).layer(
                 ServiceBuilder::new()
-                    .layer(DefaultBodyLimit::max(simple_save::MAX_FILE_BYTES))
+                    .layer(DefaultBodyLimit::max(simple_save::MAX_BODY_BYTES))
                     .layer(ensure_document_exists_middleware.clone()),
             ),
         )

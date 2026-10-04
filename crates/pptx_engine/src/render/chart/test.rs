@@ -487,13 +487,11 @@ fn series_and_point_caps() {
         doc: std::sync::Arc::new(doc),
         rels: std::sync::Arc::new(crate::opc::Relationships::empty("chart")),
     };
-    let bytes = deck_with_media(&[], &[]);
+    let bytes = deck_with_media(&[""], &[]);
     let mut p = Presentation::open(bytes).unwrap();
-    let ctx = p.slide_context(0).ok();
-    if let Some(ctx) = ctx {
-        let m = super::parse::parse(&part, &ctx, None).unwrap();
-        assert_eq!(m.groups[0].series.len(), super::model::MAX_SERIES);
-    }
+    let ctx = p.slide_context(0).unwrap();
+    let m = super::parse::parse(&part, &ctx, None).unwrap();
+    assert_eq!(m.groups[0].series.len(), super::model::MAX_SERIES);
 }
 
 // ---- related parts, labels, dates, multi-level categories -------------------
@@ -720,6 +718,20 @@ fn date_axis_labels_step_by_time_unit() {
         "{}",
         p.cat_t(0, 6.0)
     );
+    // A huge step ends the labels instead of overflowing.
+    for unit in ["months", "years"] {
+        let huge = axes.replace(
+            r#"<c:majorUnit val="6"/><c:majorTimeUnit val="months"/>"#,
+            &format!(r#"<c:majorUnit val="1e30"/><c:majorTimeUnit val="{unit}"/>"#),
+        );
+        let m = model(&chart(
+            &format!(
+                r#"<c:lineChart><c:grouping val="standard"/>{ser}<c:axId val="1"/><c:axId val="2"/></c:lineChart>{huge}"#
+            ),
+            false,
+        ));
+        assert_eq!(label_texts(&laid_out(&m), 0), ["Jan-20"], "{unit}");
+    }
 }
 
 #[test]

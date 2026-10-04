@@ -91,3 +91,28 @@ fn wide_and_split_bit_masks_do_not_overflow() {
     assert_eq!(mask_channel(0x00FF_0000, 0x00FF_0000), 255);
     assert_eq!(mask_channel(0x0080_0000, 0x00FF_0000), 128);
 }
+
+#[test]
+fn huge_color_counts_read_only_indexable_entries() {
+    // A 1 × 1, 8-bit DIB claiming 0xFFFF_FFFF palette entries, with palette
+    // entry 0 red and the pixel data given by offset.
+    let mut dib = Vec::new();
+    dib.extend(40u32.to_le_bytes());
+    dib.extend(1i32.to_le_bytes());
+    dib.extend(1i32.to_le_bytes());
+    dib.extend(1u16.to_le_bytes());
+    dib.extend(8u16.to_le_bytes());
+    dib.extend(0u32.to_le_bytes()); // BI_RGB
+    dib.extend(4u32.to_le_bytes());
+    dib.extend([0; 8]);
+    dib.extend(u32::MAX.to_le_bytes()); // biClrUsed
+    dib.extend(0u32.to_le_bytes());
+    dib.extend([0, 0, 255, 0]); // entry 0: red (BGRA)
+    let bits_at = dib.len();
+    dib.extend([0, 0, 0, 0]); // one index-0 pixel, padded to 4 bytes
+    let raster = decode_dib(&dib, Some(bits_at)).unwrap();
+    assert_eq!((raster.width, raster.height), (1, 1));
+    assert_eq!(&raster.to_straight_rgba()[..3], &[255, 0, 0]);
+    // Without a pixel offset, the stored count only pushes the data out of range.
+    assert!(decode_dib(&dib, None).is_ok());
+}

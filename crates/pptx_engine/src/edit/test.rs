@@ -896,3 +896,42 @@ fn op_fields_are_camel_case() {
     let json = serde_json::to_value(&op).unwrap();
     assert_eq!(json["flipH"], true);
 }
+
+#[test]
+fn edits_land_on_the_rendered_alternate_content_branch() {
+    let choice = text_box(7, 0, 0, 3_000_000, 1_000_000, &para("Choice"));
+    let fallback = text_box(7, 0, 0, 3_000_000, 1_000_000, &para("Fallback"));
+    let slide = format!(
+        r#"<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main"><mc:Choice Requires="p14">{choice}</mc:Choice><mc:Fallback>{fallback}</mc:Fallback></mc:AlternateContent>"#
+    );
+    let mut pres = open(&[&slide]);
+    apply(
+        &mut pres,
+        vec![EditOp::SetText {
+            slide: 256,
+            shape: 7,
+            cell: None,
+            text: "Edited".into(),
+        }],
+    );
+    let outline = pres.outline().unwrap();
+    let shape = &outline.slides[0].shapes[0];
+    assert_eq!(shape.paragraphs[0].text, "Edited");
+    let part = pres.slide_part(256).unwrap();
+    let doc = pres.xml(&part).unwrap();
+    let text_of = |branch: &str| {
+        let node = doc
+            .descendants(doc.root())
+            .into_iter()
+            .find(|&n| doc.local(n) == branch)
+            .unwrap();
+        doc.descendants(node)
+            .into_iter()
+            .filter(|&n| doc.local(n) == "t")
+            .map(|n| doc.text(n))
+            .collect::<String>()
+    };
+    assert_eq!(text_of("Choice"), "Edited");
+    assert_eq!(text_of("Fallback"), "Fallback");
+    assert_integrity(&mut pres);
+}

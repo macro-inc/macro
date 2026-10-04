@@ -416,7 +416,8 @@ export function PptxEditor() {
   };
   const onCut = (e: ClipboardEvent) => {
     onCopy(e);
-    void editor.deleteText(-1);
+    // A collapsed caret has nothing to cut; deleting would eat a character.
+    if (editor.selectedText()) void editor.deleteText(-1);
   };
   const onPaste = (e: ClipboardEvent) => {
     e.preventDefault();

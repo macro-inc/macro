@@ -251,12 +251,19 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
     let top_down = h_raw < 0;
     let (w, h) = (w.unsigned_abs(), h_raw.unsigned_abs());
     check_size(w, h)?;
-    let palette_entries = if bpp <= 8 {
+    // The stored table decides where the pixels start; only `1 << bpp`
+    // entries can be indexed, so no more are read.
+    let stored_entries = if bpp <= 8 {
         if colors_used > 0 {
             colors_used as usize
         } else {
             1usize << bpp
         }
+    } else {
+        0
+    };
+    let palette_entries = if bpp <= 8 {
+        stored_entries.min(1usize << bpp)
     } else {
         0
     };
@@ -293,7 +300,11 @@ pub fn decode_dib(dib: &[u8], bits_offset: Option<usize>) -> Result<Raster> {
     } else {
         (None, 0)
     };
-    let bits_at = bits_offset.unwrap_or(header_size + mask_len + palette_entries * entry);
+    let bits_at = bits_offset.unwrap_or_else(|| {
+        header_size
+            .saturating_add(mask_len)
+            .saturating_add(stored_entries.saturating_mul(entry))
+    });
     let bits = dib.get(bits_at..).unwrap_or(&[]);
     let stride = ((w as usize * usize::from(bpp)).div_ceil(32)) * 4;
     let mut out = vec![0u8; (w * h * 4) as usize];

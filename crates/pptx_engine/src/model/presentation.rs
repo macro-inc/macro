@@ -83,6 +83,9 @@ pub struct Presentation {
 
 /// Default slide size (16:9, 13.333 × 7.5 in).
 pub const DEFAULT_SLIDE_SIZE: (i64, i64) = (12_192_000, 6_858_000);
+/// The slide side range ECMA-376 allows (1 to 56 inches, in EMU).
+const MIN_SLIDE_SIDE: i64 = 914_400;
+const MAX_SLIDE_SIDE: i64 = 51_206_400;
 
 impl Presentation {
     /// Opens a `.pptx` file.
@@ -116,7 +119,10 @@ impl Presentation {
             let cx = doc.attr_i64(sz, "cx").unwrap_or(DEFAULT_SLIDE_SIZE.0);
             let cy = doc.attr_i64(sz, "cy").unwrap_or(DEFAULT_SLIDE_SIZE.1);
             if cx > 0 && cy > 0 {
-                self.size = (cx, cy);
+                self.size = (
+                    cx.clamp(MIN_SLIDE_SIDE, MAX_SLIDE_SIDE),
+                    cy.clamp(MIN_SLIDE_SIDE, MAX_SLIDE_SIDE),
+                );
             }
         }
         self.slides.clear();

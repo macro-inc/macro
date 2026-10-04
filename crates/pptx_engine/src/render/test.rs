@@ -75,3 +75,27 @@ fn group_unit_scaling_stretches_boxes_not_text_or_lines() {
     assert!((layout.size[0] - 200.0).abs() < 0.5, "{:?}", layout.size);
     assert_eq!(layout.lines.len(), 1);
 }
+
+#[test]
+fn extreme_slide_aspect_stays_within_the_pixel_budget() {
+    let bytes = deck(&[&rect_shape(2, 0, "FF0000")]);
+    let mut package = crate::opc::Package::open(bytes).unwrap();
+    let main = "/ppt/presentation.xml";
+    let xml = String::from_utf8(package.read(main).unwrap().into_owned()).unwrap();
+    // One EMU wide and taller than the schema allows: clamped to 1 × 56 inches.
+    let xml = xml.replace(
+        r#"<p:sldSz cx="12192000" cy="6858000"/>"#,
+        r#"<p:sldSz cx="1" cy="999999999"/>"#,
+    );
+    package.write(main, xml.into_bytes(), None);
+    let mut pres = Presentation::open(package.save().unwrap()).unwrap();
+    assert_eq!(pres.slide_size(), (914_400, 51_206_400));
+    let raster = pres.render_slide(0, 4096, fonts()).unwrap();
+    assert_eq!(raster.width, 4096);
+    assert!(
+        u64::from(raster.width) * u64::from(raster.height) <= 1 << 25,
+        "{} × {}",
+        raster.width,
+        raster.height
+    );
+}
