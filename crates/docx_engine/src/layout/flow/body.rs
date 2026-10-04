@@ -650,8 +650,10 @@ impl<'e, 'a> Flow<'e, 'a> {
         if let Some(c) = &mut self.cur {
             c.y += before;
         }
-        // Where the paragraph's floating drawings are positioned from.
-        let mut anchor_top = self.reserve_float_bands(&pb, col_left, width);
+        // Where the paragraph's floating drawings are positioned from: its
+        // top, above its own space before.
+        let own = space_before(&props, None, first_in_doc, self.sum_spacing());
+        let mut anchor_top = self.reserve_float_bands(&pb, col_left, width, before.min(own));
         let mut join = self.border_join(blocks, i, &props, self.prev.as_ref());
         let mut lines_len = pb.lines.lines.len();
         let mut first_fragment = true;
@@ -717,7 +719,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                     lines_len = pb.lines.lines.len();
                     // A new column starts a new border box.
                     join.prev = false;
-                    anchor_top = self.reserve_float_bands(&pb, col_left, width);
+                    anchor_top = self.reserve_float_bands(&pb, col_left, width, 0.0);
                     continue;
                 }
                 take = 1;

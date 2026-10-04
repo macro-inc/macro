@@ -101,20 +101,25 @@ impl Flow<'_, '_> {
     }
 
     /// Reserves the bands of the floating drawings in `pb` that leave no
-    /// room for text beside them, for a paragraph starting at the current
-    /// position; moves to the next column first when such a drawing does
-    /// not fit. Returns the paragraph top the drawings are positioned from.
+    /// room for text beside them, for a paragraph whose first line starts
+    /// at the current position, `above` points below the paragraph's own
+    /// top (its space before); moves to the next column first when such a
+    /// drawing does not fit. Returns the paragraph top the drawings are
+    /// positioned from.
     pub(super) fn reserve_float_bands(
         &mut self,
         pb: &Arc<ParaBox>,
         col_left: f32,
         width: f32,
+        above: f32,
     ) -> f32 {
+        let mut above = above;
         for attempt in 0..2 {
             let Some(c) = &self.cur else {
                 return 0.0;
             };
             let top = c.y;
+            let para_top = top - above;
             let geom = self.page_geom();
             let mut bands = Vec::new();
             for line in &pb.lines.lines {
@@ -128,7 +133,7 @@ impl Flow<'_, '_> {
                     };
                     let a = PendingAnchor {
                         drawing: Arc::new(d.clone()),
-                        para_top: top,
+                        para_top,
                         line_top: top + line.top,
                         char_x: col_left + pb.lines.x[k],
                         story: pb.story.clone(),
@@ -153,13 +158,15 @@ impl Flow<'_, '_> {
             let bottom = c.bottom - c.notes_height;
             let overflows = bands.iter().any(|&(_, b)| b > bottom + EPS);
             if attempt == 0 && overflows && c.placed_any {
+                // The paragraph starts the next column, with no space above.
                 self.next_column(false);
+                above = 0.0;
                 continue;
             }
             if let Some(c) = &mut self.cur {
                 c.bands.extend(bands);
             }
-            return top;
+            return para_top;
         }
         self.cur.as_ref().map_or(0.0, |c| c.y)
     }
