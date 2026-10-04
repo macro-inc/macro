@@ -4892,6 +4892,10 @@
       "crates/user_quota",
       "crates/workspace-hack"
     ],
+    "docx_engine": [
+      "crates/docx_engine",
+      "crates/pptx_engine"
+    ],
     "docx_unzip_handler": [
       "crates/activity",
       "crates/agent",
@@ -7676,7 +7680,6 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
       "crates/rate_limit",

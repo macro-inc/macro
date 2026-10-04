@@ -1,0 +1,236 @@
+use crate::Document;
+use crate::layout::{Item, Layout, PlacedLine};
+use crate::test_support::{Parts, docx, fonts};
+
+fn layout(body: &str, parts: &Parts<'_>) -> (Document, Layout) {
+    let doc = Document::open(docx(body, parts)).unwrap();
+    let l = doc.layout(fonts());
+    (doc, l)
+}
+
+fn lines(l: &Layout, page: usize) -> Vec<&PlacedLine> {
+    l.pages[page]
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Line(p) => Some(p),
+            _ => None,
+        })
+        .collect()
+}
+
+fn line_text(p: &PlacedLine) -> String {
+    let l = p.line();
+    p.para.inline.clusters[l.start..l.end]
+        .iter()
+        .filter(|c| {
+            !matches!(
+                c.kind,
+                crate::layout::inline::Kind::End | crate::layout::inline::Kind::Zero
+            )
+        })
+        .map(|c| if c.ch == '\u{FFFC}' { '#' } else { c.ch })
+        .collect()
+}
+
+const ARIAL_10: &str = r#"<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>"#;
+
+fn para(text: &str) -> String {
+    format!("<w:p><w:r><w:t xml:space=\"preserve\">{text}</w:t></w:r></w:p>")
+}
+
+#[test]
+fn wraps_at_spaces_and_hangs_trailing_spaces() {
+    let words = "lorem ipsum dolor sit amet ".repeat(20);
+    let (_, l) = layout(
+        &para(&words),
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    assert!(ls.len() > 3);
+    for p in &ls[..ls.len() - 1] {
+        let line = p.line();
+        // Lines fit the 6.5" text width and break after a space.
+        assert!(line.width <= 468.0 + 0.1, "{}", line.width);
+        assert!(line_text(p).ends_with(' '), "{:?}", line_text(p));
+    }
+    // Arial 10pt single spacing: 1.149 em.
+    let h = ls[0].line().height;
+    assert!((h - 11.499).abs() < 0.01, "{h}");
+}
+
+#[test]
+fn breaks_long_words_where_they_overflow() {
+    let word = "x".repeat(200);
+    let (_, l) = layout(
+        &para(&word),
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    assert!(ls.len() >= 2);
+    assert!(ls[0].line().width <= 468.0 + 0.1);
+}
+
+#[test]
+fn tabs_use_custom_then_default_stops() {
+    let body = r#"<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="9360"/></w:tabs></w:pPr><w:r><w:t>Left</w:t><w:tab/><w:t>Right</w:t></w:r></w:p>
+        <w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r></w:p>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    // "Right" ends at the right tab stop (6.5").
+    let p = ls[0];
+    let c = &p.para.inline.clusters;
+    let last = (0..c.len())
+        .rev()
+        .find(|&i| c[i].kind == crate::layout::inline::Kind::Text)
+        .unwrap();
+    let end = p.para.lines.x[last] + p.para.lines.adv[last];
+    assert!((end - 468.0).abs() < 0.05, "{end}");
+    // A default stop every half inch.
+    let p = ls[1];
+    let b = p
+        .para
+        .inline
+        .clusters
+        .iter()
+        .position(|c| c.ch == 'b')
+        .unwrap();
+    assert!((p.para.lines.x[b] - 36.0).abs() < 0.05);
+}
+
+#[test]
+fn justifies_all_but_the_last_line() {
+    let words = "justify these words please ".repeat(15);
+    let body =
+        format!(r#"<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>{words}</w:t></w:r></w:p>"#);
+    let (_, l) = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    for p in &ls[..ls.len() - 1] {
+        let line = p.line();
+        let c = &p.para.inline.clusters;
+        let last = (line.start..line.end)
+            .rev()
+            .find(|&i| c[i].kind == crate::layout::inline::Kind::Text)
+            .unwrap();
+        let end = p.para.lines.x[last] + p.para.lines.adv[last];
+        assert!((end - 468.0).abs() < 0.05, "{end}");
+    }
+}
+
+#[test]
+fn numbered_paragraphs_get_labels_and_hanging_tabs() {
+    let numbering = r#"<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>"#;
+    let body = r#"<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p>
+        <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Second</w:t></w:r></w:p>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            numbering: Some(numbering),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    assert_eq!(line_text(ls[0]), "1.\tFirst");
+    assert_eq!(line_text(ls[1]), "2.\tSecond");
+    // The label hangs at 0.25" and the text starts at the 0.5" indent.
+    let p = ls[0];
+    assert!((p.para.lines.x[0] - 18.0).abs() < 0.05);
+    let f = p
+        .para
+        .inline
+        .clusters
+        .iter()
+        .position(|c| c.ch == 'F')
+        .unwrap();
+    assert!((p.para.lines.x[f] - 36.0).abs() < 0.05);
+}
+
+#[test]
+fn page_breaks_and_widow_control() {
+    let mut body = String::new();
+    for i in 0..60 {
+        body.push_str(&para(&format!("Paragraph {i}")));
+    }
+    body.push_str(r#"<w:p><w:r><w:br w:type="page"/></w:r></w:p>"#);
+    body.push_str(&para("After the break"));
+    let (_, l) = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    assert!(l.pages.len() >= 2);
+    let last = l.pages.len() - 1;
+    assert!(
+        lines(&l, last)
+            .iter()
+            .any(|p| line_text(p).contains("After the break"))
+    );
+}
+
+#[test]
+fn keep_with_next_moves_headings() {
+    let mut body = String::new();
+    for i in 0..56 {
+        body.push_str(&para(&format!("Filler {i}")));
+    }
+    body.push_str(r#"<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>"#);
+    body.push_str(&para(&"text ".repeat(40)));
+    let (_, l) = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let first: Vec<String> = lines(&l, 0).iter().map(|p| line_text(p)).collect();
+    let second: Vec<String> = lines(&l, 1).iter().map(|p| line_text(p)).collect();
+    // The heading never ends a page without the start of the next paragraph.
+    if first.last().is_some_and(|t| t.contains("Heading")) {
+        panic!("heading stranded at the bottom: {first:?}");
+    }
+    assert!(
+        first.iter().any(|t| t.contains("Heading")) || second.iter().any(|t| t.contains("Heading"))
+    );
+}
+
+#[test]
+fn headers_footnotes_and_page_fields() {
+    let header = r#"<w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>PAGE</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>9</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>"#;
+    let footnotes = r#"<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> The note.</w:t></w:r></w:p></w:footnote>"#;
+    let body = r#"<w:p><w:r><w:t>Text</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r></w:p>
+        <w:sectPr><w:headerReference w:type="default" r:id="rIdH1"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            header: Some(header),
+            footnotes: Some(footnotes),
+            ..Parts::default()
+        },
+    );
+    let texts: Vec<String> = lines(&l, 0).iter().map(|p| line_text(p)).collect();
+    assert!(texts.iter().any(|t| t == "Page 1"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Text1"), "{texts:?}");
+    assert!(texts.iter().any(|t| t.contains("1 The note.")), "{texts:?}");
+}

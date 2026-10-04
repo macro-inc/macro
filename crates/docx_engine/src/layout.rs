@@ -1,0 +1,196 @@
+//! Paginated layout.
+//!
+//! [`Document::layout`] turns the document into pages of placed items:
+//! lines of text, shading and borders, drawings. Paragraphs are measured
+//! into clusters ([`inline`]), broken into lines ([`lines`]), and flowed into
+//! columns and pages ([`flow`]) with Word's rules for spacing, keeping lines
+//! together, widows and orphans, sections, headers, footers and notes.
+
+pub mod drawing;
+mod flow;
+pub mod fonts;
+pub mod format;
+pub mod inline;
+pub mod lines;
+mod table;
+
+use crate::document::Document;
+use crate::model::block::BlockId;
+use crate::model::props::Border;
+use format::ParaFormat;
+use inline::Inline;
+use lines::Lines;
+use pptx_engine::font::FontDb;
+use pptx_engine::model::color::Rgba;
+use pptx_engine::path::Rect;
+use std::sync::Arc;
+
+pub use flow::LayoutOptions;
+
+/// Which story a paragraph belongs to.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum StoryRef {
+    /// The body.
+    Body,
+    /// A header or footer part.
+    Part(String),
+    /// A footnote.
+    Footnote(i64),
+    /// An endnote.
+    Endnote(i64),
+    /// A text box inside a drawing (anchor paragraph and drawing index).
+    TextBox(BlockId, u16),
+}
+
+/// A laid-out paragraph, shared by the lines that show it.
+#[derive(Debug)]
+pub struct ParaBox {
+    /// The story.
+    pub story: StoryRef,
+    /// The paragraph block.
+    pub block: BlockId,
+    /// Its clusters.
+    pub inline: Inline,
+    /// Its lines.
+    pub lines: Lines,
+    /// Its formatting.
+    pub format: Arc<ParaFormat>,
+}
+
+/// A line placed on a page.
+#[derive(Clone, Debug)]
+pub struct PlacedLine {
+    /// The paragraph.
+    pub para: Arc<ParaBox>,
+    /// Line index within the paragraph.
+    pub line: usize,
+    /// Page x of the paragraph's text area left edge.
+    pub x: f32,
+    /// Page y of the line's top.
+    pub y: f32,
+    /// Clip rectangle (cells with an exact height).
+    pub clip: Option<Rect>,
+}
+
+impl PlacedLine {
+    /// The line.
+    pub fn line(&self) -> &lines::Line {
+        &self.para.lines.lines[self.line]
+    }
+
+    /// Page y of the baseline.
+    pub fn baseline(&self) -> f32 {
+        self.y + self.line().baseline
+    }
+}
+
+/// A drawing placed on a page.
+#[derive(Clone, Debug)]
+pub struct PlacedDrawing {
+    /// The drawing.
+    pub drawing: Arc<drawing::Drawing>,
+    /// Its box on the page (without effect extents).
+    pub rect: Rect,
+    /// Story of the paragraph that holds it (for part relationships).
+    pub story: StoryRef,
+}
+
+/// Something drawn on a page.
+#[derive(Clone, Debug)]
+pub enum Item {
+    /// A line of text.
+    Line(PlacedLine),
+    /// A filled rectangle (shading).
+    Fill {
+        /// Area.
+        rect: Rect,
+        /// Color.
+        color: Rgba,
+    },
+    /// A border segment from (x0, y0) to (x1, y1).
+    Rule {
+        /// Start x.
+        x0: f32,
+        /// Start y.
+        y0: f32,
+        /// End x.
+        x1: f32,
+        /// End y.
+        y1: f32,
+        /// Border style.
+        border: Border,
+    },
+    /// A drawing.
+    Drawing(PlacedDrawing),
+    /// A line number in the margin.
+    LineNumber {
+        /// Text.
+        text: String,
+        /// Right edge x.
+        right: f32,
+        /// Baseline y.
+        baseline: f32,
+        /// Font size.
+        size: f32,
+        /// Font family.
+        font: String,
+    },
+}
+
+/// One page.
+#[derive(Clone, Debug)]
+pub struct Page {
+    /// Width (points).
+    pub width: f32,
+    /// Height (points).
+    pub height: f32,
+    /// Section index.
+    pub section: usize,
+    /// Displayed page number.
+    pub number: i64,
+    /// Items behind the text (floats behind, page borders).
+    pub behind: Vec<Item>,
+    /// Body, headers, footers and notes.
+    pub items: Vec<Item>,
+    /// Items in front of the text.
+    pub front: Vec<Item>,
+    /// The body text area (for editors).
+    pub body: Rect,
+}
+
+impl Page {
+    /// Every item in paint order.
+    pub fn all_items(&self) -> impl Iterator<Item = &Item> {
+        self.behind.iter().chain(&self.items).chain(&self.front)
+    }
+
+    /// Placed lines of one story.
+    pub fn lines_of<'a>(
+        &'a self,
+        story: &'a StoryRef,
+    ) -> impl Iterator<Item = &'a PlacedLine> + 'a {
+        self.items.iter().filter_map(move |i| match i {
+            Item::Line(l) if &l.para.story == story => Some(l),
+            _ => None,
+        })
+    }
+}
+
+/// A laid-out document.
+#[derive(Clone, Debug, Default)]
+pub struct Layout {
+    /// The pages.
+    pub pages: Vec<Page>,
+}
+
+impl Document {
+    /// Lays the document out into pages.
+    pub fn layout(&self, fonts: &FontDb) -> Layout {
+        self.layout_with(fonts, &LayoutOptions::default())
+    }
+
+    /// Lays the document out with options.
+    pub fn layout_with(&self, fonts: &FontDb, options: &LayoutOptions) -> Layout {
+        flow::layout(self, fonts, options)
+    }
+}

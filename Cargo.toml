@@ -91,6 +91,7 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/docx_engine",
   "crates/pptx_engine",
   "crates/predicate_index",
   "crates/prompt",

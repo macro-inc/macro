@@ -1,0 +1,41 @@
+//! `docx_corpus`: renders documents and scores them against reference renders.
+
+mod fontconfig;
+mod render;
+mod score;
+
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(about = "DOCX engine corpus tools")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Renders documents to PNG pages.
+    Render(render::Args),
+    /// Compares renders with reference renders and writes a report.
+    Score(score::Args),
+    /// Writes a fontconfig file for LibreOffice reference renders.
+    Fontconfig(fontconfig::Args),
+}
+
+fn main() {
+    let cli = Cli::parse();
+    let ok = match cli.command {
+        Command::Render(args) => render::run(&args),
+        Command::Score(args) => score::run(&args),
+        Command::Fontconfig(args) => fontconfig::run(&args),
+    };
+    match ok {
+        Ok(true) => {}
+        Ok(false) => std::process::exit(1),
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+        }
+    }
+}

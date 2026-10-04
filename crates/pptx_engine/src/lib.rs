@@ -22,7 +22,7 @@ pub mod render;
 #[cfg(test)]
 mod test_support;
 pub mod units;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 mod wasm;
 pub mod xml;
 pub mod zip;

@@ -6389,6 +6389,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "docx_engine"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "console_error_panic_hook",
+ "js-sys",
+ "pptx_engine",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "docx_unzip_handler"
 version = "0.1.0"
 dependencies = [
