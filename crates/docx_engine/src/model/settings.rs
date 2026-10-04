@@ -52,6 +52,10 @@ pub struct Settings {
     pub track_revisions: bool,
     /// Grow autospacing like HTML (`doNotUseHTMLParagraphAutoSpacing` off).
     pub html_auto_spacing: bool,
+    /// The paragraph mark after a page break goes to the next page with the
+    /// text after the break (`splitPgBreakAndParaMark`); otherwise it stays
+    /// with the break.
+    pub split_page_break_and_mark: bool,
 }
 
 impl Default for Settings {
@@ -76,6 +80,7 @@ impl Default for Settings {
             },
             track_revisions: false,
             html_auto_spacing: true,
+            split_page_break_and_mark: false,
         }
     }
 }
@@ -137,6 +142,9 @@ impl Settings {
                             }
                             "doNotUseHTMLParagraphAutoSpacing" => {
                                 s.html_auto_spacing = !parse_on_off(t.val(k));
+                            }
+                            "splitPgBreakAndParaMark" => {
+                                s.split_page_break_and_mark = parse_on_off(t.val(k));
                             }
                             _ => {}
                         }

@@ -220,6 +220,7 @@ fn line_ctx<'a>(env: &Env<'_>, props: &'a ParaProps, width: f32, grid: Option<f3
         no_expand_shift_return: settings.do_not_expand_shift_return,
         grid: grid.filter(|_| props.snap_to_grid),
         shrink_spaces: settings.compat_mode >= 15,
+        mark_with_page_break: !settings.split_page_break_and_mark,
     }
 }
 

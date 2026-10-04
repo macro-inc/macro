@@ -82,6 +82,9 @@ pub struct LineCtx<'a> {
     /// Justified lines may shrink their spaces to fit more text (Word 2013
     /// and later).
     pub shrink_spaces: bool,
+    /// A paragraph mark right after a page break stays on the break's line
+    /// rather than going to the next page alone.
+    pub mark_with_page_break: bool,
 }
 
 /// Space a wrapping float takes from a line: (left inset, right inset) for
@@ -274,6 +277,17 @@ pub fn break_lines_from(
                         _ => LineEnd::Paragraph,
                     };
                     j += 1;
+                    if ends == LineEnd::PageBreak
+                        && ctx.mark_with_page_break
+                        && inline.clusters[j..]
+                            .iter()
+                            .all(|c| matches!(c.kind, Kind::Zero | Kind::End))
+                    {
+                        // Nothing but the paragraph mark follows the break:
+                        // the mark stays with it.
+                        x_pos[j..n].fill(x);
+                        j = n;
+                    }
                     break;
                 }
                 Kind::Tab => {
@@ -452,8 +466,12 @@ pub fn break_lines_from(
         }
         leaders.extend(line_leaders);
         let (mut height, mut baseline) = line_height(inline, i, j, ctx, &adv);
-        if matches!(ends, LineEnd::PageBreak | LineEnd::ColumnBreak) && !has_content && j < n {
-            // A paragraph that starts with a break starts after it: the
+        if matches!(ends, LineEnd::PageBreak | LineEnd::ColumnBreak)
+            && !has_content
+            && (j < n || ends == LineEnd::PageBreak)
+        {
+            // A paragraph that starts with a break starts after it, and a
+            // page that ends with a bare break has nothing below it: the
             // break takes no room where it is.
             height = 0.0;
             baseline = 0.0;
