@@ -21,7 +21,6 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
-teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
 activity = { path = "../../crates/activity", default-features = false }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", default-features = false }
 agent_session = { path = "../../crates/agent_session", default-features = false }

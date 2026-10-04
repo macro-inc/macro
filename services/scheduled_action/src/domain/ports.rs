@@ -112,6 +112,13 @@ pub trait ScheduledActionReadService: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionService: Send + Sync + 'static {
+    /// Read a routine only when the caller is its owner.
+    fn get_action(
+        &self,
+        id: &Uuid,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// Delete all of a user's actions before account deletion, including disabled
     /// and claimed actions. Repeating a completed cleanup succeeds.
     fn delete_user_actions(

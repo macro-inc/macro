@@ -12,7 +12,6 @@ import type {
   InProgressExecution,
   ScheduledAction,
   SetScheduledActionEnabled,
-  SharedRoutine,
   UpdateScheduledAction,
 } from './generated/schemas';
 
@@ -35,17 +34,10 @@ function scheduledActionFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${scheduledActionHost}${url}`, init);
 }
 
-export type { SharedRoutine } from './generated/schemas';
-
 export const scheduledActionClient = {
-  listTeamRoutines: () =>
-    scheduledActionFetch<SharedRoutine[]>('/routines/team', { method: 'GET' }),
   getRoutine: (id: string) =>
-    scheduledActionFetch<SharedRoutine>(`/routines/${id}`, { method: 'GET' }),
-  shareRoutine: (id: string, teamId: string | null) =>
-    scheduledActionFetch<SharedRoutine>(`/routines/${id}/sharing`, {
-      method: 'PUT',
-      body: JSON.stringify({ team_id: teamId }),
+    scheduledActionFetch<ScheduledAction>(`/scheduled-actions/${id}`, {
+      method: 'GET',
     }),
   // Include every trigger type in the routine list.
   listSchedules: async () =>
@@ -101,7 +93,7 @@ export const scheduledActionClient = {
 
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ActionExecutionRecord[]>(
-      `/routines/${args.scheduleId}/history`,
+      `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
     ),
 };

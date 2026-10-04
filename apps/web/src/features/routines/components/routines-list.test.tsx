@@ -23,24 +23,22 @@ const rows: RoutineRow[] = [
     editable: true,
   },
   {
-    id: 'shared',
+    id: 'revenue',
     name: 'Revenue signals',
-    creator: 'Alex',
+    creator: 'You',
     createdAt: '',
     target: 'Finance agent',
     schedule: 'Every Friday',
     status: 'Paused',
     enabled: false,
-    editable: false,
+    editable: true,
   },
 ];
 function setup() {
   const props = {
     rows,
-    scope: 'mine' as const,
     loading: false,
     error: false,
-    onScope: vi.fn(),
     onCreate: vi.fn(),
     onOpen: vi.fn(),
     onToggle: vi.fn(),
@@ -50,24 +48,27 @@ function setup() {
   return props;
 }
 describe('routines list', () => {
-  it('filters names, creators and agents without losing navigation', () => {
+  it('filters routines and agents without losing navigation', () => {
     const props = setup();
     fireEvent.input(screen.getByRole('searchbox'), {
       target: { value: 'finance' },
     });
     expect(screen.queryByText('Morning briefing')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'History' }));
-    expect(props.onOpen).toHaveBeenCalledWith('shared', true);
-    fireEvent.click(screen.getByRole('button', { name: /^Team$/ }));
-    expect(props.onScope).toHaveBeenCalledWith('team');
+    expect(props.onOpen).toHaveBeenCalledWith('revenue', true);
+    expect(screen.queryByRole('button', { name: /^Team$/ })).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Routine ownership' })
+    ).toBeNull();
   });
-  it('offers activation controls only for owned routines', () => {
+  it('offers activation controls for personal routines', () => {
     const props = setup();
     const owned = screen.getByText('Morning briefing').closest('tr')!;
-    const shared = screen.getByText('Revenue signals').closest('tr')!;
+    const revenue = screen.getByText('Revenue signals').closest('tr')!;
     fireEvent.click(within(owned).getByRole('button', { name: 'Disable' }));
     expect(props.onToggle).toHaveBeenCalledWith(rows[0]);
-    expect(within(shared).queryByRole('button', { name: 'Enable' })).toBeNull();
+    fireEvent.click(within(revenue).getByRole('button', { name: 'Enable' }));
+    expect(props.onToggle).toHaveBeenLastCalledWith(rows[1]);
   });
   it('opens a blank routine without a templates section', () => {
     const props = setup();

@@ -207,22 +207,6 @@ async fn main() -> Result<()> {
                 config.routine_agents_enabled,
             )),
     );
-    let sharing_routes = scheduled_action::inbound::routine_sharing::router(
-        scheduled_action::inbound::routine_sharing::RoutineSharingState {
-            service: Arc::new(
-                scheduled_action::domain::sharing::RoutineSharingServiceImpl::new(
-                    scheduled_action::outbound::pg_routine_sharing::PgRoutineSharingRepo::new(
-                        db.clone(),
-                    ),
-                    RoutineTeamMembership(teams::outbound::team_repo::TeamRepositoryImpl::new(
-                        db.clone(),
-                    )),
-                    Arc::clone(&repo),
-                ),
-            ),
-            authorization_state: authorization_state.clone(),
-        },
-    );
     let state = ScheduledActionRouterState {
         service,
         authorization_state,
@@ -233,8 +217,7 @@ async fn main() -> Result<()> {
         .merge(mount_at_root_and_prefix(
             Router::new()
                 .route("/health", axum::routing::get(health))
-                .merge(authed_routes)
-                .merge(sharing_routes),
+                .merge(authed_routes),
         ))
         .merge(mount_docs_at_root_and_prefix())
         .layer(macro_cors::cors_layer());
@@ -386,21 +369,4 @@ fn mount_docs_at_root_and_prefix() -> Router {
             format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
             ApiDoc::openapi(),
         ))
-}
-
-struct RoutineTeamMembership(teams::outbound::team_repo::TeamRepositoryImpl);
-impl scheduled_action::domain::sharing::RoutineTeams for RoutineTeamMembership {
-    async fn teams(
-        &self,
-        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
-    ) -> anyhow::Result<Vec<macro_uuid::Uuid>> {
-        use teams::domain::team_repo::TeamRepository;
-        Ok(self
-            .0
-            .get_user_teams(user)
-            .await?
-            .into_iter()
-            .map(|team| *team.id())
-            .collect())
-    }
 }

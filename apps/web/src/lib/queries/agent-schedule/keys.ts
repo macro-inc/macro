@@ -3,7 +3,6 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   all: null,
   list: null,
-  team: null,
   detail: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId],
   }),

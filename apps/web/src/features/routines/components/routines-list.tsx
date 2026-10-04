@@ -6,11 +6,9 @@ import type { RoutineRow } from '../core/types';
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
-  scope: 'mine' | 'team';
   loading: boolean;
   error: boolean;
   pendingId?: string;
-  onScope: (scope: 'mine' | 'team') => void;
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
@@ -38,26 +36,7 @@ export function RoutinesList(props: {
         </Button>
       </div>
       <section>
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div class="flex gap-1" role="group" aria-label="Routine ownership">
-            <For each={['mine', 'team'] as const}>
-              {(scope) => (
-                <button
-                  type="button"
-                  aria-pressed={props.scope === scope}
-                  class={cn(
-                    'rounded-md px-3 py-1.5 text-sm',
-                    props.scope === scope
-                      ? 'bg-hover text-ink'
-                      : 'text-ink-muted hover:bg-hover'
-                  )}
-                  onClick={() => props.onScope(scope)}
-                >
-                  {scope === 'mine' ? 'Mine' : 'Team'}
-                </button>
-              )}
-            </For>
-          </div>
+        <div class="mb-4 flex justify-end">
           <input
             type="search"
             aria-label="Search routines"
@@ -194,15 +173,12 @@ export function RoutinesList(props: {
                     ? 'Routines are unavailable'
                     : search()
                       ? 'No matching routines'
-                      : props.scope === 'team'
-                        ? 'No shared routines yet'
-                        : 'Your next routine starts here'}
+                      : 'Your next routine starts here'}
               </p>
               <Show when={!props.loading && !props.error && !search()}>
                 <p class="max-w-sm text-xs text-ink-muted">
-                  {props.scope === 'team'
-                    ? 'Routines shared with your teams appear here. Share a routine from its settings.'
-                    : 'Create a briefing, check on a project, or hand recurring work to an agent.'}
+                  Create a briefing, check on a project, or hand recurring work
+                  to an agent.
                 </p>
                 <Button
                   variant="ghost"

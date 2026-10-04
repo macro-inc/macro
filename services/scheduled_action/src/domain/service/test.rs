@@ -539,6 +539,10 @@ async fn foreign_and_non_user_owners_cannot_be_managed_or_executed() {
         let id = created.id.unwrap();
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
         assert_policy(
+            svc.get_action(&id, user()).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
             svc.update_action(&id, update(configuration(true)), user())
                 .await,
             ActionPolicyError::NotFound,

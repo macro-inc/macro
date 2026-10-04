@@ -112,7 +112,9 @@ where
         )
         .route(
             "/scheduled-actions/{id}",
-            put(update_action::<S, Auth>).delete(delete_action::<S, Auth>),
+            get(get_action::<S, Auth>)
+                .put(update_action::<S, Auth>)
+                .delete(delete_action::<S, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/enabled",
@@ -217,6 +219,31 @@ pub async fn list_actions<
             .map(ScheduledActionResponse::from)
             .collect::<Vec<_>>(),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}",
+    tag = "scheduled actions",
+    operation_id = "get_scheduled_action",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn get_action<S: ScheduledActionService, Auth: MacroAuthorizationService>(
+    State(state): State<ScheduledActionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError> {
+    let action = state
+        .service
+        .get_action(&id, user.authorization.user.macro_user_id.clone())
+        .await?;
+    Ok(Json(action.into()))
 }
 
 #[utoipa::path(

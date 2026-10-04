@@ -5,9 +5,9 @@ use utoipa::OpenApi;
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::axum_router::{
-    __path_create_action, __path_delete_action, __path_execute_action, __path_health,
-    __path_list_actions, __path_list_history, __path_set_action_enabled, __path_update_action,
-    ScheduledActionResponse, SetScheduledActionEnabled,
+    __path_create_action, __path_delete_action, __path_execute_action, __path_get_action,
+    __path_health, __path_list_actions, __path_list_history, __path_set_action_enabled,
+    __path_update_action, ScheduledActionResponse, SetScheduledActionEnabled,
 };
 
 use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
@@ -27,12 +27,9 @@ use model::response::EmptyResponse;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
-        crate::inbound::routine_sharing::list,
-        crate::inbound::routine_sharing::read,
-        crate::inbound::routine_sharing::share,
-        crate::inbound::routine_sharing::history,
         crate::inbound::axum_router::health,
         crate::inbound::axum_router::list_actions,
+        crate::inbound::axum_router::get_action,
         crate::inbound::axum_router::create_action,
         crate::inbound::axum_router::update_action,
         crate::inbound::axum_router::set_action_enabled,

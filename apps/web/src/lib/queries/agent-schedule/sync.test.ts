@@ -72,7 +72,7 @@ beforeEach(() => {
   queryClient.clear();
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-28T12:00:00Z'));
-  queryClient.setQueryData(detailKey, { ...schedule, team_id: null });
+  queryClient.setQueryData(detailKey, schedule);
   queryClient.setQueryData(scheduledActionKeys.list.queryKey, [
     schedule,
     { ...schedule, id: 'other' },

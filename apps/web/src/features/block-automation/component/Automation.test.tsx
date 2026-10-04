@@ -65,7 +65,6 @@ vi.mock('@queries/agent-schedule/routines', () => ({
     },
   }),
 }));
-vi.mock('../routine-sharing', () => ({ RoutineSharing: () => null }));
 vi.mock('../routine-triggers', () => ({
   RoutineTriggers: () => <div>Triggers</div>,
 }));

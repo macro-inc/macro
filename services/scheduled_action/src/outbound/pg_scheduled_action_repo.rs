@@ -51,8 +51,7 @@ fn kind_to_str(kind: &ActionKind) -> &'static str {
 }
 
 /// One mapping for every action query, including management and dispatch.
-#[derive(serde::Deserialize)]
-pub(super) struct ActionRow {
+struct ActionRow {
     id: Uuid,
     owner: String,
     name: String,

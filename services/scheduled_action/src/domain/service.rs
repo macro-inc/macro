@@ -179,6 +179,14 @@ where
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
+    async fn get_action(
+        &self,
+        id: &Uuid,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<ScheduledAction> {
+        self.owned_action(id, &user_id).await
+    }
+
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
         // Use the repository list, not the legacy cron-only service list, so
         // event-triggered actions are also removed regardless of rollout gates.

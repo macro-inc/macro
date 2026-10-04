@@ -15862,7 +15862,6 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
- "teams",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

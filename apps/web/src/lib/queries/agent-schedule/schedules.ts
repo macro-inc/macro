@@ -6,7 +6,6 @@ import type {
   CreateScheduledAction,
   InProgressExecution,
   ScheduledAction,
-  SharedRoutine,
   UpdateScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -22,7 +21,7 @@ function upsertSchedule(schedule: ScheduledAction) {
   if (schedule.id)
     queryClient.setQueryData(
       scheduledActionKeys.detail({ scheduleId: schedule.id }).queryKey,
-      (current: SharedRoutine | undefined) =>
+      (current: ScheduledAction | undefined) =>
         current ? { ...current, ...schedule } : undefined
     );
 
@@ -105,9 +104,6 @@ export function invalidateSchedules() {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: scheduledActionKeys.team.queryKey,
     }),
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.detail._def,

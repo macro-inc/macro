@@ -445,9 +445,9 @@ the static highlight.
 
 ## Routines
 
-Open **Agents → Routines** for the **Mine** and **Team** lists. On the legacy
+Open **Agents → Routines** for your routines. On the legacy
 or touch Agents screen, use the **Routines** button above the list. Search by
-routine name, creator, or agent. **History** opens that routine's Run History
+routine name or agent. **History** opens that routine's Run History
 tab, including when its Settings tab is already open.
 
 **Create → Routine** (U) and **New Routine** open the same popover host as task
@@ -484,7 +484,7 @@ and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
 to remove it. Saved settings and **Run History** appear beneath the routine’s top
 bar; **Back to routines** returns
-to the list in the same pane. Team routines use the same detail view.
+to the list in the same pane.
 
 The **Active / Inactive** switch pauses immediately, including with invalid
 unsaved edits. Resuming waits for valid settings to save. Settings autosave in
@@ -495,10 +495,9 @@ loads those settings before further edits. While running, configuration is locke
 but cannot resume until the run ends. Completed one-offs remain visible with
 their history and do not repeat.
 
-Under **Sharing**, choose a team to let its current members view the routine's
-instructions and run history. **Only me** revokes sharing. Personal routines do
-not appear for teammates automatically. Team viewers cannot edit, pause, or
-remove another person's routine. Run conversations keep their own permissions.
+Routines are private to their owner. Other users cannot list or open the routine
+or its history, even if they belong to the same team. Run conversations keep
+their own permissions.
 
 **Run History** shows outcome, duration, and firing time. History loads fifty
 rows at a time; **Load more runs** reveals older records. Accessible run rows

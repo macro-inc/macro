@@ -54,18 +54,18 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     const deletedIds = new Set(
       entities.filter((e) => e.type === 'automation').map((e) => e.id)
     );
-    for (const key of [
+    queryClient.setQueryData(
       scheduledActionKeys.list.queryKey,
-      scheduledActionKeys.team.queryKey,
-    ]) {
-      queryClient.setQueryData(key, (current: unknown) => {
+      (current: unknown) => {
         if (!Array.isArray(current)) return current;
         return current.filter(
           (item: { id?: string }) => !item.id || !deletedIds.has(item.id)
         );
-      });
-      void queryClient.invalidateQueries({ queryKey: key });
-    }
+      }
+    );
+    void queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.list.queryKey,
+    });
     for (const scheduleId of deletedIds) {
       queryClient.removeQueries({
         queryKey: scheduledActionKeys.detail({ scheduleId }).queryKey,

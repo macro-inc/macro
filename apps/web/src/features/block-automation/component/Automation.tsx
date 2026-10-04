@@ -43,7 +43,6 @@ import { RoutineEditor } from '../components/routine-editor';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from '../primitives/routine-autosave';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
-import { RoutineSharing } from '../routine-sharing';
 import { RoutineTriggers } from '../routine-triggers';
 import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
@@ -538,11 +537,6 @@ export function RoutineDetail(props: {
                       </p>
                     </Show>
                   </>
-                }
-                sharing={
-                  <Show when={isOwned()}>
-                    <RoutineSharing id={scheduleId} />
-                  </Show>
                 }
                 history={
                   <div class="overflow-hidden rounded-xl border border-edge-muted">

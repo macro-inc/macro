@@ -105,7 +105,7 @@ describe('routine activation', () => {
     const detailKey = scheduledActionKeys.detail({
       scheduleId: 'routine',
     }).queryKey;
-    queryClient.setQueryData(detailKey, { ...routine, team_id: 'team' });
+    queryClient.setQueryData(detailKey, routine);
     const respond = respondLater();
     const pausing = mountMutation().mutateAsync({
       scheduleId: 'routine',
@@ -118,10 +118,7 @@ describe('routine activation', () => {
     );
     respond(err([{ code: 'CONFLICT', message: 'Routine changed' }]));
     await expect(pausing).rejects.toThrow('Routine changed');
-    expect(queryClient.getQueryData(detailKey)).toEqual({
-      ...routine,
-      team_id: 'team',
-    });
+    expect(queryClient.getQueryData(detailKey)).toEqual(routine);
   });
 
   it('restores only the activation it changed when saving fails', async () => {

@@ -185,6 +185,35 @@ async fn mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_upda
 }
 
 #[tokio::test]
+async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found() {
+    let app = router(true);
+    for events in [false, true] {
+        let (status, created) = request(
+            &app,
+            "POST",
+            "/scheduled-actions",
+            "owner",
+            serde_json::to_value(configuration(events)).unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+        let (status, routine) = request(&app, "GET", &url, "owner", Value::Null).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(routine, created);
+        assert_eq!(
+            request(&app, "GET", &url, "invalid", Value::Null).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    let missing = format!("/scheduled-actions/{}", macro_uuid::generate_uuid_v7());
+    assert_eq!(
+        request(&app, "GET", &missing, "owner", Value::Null).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
 async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     let app = router(true);
     let (_, action) = request(
@@ -197,6 +226,7 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     .await;
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
     for (method, path, body) in [
+        ("GET", url.clone(), Value::Null),
         ("PUT", url.clone(), legacy()),
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),

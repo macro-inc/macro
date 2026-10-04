@@ -21,7 +21,6 @@ export function RoutineEditor(props: {
   metadata?: JSX.Element;
   status?: JSX.Element;
   feedback?: JSX.Element;
-  sharing?: JSX.Element;
 }) {
   return (
     <div class="min-h-0 flex-1 overflow-y-auto text-ink">
@@ -104,7 +103,6 @@ export function RoutineEditor(props: {
               </EntityComposer.Properties>
             </fieldset>
             {props.feedback}
-            {props.sharing}
           </Tabs.Content>
         </Tabs>
       </div>

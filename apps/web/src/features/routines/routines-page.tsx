@@ -3,9 +3,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { isClaimActive } from '@queries/agent-schedule/entities';
-import { useTeamRoutinesQuery } from '@queries/agent-schedule/routines';
 import {
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
@@ -63,14 +61,10 @@ function RoutinesContent() {
       }
     )
   );
-  const [scope, setScope] = createSignal<'mine' | 'team'>('mine');
-  const mine = useSchedulesQuery(() => true);
-  const team = useTeamRoutinesQuery(() => scope() === 'team');
+  const query = useSchedulesQuery(() => true);
   const roster = createAgentRosterSource();
-  const query = () => (scope() === 'mine' ? mine : team);
   const rows = createMemo<RoutineRow[]>(() => {
-    const source = query();
-    const data = source.isSuccess || source.isError ? (source.data ?? []) : [];
+    const data = query.isSuccess || query.isError ? (query.data ?? []) : [];
     return data
       .toSorted((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
       .flatMap((routine) => {
@@ -86,10 +80,7 @@ function RoutinesContent() {
           {
             id: routine.id,
             name: routine.name,
-            creator:
-              routine.owner === userId()
-                ? 'You'
-                : getDisplayName(tryMacroId(routine.owner)),
+            creator: 'You',
             createdAt: routine.created_at,
             target:
               target?.kind === 'agent'
@@ -138,11 +129,9 @@ function RoutinesContent() {
       fallback={
         <RoutinesList
           rows={rows()}
-          scope={scope()}
-          onScope={setScope}
-          loading={query().isPending}
-          error={query().isError}
-          onRetry={() => void query().refetch()}
+          loading={query.isPending}
+          error={query.isError}
+          onRetry={() => void query.refetch()}
           onCreate={create}
           onOpen={(id, history) =>
             setSelected({ id, tab: history ? 'history' : 'settings' })
