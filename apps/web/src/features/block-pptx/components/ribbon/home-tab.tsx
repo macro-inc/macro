@@ -60,6 +60,7 @@ import {
   RibbonPopover,
   RibbonTextButton,
 } from './controls';
+import { SectionMenu } from './deck-setup-controls';
 import { FontPicker, FontSizePicker } from './font-controls';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
@@ -457,6 +458,7 @@ export function HomeTab() {
             )}
           </RibbonPopover>
         </>
+        <SectionMenu />
         <RibbonButton
           label="Duplicate slide"
           tooltip="Duplicate slide"

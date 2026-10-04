@@ -49,12 +49,19 @@ export interface SlideRailProps {
   onPaste?: (event: ClipboardEvent) => void;
   /** Whether keyboard focus is in the rail (clipboard acts on slides then). */
   onFocusChange?: (focused: boolean) => void;
+  /** Section header rows before the slide at `index` (the slide count: after the last). */
+  sectionHeaders?: (index: () => number) => JSX.Element;
+  /** Slides whose section is collapsed. */
+  slideHidden?: (slideId: number) => boolean;
+  /** Right-click menu items for a section header (`data-section-id`). */
+  sectionMenu?: (sectionId: string) => JSX.Element;
 }
 
 export function SlideRail(props: SlideRailProps) {
   let list!: HTMLDivElement;
   const [dragging, setDragging] = createSignal<number[] | null>(null);
   const [menuSlide, setMenuSlide] = createSignal<SlideOutline>();
+  const [menuSection, setMenuSection] = createSignal<string>();
   const [dropAt, setDropAt] = createSignal<number | null>(null);
   const isSelected = (id: number) => props.selectedIds.includes(id);
 
@@ -145,6 +152,11 @@ export function SlideRail(props: SlideRailProps) {
           // keeps onContextMenu to itself).
           onPointerDown={(e: PointerEvent) => {
             if (e.button !== 2) return;
+            const header = (e.target as HTMLElement).closest<HTMLElement>(
+              '[data-section-id]'
+            );
+            setMenuSection(header?.dataset.sectionId);
+            if (header) return;
             const el = (e.target as HTMLElement).closest<HTMLElement>(
               '[data-slide-index]'
             );
@@ -157,10 +169,14 @@ export function SlideRail(props: SlideRailProps) {
           }}
         >
           <For each={props.slides}>
-            {(slide, i) => (
+            {(slide, i) => [
+              props.sectionHeaders?.(i),
               <div
                 class="group relative flex gap-1.5"
                 classList={{ 'flex-col items-stretch': !!props.grid }}
+                style={{
+                  display: props.slideHidden?.(slide.id) ? 'none' : undefined,
+                }}
                 data-slide-index={i()}
                 draggable={!props.readonly}
                 onDragStart={(e) => {
@@ -292,9 +308,10 @@ export function SlideRail(props: SlideRailProps) {
                     </Show>
                   </div>
                 </Show>
-              </div>
-            )}
+              </div>,
+            ]}
           </For>
+          {props.sectionHeaders?.(() => props.slides.length)}
           <Show when={dropAt() === props.slides.length && !props.grid}>
             <div class="ml-5 h-0.5 rounded bg-accent" />
           </Show>
@@ -302,7 +319,9 @@ export function SlideRail(props: SlideRailProps) {
         <Show when={props.menu}>
           <ContextMenu.Portal>
             <ContextMenuContent class="w-60" data-testid="pptx-rail-menu">
-              {props.menu!(menuSlide())}
+              <Show when={menuSection()} fallback={props.menu!(menuSlide())}>
+                {(id) => props.sectionMenu?.(id())}
+              </Show>
             </ContextMenuContent>
           </ContextMenu.Portal>
         </Show>

@@ -54,6 +54,7 @@ import {
   ChartGallery,
   sampleChartData,
 } from '../components/chart-controls';
+import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
 import { NotesPanel } from '../components/notes-panel';
@@ -80,6 +81,7 @@ import {
   TableDesignTab,
   TableLayoutTab,
 } from '../components/ribbon/table-tabs';
+import { SectionHeaders, SectionMenuItems } from '../components/section-header';
 import { SelectionOverlay } from '../components/selection-overlay';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
@@ -105,6 +107,7 @@ import {
 } from '../core/table';
 import { paragraphCommand } from '../core/text-commands';
 import { createClipboard } from '../primitives/create-clipboard';
+import { createDeckSetup } from '../primitives/create-deck-setup';
 import { createEditorCommands } from '../primitives/create-editor-commands';
 import { createFormatPainter } from '../primitives/create-format-painter';
 import { createPresentationSession } from '../primitives/create-presentation-session';
@@ -405,6 +408,14 @@ export function PptxEditor() {
       anchor: session.currentSlide()?.id ?? -1,
     });
   };
+  /** Selects these slides (a section's); the first becomes current. */
+  const selectSlides = (ids: number[]) => {
+    const slides = session.outline()?.slides ?? [];
+    const first = slides.findIndex((s) => ids.includes(s.id));
+    if (first < 0) return;
+    setSlideSelection({ ids, anchor: slides[first].id });
+    editor.goToSlide(first);
+  };
 
   // ---- commands -------------------------------------------------------------
 
@@ -417,6 +428,14 @@ export function PptxEditor() {
     startEditing: (id) => void startEditing(id),
     tableTarget,
     slideSelection: selectedSlideIds,
+  });
+
+  const deckSetup = createDeckSetup({
+    session,
+    commands,
+    canEdit: context.canEdit,
+    selectedSlideIds,
+    selectSlides,
   });
 
   const [railFocused, setRailFocused] = createSignal(false);
@@ -1319,6 +1338,7 @@ export function PptxEditor() {
     toggleNotes: () => setNotesVisible((v) => !v),
     download: () => void download(),
     recentFonts,
+    deckSetup,
   };
 
   const tableTabProps = () => {
@@ -1484,6 +1504,22 @@ export function PptxEditor() {
               void clipboard.pasteEvent(e.clipboardData);
             }}
             onFocusChange={setRailFocused}
+            sectionHeaders={(index) => (
+              <SectionHeaders
+                setup={deckSetup}
+                before={index()}
+                grid={props.grid}
+                readonly={readonly()}
+              />
+            )}
+            slideHidden={deckSetup.sections.hidden}
+            sectionMenu={(id) => (
+              <SectionMenuItems
+                setup={deckSetup}
+                id={id}
+                readonly={readonly()}
+              />
+            )}
           />
         )}
       </Show>
@@ -1547,6 +1583,11 @@ export function PptxEditor() {
                   (session.outline()?.slides.length ?? 0)
               }
               onClick={() => void commands.deleteSlides(selectedSlideIds())}
+            />
+            <MenuItem
+              text="Add Section"
+              disabled={readonly()}
+              onClick={() => void deckSetup.sections.add(s().id)}
             />
             <MenuSeparator />
             <ContextMenu.Sub overlap gutter={2}>
@@ -2118,6 +2159,14 @@ export function PptxEditor() {
           />
         )}
       </Show>
+      <DeckSetupDialogs
+        setup={deckSetup}
+        deck={session.outline()}
+        slide={session.currentSlide()}
+        selectedCount={selectedSlideIds().length}
+        readonly={readonly()}
+        onClosed={() => queueMicrotask(refocus)}
+      />
       <Show when={presenting() && session.outline()}>
         {(deck) => {
           const onExit = (index: number) => {

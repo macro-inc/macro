@@ -33,6 +33,7 @@ import {
   RibbonPopover,
   RibbonTextButton,
 } from './controls';
+import { SlideSizeGroup } from './deck-setup-controls';
 import { ArrangeMenu, FillMenu, OutlineMenu } from './home-tab';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
@@ -187,6 +188,7 @@ export function DesignTab() {
           )}
         </RibbonPopover>
       </RibbonGroup>
+      <SlideSizeGroup />
     </>
   );
 }

@@ -15,6 +15,7 @@ import {
   RibbonPopover,
   RibbonTextButton,
 } from './controls';
+import { HeaderFooterButtons } from './deck-setup-controls';
 import { useRibbon } from './ribbon';
 import { ShapeGallery } from './shape-gallery';
 
@@ -189,6 +190,7 @@ export function InsertTab(props: {
           <TextT />
           Text box
         </RibbonTextButton>
+        <HeaderFooterButtons />
         <RibbonTextButton
           label="Link"
           tooltip="Insert link (⌘K)"

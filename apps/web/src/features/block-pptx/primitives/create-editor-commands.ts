@@ -37,6 +37,7 @@ import {
 } from '../core/selection';
 import { moveSlidesOps } from '../core/slide-selection';
 import { formatCommand, paragraphCommand } from '../core/text-commands';
+import { createDeckCommands } from './create-deck-commands';
 import type { PresentationSession } from './create-presentation-session';
 import type { SlideEditor } from './create-slide-editor';
 
@@ -1215,6 +1216,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     applyBackgroundToAll,
     paragraphs,
     apply,
+    // ---- deck setup: header & footer, slide size, sections ----
+    ...createDeckCommands({ apply, outline: session.outline }),
   };
 }
 

@@ -390,6 +390,28 @@ Layout and test hooks:
   `pptx-theme-fonts-<pair name>`, such as `Georgia`). Transitions: `pptx-transition-<kind>`, Effect options, duration
   (`pptx-transition-duration`), automatic advance, and Apply to all
   (`pptx-transition-all`). Color menus are PowerPoint's theme grid with tints.
+- **Header & Footer** (Insert ▸ Header & Footer `pptx-insert-header-footer`,
+  Date & Time `pptx-insert-date-time`, or Slide Number
+  `pptx-insert-slide-number`) opens `pptx-header-footer`, starting from what
+  the current slide shows: Date and time (`pptx-hf-date`) updating
+  automatically (`pptx-hf-date-auto`, format select `pptx-hf-date-format`
+  listing today's date in `datetime1`–`datetime13`) or Fixed
+  (`pptx-hf-date-fixed`, text `pptx-hf-date-fixed-text`), Slide number
+  (`pptx-hf-slide-number`), Footer (`pptx-hf-footer`, text
+  `pptx-hf-footer-text`), and Don't show on title slide
+  (`pptx-hf-not-on-title`). **Apply** (`pptx-hf-apply`) changes the selected
+  slides; **Apply to All** (`pptx-hf-apply-all`) every slide. A layout without
+  the placeholder cannot show the element.
+- **Slide Size** (Design ▸ Customize ▸ `pptx-slide-size`): Standard (4:3)
+  `pptx-slide-size-standard`, Widescreen (16:9) `pptx-slide-size-widescreen`,
+  or Custom Slide Size… `pptx-slide-size-custom`, which opens
+  `pptx-slide-size-dialog` (preset `pptx-slide-size-preset`, width and height
+  `pptx-slide-size-width|height` in inches, or cm in metric locales,
+  orientation `pptx-slide-size-portrait|landscape`, OK `pptx-slide-size-ok`).
+  When content must change shape, `pptx-slide-size-scale` asks **Maximize**
+  (`pptx-slide-size-maximize`) or **Ensure Fit** (`pptx-slide-size-fit`); a
+  proportional change scales without asking. Stage, thumbnails, sorter, show,
+  and print follow the new size.
 - **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one
   `pptx-thumbnail` button per slide, labelled `Slide N: <title>`, with
   `aria-current="true"` on the current one. Hovering a thumbnail shows
@@ -401,6 +423,20 @@ Layout and test hooks:
   duplicate, delete, hide, layout, transitions, background, copy, cut, and
   dragging then act on every selected slide. Cmd/Ctrl+A selects all slides
   and Cmd/Ctrl+D duplicates them while the rail has focus.
+- **Sections** (rail and sorter): a deck with sections shows a
+  `pptx-section-header` row (`data-section-id`, `aria-expanded`) before each
+  section's slides with its name and slide count. Its caret
+  (`pptx-section-toggle`, or double-click) collapses the section's
+  thumbnails (view only); clicking the header selects its slides; dragging it
+  onto another header moves the section there. Right-click a header for
+  Rename Section (in place: `pptx-section-rename`, Enter keeps, Escape
+  cancels), Remove Section, Remove Section & Slides, Remove All Sections,
+  Move Section Up/Down, Collapse All, and Expand All. The slide menu's **Add
+  Section** starts "Untitled Section" at that slide and opens its name for
+  typing. Home ▸ Section (`pptx-section-menu`): Add (`pptx-section-add`),
+  Rename (`pptx-section-rename-current`), Remove (`pptx-section-remove`),
+  Remove All (`pptx-section-remove-all`), Collapse All
+  (`pptx-section-collapse-all`), Expand All (`pptx-section-expand-all`).
 - **Slide Sorter** (View ▸ Slide Sorter, or `pptx-view-sorter` in the status
   bar; `pptx-view-normal` returns): every slide in a grid
   (`pptx-slide-sorter`, same `pptx-thumbnail` buttons and menu as the rail),

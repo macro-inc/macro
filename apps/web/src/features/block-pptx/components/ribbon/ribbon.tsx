@@ -19,6 +19,7 @@ import {
   useContext,
 } from 'solid-js';
 import type { Swatch } from '../../core/palette';
+import type { DeckSetup } from '../../primitives/create-deck-setup';
 import type { EditorCommands } from '../../primitives/create-editor-commands';
 
 export interface RibbonEnv {
@@ -80,6 +81,8 @@ export interface RibbonEnv {
   recentFonts: () => string[];
   /** Extra tabs (tables, charts) contributed by the view. */
   extraTabs?: () => RibbonTab[];
+  /** Header & Footer, slide size, and sections (dialogs and section view state). */
+  deckSetup?: DeckSetup;
 }
 
 const RibbonContext = createContext<RibbonEnv>();
