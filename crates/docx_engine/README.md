@@ -150,8 +150,8 @@ when sources changed, and `bun run dev` runs it.
 
 Current state (61 documents, 36 of them legal; references rendered with the
 engine's fonts): against Word's own PDF exports (18 documents) mean SSIM
-0.78 with equal page counts for all 18; against LibreOffice 24.2 (61
-documents) mean SSIM 0.66 with equal page counts for 41. Page SSIM is
+0.84 with equal page counts for all 18; against LibreOffice 24.2 (61
+documents) mean SSIM 0.66 with equal page counts for 42. Page SSIM is
 strict: a line that wraps one word differently shifts everything below it,
 so the page counts are the better summary. LibreOffice is a reference, not ground truth;
 where Word PDFs exist they decide.

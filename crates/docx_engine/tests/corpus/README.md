@@ -26,6 +26,6 @@ writes `report.html` with side-by-side pages, plus `scores.json`. `lines`
 dumps the engine's text lines with positions for comparing line breaks
 with a reference PDF's.
 
-Scores as of this writing: against Word, mean SSIM 0.78 with equal page
+Scores as of this writing: against Word, mean SSIM 0.84 with equal page
 counts for all 18 documents; against LibreOffice 24.2, mean SSIM 0.66 with
-equal page counts for 41 of 61.
+equal page counts for 42 of 61.
