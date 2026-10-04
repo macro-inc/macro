@@ -867,6 +867,9 @@ updates live and shows each collaborator's caret with their name
   area gets a dashed edge and a `Header` (or `Footer`) label with a `Close`
   button; Escape or a click on the body returns to the body. Header and
   footer edits reach collaborators and the download like body edits.
+- Click a footnote or endnote at the bottom of the page (or after the body)
+  to type in it, as in Word; nothing dims. Escape or a click on the body
+  returns to the body. Comments stay with the body text.
 - Clicking a DOCX in the Home list opens the editor in the Home preview pane.
   Viewers and commenters see the same paginated pages, read-only.
 - To comment on any text, including table cells: select it, then click the

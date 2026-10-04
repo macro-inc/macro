@@ -175,7 +175,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
     onCleanup(() => observer.disconnect());
   });
 
-  // Comments anchor in the body, not in headers and footers.
+  // Comments anchor in the body, not in headers, footers or notes.
   const selectionTop = createMemo<number | null>(() => {
     const state = editor.state();
     const first = state?.rects[0];
@@ -319,8 +319,7 @@ export function DocxEditorView(props: DocxEditorViewProps) {
         canComment={
           !!props.commentRoots &&
           props.canComment() &&
-          editor.state()?.story.kind !== 'header' &&
-          editor.state()?.story.kind !== 'footer'
+          editor.state()?.story.kind === 'body'
         }
         format={{
           bold: format()?.bold,

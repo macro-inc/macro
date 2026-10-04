@@ -1110,3 +1110,163 @@ fn format_state_reports_highlight_spacing_and_tables() {
     assert_eq!(f.highlight, None);
     assert_eq!(f.line_spacing, Some(1.0));
 }
+
+const WITH_FOOTNOTE: &str = r#"<w:p><w:r><w:t>Body text</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r></w:p>"#;
+
+const FOOTNOTES: &str = r#"<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote><w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote><w:footnote w:id="1"><w:p><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> See the Agreement.</w:t></w:r></w:p></w:footnote>"#;
+
+fn open_with_footnote() -> Session {
+    open_with(
+        WITH_FOOTNOTE,
+        &Parts {
+            footnotes: Some(FOOTNOTES),
+            ..Parts::default()
+        },
+    )
+}
+
+/// The text of footnote 1 (its reference mark is an object character).
+fn note_text(doc: &Document) -> Vec<String> {
+    let note = &doc.footnotes().by_id[&1];
+    note.story
+        .paragraphs()
+        .iter()
+        .map(|id| {
+            note.story
+                .get(id)
+                .unwrap()
+                .content
+                .text()
+                .replace('\u{FFFC}', "^")
+        })
+        .collect()
+}
+
+fn enter_note(s: &mut Session) -> EditResult {
+    let area = s.pages(fonts())[0].notes.clone().expect("notes area");
+    run(
+        s,
+        EditOp::EnterStory {
+            page: 0,
+            x: 150.0,
+            y: (area.top + area.bottom) / 2.0,
+        },
+    )
+}
+
+#[test]
+fn footnotes_are_edited_in_place_and_written_to_their_part() {
+    let mut s = open_with_footnote();
+    let area = s.pages(fonts())[0].notes.clone().expect("notes area");
+    assert!(area.top > 600.0, "{area:?}");
+    let r = enter_note(&mut s);
+    assert_eq!(r.story.kind, StoryKind::Footnote);
+    assert_eq!(r.story.page, Some(0));
+    let note_para = s.document().footnotes().by_id[&1].story.paragraphs()[0].clone();
+    assert_eq!(r.selection.focus.block, note_para);
+    run(
+        &mut s,
+        EditOp::Move {
+            unit: Unit::Document,
+            forward: true,
+            extend: false,
+            visual: false,
+        },
+    );
+    let r = type_text(&mut s, " Exhibit A.");
+    // Shared as the notes part's XML.
+    assert!(
+        r.changes.iter().any(|c| matches!(
+            c,
+            Change::Entry { container, key, value: Some(v) }
+                if container == "wordParts" && key.ends_with("footnotes.xml")
+                    && v.contains("See the Agreement. Exhibit A.")
+                    && v.contains(r#"w:type="separator""#)
+        )),
+        "{:?}",
+        r.changes
+    );
+    let caret = r.caret.expect("caret");
+    assert!(caret.y > 600.0, "{caret:?}");
+    assert_eq!(
+        note_text(s.document()),
+        vec!["^ See the Agreement. Exhibit A."]
+    );
+    assert_eq!(texts(&s), vec!["Body text\u{FFFC}"]);
+
+    // Back to the body, where the caret was.
+    let r = run(&mut s, EditOp::ExitStory);
+    assert_eq!(r.story.kind, StoryKind::Body);
+
+    // The saved file has the new note, and the separators.
+    let saved = Document::open(s.document().save().unwrap()).unwrap();
+    assert_eq!(note_text(&saved), vec!["^ See the Agreement. Exhibit A."]);
+    assert_eq!(saved.footnotes().by_id[&-1].kind, "separator");
+    assert_eq!(saved.footnotes().by_id[&0].kind, "continuationSeparator");
+
+    // Undo goes back into the note.
+    let r = s.undo(fonts()).unwrap();
+    assert_eq!(r.story.kind, StoryKind::Footnote);
+    assert_eq!(note_text(s.document()), vec!["^ See the Agreement."]);
+}
+
+#[test]
+fn clicking_the_body_leaves_a_note_and_enter_splits_it() {
+    let mut s = open_with_footnote();
+    enter_note(&mut s);
+    // Entering the note it is in keeps the selection.
+    run(
+        &mut s,
+        EditOp::Move {
+            unit: Unit::Document,
+            forward: true,
+            extend: false,
+            visual: false,
+        },
+    );
+    let at = s.selection().clone();
+    let r = enter_note(&mut s);
+    assert_eq!(r.selection, at);
+    run(&mut s, EditOp::InsertParagraph);
+    type_text(&mut s, "Second");
+    assert_eq!(
+        note_text(s.document()),
+        vec!["^ See the Agreement.", "Second"]
+    );
+    let r = run(
+        &mut s,
+        EditOp::EnterStory {
+            page: 0,
+            x: 100.0,
+            y: 80.0,
+        },
+    );
+    assert_eq!(r.story.kind, StoryKind::Body);
+    assert_eq!(texts(&s), vec!["Body text\u{FFFC}"]);
+}
+
+#[test]
+fn a_remote_note_change_keeps_the_caret_in_the_note() {
+    let mut s = open_with_footnote();
+    enter_note(&mut s);
+    let xml = format!(
+        r#"<w:footnotes {NS}>{}</w:footnotes>"#,
+        FOOTNOTES.replace("See the Agreement.", "See the Merger Agreement.")
+    );
+    let r = s
+        .apply_remote(
+            &[RemoteChange::Entry {
+                container: "wordParts".to_owned(),
+                key: "/word/footnotes.xml".to_owned(),
+                value: Some(xml),
+            }],
+            fonts(),
+        )
+        .unwrap();
+    assert_eq!(r.story.kind, StoryKind::Footnote);
+    assert_eq!(note_text(s.document()), vec!["^ See the Merger Agreement."]);
+    let first = s.document().footnotes().by_id[&1].story.paragraphs()[0].clone();
+    assert_eq!(r.selection.focus.block, first);
+    type_text(&mut s, "x");
+    assert!(note_text(s.document())[0].contains('x'));
+}

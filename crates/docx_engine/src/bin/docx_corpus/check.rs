@@ -1,7 +1,7 @@
 //! `docx_corpus check`: every document through the engine's paths, not only
 //! rendering: layout and every page drawn, the collaborative state round
-//! trip, edits with undo and redo, tracked changes, a header edit, copy and
-//! paste, and saving and reopening. Any panic or mismatch fails the document.
+//! trip, edits with undo and redo, tracked changes, a header edit, a note
+//! edit, copy and paste, and saving and reopening. Any panic or mismatch fails the document.
 
 use docx_engine::Document;
 use docx_engine::collab::CollabState;
@@ -273,6 +273,63 @@ fn check_header(doc: &Document, fonts: &FontDb) -> Check {
     })
 }
 
+/// Types into the first footnote or endnote shown, and checks that the
+/// edit reaches the saved notes part and leaves the body alone.
+fn check_note(doc: &Document, fonts: &FontDb) -> Check {
+    let mut s = Session::new(doc.clone());
+    let pages = s.pages(fonts);
+    let Some((page, area)) = pages
+        .iter()
+        .enumerate()
+        .find_map(|(i, p)| p.notes.clone().map(|a| (i, a)))
+    else {
+        return Ok(());
+    };
+    let r = s
+        .apply(
+            &[EditOp::EnterStory {
+                page,
+                x: pages[page].width / 2.0,
+                y: (area.top + area.bottom) / 2.0,
+            }],
+            None,
+            fonts,
+        )
+        .map_err(|e| e.to_string())?;
+    use docx_engine::edit::StoryKind;
+    let endnote = match r.story.kind {
+        StoryKind::Footnote => false,
+        StoryKind::Endnote => true,
+        _ => return Err("a click in the notes area did not enter a note".into()),
+    };
+    change(
+        &mut s,
+        EditOp::InsertText {
+            text: "NOTE".into(),
+        },
+        fonts,
+    )?;
+    apply(&mut s, vec![EditOp::ExitStory], fonts)?;
+    let saved = s.document().save().map_err(|e| e.to_string())?;
+    let reopened = Document::open(saved).map_err(|e| e.to_string())?;
+    let notes = if endnote {
+        reopened.endnotes()
+    } else {
+        reopened.footnotes()
+    };
+    let has = notes.by_id.values().any(|n| {
+        n.story.paragraphs().iter().any(|id| {
+            n.story
+                .get(id)
+                .is_some_and(|b| b.content.text().contains("NOTE"))
+        })
+    });
+    ensure(has, || "the note edit was not saved".into())?;
+    ensure(texts(&reopened) == texts(doc), || {
+        "the note edit changed the body".into()
+    })
+}
+
 fn check_clipboard(doc: &Document, fonts: &FontDb) -> Check {
     let mut s = Session::new(doc.clone());
     let ids = s.document().body().paragraphs();
@@ -325,6 +382,7 @@ fn check(file: &PathBuf, width: u32, fonts: &FontDb) -> Result<String, String> {
     check_edits(&doc, fonts).map_err(|e| format!("edits: {e}"))?;
     check_tracking(&doc, fonts).map_err(|e| format!("tracking: {e}"))?;
     check_header(&doc, fonts).map_err(|e| format!("header: {e}"))?;
+    check_note(&doc, fonts).map_err(|e| format!("note: {e}"))?;
     check_clipboard(&doc, fonts).map_err(|e| format!("clipboard: {e}"))?;
     Ok(format!("{pages} pages"))
 }

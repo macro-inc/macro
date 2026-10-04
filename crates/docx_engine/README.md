@@ -76,9 +76,11 @@ Accept and reject resolve the selection, the revision at the caret or
 everything. With markup, a bar in the left margin marks every line that
 holds a change, and a list label shows its paragraph mark's revision.
 
-Headers and footers are stories of their own: their blocks get ids prefixed
-with the part, transactions target the active story, and an edited part is
-written back as XML and shared as one entry.
+Headers, footers, footnotes and endnotes are stories of their own: their
+blocks get ids prefixed with the part (or note), transactions target the
+active story, and an edited part (`footnotes.xml` for any footnote) is
+written back as XML and shared as one entry. A click in a page's notes
+area (`PageInfo::notes`) enters the note under it.
 
 ### Collaboration
 
@@ -171,9 +173,11 @@ where Word PDFs exist they decide.
   (square wrap is used), no balancing of continuous-section columns.
 - Fields are shown with their cached results, except page numbers, which
   are computed; a table of contents is not regenerated.
-- Editing does not create footnotes, text boxes or pictures, and does not
-  edit inside them (it keeps them); comments are Macro threads anchored in
-  the body.
+- Editing changes the text of footnotes and endnotes but does not create
+  notes, text boxes or pictures, and does not edit inside text boxes (it
+  keeps them); comments are Macro threads anchored in the body.
+- Two people editing the same footnote or endnote part at once: the last
+  write of the part wins, as for headers and footers.
 - Tracked changes show without balloons (formatting changes only get a
   change bar); table property changes (`w:tcPrChange`, `w:tblPrChange`)
   are not recorded.

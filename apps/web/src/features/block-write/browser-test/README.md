@@ -19,6 +19,7 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
   - the downloaded `.docx` and reloading the merged document;
   - undo and redo of one person's own edits;
   - header and footer editing in place;
+  - footnote editing in place (a memo built by the test), shared and downloaded;
   - tracked changes recorded per author, then rejected for everyone;
   - find and replace (one match, then all, undone in one step);
   - toolbar formatting (highlight, color, line spacing) and table rows;
