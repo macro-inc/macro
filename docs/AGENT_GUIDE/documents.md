@@ -545,6 +545,15 @@ Layout and test hooks:
   `pptx-animation-row`s (click picks one and selects its shape; Delete or
   `pptx-animation-remove` removes it), and numbered `pptx-animation-tag`s
   mark animated shapes while the tab or pane is open.
+- **View ▸ Show**: Ruler (`pptx-view-ruler`: inch rulers along the slide's
+  top and left edges, `pptx-ruler-horizontal`/`pptx-ruler-vertical`, measured
+  from the center, with the selection shaded as `pptx-ruler-span`), Gridlines
+  (`pptx-view-gridlines`, drawn as `pptx-gridlines`), and Grid settings
+  (`pptx-view-grid-settings`: Snap objects to grid `pptx-view-snap-grid`,
+  spacing `pptx-view-grid-spacing` in points, and smart guides
+  `pptx-view-smart-guides`). Snapping moves the dragged box's top-left corner
+  to the grid where no smart guide is within reach; Alt-drag snaps to
+  nothing. These choices are remembered in the browser.
 - **Selection Pane** (Arrange ▸ Selection Pane… `pptx-selection-pane-toggle`,
   or Alt+F10) opens `pptx-selection-pane`: one `pptx-selection-row` per
   object (`data-shape-id`), topmost first with groups nested. Click selects

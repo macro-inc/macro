@@ -122,6 +122,8 @@ export interface SlideEditorOptions {
   renderWidth: Accessor<number>;
   /** Slide points per screen pixel, for drag thresholds. */
   pointsPerPixel: Accessor<number>;
+  /** Smart guides, and the grid spacing moves snap to (View ▸ Grid). */
+  snap?: Accessor<{ guides: boolean; grid?: number }>;
 }
 
 const DRAG_THRESHOLD_PX = 3;
@@ -457,10 +459,16 @@ export function createSlideEditor(options: SlideEditorOptions) {
         if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
         else dx = 0;
       }
-      // Alt turns smart guides off, as in PowerPoint.
+      // Alt turns smart guides and the grid off, as in PowerPoint.
       const deck = session.outline();
       const bounds = unionBounds(d.shapes.map((x) => x.origin));
-      if (!opts.alt && deck && bounds) {
+      const snapping = options.snap?.() ?? { guides: true };
+      if (
+        !opts.alt &&
+        deck &&
+        bounds &&
+        (snapping.guides || snapping.grid !== undefined)
+      ) {
         const moving = new Set(d.shapes.map((x) => x.id));
         const others = shapes()
           .filter((x) => !x.hidden && !moving.has(x.id))
@@ -469,7 +477,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
           { ...bounds, x: bounds.x + dx, y: bounds.y + dy },
           others,
           { w: deck.width, h: deck.height },
-          5 * options.pointsPerPixel()
+          5 * options.pointsPerPixel(),
+          snapping
         );
         dx += opts.shift && dx === 0 ? 0 : snap.dx;
         dy += opts.shift && dy === 0 ? 0 : snap.dy;

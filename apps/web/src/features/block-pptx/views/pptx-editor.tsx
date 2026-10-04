@@ -85,6 +85,7 @@ import {
   TableDesignTab,
   TableLayoutTab,
 } from '../components/ribbon/table-tabs';
+import { Gridlines, Rulers } from '../components/rulers';
 import { SectionHeaders, SectionMenuItems } from '../components/section-header';
 import { SelectionOverlay } from '../components/selection-overlay';
 import { SelectionPane } from '../components/selection-pane';
@@ -126,6 +127,7 @@ import { createPresentationSession } from '../primitives/create-presentation-ses
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
 import { createThumbnails } from '../primitives/create-thumbnails';
+import { createViewOptions } from '../primitives/create-view-options';
 
 const STAGE_MARGIN = 32;
 
@@ -237,6 +239,7 @@ export function PptxEditor() {
   );
   const unit = () => 1 / Math.max(scale(), 0.01);
 
+  const view = createViewOptions();
   const editor = createSlideEditor({
     engine,
     session,
@@ -244,6 +247,10 @@ export function PptxEditor() {
     canEdit: context.canEdit,
     renderWidth,
     pointsPerPixel: unit,
+    snap: () => ({
+      guides: view.options().guides,
+      grid: view.options().snapToGrid ? view.options().gridSpacing : undefined,
+    }),
   });
 
   // ---- tables ----------------------------------------------------------------
@@ -1409,6 +1416,7 @@ export function PptxEditor() {
     openFormatPane: (section) => setPane(section ?? 'shape'),
     openLink: () => void openLinkDialog(),
     selectionPane: { open: selectionPane, toggle: toggleSelectionPane },
+    view,
     present,
     find: (replace) => setFind({ replace }),
     zoom,
@@ -2086,6 +2094,22 @@ export function PptxEditor() {
                         </ContextMenuContent>
                       </ContextMenu.Portal>
                     </ContextMenu>
+                    <Show when={view.options().gridlines}>
+                      <Gridlines
+                        width={slideW()}
+                        height={slideH()}
+                        scale={scale()}
+                        spacing={view.options().gridSpacing}
+                      />
+                    </Show>
+                    <Show when={view.options().ruler}>
+                      <Rulers
+                        width={slideW()}
+                        height={slideH()}
+                        scale={scale()}
+                        selection={unionBounds(editor.selection().map(boxOf))}
+                      />
+                    </Show>
                     <Show when={selectedMedia()}>
                       {(shape) => {
                         const box = () => ({

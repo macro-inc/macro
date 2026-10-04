@@ -7,6 +7,8 @@ import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
+import GearSix from '@phosphor/gear-six.svg';
+import GridFour from '@phosphor/grid-four.svg';
 import MagnifyingGlassMinus from '@phosphor/magnifying-glass-minus.svg';
 import MagnifyingGlassPlus from '@phosphor/magnifying-glass-plus.svg';
 import Notepad from '@phosphor/notepad.svg';
@@ -16,18 +18,21 @@ import Play from '@phosphor/play.svg';
 import Presentation from '@phosphor/presentation.svg';
 import ProjectorScreen from '@phosphor/projector-screen.svg';
 import Rectangle from '@phosphor/rectangle.svg';
+import Ruler from '@phosphor/ruler.svg';
 import ShapesIcon from '@phosphor/shapes.svg';
 import SquaresFour from '@phosphor/squares-four.svg';
 import Stack from '@phosphor/stack.svg';
 import { For, Show } from 'solid-js';
 import { boxOf } from '../../core/geometry';
 import { swatchCss } from '../../core/palette';
+import { GRID_SPACINGS } from '../../core/rulers';
 import { unionBounds } from '../../core/selection';
 import { COLOR_SETS, type ColorSet, FONT_PAIRS } from '../../core/themes';
 import {
   ColorPicker,
   NumberField,
   PopoverItem,
+  PopoverLabel,
   RibbonButton,
   RibbonGroup,
   RibbonPopover,
@@ -267,6 +272,7 @@ export function SlideShowTab() {
 
 export function ViewTab() {
   const env = useRibbon();
+  const view = () => env.view.options();
   const percent = () => {
     const z = env.zoom();
     return z === 'fit' ? undefined : Math.round(z * 100);
@@ -333,6 +339,88 @@ export function ViewTab() {
         </RibbonTextButton>
       </RibbonGroup>
       <RibbonGroup label="Show">
+        <RibbonTextButton
+          label="Ruler"
+          aria-pressed={view().ruler}
+          variant={view().ruler ? 'accent' : 'ghost'}
+          data-testid="pptx-view-ruler"
+          onClick={() => env.view.set({ ruler: !view().ruler })}
+        >
+          <Ruler />
+          Ruler
+        </RibbonTextButton>
+        <RibbonTextButton
+          label="Gridlines"
+          aria-pressed={view().gridlines}
+          variant={view().gridlines ? 'accent' : 'ghost'}
+          data-testid="pptx-view-gridlines"
+          onClick={() => env.view.set({ gridlines: !view().gridlines })}
+        >
+          <GridFour />
+          Gridlines
+        </RibbonTextButton>
+        <RibbonPopover
+          label="Grid settings"
+          icon={<GearSix />}
+          testId="pptx-view-grid-settings"
+        >
+          {() => (
+            <div class="flex w-60 flex-col gap-2 p-1 text-ink text-xs">
+              <PopoverLabel>Snap to</PopoverLabel>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={view().snapToGrid}
+                  data-testid="pptx-view-snap-grid"
+                  onChange={(e) =>
+                    env.view.set({ snapToGrid: e.currentTarget.checked })
+                  }
+                />
+                Snap objects to grid
+              </label>
+              <PopoverLabel>Grid settings</PopoverLabel>
+              <label class="flex items-center justify-between gap-2">
+                Spacing
+                <select
+                  class="h-7 rounded-md border border-edge-muted bg-input px-1 text-ink text-xs"
+                  data-testid="pptx-view-grid-spacing"
+                  value={String(view().gridSpacing)}
+                  onChange={(e) =>
+                    env.view.set({
+                      gridSpacing: Number(e.currentTarget.value),
+                    })
+                  }
+                >
+                  <For each={GRID_SPACINGS}>
+                    {(s) => <option value={String(s.value)}>{s.label}</option>}
+                  </For>
+                </select>
+              </label>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={view().gridlines}
+                  onChange={(e) =>
+                    env.view.set({ gridlines: e.currentTarget.checked })
+                  }
+                />
+                Display grid on screen
+              </label>
+              <PopoverLabel>Guide settings</PopoverLabel>
+              <label class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={view().guides}
+                  data-testid="pptx-view-smart-guides"
+                  onChange={(e) =>
+                    env.view.set({ guides: e.currentTarget.checked })
+                  }
+                />
+                Display smart guides when shapes are aligned
+              </label>
+            </div>
+          )}
+        </RibbonPopover>
         <RibbonTextButton
           label="Notes"
           aria-pressed={env.notesVisible()}

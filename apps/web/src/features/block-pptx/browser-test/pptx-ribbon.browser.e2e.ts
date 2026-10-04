@@ -528,3 +528,48 @@ test('Selection Pane selects, hides, renames, and reorders objects', async ({
   await page.keyboard.press('Alt+F10');
   await expect(pane).toBeHidden();
 });
+
+test('shows the ruler and gridlines and snaps moves to the grid', async ({
+  page,
+}) => {
+  await open(page);
+  await goToSlide(page, 2);
+  await page.getByTestId('pptx-tab-view').click();
+  await page.getByTestId('pptx-view-ruler').click();
+  await page.getByTestId('pptx-view-gridlines').click();
+  await expect(page.getByTestId('pptx-ruler-horizontal')).toBeVisible();
+  await expect(page.getByTestId('pptx-ruler-vertical')).toBeVisible();
+  await expect(page.getByTestId('pptx-gridlines')).toBeVisible();
+  // Snap to a half-inch grid with smart guides off.
+  await page.getByTestId('pptx-view-grid-settings').click();
+  await page.getByTestId('pptx-view-snap-grid').check();
+  await page.getByTestId('pptx-view-smart-guides').uncheck();
+  await page.getByTestId('pptx-view-grid-spacing').selectOption('36');
+  await page.keyboard.press('Escape');
+  // Select the first card and drag it.
+  const card = await screen(page, 140, 250);
+  await page.mouse.click(card.x, card.y);
+  await expect(page.getByTestId('pptx-ruler-span').first()).toBeVisible();
+  const id = await page.evaluate(async () => {
+    const deck = await window.pptxFixture.engine()?.outline();
+    const s = deck?.slides[2].shapes.find(
+      (x) => x.x < 140 && x.x + x.w > 140 && x.y < 250 && x.y + x.h > 250
+    );
+    return s?.id;
+  });
+  const to = await screen(page, 177, 281);
+  await page.mouse.move(card.x, card.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => {
+      const s = (await outline(page)).slides[2].shapes.find((x) => x.id === id);
+      return s && [Math.round(s.x * 100) % 3600, Math.round(s.y * 100) % 3600];
+    })
+    .toEqual([0, 0]);
+  // The choices stay for the next visit.
+  await page.reload();
+  await expect(page.getByTestId('pptx-thumbnail').first()).toBeVisible();
+  await expect(page.getByTestId('pptx-gridlines')).toBeVisible();
+});

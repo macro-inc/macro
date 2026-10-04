@@ -47,24 +47,31 @@ function nearest(values: number[], candidates: number[], threshold: number) {
  * Where `moving` (already offset by the drag) snaps among `others` and the
  * slide. `threshold` is in points (a few screen pixels).
  */
+/**
+ * Snaps a moved box: to smart guides within `threshold` (unless `guides` is
+ * off), else, with a `grid` spacing, its top-left corner to the grid, as
+ * PowerPoint's Snap objects to grid does.
+ */
 export function snapMove(
   moving: Rect,
   others: Rect[],
   slide: { w: number; h: number },
-  threshold: number
+  threshold: number,
+  options: { grid?: number; guides?: boolean } = {}
 ): Snap {
-  const xCandidates = [
-    ...stops(0, slide.w),
-    ...others.flatMap((o) => stops(o.x, o.w)),
-  ];
-  const yCandidates = [
-    ...stops(0, slide.h),
-    ...others.flatMap((o) => stops(o.y, o.h)),
-  ];
+  const smart = options.guides ?? true;
+  const xCandidates = smart
+    ? [...stops(0, slide.w), ...others.flatMap((o) => stops(o.x, o.w))]
+    : [];
+  const yCandidates = smart
+    ? [...stops(0, slide.h), ...others.flatMap((o) => stops(o.y, o.h))]
+    : [];
   const x = nearest(stops(moving.x, moving.w), xCandidates, threshold);
   const y = nearest(stops(moving.y, moving.h), yCandidates, threshold);
-  const dx = x?.delta ?? 0;
-  const dy = y?.delta ?? 0;
+  const grid = options.grid && options.grid > 0 ? options.grid : undefined;
+  const toGrid = (v: number) => (grid ? Math.round(v / grid) * grid - v : 0);
+  const dx = x?.delta ?? toGrid(moving.x);
+  const dy = y?.delta ?? toGrid(moving.y);
   // Every guide the snapped box now lines up with, as PowerPoint shows them.
   const snapped = { ...moving, x: moving.x + dx, y: moving.y + dy };
   const close = (a: number, b: number) => Math.abs(a - b) < 0.01;

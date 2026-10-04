@@ -22,6 +22,7 @@ import {
 import type { Swatch } from '../../core/palette';
 import type { DeckSetup } from '../../primitives/create-deck-setup';
 import type { EditorCommands } from '../../primitives/create-editor-commands';
+import type { ViewOptionsState } from '../../primitives/create-view-options';
 
 export interface RibbonEnv {
   commands: EditorCommands;
@@ -55,6 +56,8 @@ export interface RibbonEnv {
   openFormatPane: (
     section?: 'shape' | 'effects' | 'picture' | 'text' | 'size' | 'background'
   ) => void;
+  /** View ▸ Show: ruler, gridlines, guides, and grid snapping. */
+  view: ViewOptionsState;
   /** The Selection Pane (Arrange ▸ Selection Pane, Alt+F10). */
   selectionPane: { open: () => boolean; toggle: () => void };
   /** Opens the Insert/Edit Link dialog for the text or shapes selected. */
