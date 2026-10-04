@@ -50,6 +50,8 @@ struct PageOut {
     lines: Vec<LineOut>,
     /// Drawings: (x, y, width, height).
     drawings: Vec<[f32; 4]>,
+    /// The body area: (x, y, width, height).
+    body: [f32; 4],
 }
 
 fn story_name(s: &StoryRef) -> &'static str {
@@ -156,6 +158,7 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
             height: page.height,
             lines,
             drawings,
+            body: [page.body.x, page.body.y, page.body.w, page.body.h],
         });
     }
     let json = serde_json::to_string(&pages)?;
