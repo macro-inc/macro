@@ -44,9 +44,17 @@ into one undo step per group. Slides are addressed by their stable
 text (set, insert, delete, run and paragraph formatting, body properties),
 shapes (transform, fill, outline, geometry, add, delete, duplicate, z-order,
 picture replacement), tables (cell text, rows, columns), slides (add from a
-layout, duplicate, delete, move, hide, notes, background). The same JSON
+layout, duplicate, delete, move, hide, notes, background), and charts (data,
+type, title, legend, data labels, series colors, new charts). The same JSON
 vocabulary is used by the browser editor and by the `EditPresentation` AI
 tool; with the `schema` feature the operations derive JSON Schemas.
+
+Chart edits rewrite the chart part's data caches and the embedded workbook
+PowerPoint's "Edit Data" opens (its data sheet and any table over it; other
+workbook parts keep their bytes). Data and type edits apply to single-plot
+bar, column, line, pie, doughnut, and area charts with cached data (the
+outline's `chart.editable`); new charts are built through the same code and
+come with a generated workbook.
 
 After text edits, shapes with `normAutofit` are re-fitted (PowerPoint's font
 scale ladder) and `spAutoFit` shapes grow to their text, so saved files open
@@ -130,5 +138,6 @@ one that differs from PowerPoint (pattern fills, for example).
 - SmartArt is drawn from the drawing PowerPoint caches with it; the rare
   diagram saved without one (1 of 16 in the corpus) is left empty, since the
   SmartArt layout algorithms are not implemented.
-- Editing does not create charts, SmartArt, or animations; it keeps the ones
-  a deck has.
+- Editing does not create SmartArt or animations; it keeps the ones a deck
+  has. Combination, scatter, bubble, stock, surface, and radar charts take
+  formatting edits but not data or type edits.
