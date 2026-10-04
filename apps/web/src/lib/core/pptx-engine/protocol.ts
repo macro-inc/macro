@@ -8,12 +8,15 @@
 
 import type {
   CellRef,
+  ClipboardPayload,
   DeckOutline,
   EditResult,
   EntryChange,
+  FindOptions,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
+  TextMatch,
 } from './types';
 
 interface Base {
@@ -58,7 +61,13 @@ export type PptxRequest =
       names: string[];
       width: number;
       height: number;
-    });
+    })
+  /** Copies shapes of slide `index` (by id); answers `clipboard`. */
+  | (Base & { kind: 'copyShapes'; index: number; shapes: number[] })
+  /** Copies slides (by id) with their notes; answers `clipboard`. */
+  | (Base & { kind: 'copySlides'; slides: number[] })
+  /** Finds text on every slide; answers `matches`. */
+  | (Base & { kind: 'findText'; query: string; options?: FindOptions });
 
 /** History availability, reported after every state change. */
 export interface HistoryState {
@@ -102,4 +111,6 @@ export type PptxResponse =
       kind: 'presetPaths';
       paths: Record<string, PresetPath[]>;
     }
+  | { id: number; ok: true; kind: 'clipboard'; payload: ClipboardPayload }
+  | { id: number; ok: true; kind: 'matches'; matches: TextMatch[] }
   | { id: number; ok: false; error: string };

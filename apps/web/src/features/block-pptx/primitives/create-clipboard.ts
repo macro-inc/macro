@@ -7,7 +7,6 @@
  * pasting back into a presentation restores the shapes rather than text.
  */
 
-import type { EditOp } from '@core/pptx-engine/types';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { EditorCommands } from './create-editor-commands';
 import type { PresentationSession } from './create-presentation-session';
@@ -68,18 +67,15 @@ export function createClipboard(options: ClipboardOptions) {
       ])
       .join('\n');
 
-  const canCopyShapes = () => !!engine.copyShapes;
-  const canCopySlides = () => !!engine.copySlides;
-
   /** Copies the selection into `data` (a copy event's), or the async clipboard. */
   function copy(data?: DataTransfer | null): boolean {
     const slides = options.railSelection();
-    if (slides && slides.length > 0 && canCopySlides()) {
+    if (slides && slides.length > 0) {
       const token = newToken();
       current = {
         token,
         kind: 'slides',
-        payload: engine.copySlides!(slides),
+        payload: engine.copySlides(slides),
         pastes: 0,
       };
       write(data, token, '');
@@ -87,12 +83,12 @@ export function createClipboard(options: ClipboardOptions) {
     }
     const s = session.currentSlide();
     const shapes = editor.selection();
-    if (!s || shapes.length === 0 || !canCopyShapes()) return false;
+    if (!s || shapes.length === 0) return false;
     const token = newToken();
     current = {
       token,
       kind: 'shapes',
-      payload: engine.copyShapes!(
+      payload: engine.copyShapes(
         s.index,
         shapes.map((x) => x.id)
       ),
@@ -155,7 +151,7 @@ export function createClipboard(options: ClipboardOptions) {
     clip.pastes++;
     if (clip.kind === 'slides') {
       const result = await session.apply([
-        { op: 'pasteSlides', after: s.id, payload } as unknown as EditOp,
+        { op: 'pasteSlides', after: s.id, payload },
       ]);
       const first = result?.created[0]?.slide;
       if (first !== undefined) commands.goToSlideId(first);
@@ -170,7 +166,7 @@ export function createClipboard(options: ClipboardOptions) {
         payload,
         dx: offset,
         dy: offset,
-      } as unknown as EditOp,
+      },
     ]);
     const ids = (result?.created ?? [])
       .filter((c) => c.slide === s.id && c.shape !== undefined)

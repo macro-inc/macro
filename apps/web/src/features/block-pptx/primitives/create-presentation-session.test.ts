@@ -29,6 +29,7 @@ const changed: EditResult = {
   created: [],
   changedSlides: [256],
   structureChanged: false,
+  replaced: 0,
 };
 
 /** An engine whose open document is a title, swapped by `reopen`. */
@@ -61,6 +62,9 @@ function fakeEngine() {
       title = new TextDecoder().decode(bytes);
     }),
     close: () => {},
+    copyShapes: async () => '{}',
+    copySlides: async () => '{}',
+    findText: async () => [],
   };
   return engine;
 }

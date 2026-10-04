@@ -9,14 +9,17 @@
 import type { HistoryState, PptxRequest, PptxResponse } from './protocol';
 import type {
   CellRef,
+  ClipboardPayload,
   CollabEntries,
   DeckOutline,
   EditOp,
   EditResult,
   EntryChange,
+  FindOptions,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
+  TextMatch,
 } from './types';
 
 export type { HistoryState } from './protocol';
@@ -278,4 +281,38 @@ export async function getPresetPaths(
       'presetPaths'
     )
   ).paths;
+}
+
+/**
+ * Copies shapes of slide `index` (back to front, with every part they use)
+ * for a `pasteShapes` op, in this or another presentation.
+ */
+export async function copyShapes(
+  docKey: string,
+  index: number,
+  shapes: number[]
+): Promise<ClipboardPayload> {
+  return (
+    await request({ kind: 'copyShapes', docKey, index, shapes }, 'clipboard')
+  ).payload;
+}
+
+/** Copies slides (by id) with their notes for a `pasteSlides` op. */
+export async function copySlides(
+  docKey: string,
+  slides: number[]
+): Promise<ClipboardPayload> {
+  return (await request({ kind: 'copySlides', docKey, slides }, 'clipboard'))
+    .payload;
+}
+
+/** Every occurrence of `query` in slide text, in slide order. */
+export async function findText(
+  docKey: string,
+  query: string,
+  options?: FindOptions
+): Promise<TextMatch[]> {
+  return (
+    await request({ kind: 'findText', docKey, query, options }, 'matches')
+  ).matches;
 }

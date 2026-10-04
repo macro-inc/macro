@@ -159,16 +159,11 @@ export interface ShapeOutline {
   table?: TableOutline;
   /** Chart content, for charts. */
   chart?: ChartOutline;
+  /**
+   * Group members, back to front. Their box, rotation, and flips are in
+   * slide space (what `setTransform` takes and ungrouping gives them).
+   */
   children?: ShapeOutline[];
-}
-
-/** How a slide enters in a slide show. */
-export interface TransitionOutline {
-  kind: string;
-  durationMs: number;
-  direction?: string;
-  advanceOnClick: boolean;
-  advanceAfterMs?: number;
 }
 
 export interface SlideOutline {
@@ -180,7 +175,7 @@ export interface SlideOutline {
   title?: string;
   shapes: ShapeOutline[];
   notes?: string;
-  /** The transition into this slide. */
+  /** The transition into the slide. */
   transition?: TransitionOutline;
 }
 
@@ -494,7 +489,36 @@ export type EditOp =
       legend?: LegendPosition | 'none';
       dataLabels?: boolean;
       seriesColors?: { series: number; color: string }[];
-    } & ShapeTarget);
+    } & ShapeTarget)
+  /** Groups shapes sharing a parent (≥ 2); the group id is in `created`. */
+  | { op: 'groupShapes'; slide: number; shapes: number[] }
+  /** Ungroups; the members' ids are in `created`, back to front. */
+  | ({ op: 'ungroupShape' } & ShapeTarget)
+  /** Pastes a `copyShapes` payload on top of a slide; new ids in `created`. */
+  | {
+      op: 'pasteShapes';
+      slide: number;
+      payload: string;
+      dx?: number;
+      dy?: number;
+    }
+  /** Pastes a `copySlides` payload; new slide ids in `created`. */
+  | { op: 'pasteSlides'; after?: number; payload: string }
+  /** Changes a slide's layout (by name, as in `DeckOutline.layouts`). */
+  | { op: 'setSlideLayout'; slide: number; layout: string }
+  | ({ op: 'setTransition' } & TransitionPatch)
+  /** Replaces text everywhere (or on one slide); the count is `replaced`. */
+  | {
+      op: 'replaceText';
+      find: string;
+      replace: string;
+      matchCase?: boolean;
+      wholeWord?: boolean;
+      slide?: number;
+    }
+  | ({ op: 'setAltText'; text: string } & ShapeTarget)
+  | ({ op: 'setShapeName'; name: string } & ShapeTarget)
+  | ({ op: 'setShapeHidden'; hidden: boolean } & ShapeTarget);
 
 export interface Created {
   slide: number;
@@ -508,6 +532,8 @@ export interface EditResult {
   changedSlides: number[];
   /** Slides were added, removed, or reordered. */
   structureChanged: boolean;
+  /** Text replacements made by `replaceText` operations. */
+  replaced: number;
 }
 
 /**
@@ -529,3 +555,83 @@ export interface PresetPath {
   fill: boolean;
   stroke: boolean;
 }
+
+/** Effects `setTransition` writes. */
+export type TransitionKind =
+  | 'none'
+  | 'cut'
+  | 'fade'
+  | 'push'
+  | 'wipe'
+  | 'split'
+  | 'reveal'
+  | 'randomBar'
+  | 'shape'
+  | 'uncover'
+  | 'cover'
+  | 'zoom'
+  | 'dissolve'
+  | 'flash'
+  | 'morph';
+
+/** A slide transition (`inspect::TransitionOutline`). */
+export interface TransitionOutline {
+  /**
+   * A `TransitionKind` (`none` = advance settings only), or the element name
+   * of an effect `setTransition` cannot write (`vortex`, `wheel`...).
+   */
+  kind: TransitionKind | (string & {});
+  durationMs: number;
+  /** Effect option (see `TransitionPatch.direction`), when the effect has one. */
+  direction?: string;
+  advanceOnClick: boolean;
+  /** Automatic advance after this many milliseconds. */
+  advanceAfterMs?: number;
+}
+
+/** The fields of a `setTransition` op; omitted ones keep the slide's value. */
+export interface TransitionPatch {
+  slide: number;
+  kind: TransitionKind;
+  /** At most 60000. */
+  durationMs?: number;
+  /**
+   * `fade`: smooth|black; `push`, `wipe`: l|r|u|d; `cover`, `uncover`: those
+   * or lu|ru|ld|rd; `split`: horzOut|horzIn|vertOut|vertIn; `reveal`: l|r;
+   * `randomBar`: horz|vert; `shape`: circle|diamond|plus; `zoom`: in|out;
+   * `morph`: byObject|byWord|byChar.
+   */
+  direction?: string;
+  advanceOnClick?: boolean;
+  /** `null` turns automatic advance off; omitted keeps it. */
+  advanceAfterMs?: number | null;
+  /** Give every slide the resulting transition. */
+  applyToAll?: boolean;
+}
+
+/** How `findText` and `replaceText` match. */
+export interface FindOptions {
+  /** Default: ignore case. */
+  matchCase?: boolean;
+  /** No letter, digit, or `_` on either side of a match. */
+  wholeWord?: boolean;
+}
+
+/** One occurrence of found text (`edit::TextMatch`); offsets as in `TextPos`. */
+export interface TextMatch {
+  slide: number;
+  /** Shape id (the table's frame for cell text). */
+  shape: number;
+  cell?: CellRef;
+  paragraph: number;
+  start: number;
+  /** Exclusive. */
+  end: number;
+}
+
+/**
+ * A `copyShapes` / `copySlides` result: self-contained JSON (format
+ * `pptx-engine/clipboard`) to hand back verbatim to `pasteShapes` or
+ * `pasteSlides`, in this or another presentation.
+ */
+export type ClipboardPayload = string;

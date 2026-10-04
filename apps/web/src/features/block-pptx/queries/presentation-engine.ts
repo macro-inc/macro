@@ -8,7 +8,10 @@ import {
   applyEdits,
   breakEditGroup,
   closePresentation,
+  copyShapes,
+  copySlides,
   enableCollab,
+  findText,
   getOutline,
   getPresetPaths,
   getSlideOutline,
@@ -26,6 +29,7 @@ import type {
   CollabEntries,
   EditResult,
   EntryChange,
+  FindOptions,
 } from '@core/pptx-engine/types';
 import { type LoroDoc, UndoManager } from 'loro-crdt';
 import type {
@@ -64,6 +68,11 @@ function readers(key: string) {
     presetPaths: getPresetPaths,
     save: () => savePresentation(key),
     close: () => closePresentation(key),
+    copyShapes: (index: number, shapes: number[]) =>
+      copyShapes(key, index, shapes),
+    copySlides: (slides: number[]) => copySlides(key, slides),
+    findText: (query: string, options?: FindOptions) =>
+      findText(key, query, options),
   };
 }
 

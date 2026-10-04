@@ -53,6 +53,12 @@ export interface WasmPptxDocument {
   collabChanges: () => string;
   /** Applies `EntryChange[]` JSON from the shared maps; returns `EditResult` JSON. */
   applyCollab: (changes: string) => string;
+  /** Clipboard payload JSON of shapes (`ids`: JSON array) of slide `index`. */
+  copyShapes: (index: number, ids: string) => string;
+  /** Clipboard payload JSON of slides (`ids`: JSON array of slide ids). */
+  copySlides: (ids: string) => string;
+  /** `TextMatch[]` JSON; `options` is `FindOptions` JSON. */
+  findText: (query: string, options: string) => string;
   free: () => void;
 }
 

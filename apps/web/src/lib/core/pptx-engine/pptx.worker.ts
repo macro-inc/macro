@@ -18,6 +18,7 @@ import type {
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
+  TextMatch,
 } from './types';
 import {
   discardPptxEngineWasm,
@@ -330,6 +331,32 @@ async function serve(
         saved.byteOffset + saved.byteLength
       ) as ArrayBuffer;
       return [{ id, ok: true, kind: 'save', bytes }, [bytes]] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'copyShapes' }, ({ docKey, index, shapes }) => {
+      const payload = documentFor(docKey).copyShapes(
+        index,
+        JSON.stringify(shapes)
+      );
+      return [{ id, ok: true, kind: 'clipboard', payload }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'copySlides' }, ({ docKey, slides }) => {
+      const payload = documentFor(docKey).copySlides(JSON.stringify(slides));
+      return [{ id, ok: true, kind: 'clipboard', payload }, []] as [
+        PptxResponse,
+        Transferable[],
+      ];
+    })
+    .with({ kind: 'findText' }, ({ docKey, query, options }) => {
+      const matches = JSON.parse(
+        documentFor(docKey).findText(query, JSON.stringify(options ?? {}))
+      ) as TextMatch[];
+      return [{ id, ok: true, kind: 'matches', matches }, []] as [
         PptxResponse,
         Transferable[],
       ];

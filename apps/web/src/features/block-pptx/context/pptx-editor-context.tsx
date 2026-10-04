@@ -7,12 +7,15 @@
 
 import type {
   CellRef,
+  ClipboardPayload,
   DeckOutline,
   EditOp,
   EditResult,
+  FindOptions,
   PresetPath,
   SlideOutline,
   TextLayoutInfo,
+  TextMatch,
 } from '@core/pptx-engine/types';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 
@@ -57,6 +60,12 @@ export interface PresentationEngine {
   redo: () => Promise<EditOutcome>;
   /** The current presentation as `.pptx` bytes. */
   save: () => Promise<Uint8Array>;
+  /** Copies shapes of slide `index` for a `pasteShapes` op (any presentation). */
+  copyShapes: (index: number, shapes: number[]) => Promise<ClipboardPayload>;
+  /** Copies slides (by id) with their notes for a `pasteSlides` op. */
+  copySlides: (slides: number[]) => Promise<ClipboardPayload>;
+  /** Every occurrence of `query` in slide text, in slide order. */
+  findText: (query: string, options?: FindOptions) => Promise<TextMatch[]>;
   /**
    * Replaces the open presentation with `bytes` (transferred), dropping its
    * undo history. Rejects, keeping the current one, when they can't be read.
@@ -66,10 +75,6 @@ export interface PresentationEngine {
   reopen: (bytes: ArrayBuffer) => Promise<void>;
   /** Releases the engine's memory. */
   close: () => void;
-  /** Serializes shapes of slide `index` for pasting (`pasteShapes`). */
-  copyShapes?: (index: number, shapes: number[]) => Promise<string>;
-  /** Serializes slides for pasting (`pasteSlides`). */
-  copySlides?: (slides: number[]) => Promise<string>;
   /** Outlines of preset shapes at `width`×`height` points, for galleries. */
   presetPaths?: (
     names: string[],
