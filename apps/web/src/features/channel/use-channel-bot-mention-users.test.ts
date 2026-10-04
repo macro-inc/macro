@@ -211,4 +211,14 @@ describe('availableBotMentionUsers', () => {
       ).toEqual(['bot|doc-only']);
     }
   );
+
+  it('offers owned and team agents in calls regardless of channel scope', () => {
+    const owned = agent('owned-agent', 'Owned agent', 'selected');
+    const team = agent('team-agent', 'Team agent', 'all');
+    expect(
+      availableBotMentionUsers([], [owned, team], true, 'call').map(
+        (user) => user.id
+      )
+    ).toEqual(['bot|owned-agent', 'bot|team-agent']);
+  });
 });

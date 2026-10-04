@@ -87,6 +87,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views; stays at this URL rather than moving into Drive (requires the Databases flag) |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
@@ -96,6 +97,15 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
+pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
+`/app/task-slug/...`) render without the split layout and take one part only.
+`/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
+replaced with `/app`, which goes to Home or to login. An unknown split among app
+splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
+navigates to a page outside the app replaces every split; Back restores them.
 
 Search-result locations use pane-local namespaces: `channels` (message/thread),
 `email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight

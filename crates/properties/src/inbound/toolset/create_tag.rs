@@ -13,8 +13,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::tag_color::TagColor;
 use super::{PropertiesToolContext, caller_team_receipt_opt};
+use crate::TagColor;
 
 fn default_tag_scope() -> TagScope {
     TagScope::Personal

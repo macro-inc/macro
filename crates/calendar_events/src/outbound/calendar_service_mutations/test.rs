@@ -18,6 +18,7 @@ use crate::inbound::mutation_router::{
 
 fn sample_draft() -> CalendarEventDraft {
     CalendarEventDraft {
+        idempotency_key: None,
         title: "Standup".to_string(),
         description: Some("Daily".to_string()),
         location: None,

@@ -105,6 +105,22 @@ export function isFeatureEnabled(flag: Flag): boolean {
   return flag.enabled;
 }
 
+/** Databases rollout. Local HMR is on; deployed environments defer to PostHog. */
+export const enableDatabases = defineFlag({
+  key: 'enable-databases',
+  env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
+/**
+ * Shows the SQL behind database answers and tool results. Off everywhere;
+ * turn on locally with VITE_SHOW_DATABASE_SQL=true.
+ */
+export const showDatabaseSql = defineFlag({
+  env: 'SHOW_DATABASE_SQL',
+  default: false,
+});
+
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
@@ -113,6 +129,13 @@ export function isFeatureEnabled(flag: Flag): boolean {
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
+
+// Leave the production PostHog flag disabled until archive-import rollout.
+export const enableSlackArchiveImport = defineFlag({
+  key: 'enable-slack-archive-import',
+  env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
+  default: onInDev,
+});
 
 /** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
 export const enableTasksReviews = defineFlag({
@@ -200,6 +223,16 @@ export const ENABLE_DOCX_TO_PDF = defineFlag({
   env: 'ENABLE_DOCX_TO_PDF',
   default: true,
 }).enabled;
+
+/**
+ * Open DOCX files in the collaborative DOCX editor instead of the converted
+ * PDF. On in development; deployed environments defer to PostHog.
+ */
+export const enableDocxEditor = defineFlag({
+  key: 'enable-docx-editor',
+  env: 'ENABLE_DOCX_EDITOR',
+  default: DEV_MODE_ENV || undefined,
+});
 
 export const ENABLE_MARKDOWN_LIVE_COLLABORATION = defineFlag({
   env: 'ENABLE_MARKDOWN_LIVE_COLLABORATION',
@@ -573,6 +606,14 @@ export function isCalendarSearchUiEnabled(): boolean {
   );
 }
 
+// Scheduling settings, calendar shortcuts, and public booking/receipt pages.
+// On in dev; production defers to PostHog.
+export const enableCalendarScheduling = defineFlag({
+  key: 'enable-calendar-scheduling',
+  env: 'ENABLE_CALENDAR_SCHEDULING',
+  default: onInDev,
+});
+
 // The "Enable calendar" prompt on phones. Off by default everywhere,
 // including dev: the mobile toast layout drops the body and the close button,
 // so the prompt lands as an undismissable one-line bar over the composer.
@@ -699,6 +740,17 @@ export const enableRecentView = defineFlag({
 export const enableNotificationSettings = defineFlag({
   key: 'enable-notification-settings',
   env: 'ENABLE_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
+/**
+ * The in-browser PowerPoint editor (`block-pptx`). Off shows uploaded
+ * `.pptx` files as before: download only. On in dev; deployed environments
+ * follow PostHog.
+ */
+export const enablePptxEditor = defineFlag({
+  key: 'enable-pptx-editor',
+  env: 'ENABLE_PPTX_EDITOR',
   default: onInDev,
 });
 

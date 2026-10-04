@@ -202,6 +202,69 @@ fn sort_key(reminder: &Reminder) -> (DateTime<Utc>, DateTime<Utc>, Uuid) {
 }
 
 impl RemindersRepo for FakeRemindersRepo {
+    async fn email_candidates(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _ids: Option<&[Uuid]>,
+        _cursor: Option<crate::domain::email_collection::EmailReminderCursor>,
+        _as_of: DateTime<Utc>,
+        _limit: u32,
+    ) -> Result<Vec<crate::domain::email_collection::EmailReminderCandidate>, Self::Err> {
+        unreachable!("generic reminder tests do not read email collections")
+    }
+    async fn list_collection(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        query: &crate::domain::collection::CollectionQuery,
+        as_of: DateTime<Utc>,
+        limit: i64,
+    ) -> Result<crate::domain::collection::CollectionBatch, Self::Err> {
+        use crate::domain::collection::{ReminderCollectionRow, is_history};
+        self.check_failing()?;
+        let key = |r: &Reminder| (is_history(r, as_of), r.next_run_at, r.created_at, r.id);
+        let mut rows: Vec<_> = self
+            .rows()
+            .into_iter()
+            .filter(|(owner, r)| {
+                owner == user.as_ref()
+                    && query
+                        .completed
+                        .is_none_or(|done| r.completed_at.is_some() == done)
+                    && query.cursor.is_none_or(|c| {
+                        key(r)
+                            > (
+                                c.history,
+                                c.position.next_run_at,
+                                c.position.created_at,
+                                c.position.id,
+                            )
+                    })
+            })
+            .map(|(_, r)| r)
+            .collect();
+        rows.sort_by_key(key);
+        rows.truncate(limit as usize);
+        let last_examined = rows
+            .last()
+            .map(|r| crate::domain::collection::CollectionCursor {
+                as_of,
+                history: is_history(r, as_of),
+                position: ReminderCursor::after(r),
+            });
+        Ok(crate::domain::collection::CollectionBatch {
+            examined: rows.len(),
+            last_examined,
+            items: rows
+                .into_iter()
+                .map(|reminder| ReminderCollectionRow {
+                    reminder,
+                    reference: None,
+                    email_followup: None,
+                })
+                .collect(),
+        })
+    }
+
     type Err = FakeRepoError;
 
     async fn create_reminder(

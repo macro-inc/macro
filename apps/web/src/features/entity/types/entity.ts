@@ -11,6 +11,7 @@ import type {
   SoupThreadReply,
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
+import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 
 export type EntityBase = {
   id: string;
@@ -52,6 +53,12 @@ export type UnknownForeignEntity = ForeignEntityBase & {
   };
 };
 
+/** A GitHub label; `color` is GitHub's six-digit hex without `#`. */
+export type GithubPullRequestLabel = {
+  name: string;
+  color?: string | null;
+};
+
 // Consider making this a generic pull request entity so we can display
 // pull requests from other sources besides github
 export type GithubPullRequestEntity = ForeignEntityBase & {
@@ -67,6 +74,7 @@ export type GithubPullRequestEntity = ForeignEntityBase & {
     deletions: number;
     comments: GithubPullRequestComment[];
     checks: GithubPullRequestCheckRun[];
+    labels: GithubPullRequestLabel[];
     authorLogin?: string;
     authorId?: number;
   };
@@ -393,6 +401,13 @@ export type CrmContactEntity = EntityBase & {
   hidden: boolean;
 };
 
+/** A Macro Database. Not a Soup entity: it has no view history, so `createdAt` is its only timestamp. */
+export type DatabaseEntity = EntityBase & {
+  type: 'database';
+  /** What the viewer may do with the database. */
+  grant: AccessLevel;
+};
+
 export type ReminderEntity = EntityBase & {
   type: 'reminder';
   /** What to remind the user about. Doubles as {@link EntityBase.name}. */
@@ -414,7 +429,11 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'initiative'>;
+    // Databases are not Soup entities, so nothing can point a reminder at one.
+    type: Exclude<
+      EntityType,
+      'reminder' | 'calendar_event' | 'initiative' | 'database'
+    >;
     fileType?: string;
     subType?: string;
   };
@@ -428,8 +447,10 @@ export type ReminderEntity = EntityBase & {
   nextRunAt: DateValue;
   /** When false, the dispatcher skips this reminder. */
   enabled: boolean;
-  /** Set once a one-shot reminder has fired. */
+  /** When the owner acknowledged the occurrence; recurring schedules can remain enabled. */
   completedAt?: DateValue | null;
+  /** Owning email workflow; these mirrors must be rescheduled through Remind me. */
+  emailFollowup?: import('@service-storage/generated/schemas/emailFollowup').EmailFollowup;
 };
 
 /** Normalized time shape of a calendar event soup row. */
@@ -468,7 +489,6 @@ export type CalendarEventEntity = EntityBase & {
 /** A native project, distinct from folder entities. */
 export type InitiativeEntity = EntityBase & {
   type: 'initiative';
-  descriptionDocumentId: string;
   properties?: SoupProperty[];
 };
 
@@ -487,6 +507,7 @@ export type EntityData =
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
+  | DatabaseEntity
   | AutomationEntity
   | ReminderEntity
   | CalendarEventEntity
@@ -505,6 +526,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'call',
   'crm_company',
   'crm_contact',
+  'database',
   'automation',
   'reminder',
   'calendar_event',

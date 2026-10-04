@@ -223,12 +223,22 @@ function renderToolPage(tool: ResolvedTool, defs: Record<string, JsonSchema>) {
   const description =
     tool.description ?? 'Generated from the Macro Rust tool registry.';
   const paramsTable = renderParamsTable(tool.inputSchema, defs);
+  // Metadata is a summary; the complete tool instructions belong in the body.
+  const summary = description.trim().split(/\n\s*\n|(?<=[.!?])\s/)[0];
+  const descriptionLines: string[] = [];
+  for (const word of summary.split(/\s+/)) {
+    const last = descriptionLines.length - 1;
+    if (last < 0 || descriptionLines[last].length + word.length + 1 > 78)
+      descriptionLines.push(word);
+    else descriptionLines[last] += ` ${word}`;
+  }
 
   return {
     slug,
     body: `---
 title: ${tool.name}
-description: "${description.replaceAll('\n', ' ').replaceAll('"', '\\"')}"
+description: >-
+${descriptionLines.map((line) => `  ${line}`).join('\n')}
 ---
 
 # ${tool.name}

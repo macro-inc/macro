@@ -48,6 +48,13 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
 }));
 
+// The real EntityIcon reaches the command launcher through `@ui`, which reads
+// `getIconConfig` back before EntityIcon finishes initializing.
+vi.mock('@core/component/EntityIcon', () => ({
+  EntityIcon: () => null,
+  getIconConfig: () => ({ icon: () => null }),
+}));
+
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -97,7 +104,11 @@ function renderTool(
         message_id="message-1"
         part_index={0}
         isComplete
-        renderContext={{ isStreaming: false, grouped: false }}
+        renderContext={{
+          isStreaming: false,
+          grouped: false,
+          followedBy: () => false,
+        }}
       />
     </ActivityContextProvider>
   ));
@@ -150,6 +161,22 @@ describe('ReadActivity renderer', () => {
     expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
     expect(container.textContent).toContain('Created');
     expect(container.textContent).not.toContain('agent-session-raw-id');
+  });
+
+  it('renders a database as a named entity', () => {
+    const { container } = renderTool([
+      {
+        actorId: 'macro|user@example.com',
+        entityType: 'database',
+        entityId: 'database-raw-id',
+        action: { type: 'created' },
+        occurredAt: '2026-08-19T17:30:00Z',
+      },
+    ]);
+
+    expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
+    expect(container.textContent).toContain('Launch plan');
+    expect(container.textContent).not.toContain('database-raw-id');
   });
 
   it('reports an empty range without an expand control', () => {

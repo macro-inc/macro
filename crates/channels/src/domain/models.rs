@@ -653,6 +653,8 @@ pub struct PatchChannelRequest {
 pub enum ReferencedShareItemType {
     /// Agent session entity.
     AgentSession,
+    /// Database entity.
+    Database,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -672,6 +674,7 @@ impl ReferencedShareItemType {
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
             "agent_session" => Some(Self::AgentSession),
+            "database" => Some(Self::Database),
             "document" => Some(Self::Document),
             "chat" => Some(Self::Chat),
             "project" => Some(Self::Project),
@@ -686,6 +689,7 @@ impl ReferencedShareItemType {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::AgentSession => "agent_session",
+            Self::Database => "database",
             Self::Document => "document",
             Self::Chat => "chat",
             Self::Project => "project",

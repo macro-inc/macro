@@ -6,8 +6,8 @@
     "root": "../.."
   },
   "files": {
-    // orval's zod.ts crossed biome's 1 MiB default once calendar schemas landed
-    "maxSize": 2097152,
+    // orval's storage zod.ts passed 1 MiB with calendar schemas and 2 MiB with databases and Slack imports
+    "maxSize": 4194304,
     "includes": [
       "**/*.{ts,tsx,js,jsx}",
       "**/openapi.json",
@@ -44,6 +44,30 @@
         "actions": {
           "source": {
             "organizeImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/lib/split-router/routes/**",
+        "src/lib/split-router/router/run.ts",
+        "src/lib/split-router/router/url-gate.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["solid-js", "solid-js/**"],
+                    "message": "The split router's route table and navigation machines are pure; keep Solid out of them."
+                  }
+                ]
+              }
+            }
           }
         }
       }

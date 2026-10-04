@@ -163,21 +163,14 @@ type CompleteMutationRoot {
 	"""
 	updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!
 	"""
+	Idempotently ensure the collaborative description surface of an initiative the viewer
+	can see, returning its id, which is the initiative's id. Call before connecting.
+	"""
+	ensureInitiativeDescriptionSurface(initiativeId: ID!): ID!
+	"""
 	Delete an initiative after its owner capability has been verified.
 	"""
 	deleteInitiative(initiativeId: ID!): Boolean!
-	"""
-	Assign or move tasks, preserving partial task authorization results.
-	"""
-	assignInitiativeTasks(initiativeId: ID!, taskIds: [ID!]!): [InitiativeTaskAssignment!]!
-	"""
-	Remove a task using project and task edit capabilities.
-	"""
-	unassignInitiativeTask(initiativeId: ID!, taskId: ID!): Boolean!
-	"""
-	Clear a task's project using task edit access, even after project access is revoked.
-	"""
-	clearTaskInitiative(taskId: ID!): Boolean!
 }
 
 """
@@ -1760,6 +1753,56 @@ input GraphqlCrmScope @oneOf {
 }
 
 """
+The two operands of a recursive `DatabaseRowFilterExpr` binary expression.
+"""
+input GraphqlDatabaseRowBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlDatabaseRowExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlDatabaseRowExpr!
+}
+
+"""
+A recursive `DatabaseRowFilterExpr` filter expression.
+"""
+input GraphqlDatabaseRowExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlDatabaseRowBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlDatabaseRowBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlDatabaseRowExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlDatabaseRowLiteral
+}
+
+"""
+GraphQL input for selecting database rows through Soup.
+"""
+input GraphqlDatabaseRowLiteral @oneOf {
+	"""
+	Match the rows of a table.
+	"""
+	tableId: ID
+	"""
+	Match one row.
+	"""
+	id: ID
+}
+
+"""
 GraphQL input representing the date literal.
 """
 input GraphqlDateLiteral @oneOf {
@@ -1880,6 +1923,14 @@ input GraphqlDocumentLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	An entity-property condition on the document or task.
+	"""
+	property: GraphqlFilterPropertiesLiteral
+	"""
+	Uploaded from an email attachment sent by, or to, a matching address.
+	"""
+	emailAttachmentParticipant: GraphqlEmailValue
 }
 
 """
@@ -2323,6 +2374,10 @@ input GraphqlEntityFilterAst {
 	"""
 	foreignEntityFilter: GraphqlForeignEntityExpr
 	"""
+	The GitHub pull request filter to apply, on top of the foreign entity filter.
+	"""
+	githubPullRequestFilter: GraphqlGithubPullRequestExpr
+	"""
 	The reminder filter to apply.
 	"""
 	reminderFilter: GraphqlReminderExpr
@@ -2334,6 +2389,10 @@ input GraphqlEntityFilterAst {
 	The initiative filter to apply. Initiatives are opt-in.
 	"""
 	initiativeFilter: GraphqlInitiativeExpr
+	"""
+	The database row filter to apply. Rows are opt-in: name a table.
+	"""
+	databaseRowFilter: GraphqlDatabaseRowExpr
 	"""
 	The properties filter to apply.
 	"""
@@ -2526,6 +2585,14 @@ enum GraphqlEntityType {
 	Initiative entity.
 	"""
 	INITIATIVE
+	"""
+	Macro Database entity (a collection of user-defined tables).
+	"""
+	DATABASE
+	"""
+	Row of a Macro Database table.
+	"""
+	DATABASE_ROW
 }
 
 """
@@ -3152,6 +3219,128 @@ type GraphqlGithubPrStatusChangedMetadata {
 	Merge timestamp in RFC 3339 format.
 	"""
 	mergedAt: String
+}
+
+"""
+The two operands of a recursive `GithubPullRequestFilterExpr` binary expression.
+"""
+input GraphqlGithubPullRequestBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlGithubPullRequestExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlGithubPullRequestExpr!
+}
+
+"""
+A recursive `GithubPullRequestFilterExpr` filter expression.
+"""
+input GraphqlGithubPullRequestExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlGithubPullRequestBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlGithubPullRequestBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlGithubPullRequestExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlGithubPullRequestLiteral
+}
+
+"""
+GraphQL input representing a GitHub pull request literal.
+"""
+input GraphqlGithubPullRequestLiteral @oneOf {
+	"""
+	The numeric GitHub repository id option.
+	"""
+	repositoryId: String
+	"""
+	The author's numeric GitHub user id option.
+	"""
+	author: String
+	"""
+	The pull request state option.
+	"""
+	status: GraphqlGithubPullRequestState
+	"""
+	The numeric GitHub user id of someone involved in the pull request.
+	"""
+	involves: String
+	"""
+	The numeric GitHub user id of a requested reviewer.
+	"""
+	reviewRequested: String
+	"""
+	The draft option.
+	"""
+	draft: Boolean
+	"""
+	The numeric GitHub user id of an assignee.
+	"""
+	assignee: String
+	"""
+	The label name option.
+	"""
+	label: String
+	"""
+	The review status option.
+	"""
+	reviewStatus: GraphqlGithubPullRequestReviewStatus
+	"""
+	The numeric GitHub user id of someone who submitted a review.
+	"""
+	reviewedBy: String
+}
+
+"""
+GraphQL input representing a GitHub pull request review status.
+"""
+enum GraphqlGithubPullRequestReviewStatus {
+	"""
+	The no reviews option.
+	"""
+	NONE
+	"""
+	The review required option.
+	"""
+	REQUIRED
+	"""
+	The approved option.
+	"""
+	APPROVED
+	"""
+	The changes requested option.
+	"""
+	CHANGES_REQUESTED
+}
+
+"""
+GraphQL input representing a GitHub pull request state.
+"""
+enum GraphqlGithubPullRequestState {
+	"""
+	The open option.
+	"""
+	OPEN
+	"""
+	The closed option.
+	"""
+	CLOSED
+	"""
+	The merged option.
+	"""
+	MERGED
 }
 
 """
@@ -4120,6 +4309,14 @@ enum GraphqlPropertyEntityType {
 	"""
 	COMPANY
 	"""
+	Database row entity.
+	"""
+	DATABASE_ROW
+	"""
+	CRM contact entity.
+	"""
+	CONTACT
+	"""
 	Document entity.
 	"""
 	DOCUMENT
@@ -4200,6 +4397,10 @@ enum GraphqlPropertyOwnerScope {
 	A system definition.
 	"""
 	SYSTEM
+	"""
+	A column of one database.
+	"""
+	DATABASE
 }
 
 """
@@ -4222,6 +4423,10 @@ enum GraphqlPropertyTargetEntityType {
 	CRM company target.
 	"""
 	COMPANY
+	"""
+	Row of a Macro database table.
+	"""
+	DATABASE_ROW
 	"""
 	Document target, including tasks and snippets.
 	"""
@@ -5560,6 +5765,88 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 }
 
 """
+A row of a Macro database table. Its cells are its `properties`, keyed
+by the columns' property definitions.
+"""
+type GraphqlSoupDatabaseRow implements GraphqlSoupEntity {
+	"""
+	The row identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for rows.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	Rows have no name of their own.
+	"""
+	displayName: String
+	"""
+	Common row metadata; the owner is the database's.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The table the row belongs to.
+	"""
+	tableId: ID!
+	"""
+	The database the table belongs to.
+	"""
+	databaseId: ID!
+	"""
+	Fractional index ordering the row within its table.
+	"""
+	position: String!
+	"""
+	The principal identifier of the owner: the database's owner.
+	"""
+	ownerId: String!
+	"""
+	Who created the row, when they still exist. Named apart from other
+	entities' non-null `createdBy` so one selection can hold both.
+	"""
+	creatorId: String
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
 GraphQL representation of the soup document.
 """
 type GraphqlSoupDocument implements GraphqlSoupEntity {
@@ -6303,6 +6590,10 @@ enum GraphqlSoupEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+	"""
+	Row of a Macro database table.
+	"""
+	DATABASE_ROW
 }
 
 """
@@ -6409,10 +6700,6 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	Common initiative metadata.
 	"""
 	metadata: GraphqlEntityMetadata!
-	"""
-	Document backing the project's description, when one exists.
-	"""
-	descriptionDocumentId: ID
 	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
@@ -6785,10 +7072,6 @@ type GraphqlUser {
 	"""
 	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
 	"""
-	Initiative chips for tasks, without inaccessible project metadata.
-	"""
-	taskInitiativeReferences(taskIds: [ID!]!): [TaskInitiativeReference!]!
-	"""
 	AI routines the authenticated user can access.
 	"""
 	scheduledActions: [GraphqlScheduledAction!]!
@@ -6810,6 +7093,12 @@ type GraphqlUser {
 	Delegated actions performed on the user's behalf are included.
 	"""
 	activity(input: ActivityFeedInput!): GraphqlActivityPage!
+	"""
+	The newest activity on a database the authenticated user can view,
+	newest first. Databases are not Soup items, so this stands in for the
+	`activity` edge Soup entities carry.
+	"""
+	databaseActivity(databaseId: ID!, limit: Int): [GraphqlActivityEvent!]!
 	"""
 	The authenticated user's activity over the trailing year, bucketed
 	into local dates in the requested time zone.
@@ -7029,46 +7318,6 @@ input InitiativeSharePermissionInput {
 	Changes to channel grants.
 	"""
 	channelSharePermissions: [InitiativeChannelShareInput!]
-}
-
-"""
-One result in the deduplicated request order.
-"""
-type InitiativeTaskAssignment {
-	"""
-	Task whose assignment was attempted.
-	"""
-	taskId: ID!
-	"""
-	Domain result of this assignment.
-	"""
-	status: InitiativeTaskAssignmentStatus!
-}
-
-"""
-Per-task result of an assignment request.
-"""
-enum InitiativeTaskAssignmentStatus {
-	"""
-	Newly assigned or already assigned here.
-	"""
-	ASSIGNED
-	"""
-	Moved from another initiative.
-	"""
-	MOVED
-	"""
-	Document exists but is not a task.
-	"""
-	NOT_A_TASK
-	"""
-	Task could not be found.
-	"""
-	NOT_FOUND
-	"""
-	Viewer cannot edit this task.
-	"""
-	SKIPPED_NO_PERMISSION
 }
 
 """
@@ -7510,42 +7759,6 @@ type SoupUpdated {
 	The hydrated entity for this update.
 	"""
 	item: GraphqlSoupEntity!
-}
-
-"""
-Permission-filtered relationship between a task and its project.
-"""
-type TaskInitiativeReference {
-	"""
-	Task whose relationship is described, never this object's identity.
-	"""
-	taskId: ID!
-	"""
-	Permission-filtered relationship state.
-	"""
-	state: TaskInitiativeReferenceState!
-	"""
-	The same initiative entity used by collection/detail queries.
-	"""
-	initiative: GraphqlSoupInitiative
-}
-
-"""
-Visibility state of a task's initiative.
-"""
-enum TaskInitiativeReferenceState {
-	"""
-	Visible task without an initiative.
-	"""
-	NONE
-	"""
-	Task or initiative cannot be viewed.
-	"""
-	UNAVAILABLE
-	"""
-	Both task and initiative can be viewed.
-	"""
-	VISIBLE
 }
 
 """

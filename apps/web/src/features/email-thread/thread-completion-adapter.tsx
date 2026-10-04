@@ -6,9 +6,11 @@ import {
 } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compositeEntity, setDoneOverride } from '@notifications';
@@ -48,6 +50,7 @@ export function createThreadCompletionAdapter(
   | 'markThreadNotDone'
 > {
   const notificationSource = useGlobalNotificationSource();
+  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
 
@@ -108,7 +111,7 @@ export function createThreadCompletionAdapter(
               : bulkMarkNotificationsAsUndone(ids)
           ).catch(() => setDoneOverride(ids, undefined));
         }
-        if (disposition() !== 'queued') {
+        if (!graphqlSoup().enabled && disposition() !== 'queued') {
           if (!nowArchived) {
             void refetchSoupEntity(params.threadId, 'emailThread');
           }
@@ -139,16 +142,13 @@ export function createThreadCompletionAdapter(
     return thread ? !thread.inbox_visible : false;
   };
 
-  // Doneness is derived, not stored: `inbox_visible` is recomputed from the
-  // thread's messages as "some message has INBOX and not SENT", and the inbox
-  // view additionally requires an inbound message. A thread with only sent
-  // messages can satisfy neither, so it is permanently done — unarchiving it
-  // reverts on the next recompute and meanwhile labels its sent messages
-  // INBOX, in Gmail too. Only offer the reversal when it can hold.
+  // GraphQL validates received-message history on the server. An archived
+  // received thread may have no inbox-sorting timestamp, and a paginated
+  // message snapshot cannot prove it is sent-only. Keep REST's existing gate.
   const canMarkThreadNotDone = () => {
     const thread = threadSource();
-    if (!thread) return false;
-    return !thread.inbox_visible && thread.latest_inbound_message_ts != null;
+    if (!thread || thread.inbox_visible) return false;
+    return graphqlSoup().enabled || thread.latest_inbound_message_ts != null;
   };
 
   // Resolve a thread's soup representation for the mark-done / mark-not-done
@@ -232,7 +232,9 @@ export function createThreadCompletionAdapter(
                 toast.failure('Failed to mark as not done');
               }
             }
-            if (disposition !== 'queued') {
+            // GraphQL owns its normalized write and durable revalidation;
+            // keep the legacy REST Soup reconciliation on the REST path only.
+            if (!graphqlSoup().enabled && disposition !== 'queued') {
               void refetchSoupEntity(threadId, 'emailThread');
               invalidateAllSoup();
             }

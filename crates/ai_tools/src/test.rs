@@ -17,7 +17,43 @@ use ai_toolset::ToolSet as _;
 
 #[test]
 fn subagent_toolset_passes_schema_validation() {
-    let _ = subagent_toolset();
+    let tools = subagent_toolset();
+    for name in [
+        "ListDatabases",
+        "DescribeDatabase",
+        "QueryDatabase",
+        "SaveDatabaseView",
+    ] {
+        assert!(
+            tools.tools.contains_key(name),
+            "delegated agents need {name}"
+        );
+    }
+}
+
+#[test]
+fn database_only_toolset_exposes_exactly_its_database_capabilities() {
+    let tools = database_tools();
+    let names = tools
+        .tools
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let expected = [
+        "ListDatabases",
+        "DescribeDatabase",
+        "QueryDatabase",
+        "SaveDatabaseView",
+        "DeleteDatabaseView",
+        "SaveDatabaseQuery",
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(names, expected);
+    assert!(
+        tools.user_tools.is_empty(),
+        "database actions must not expose email/calendar composers"
+    );
 }
 
 #[test]
@@ -45,8 +81,6 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "UpdateInitiative",
         "DeleteInitiative",
         "UpdateInitiativeSharing",
-        "SetTaskInitiative",
-        "ReadTaskInitiatives",
         "ReadInitiativeActivity",
         "SetEntityProperty",
         "CommentOnDocument",
@@ -74,6 +108,30 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
             );
         }
     }
+}
+
+/// Document answers get the one SQL tool, not a read-only twin: the access
+/// they run over refuses the writes (see `databases_sql`'s view-only tests).
+#[test]
+fn document_answers_expose_discovery_and_the_one_query_tool() {
+    let tools = database_read_only_tools();
+    let names = tools
+        .tools
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        names,
+        ["ListDatabases", "DescribeDatabase", "QueryDatabase"]
+            .into_iter()
+            .collect()
+    );
+    assert_eq!(
+        tools.tools["QueryDatabase"].annotations,
+        database_tools().tools["QueryDatabase"].annotations,
+        "the same QueryDatabase every host gets"
+    );
+    assert!(tools.user_tools.is_empty());
 }
 
 /// An agent session finishes user tools in the turn, so it keeps chat's
@@ -145,7 +203,33 @@ fn search_toolset_passes_schema_validation() {
 
 #[test]
 fn frontend_schemas_build() {
-    let _ = all_tool_frontend_schemas();
+    let json = all_tool_frontend_schemas().to_json_pretty().unwrap();
+    let schemas: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let mut names = std::collections::HashSet::new();
+    for tool in schemas["tools"].as_array().unwrap() {
+        let name = tool["name"].as_str().unwrap();
+        assert!(names.insert(name), "duplicate frontend tool: {name}");
+    }
+    assert!(names.contains("QueryDatabase"));
+    for name in [
+        "CreateDatabase",
+        "CreateTable",
+        "RenameDatabase",
+        "RenameTable",
+        "ReorderTables",
+        "DeleteTable",
+        "AddColumn",
+        "AddColumnOptions",
+        "RenameColumn",
+        "ChangeColumnType",
+        "DeleteColumn",
+        "ReorderColumns",
+    ] {
+        assert!(
+            !names.contains(name),
+            "removed tool {name} must not be generated"
+        );
+    }
 }
 
 #[test]

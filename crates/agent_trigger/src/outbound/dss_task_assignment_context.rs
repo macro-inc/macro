@@ -58,6 +58,7 @@ impl TaskAssignmentContext for DssTaskAssignmentContext {
         Ok(Some(TaskBrief {
             title: document.document_name,
             markdown,
+            project_id: None,
         }))
     }
 }

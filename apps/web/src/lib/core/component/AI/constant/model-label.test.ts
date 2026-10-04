@@ -3,9 +3,10 @@ import { modelLabel } from './model-label';
 
 describe('modelLabel', () => {
   it('prefers the house name for models the app routes itself', () => {
-    expect(modelLabel('anthropic/claude-sonnet-5')).toBe('Sonnet 5');
+    expect(modelLabel('anthropic/claude-sonnet-5-5')).toBe('Sonnet 5.5');
     expect(modelLabel('openai/gpt-5.6-mini')).toBe('GPT-5.6 mini');
     // Runtimes that drop the provider segment still get the house name.
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
     expect(modelLabel('claude-haiku-4-5')).toBe('Haiku 4.5');
     expect(modelLabel('fireworks/kimi-k3')).toBe('Kimi K3');
     expect(modelLabel('kimi-k3')).toBe('Kimi K3');
@@ -27,6 +28,8 @@ describe('modelLabel', () => {
 
   it('reads an unknown slug as a name rather than showing it raw', () => {
     expect(modelLabel('anthropic/claude-sonnet-3.8')).toBe('Sonnet 3.8');
+    // Retired Claude ids a session row may still carry read as names too.
+    expect(modelLabel('anthropic/claude-sonnet-5')).toBe('Sonnet 5');
     expect(modelLabel('openai/gpt-5.5')).toBe('GPT-5.5');
     expect(modelLabel('openai/gpt-5-mini')).toBe('GPT-5 mini');
     expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');

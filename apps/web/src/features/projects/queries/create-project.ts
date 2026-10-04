@@ -56,7 +56,7 @@ export function createProjectMutation(
             client.create(createInitiativeInput(input))
           );
           if (scope.isCurrent()) {
-            await seedProjectDetail(cache, scope.viewer, project, scope.host);
+            await seedProjectDetail(scope.viewer, project, scope.host);
             if (scope.isCurrent())
               void refetchSoupEntity(project.id, 'initiative', {
                 ownTouch: true,

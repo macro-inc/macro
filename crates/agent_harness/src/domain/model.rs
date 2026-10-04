@@ -609,8 +609,8 @@ pub struct SessionAnnouncement {
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.
     pub bot_id: BotId,
-    /// Whether the announcement is a coding agent's magic chip or a chat
-    /// agent's pending reply (see [`is_coding_agent`]).
+    /// Whether the bot is a coding agent (see [`is_coding_agent`]). Assignment
+    /// announcements always use a session link, regardless of the bot's kind.
     pub is_coding: bool,
     /// Channel or document containing the mention that opened the session.
     pub origin_parent: messages::domain::models::MessageParent,
@@ -624,6 +624,14 @@ pub struct SessionAnnouncement {
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
+}
+
+impl SessionAnnouncement {
+    /// Assignments and coding agents link to the session; only a chat mention
+    /// starts a pending reply that will copy the answer into the discussion.
+    pub(crate) const fn shows_session_link(&self) -> bool {
+        self.is_coding || self.reuse_origin_message
+    }
 }
 
 /// Something the mentioner has to set up before their provider will open a

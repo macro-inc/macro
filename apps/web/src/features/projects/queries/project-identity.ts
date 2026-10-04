@@ -2,25 +2,14 @@ import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
 import { createQueryAuthorization } from '@queries/authorization';
-import { queryClient } from '@queries/client';
 import {
   InitiativeDocument,
   type InitiativeQuery,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { mapInitiativeDetail } from '@service-storage/initiative';
-import {
-  type QueryClient,
-  useIsMutating,
-  useMutationState,
-} from '@tanstack/solid-query';
 import { type Client, stringifyDocument } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
-import type {
-  ProjectTaskMutationContext,
-  ProjectTaskMutationVariables,
-} from './create-project-task';
-import { projectKeys } from './keys';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
 import { registerProjectRevalidation } from './project-revalidation';
@@ -34,15 +23,10 @@ export const projectDetailData = (project: InitiativeDetail) => ({
 
 /** Seeds the detail read from a create response, so opening it needs no request. */
 export async function seedProjectDetail(
-  cache: QueryClient,
   userId: string | undefined,
   project: InitiativeDetail,
   host?: Pick<CacheHost, 'writeQuery' | 'disabled'>
 ) {
-  cache.setQueryData(
-    projectKeys.detail(userId, project.id).queryKey,
-    projectDetailData(project)
-  );
   if (!host || host.disabled || !userId) return;
   try {
     // The create response already normalized the complete record. Establish its
@@ -69,32 +53,10 @@ export async function seedProjectDetail(
 /** One authorized read backs the project view and its chips and previews. */
 export function createProjectDetailQuery(
   client: () => Client,
-  cache: QueryClient,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
-  const creating = useIsMutating(
-    () => ({ mutationKey: projectKeys.createTask._def }),
-    () => cache
-  );
-  const pendingTasks = useMutationState(
-    () => ({
-      filters: {
-        mutationKey: projectKeys.createTask._def,
-        status: 'pending' as const,
-      },
-      select: (mutation) => ({
-        variables: mutation.state.variables as
-          | ProjectTaskMutationVariables
-          | undefined,
-        context: mutation.state.context as
-          | ProjectTaskMutationContext
-          | undefined,
-      }),
-    }),
-    () => cache
-  );
   const active = () => enabled() && Boolean(userId() && projectId());
   const authorization = createQueryAuthorization(() =>
     JSON.stringify([userId(), projectId()])
@@ -104,9 +66,7 @@ export function createProjectDetailQuery(
     () => (active() ? { initiativeId: projectId() } : undefined),
     () => ({
       client: client(),
-      // REST task creation seeds membership before publishing temporary IDs.
-      // Keep listening locally while preventing a refresh from erasing them.
-      requestPolicy: creating() ? 'cache-only' : 'cache-and-network',
+      requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       onResult: authorization.onResult,
       select: (data) => ({
@@ -115,10 +75,8 @@ export function createProjectDetailQuery(
       }),
     })
   );
-  registerProjectRevalidation(
-    client,
-    () => active() && !creating(),
-    () => query.refetch({ requestPolicy: 'cache-and-network' })
+  registerProjectRevalidation(client, active, () =>
+    query.refetch({ requestPolicy: 'cache-and-network' })
   );
   const data = createMemo(() => {
     const result = query.data;
@@ -129,27 +87,7 @@ export function createProjectDetailQuery(
       result.viewerId !== userId()
     )
       return undefined;
-    const detail = result.detail;
-    const pending = pendingTasks().flatMap(({ variables, context }) =>
-      context &&
-      variables &&
-      variables.ownerId === userId() &&
-      variables.projectId === projectId() &&
-      variables.scope?.isCurrent()
-        ? [{ temporaryId: variables.id, id: context.membershipId() }]
-        : []
-    );
-    if (!pending.length) return detail;
-    const temporaryIds = new Set(pending.map(({ temporaryId }) => temporaryId));
-    // REST creates own their membership until settlement. Full GraphQL entity
-    // responses (e.g. a rename) must not hide a task still being saved.
-    const taskIds = [
-      ...new Set([
-        ...detail.project.taskIds.filter((id) => !temporaryIds.has(id)),
-        ...pending.flatMap(({ id }) => (id ? [id] : [])),
-      ]),
-    ];
-    return { ...detail, project: { ...detail.project, taskIds } };
+    return result.detail;
   });
   return {
     get data() {
@@ -181,12 +119,7 @@ export function useProjectIdentityQuery(
   id: Accessor<string>,
   userId: Accessor<string | undefined>
 ) {
-  const query = createProjectDetailQuery(
-    getGraphqlSoupClient,
-    queryClient,
-    userId,
-    id
-  );
+  const query = createProjectDetailQuery(getGraphqlSoupClient, userId, id);
   return {
     get isSuccess() {
       return query.isSuccess;

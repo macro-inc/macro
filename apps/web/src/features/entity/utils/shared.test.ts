@@ -25,6 +25,7 @@ describe('isSharedWithViewer', () => {
     ['automation', true],
     ['calendar_event', true],
     ['chat', true],
+    ['database', true],
     ['document', true],
     ['email', true],
     ['initiative', true],

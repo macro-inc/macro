@@ -1,7 +1,20 @@
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
+import {
+  registerActivityRevalidator,
+  revalidateActivityQueries,
+} from '@queries/activity/push-registry';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { createTrailingRefetch } from '@queries/trailing-refetch';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { onCleanup } from 'solid-js';
+
+/** Refresh live project details and collections after UI or agent-tool writes. */
+export async function refreshProjectQueries(client = getGraphqlSoupClient()) {
+  await Promise.all([
+    refreshActiveGraphqlSoupQueries(),
+    revalidateActivityQueries(client, null),
+  ]);
+}
 
 /** Fields update locally; permissions and membership still need authorized reads. */
 export function registerProjectRevalidation(

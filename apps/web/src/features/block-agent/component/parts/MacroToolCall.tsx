@@ -37,7 +37,7 @@ export function MacroToolCall(props: {
   detail: MacroDetail;
   common: ToolCallCommon;
   grouped?: boolean;
-  context?: ToolCallContext;
+  context: ToolCallContext;
 }): JSX.Element {
   const response = createMemo(() =>
     deserializeToolResponse({
@@ -122,14 +122,15 @@ export function MacroToolCall(props: {
             name={props.common.label}
             json={props.detail.input}
             response={{ json: props.detail.output, name: props.common.label }}
-            chat_id={props.context?.sessionId ?? ''}
-            message_id={props.context?.messageId ?? ''}
-            part_index={props.context?.partIndex ?? 0}
+            chat_id={props.context.sessionId}
+            message_id={props.context.messageId}
+            part_index={props.context.partIndex}
             isComplete={true}
             renderContext={{
               renderContext: {
                 isStreaming: false,
                 grouped: props.grouped ?? true,
+                followedBy: props.context.followedBy,
               },
             }}
           />
@@ -213,12 +214,17 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'ReadThread',
       'ReadChat',
       'ReadProject',
+      'ReadPresentation',
       () => <ReadIcon class="size-4" />
     )
     .with('WebFetch', () => <GlobeIcon class="size-4" />)
-    .with('EditDocument', 'EditSpreadsheet', 'CreateDocument', () => (
-      <PencilIcon class="size-4" />
-    ))
+    .with(
+      'EditDocument',
+      'EditSpreadsheet',
+      'EditPresentation',
+      'CreateDocument',
+      () => <PencilIcon class="size-4" />
+    )
     .with('ListEntities', 'ListSkills', 'ListCalendarEvents', () => (
       <ListIcon class="size-4" />
     ))

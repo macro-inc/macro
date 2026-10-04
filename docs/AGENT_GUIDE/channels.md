@@ -10,6 +10,37 @@
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a channel between two users.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
+## Imported Slack history
+
+Import starts in **Settings → Team → Connections → Import from Slack**, not the
+channel composer. Only explicitly selected Slack IDs create work. Slack public
+channels become Team channels with automatic team joining off; private channels
+and group DMs become Private. Two-person DMs keep exactly their mapped pair and
+never gain the importing admin as a third participant. Existing names, roles,
+leavers and newer activity are preserved. Imported history keeps source dates and
+does not produce live message notifications, invitations or bot invocations.
+Unknown authors display their Slack name through the system bot. Attachments and
+attachment-only messages are not imported. Cancellation keeps committed history;
+repeating an archive deduplicates source messages rather than applying later edits.
+
+For verification, use synthetic local history with a root, replies and reactions.
+Search for an imported author name absent from the body. Verify the result for a
+participant and its absence for an unrelated viewer after indexing has caught up.
+Job completion means required search publication finished, not immediate index
+refresh. Test existing channel live activity is not moved backward.
+
+Hover and click imported external links, channel mentions, root-message and reply
+references in the actual message body. Check destination channel/message/root
+UUIDs and that the correct message is revealed, including offscreen replies.
+Forward references must work regardless of conversation processing order. Prior
+same-source imports can resolve without being selected again; unselected targets
+must not be auto-created. Unknown Slack domains remain external links. Missing,
+skipped, deleted and inaccessible targets retain safe source-only fallbacks, and
+another viewer must not gain access through a rendered mention. Code examples
+remain literal; source-controlled tags must not inject entities. Test live edits
+and deletion before deferred reconciliation: neither may be overwritten or revived.
+See the [rollout/recovery gates](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
+
 ## Collapsed reply chains
 
 Collapsed threads show the first three complete message groups. Consecutive
@@ -756,6 +787,49 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
+The **Open chat** button in its own island at the far right of the bottom toolbar
+opens the chat beside the video. The panel has no header or divider above the
+composer. The media controls stay centered. On narrow screens it overlays the
+video. The same toolbar button, now **Close chat**, or Escape closes the panel
+and returns focus to the chat button; reopening preserves the draft and scroll
+position. The call continues while chat is open or closed.
+
+Signed-in participants in channel, quick, and scheduled calls use the same chat
+panel. Guest meeting participants do not see chat because shared messages require
+a Macro account. Each call session has one persistent message thread, using the
+shared message composer, attachments, reactions, and message actions. The `@`
+menu offers Macro and available owned and team agents. Mention an agent and send
+to invoke it in the call thread; follow-up mentions use the same thread. Reply
+on your own or another participant’s message inserts a quote into the bottom
+composer while preserving its draft and attachments. Enter sends; subsequent
+messages and quoted replies join the same thread. Clicking a quote highlights its
+message in the live chat; Shift-click opens its durable saved-call link. Participants see new messages without reopening the panel.
+Check simultaneous first sends from two participants, edit/delete/reaction
+updates, a retained unsent draft after toggling chat, and a new incoming message
+while scrolled into history.
+
+After the call ends, its recording page shows a read-only **Call chat** below
+the transcript. A copied chat message link opens
+`/app/call/<callId>?call_message_id=<messageId>` and highlights that message in
+the recording's chat. Clicking the highlighted message clears the target from
+the pane's route while leaving chat expanded; verify this on standalone and
+Drive recording pages. A transcript search result clears any earlier chat
+target in that pane. In an already-open Home call preview, follow a second
+message link and then open the call without a message target: the highlight
+must move to the second message and then clear without remounting the preview.
+After following a message link, scroll away and follow that same link again:
+the view must return to the message. Check repeated links in Home, Drive, and
+standalone recordings, and repeated quote clicks in live chat; navigation must
+preserve the mounted thread and any unsent draft.
+A new call in the same channel starts a separate thread.
+
+An initial missing thread means the call has no messages yet. If a later chat
+refresh reports the thread missing or access denied after messages loaded,
+show the retry error and hide the stale thread. Verify that it never shows
+the empty-conversation prompt alongside cached messages. A transient server
+error may retain readable messages; Retry restores the thread when access
+and the request recover.
+
 For recovery checks, keep another participant connected and briefly interrupt
 the first participant's network. Recovery may rejoin that same live call. It
 must not start a replacement call if the original ended, or rejoin after the
@@ -888,3 +962,5 @@ Picture changes refresh other participants' open sessions, including after
 reconnecting.
 Members see the picture without editing controls. One-to-one direct messages
 continue to show the other person's user picture.
+
+When Databases is enabled, type `/database` in a channel message or thread reply and choose **Database** to insert a live question. Ask with Enter or the Ask button, then accept the answer before sending the message. Enter in the question box belongs to the question and must not send the channel draft. Recipients can read the live answer subject to their database access.

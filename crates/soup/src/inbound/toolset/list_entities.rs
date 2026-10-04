@@ -318,6 +318,9 @@ impl EntityItem {
             SoupItem::AgentSession(_) => {
                 unreachable!("ListEntities tool does not surface AgentSession rows")
             }
+            SoupItem::DatabaseRow(_) => {
+                unreachable!("ListEntities tool does not surface DatabaseRow rows")
+            }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
                 foreign_entity_id: foreign_entity.foreign_entity_id,
@@ -369,7 +372,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             | SoupItem::Call(_)
             | SoupItem::ForeignEntity(_)
             | SoupItem::Reminder(_)
-            | SoupItem::AgentSession(_) => return false,
+            | SoupItem::AgentSession(_)
+            | SoupItem::DatabaseRow(_) => return false,
         };
         properties
             .iter()
@@ -572,10 +576,13 @@ impl ListEntities {
             foreign_entity_filter: self.foreign_entity_filter.clone(),
             // Reminders are opt-in in Soup, so leaving this unset is already
             // what keeps them out of the tool surface — no force-filter needed.
+            github_pull_request_filter: None,
             reminder_filter: None,
             // Agent sessions are opt-in too; unset keeps them off the tool surface.
             agent_session_filter: None,
             initiative_filter: None,
+            // Database rows are opt-in as well; the tool never names a table.
+            database_row_filter: None,
             properties_filter,
         };
 
@@ -650,9 +657,11 @@ impl ListEntities {
                 Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
             },
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
+            github_pull_request_filter: None,
             reminder_filter: ast.reminder_filter,
             agent_session_filter: ast.agent_session_filter,
             initiative_filter: None,
+            database_row_filter: None,
             properties_filter: ast.properties_filter,
         }
     }

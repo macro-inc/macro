@@ -92,6 +92,7 @@ import type { DocumentTeamShareResponse } from './generated/schemas/documentTeam
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EmailFollowup } from './generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
+import type { EmailReminderPage } from './generated/schemas/emailReminderPage';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
@@ -114,14 +115,23 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
+import type { GithubPullRequestChangesPatchResponse } from './generated/schemas/githubPullRequestChangesPatchResponse';
+import type { GithubPullRequestChangesResponse } from './generated/schemas/githubPullRequestChangesResponse';
+import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
+import type { ImportPage } from './generated/schemas/importPage';
+import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
+import type { JobId } from './generated/schemas/jobId';
+import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
+import type { ListReminderCollectionParams } from './generated/schemas/listReminderCollectionParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
+import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
@@ -135,6 +145,7 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
 import type { Reminder } from './generated/schemas/reminder';
+import type { ReminderCollectionPage } from './generated/schemas/reminderCollectionPage';
 import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
@@ -142,13 +153,19 @@ import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavorit
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
+import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
+import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
+import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
+import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
@@ -156,6 +173,7 @@ import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest'
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
+import type { UploadGrant } from './generated/schemas/uploadGrant';
 import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
@@ -164,7 +182,7 @@ import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
 
-export type { ItemType } from './itemType';
+export type { HistoryItemType, ItemType } from './itemType';
 export {
   blockNameToItemType,
   DEFAULT_ITEM_TYPE,
@@ -172,6 +190,7 @@ export {
   stringToItemType,
 } from './itemType';
 
+import { databasesClient } from './databases';
 import type {
   CollabSurfaceResponse,
   CollabSurfaceTokenResponse,
@@ -380,7 +399,91 @@ const { showPaywall } = usePaywallState();
 /** Machine-readable code the backend returns when a document name is too long. */
 export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
+type SlackImportJobArgs = { jobId: JobId; signal?: AbortSignal };
+
 export const storageServiceClient = {
+  /** Macro Databases — see `./databases.ts`. */
+  databases: databasesClient,
+
+  async createSlackImport(args: {
+    body: SlackCreateRequest;
+    signal?: AbortSignal;
+  }) {
+    return dssFetch<ImportProgress>('/slack/imports', {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+      signal: args.signal,
+    });
+  },
+
+  async listSlackImports(
+    args: ListSlackImportsParams & { signal?: AbortSignal } = {}
+  ) {
+    const params = new URLSearchParams();
+    if (args.before) params.set('before', args.before);
+    const query = params.toString();
+    return dssFetch<ImportPage>(`/slack/imports${query ? `?${query}` : ''}`, {
+      method: 'GET',
+      signal: args.signal,
+    });
+  },
+
+  async getSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}`,
+      {
+        method: 'GET',
+        signal: args.signal,
+      }
+    );
+  },
+
+  async registerSlackImportUploads(
+    args: SlackImportJobArgs & { body: SlackRegisterRequest }
+  ) {
+    return dssFetch<UploadGrant[]>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/uploads`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        signal: args.signal,
+      }
+    );
+  },
+
+  async completeSlackImportUploads(
+    args: SlackImportJobArgs & { body: SlackCompleteRequest }
+  ) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/uploads/complete`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        signal: args.signal,
+      }
+    );
+  },
+
+  async finalizeSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/finalize`,
+      {
+        method: 'POST',
+        signal: args.signal,
+      }
+    );
+  },
+
+  async cancelSlackImport(args: SlackImportJobArgs) {
+    return dssFetch<ImportProgress>(
+      `/slack/imports/${encodeURIComponent(args.jobId)}/cancel`,
+      {
+        method: 'POST',
+        signal: args.signal,
+      }
+    );
+  },
+
   async ping() {
     return (await dssFetch<SuccessResponse>(`/ping`)).map(
       (result) => result.data
@@ -1654,6 +1757,72 @@ export const storageServiceClient = {
     );
   },
 
+  /**
+   * Repositories and authors among the GitHub pull requests visible to the
+   * caller and their team, most pull requests first.
+   */
+  async getGithubPullRequestFacets(): Promise<
+    Result<GithubPullRequestFacets, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<GithubPullRequestFacets>(
+      '/github_pull_requests/facets',
+      { method: 'GET' }
+    );
+  },
+
+  /** The pull request behind a foreign entity record the caller can view. */
+  async getGithubPullRequest({
+    id,
+  }: {
+    id: string;
+  }): Promise<
+    Result<StoredGithubPullRequest, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<StoredGithubPullRequest>(
+      `/github_pull_requests/${id}`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * The changes of that pull request at its current base and head, or why
+   * GitHub could not provide them.
+   */
+  async getGithubPullRequestChanges({
+    id,
+  }: {
+    id: string;
+  }): Promise<
+    Result<
+      GithubPullRequestChangesResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestChangesResponse>(
+      `/github_pull_requests/${id}/changes`,
+      { method: 'GET' }
+    );
+  },
+
+  /** The patch of one changeset of that pull request. */
+  async getGithubPullRequestChangesPatch({
+    id,
+    changeset,
+  }: {
+    id: string;
+    changeset: string;
+  }): Promise<
+    Result<
+      GithubPullRequestChangesPatchResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestChangesPatchResponse>(
+      `/github_pull_requests/${id}/changes/patch?changeset=${encodeURIComponent(changeset)}`,
+      { method: 'GET' }
+    );
+  },
+
   async exportDocument({ documentId }) {
     return (
       await dssFetch<ExportDocumentResponse>(
@@ -2407,6 +2576,32 @@ export const storageServiceClient = {
     },
   },
   reminders: {
+    async listEmailReminders(params: ListEmailRemindersParams) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (Array.isArray(value)) {
+          for (const item of value) query.append(key, item);
+        } else if (value !== undefined && value !== null) {
+          query.set(key, String(value));
+        }
+      }
+      return await dssFetch<EmailReminderPage>(
+        `/reminders/email/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+    async listCollection(params: ListReminderCollectionParams) {
+      const query = new URLSearchParams();
+      if (params.completed !== undefined)
+        query.set('completed', String(params.completed));
+      if (params.limit !== undefined) query.set('limit', String(params.limit));
+      if (params.cursor) query.set('cursor', params.cursor);
+      return await dssFetch<ReminderCollectionPage>(
+        `/reminders/collection?${query}`,
+        { method: 'GET' }
+      );
+    },
+
     async getEmailFollowup(threadId: string) {
       return (
         await dssFetch<{ followup: EmailFollowup | null }>(
@@ -2509,6 +2704,18 @@ export const storageServiceClient = {
     const query = new URLSearchParams({ email });
     return await dssFetch<GetContactByEmailResponse>(
       `/crm/contacts/by-email?${query.toString()}`,
+      { method: 'GET', signal }
+    );
+  },
+  async searchContacts({
+    query,
+    limit,
+    signal,
+  }: SearchContactsParams & { signal?: AbortSignal }) {
+    const params = new URLSearchParams({ query: query ?? '' });
+    if (limit) params.set('limit', String(limit));
+    return await dssFetch<SearchContactsResponse>(
+      `/crm/contacts?${params.toString()}`,
       { method: 'GET', signal }
     );
   },

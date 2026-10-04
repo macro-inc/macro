@@ -11,7 +11,7 @@ import type { ChangesetSourceDto } from './changesetSourceDto';
 import type { GitRefDto } from './gitRefDto';
 
 /**
- * One capture of a session's changes.
+ * One changeset: the files a patch touches and what happened to each.
 
 Clients deserialize this, so both derives are used.
  */
@@ -34,10 +34,10 @@ export interface ChangesetDto {
   files: ChangedFileDto[];
   /** The side carrying the work. */
   head: GitRefDto;
-  /** The capture's id; changes with every capture. */
+  /** The changeset's id; a different id means different changes. */
   id: string;
   /**
-   * Size of the patch `GET .../changes/patch` serves; zero when nothing
+   * Size of the patch the matching patch route serves; zero when nothing
 changed.
    * @minimum 0
    */

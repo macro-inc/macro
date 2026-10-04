@@ -21,10 +21,15 @@ use crate::domain::models::CollabSurfaceError;
 /// The sync-service access level implied by a parent-entity permission.
 ///
 /// Channel members collaborate as editors; a view-only channel presence gets a
-/// read-only session. Team roles have no surface semantics yet and fail
-/// closed.
+/// read-only session. Surfaces have no comment layer, and sync-service lets a
+/// Comment grant write to a document-namespace session, so comment access on
+/// the parent is read-only here. Team roles have no surface semantics yet and
+/// fail closed.
 pub fn access_level_for(permission: &EntityPermission) -> Result<AccessLevel, CollabSurfaceError> {
     match permission {
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        } => Ok(AccessLevel::View),
         EntityPermission::AccessLevel { access_level } => Ok(*access_level),
         EntityPermission::ChannelRole { .. } => Ok(AccessLevel::Edit),
         EntityPermission::ChannelViewOnly => Ok(AccessLevel::View),

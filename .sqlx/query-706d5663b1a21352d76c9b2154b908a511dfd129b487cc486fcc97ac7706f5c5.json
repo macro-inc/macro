@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT j.team_id, j.user_id FROM slack_import_job j\n               JOIN slack_import_conversation c ON c.job_id = j.id\n               WHERE j.id = $1 AND c.slack_channel_id = $2 AND c.event_generation = $3\n                 AND c.status IN ('queued', 'importing') AND j.cancel_requested_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "706d5663b1a21352d76c9b2154b908a511dfd129b487cc486fcc97ac7706f5c5"
+}

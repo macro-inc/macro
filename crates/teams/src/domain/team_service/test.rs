@@ -56,9 +56,10 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
-        RemoveTeamInviteError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError, Team,
-        TeamError, TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan,
-        TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+        RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan,
+        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteSnapshot,
+        TeamMember, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError,
     },
     team_repo::TeamRepository,
 };
@@ -130,6 +131,7 @@ struct MockTeamRepository {
     fail_get_all_team_members: bool,
     team_ids: Vec<uuid::Uuid>,
     reject_owner: bool,
+    user_teams: Vec<Team>,
 }
 
 impl MockTeamRepository {
@@ -207,6 +209,7 @@ impl MockTeamRepository {
             fail_get_all_team_members: false,
             team_ids: Vec::new(),
             reject_owner: false,
+            user_teams: Vec::new(),
         }
     }
 
@@ -610,7 +613,8 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Team>, TeamError>> + Send {
-        async { unimplemented!() }
+        let teams = self.user_teams.clone();
+        async move { Ok(teams) }
     }
 
     fn get_user_team_invites(
@@ -3988,6 +3992,107 @@ async fn test_delete_team_repository_failures_do_not_publish_event() {
         );
         assert!(broker.events().is_empty());
     }
+}
+
+fn account_deletion_team(team_id: uuid::Uuid, owner: &MacroUserIdStr<'_>) -> Team {
+    Team::new(
+        team_id,
+        "Team".to_string(),
+        "team".to_string(),
+        owner.clone().into_owned(),
+        false,
+        false,
+    )
+}
+
+#[tokio::test]
+async fn remove_user_from_all_teams_deletes_the_team_the_user_owns() {
+    let team_id = uuid::Uuid::from_u128(809);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.user_teams = vec![account_deletion_team(team_id, &owner)];
+    repo.team_members = vec![
+        make_team_member(team_id, owner.as_ref(), TeamRole::Owner),
+        make_team_member(team_id, member.as_ref(), TeamRole::Member),
+    ];
+    let delete_team_calls = repo.delete_team_calls.clone();
+    let remove_user_calls = repo.remove_user_calls.clone();
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    service.remove_user_from_all_teams(&owner).await.unwrap();
+
+    assert_eq!(*delete_team_calls.lock().unwrap(), vec![team_id]);
+    assert_eq!(*remove_user_calls.lock().unwrap(), 0);
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.deleted");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["actor_user_id"], owner.as_ref());
+    assert_eq!(
+        metadata["member_user_ids"],
+        serde_json::json!([owner.as_ref(), member.as_ref()])
+    );
+}
+
+#[tokio::test]
+async fn remove_user_from_all_teams_leaves_the_team_the_user_belongs_to() {
+    let team_id = uuid::Uuid::from_u128(810);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.user_teams = vec![account_deletion_team(team_id, &owner)];
+    repo.removed_member = Some(make_team_member(team_id, member.as_ref(), TeamRole::Member));
+    let delete_team_calls = repo.delete_team_calls.clone();
+    let remove_user_calls = repo.remove_user_calls.clone();
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    service.remove_user_from_all_teams(&member).await.unwrap();
+
+    assert!(delete_team_calls.lock().unwrap().is_empty());
+    assert_eq!(*remove_user_calls.lock().unwrap(), 1);
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].envelope["event_type"], "team.member_removed");
+    let metadata = &events[0].envelope["metadata"];
+    assert_eq!(metadata["member_id"], member.as_ref());
+    assert_eq!(metadata["removed_by"], member.as_ref());
+}
+
+#[tokio::test]
+async fn remove_user_from_all_teams_without_a_team_changes_nothing() {
+    let user = MacroUserIdStr::parse_from_str("macro|solo@example.com").unwrap();
+    let repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    let delete_team_calls = repo.delete_team_calls.clone();
+    let remove_user_calls = repo.remove_user_calls.clone();
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    service.remove_user_from_all_teams(&user).await.unwrap();
+
+    assert!(delete_team_calls.lock().unwrap().is_empty());
+    assert_eq!(*remove_user_calls.lock().unwrap(), 0);
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn remove_user_from_all_teams_surfaces_owned_team_deletion_failures() {
+    let team_id = uuid::Uuid::from_u128(811);
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.user_teams = vec![account_deletion_team(team_id, &owner)];
+    repo.team_members = vec![make_team_member(team_id, owner.as_ref(), TeamRole::Owner)];
+    repo.fail_delete_team = true;
+    let broker = RecordingEventBroker::default();
+    let service = build_service_with_repo_and_broker(repo, broker.clone());
+
+    assert!(matches!(
+        service.remove_user_from_all_teams(&owner).await,
+        Err(RemoveUserFromAllTeamsError::DeleteTeam(_))
+    ));
+    assert!(broker.events().is_empty());
 }
 
 #[tokio::test]

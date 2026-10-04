@@ -30,7 +30,6 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_changes::domain::pull_request::PullRequestChanges;
 use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
 use agent_changes::inbound::axum_router::AgentChangesRouterState;
-use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
 use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::service::EgressServiceImpl;
@@ -114,6 +113,10 @@ use github::domain::service::{
 };
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
+use github_pull_requests::domain::service::GithubPullRequestChangesetStore;
+use github_pull_requests::outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo;
+use github_pull_requests::outbound::s3_patch_store::S3GithubPullRequestPatchStore;
 use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
@@ -951,15 +954,21 @@ async fn run() -> anyhow::Result<()> {
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
 
     // Capture only the session's linked GitHub pull request, for every harness.
-    let changes_extractor =
-        PullRequestChanges::new(GithubPullRequestDiff::new(InstallationTokenService::new(
+    let changes_extractor = PullRequestChanges::new(GithubPullRequestChangesetStore::new(
+        GithubPullRequestDiffClient::new(InstallationTokenService::new(
             InstallationTokenConfig {
                 client_id: config.github_sync_app_client_id.clone(),
                 private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
             },
             PgGithubSyncRepo::new(pool.clone()),
             GithubSyncClientImpl::default(),
-        )));
+        )),
+        PgGithubPullRequestRepo::new(pool.clone()),
+        S3GithubPullRequestPatchStore::new(
+            macro_aws_config::s3_client().await,
+            config.github_pull_request_patch_bucket.clone(),
+        ),
+    ));
     let changes = AgentChangesService::new(
         session_repo.clone(),
         changes_extractor,
@@ -1072,7 +1081,10 @@ async fn run() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
-            ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_audience),
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
             NoOpAgentSessionNameGenerator,
             Arc::new(NoOpTurnObserver),
             lifecycle_publisher,
@@ -1137,6 +1149,21 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let pull_requests =
+        agent_session::inbound::axum_router::pull_requests::agent_session_pull_request_router(
+            AgentSessionRouterState::new(
+                agent_session::domain::pull_request_links::SessionPullRequestLinkService::new(
+                    session_repo.clone(),
+                    Arc::new(
+                        agent_session::domain::audience::EntityAccessSessionView::new(
+                            (*entity_access).clone(),
+                        ),
+                    ),
+                ),
+                entity_access.clone(),
+                MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            ),
+        );
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
@@ -1158,7 +1185,8 @@ async fn run() -> anyhow::Result<()> {
             .with_claude_auth(claude_auth)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
-            .with_capabilities(capabilities),
+            .with_capabilities(capabilities)
+            .with_pull_requests(pull_requests),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),
@@ -1186,6 +1214,31 @@ async fn run() -> anyhow::Result<()> {
             }
             if let Err(error) = heartbeat_repo.heartbeat(replica, None).await {
                 tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
+            }
+        }
+    });
+
+    // A hard abort cannot emit a disconnect. Reconcile expired leases so
+    // viewers stop showing a turn as working without issuing another command.
+    let recovery_repo = session_repo.clone();
+    let recovery_realtime = ConnectionGatewayAgentSessionRealtime::new(
+        connection_gateway.clone(),
+        session_audience.clone(),
+    );
+    let recovery = tokio::spawn(async move {
+        let mut ticker =
+            tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            if let Err(error) = agent_session::domain::recovery::recover_stale_sessions(
+                &recovery_repo,
+                &recovery_realtime,
+                std::num::NonZeroUsize::new(100).expect("nonzero recovery batch"),
+            )
+            .await
+            {
+                tracing::warn!(error = ?error, "failed to recover abandoned agent sessions");
             }
         }
     });
@@ -1409,6 +1462,7 @@ async fn run() -> anyhow::Result<()> {
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    recovery.abort();
     runtime_commands.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

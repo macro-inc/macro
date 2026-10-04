@@ -1,201 +1,352 @@
+import ChatTeardrop from '@phosphor/chat-teardrop.svg';
+import CheckSquare from '@phosphor/check-square.svg';
 import FileText from '@phosphor/file-text.svg';
+import GridFour from '@phosphor/grid-four.svg';
+import LinkIcon from '@phosphor/link.svg';
+import TextB from '@phosphor/text-b.svg';
+import TextItalic from '@phosphor/text-italic.svg';
+import TextStrikethrough from '@phosphor/text-strikethrough.svg';
 import { createSignal, For, Show } from 'solid-js';
+import type { TaskStatus, WorkspaceTask } from '../../core/dummy-workspace';
 import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
-import { HomepageConversation } from '../HomepageConversation';
+import { DemoCursor } from '../DemoCursor';
+import { PrStatusIcon } from '../DemoPrDocument';
+import { ViewShell } from '../DemoWorkspaceChrome';
 import { ProductDemo } from '../product/ProductPage';
+import { ProductWorkspace } from '../product/ProductWorkspace';
+import { TaskMention } from '../workspace/frozen/TaskMention';
 import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
-import { WorkspaceChannel } from '../workspace/WorkspaceChannel';
-import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
-import { type TaskFilter, WorkspaceTasks } from '../workspace/WorkspaceTasks';
+import { WorkspaceTasks } from '../workspace/WorkspaceTasks';
 import '../workspace/dummy-workspace.css';
 import '../demo-markdown.css';
+import './task-stories.css';
 
 import { TaskCreationFlow } from './TaskCreationFlow';
 
 export function TaskFromMessageDemo() {
   return <TaskCreationFlow />;
 }
-export function TaskFromChannelDemo() {
-  return <TaskCreationFlow fromChannel />;
-}
 
-export function TaskOwnershipDemo() {
-  let root!: HTMLDivElement;
-  const w = createDummyWorkspace('tasks');
-  w.open('tasks', 'checklist');
-  w.updateTask('checklist', {
+const launchAsks = [
+  {
+    title: 'Fix the team invite handoff',
+    owner: 'teo',
+    priority: 'Urgent',
+  },
+  {
+    title: 'Final read of the launch announcement',
+    owner: 'julia',
+    priority: 'High',
+  },
+  {
+    title: 'Own the launch checklist',
     owner: 'jacob',
-    priority: 'Low',
-    status: 'Not Started',
-  });
-  const [action, setAction] = createSignal<string>();
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 4,
-    reset: () => {},
-    reduced: () =>
-      w.updateTask('checklist', {
-        owner: 'teo',
-        priority: 'High',
-        status: 'In Progress',
-      }),
-    advance: (step) => {
-      setAction(['assignee', 'priority', 'status', undefined][step - 1]);
-      if (step === 1) w.updateTask('checklist', { owner: 'teo' });
-      if (step === 2) w.updateTask('checklist', { priority: 'High' });
-      if (step === 3) w.updateTask('checklist', { status: 'In Progress' });
-    },
-  });
-  return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Assign a task and set its next step"
-      action={action()}
-      onInteract={playback.pause}
-    >
-      <WorkspaceTasks workspace={w} filter="all" />
-    </ProductDemo>
-  );
-}
+    priority: 'Medium',
+  },
+] as const;
 
-export function TaskContextDemo() {
-  const w = createDummyWorkspace('tasks');
-  w.open('tasks', 'announcement');
-  return (
-    <ProductDemo label="Task checklist, linked plan, and discussion">
-      <Show
-        when={w.contentView() === 'documents'}
-        fallback={
-          <Show
-            when={w.contentView() === 'messages'}
-            fallback={
-              <TaskNotebook
-                workspace={w}
-                task={w.data.tasks.find((t) => t.id === 'announcement')!}
-                relatedContent={
-                  <button
-                    type="button"
-                    class="dummy-entity-link"
-                    onClick={() => w.open('documents', 'plan')}
-                  >
-                    <FileText class="size-4 text-document" />
-                    Q3 launch plan
-                  </button>
-                }
-              />
-            }
-          >
-            <WorkspaceChannel workspace={w} />
-          </Show>
-        }
-      >
-        <WorkspaceDocuments workspace={w} />
-      </Show>
-    </ProductDemo>
-  );
-}
-
-export function TaskAttentionDemo() {
+/** @Macro in a channel: one request becomes several assigned tasks. */
+export function TaskAgentChannelDemo() {
   let root!: HTMLDivElement;
-  const w = createDummyWorkspace('tasks');
-  const [filter, setFilter] = createSignal<TaskFilter>('all');
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 3,
-    reset: () => {},
-    reduced: () => {
-      setFilter('mine');
-      w.setQuery('launch');
+  const w = createDummyWorkspace('messages');
+  const thread = [
+    {
+      id: 'launch-asks',
+      person: 'julia' as const,
+      body: 'Last pass before Thursday. The invite still drops people in their personal workspace, the announcement needs a final read, and nobody owns the checklist yet.',
+      time: '9:20 AM',
     },
-    advance: (step) => {
-      if (step === 1) setFilter('mine');
-      if (step === 2) w.setQuery('launch');
+    {
+      id: 'make-tasks',
+      person: 'jacob' as const,
+      body: '@[Macro](demo-mention:macro) make tasks for these. Teo takes the invite fix, Julia the announcement, I’ll take the checklist.',
+      time: '9:22 AM',
     },
-  });
-  return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Find your next task"
-      onInteract={playback.pause}
-    >
-      <nav class="product-task-filters" aria-label="Task views">
-        <For
-          each={
-            [
-              { id: 'all', label: 'All Tasks' },
-              { id: 'mine', label: 'My Tasks' },
-              { id: 'created', label: 'Created by me' },
-            ] as const
-          }
-        >
-          {(view) => (
-            <button
-              type="button"
-              aria-pressed={filter() === view.id}
-              onClick={() => {
-                setFilter(view.id);
-                w.open('tasks');
-                w.setQuery('');
-              }}
-            >
-              {view.label}
-            </button>
-          )}
-        </For>
-      </nav>
-      <WorkspaceTasks workspace={w} filter={filter()} />
-    </ProductDemo>
-  );
-}
-
-export function TaskAgentDemo() {
-  let root!: HTMLDivElement;
-  const w = createDummyWorkspace('tasks');
-  w.open('tasks', 'announcement');
-  w.updateTask('announcement', { status: 'In Progress', comments: [] });
+  ];
+  w.setData('channels', (c) => c.id === 'launch', 'messages', thread);
+  w.open('messages', 'launch');
+  let created = false;
   const finish = () => {
-    w.updateTask('announcement', {
-      status: 'In Review',
-      description:
-        'Draft the Thursday launch announcement. Include the Q3 launch plan, product demo, and the invite checklist.',
-      comments: [
-        {
-          id: 'agent-draft',
-          person: 'claude',
-          body: 'I added the launch details to the brief. Julia, please review before publishing.',
-          time: '9:34 AM',
-        },
-      ],
+    if (created) return;
+    created = true;
+    const ids = launchAsks.map((ask) => {
+      const id = w.createTask(ask.title, '', 'launch');
+      w.updateTask(id, { owner: ask.owner, priority: ask.priority });
+      return id;
     });
+    w.setData('channels', (c) => c.id === 'launch', 'messages', [
+      ...thread,
+      {
+        id: 'macro-tasks',
+        person: 'macro',
+        body: 'Created 3 tasks for Thursday’s launch and assigned them.',
+        time: '9:22 AM',
+        taskIds: ids,
+      },
+    ]);
+    w.open('messages', 'launch');
   };
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 3,
+    steps: 2,
     reset: () => {},
     reduced: finish,
+    delay: (step) => (step === 1 ? 900 : 1600),
     advance: (step) => {
       if (step === 2) finish();
     },
   });
   return (
-    <div ref={root}>
-      <div class="product-demo-request">
-        <HomepageConversation
-          messages={[
-            {
-              person: 'julia',
-              text: '@Claude, add the launch details to this task and leave the draft ready for my review.',
-            },
-          ]}
-        />
-      </div>
-      <ProductDemo
-        label="An agent prepares a task for human review"
-        onInteract={playback.pause}
+    <ProductDemo
+      ref={(el) => (root = el)}
+      label="Ask the Macro agent to make tasks from a channel message"
+      onInteract={playback.pause}
+      height={540}
+      mobileHeight={640}
+    >
+      <ProductWorkspace workspace={w} />
+    </ProductDemo>
+  );
+}
+
+const checklist = [
+  'Verify both invite paths before Thursday',
+  'Final read of the announcement',
+  'Record the product demo',
+];
+
+/**
+ * MarkdownPopup's selection toolbar offers "Tasks" when the selection holds
+ * checkboxes. Each checkbox becomes a task mention in place.
+ */
+export function TaskFromChecklistDemo() {
+  let root!: HTMLDivElement;
+  const w = createDummyWorkspace('documents');
+  const [phase, setPhase] = createSignal(0);
+  const [tasks, setTasks] = createSignal<WorkspaceTask[]>([]);
+  const convert = () => {
+    if (tasks().length) return;
+    const owners = ['teo', 'julia', 'jacob'] as const;
+    const ids = checklist.map((title, index) => {
+      const id = w.createTask(title, '', 'launch');
+      w.updateTask(id, { owner: owners[index] });
+      return id;
+    });
+    w.open('documents', 'plan');
+    setTasks(ids.map((id) => w.data.tasks.find((task) => task.id === id)!));
+    setPhase(3);
+  };
+  const playback = createProductWalkthrough({
+    root: () => root,
+    steps: 3,
+    reset: () => {},
+    reduced: convert,
+    delay: (step) => [0, 1200, 1500, 1400][step] ?? 1400,
+    advance: (step) => {
+      if (step === 3) convert();
+      else setPhase(step);
+    },
+  });
+  const opened = () =>
+    w.contentView() === 'tasks'
+      ? w.data.tasks.find((t) => t.id === w.selected())
+      : undefined;
+  return (
+    <ProductDemo
+      ref={(el) => (root = el)}
+      label="Turn checklist items in a document into tasks"
+      onInteract={playback.pause}
+      height={460}
+      mobileHeight={560}
+    >
+      <Show when={!opened()} fallback={<ProductWorkspace workspace={w} />}>
+        <ViewShell.TopBar>
+          <FileText class="size-4 text-note" />
+          <span class="text-sm font-medium">Q3 launch plan</span>
+        </ViewShell.TopBar>
+        <div class="dummy-scroll task-checklist-doc">
+          <h1>Q3 launch plan</h1>
+          <h2>Before Thursday</h2>
+          <div
+            class="task-checklist-block"
+            data-selected={phase() >= 1 && phase() < 3}
+          >
+            <Show when={phase() >= 1 && phase() < 3}>
+              <div
+                class="task-checklist-toolbar"
+                role="toolbar"
+                aria-label="Selection"
+              >
+                <button type="button">AI edit</button>
+                <button
+                  type="button"
+                  data-convert-tasks
+                  onClick={() => {
+                    playback.pause();
+                    convert();
+                  }}
+                >
+                  <CheckSquare class="size-4" />
+                  Tasks
+                  <Show when={phase() === 2}>
+                    <DemoCursor
+                      label="Jacob"
+                      class="task-checklist-cursor"
+                      clicking
+                    />
+                  </Show>
+                </button>
+                <span class="task-checklist-divider" />
+                <button type="button" aria-label="Bold">
+                  <TextB class="size-4" />
+                </button>
+                <button type="button" aria-label="Italic">
+                  <TextItalic class="size-4" />
+                </button>
+                <button type="button" aria-label="Strikethrough">
+                  <TextStrikethrough class="size-4" />
+                </button>
+                <button type="button" aria-label="Insert link">
+                  <LinkIcon class="size-4" />
+                </button>
+                <span class="task-checklist-divider" />
+                <button type="button">
+                  <GridFour class="size-4" />
+                  Table
+                </button>
+                <span class="task-checklist-divider" />
+                <button type="button" aria-label="Comment">
+                  <ChatTeardrop class="size-4" />
+                </button>
+              </div>
+            </Show>
+            <Show
+              when={tasks().length}
+              fallback={
+                <ul class="task-checklist-list">
+                  <For each={checklist}>
+                    {(item) => (
+                      <li>
+                        <span class="task-checklist-box" aria-hidden="true" />
+                        <span class="task-checklist-text">{item}</span>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              }
+            >
+              <ul class="task-checklist-list" data-converted="true">
+                <For each={tasks()}>
+                  {(task) => (
+                    <li>
+                      <TaskMention
+                        task={
+                          w.data.tasks.find((t) => t.id === task.id) ?? task
+                        }
+                        onOpen={() => {
+                          playback.pause();
+                          w.open('tasks', task.id);
+                        }}
+                      />
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </div>
+          <p class="task-checklist-after">
+            Launch is Thursday at 9. Julia sends the announcement once the
+            invite fix ships.
+          </p>
+          <h2>Owners</h2>
+          <p class="task-checklist-after">
+            Teo owns sign-up, Julia owns the announcement, and Jacob runs the
+            final checklist.
+          </p>
+        </div>
+      </Show>
+    </ProductDemo>
+  );
+}
+
+const PR = {
+  title: 'Keep the invited team through sign-up',
+  repo: 'launch-team/web',
+  number: 491,
+};
+
+/** InlineTaskGithubPullRequests plus the GitHub sync's status changes. */
+export function TaskGithubDemo() {
+  let root!: HTMLDivElement;
+  const w = createDummyWorkspace('tasks');
+  w.open('tasks', 'invite');
+  w.updateTask('invite', {
+    status: 'In Progress',
+    steps: [
+      { id: 'new', text: 'New accounts land in the invited team', done: true },
+      { id: 'existing', text: 'Existing accounts switch teams', done: true },
+      { id: 'tests', text: 'Regression tests for both paths', done: false },
+    ],
+    comments: [],
+  });
+  const [pr, setPr] = createSignal<'none' | 'open' | 'merged'>('none');
+  const move = (next: 'open' | 'merged', status: TaskStatus) => {
+    setPr(next);
+    w.updateTask('invite', { status });
+  };
+  const playback = createProductWalkthrough({
+    root: () => root,
+    steps: 3,
+    reset: () => {},
+    reduced: () => {
+      move('merged', 'Completed');
+      w.updateTask('invite', {
+        steps: task().steps.map((item) => ({ ...item, done: true })),
+      });
+    },
+    delay: (step) => [0, 1000, 2200, 2200][step] ?? 1400,
+    advance: (step) => {
+      if (step === 1) move('open', 'In Review');
+      if (step === 3) {
+        move('merged', 'Completed');
+        w.updateTask('invite', {
+          steps: task().steps.map((item) => ({ ...item, done: true })),
+        });
+      }
+    },
+  });
+  const task = () => w.data.tasks.find((t) => t.id === 'invite')!;
+  return (
+    <ProductDemo
+      ref={(el) => (root = el)}
+      label="A linked pull request moves the task to review, then done"
+      onInteract={playback.pause}
+      height={500}
+      mobileHeight={600}
+    >
+      <Show
+        when={w.contentView() === 'tasks' && w.selected() === 'invite'}
+        fallback={<WorkspaceTasks workspace={w} filter="all" />}
       >
-        <WorkspaceTasks workspace={w} filter="all" />
-      </ProductDemo>
-    </div>
+        <TaskNotebook
+          workspace={w}
+          task={task()}
+          pills={
+            <Show when={pr() !== 'none'}>
+              <span class="task-pr-pill" data-status={pr()}>
+                <PrStatusIcon status={pr()} class="size-3 shrink-0" />
+                <span class="truncate">{PR.title}</span>
+                <span class="text-ink-muted">
+                  {PR.repo}#{PR.number}
+                </span>
+                <span class="text-success">+38</span>
+                <span class="text-failure">−6</span>
+              </span>
+            </Show>
+          }
+        />
+      </Show>
+    </ProductDemo>
   );
 }

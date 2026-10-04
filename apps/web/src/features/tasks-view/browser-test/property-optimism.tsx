@@ -87,6 +87,7 @@ const placeholder = soupPropertyToProperty({
     data_type: 'SELECT_STRING',
     is_multi_select: false,
     is_metadata: false,
+    specific_entity_type: null,
     is_system: true,
     owner: { scope: 'system' },
     created_at: new Date(0).toISOString(),

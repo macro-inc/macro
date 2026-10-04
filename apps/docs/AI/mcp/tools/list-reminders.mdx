@@ -1,6 +1,7 @@
 ---
 title: ListReminders
-description: "Read the current user's reminders, soonest first. **Filtered by default: only reminders the user has not marked done**, which is what \"what are my reminders\" means. Pass `completed: true` for the ones they have dealt with. To re-read a reminder you already have the id for, pass it in `reminderIds`.  Filters: - `overdue: true` / `false` — already fired and waiting on the user, or still upcoming - `completed: true` / `false` — dealt with, or still outstanding - `entityType` + `entityId` — reminders about one specific thing. `entityType` takes the same values CreateReminder accepts: document, ai_chat, project, email, channel, call, calendar_event  The two flags are independent and compose: firing does not complete a reminder, so overdue and not completed is the needs-attention case, and a completed reminder never fires whether or not its time has passed.  Each reminder comes back with its `id` (pass to UpdateReminder or DeleteReminder), `description`, `nextRunAt`, `overdue`, and what it is attached to. `nextRunAt` is UTC, so convert before quoting it: for America/New_York (UTC-4 in August), `\"2026-08-13T19:00:00Z\"` is \"3:00 PM tomorrow\".  A `recurrence` field means the reminder repeats — rare, and currently broken: nothing in the app creates one and the dispatcher never fires them, so it sits at its `nextRunAt` without arriving. Say that rather than implying it is scheduled."
+description: >-
+  Read the current user's reminders, soonest first.
 ---
 
 # ListReminders

@@ -870,6 +870,9 @@ export function buildSingleEntityFilter(
       ...base,
       agent_session_filters: { ids: [entityId] },
     }))
+    .with('databaseRow', () => {
+      throw new Error('Database rows are read through GraphQL Soup only');
+    })
     .exhaustive();
 }
 

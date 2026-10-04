@@ -41,6 +41,27 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         repo.get_pricing("whisper-1").await.unwrap(),
         Some(ModelPricing::Audio { per_minute: 0.006 })
     );
+    let price = repo
+        .get_pricing("gemini-2.5-flash-image")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        price,
+        ModelPricing::Tokens {
+            input: 0.30,
+            output: 30.0
+        }
+    );
+    let cost = crate::Price::compute(
+        price,
+        UsageAmount::Tokens {
+            input: 100,
+            output: 1290,
+        },
+    )
+    .unwrap();
+    assert!((cost.total - 0.03873).abs() < 0.000001);
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
 }
 

@@ -16,7 +16,7 @@ async fn document_only_soup_never_calls_excluded_entity_services() {
     let emails = RecordingEmailPreviewService::default();
     let channels = RecordingCommsService::new(Vec::new());
     let calls = RecordingCallRecordQueryService::new(Vec::new());
-    let foreign_entities = RecordingForeignEntityService::new(Vec::new());
+    let foreign_entities = RecordingPullRequestListing::new(Vec::new());
     let mut soup = MockSoupRepo::new();
     soup.expect_unexpanded_generic_cursor_soup()
         .times(1)

@@ -2,7 +2,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
-import { SplitRouter } from '@app/lib/split-router';
+import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -21,8 +21,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  onCleanup,
-  onMount,
   Show,
   Suspense,
 } from 'solid-js';
@@ -123,25 +121,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const headerSize = createElementSize(headerRef);
 
   const [hasToolbarContent, setHasToolbarContent] = createSignal(false);
-  onMount(() => {
-    const checkContent = () => {
-      setHasToolbarContent(
-        Boolean(
-          layoutRefs.toolbarLeft?.hasChildNodes() ||
-            layoutRefs.toolbarRight?.hasChildNodes()
-        )
-      );
-    };
-    checkContent();
-    const observer = new MutationObserver(checkContent);
-    if (layoutRefs.toolbarLeft) {
-      observer.observe(layoutRefs.toolbarLeft, { childList: true });
-    }
-    if (layoutRefs.toolbarRight) {
-      observer.observe(layoutRefs.toolbarRight, { childList: true });
-    }
-    onCleanup(() => observer.disconnect());
-  });
 
   createEffect(() => {
     const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
@@ -198,17 +177,15 @@ export function SplitPanel(props: SplitPanelProps) {
           fallback={
             <SoupViewContextProvider soup={nextSoup}>
               <SplitRouter.Outlet
-                splitId={props.handle.id}
-                fallback={() => (
-                  <Dynamic component={props.split.mount.element} />
-                )}
+                pane={props.handle.id as string as PaneId}
+                fallback={<Dynamic component={props.split.mount.element} />}
               />
             </SoupViewContextProvider>
           }
         >
           <SplitRouter.Outlet
-            splitId={props.handle.id}
-            fallback={() => <Dynamic component={props.split.mount.element} />}
+            pane={props.handle.id as string as PaneId}
+            fallback={<Dynamic component={props.split.mount.element} />}
           />
         </Show>
       </Suspense>
@@ -346,6 +323,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   <SplitToolbar
                     ref={setToolbarRef}
                     collapseController={toolbarCollapseController}
+                    onContentChange={setHasToolbarContent}
                   />
                 </Panel.Toolbar>
               </Show>

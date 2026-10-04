@@ -30,6 +30,10 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
     AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
@@ -191,8 +195,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
-    let foreign_entity_service =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        PgGithubPullRequestRepo::new(db.clone()),
+    );
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
@@ -202,11 +208,16 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
         ),
         crm::domain::service::NoOpCrmService,
-        foreign_entity_service,
+        github_pull_request_service,
         reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
+    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+        db.clone(),
+        s3_client.clone(),
+        config.document_storage_bucket.as_ref(),
+    );
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         s3_client,
         config.document_storage_bucket.as_ref(),
@@ -282,6 +293,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         sqs: queue_aws_client,
         macro_event_broker: macro_event_broker.clone(),
     };
+    let databases_gateway = side_effect_clients.connection_gateway.as_ref().clone();
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
@@ -295,7 +307,8 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_presentation_files(Arc::new(presentation_files));
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),
@@ -390,9 +403,27 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         &document_tool_context,
         properties_service.clone(),
         entity_access_service.clone(),
-        side_effect_clients.sqs,
         side_effect_clients.macro_event_broker,
     );
+
+    let databases_tool_context = ai_tools::build_databases_tool_context(
+        db.clone(),
+        entity_access_service.clone(),
+        ai_tools::ToolTableEventPublisher::Gateway(
+            databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                databases_gateway,
+            ),
+        ),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
+        &databases_tool_context,
+        soup_service.clone(),
+        db.clone(),
+    );
+
+    let recorder =
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
 
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
@@ -409,6 +440,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         image_generation_tool_context: ai_tools::build_image_generation_tool_context(
             &document_tool_context,
             ai_tools::build_image_generator_from_env(),
+            recorder.clone(),
         )?,
         document_tool_context,
         properties_tool_context,
@@ -425,12 +457,14 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             user_email_service.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context,
+        databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         bot_tool_context: ai_tools::build_bot_tool_context(
             db.clone(),
-            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             dss_url,
             ai_tools::pipedream_client_from_env()?,
@@ -446,10 +480,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             db.clone(),
             config.enable_ai_usage_enforcement,
         ),
-        recorder: ai_usage::pg_recorder_with_enforcement(
-            db.clone(),
-            config.enable_ai_usage_enforcement,
-        ),
+        recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
 

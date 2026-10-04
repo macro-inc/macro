@@ -43,6 +43,7 @@ impl<Access: EntityAccessService> InvocationAuthorizer for Access {
                 MessageParent::Initiative(_) => EntityType::Initiative,
                 MessageParent::CrmCompany(_) => EntityType::CrmCompany,
                 MessageParent::CrmContact(_) => EntityType::CrmContact,
+                MessageParent::Call(_) => EntityType::Call,
             },
         )
         .await

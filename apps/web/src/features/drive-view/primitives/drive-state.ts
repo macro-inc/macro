@@ -11,6 +11,22 @@ import type {
 } from '../core/types';
 import type { DriveListState } from './drive-list';
 
+/** Mask disabled database filters without changing persisted route intent. */
+export function availableDriveState(
+  state: DriveState,
+  databasesEnabled: boolean
+): DriveState {
+  if (databasesEnabled || !state.facets.type?.includes('database'))
+    return state;
+  return {
+    ...state,
+    facets: {
+      ...state.facets,
+      type: state.facets.type.filter((id) => id !== 'database'),
+    },
+  };
+}
+
 /** Shared navigation and controls. Display derivations stay with their consumers. */
 export function createDriveState(options: {
   state: Accessor<DriveState>;

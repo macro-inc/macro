@@ -28,6 +28,9 @@ pub mod get_contact;
 /// receive null for hidden rows; admin/owner reach hidden contacts.
 pub mod get_contact_by_email;
 
+/// Search the caller's team's CRM contacts by email or name.
+pub mod search_contacts;
+
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
@@ -151,6 +154,10 @@ where
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, St, Eas, Auth>)
                 .post(create_contact::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/contacts",
+            get(search_contacts::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/by-email",

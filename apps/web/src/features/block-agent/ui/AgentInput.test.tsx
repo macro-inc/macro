@@ -189,7 +189,7 @@ describe('queued message advancement', () => {
       screen.getByTestId('agent-input-editor').getAttribute('data-disabled')
     ).toBe('true');
     const stop = screen.getByRole('button', {
-      name: 'Stop',
+      name: 'Send next queued message',
     }) as HTMLButtonElement;
     expect(stop.disabled).toBe(true);
     fireEvent.click(stop);
@@ -202,7 +202,7 @@ describe('queued message advancement', () => {
     expect(onSendNext).not.toHaveBeenCalled();
   });
 
-  it('shows a pressable Enter action that advances the next queued message', () => {
+  it('shows a send action that advances the next queued message', () => {
     const onStop = vi.fn();
 
     render(() => (
@@ -212,7 +212,7 @@ describe('queued message advancement', () => {
     const sendNext = screen.getByRole('button', {
       name: 'Send next queued message',
     });
-    expect(screen.getByTestId('enter-icon')).toBeTruthy();
+    expect(sendNext.hasAttribute('disabled')).toBe(false);
 
     fireEvent.click(sendNext);
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -259,13 +259,12 @@ describe('queued message advancement', () => {
       />
     ));
 
-    // Attached files are a draft, so this is the typed-text case: Enter sends
-    // them, and the control is Stop rather than the send-next Enter action,
-    // which would have stopped the agent and left the files behind.
+    // Attached files are a draft: both tapping Send and Enter send them.
     expect(
       screen.queryByRole('button', { name: 'Send next queued message' })
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
 
     editor.enter?.();
     expect(onSend).toHaveBeenCalledWith('', [uploaded]);

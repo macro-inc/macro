@@ -20,11 +20,9 @@ import {
   createSoupLiveQuery,
   type SoupLiveQueryOptions,
 } from './create-soup-live-query';
-import { withoutPendingGraphqlSoupDeletes } from './optimistic-deletions';
-import {
-  usePendingGraphqlSoupDone,
-  withPendingDoneIds,
-} from './optimistic-done';
+import { createGraphqlSoupDoneProjection } from './done-projection';
+import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDone } from './optimistic-done';
 import { soupItemKey } from './reconciliation';
 
 export type GraphqlSoupAstItemsQueryArgs = {
@@ -78,8 +76,9 @@ export function createGraphqlSoupAstItemsQuery(
   );
   const sortMethod = createMemo(() => args().params.sort_method);
   const showForeign = createMemo(() => options().showSupportedForeignEntities);
-  const noDeletedIds: ReadonlySet<string> = new Set();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const pendingDone = usePendingGraphqlSoupDone();
+  const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
 
   // One keyed UI projection for network, live, and Mail rows. Retain the
@@ -185,11 +184,12 @@ export function createGraphqlSoupAstItemsQuery(
   return {
     ...source,
     data: createMemo(() =>
-      withoutPendingGraphqlSoupDeletes(
+      projectDone(
+        source.queryScope(),
         data(),
-        excludesDone()
-          ? withPendingDoneIds(noDeletedIds, entities(), pendingDone())
-          : noDeletedIds
+        pendingDone(),
+        excludesDone(),
+        pendingDeleteIds()
       )
     ),
   };

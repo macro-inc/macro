@@ -10,7 +10,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { initiativeToolHandlers } from './Initiatives';
 
 const open = vi.hoisted(() => vi.fn());
-const invalidate = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const refreshProjects = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const [projectsEnabled, setProjectsEnabled] = createSignal(true);
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: projectsEnabled() }),
@@ -19,8 +19,8 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => projectsEnabled(),
 }));
-vi.mock('@queries/client', () => ({
-  queryClient: { invalidateQueries: invalidate },
+vi.mock('@app/features/projects/queries/project-revalidation', () => ({
+  refreshProjectQueries: refreshProjects,
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: open }),
@@ -70,7 +70,11 @@ function tool(
       }
       tool={{ name, data }}
       response={response === undefined ? undefined : { name, data: response }}
-      renderContext={{ isStreaming: response === undefined, grouped: false }}
+      renderContext={{
+        isStreaming: response === undefined,
+        grouped: false,
+        followedBy: () => false,
+      }}
     />
   ));
 }
@@ -111,82 +115,6 @@ it('expands project results and opens a native project view', () => {
   );
 });
 
-it('preserves per-task failures and unavailable references in expandable results', () => {
-  tool(
-    'SetTaskInitiative',
-    { initiativeId: projectId },
-    {
-      results: [
-        { taskId: 'a', status: 'assigned' },
-        { taskId: 'b', status: 'skippedNoPermission' },
-      ],
-    }
-  );
-  fireEvent.click(screen.getByRole('button', { name: '2 tasks' }));
-  expect(screen.getByText('Task 2: skipped no permission')).toBeTruthy();
-  cleanup();
-  tool(
-    'ReadTaskInitiatives',
-    { taskIds: ['a'] },
-    {
-      references: [{ state: 'unavailable', taskId: 'a' }],
-    }
-  );
-  fireEvent.click(screen.getByRole('button', { name: '1 task' }));
-  expect(screen.getByText('Unavailable project')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Project' })).toBeNull();
-});
-
-it('shows separate assignment outcomes and retains the full response', () => {
-  tool(
-    'AssignTasksToInitiative',
-    { initiativeId: projectId, taskIds: ['a', 'b', 'c'] },
-    {
-      initiativeId: projectId,
-      results: [
-        { taskId: 'a', status: 'assigned' },
-        { taskId: 'b', status: 'moved' },
-        { taskId: 'c', status: 'skipped_no_permission' },
-      ],
-    }
-  );
-  expect(screen.getByText('Add 3 tasks to project')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: '3 tasks' }));
-  expect(screen.getByText('a — assigned')).toBeTruthy();
-  expect(screen.getByText('b — moved')).toBeTruthy();
-  expect(screen.getByText('c — skipped no permission')).toBeTruthy();
-  expect(screen.getByText('Result data')).toBeTruthy();
-});
-
-it('distinguishes removed tasks from tasks not assigned to the project', () => {
-  tool(
-    'UnassignTasksFromInitiative',
-    { initiativeId: projectId, taskIds: ['a', 'b'] },
-    {
-      initiativeId: projectId,
-      results: [
-        { taskId: 'a', status: 'unassigned' },
-        { taskId: 'b', status: 'not_assigned' },
-      ],
-    }
-  );
-  expect(screen.getByText('Remove 2 tasks from project')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: '2 tasks' }));
-  expect(screen.getByText('a — unassigned')).toBeTruthy();
-  expect(screen.getByText('b — not assigned')).toBeTruthy();
-});
-
-it('refreshes project caches after both batch membership tools', async () => {
-  await initiativeToolHandlers.AssignTasksToInitiative.handleResponse?.(
-    {} as never
-  );
-  await initiativeToolHandlers.UnassignTasksFromInitiative.handleResponse?.(
-    {} as never
-  );
-  expect(invalidate).toHaveBeenCalledTimes(2);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['initiatives'] });
-});
-
 it('keeps successful deletion results inspectable without a stale project link', () => {
   tool('DeleteInitiative', { initiativeId: projectId }, { success: true });
   fireEvent.click(screen.getByRole('button', { name: 'Deleted' }));
@@ -202,9 +130,9 @@ it('reports a failed project deletion truthfully', () => {
   expect(screen.queryByText('Project deleted.')).toBeNull();
 });
 
-it('refreshes native project caches after a completed tool mutation', async () => {
+it('refreshes live project queries after a completed tool mutation', async () => {
   await initiativeToolHandlers.CreateInitiative.handleResponse?.({} as never);
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['initiatives'] });
+  expect(refreshProjects).toHaveBeenCalledOnce();
 });
 
 it('keeps historical results readable while disabling project navigation', () => {
@@ -238,5 +166,5 @@ it('keeps historical results readable while disabling project navigation', () =>
 it('does not refresh project data when projects are disabled', async () => {
   setProjectsEnabled(false);
   await initiativeToolHandlers.CreateInitiative.handleResponse?.({} as never);
-  expect(invalidate).not.toHaveBeenCalled();
+  expect(refreshProjects).not.toHaveBeenCalled();
 });

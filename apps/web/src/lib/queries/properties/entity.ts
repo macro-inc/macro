@@ -64,6 +64,9 @@ function toPropertyTargetEntityType(
     // Not a property target yet; surface a real error instead of a bad request.
     throw new Error('calendar events do not support properties');
   }
+  if (entityType === 'CONTACT') {
+    throw new Error('crm contacts do not support properties');
+  }
   return entityType;
 }
 
@@ -90,6 +93,45 @@ async function setRestEntityProperty(args: {
       error: error instanceof Error ? error : new Error(String(error)),
     };
   }
+}
+
+/**
+ * An entity's properties from the properties service, metadata included, so
+ * consumers with different `includeMetadata` values share one cache entry and
+ * one request.
+ */
+async function fetchRestEntityProperties(
+  entityType: EntityType,
+  entityId: string
+): Promise<Property[]> {
+  const data = await throwOnErr(
+    async () =>
+      await propertiesServiceClient.getEntityProperties({
+        entity_type: toPropertyTargetEntityType(entityType),
+        entity_id: entityId,
+        query: { include_metadata: true },
+      })
+  );
+  return data.properties.flatMap((property) => {
+    try {
+      return [entityPropertyFromApi(property)];
+    } catch (error) {
+      console.warn('Skipping property with unsupported type', error);
+      return [];
+    }
+  });
+}
+
+/** Read an entity's current properties through the shared entity query. */
+export function fetchEntityProperties(
+  entityType: EntityType,
+  entityId: string
+): Promise<Property[]> {
+  return queryClient.fetchQuery({
+    queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
+    queryFn: () => fetchRestEntityProperties(entityType, entityId),
+    staleTime: 0,
+  });
 }
 
 export function useEntityPropertiesQuery(
@@ -122,26 +164,7 @@ export function useEntityPropertiesQuery(
           entityId: id,
         }).queryKey,
         enabled: !usesGraphql() && id.length > 0,
-        queryFn: async () => {
-          // Always fetch with metadata so consumers with different
-          // `includeMetadata` values share one cache entry and one request.
-          const data = await throwOnErr(
-            async () =>
-              await propertiesServiceClient.getEntityProperties({
-                entity_type: toPropertyTargetEntityType(type),
-                entity_id: id,
-                query: { include_metadata: true },
-              })
-          );
-          return data.properties.flatMap((property) => {
-            try {
-              return [entityPropertyFromApi(property)];
-            } catch (error) {
-              console.warn('Skipping property with unsupported type', error);
-              return [];
-            }
-          });
-        },
+        queryFn: () => fetchRestEntityProperties(type, id),
         select: (properties: Property[]) =>
           includeMetadata
             ? properties
@@ -307,7 +330,7 @@ function buildSoupProperty(
         ? (property.isSystemProperty ?? false)
         : property.isSystem,
       owner: property.owner,
-      specific_entity_type: property.specificEntityType ?? undefined,
+      specific_entity_type: property.specificEntityType ?? null,
       created_at: now,
       updated_at: now,
     },

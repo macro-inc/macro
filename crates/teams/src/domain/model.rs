@@ -787,6 +787,20 @@ pub enum DeleteTeamError {
     RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
 }
 
+/// Errors for detaching a user from every team ahead of account deletion
+#[derive(Debug, thiserror::Error)]
+pub enum RemoveUserFromAllTeamsError {
+    /// Underlying team error
+    #[error("Underlying team error")]
+    TeamError(#[from] TeamError),
+    /// A team the user owns could not be deleted
+    #[error("Unable to delete a team the user owns")]
+    DeleteTeam(#[from] DeleteTeamError),
+    /// The user could not be removed from a team they belong to
+    #[error("Unable to remove the user from a team")]
+    RemoveUserFromTeam(#[from] RemoveUserFromTeamError),
+}
+
 /// Errors for joining a team
 #[derive(Debug, thiserror::Error)]
 pub enum JoinTeamError {

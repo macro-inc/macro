@@ -10,6 +10,7 @@ import Plus from '@phosphor/plus.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import DeleteIcon from '@phosphor/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
+import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import {
@@ -61,7 +62,6 @@ export interface EntityPropertiesSectionProps {
   requiredPropertyDefinitionIds?: readonly string[];
   pinnedPropertyIds?: () => string[];
   pinnedPropertyDefinitionOrder?: readonly string[];
-  onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
   /**
    * Placeholder properties shown (and editable) even when the entity has no
@@ -121,15 +121,15 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       props.includeMetadata ?? false
     );
   const allProperties = useAllProperties();
-  const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
-    new Set()
-  );
+  const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
+    Set<string>
+  >(new Set());
 
   const tagsQuery = useTagsQuery();
   const tagDefinitionIds = createMemo(
     () =>
       new Set(
-        (tagsQuery.data ?? [])
+        (tagsQuery.isSuccess ? tagsQuery.data : [])
           .map((set) => set.definition?.id)
           .filter((id): id is string => !!id)
       )
@@ -152,7 +152,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     );
     const pendingPlaceholderProperties = allProperties().flatMap(
       (definition) => {
-        if (!pendingPinDefIds().has(definition.id)) return [];
+        if (!pendingDefinitionIds().has(definition.id)) return [];
         if (hiddenDefinitionIds.has(definition.id)) return [];
         if (fetchedDefinitionIds.has(definition.id)) return [];
         if (defaultDefinitionIds.has(definition.id)) return [];
@@ -169,13 +169,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     ];
   });
 
-  const filteredPinnedProperties = createMemo(() => {
-    const defaultPinnedIds = props.defaultPinnedPropertyIds?.() ?? [];
-    const pinnedIds = props.pinnedPropertyIds?.() ?? [];
-    const usesPinnedFilter =
-      props.defaultPinnedPropertyIds !== undefined ||
-      props.pinnedPropertyIds !== undefined;
-    const pinned = mergedProperties().filter((property) => {
+  const filteredProperties = createMemo(() => {
+    // Pins control the title row only. The panel lists every assigned property.
+    const visible = mergedProperties().filter((property) => {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
         return false;
       }
@@ -183,24 +179,19 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         return false;
       }
       if (property.isMetadata) return props.includeMetadata === true;
-      if (pendingPinDefIds().has(property.propertyDefinitionId)) return true;
-      if (!usesPinnedFilter) return true;
-      return (
-        defaultPinnedIds.includes(property.propertyDefinitionId) ||
-        pinnedIds.includes(property.propertyId)
-      );
+      return true;
     });
 
-    return sortPinnedProperties(pinned, props.pinnedPropertyDefinitionOrder);
+    return sortPinnedProperties(visible, props.pinnedPropertyDefinitionOrder);
   });
 
-  const gridPinnedProperties = createMemo(() =>
-    filteredPinnedProperties().filter(
+  const gridProperties = createMemo(() =>
+    filteredProperties().filter(
       (property) => !isNonUserMultiEntityProperty(property)
     )
   );
-  const collectionPinnedProperties = createMemo(() =>
-    filteredPinnedProperties().filter(isNonUserMultiEntityProperty)
+  const collectionProperties = createMemo(() =>
+    filteredProperties().filter(isNonUserMultiEntityProperty)
   );
   const defaultPinnedDefinitionIds = createMemo(
     () =>
@@ -211,6 +202,14 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   );
 
   const addEntityProperty = async (definitionId: string) => {
+    // The entity can carry a definition it never pinned (set at creation or
+    // through the API); attaching it again would clear the value.
+    if (
+      properties().some(
+        (property) => property.propertyDefinitionId === definitionId
+      )
+    )
+      return;
     await addProperty(definitionId);
     await props.onPropertiesChanged?.();
   };
@@ -221,7 +220,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
   const handlePropertyAdded = (addedDefinitionIds?: string[]) => {
     if (addedDefinitionIds && addedDefinitionIds.length > 0) {
-      setPendingPinDefIds((prev) => {
+      setPendingDefinitionIds((prev) => {
         const next = new Set(prev);
         for (const id of addedDefinitionIds) next.add(id);
         return next;
@@ -232,7 +231,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 
   const removePendingProperty = (property: Property) => {
     if (!property.propertyId.startsWith('pending:')) return;
-    setPendingPinDefIds((prev) => {
+    setPendingDefinitionIds((prev) => {
       const next = new Set(prev);
       next.delete(property.propertyDefinitionId);
       return next;
@@ -240,7 +239,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   };
 
   const handlePropertyAddFailed = (definitionId: string) => {
-    setPendingPinDefIds((prev) => {
+    setPendingDefinitionIds((prev) => {
       const next = new Set(prev);
       next.delete(definitionId);
       return next;
@@ -249,7 +248,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   };
 
   createEffect(() => {
-    const pending = pendingPinDefIds();
+    const pending = pendingDefinitionIds();
     if (pending.size === 0) return;
 
     const remaining = new Set(pending);
@@ -258,13 +257,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         (property) => property.propertyDefinitionId === defId
       );
       if (instance) {
-        props.onPropertyPinned?.(instance.propertyId);
         remaining.delete(defId);
       }
     }
 
     if (remaining.size !== pending.size) {
-      setPendingPinDefIds(remaining);
+      setPendingDefinitionIds(remaining);
     }
   });
 
@@ -302,12 +300,11 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           entityType={props.entityType}
           canEdit={props.canEdit}
           documentName={props.documentName}
-          properties={filteredPinnedProperties}
+          properties={filteredProperties}
           onRefresh={refetch}
           onPropertyAdded={handlePropertyAdded}
           onPropertyAddFailed={handlePropertyAddFailed}
           onPropertyDeleted={refetch}
-          onPropertyPinned={props.onPropertyPinned}
           onPropertyUnpinned={props.onPropertyUnpinned}
           pinnedPropertyIds={props.pinnedPropertyIds}
           addProperty={addEntityProperty}
@@ -333,9 +330,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
             </div>
           </Show>
 
-          <Show when={gridPinnedProperties().length > 0}>
+          <Show when={gridProperties().length > 0}>
             <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)]">
-              <For each={gridPinnedProperties()}>
+              <For each={gridProperties()}>
                 {(property) => (
                   <SidePanelPropertyRow
                     entityId={props.entityId}
@@ -353,9 +350,9 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
             </SidePanel.Grid>
           </Show>
 
-          <Show when={collectionPinnedProperties().length > 0}>
+          <Show when={collectionProperties().length > 0}>
             <div class="flex flex-col gap-2 pb-2">
-              <For each={collectionPinnedProperties()}>
+              <For each={collectionProperties()}>
                 {(property) => (
                   <EntityCollectionProperty
                     entityId={props.entityId}
@@ -373,31 +370,19 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={props.canEdit && props.showAddProperty !== false}>
-            <div class="mt-2">
-              <AddPinnedPropertyButton />
+            <div
+              class={cn(
+                'flex items-center',
+                filteredProperties().length > 0 && 'mt-2'
+              )}
+            >
+              <AddPropertyButton class="m-px gap-1.5" />
             </div>
           </Show>
           <Modals />
         </PropertiesProvider>
       </div>
     </Show>
-  );
-}
-
-function AddPinnedPropertyButton() {
-  const { openPropertySelector } = usePropertiesContext();
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      noTouchResize
-      onClick={openPropertySelector}
-      class="m-px"
-    >
-      <Plus class="size-3" />
-      <span>Add property</span>
-    </Button>
   );
 }
 
@@ -542,6 +527,7 @@ function SidePanelPropertyRow(props: {
             />
           </PropertyNS.Root>
           <PropertyRowActions
+            class="absolute right-0 top-1/2 z-1 -translate-y-1/2"
             canRemoveFromEntity={props.canRemoveFromEntity}
             property={props.property}
             onRemovePendingProperty={props.onRemovePendingProperty}
@@ -557,6 +543,7 @@ function isPendingProperty(property: Property): boolean {
 }
 
 function PropertyRowActions(props: {
+  class?: string;
   canRemoveFromEntity: boolean;
   onRemovePendingProperty: (property: Property) => void;
   property: Property;
@@ -602,9 +589,10 @@ function PropertyRowActions(props: {
     <Show when={hasActions()}>
       <div
         class={cn(
-          'absolute right-0 top-1/2 z-1 flex -translate-y-1/2 items-center gap-0.5',
+          'flex shrink-0 items-center gap-0.5',
           'pointer-events-none opacity-0 transition-opacity',
-          'group-hover/property-row:opacity-100 group-focus-within/property-row:opacity-100 focus-within:opacity-100'
+          'group-hover/property-row:opacity-100 group-focus-within/property-row:opacity-100 focus-within:opacity-100',
+          props.class
         )}
         onMouseDown={stopRowInteraction}
       >
@@ -864,15 +852,15 @@ function EntityCollectionPropertyBody(props: {
   };
 
   return (
-    <SidePanel.Card>
-      <div class="group/property-row relative p-2">
-        <div class="flex items-center justify-between gap-2">
-          <span
-            class="min-w-0 truncate text-ink-muted"
-            title={props.property.displayName}
-          >
-            {props.property.displayName}
-          </span>
+    <div class="group/property-row min-w-0 py-2">
+      <div class="flex items-center justify-between gap-2">
+        <span
+          class="min-w-0 truncate text-ink-muted"
+          title={props.property.displayName}
+        >
+          {props.property.displayName}
+        </span>
+        <div class="ml-auto flex shrink-0 items-center gap-1">
           <Show when={!isReadOnly()}>
             <Button
               type="button"
@@ -895,29 +883,29 @@ function EntityCollectionPropertyBody(props: {
             onRemovePendingProperty={props.onRemovePendingProperty}
           />
         </div>
-        <div class="mt-2 flex flex-wrap gap-1.5">
-          <For
-            each={entities()}
-            fallback={<span class="text-ink-extra-muted">Empty</span>}
-          >
-            {(entityRef) => (
-              <NonUserEntityChip
-                property={props.property}
-                entityId={entityRef.entity_id}
-                entityType={entityRef.entity_type}
-                specificMessageId={entityRef.specific_message_id}
-                canEdit={!isReadOnly()}
-                onRemove={() => handleRemoveEntity(entityRef.entity_id)}
-                onEdit={(anchor) => {
-                  if (isReadOnly()) return;
-                  propertyCtx.openEditor(anchor);
-                }}
-              />
-            )}
-          </For>
-        </div>
       </div>
-    </SidePanel.Card>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <For
+          each={entities()}
+          fallback={<span class="text-ink-extra-muted">Empty</span>}
+        >
+          {(entityRef) => (
+            <NonUserEntityChip
+              property={props.property}
+              entityId={entityRef.entity_id}
+              entityType={entityRef.entity_type}
+              specificMessageId={entityRef.specific_message_id}
+              canEdit={!isReadOnly()}
+              onRemove={() => handleRemoveEntity(entityRef.entity_id)}
+              onEdit={(anchor) => {
+                if (isReadOnly()) return;
+                propertyCtx.openEditor(anchor);
+              }}
+            />
+          )}
+        </For>
+      </div>
+    </div>
   );
 }
 

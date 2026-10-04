@@ -6,7 +6,6 @@ import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { createInitiativeInput, createProjectMutation } from './create-project';
-import { projectKeys } from './keys';
 
 const mock = vi.hoisted(() => ({ refetch: vi.fn() }));
 vi.mock('@queries/soup/cache', () => ({ refetchSoupEntity: mock.refetch }));
@@ -42,7 +41,6 @@ const due = {
 const detail = {
   id: 'project',
   name: 'Launch',
-  descriptionDocumentId: 'description',
   updatedAt: '2026-09-30T12:00:00Z',
   userAccessLevel: 'owner' as const,
   taskCount: 0,
@@ -99,7 +97,7 @@ it('sends drafted values with the create and leaves unset ones to the server', (
   });
 });
 
-it('resolves as soon as the server answers, seeding the detail and refreshing lists in the background', async () => {
+it('resolves as soon as the server answers and refreshes lists in the background', async () => {
   const cache = new QueryClient();
   const create = vi.fn(async () => ok(detail));
   // A list refresh that never settles must not hold the create.
@@ -126,13 +124,7 @@ it('resolves as soon as the server answers, seeding the detail and refreshing li
     ownTouch: true,
     refreshGraphql: true,
   });
-  // Opening the new project reads the seeded detail instead of the network.
-  expect(
-    cache.getQueryData(projectKeys.detail('viewer', 'project').queryKey)
-  ).toMatchObject({
-    project: { id: 'project', access: 'owner' },
-    properties: [],
-  });
+  cache.clear();
 });
 
 it('rejects without refreshing when the server refuses the create', async () => {

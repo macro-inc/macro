@@ -588,16 +588,17 @@ unrelated fields.
 
 ### Adoption and mutation coverage
 
-Mounted project details, project identity chips, task-to-project references, and
-agent-session mentions now use this live path as well. Reference and mention
-lookups share stable batches: adding another visible item does not clear an
-existing item's data or restart its request. Project creation links the complete
-server-normalized record to its detail query, including when the user root is
-not cached yet. REST task creation still owns its explicit temporary membership;
-only those known temporary/just-created tasks may supply a reference fallback.
-Pending membership survives unrelated full entity responses, and canonical task
-IDs are published only after their Soup rows are seeded. Async creation bridges
-stop publishing after viewer changes, cache replacement, or storage reset.
+Mounted project details, project identity chips, and agent-session mentions use
+this live path as well. Mention lookups share stable batches: adding another
+visible item does not clear an existing item's data or restart its request.
+Project creation links the complete server-normalized record to its detail query,
+including when the user root is not cached yet. Async creation stops publishing
+after viewer changes, cache replacement, or storage reset.
+Task project assignments use the standard Project entity property and its
+optimistic property mutation; the former task-to-project reference query and
+separate assignment mutations no longer exist. Task creation includes that
+property in its ordinary create request. Project descriptions use the project's
+collaborative surface, provisioned by an authoritative ensure mutation.
 
 Permissions and server-owned membership still revalidate on activity, focus, and
 the existing project polling interval. A denied mounted read stays hidden across
@@ -609,13 +610,13 @@ Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-26 mutation documents and fails when a document has no declared strategy:
+27 mutation documents and fails when a document has no declared strategy:
 
 | Strategy | Operations |
 | --- | --- |
 | Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
 | Existing domain optimistic recipe (6) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions |
-| Authoritative outcome (6) | CreateInitiative, DeleteInitiative, AssignInitiativeTasks, ClearTaskInitiative, RecordChannelActivity, UpdateNotificationsForEntity |
+| Authoritative outcome (7) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RecordChannelActivity, UpdateNotificationsForEntity |
 | Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
 
 The project resolver predicts names and members; sharing waits for the server.

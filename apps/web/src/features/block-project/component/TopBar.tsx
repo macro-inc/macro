@@ -138,7 +138,7 @@ export function TopBar() {
           <div class="flex gap-2 p-1">
             <Show when={ops().length > 0}>
               <Show when={canEdit()}>
-                <ProjectCreateMenu id={id} />
+                <ProjectCreateMenu id={id} name={name()} />
               </Show>
             </Show>
           </div>

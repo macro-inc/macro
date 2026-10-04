@@ -32,6 +32,8 @@ export function TaskNotebook(props: {
   workspace: DummyWorkspace;
   task: WorkspaceTask;
   relatedContent?: JSX.Element;
+  /** Extra pills in the property row, e.g. linked GitHub pull requests. */
+  pills?: JSX.Element;
 }) {
   const [panel, setPanel] = createSignal<boolean>();
   const save = (patch: Partial<WorkspaceTask>) =>
@@ -250,6 +252,7 @@ export function TaskNotebook(props: {
                   tags={props.task.tags}
                   onChange={(tags) => save({ tags })}
                 />
+                {props.pills}
                 <Show when={props.task.steps.length}>
                   <div
                     class="h-6 inline-flex min-w-0 items-center gap-1.5 rounded-full border border-edge-muted bg-surface-2 px-2 py-1 leading-tight text-xs"

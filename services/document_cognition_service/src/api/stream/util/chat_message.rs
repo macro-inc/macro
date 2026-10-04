@@ -1,5 +1,4 @@
 pub mod ai_request;
-pub mod toolset;
 
 use crate::{api::context::ApiContext, model::stream::SendChatMessagePayload};
 

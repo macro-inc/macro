@@ -20,7 +20,7 @@ impl InvocationAuthorizer for Authorizer {
         EntityAccessReceipt::try_new_authenticated_user(
             user.clone(),
             Entity {
-                entity_type: EntityType::Document,
+                entity_type: parent.access_entity_type(),
                 entity_id: parent.entity_id(),
             },
             EntityPermission::AccessLevel {
@@ -112,6 +112,34 @@ async fn revoked_write_permission_yields_no_invocation_or_read() {
             .await
             .unwrap()
             .is_none()
+    );
+}
+
+#[tokio::test]
+async fn call_history_uses_the_call_receipt_and_canonical_root() {
+    let mut reader = MockMessageReader::new();
+    reader
+        .expect_get_thread()
+        .once()
+        .withf(|access, id| {
+            access.entity().entity_id == root().to_string()
+                && access.entity().entity_type == EntityType::Call
+                && access.get_authenticated_user().unwrap() == &user()
+                && *id == root()
+        })
+        .return_once(|_, _| Err(MessageError::NotFound));
+    let history = MessageThreadHistory::new(Arc::new(reader), Authorizer { allowed: true });
+    let invocation = history
+        .authorize_invocation(&user(), &MessageParent::Call(root()), root())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        history
+            .thread_messages(&invocation)
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 

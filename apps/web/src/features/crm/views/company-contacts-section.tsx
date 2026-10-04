@@ -45,14 +45,7 @@ export function CompanyContactsSection(props: {
               <div class="text-sm text-ink-muted">No matching contacts.</div>
             }
           >
-            <div
-              class="flex flex-col gap-2"
-              classList={{
-                // ~5 two-line rows tall; scroll for the rest.
-                'max-h-[13.5rem] overflow-y-auto scrollbar-hidden':
-                  filtered().length > 5,
-              }}
-            >
+            <div class="flex flex-col gap-1">
               <For each={filtered()}>
                 {(contact) => (
                   <button
@@ -70,7 +63,7 @@ export function CompanyContactsSection(props: {
                         { activate: true, preferNewSplit: event.shiftKey }
                       );
                     }}
-                    class="flex min-w-0 flex-col gap-0.5 rounded-md px-1 py-0.5 text-left hover:bg-ink-muted/[0.06]"
+                    class="flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-ink-muted/[0.06]"
                   >
                     <span class="truncate text-sm">
                       {contact.name ?? contact.email}

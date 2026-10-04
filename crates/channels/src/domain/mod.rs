@@ -12,6 +12,8 @@ pub mod events;
 /// Channel audience policy for authored group mentions.
 #[cfg(feature = "ports")]
 pub mod group_mentions;
+/// Silent historical creation commands and shared atomic DM creation policy.
+pub mod historical;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;

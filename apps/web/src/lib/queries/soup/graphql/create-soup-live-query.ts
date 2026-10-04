@@ -790,6 +790,7 @@ export function createSoupLiveQuery(
   );
 
   return {
+    queryScope: () => JSON.stringify([firstPageInput(), cacheGeneration]),
     localRevision: () => displayLocalProjection()?.mail?.revision,
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
     data: createMemo(() => {

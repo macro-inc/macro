@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucketV2 } from '../../packages/resources';
+import { createBucketV2 } from '../../packages/resources/src/resources/bucket';
 import { stack } from '../../packages/shared';
 
 const isLocal = stack === 'local';
@@ -38,6 +38,16 @@ export class BulkUploadBucket extends pulumi.ComponentResource {
         id: 'bulk-upload-bucket',
         bucketName,
         transferAcceleration: false,
+        lifecycleRules: [
+          {
+            id: 'slack-import-cleanup',
+            status: 'Enabled',
+            filter: { prefix: 'slack-import/' },
+            expiration: { days: 14 },
+          },
+        ],
+        // The helper owns CORS: PUT and allowedHeaders ['*'] already permit
+        // If-None-Match and x-amz-checksum-sha256 without a second CORS resource.
         tags,
       },
       { parent: this }
@@ -55,35 +65,39 @@ export class BulkUploadBucket extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Only grant access to the document storage service role if it exists
-    const allowAccessPolicy = pulumi
-      .all([this.bucket.arn, cloudStorageServiceRoleArn])
-      .apply(([bucketArn, roleArn]) => {
-        const principals = roleArn
-          ? [{ type: 'AWS', identifiers: [roleArn] }]
-          : [{ type: 'AWS', identifiers: ['*'] }];
-
-        return aws.iam.getPolicyDocumentOutput({
-          statements: [
-            {
-              principals,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:GetObjectAttributes',
-                's3:ListBucket',
-              ],
-              resources: [bucketArn, pulumi.interpolate`${bucketArn}/*`],
-            },
+    const bucketPolicy = pulumi.jsonStringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          // Preserve existing bulk-upload access, including the local stack.
+          Effect: 'Allow',
+          Principal: { AWS: cloudStorageServiceRoleArn ?? '*' },
+          Action: [
+            's3:GetObject',
+            's3:PutObject',
+            's3:GetObjectAttributes',
+            's3:ListBucket',
           ],
-        });
-      });
+          Resource: [this.bucket.arn, pulumi.interpolate`${this.bucket.arn}/*`],
+        },
+        {
+          Sid: 'RequireImmutableSlackImports',
+          Effect: 'Deny',
+          Principal: '*',
+          Action: ['s3:PutObject'],
+          Resource: [pulumi.interpolate`${this.bucket.arn}/slack-import/*`],
+          // Negated matching also denies a missing header. This does not
+          // affect extract/ or any other existing bulk-upload keys.
+          Condition: { StringNotEquals: { 's3:if-none-match': '*' } },
+        },
+      ],
+    });
 
     new aws.s3.BucketPolicy(
       'bulk-upload-bucket-policy',
       {
         bucket: this.bucket.bucket,
-        policy: allowAccessPolicy.apply((policy) => policy.json),
+        policy: bucketPolicy,
       },
       { parent: this }
     );

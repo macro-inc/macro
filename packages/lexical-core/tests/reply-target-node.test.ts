@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
 import {
   buildReplyTargetMarkdown,
+  readReplyTargetData,
   stripLeadingReplyTargetMarkdown,
 } from '../nodes/ReplyTargetNode';
 import { EXTERNAL_TRANSFORMERS } from '../transformers';
@@ -43,16 +44,31 @@ describe('ReplyTargetNode', () => {
     });
   });
 
-  it('round-trips a document reply target', () => {
+  it.each([
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ] as const)('round-trips a %s reply target', (type) => {
     const target = {
       ...data,
-      parent: { type: 'document' as const, id: 'document-1' },
+      parent: { type, id: 'parent-1' },
     };
     const markdown = buildReplyTargetMarkdown(target);
     const state = markdownToSerializedEditorStateWithIds(markdown);
     expect(state.root.children[0]).toMatchObject(target);
     expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
   });
+
+  it.each(['unknown', 'email', 'project'])(
+    'rejects unsupported parent %s',
+    (type) => {
+      expect(
+        readReplyTargetData({ ...data, parent: { type, id: 'parent-1' } })
+      ).toBeUndefined();
+    }
+  );
 
   it('exposes its preview to plain text and embedding conversion', () => {
     expect(markdownToPlainText(markdown)).toBe(data.displayText);

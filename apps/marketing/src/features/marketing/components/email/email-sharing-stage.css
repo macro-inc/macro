@@ -53,10 +53,7 @@
 .mail-sharing-stage .mail-channel-composer { flex-shrink: 0; }
 .mail-sharing-stage .mail-channel-messages { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .mail-sharing-demo > .mail-demo-controls { height: 48px; padding-inline: 12px; }
-.mail-sharing-pointer { position: absolute; top: 0; left: 0; z-index: 8; pointer-events: none; color: #eceeed; transition: transform 650ms cubic-bezier(.2,.8,.2,1); }
-.mail-sharing-pointer svg { width: 23px; height: 23px; fill: currentColor; filter: drop-shadow(0 1px 2px #0008); }
-.mail-sharing-pointer[data-clicking='true'] svg { animation: mail-pointer-click 650ms ease both; }
-@keyframes mail-pointer-click { 55% { transform: scale(.8); } }
+.mail-sharing-pointer { position: absolute; top: 0; left: 0; z-index: 8; pointer-events: none; transition: transform 650ms cubic-bezier(.2,.8,.2,1); }
 @media (max-width: 699px) {
   .mail-sharing-demo > .mail-demo-controls { height: 64px; }
 }

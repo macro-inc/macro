@@ -9,6 +9,7 @@ import {
   makeMuteAction,
   markReminderTargetDone,
 } from '@app/features/next-soup/actions';
+import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -22,7 +23,7 @@ import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
-import { enableReminders } from '@core/constant/featureFlags';
+import { enableProjects, enableReminders } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
@@ -41,6 +42,7 @@ import Copy from '@phosphor/copy.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Link from '@phosphor/link.svg';
 import Rename from '@phosphor/pencil-line.svg';
+import Stack from '@phosphor/stack.svg';
 import Star from '@phosphor/star.svg';
 import Tag from '@phosphor/tag.svg';
 import Trash from '@phosphor/trash-simple.svg';
@@ -352,6 +354,8 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const blockName = resolveBlockAlias(props.entityKind);
 
   const [open, setOpen] = createSignal(false);
+  const [assigningProject, setAssigningProject] = createSignal(false);
+  const projectsFlag = useFeatureFlag(enableProjects);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
@@ -644,6 +648,22 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       muteOp(),
       reminderOp(),
       addTagOp(),
+      ...(props.entityKind === 'task' &&
+      projectsFlag().enabled &&
+      (props.permissions === Permissions.OWNER ||
+        props.permissions === Permissions.CAN_EDIT)
+        ? [
+            {
+              label: 'Add to project…',
+              icon: Stack,
+              group: 'file' as const,
+              action: () => {
+                setOpen(false);
+                setAssigningProject(true);
+              },
+            },
+          ]
+        : []),
       copyLinkOp(),
       copyEntityIdOp(),
       ...mapped,
@@ -699,25 +719,33 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   onCleanup(() => ctx.setTitleFileMenuActions(undefined));
 
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <DesktopRender
+    <>
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <DesktopRender
+            open={open()}
+            onOpenChange={setOpen}
+            triggerClass={props.buttonClass}
+            groups={actionGroups()}
+          />
+        }
+      >
+        <MobileRender
           open={open()}
           onOpenChange={setOpen}
           triggerClass={props.buttonClass}
           groups={actionGroups()}
+          views={props.mobileViews}
         />
-      }
-    >
-      <MobileRender
-        open={open()}
-        onOpenChange={setOpen}
-        triggerClass={props.buttonClass}
-        groups={actionGroups()}
-        views={props.mobileViews}
-      />
-    </Show>
+      </Show>
+      <Show when={projectsFlag().enabled && assigningProject()}>
+        <ProjectAssignmentDialog
+          taskIds={[props.id]}
+          onClose={() => setAssigningProject(false)}
+        />
+      </Show>
+    </>
   );
 }
 

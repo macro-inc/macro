@@ -1,13 +1,13 @@
+import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { revalidateActivityQueries } from '@queries/activity/push-registry';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
   createGraphqlBulkSaveEntityPropertiesMutation,
   refetchGraphqlInitiativeProperties,
 } from '@queries/properties/graphql/entity';
 import { propertiesKeys } from '@queries/properties/keys';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type { initiativeClient } from '@service-storage/initiative';
 import { type QueryClient, useMutation } from '@tanstack/solid-query';
@@ -16,12 +16,11 @@ import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import { createProjectMutation } from './create-project';
-import { createProjectTaskMutation } from './create-project-task';
-import { projectKeys } from './keys';
 import { createProjectDetailQuery } from './project-identity';
 import { projectDefinitionProperties } from './project-properties';
-import { createProjectReferences } from './project-references';
+import { refreshProjectQueries } from './project-revalidation';
 import { createProjectSoupSource } from './project-soup';
+import { TASK_PROJECT_PROPERTY, taskProjectValue } from './task-project';
 
 type ProjectCommands = ReturnType<ProjectsContext['createCommands']>;
 
@@ -33,10 +32,10 @@ const accessLost = (error: unknown) =>
         error.graphQLErrors.some((error) => error.extensions.code === code))
   );
 
-/** GraphQL Soup lists projects and holds the optimistic rows of their tasks. */
+/** GraphQL Soup lists projects. */
 export type ProjectSoupTransport = {
   client(): Client;
-  cacheHost(): CacheHost | undefined;
+  cacheHost?(): CacheHost | undefined;
 };
 
 /** Transport and cache mechanics stay outside the feature's reactive consumers. */
@@ -47,13 +46,7 @@ export function createProjectSources(
   userId: Accessor<string | undefined>,
   createReadGate: () => Accessor<boolean> = () => () => true
 ): ProjectsContext {
-  const refresh = async () => {
-    await Promise.all([
-      cache.invalidateQueries({ queryKey: projectKeys._def }),
-      refreshActiveGraphqlSoupQueries(),
-      revalidateActivityQueries(soup.client(), null),
-    ]);
-  };
+  const refresh = () => refreshProjectQueries(soup.client());
   const context: ProjectsContext = {
     userId,
     createPropertyDefinitionsSource() {
@@ -82,7 +75,6 @@ export function createProjectSources(
       const readEnabled = createReadGate();
       const query = createProjectDetailQuery(
         soup.client,
-        cache,
         userId,
         id,
         readEnabled
@@ -104,29 +96,27 @@ export function createProjectSources(
         },
       };
     },
-    createReferencesSource(ids) {
-      const readEnabled = createReadGate();
-      return createProjectReferences(
-        soup.client,
-        cache,
-        userId,
-        ids,
-        () => readEnabled() && Boolean(userId())
-      );
-    },
     createCommands() {
-      const createTask = createProjectTaskMutation(
-        client,
-        soup.cacheHost,
-        cache,
-        userId,
-        async () => {
-          await Promise.all([
-            refresh(),
-            cache.invalidateQueries({ queryKey: soupKeys._def }),
-          ]);
-        }
-      );
+      // A task joins a project through its Project property, set at creation.
+      // The composer starts in the project, so keep a changed or cleared value.
+      const createTask: ProjectCommands['createTask'] = (
+        projectId,
+        title,
+        content,
+        properties,
+        ...rest
+      ) =>
+        createTaskWithProperties(
+          title,
+          content,
+          properties.some(([id]) => id === SYSTEM_PROPERTY_IDS.PROJECT)
+            ? properties
+            : [
+                ...properties,
+                [SYSTEM_PROPERTY_IDS.PROJECT, taskProjectValue(projectId)],
+              ],
+          ...rest
+        );
       const create = createProjectMutation(
         client,
         cache,
@@ -187,45 +177,45 @@ export function createProjectSources(
           ]);
         },
       });
+      const taskProject = createGraphqlBulkSaveEntityPropertiesMutation();
       const assign = useMutation(
         () => ({
-          mutationFn: async ({
+          mutationFn: ({
             projectId,
             taskIds,
           }: {
             projectId?: string;
             taskIds: readonly string[];
-          }) => {
-            return assignProjectTasks(
-              {
-                assign: async (projectId, batch) => {
-                  const response = await throwOnErr(() =>
-                    client.assignTasks(projectId, { taskIds: batch })
-                  );
-                  return response.results.map((result) => ({
-                    taskId: result.taskId,
-                    error:
-                      result.status === 'notATask'
-                        ? 'This item is not a task.'
-                        : result.status === 'notFound'
-                          ? 'Task no longer exists.'
-                          : result.status === 'skippedNoPermission'
-                            ? 'You need edit access to this task.'
-                            : undefined,
-                  }));
-                },
-                clear: async (taskId) => {
-                  await throwOnErr(() => client.removeTask(taskId));
-                },
+          }) =>
+            assignProjectTasks(
+              async (taskId, projectId) => {
+                const result = await taskProject.mutateAsync({
+                  properties: [
+                    {
+                      entityType: 'TASK',
+                      entityId: taskId,
+                      property: TASK_PROJECT_PROPERTY,
+                      apiValues: taskProjectValue(projectId),
+                    },
+                  ],
+                });
+                if (result.error) throw result.error;
               },
               projectId,
               taskIds
-            );
-          },
-          onSettled: async () => {
+            ),
+          onSettled: async (_results, _error, { taskIds }) => {
             await Promise.all([
               refresh(),
               cache.invalidateQueries({ queryKey: soupKeys._def }),
+              ...taskIds.map((entityId) =>
+                cache.invalidateQueries({
+                  queryKey: propertiesKeys.entity({
+                    entityType: 'TASK',
+                    entityId,
+                  }).queryKey,
+                })
+              ),
             ]);
           },
         }),

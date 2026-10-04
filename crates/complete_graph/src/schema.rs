@@ -14,8 +14,9 @@ use entity_mutation::{EntityMutationService, UnavailableEntityMutationService};
 use favorites::domain::ports::FavoritesMutationService;
 use graphql_activity::{
     ActivityFeedInput, ActivityOverviewInput, ActivityReader, ActivitySubscriptionRoot,
-    ActivitySubscriptionService, GraphqlActivityOverview, GraphqlActivityPage, NoOpActivityReader,
-    NoOpActivitySubscriptionService, resolve_activity_feed, resolve_activity_overview,
+    ActivitySubscriptionService, GraphqlActivityEvent, GraphqlActivityOverview,
+    GraphqlActivityPage, NoOpActivityReader, NoOpActivitySubscriptionService,
+    resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
 };
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
@@ -31,9 +32,8 @@ use graphql_favorite::{
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
 use graphql_initiative::{
-    GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference, InitiativeMutationRoot,
-    InitiativeTasksInput, resolve_initiative, resolve_initiative_tasks,
-    resolve_task_initiative_references,
+    GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
+    resolve_initiative_tasks,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -657,17 +657,6 @@ where
         .await
     }
 
-    /// Initiative chips for tasks, without inaccessible project metadata.
-    async fn task_initiative_references(
-        &self,
-        ctx: &Context<'_>,
-        task_ids: Vec<ID>,
-    ) -> async_graphql::Result<
-        Vec<GraphqlTaskInitiativeReference<SoupEdges<NR, PR, ER, FR, AR, AcR>>>,
-    > {
-        resolve_task_initiative_references(ctx, self.user_id.clone(), task_ids).await
-    }
-
     /// AI routines the authenticated user can access.
     async fn scheduled_actions(
         &self,
@@ -713,6 +702,20 @@ where
         input: ActivityFeedInput,
     ) -> async_graphql::Result<GraphqlActivityPage> {
         resolve_activity_feed::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// The newest activity on a database the authenticated user can view,
+    /// newest first. Databases are not Soup items, so this stands in for the
+    /// `activity` edge Soup entities carry.
+    async fn database_activity(
+        &self,
+        ctx: &Context<'_>,
+        database_id: ID,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        let access = Arc::<EAS>::from_ref(ctx.data::<St>()?);
+        resolve_database_activity::<AcR, EAS>(ctx, &*access, &self.user_id, database_id, limit)
+            .await
     }
 
     /// The authenticated user's activity over the trailing year, bucketed

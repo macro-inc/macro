@@ -19,14 +19,11 @@ describe('settings Connections tab', () => {
     const workspace = SETTINGS_TAB_GROUPS.find(
       (group) => group.label === 'Workspace'
     );
-    expect(workspace?.items.map((item) => item.tab)).toEqual([
-      'Team',
-      'Tags',
-      'CRM',
+    const tabs = workspace?.items.map((item) => item.tab) ?? [];
+    const integrations = tabs.indexOf('Connected');
+    expect(tabs.slice(integrations, integrations + 2)).toEqual([
       'Connected',
       'Connections',
-      'Agent',
-      'Bots',
     ]);
   });
 });

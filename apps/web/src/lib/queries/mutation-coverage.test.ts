@@ -18,13 +18,15 @@ const policies = {
   ReorderFavorites: 'custom: ordered favorite links',
   SetEntityProperty: 'custom: assignment identity and parent links',
   UpdateEntityPropertyOptions: 'custom: ordered option deltas',
-  CreateInitiative: 'authoritative: server assigns project and description IDs',
+  CreateInitiative: 'authoritative: server assigns the project ID',
   DeleteInitiative:
     'authoritative: boolean response; membership refresh after success',
-  AssignInitiativeTasks:
-    'authoritative: per-task permissions and assignment outcomes',
-  ClearTaskInitiative:
-    'authoritative: boolean response; membership refresh after success',
+  EnsureInitiativeDescriptionSurface:
+    'authoritative: server provisions the collaborative description surface',
+  RenameDatabase:
+    'authoritative: database metadata and SQL catalog reload after success',
+  TrashDatabase:
+    'authoritative: database list membership refreshes after success',
   RecordChannelActivity: 'authoritative: server event identity and timestamps',
   UpdateNotificationsForEntity:
     'authoritative: exact affected notification IDs required for undo',

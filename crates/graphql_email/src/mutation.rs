@@ -470,13 +470,17 @@ async fn reload_thread<O: EmailThreadMutationOutput>(
     user_id: MacroUserIdStr<'static>,
     thread_id: Uuid,
 ) -> async_graphql::Result<O::Thread> {
-    async {
-        O::load_email_thread(ctx, user_id, thread_id)
-            .await?
-            .ok_or_else(|| async_graphql::Error::new("updated email thread is unavailable"))
-    }
-    .await
-    .map_err(retryable_email_error)
+    O::load_email_thread(ctx, user_id, thread_id)
+        .await
+        .map_err(retryable_email_error)?
+        .ok_or_else(|| {
+            // The primary-backed lookup completed, but its All Mail projection
+            // can omit a trashed thread even after the write committed. Repeating
+            // that write cannot recover the reply and blocks every later queued
+            // mutation, including unrelated notification reads.
+            async_graphql::Error::new("updated email thread is unavailable")
+                .extend_with(|_, extensions| extensions.set("code", "NOT_FOUND"))
+        })
 }
 
 /// GraphQL email mutations.

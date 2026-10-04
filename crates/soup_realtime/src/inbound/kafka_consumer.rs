@@ -32,11 +32,13 @@ use messages::domain::models::MessageParent;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
+use models_properties::service::property_value::PropertyValue;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use system_properties::SystemPropertyKey;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::Instrument as _;
 
@@ -161,16 +163,6 @@ fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealti
         }
         InitiativeTopicEvent::Purged { initiative_id } => {
             vec![delete(EntityType::Initiative, initiative_id)]
-        }
-        InitiativeTopicEvent::TasksChanged(change) => {
-            let mut patches = Vec::new();
-            for membership in &change.changes {
-                push_unique_update(&mut patches, EntityType::Document, &membership.task_id);
-                for id in [membership.from, membership.to].into_iter().flatten() {
-                    push_unique_update(&mut patches, EntityType::Initiative, &id.to_string());
-                }
-            }
-            patches
         }
     }
 }
@@ -347,6 +339,8 @@ fn channel_and_thread_entities(
 fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityType> {
     match ReferencedShareItemType::from_raw(entity_type)? {
         ReferencedShareItemType::AgentSession => Some(EntityType::AgentSession),
+        // Databases use their own list and table-change gateway events.
+        ReferencedShareItemType::Database => None,
         ReferencedShareItemType::Document => Some(EntityType::Document),
         ReferencedShareItemType::Chat => Some(EntityType::Chat),
         ReferencedShareItemType::Project => Some(EntityType::Project),
@@ -476,8 +470,12 @@ fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<Ent
         PropertyEntityType::Project => Some(EntityType::Project),
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
         PropertyEntityType::Initiative => Some(EntityType::Initiative),
-        // Soup channels do not expose properties, and users are not Soup items.
-        PropertyEntityType::Channel | PropertyEntityType::User => None,
+        PropertyEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
+        // Soup channels do not expose properties; users and CRM contacts are
+        // not Soup items.
+        PropertyEntityType::Channel | PropertyEntityType::User | PropertyEntityType::Contact => {
+            None
+        }
     }
 }
 
@@ -491,7 +489,35 @@ fn property_update(entity_type: PropertyEntityType, entity_id: &str) -> Vec<Soup
 fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
         PropertyTopicEvent::EntityPropertyUpdated(metadata) => {
-            property_update(metadata.entity_type, &metadata.entity_id)
+            let mut patches = property_update(metadata.entity_type, &metadata.entity_id);
+            // Deleting a project clears its tasks with internal, unattributed writes
+            // after publishing Purged; refreshing that project here could replace the
+            // deletion with a stale replica row.
+            let attributed = metadata.actor_user_id.is_some()
+                || metadata.actor.is_some()
+                || metadata.on_behalf_of.is_some();
+            if metadata.entity_type == PropertyEntityType::Task
+                && metadata.property_definition_id == SystemPropertyKey::PROJECT_UUID
+                && attributed
+            {
+                // The projects the task left and joined change their task lists.
+                for value in [&metadata.previous_value, &metadata.value]
+                    .into_iter()
+                    .flatten()
+                {
+                    let PropertyValue::EntityRef(references) = value else {
+                        continue;
+                    };
+                    for reference in references {
+                        push_unique_update(
+                            &mut patches,
+                            EntityType::Initiative,
+                            &reference.entity_id,
+                        );
+                    }
+                }
+            }
+            patches
         }
         PropertyTopicEvent::EntityPropertyDeleted(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)

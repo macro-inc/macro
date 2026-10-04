@@ -19,7 +19,6 @@ it('preserves initiative identity, properties, and metadata separately from fold
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
-      descriptionDocumentId: 'description',
       metadata: {
         ownerId: 'owner',
         createdAt: '2026-09-01',
@@ -42,7 +41,6 @@ it('preserves initiative identity, properties, and metadata separately from fold
       id: 'initiative',
       name: 'Launch',
       ownerId: 'owner',
-      descriptionDocumentId: 'description',
       properties: [],
       updatedAt: '2026-09-26',
     },
@@ -297,7 +295,14 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: mocks.telemetryError },
+  Telemetry: {
+    error: mocks.telemetryError,
+    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
+      work({
+        event: vi.fn(),
+        setAttr: vi.fn(),
+      }),
+  },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({

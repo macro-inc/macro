@@ -768,6 +768,11 @@
             "format": "uuid",
             "description": "Connected inbox whose primary calendar receives the event; defaults\nto the requester's primary inbox."
           },
+          "idempotencyKey": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Stable retry identity, scoped to the authenticated organizer."
+          },
           "location": {
             "type": ["string", "null"],
             "description": "Optional location label."

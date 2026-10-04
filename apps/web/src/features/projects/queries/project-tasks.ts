@@ -4,17 +4,25 @@ import {
   type UseTasksDataSourceOptions,
   useTasksDataSource,
 } from '@app/features/tasks-view/queries/use-tasks-query';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { ProjectSource } from '../context/projects-context';
 
-/** The standard Tasks source scoped to complete, currently authorized membership. */
+/**
+ * The standard Tasks source scoped to tasks whose Project property names the
+ * project, enabled only while the project itself is readable.
+ */
 export function createProjectTasksDataSource(
+  projectId: string,
   project: ProjectSource,
   state: TasksDataSourceInput,
   options: UseTasksDataSourceOptions
 ): TasksDataSource {
   const source = useTasksDataSource(state, {
     ...options,
-    taskIds: () => project.project()?.taskIds ?? [],
+    reference: () => ({
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      entityId: projectId,
+    }),
     enabled: () => Boolean(project.project()),
   });
   return {

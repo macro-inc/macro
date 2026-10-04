@@ -2,10 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Expose identity confirmation on queue claims so superseded draft creates replay.
-# Rebuild with read-path optimizations, scoped invalidation, and bounded filter selection.
-# Rebuild with identity-aware resumable reads after merging the draft changes.
-version = "0.6.41"
+# Rebuild live queries and optimistic transactions against the current GraphQL schema.
+version = "0.6.42"
 
 [features]
 default = []

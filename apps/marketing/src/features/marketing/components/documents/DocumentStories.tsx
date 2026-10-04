@@ -1,170 +1,380 @@
-import ListChecks from '@phosphor/list-checks.svg';
-import { createSignal, Show } from 'solid-js';
-import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
-import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
+import Cloud from '@phosphor/cloud.svg';
+import CloudWarning from '@phosphor/cloud-warning.svg';
+import { Tooltip } from '@ui/components/Tooltip';
+import { For, Show } from 'solid-js';
+import { DemoCursor } from '../DemoCursor';
 import { HomepageConversation } from '../HomepageConversation';
+import { HomepageMention } from '../HomepageMention';
 import { ProductDemo } from '../product/ProductPage';
-import { ProductShareDialog } from '../product/ProductShareDialog';
-import { ProductWorkspace } from '../product/ProductWorkspace';
-import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
-import '../workspace/dummy-workspace.css';
-import '../demo-markdown.css';
+import { DocumentFrame } from './DocumentFrame';
+import {
+  controlPoint,
+  createAnchor,
+  createSceneClock,
+  typed,
+} from './documentScene';
 
-const draft =
-  '## Thursday’s launch\n\nWe’re introducing the team workspace on Thursday. The invite flow and announcement need a final check.';
-const finished =
-  '## Thursday’s launch\n\nBring the team’s emails, messages, and tasks into one workspace.\n\n## Before we publish\n\n- Teo: verify the invite flow.\n- Julia: review the announcement.\n- Jacob: confirm the final launch checks.';
-function documentWorkspace() {
-  const w = createDummyWorkspace('documents');
-  w.open('documents', 'plan');
-  w.setData('documents', (d) => d.id === 'plan', { body: draft, comments: [] });
-  return w;
+export { DocumentMentionsDemo } from './DocumentMentionsDemo';
+export { DocumentSharingDemo } from './DocumentSharingDemo';
+
+/** A collaborator's insertion point inside the editable text. */
+function Caret(props: { who: 'claude' | 'jacob' | 'julia' }) {
+  return <span class="doc-caret" data-caret={props.who} />;
 }
 
-export function DocumentEditingDemo() {
-  let root!: HTMLDivElement;
-  const w = documentWorkspace();
-  const [editing, setEditing] = createSignal(false);
-  const finish = () =>
-    w.setData('documents', (d) => d.id === 'plan', 'body', finished);
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 3,
-    reset: () => {},
-    reduced: finish,
-    advance: (s) => {
-      if (s === 1) setEditing(true);
-      if (s === 2) finish();
-      if (s === 3) setEditing(false);
-    },
-  });
-  return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Edit the working launch document"
-      action={editing() ? 'document' : undefined}
-      onInteract={playback.pause}
-    >
-      <WorkspaceDocuments workspace={w} />
-    </ProductDemo>
-  );
-}
+const OLD_INTRO =
+  'We’re introducing the team workspace on Thursday. It brings email, messages, tasks, and docs into one place, so a team can stop switching between five apps to get work done. The invite flow and the announcement still need a final check before we publish.';
+const NEW_INTRO =
+  'Thursday we launch the team workspace: email, chat, tasks, and docs in one place.';
+const CHECK_HEADING = 'Before we publish';
+const CHECKLIST = [
+  'Teo: verify the invite flow.',
+  'Julia: final read of the announcement.',
+  'Jacob: confirm the launch checks.',
+];
+const ANNOUNCEMENT = 'Julia sends it at 9.';
+const JACOB_ADDS = ' Dana’s team gets a heads-up the night before.';
 
+// Claude selects the intro, retypes it, then writes the checklist line by
+// line. Jacob keeps writing further down the whole time.
+const AGENT = {
+  select: 250,
+  replace: 750,
+  intro: 2050,
+  heading: [2200, 2500],
+  items: [
+    [2600, 3200],
+    [3250, 3900],
+    [3950, 4550],
+  ],
+  jacob: [600, 3000],
+  end: 4700,
+} as const;
+
+/** Claude edits the open document with its own cursor while Jacob types. */
 export function DocumentAgentDemo() {
   let root!: HTMLDivElement;
-  const w = documentWorkspace();
-  const [editing, setEditing] = createSignal(false);
-  const finish = () => {
-    w.setData('documents', (d) => d.id === 'plan', 'body', finished);
-    setEditing(false);
-  };
-  const playback = createProductWalkthrough({
+  let overlay: HTMLDivElement | undefined;
+  const clock = createSceneClock({
     root: () => root,
-    steps: 4,
-    reset: () => {},
-    reduced: finish,
-    advance: (s) => {
-      if (s === 1) setEditing(true);
-      if (s === 2) finish();
-    },
+    end: AGENT.end,
+    lead: 700,
+  });
+  const t = clock.t;
+  const claudeAt = () => {
+    if (t() < AGENT.select) return 'start';
+    if (t() < AGENT.replace) return 'selected';
+    if (t() < AGENT.heading[0]) return 'intro';
+    if (t() < AGENT.items[0][0]) return 'heading';
+    const item = AGENT.items.reduce(
+      (current, [from], index) => (t() >= from ? index : current),
+      0
+    );
+    return `item-${item}`;
+  };
+  const frame = () => overlay?.parentElement ?? undefined;
+  const claude = createAnchor({
+    frame,
+    track: t,
+    target: () => ({ selector: '[data-caret="claude"]' }),
+  });
+  const jacob = createAnchor({
+    frame,
+    track: t,
+    target: () => ({ selector: '[data-caret="jacob"]' }),
   });
   return (
-    <div ref={root} onPointerDown={playback.pause} onKeyDown={playback.pause}>
+    <div
+      ref={root}
+      class="doc-story doc-story-page-fade"
+      data-live={clock.live()}
+    >
       <div class="product-demo-request">
         <HomepageConversation
           messages={[
             {
               person: 'julia',
-              text: '@Claude, make the launch introduction shorter and add a checklist with Teo, Julia, and Jacob’s next steps.',
+              text: (
+                <>
+                  <span class="homepage-person-mention">@Claude</span>, make the
+                  intro in{' '}
+                  <HomepageMention
+                    kind="md"
+                    label="Q3 launch plan"
+                    description="Thursday’s launch: the intro, owners, and the announcement plan."
+                    href="#document-agents"
+                  />{' '}
+                  shorter and add a checklist with Teo, Julia, and Jacob’s next
+                  steps.
+                </>
+              ),
             },
           ]}
         />
       </div>
       <ProductDemo
-        label="An agent edits the same document"
-        onInteract={playback.pause}
-        action={editing() ? 'document' : undefined}
+        label="Claude edits the launch plan while Jacob keeps writing"
+        onInteract={clock.takeOver}
+        height={540}
+        mobileHeight={640}
       >
-        <WorkspaceDocuments workspace={w} />
-        <Show when={editing()}>
-          <div class="product-editing-pointer" aria-hidden="true">
-            <svg viewBox="0 0 16 20">
-              <path d="M2 1v15l4-4 3 7 3-1-3-7h6Z" fill="currentColor" />
-            </svg>
-            <span>Claude</span>
-          </div>
-        </Show>
+        <DocumentFrame
+          title="Q3 launch plan"
+          tags={['Launch', 'Product']}
+          overlay={
+            <div ref={overlay} class="doc-story-overlay" aria-hidden="true">
+              <Show when={clock.live() && claude()}>
+                {(point) => (
+                  <DemoCursor
+                    label="Claude"
+                    class="doc-story-cursor"
+                    style={{
+                      transform: `translate(${point().x}px, ${point().y}px)`,
+                    }}
+                  />
+                )}
+              </Show>
+              <Show when={clock.live() && jacob()}>
+                {(point) => (
+                  <DemoCursor
+                    label="Jacob"
+                    class="doc-story-cursor"
+                    style={{
+                      transform: `translate(${point().x}px, ${point().y}px)`,
+                    }}
+                  />
+                )}
+              </Show>
+            </div>
+          }
+        >
+          <h2>Thursday’s launch</h2>
+          <p>
+            <Show
+              when={t() < AGENT.replace}
+              fallback={
+                <>
+                  {typed(NEW_INTRO, t(), AGENT.replace, AGENT.intro)}
+                  <Show when={claudeAt() === 'intro'}>
+                    <Caret who="claude" />
+                  </Show>
+                </>
+              }
+            >
+              <Show when={claudeAt() === 'start'}>
+                <Caret who="claude" />
+              </Show>
+              <span
+                class={
+                  claudeAt() === 'selected' ? 'doc-story-selected' : undefined
+                }
+              >
+                {OLD_INTRO}
+              </span>
+              <Show when={claudeAt() === 'selected'}>
+                <Caret who="claude" />
+              </Show>
+            </Show>
+          </p>
+          <Show when={t() >= AGENT.heading[0]}>
+            <h2>
+              {typed(CHECK_HEADING, t(), AGENT.heading[0], AGENT.heading[1])}
+              <Show when={claudeAt() === 'heading'}>
+                <Caret who="claude" />
+              </Show>
+            </h2>
+          </Show>
+          <Show when={t() >= AGENT.items[0][0]}>
+            <ul class="md-list md-check">
+              <For each={CHECKLIST}>
+                {(item, index) => (
+                  <Show when={t() >= AGENT.items[index()][0]}>
+                    <li>
+                      {typed(
+                        item,
+                        t(),
+                        AGENT.items[index()][0],
+                        AGENT.items[index()][1]
+                      )}
+                      <Show when={claudeAt() === `item-${index()}`}>
+                        <Caret who="claude" />
+                      </Show>
+                    </li>
+                  </Show>
+                )}
+              </For>
+            </ul>
+          </Show>
+          <h2>Announcement</h2>
+          <p>
+            {ANNOUNCEMENT}
+            {typed(JACOB_ADDS, t(), AGENT.jacob[0], AGENT.jacob[1])}
+            <Caret who="jacob" />
+          </p>
+          <h2>Owners</h2>
+          <p>
+            Julia owns the announcement and the customer email. Teo owns the
+            deploy and release checks. Jacob owns customer conversations.
+          </p>
+          <h2>After launch</h2>
+          <p>
+            Check activation on Friday and send Dana’s team the rollout plan.
+          </p>
+        </DocumentFrame>
       </ProductDemo>
     </div>
   );
 }
 
-export function DocumentDiscussionDemo() {
-  const w = documentWorkspace();
-  w.setData('documents', (d) => d.id === 'plan', {
-    body: '## Announcement wording\n\nBring your team’s emails, messages, and tasks into one workspace.',
-    comments: [
-      {
-        id: 'wording',
-        person: 'teo',
-        body: 'Can we make the invite flow explicit? That’s what changes for existing teams.',
-        time: '9:40 AM',
-      },
-      {
-        id: 'answer',
-        person: 'julia',
-        body: 'Yes. I’ll add that in the next paragraph before publishing.',
-        time: '9:42 AM',
-      },
-    ],
+const JULIA_EDIT = 'Send it Thursday at 9. ';
+const ANNOUNCEMENT_LINE = 'Lead with the shared inbox.';
+const JACOB_OFFLINE = ' Pricing doesn’t change for existing teams.';
+
+// Offline while Jacob writes, reconnecting, then synced with Julia's edit to
+// the same paragraph merged in front of his.
+const OFFLINE = {
+  hover: 1100,
+  type: [1500, 3200],
+  connecting: 3500,
+  synced: 4400,
+  end: 4600,
+} as const;
+
+/** The real offline indicator while Jacob writes; Julia's edit merges in. */
+export function DocumentOfflineDemo() {
+  let root!: HTMLDivElement;
+  let overlay: HTMLDivElement | undefined;
+  const clock = createSceneClock({
+    root: () => root,
+    end: OFFLINE.end,
+    lead: 500,
+  });
+  const t = clock.t;
+  const status = () =>
+    t() < OFFLINE.connecting
+      ? 'offline'
+      : t() < OFFLINE.synced
+        ? 'connecting'
+        : undefined;
+  const hovering = () => clock.live() && t() < OFFLINE.hover;
+  const synced = () => t() >= OFFLINE.synced;
+  const gliding = () => t() >= OFFLINE.hover && t() < OFFLINE.type[0];
+  const frame = () => overlay?.parentElement ?? undefined;
+  const jacob = createAnchor({
+    frame,
+    track: t,
+    target: () =>
+      hovering()
+        ? { selector: '[data-sync-status]', place: controlPoint }
+        : { selector: '[data-caret="jacob"]' },
+  });
+  const julia = createAnchor({
+    frame,
+    track: t,
+    target: () => (synced() ? { selector: '[data-caret="julia"]' } : undefined),
   });
   return (
-    <ProductDemo label="Discuss the document alongside its content">
-      <WorkspaceDocuments workspace={w} />
-    </ProductDemo>
-  );
-}
-
-export function DocumentLinkedTaskDemo() {
-  const w = documentWorkspace();
-  return (
-    <ProductDemo label="Open the task linked to the document">
-      <Show
-        when={w.contentView() === 'documents'}
-        fallback={<ProductWorkspace workspace={w} />}
+    <div
+      ref={root}
+      class="doc-story doc-story-page-fade"
+      data-live={clock.live()}
+    >
+      <ProductDemo
+        label="Jacob writes offline, then his edits merge with Julia’s"
+        onInteract={clock.takeOver}
+        height={470}
+        mobileHeight={560}
       >
-        <WorkspaceDocuments
-          workspace={w}
-          relatedContent={
-            <div class="mt-6">
-              <button
-                type="button"
-                class="dummy-entity-link"
-                onClick={() => w.open('tasks', 'checklist')}
-              >
-                <ListChecks class="size-4 text-task" />
-                Prepare the launch checklist
-              </button>
+        <DocumentFrame
+          title="Q3 launch plan"
+          tags={['Launch', 'Product']}
+          status={
+            <Show when={status()}>
+              {(current) => (
+                <span class="doc-sync">
+                  <Tooltip
+                    as="span"
+                    label={
+                      current() === 'offline'
+                        ? "You're offline. Changes will sync when you reconnect."
+                        : 'Reconnecting…'
+                    }
+                  >
+                    <span
+                      role="status"
+                      data-sync-status
+                      class="doc-sync-status"
+                      data-status={current()}
+                      aria-label={
+                        current() === 'offline' ? 'Offline' : 'Reconnecting'
+                      }
+                    >
+                      <Show when={current() === 'offline'} fallback={<Cloud />}>
+                        <CloudWarning />
+                      </Show>
+                    </span>
+                  </Tooltip>
+                  <Show when={hovering() && current() === 'offline'}>
+                    <span class="doc-tooltip" aria-hidden="true">
+                      You're offline. Changes will sync when you reconnect.
+                    </span>
+                  </Show>
+                </span>
+              )}
+            </Show>
+          }
+          overlay={
+            <div ref={overlay} class="doc-story-overlay" aria-hidden="true">
+              <Show when={clock.live() && jacob()}>
+                {(point) => (
+                  <DemoCursor
+                    label="Jacob"
+                    class={`doc-story-cursor${gliding() ? ' doc-story-glide' : ''}`}
+                    style={{
+                      transform: `translate(${point().x}px, ${point().y}px)`,
+                    }}
+                  />
+                )}
+              </Show>
+              <Show when={clock.live() && julia()}>
+                {(point) => (
+                  <DemoCursor
+                    label="Julia"
+                    class="doc-story-cursor"
+                    style={{
+                      transform: `translate(${point().x}px, ${point().y}px)`,
+                    }}
+                  />
+                )}
+              </Show>
             </div>
           }
-        />
-      </Show>
-    </ProductDemo>
-  );
-}
-
-/** The native Share flow, isolated from real document access. */
-export function DocumentSharingDemo() {
-  const w = documentWorkspace();
-  const [open, setOpen] = createSignal(false);
-  return (
-    <ProductDemo label="Share a working document with a teammate">
-      <WorkspaceDocuments workspace={w} onShare={() => setOpen(true)} />
-      <ProductShareDialog
-        open={open()}
-        title="Q3 launch plan"
-        onClose={() => setOpen(false)}
-      />
-    </ProductDemo>
+        >
+          <h2>Launch checklist</h2>
+          <ul class="md-list md-check">
+            <li class="checked md-strike text-ink-extra-muted">
+              Finalize the product story
+            </li>
+            <li>Send the customer email</li>
+            <li>Publish the changelog</li>
+          </ul>
+          <h2>Announcement</h2>
+          <p>
+            <Show when={synced()}>
+              <span class="doc-story-merged">{JULIA_EDIT}</span>
+              <Caret who="julia" />
+            </Show>
+            {ANNOUNCEMENT_LINE}
+            {typed(JACOB_OFFLINE, t(), OFFLINE.type[0], OFFLINE.type[1])}
+            <Caret who="jacob" />
+          </p>
+          <h2>Owners</h2>
+          <p>
+            Julia owns the announcement and the customer email. Teo owns the
+            deploy and release checks.
+          </p>
+        </DocumentFrame>
+      </ProductDemo>
+    </div>
   );
 }

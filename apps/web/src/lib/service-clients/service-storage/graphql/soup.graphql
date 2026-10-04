@@ -125,8 +125,17 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	frecencyScore
+	... on GraphqlSoupDatabaseRow {
+		tableId
+		databaseId
+		position
+		ownerId
+		creatorId
+		createdAt
+		updatedAt
+		properties { ...SoupPropertyFields }
+	}
 	... on GraphqlSoupInitiative {
-		descriptionDocumentId
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename
@@ -376,33 +385,35 @@ fragment SoupPropertyFields on GraphqlProperty {
 	specificEntityType
 	isSystem
 	isMetadata
-	value {
-		__typename
-		... on GraphqlBooleanPropertyValue {
-			boolValue: value
+	value { ...SoupPropertyValueFields }
+}
+
+fragment SoupPropertyValueFields on GraphqlPropertyValue {
+	__typename
+	... on GraphqlBooleanPropertyValue {
+		boolValue: value
+	}
+	... on GraphqlNumberPropertyValue {
+		numberValue: value
+	}
+	... on GraphqlStringPropertyValue {
+		stringValue: value
+	}
+	... on GraphqlDatePropertyValue {
+		dateValue: value
+	}
+	... on GraphqlSelectOptionPropertyValue {
+		optionIds
+	}
+	... on GraphqlEntityReferencePropertyValue {
+		references {
+			entityId
+			entityType
+			specificMessageId
 		}
-		... on GraphqlNumberPropertyValue {
-			numberValue: value
-		}
-		... on GraphqlStringPropertyValue {
-			stringValue: value
-		}
-		... on GraphqlDatePropertyValue {
-			dateValue: value
-		}
-		... on GraphqlSelectOptionPropertyValue {
-			optionIds
-		}
-		... on GraphqlEntityReferencePropertyValue {
-			references {
-				entityId
-				entityType
-				specificMessageId
-			}
-		}
-		... on GraphqlLinkPropertyValue {
-			urls
-		}
+	}
+	... on GraphqlLinkPropertyValue {
+		urls
 	}
 }
 

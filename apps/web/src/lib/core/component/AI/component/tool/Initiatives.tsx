@@ -4,13 +4,12 @@ import { ProjectChip } from '@app/features/projects/components/project-chip';
 import type { ProjectSection } from '@app/features/projects/core/project';
 import { projectActivityEvent } from '@app/features/projects/core/project-activity';
 import { openProject } from '@app/features/projects/open-project';
-import { projectKeys } from '@app/features/projects/queries/keys';
+import { refreshProjectQueries } from '@app/features/projects/queries/project-revalidation';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import Stack from '@phosphor-icons/core/regular/stack.svg';
-import { queryClient } from '@queries/client';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -21,7 +20,7 @@ type ProjectDetails = NamedTool<'CreateInitiative', 'response'>['data'];
 
 async function refreshProjectsAfterMutation(): Promise<void> {
   if (!isFeatureEnabled(enableProjects)) return;
-  await queryClient.invalidateQueries({ queryKey: projectKeys._def });
+  await refreshProjectQueries();
 }
 
 function resultCount(count: number, noun: string, more = false): string {
@@ -125,55 +124,7 @@ function ProjectDetailsResult(props: { project: ProjectDetails }) {
   );
 }
 
-function TaskMembershipResults(props: {
-  results?: { taskId: string; status: string }[];
-}) {
-  return (
-    <Tool.List>
-      <For each={props.results}>
-        {(outcome) => (
-          <Tool.ListItem>
-            {outcome.taskId} — {outcome.status.replaceAll('_', ' ')}
-          </Tool.ListItem>
-        )}
-      </For>
-    </Tool.List>
-  );
-}
-
 export const initiativeToolHandlers = {
-  AssignTasksToInitiative: createToolRenderer({
-    name: 'AssignTasksToInitiative',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={`Add ${ctx.tool.data.taskIds.length} tasks to project`}
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        status={resultCount(ctx.response?.data.results.length ?? 0, 'task')}
-      >
-        <TaskMembershipResults results={ctx.response?.data.results} />
-      </ProjectToolCard>
-    ),
-  }),
-  UnassignTasksFromInitiative: createToolRenderer({
-    name: 'UnassignTasksFromInitiative',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={`Remove ${ctx.tool.data.taskIds.length} tasks from project`}
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        status={resultCount(ctx.response?.data.results.length ?? 0, 'task')}
-      >
-        <TaskMembershipResults results={ctx.response?.data.results} />
-      </ProjectToolCard>
-    ),
-  }),
   ListInitiatives: createToolRenderer({
     name: 'ListInitiatives',
     render: (ctx) => (
@@ -302,76 +253,6 @@ export const initiativeToolHandlers = {
         <Show when={ctx.response?.data}>
           {(project) => <ProjectDetailsResult project={project()} />}
         </Show>
-      </ProjectToolCard>
-    ),
-  }),
-  SetTaskInitiative: createToolRenderer({
-    name: 'SetTaskInitiative',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={
-          ctx.tool.data.initiativeId ? 'Set task project' : 'Clear task project'
-        }
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        status={resultCount(ctx.response?.data.results.length ?? 0, 'task')}
-      >
-        <Tool.List>
-          <For each={ctx.response?.data.results}>
-            {(outcome, index) => (
-              <Tool.ListItem>
-                Task {index() + 1}:{' '}
-                {outcome.status
-                  .replace(/([a-z])([A-Z])/g, '$1 $2')
-                  .toLowerCase()}
-              </Tool.ListItem>
-            )}
-          </For>
-        </Tool.List>
-      </ProjectToolCard>
-    ),
-  }),
-  ReadTaskInitiatives: createToolRenderer({
-    name: 'ReadTaskInitiatives',
-    render: (ctx) => (
-      <ProjectToolCard
-        label="Read task projects"
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        status={resultCount(ctx.response?.data.references.length ?? 0, 'task')}
-      >
-        <Tool.List>
-          <For each={ctx.response?.data.references}>
-            {(reference, index) => (
-              <Tool.ListItem>
-                <div class="flex items-center gap-2">
-                  <span>Task {index() + 1}</span>
-                  <Show
-                    when={reference.state === 'visible' ? reference : undefined}
-                    fallback={
-                      <span>
-                        {reference.state === 'unavailable'
-                          ? 'Unavailable project'
-                          : 'No project'}
-                      </span>
-                    }
-                  >
-                    {(project) => (
-                      <ProjectLink
-                        id={project().initiativeId}
-                        name={project().name}
-                      />
-                    )}
-                  </Show>
-                </div>
-              </Tool.ListItem>
-            )}
-          </For>
-        </Tool.List>
       </ProjectToolCard>
     ),
   }),

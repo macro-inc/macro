@@ -1,11 +1,11 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
   projectTaskRoute,
   tasksSplitRoute,
-} from '@app/features/tasks-view/route';
-import { useNavigate } from '@app/lib/split-router';
+} from '@app/routes/routes';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -121,6 +121,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         createTask: (
           ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
         ) => commands.createTask(projectId, ...args),
+        initialProjectId: projectId,
         onSuccess: () => section('tasks'),
       },
     });
@@ -200,7 +201,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                 onCreateTask={createTask}
                 description={
                   <ProjectDescription
-                    documentId={project().descriptionDocumentId}
+                    projectId={project().id}
                     canEdit={canEditProject(project())}
                   />
                 }

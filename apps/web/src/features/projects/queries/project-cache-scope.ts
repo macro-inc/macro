@@ -1,7 +1,7 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { type Accessor, createSignal } from 'solid-js';
 
-/** Async REST bridges must not publish into a replacement viewer or cache. */
+/** Async project creation must not publish into a replacement viewer or cache. */
 export function captureProjectCacheScope(
   userId: Accessor<string | undefined>,
   cacheHost: () => CacheHost | undefined
@@ -19,5 +19,3 @@ export function captureProjectCacheScope(
     dispose: () => unsubscribe?.(),
   };
 }
-
-export type ProjectCacheScope = ReturnType<typeof captureProjectCacheScope>;

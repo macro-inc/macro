@@ -32,6 +32,10 @@ use github::{
         pg_github_repo::PgGithubRepo,
     },
 };
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -391,7 +395,7 @@ async fn main() -> anyhow::Result<()> {
         PgAccessRepository::new(db.clone()),
     ));
     let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        internal_api_key.to_string(),
+        config.service_internal_auth_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     ));
     // Authentication creates channels and posts support welcome messages in-process, so its
@@ -453,7 +457,10 @@ async fn main() -> anyhow::Result<()> {
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
         GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
-        foreign_entity_service,
+        GithubPullRequestServiceImpl::new(
+            foreign_entity_service,
+            PgGithubPullRequestRepo::new(db.clone()),
+        ),
         GithubLinkConfig {
             client_id: config.github_client_id.to_string(),
             client_secret: config.github_client_secret.to_string(),
@@ -525,12 +532,16 @@ async fn main() -> anyhow::Result<()> {
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker)
     .with_open_seat_release((*ai_billing_service).clone());
+    let teams_service = Arc::new(teams_service_impl);
     let document_storage_service_client = Arc::new(document_storage_service_client);
+    // The harness and scheduled-action services validate the fleet-wide
+    // internal key, not this service's own inbound key.
     let user_deletion = Arc::new(
         authentication_service::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
             document_storage_service_client.clone(),
-            internal_api_key.to_string(),
+            teams_service.clone(),
+            config.service_internal_auth_key.to_string(),
             macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
             macro_service_urls::ScheduledActionServiceUrl::new()?.to_string(),
         )
@@ -570,7 +581,7 @@ async fn main() -> anyhow::Result<()> {
             internal_api_key,
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
-            teams_service: Arc::new(teams_service_impl),
+            teams_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),

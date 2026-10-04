@@ -108,6 +108,7 @@ export function buildEntityData(
         'image',
         'canvas',
         'spreadsheet',
+        'pptx',
         'video',
         'unknown',
         'csv',
@@ -184,8 +185,14 @@ export function buildEntityData(
       })
       // The singleton calendar block has no entity-shaped block id.
       .with('calendar', (): undefined => undefined)
-      // CRM companies/contacts aren't constructed from block args; soup is the source.
-      .with('company', 'contact', (): undefined => undefined)
+      // Databases use REST; CRM records and initiatives come from Soup.
+      .with(
+        'database',
+        'company',
+        'contact',
+        'initiative',
+        (): undefined => undefined
+      )
       // PRs are virtual blocks backed by GitHub, not Macro entities.
       .with('pr', (): undefined => undefined)
       .with('agent', (): EntityData | undefined =>

@@ -125,12 +125,11 @@ export function MessageList(props: MessageListProps) {
               title={props.title ?? ''}
               copyReveal={viewContext.thread.isTouch() ? 'always' : 'hover'}
               class={
-                viewContext.thread.isTouch()
-                  ? 'text-xl pt-1 pb-0'
-                  : 'text-2xl pb-1.5'
+                viewContext.thread.isTouch() ? 'text-xl pt-1 pb-0' : 'text-2xl'
               }
             />
             <Show when={!viewContext.thread.isTouch()}>
+              <div class="h-4.5" aria-hidden="true" />
               <EmailParticipants />
             </Show>
           </div>

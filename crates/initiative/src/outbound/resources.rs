@@ -116,8 +116,49 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
     }
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async move {
+            let id: InitiativeId = receipt
+                .entity()
+                .entity_id
+                .parse()
+                .map_err(|_| InitiativeError::BadRequest("invalid initiative id".into()))?;
             self.properties
                 .delete_entity_properties(&receipt)
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
+            // Each task leaves through an ordinary property write, so realtime and other
+            // consumers hear about it. The write is internal: it records no activity.
+            let tasks = self
+                .system_properties
+                .project_task_ids(id.as_uuid())
+                .await
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
+            for task_id in tasks {
+                let task = EntityAccessReceipt::<EditAccessLevel>::try_new(
+                    EntityAccessAuth::Internal,
+                    Entity {
+                        entity_id: task_id.clone(),
+                        entity_type: EntityType::Document,
+                    },
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                )
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
+                if let Err(error) = self
+                    .properties
+                    .set_entity_property(&task, SystemPropertyKey::PROJECT_UUID, None)
+                    .await
+                {
+                    tracing::warn!(?error, %task_id, %id, "task kept a deleted project's reference");
+                }
+            }
+            Ok(())
+        })
+    }
+    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+        Box::pin(async move {
+            self.system_properties
+                .project_task_ids(id.as_uuid())
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
         })

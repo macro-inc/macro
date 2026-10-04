@@ -24,6 +24,8 @@ use soup_filter_projection::{
 use std::collections::HashSet;
 
 mod channels;
+mod database_rows;
+mod direct_patch;
 pub mod live_query;
 pub mod mail;
 mod notifications;
@@ -205,17 +207,19 @@ fn walk_authoritative_object(
     collect_applicable_fields(selections, concrete_type, &mut fields);
 
     if let Some(partition) = projection_partition(concrete_type) {
-        let (mut projection_object, valid_selection) =
-            if partition == vocabulary::channel_partition() {
-                match channels::selected_object(object, &fields) {
-                    Ok(selected) => (selected, true),
-                    // Use the original ID only to invalidate a conflicting snapshot;
-                    // never interpret conflicting nullable aliases as absent facts.
-                    Err(()) => (object.clone(), false),
-                }
-            } else {
-                (object.clone(), true)
-            };
+        let (mut projection_object, valid_selection) = if partition
+            == vocabulary::channel_partition()
+            || partition == vocabulary::database_row_partition()
+        {
+            match direct_patch::selected_object(object, &fields) {
+                Ok(selected) => (selected, true),
+                // Use the original ID only to invalidate a conflicting snapshot;
+                // never interpret conflicting nullable aliases as absent facts.
+                Err(()) => (object.clone(), false),
+            }
+        } else {
+            (object.clone(), true)
+        };
         projection_object.remove("notifications");
         if let Some(snapshot) = notifications::selected_snapshot(object, &fields) {
             projection_object.insert("notifications".into(), snapshot);
@@ -594,6 +598,9 @@ fn complete_v4_projection_for_object(
     if partition == vocabulary::channel_partition() {
         return channels::complete(record_key, object);
     }
+    if partition == vocabulary::database_row_partition() {
+        return database_rows::complete(record_key, object);
+    }
     let input =
         direct_projection_input_for_object(record_key, &partition, object, None).ok_or(())?;
     let sub_type = if input.kind == SoupFlatEntityKind::Document {
@@ -610,7 +617,14 @@ fn authoritative_v4_patch_for_object(
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<ProjectionMutation, ()> {
-    if partition == vocabulary::channel_partition() {
+    let authoritative_patch = if partition == vocabulary::channel_partition() {
+        Some(channels::patch(record_key.clone(), object, None)?)
+    } else if partition == vocabulary::database_row_partition() {
+        Some(database_rows::patch(record_key.clone(), object, None)?)
+    } else {
+        None
+    };
+    if let Some(patch) = authoritative_patch {
         let OptimisticProjectionMutation::Patch {
             record_key,
             profile,
@@ -618,7 +632,7 @@ fn authoritative_v4_patch_for_object(
             exact,
             integers,
             sorts,
-        } = channels::patch(record_key, object, None)?
+        } = patch
         else {
             return Err(());
         };
@@ -750,6 +764,11 @@ fn optimistic_projection_for_object(
         // base but cannot fabricate a complete, newly accessible channel.
         return channels::patch(record_key, object, Some(created_at_ms)).ok();
     }
+    if partition == vocabulary::database_row_partition() {
+        // Rows are authoritative like channels: optimism patches a known
+        // base but cannot fabricate a newly visible row.
+        return database_rows::patch(record_key, object, Some(created_at_ms)).ok();
+    }
     let kind = projection_kind(&partition)?;
     if kind != SoupFlatEntityKind::Document
         && let Some(input) = direct_projection_input_for_object(
@@ -871,6 +890,7 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupProject" => Some(vocabulary::project_partition()),
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
         "GraphqlSoupChannel" => Some(vocabulary::channel_partition()),
+        "GraphqlSoupDatabaseRow" => Some(vocabulary::database_row_partition()),
         _ => None,
     }
 }

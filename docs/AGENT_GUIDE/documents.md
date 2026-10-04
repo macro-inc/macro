@@ -4,12 +4,56 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Snippet owners manage team sharing under **Share → Team access**. The details
+panel has no separate Sharing section. Choose **Edit** to grant the access the
+old snippet toggle provided, or **None** to remove team access.
+
+Hover or focus a document title in the header to see its owner, created time,
+and last-updated time. This details card is shared
+by documents, tasks, snippets, canvas, and file blocks; unavailable metadata is
+labeled rather than inferred.
+
+Editable documents show matching **Add tags** and **Add property** pills below
+the title. Once tags are applied, **Add tags** becomes the existing tag name or
+count pill; clicking it reopens the picker. **Add property** opens the shared
+property selector for that document.
+Adding or reselecting a property from the title row pins it there. Adding from
+the side panel leaves it unpinned. The side panel shows all assigned properties,
+including unpinned ones.
+Hover or focus an inline property pill to find **Unpin** (keeps its saved
+value) and **Delete from item** (removes the document's assignment, without
+deleting the shared property definition). Pins are saved with the document.
+
+Markdown code blocks have a **Copy Code** button in both editable and read-only
+views. Successful copies briefly animate the icon to a solid green check-circle;
+they do not show a success toast.
+## Markdown outline
+
+On desktop, Markdown documents with at least three headings show a tick rail in
+the left margin. Every section whose content overlaps the editor viewport is
+highlighted, including a section whose heading has already scrolled above it.
+Hover a tick (or Tab to its button) to expand it and nearby ticks and show a
+rounded preview with the section heading and up to three lines of body text.
+While a preview is open, only its tick is emphasized; visible-section highlights
+return when the preview closes.
+Click a tick or press Enter to jump immediately to its heading without closing its preview
+or collapsing the expanded ticks. Scrolling, resizing, and
+editor updates refresh the visible-section highlights.
+
 On a local HTTPS stack, document and image downloads use `/local-storage/`
 on the app's HTTPS origin. A request to HTTP localhost indicates a stale
 storage URL or stack configuration; hard-refresh after updating the stack.
 Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
 A 403 there indicates the sync origin check, which the local proxy handles for
 HTTPS machine hostnames; verify the proxy configuration before retrying.
+
+## Live database answers
+
+With Databases on, type `/database` and choose **Database** to insert a live answer
+to a question about a database. Answers run with each reader's database access and
+refresh when referenced tables change. See
+[Databases](databases.md#ai-questions-and-live-answers) for the question box, source
+picker, displays, and editing.
 
 ## Spreadsheets
 
@@ -309,6 +353,95 @@ client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
 
+## Presentations (PowerPoint)
+
+Uploaded `.pptx` files open in the `pptx` block (`/app/pptx/<documentId>`).
+With the `enable-pptx-editor` PostHog flag (on by default in development
+builds; `ENABLE_PPTX_EDITOR` overrides it) the block is a full editor; with the
+flag off it offers the file for download, as before. The deck is parsed,
+rendered, and edited by the Rust `pptx_engine` compiled to WebAssembly in a
+lazily created module worker, so the first open of a session pays a
+one-time ~6 MB module download.
+
+Layout and test hooks:
+
+- **Slide rail** (`nav` "Slides", `data-testid="pptx-slide-rail"`): one
+  `pptx-thumbnail` button per slide, labelled `Slide N: <title>`, with
+  `aria-current="true"` on the current one. Hovering a thumbnail shows
+  **Duplicate slide**, **Hide slide**/**Show slide**, and **Delete slide**;
+  thumbnails reorder by dragging. **New slide** is at the bottom.
+- **Stage** (`pptx-stage`, focusable): click selects a shape
+  (`pptx-selection`, handles `pptx-handle-<nw|n|ne|e|se|s|sw|w>` and
+  `pptx-rotate-handle`); drag moves it; handles resize and rotate. The stage
+  covers exactly the slide, so slide point `(x, y)` is at
+  `stage.left + x × stage.width / slideWidth`.
+- **Text**: double-click (or Enter/F2 on a selected text shape) starts
+  editing; keystrokes go to a hidden textarea (`pptx-text-input`, "Slide
+  text"). The caret is `pptx-caret`, an SVG line of zero width, so assert it
+  with `toBeAttached()`, not `toBeVisible()`. Escape stops editing.
+- **Tables**: double-click a cell to edit it in `pptx-cell-input`; Enter
+  commits, Escape cancels.
+- **Toolbar** (`pptx-toolbar`): Undo, Redo, Text box (`pptx-insert-textbox`),
+  Insert shape (`pptx-insert-shape`, then `pptx-shape-<preset>`), Picture,
+  Table (`pptx-insert-table`), Bold (`pptx-bold`), Italic, Underline,
+  Smaller/Larger text (`pptx-font-size` shows the size), Text color, alignment,
+  Bullets, Shape fill, the save state, Save, and Download.
+- **Keyboard** on the stage: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z (or Ctrl+Y),
+  Cmd/Ctrl+S saves now, Cmd/Ctrl+D duplicates, arrows nudge (Shift for 10 pt),
+  Delete removes, PageUp/PageDown change slides.
+- **Speaker notes** (`pptx-notes`) sit below the slide.
+
+Changes save automatically 1.5 s after the last edit, when the tab is hidden,
+and when the editor closes; `pptx-save-state` reads **Saved**, **Unsaved
+changes**, **Saving…**, or **Save failed**. Each save stores the whole file as a
+new document version through `PUT /documents/{id}/simple_save` (limit
+100 MB). Viewers without edit access get the same view with editing disabled.
+
+Everyone with the deck open edits it live. The deck is shared through the sync
+service as Loro maps (one entry per shape, slide position, relationship, and
+part; see `pptx_engine::collab`), seeded from the stored file the first time
+someone who can edit opens it. Others' edits appear within a second; edits to
+different shapes merge, and edits to the same shape resolve to the latest.
+Undo takes back only your own changes. Presence shows in the stage's top-right
+corner (`pptx-collaborators`, one `pptx-collaborator` avatar per person), as
+outlines with name tags around the shapes others selected
+(`pptx-peer-selection`, `data-peer="<name>"`, "… is typing" while they type),
+and as colored dots on the thumbnails of slides they are on. A viewer who opens
+a deck nobody has shared yet, or anyone when the sync service is unreachable,
+gets the stored file read-only.
+
+Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
+and every shape with its id, kind, placeholder role, position in points, text,
+and table cells; `ReadContent` returns the same description) and changes them
+with `EditPresentation`, an atomic batch of the editor's own operations saved
+as a new version. When an `EditPresentation` result arrives in chat, an open
+editor of that deck reloads in place and says **Updated with changes made
+elsewhere.** If it holds unsaved edits it keeps them and says the deck also
+changed elsewhere; saving those edits replaces the other version.
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web`:
+
+```sh
+bunx vite --config src/features/block-pptx/browser-test/vite.config.ts
+# http://127.0.0.1:3018/?deck=generated/kitchen-sink-financial.pptx
+```
+
+It mounts the real editor and worker over corpus decks (`?readonly` for a
+viewer, `?autosave=0` to save only on demand). `window.pptxFixture` exposes
+`saved()`, `saves()`, `engine()`, `errors()`, `notices()`, and
+`externalEdit(ops)`, which applies operations to the stored copy with a second
+engine instance and announces the change the way an AI edit does. With `document`, `user`, `worker`, `socket`, and `token` parameters the
+fixture is one collaborator on the real sync service
+(`browser-test/sync-server.ts` boots the compiled sync Worker in Miniflare;
+build it once with `\cd services/sync-service && just worker-build`), and
+`window.pptxFixture.collab` exposes the connection status, peers, and shared
+entries. Its Playwright suites run with
+`bunx playwright test --config src/features/block-pptx/browser-test/playwright.config.ts`
+(set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
+`/app/pptx` route itself needs a backend with an uploaded deck.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
@@ -386,6 +519,45 @@ To verify, search for a cached company absent from that REST page, select it, an
 check that the inserted company mention points to the correct company. Also check
 searching by domain and that an open picker updates when companies finish hydrating.
 Discard unsent test drafts rather than sending them.
+
+## Project mentions
+
+With Projects enabled, type `@` followed by a project name in an editor,
+composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
+they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
+section and in entity property pickers that accept projects. The command menu
+keeps its own project search. Selecting one inserts a document mention with the
+project's icon and current name, like a channel mention. Clicking it or
+pressing Enter on it opens the project the way a task mention opens a task:
+in Tasks, under **Projects** › the project (on touch devices, as the project
+view on its own). A project you cannot read shows **No Access**. Pasting
+`/app/initiative/<id>` or a Tasks project link inserts the same mention.
+
+The mention is stored as
+`<m-document-mention>{"documentId":"<initiative id>","blockName":"initiative",…}</m-document-mention>`
+(`project` is a folder). In a document it is tracked as a reference like other
+entity mentions. It is deliberately not a channel-message reference, so
+mentioning a project in a channel never shares the project with the channel's
+members.
+
+To verify, mention a project in a document and in a channel draft, check the
+mention opens the right project, rename the project and reload to see the name
+update, and delete the mention. Discard unsent test drafts rather than sending
+them.
+
+## CRM associations
+
+With CRM enabled, any task, document or call can point at CRM records through the
+`Companies` and `Contacts` system properties: side panel `Properties` →
+`Add property`. Both pickers list Quick Access records: the team's companies and
+its most recently interacted contacts, filtered by name, domain or email. CRM
+contacts have their own Quick Access bucket, apart from people, and are not
+offered in `@` mentions or the command menu. Values show the
+record's name and open the company or contact. An entity can carry the property
+without listing it (set at creation or through the API); adding that property
+pins the existing value rather than clearing it. Calls are linked automatically
+when they end, from their participants and the invitees of the calendar event
+carrying the meeting link; verify on a finished call's `Properties`.
 
 ## Native offline reopening
 
@@ -629,6 +801,56 @@ highlight; deleting a placeable's discussion removes the placeable. An anchor bo
 to a legacy annotation thread that was never imported stays hidden rather than
 shown as a bare highlight.
 
+## Word (DOCX) editor
+
+When `enable-docx-editor` is on, uploaded `.docx` files open at
+`/app/write/<id>` in an editor instead of the PDF preview. The flag is a
+PostHog flag that is on by default in dev mode; set `VITE_ENABLE_DOCX_EDITOR`
+to override it locally. The header label has a **Beta** badge. The page is the
+Docxodus WASM engine. Edits sync through the sync service, so every open copy
+updates live and shows each collaborator's caret with their name.
+
+- Editors get a toolbar labelled `Document formatting` with the following
+  controls: `Undo`, `Redo`, a `Paragraph style` select, bold, italic,
+  underline and strikethrough, `Bulleted list`, `Numbered list`, the alignment
+  buttons, `Insert table` and `Track changes`.
+- Typing is committed after about a second of idle time, or on blur. Wait
+  roughly 1.5 s before checking another tab for the text.
+- Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo. They
+  commit pending typing first, so an undo straight after typing removes it,
+  and leave the caret at the end of the change.
+- Clicking a DOCX in the Home list opens the editor in the Home preview pane.
+- Editors see editable `Header` and `Footer` bands. Viewers and commenters get
+  a read-only paginated rendering instead.
+- To comment on any text, including table cells: select it, then click the
+  floating `Comment` button beside the selection. You can also use the toolbar
+  `Comment on selection` button or Mod+Alt+M. The draft opens a thread card in
+  the right margin. Posting creates a normal document discussion (`markdown`
+  anchor with `mark_id`), so it also appears in channels and notifications.
+- Highlighted text is drawn with the CSS Custom Highlight API rather than DOM
+  marks: query `CSS.highlights`, not `<mark>` elements.
+- Threads whose text was deleted are listed under `Comments on text that has
+  changed`, above the `Discussion` composer.
+- AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to
+  the first matching text the next time someone opens the file.
+- `Download .docx` exports the current collaborative state with every edit.
+  Comments stay in Macro threads and are not written into the file.
+- The stored upload is not rewritten yet. Search, the PDF export and AI
+  `ReadContent` still see the original file.
+- AI `EditDocument` edits Markdown documents only and rejects DOCX files.
+
+## Document history
+
+On desktop, open the title's file menu (**…**) and choose **History**. This
+opens an overlay filling the current document block, with a read-only version
+preview on the left and a timeline graph plus sessions on the right. History is
+no longer a side-panel section and its file-menu item is hidden on mobile.
+Scrub the graph to preview a point in time, or select a session to see its changes.
+**Current version** returns the preview to the live version; **Fork** copies the
+selected version into a separate document. **Close history** or Escape returns
+to the mounted editor without losing its scroll position. The two columns scroll
+independently, and other app splits remain available.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
@@ -651,7 +873,7 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   This must also work after background backfills populate more than 128 cached
   Soup variants—tag saves must not scan all cached pages.
   `Properties` → `Add property`.
-- Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
+- `Activity` is collapsible; document statistics and ownership timestamps appear in the footer.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
   times; consecutive edits fold into one `made 3 edits` line). Past four entries it shows the

@@ -6,6 +6,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use uuid::Uuid;
 
+#[cfg(doc)]
+use crate::domain::models::SurfaceOwnership;
 use crate::domain::models::{CollabSurface, CollabSurfaceError};
 
 /// Outbound persistence port for collab surfaces.
@@ -38,9 +40,25 @@ pub trait CollabSurfaceRepo: Send + Sync + 'static {
 
     /// Soft-delete a surface. Idempotent.
     fn soft_delete(&self, id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Whether `id` belongs to a soft-deleted surface.
+    fn is_deleted(&self, id: Uuid) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
-/// Outbound port that boots a surface's sync-service session from markdown.
+/// Outbound port onto the document id namespace, which surfaces share in
+/// sync-service. `outbound::document_ids::PgDocumentIds` implements it over
+/// macro_db_client's `does_document_exist` helper, which owns reads of the
+/// documents table.
+pub trait DocumentIds: Send + Sync + 'static {
+    /// Whether `id` names a document, live or soft-deleted.
+    fn is_document_id(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
+}
+
+/// Outbound port for a surface's sync-service session: boots it from markdown
+/// and checks whether it exists.
 ///
 /// Implementations convert the markdown to a Loro snapshot (an empty string
 /// maps to the canonical blank-document snapshot) and store it as the
@@ -54,6 +72,21 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         surface_id: &str,
         markdown: &str,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+
+    /// Whether a session for `surface_id` exists. Only asked for a new id,
+    /// before its row is inserted. Sync-service answers yes as soon as a
+    /// session knows its id (a client connected, say), not only once it is
+    /// initialized: the conservative answer for an id nothing should use yet.
+    fn session_exists(
+        &self,
+        surface_id: &str,
+    ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
+
+    /// The session for `surface_id` rendered as GitHub-flavored markdown.
+    fn markdown(
+        &self,
+        surface_id: &str,
+    ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
 }
 
 /// The collab-surface use-cases, generic over the outbound ports.
@@ -67,6 +100,12 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     ///   row (an earlier ensure died or failed mid-init) has its
     ///   initialization retried.
     /// - soft-deleted → [`CollabSurfaceError::Gone`]; ids are never reused.
+    /// - not a random (v4 or v7) UUID → [`CollabSurfaceError::BadRequest`].
+    /// - the id names a document, or a new id already has a sync-service
+    ///   session → [`CollabSurfaceError::IdReserved`], before any row is
+    ///   written: a new surface only ever creates its own session.
+    /// - the parent's domain owns its surfaces
+    ///   ([`SurfaceOwnership::ParentDomain`]) → [`CollabSurfaceError::AccessDenied`].
     ///
     /// Concurrent ensures for the same id converge: the insert is
     /// conflict-tolerant and the initializer treats an already-initialized
@@ -96,8 +135,10 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Entity<'static>, CollabSurfaceError>> + Send;
 
-    /// Mint a sync-service connection token for the surface, at the access
-    /// level implied by the caller's permission on the parent entity.
+    /// Mint a sync-service connection token for a `ready` surface, at the
+    /// access level implied by the caller's permission on the parent entity.
+    /// A surface whose id names a document is refused
+    /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound.
     fn mint_token(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -106,13 +147,44 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<DocumentPermissionToken, CollabSurfaceError>> + Send;
 
     /// Soft-delete a surface. Requires an edit-capable permission on the
-    /// parent. The sync-service session is not reclaimed (documented gap
-    /// shared with documents); deletion makes the surface unmintable, which
-    /// cuts off all access.
+    /// parent, and a parent whose domain does not own its surfaces
+    /// ([`SurfaceOwnership::ParentDomain`]): a deleted id never comes back, so
+    /// only the owning domain may retire one. The sync-service session is not
+    /// reclaimed (documented gap shared with documents); deletion makes the
+    /// surface unmintable, which cuts off all access.
     fn delete_surface(
         &self,
         user_id: &MacroUserIdStr<'_>,
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+}
+
+/// Surfaces a parent's domain owns ([`SurfaceOwnership::ParentDomain`]). That
+/// domain has already authorized its caller, so these take no receipt; keep
+/// them out of reach of caller-chosen ids.
+pub trait OwnedSurfaceService: Send + Sync + 'static {
+    /// Idempotently ensure surface `id`, parented by `parent`, exists and is
+    /// `ready`, under the same rules as [`CollabSurfaceService::ensure_surface`].
+    /// A new surface starts from `initial_markdown`; an existing one keeps its
+    /// content.
+    fn ensure_owned_surface(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        initial_markdown: String,
+    ) -> impl Future<Output = Result<CollabSurface, CollabSurfaceError>> + Send;
+
+    /// A ready surface's content as GitHub-flavored markdown; `None` while the
+    /// surface does not exist or is not ready.
+    fn owned_surface_markdown(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, CollabSurfaceError>> + Send;
+
+    /// Soft-delete a surface for the domain that owns it. Idempotent.
+    fn retire_surface(
+        &self,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
 }
