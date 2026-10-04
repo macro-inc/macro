@@ -470,6 +470,10 @@ fn resolve_inner(
 
         let mut runs = Vec::new();
         for r in doc.children(p) {
+            if let Some(m) = crate::math::equation_element(doc, r) {
+                runs.push(math_run(&parse, own_part, &pp.def_rpr, m, r));
+                continue;
+            }
             let kind = match doc.local(r) {
                 "r" => RunKind::Text,
                 "br" => RunKind::Break,
@@ -506,7 +510,7 @@ fn resolve_inner(
                     .clock
                     .and_then(|now| now.format(t))
                     .unwrap_or_else(cached),
-                RunKind::Text => cached(),
+                RunKind::Text | RunKind::Math(_) => cached(),
             };
             runs.push(Run {
                 text,
@@ -533,6 +537,33 @@ fn resolve_inner(
         paragraphs,
         node: body_node,
     })
+}
+
+/// An equation of a paragraph as a run: `item` is the paragraph child (the
+/// `a14:m` or the `mc:AlternateContent` around it), `m` the `a14:m`.
+fn math_run(parse: &Parse<'_>, part: &PartRef, defaults: &PRun, m: NodeId, item: NodeId) -> Run {
+    let doc = &part.doc;
+    let resolve = |rpr: NodeId| {
+        let mut rp = parse.rpr(part, rpr);
+        rp.inherit(defaults);
+        Some(Box::new(finish_run(&rp, &parse.colors)))
+    };
+    let equation = crate::math::read_equation(doc, m, &resolve);
+    // The equation's size and color are its first run's.
+    let first = doc
+        .descendants(m)
+        .into_iter()
+        .find(|&n| doc.is(n, Ns::A, "rPr"));
+    let props = first
+        .and_then(|n| resolve(n).map(|b| *b))
+        .unwrap_or_else(|| finish_run(defaults, &parse.colors));
+    Run {
+        text: crate::math::OBJECT_CHAR.to_string(),
+        props,
+        kind: RunKind::Math(Box::new(equation)),
+        link: None,
+        node: item,
+    }
 }
 
 /// Reads an `a:hlinkClick` (on a run or a shape's `p:cNvPr`) of `part`.

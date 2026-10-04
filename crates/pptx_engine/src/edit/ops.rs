@@ -902,6 +902,69 @@ pub enum EditOp {
         /// New index among the sections.
         to_index: usize,
     },
+    // ---- equations ----
+    /// Inserts an equation (PowerPoint's Insert ▸ Equation) written in the
+    /// LaTeX-style linear format: into a shape's text at `at`, or, without
+    /// `shape`, in a new text box centered on the slide (its id is reported
+    /// in the result). In text an equation counts as one character (U+FFFC
+    /// in the outline's paragraph text, listed in the paragraph's
+    /// `equations`): delete it with `deleteText`, change it with
+    /// `setEquation`. Supported: `\frac{a}{b}`, `^`, `_`, `\sqrt[n]{x}`,
+    /// `\sum_{i=1}^{n}`, `\prod`, `\int_{a}^{b}`, `\oint`, `\lim_{x\to 0}`,
+    /// `\sin` and other functions, `\left( \right)` (brackets such as
+    /// `(…)` pair and grow by themselves), `\begin{matrix}` / `pmatrix` /
+    /// `bmatrix` / `vmatrix` / `cases` / `aligned`, `\binom{n}{k}`, accents
+    /// (`\hat \bar \vec \dot \ddot \tilde`), `\overline`, `\underline`,
+    /// `\overbrace{x}^{a}`, `\underbrace{x}_{a}`, `\boxed`, Greek letters,
+    /// symbols (`\infty \pm \times \cdot \le \ge \ne \approx \to
+    /// \Rightarrow \partial \nabla`...), `\mathrm{}`, `\mathbf{}`,
+    /// `\mathbb{}`, `\mathcal{}`, `\text{}`, and spaces (`\, \; \quad`).
+    InsertEquation {
+        /// Slide id.
+        slide: u32,
+        /// Shape whose text gets the equation; omit (or null) to add a new
+        /// text box holding only the equation.
+        #[serde(default)]
+        shape: Option<u32>,
+        /// Table cell whose text gets the equation (the shape must be a table).
+        #[serde(default)]
+        cell: Option<CellRef>,
+        /// Where in the shape's text; omit (or null) for the end of its
+        /// last paragraph.
+        #[serde(default)]
+        at: Option<TextPos>,
+        /// The equation, e.g. `x=\frac{-b\pm\sqrt{b^2-4ac}}{2a}`.
+        latex: String,
+        /// `true`: a display equation on a line (paragraph) of its own,
+        /// centered, with large operators and fractions at full size (what
+        /// PowerPoint inserts); `false`: inline, flowing with the text
+        /// around it. Omit (or null) for display in an empty paragraph or a
+        /// new text box, inline otherwise.
+        #[serde(default)]
+        display: Option<bool>,
+    },
+    /// Replaces an equation (one of a paragraph's `equations` in the
+    /// outline) with new linear text, keeping its size and color.
+    SetEquation {
+        /// Slide id.
+        slide: u32,
+        /// Shape id.
+        shape: u32,
+        /// Table cell holding the equation (the shape must be a table).
+        #[serde(default)]
+        cell: Option<CellRef>,
+        /// Paragraph index.
+        paragraph: usize,
+        /// The equation's character index in the paragraph (its `index` in
+        /// the outline).
+        index: usize,
+        /// The new equation in the linear format (see `insertEquation`).
+        latex: String,
+        /// Make it a display (`true`) or inline (`false`) equation; omit
+        /// (or null) to keep.
+        #[serde(default)]
+        display: Option<bool>,
+    },
 }
 
 /// Something an edit created.

@@ -15,6 +15,7 @@ pub mod font;
 pub mod geometry;
 pub mod inspect;
 mod integrity;
+pub mod math;
 pub mod model;
 pub mod opc;
 pub mod path;

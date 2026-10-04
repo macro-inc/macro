@@ -298,6 +298,9 @@ pub enum RunKind {
     Break,
     /// A field (`a:fld`) of the given type; `text` holds its display value.
     Field(String),
+    /// An equation (`a14:m`, usually inside `mc:AlternateContent`); `text`
+    /// is one U+FFFC, as it counts one character.
+    Math(Box<crate::math::Equation>),
 }
 
 /// Where a hyperlink (`a:hlinkClick`) goes.

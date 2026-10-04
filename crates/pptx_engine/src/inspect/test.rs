@@ -54,7 +54,8 @@ fn outline_lists_shapes_text_tables_and_notes() {
         tb.paragraphs[1],
         ParagraphOutline {
             text: "Second\u{b}line".into(),
-            level: 1
+            level: 1,
+            equations: Vec::new(),
         }
     );
     let title = slide.shapes.iter().find(|s| s.id == 5).unwrap();

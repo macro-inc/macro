@@ -579,6 +579,15 @@ pub fn text_layout_nodes(
             });
         }
     }
+    for shape in &lay.paths {
+        if let Some(p) = fill_paint(&shape.fill, bbox, t, images) {
+            out.push(Node::Fill {
+                path: shape.path.transform(t),
+                paint: p,
+                even_odd: false,
+            });
+        }
+    }
 }
 
 /// Where a shape's text is laid out: its text rectangle at the size the

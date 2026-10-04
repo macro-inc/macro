@@ -4,7 +4,7 @@ use crate::test_support::fonts;
 #[test]
 fn registers_bundled_families() {
     let db = fonts();
-    assert_eq!(db.len(), 22);
+    assert_eq!(db.len(), 23);
     for fam in [
         "Carlito",
         "Caladea",
@@ -12,6 +12,7 @@ fn registers_bundled_families() {
         "Liberation Serif",
         "Liberation Mono",
         "DejaVu Sans",
+        "STIX Two Math",
     ] {
         assert!(db.has_family(fam), "{fam}");
     }

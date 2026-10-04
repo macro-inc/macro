@@ -1,7 +1,8 @@
 //! Text editing on the DOM: insert, delete, split, replace, and format.
 //!
-//! Positions count Unicode scalar values; `a:br` counts as one character and
-//! fields count as their displayed text, matching the layout's caret stops.
+//! Positions count Unicode scalar values; `a:br` counts as one character,
+//! fields count as their displayed text, and an equation counts as one
+//! character, matching the layout's caret stops.
 
 use super::links::{LinkRef, set_run_link};
 use super::ops::{BodyPatch, BulletSpec, ParaPatch, RunPatch, TextPos};
@@ -9,18 +10,25 @@ use super::xmlutil::{
     BODY_PR_ORDER, P_PR_ORDER, R_PR_ORDER, color_element, replace_fill, solid_fill,
 };
 use crate::error::{Error, Result};
+use crate::math::is_equation_item;
 use crate::units::pt_to_emu;
 use crate::xml::{NodeId, Ns, XmlDoc};
 
 /// The run-like children of a paragraph with their text lengths.
-fn items(doc: &XmlDoc, p: NodeId) -> Vec<(NodeId, usize)> {
+pub(super) fn items(doc: &XmlDoc, p: NodeId) -> Vec<(NodeId, usize)> {
     doc.children(p)
         .filter_map(|c| match doc.local(c) {
             "r" | "fld" => Some((c, run_text(doc, c).chars().count())),
             "br" => Some((c, 1)),
+            _ if is_equation_item(doc, c) => Some((c, 1)),
             _ => None,
         })
         .collect()
+}
+
+/// Whether a paragraph child is part of its text (a run, break, field, or equation).
+fn is_text_item(doc: &XmlDoc, c: NodeId) -> bool {
+    matches!(doc.local(c), "r" | "br" | "fld") || is_equation_item(doc, c)
 }
 
 fn run_text(doc: &XmlDoc, r: NodeId) -> String {
@@ -48,26 +56,25 @@ pub fn para_len(doc: &XmlDoc, p: NodeId) -> usize {
 pub fn para_text(doc: &XmlDoc, p: NodeId) -> String {
     items(doc, p)
         .iter()
-        .map(|&(n, _)| {
-            if doc.local(n) == "br" {
-                "\u{b}".to_owned()
-            } else {
-                run_text(doc, n)
-            }
+        .map(|&(n, _)| match doc.local(n) {
+            "br" => "\u{b}".to_owned(),
+            "r" | "fld" => run_text(doc, n),
+            _ => crate::math::OBJECT_CHAR.to_string(),
         })
         .collect()
 }
 
 /// Ensures a run boundary at `offset` and returns the index (among all child
 /// nodes of `p`) before which content at `offset` starts.
-fn split_at(doc: &mut XmlDoc, p: NodeId, offset: usize) -> usize {
+pub(super) fn split_at(doc: &mut XmlDoc, p: NodeId, offset: usize) -> usize {
     let mut pos = 0;
     for (node, len) in items(doc, p) {
         if offset == pos {
             return doc.index_in_parent(node).unwrap_or(0);
         }
         if offset < pos + len {
-            // Split inside a text run (fields and breaks are atomic: split before them).
+            // Split inside a text run (fields, breaks, and equations are
+            // atomic: split before them).
             if doc.local(node) != "r" {
                 return doc.index_in_parent(node).unwrap_or(0);
             }
@@ -88,7 +95,7 @@ fn split_at(doc: &mut XmlDoc, p: NodeId, offset: usize) -> usize {
 }
 
 /// The `a:rPr` to use for text typed at `offset` (formatting of the preceding run).
-fn rpr_template(doc: &XmlDoc, p: NodeId, offset: usize) -> Option<NodeId> {
+pub(super) fn rpr_template(doc: &XmlDoc, p: NodeId, offset: usize) -> Option<NodeId> {
     let mut pos = 0;
     let mut last: Option<NodeId> = None;
     for (node, len) in items(doc, p) {
@@ -130,7 +137,7 @@ fn rename(doc: &mut XmlDoc, node: NodeId, local: &str) {
     doc.rename(node, local);
 }
 
-fn paragraph_at(doc: &XmlDoc, body: NodeId, i: usize) -> Result<NodeId> {
+pub(super) fn paragraph_at(doc: &XmlDoc, body: NodeId, i: usize) -> Result<NodeId> {
     paragraphs(doc, body)
         .get(i)
         .copied()
@@ -215,7 +222,7 @@ pub fn split_paragraph(doc: &mut XmlDoc, body: NodeId, at: TextPos) -> Result<Te
     let moving: Vec<NodeId> = doc.child_nodes(p)[idx..]
         .iter()
         .copied()
-        .filter(|&c| matches!(doc.local(c), "r" | "br" | "fld"))
+        .filter(|&c| is_text_item(doc, c))
         .collect();
     let template = rpr_template(doc, p, at.offset);
     for m in moving {
@@ -266,10 +273,7 @@ pub fn delete_text(doc: &mut XmlDoc, body: NodeId, start: TextPos, end: TextPos)
         remove_range(doc, sp, start.offset, len);
         remove_range(doc, ep, 0, end.offset);
         // Move the rest of the end paragraph into the start paragraph.
-        let rest: Vec<NodeId> = doc
-            .children(ep)
-            .filter(|&c| matches!(doc.local(c), "r" | "br" | "fld"))
-            .collect();
+        let rest: Vec<NodeId> = doc.children(ep).filter(|&c| is_text_item(doc, c)).collect();
         let anchor = doc.child(sp, Ns::A, "endParaRPr");
         for n in rest {
             match anchor {
@@ -515,8 +519,12 @@ pub fn format_text(
             let mut pos = 0;
             for (node, l) in items(doc, p) {
                 if pos >= from && pos + l <= to && doc.local(node) != "br" {
-                    let rpr = ensure_rpr(doc, node);
-                    patch_rpr(doc, rpr, patch, link)?;
+                    if is_equation_item(doc, node) {
+                        super::equation::format_equation(doc, node, patch)?;
+                    } else {
+                        let rpr = ensure_rpr(doc, node);
+                        patch_rpr(doc, rpr, patch, link)?;
+                    }
                 }
                 pos += l;
             }
@@ -699,14 +707,15 @@ pub fn format_body(doc: &mut XmlDoc, body: NodeId, patch: &BodyPatch) -> Result<
 /// Replaces characters `start..end` of paragraph `p` with `text` (no breaks)
 /// in the formatting of the first replaced character, whatever runs the
 /// range spans. Returns `false`, changing nothing, when the range is empty or
-/// touches a field (fields cannot be split).
+/// touches a field or an equation (which cannot be split).
 pub fn replace_range(doc: &mut XmlDoc, p: NodeId, start: usize, end: usize, text: &str) -> bool {
     if end <= start {
         return false;
     }
     let mut pos = 0;
     for (node, len) in items(doc, p) {
-        if doc.local(node) == "fld" && pos < end && start < pos + len {
+        let atomic = doc.local(node) == "fld" || is_equation_item(doc, node);
+        if atomic && pos < end && start < pos + len {
             return false;
         }
         pos += len;

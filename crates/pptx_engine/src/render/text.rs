@@ -15,6 +15,9 @@ use crate::path::{Affine, Rect};
 use serde::Serialize;
 
 mod bullet;
+mod math;
+
+pub use math::{EquationBox, TextPath};
 
 pub use bullet::autonum_text;
 use bullet::{BulletInfo, make_bullet};
@@ -95,6 +98,10 @@ pub struct TextLayout {
     pub decorations: Vec<Decoration>,
     /// Lines (for carets and hit testing).
     pub lines: Vec<LineBox>,
+    /// Filled outlines drawn over the text.
+    pub paths: Vec<TextPath>,
+    /// Equations, in drawing order.
+    pub equations: Vec<EquationBox>,
     /// Total height of the laid-out text, including insets.
     pub content_height: f32,
     /// Widest line, including insets.
@@ -142,6 +149,8 @@ struct Item {
     break_after: bool,
     /// The (display) character.
     ch: char,
+    /// The typeset equation an equation item draws.
+    math: Option<std::sync::Arc<crate::math::MathBox>>,
 }
 
 /// Parameters controlling layout that callers may vary (autofit search).
@@ -428,6 +437,7 @@ pub fn layout(body: &TextBody, w: f32, h: f32, fonts: &FontDb, params: LayoutPar
                 baseline: y0 + top + l.ascent,
                 top: y0 + top,
                 bottom: y0 + top + l.height,
+                align: math::display_align(para).unwrap_or(para.props.align),
             };
             emit_line(&mut out, fonts, para, *pi, items, &l.line, &geo);
         }
@@ -474,7 +484,13 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
                 shift: 0.0,
                 break_after: true,
                 ch: '\u{b}',
+                math: None,
             });
+            src += 1;
+            continue;
+        }
+        if let RunKind::Math(eq) = &run.kind {
+            items.push(math::math_item(eq, run, ri, src, fonts, params));
             src += 1;
             continue;
         }
@@ -549,6 +565,7 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
                 shift,
                 break_after,
                 ch: shown,
+                math: None,
             });
             src += 1;
         }
@@ -765,6 +782,8 @@ struct LineGeometry {
     baseline: f32,
     top: f32,
     bottom: f32,
+    /// Horizontal alignment (the paragraph's, or its display equation's).
+    align: Align,
 }
 
 fn emit_line(
@@ -776,7 +795,6 @@ fn emit_line(
     line: &LineRange,
     g: &LineGeometry,
 ) {
-    let pp = &para.props;
     let free = if g.avail.is_finite() {
         g.avail - line.x_start - line.width
     } else {
@@ -786,7 +804,7 @@ fn emit_line(
         .rev()
         .find(|&i| !matches!(items[i].kind, ItemKind::Space | ItemKind::Break))
         .map_or(line.start, |i| i + 1);
-    let (offset, per_space, per_char) = match pp.align {
+    let (offset, per_space, per_char) = match g.align {
         Align::Center => (free / 2.0, 0.0, 0.0),
         Align::Right => (free, 0.0, 0.0),
         Align::Justify if !line.last && free > 0.0 => {
@@ -813,7 +831,7 @@ fn emit_line(
 
     // The bullet hangs at the indent and moves with centered/right-aligned text.
     if let Some(b) = &line.bullet {
-        let shift = if matches!(pp.align, Align::Center | Align::Right) {
+        let shift = if matches!(g.align, Align::Center | Align::Right) {
             offset
         } else {
             0.0
@@ -884,6 +902,10 @@ fn emit_line(
     for k in line.start..line.end {
         let it = &items[k];
         if it.kind != ItemKind::Glyph {
+            continue;
+        }
+        if let Some(bx) = &it.math {
+            math::emit_math(out, it, bx, para, pi, xs[k - line.start], g.baseline);
             continue;
         }
         let (Some(ch), Some(gl)) = (it.choice, it.glyph) else {

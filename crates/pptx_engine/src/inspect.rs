@@ -44,6 +44,10 @@ pub use picture::{
 
 mod picture;
 
+pub use equations::{EquationLayout, EquationOutline};
+
+mod equations;
+
 /// What kind of object a shape is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,10 +78,13 @@ pub enum ShapeKindName {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParagraphOutline {
-    /// Text (`\u{b}` marks line breaks).
+    /// Text (`\u{b}` marks line breaks, U+FFFC an equation).
     pub text: String,
     /// Outline level (0-8).
     pub level: u8,
+    /// The paragraph's equations, in order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub equations: Vec<EquationOutline>,
 }
 
 /// A table's cell text and grid.
@@ -461,15 +468,18 @@ pub struct TextLayoutInfo {
     pub lines: Vec<LineBox>,
     /// Paragraph and run formatting, indexed like `paragraphs`.
     pub styles: Vec<ParagraphStyle>,
+    /// Where equations are, in layout space (absent when there are none).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub equations: Vec<EquationLayout>,
 }
 
-/// Plain text of an `a:p` (`a:br` = `\u{b}`).
+/// Plain text of an `a:p` (`a:br` = `\u{b}`, an equation U+FFFC).
 pub fn dom_paragraph_text(doc: &XmlDoc, p: NodeId) -> String {
     doc.children(p)
         .filter_map(|c| match doc.local(c) {
             "r" | "fld" => doc.child(c, Ns::A, "t").map(|t| doc.text(t)),
             "br" => Some("\u{b}".to_owned()),
-            _ => None,
+            _ => equations::equation_text(doc, c),
         })
         .collect()
 }
@@ -477,6 +487,7 @@ pub fn dom_paragraph_text(doc: &XmlDoc, p: NodeId) -> String {
 fn paragraphs_of(doc: &XmlDoc, body: NodeId) -> Vec<ParagraphOutline> {
     doc.children_named(body, Ns::A, "p")
         .map(|p| ParagraphOutline {
+            equations: equations::paragraph_equations(doc, p),
             text: dom_paragraph_text(doc, p),
             level: doc
                 .child(p, Ns::A, "pPr")
@@ -904,6 +915,7 @@ impl Presentation {
                 .collect(),
             lines: lay.lines,
             styles,
+            equations: equations::layout_equations(&body.paragraphs, &lay.equations),
         }))
     }
 
@@ -980,6 +992,7 @@ impl Presentation {
                 .iter()
                 .map(|p| paragraph_style(&part.doc, &self.slides, p))
                 .collect(),
+            equations: equations::layout_equations(&body.paragraphs, &lay.equations),
         }))
     }
 }
