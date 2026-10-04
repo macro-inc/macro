@@ -2472,6 +2472,7 @@ export const EditPresentation = z.object({
                   font: z.union([z.string(), z.null()]).optional(),
                   highlight: z.union([z.string(), z.null()]).optional(),
                   baseline: z.union([z.number(), z.null()]).optional(),
+                  spacing: z.union([z.number(), z.null()]).optional(),
                   link: z.union([z.string(), z.null()]).optional(),
                   linkTip: z.union([z.string(), z.null()]).optional(),
                   shadow: z

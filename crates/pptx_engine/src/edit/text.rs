@@ -424,6 +424,18 @@ pub fn patch_rpr(
             doc.set_attr(rpr, "baseline", &((b * 1000.0).round() as i64).to_string());
         }
     }
+    if let Some(spacing) = patch.spacing {
+        if !(-100.0..=400.0).contains(&spacing) {
+            return Err(Error::InvalidEdit(format!(
+                "character spacing {spacing} pt is out of range"
+            )));
+        }
+        if spacing == 0.0 {
+            doc.remove_attr(rpr, "spc");
+        } else {
+            doc.set_attr(rpr, "spc", &((spacing * 100.0).round() as i64).to_string());
+        }
+    }
     if let Some(c) = &patch.color {
         let fill = solid_fill(doc, c, None)?;
         replace_fill(doc, rpr, fill, R_PR_ORDER);

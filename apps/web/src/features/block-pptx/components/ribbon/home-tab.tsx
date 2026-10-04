@@ -14,6 +14,7 @@ import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowLineDown from '@phosphor/arrow-line-down.svg';
 import ArrowLineUp from '@phosphor/arrow-line-up.svg';
 import ArrowUp from '@phosphor/arrow-up.svg';
+import ArrowsHorizontal from '@phosphor/arrows-horizontal.svg';
 import ArrowsVertical from '@phosphor/arrows-vertical.svg';
 import ClipboardIcon from '@phosphor/clipboard.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -48,11 +49,13 @@ import TextSuperscript from '@phosphor/text-superscript.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
 import Trash from '@phosphor/trash.svg';
 import { For, type JSX, Show } from 'solid-js';
+import { CHARACTER_SPACINGS } from '../../core/formatting';
 import { swatchCss } from '../../core/palette';
 import type { AlignMode } from '../../core/selection';
 import {
   ColorBarIcon,
   ColorPicker,
+  NumberField,
   PopoverItem,
   PopoverLabel,
   RibbonButton,
@@ -633,6 +636,45 @@ export function HomeTab() {
                 if (v) void c.setTextColor(v);
               }}
             />
+          )}
+        </RibbonPopover>
+        <RibbonPopover
+          label="Character spacing"
+          testId="pptx-char-spacing"
+          disabled={!text()}
+          icon={<ArrowsHorizontal class="size-3.5" />}
+        >
+          {(close) => (
+            <div class="flex w-48 flex-col">
+              <For each={CHARACTER_SPACINGS}>
+                {(s) => (
+                  <PopoverItem
+                    label={s.label}
+                    active={(f().spacing ?? 0) === s.value}
+                    testId={`pptx-char-spacing-${s.value}`}
+                    onClick={() => {
+                      close();
+                      void c.setCharSpacing(s.value);
+                    }}
+                  />
+                )}
+              </For>
+              <div class="mt-1 flex items-center justify-between gap-2 border-edge-muted border-t px-2 pt-2 text-ink-muted text-xs">
+                More spacing
+                <NumberField
+                  label="Character spacing"
+                  unit="pt"
+                  value={f().spacing ?? 0}
+                  min={-100}
+                  max={400}
+                  step={0.5}
+                  precision={1}
+                  width="4.5rem"
+                  testId="pptx-char-spacing-custom"
+                  onCommit={(v) => void c.setCharSpacing(v)}
+                />
+              </div>
+            </div>
           )}
         </RibbonPopover>
       </RibbonGroup>

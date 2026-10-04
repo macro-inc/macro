@@ -5455,6 +5455,11 @@ export interface RunPatch {
    */
   baseline?: number | null;
   /**
+   * Character spacing in points added between letters (negative
+   * condenses; 0 = normal).
+   */
+  spacing?: number | null;
+  /**
    * Hyperlink, or `""` to remove: an address (`https://…`, `mailto:…`),
    * `#slide=<id>` for another slide by stable id, or a slide show jump
    * (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,

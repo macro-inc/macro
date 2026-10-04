@@ -1037,3 +1037,61 @@ fn group_clipboard_layout_transition_and_find_ops_read_camel_case_json() {
             .unwrap();
     assert_eq!(older.replaced, 0);
 }
+
+#[test]
+fn character_spacing_is_set_reported_and_cleared() {
+    let mut pres = open(&[&text_box(2, 0, 0, 5_000_000, 1_000_000, &para("Spread"))]);
+    let width = |pres: &mut Presentation| {
+        let layout = pres.text_layout(0, 2, None, fonts()).unwrap().unwrap();
+        let stops = &layout.lines[0].stops;
+        stops.last().unwrap().x - stops[0].x
+    };
+    let normal = width(&mut pres);
+    let spacing = |pres: &mut Presentation, pt: f32| {
+        apply(
+            pres,
+            vec![EditOp::FormatText {
+                slide: 256,
+                shape: 2,
+                cell: None,
+                start: None,
+                end: None,
+                props: RunPatch {
+                    spacing: Some(pt),
+                    ..RunPatch::default()
+                },
+            }],
+        );
+    };
+    spacing(&mut pres, 3.0);
+    let layout = pres.text_layout(0, 2, None, fonts()).unwrap().unwrap();
+    assert_eq!(layout.styles[0].runs[0].spacing, 3.0);
+    // Six letters, each 3 pt further apart.
+    assert!((width(&mut pres) - normal - 18.0).abs() < 0.5);
+    let part = pres.slide_part(256).unwrap();
+    let doc = pres.xml(&part).unwrap();
+    assert!(
+        doc.descendants(doc.root())
+            .into_iter()
+            .any(|n| doc.local(n) == "rPr" && doc.attr(n, "spc") == Some("300"))
+    );
+    spacing(&mut pres, 0.0);
+    assert!((width(&mut pres) - normal).abs() < 0.01);
+    assert!(
+        pres.apply(
+            &[EditOp::FormatText {
+                slide: 256,
+                shape: 2,
+                cell: None,
+                start: None,
+                end: None,
+                props: RunPatch {
+                    spacing: Some(900.0),
+                    ..RunPatch::default()
+                },
+            }],
+            fonts()
+        )
+        .is_err()
+    );
+}

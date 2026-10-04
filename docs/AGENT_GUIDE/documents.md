@@ -378,7 +378,10 @@ Layout and test hooks:
   Escape; the stage carries `data-format-painter` while armed), **New slide**
   (`pptx-new-slide`), layouts, font (`pptx-font-family`) and size
   (`pptx-font-size`) boxes, Bold (`pptx-bold`) and the other run toggles,
-  text and highlight colors (`pptx-text-color`), bullets and numbering, list
+  text and highlight colors (`pptx-text-color`), Character Spacing
+  (`pptx-char-spacing`: Very Tight to Very Loose as
+  `pptx-char-spacing-<points>`, or More spacing `pptx-char-spacing-custom`),
+  bullets and numbering, list
   levels, line spacing, alignment, the shape gallery (`pptx-insert-shape`,
   then `pptx-shape-<preset>`), Arrange (`pptx-arrange`), Shape fill
   (`pptx-fill`) and outline (`pptx-outline`), Find, and Replace. Insert: table

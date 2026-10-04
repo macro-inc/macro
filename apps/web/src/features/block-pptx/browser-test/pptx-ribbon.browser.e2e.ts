@@ -620,3 +620,22 @@ test('exports slides as pictures and shapes with Save as Picture', async ({
   // Rendered at 2 px per point.
   expect(bytes.readUInt32BE(16)).toBeCloseTo(title.w * 2, -1);
 });
+
+test('sets character spacing from the Home tab', async ({ page }) => {
+  await open(page);
+  await selectTitle(page);
+  const spacing = () =>
+    page.evaluate(async () => {
+      const layout = await window.pptxFixture.engine()?.textLayout(0, 2);
+      return layout?.styles[0].runs[0].spacing;
+    });
+  await page.getByTestId('pptx-char-spacing').click();
+  await page.getByTestId('pptx-char-spacing-3').click();
+  await expect.poll(spacing).toBe(3);
+  await page.getByTestId('pptx-char-spacing').click();
+  const custom = page.getByTestId('pptx-char-spacing-custom');
+  await expect(custom).toHaveValue('3');
+  await custom.fill('-1');
+  await custom.press('Enter');
+  await expect.poll(spacing).toBe(-1);
+});

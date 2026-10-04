@@ -414,6 +414,8 @@ pub struct RunStyle {
     pub font: String,
     /// Baseline shift in percent (positive = superscript, negative = subscript).
     pub baseline: f32,
+    /// Character spacing in points (0 = normal).
+    pub spacing: f32,
     /// Highlight color as `#RRGGBB`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highlight: Option<String>,
@@ -1137,6 +1139,7 @@ fn linked_run_style(
         color: hex(&props.fill),
         font: props.latin.clone(),
         baseline: props.baseline,
+        spacing: props.spacing,
         highlight: props.highlight.and_then(|c| hex(&Fill::Solid(c))),
         effects: crate::edit::effects::outline(&props.effects, false),
     }

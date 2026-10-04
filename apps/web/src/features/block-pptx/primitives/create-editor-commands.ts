@@ -188,6 +188,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
       highlight: '',
     });
   const setLink = (url: string) => runs({ link: url });
+  const setCharSpacing = (spacing: number) =>
+    runs({ spacing: Math.max(-100, Math.min(400, spacing)) });
 
   // ---- links -----------------------------------------------------------------
 
@@ -1445,6 +1447,7 @@ export function createEditorCommands(options: EditorCommandsOptions) {
     toggleBaseline,
     clearFormatting,
     setLink,
+    setCharSpacing,
     linkTarget,
     applyLink,
     moveInZOrder,

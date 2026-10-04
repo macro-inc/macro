@@ -54,6 +54,9 @@ pub struct RunPatch {
     pub highlight: Option<String>,
     /// Baseline shift in percent (30 = superscript, -25 = subscript, 0 = normal).
     pub baseline: Option<f32>,
+    /// Character spacing in points added between letters (negative
+    /// condenses; 0 = normal).
+    pub spacing: Option<f32>,
     /// Hyperlink, or `""` to remove: an address (`https://…`, `mailto:…`),
     /// `#slide=<id>` for another slide by stable id, or a slide show jump
     /// (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,

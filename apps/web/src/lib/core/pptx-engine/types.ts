@@ -424,6 +424,8 @@ export interface RunStyle {
   baseline?: number;
   /** Highlight color as `#RRGGBB`. */
   highlight?: string;
+  /** Character spacing in points (0 = normal). */
+  spacing?: number;
   /** Text shadow and glow (WordArt effects). */
   effects?: EffectsOutline;
   /** Hyperlink, as `RunPatch.link` takes it. */
@@ -473,6 +475,8 @@ export interface RunPatch {
   font?: string;
   highlight?: string;
   baseline?: number;
+  /** Character spacing in points (negative condenses; 0 = normal). */
+  spacing?: number;
   /**
    * Hyperlink, or `""` to remove: an address, `#slide=<id>`, or a slide
    * show jump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,
