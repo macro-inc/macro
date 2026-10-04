@@ -214,7 +214,11 @@ shifted from A1 as Excel stores them. Whole-column lookup tables in `VLOOKUP`,
 `MATCH` and `COUNTA` are bounded to the sheet's rows, because IronCalc scans all
 1,048,576 rows on every call. An `@` on a range in another sheet reads the cell in
 the formula's row or column through `INDEX`, which IronCalc otherwise reports as
-`#VALUE!`. The stored formula text never changes.
+`#VALUE!`. A prefix `--operand` is entered as `(1*operand)`, because IronCalc
+drops arrays under double negation (`SUMPRODUCT(--(A1:A9="x"))` would be 0).
+The stored formula text never changes. Results are read at Excel's fifteen
+significant digits; IronCalc truncates a sixteenth, which read 979 as
+978.999999999999.
 
 Formula assistance uses a separate lazy worker and IronCalc's own incomplete
 formula parser. Keystrokes coalesce while it starts, and stale responses cannot
