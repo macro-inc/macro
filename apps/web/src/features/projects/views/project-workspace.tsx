@@ -45,7 +45,6 @@ export function ProjectWorkspace(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const [deleting, setDeleting] = createSignal(false);
-  const [addingTasks, setAddingTasks] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
   const run = async (action: () => Promise<void>) => {
@@ -181,7 +180,11 @@ export function ProjectWorkspace(props: {
                 projectId={props.project.id}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}
-                onAddTasks={canEdit() ? () => setAddingTasks(true) : undefined}
+                addTasksAction={
+                  <Show when={canEdit()}>
+                    <AddProjectTasks project={props.project} />
+                  </Show>
+                }
               />
             </Match>
           </Switch>
@@ -201,12 +204,6 @@ export function ProjectWorkspace(props: {
               props.onDelete();
             })
           }
-        />
-      </Show>
-      <Show when={addingTasks() && canEdit()}>
-        <AddProjectTasks
-          project={props.project}
-          onClose={() => setAddingTasks(false)}
         />
       </Show>
     </SidePanel.Layout>
