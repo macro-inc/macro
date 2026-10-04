@@ -5,8 +5,8 @@ use super::super::super::format::TableCtx;
 use super::super::super::lines::LineEnd;
 use super::super::super::{Item, ParaBox, StoryRef};
 use super::super::stack::{
-    BorderJoin, PendingAnchor, PrevPara, border_space, decorate, emit_lines, prev_record, rebreak,
-    space_after, space_before, table_box,
+    BorderJoin, Fragment, PendingAnchor, PrevPara, Sink, border_space, decorate, emit_lines,
+    prev_record, rebreak, space_after, space_before, table_box,
 };
 use super::floats::{OnPage, place_anchors};
 use super::{COLUMN_SLACK, EPS, Flow, LINE_NUMBER_DISTANCE};
@@ -240,17 +240,12 @@ impl Flow<'_, '_> {
             let mut items = Vec::new();
             let mut anchors: Vec<PendingAnchor> = Vec::new();
             let mut notes = Vec::new();
-            let h = emit_lines(
-                &p.pb,
-                li,
-                li + take,
-                p.col_left,
-                y,
-                &mut items,
-                &mut anchors,
-                &mut notes,
-                anchor_top,
-            );
+            let sink = Sink {
+                items: &mut items,
+                anchors: &mut anchors,
+                notes: &mut notes,
+            };
+            let h = emit_lines(&p.pb, (li, li + take), (p.col_left, y), anchor_top, sink);
             self.number_lines(&p.pb, li, li + take, p.col_left, y);
             let last_fragment = li + take >= lines_len;
             let bottom = y + h + if last_fragment { bb } else { 0.0 };
@@ -259,17 +254,15 @@ impl Flow<'_, '_> {
                 if !first_fragment {
                     frag_top = y;
                 }
-                decorate(
-                    &props,
-                    p.col_left,
-                    frag_top,
+                let frag = Fragment {
+                    x: p.col_left,
+                    width: p.width,
+                    top: frag_top,
                     bottom,
-                    first_fragment,
-                    last_fragment,
-                    p.width,
-                    join,
-                    &mut deco,
-                );
+                    first: first_fragment,
+                    last: last_fragment,
+                };
+                decorate(&props, frag, join, &mut deco);
                 if let Some(c) = &mut self.cur {
                     c.body.extend(deco);
                 }

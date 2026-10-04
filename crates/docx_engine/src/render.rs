@@ -211,7 +211,7 @@ impl Renderer<'_> {
                 baseline,
                 size,
                 font,
-            } => text::plain_text(self, text, *right, *baseline, *size, font, true, out),
+            } => text::plain_text(self, text, *right, *baseline, *size, font, out),
         }
     }
 

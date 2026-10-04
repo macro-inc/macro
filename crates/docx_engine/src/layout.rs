@@ -219,6 +219,9 @@ struct Cached {
     epoch: u64,
 }
 
+/// Laid out paragraphs by story and block.
+type ParaBoxes = crate::hash::FxMap<(StoryRef, BlockId), Vec<Cached>>;
+
 /// Paragraph measurements kept between layouts, so laying out again after
 /// an edit re-measures only the paragraphs the edit touched.
 #[derive(Debug, Default)]
@@ -226,7 +229,7 @@ pub struct LayoutCache {
     /// Per paragraph, the boxes of its last pass: a few, since one pass can
     /// lay a paragraph out more than once (a table cell measured for the
     /// column widths, then laid out at its width).
-    paras: Mutex<(u64, crate::hash::FxMap<(StoryRef, BlockId), Vec<Cached>>)>,
+    paras: Mutex<(u64, ParaBoxes)>,
     /// Paragraphs showing page fields, by the values they show (a footer's
     /// page number on every page).
     dynamic: Mutex<crate::hash::FxMap<(StoryRef, BlockId, u64), Cached>>,

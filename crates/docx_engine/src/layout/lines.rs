@@ -417,7 +417,7 @@ pub fn break_lines_from(
             LineEnd::Paragraph | LineEnd::PageBreak | LineEnd::ColumnBreak
         );
         let stretch = match p.jc {
-            Align::Justify => !last_line && !(ends == LineEnd::Break && ctx.no_expand_shift_return),
+            Align::Justify => !(last_line || ends == LineEnd::Break && ctx.no_expand_shift_return),
             Align::Distribute => true,
             _ => false,
         };
@@ -461,8 +461,8 @@ pub fn break_lines_from(
             } else {
                 slack
             };
-            for k in i..j {
-                x_pos[k] += shift;
+            for x in &mut x_pos[i..j] {
+                *x += shift;
             }
         }
         if !inline.levels.is_empty() {

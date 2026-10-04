@@ -1082,9 +1082,7 @@ fn object(
 /// Whether an enclosing field hides its content (instruction part, or a
 /// dynamic result already replaced).
 fn fields_hidden(fields: &[FieldState]) -> bool {
-    fields
-        .iter()
-        .any(|f| !f.in_result || (f.dynamic.is_some() && f.in_result))
+    fields.iter().any(|f| !f.in_result || f.dynamic.is_some())
 }
 
 /// A quick attribute read on an element's start tag.

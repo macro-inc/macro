@@ -8,7 +8,7 @@ mod tables;
 use super::super::inline::{FieldValues, Kind};
 use super::super::{Chrome, Item, Page, ParaBox, StoryRef};
 use super::anchors::PageGeom;
-use super::stack::{PrevPara, Stack, StackCtx, para_box, stack_story};
+use super::stack::{ParaCtx, PrevPara, Stack, StackCtx, para_box, stack_story};
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
 use crate::model::section::{HeaderRefs, PageVAlign, Section, SectionStart};
@@ -447,16 +447,17 @@ impl<'e, 'a> Flow<'e, 'a> {
                 return Arc::clone(pb);
             }
         }
-        let grid = self.grid();
         let pb = para_box(
             self.env,
             b,
-            &StoryRef::Body,
-            width,
-            &Default::default(),
-            &self.fields(),
-            None,
-            grid,
+            &ParaCtx {
+                story: &StoryRef::Body,
+                width,
+                table: &Default::default(),
+                fields: &self.fields(),
+                note_number: None,
+                grid: self.grid(),
+            },
         );
         self.boxes.insert(b.id.clone(), Arc::clone(&pb));
         pb

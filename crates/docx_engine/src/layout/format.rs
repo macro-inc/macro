@@ -60,15 +60,22 @@ pub struct Formats<'d> {
     cache: Arc<FormatCache>,
 }
 
+/// Run properties parsed from attribute snippets, by (element name, XML).
+type SnippetRuns = FxMap<(Box<str>, Box<str>), RPr>;
+
+/// Resolved runs by the address of their attribute set and of their
+/// paragraph format, with the attribute set they were resolved for.
+type RunsById = FxMap<(usize, usize), (Attrs, Arc<RunProps>)>;
+
 /// Resolved formats, kept between layouts of the same style sheet.
 #[derive(Debug, Default)]
 pub struct FormatCache {
     paras: Mutex<FxMap<(String, TableCtx), Arc<ParaFormat>>>,
     runs: Mutex<FxMap<(Attrs, usize), Arc<RunProps>>>,
-    run_snippets: Mutex<FxMap<(Box<str>, Box<str>), RPr>>,
+    run_snippets: Mutex<SnippetRuns>,
     /// Resolved runs by the identity of their attribute set (which the
     /// entry holds, so the address stays its own) and paragraph format.
-    run_ids: Mutex<FxMap<(usize, usize), (Attrs, Arc<RunProps>)>>,
+    run_ids: Mutex<RunsById>,
     parsed: Mutex<Parsed>,
 }
 

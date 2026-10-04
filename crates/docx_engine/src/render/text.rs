@@ -58,16 +58,36 @@ impl GlyphBatch {
     }
 }
 
-fn glyph_path(
-    r: &Renderer<'_>,
+/// How glyphs of a run are drawn: their face at a size, widened by
+/// `scale_x`, slanted when `italic` (a synthetic italic).
+#[derive(Clone, Copy)]
+struct GlyphStyle {
     face: FaceId,
-    glyph: u16,
-    x: f32,
-    y: f32,
     size: f32,
     scale_x: f32,
     italic: bool,
-) -> Option<Path> {
+}
+
+impl GlyphStyle {
+    /// Upright glyphs of `face` at `size`.
+    fn plain(face: FaceId, size: f32) -> Self {
+        Self {
+            face,
+            size,
+            scale_x: 1.0,
+            italic: false,
+        }
+    }
+}
+
+/// The outline of `glyph` drawn in `style` with its origin at (x, y).
+fn glyph_path(r: &Renderer<'_>, style: GlyphStyle, glyph: u16, x: f32, y: f32) -> Option<Path> {
+    let GlyphStyle {
+        face,
+        size,
+        scale_x,
+        italic,
+    } = style;
     let outline = r.fonts.outline(face, glyph)?;
     let mut t = Affine::translate(f64::from(x), f64::from(y))
         .pre_concat(&Affine::scale(f64::from(size * scale_x), f64::from(size)));
@@ -250,16 +270,13 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
                     batch.color = color;
                 }
                 batch.bold = bold;
-                if let Some(p) = glyph_path(
-                    r,
-                    font.face,
-                    c.glyph,
-                    x,
-                    y,
+                let glyphs = GlyphStyle {
+                    face: font.face,
                     size,
-                    style.props.scale,
-                    font.synthetic_italic,
-                ) {
+                    scale_x: style.props.scale,
+                    italic: font.synthetic_italic,
+                };
+                if let Some(p) = glyph_path(r, glyphs, c.glyph, x, y) {
                     batch.path.extend(&p);
                 }
             }
@@ -283,13 +300,10 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
                     if let Some(g) = g
                         && let Some(p) = glyph_path(
                             r,
-                            font.face,
+                            GlyphStyle::plain(font.face, style.size),
                             g,
                             pl.x + lines.x[k],
                             baseline - style.shift,
-                            style.size,
-                            1.0,
-                            false,
                         )
                     {
                         if batch.color != style.color {
@@ -473,7 +487,7 @@ fn leader_nodes(
             let mut x = (x0 / adv).ceil() * adv;
             let mut path = Path::new();
             while x + adv <= x1 - adv * 0.5 {
-                if let Some(p) = glyph_path(r, font.face, g, x, baseline, size, 1.0, false) {
+                if let Some(p) = glyph_path(r, GlyphStyle::plain(font.face, size), g, x, baseline) {
                     path.extend(&p);
                 }
                 x += adv;
@@ -489,7 +503,7 @@ fn leader_nodes(
     }
 }
 
-/// Draws a short string (line numbers) ending at `x` when `right_aligned`.
+/// Draws a short string (line numbers) ending at `x`.
 pub(super) fn plain_text(
     r: &mut Renderer<'_>,
     text: &str,
@@ -497,7 +511,6 @@ pub(super) fn plain_text(
     baseline: f32,
     size: f32,
     font: &str,
-    right_aligned: bool,
     out: &mut Vec<Node>,
 ) {
     let Some(choice) = r.fonts.select(font, false, false) else {
@@ -513,10 +526,10 @@ pub(super) fn plain_text(
         })
         .collect();
     let width: f32 = glyphs.iter().map(|(_, a)| a).sum();
-    let mut pen = if right_aligned { x - width } else { x };
+    let mut pen = x - width;
     let mut path = Path::new();
     for (g, adv) in glyphs {
-        if let Some(p) = glyph_path(r, face, g, pen, baseline, size, 1.0, false) {
+        if let Some(p) = glyph_path(r, GlyphStyle::plain(face, size), g, pen, baseline) {
             path.extend(&p);
         }
         pen += adv;
