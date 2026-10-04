@@ -65,6 +65,8 @@ export interface EditorCommandsOptions {
   tableTarget: () => TableTarget | undefined;
   /** Ids of the slides selected in the rail or sorter (slide commands act on all). */
   slideSelection?: () => number[];
+  /** Whether other people edit the presentation live (media must stay small). */
+  collaborative?: () => boolean;
 }
 
 /** A table and the cell range table commands act on (inclusive). */
@@ -533,7 +535,7 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   };
   /** Insert ▸ Video or Audio: embeds the clip with a poster, centered. */
   const insertMedia = async (file: File, kind: 'video' | 'audio') => {
-    const checked = mediaType(file, kind);
+    const checked = mediaType(file, kind, options.collaborative?.() ?? false);
     if ('error' in checked) {
       context.notifyError(checked.error);
       return;

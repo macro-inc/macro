@@ -30,6 +30,12 @@ describe('media', () => {
         'video'
       )
     ).toHaveProperty('error');
+    // Shared presentations take small clips only.
+    const clip = { name: 'clip.mp4', type: 'video/mp4', size: 3 * 1024 * 1024 };
+    expect(mediaType(clip, 'video')).toEqual({ type: 'video/mp4' });
+    expect(mediaType(clip, 'video', true)).toEqual({
+      error: 'In a shared presentation, clips can be up to 2 MB.',
+    });
     expect(mimeOf('/ppt/media/media3.mov')).toBe('video/quicktime');
     expect(mimeOf('/ppt/media/media1.bin')).toBe('application/octet-stream');
   });

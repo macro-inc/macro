@@ -451,6 +451,7 @@ export function PptxEditor() {
     startEditing: (id) => void startEditing(id),
     tableTarget,
     slideSelection: selectedSlideIds,
+    collaborative: () => !!engine.collaborative,
   });
 
   const deckSetup = createDeckSetup({

@@ -389,7 +389,9 @@ Layout and test hooks:
   (`pptx-image-input`), Shapes, Chart (`pptx-insert-chart`, then
   `pptx-chart-<kind>-<grouping>`), Video and Audio (`pptx-insert-video`,
   `pptx-insert-audio`; file inputs `pptx-video-input`, `pptx-audio-input`;
-  clips up to 50 MB are embedded with a poster frame or speaker icon), Text
+  clips up to 50 MB, or 2 MB in a shared presentation because the sync
+  service keeps presentations under 4 MB, are embedded with a poster frame
+  or speaker icon), Text
   box (`pptx-insert-textbox`), and Link (`pptx-insert-link`). A selected
   video or audio shape shows Play (`pptx-media-play`), which plays it over
   the shape (`pptx-media-player`, with `pptx-media-video` or

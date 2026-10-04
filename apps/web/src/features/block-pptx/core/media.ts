@@ -12,6 +12,11 @@ import type {
 
 /** The largest clip the engine embeds (its `MAX_MEDIA_BYTES`). */
 export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+/**
+ * The largest clip in a shared presentation: the sync service keeps whole
+ * presentations under 4 MB, so clips must stay small there.
+ */
+export const SHARED_MEDIA_BYTES = 2 * 1024 * 1024;
 
 const TYPES: Record<string, string> = {
   mp4: 'video/mp4',
@@ -47,7 +52,8 @@ export function mimeOf(part: string): string {
  */
 export function mediaType(
   file: { name: string; type: string; size: number },
-  kind: 'video' | 'audio'
+  kind: 'video' | 'audio',
+  shared = false
 ): { type: string } | { error: string } {
   const type = TYPES[extOf(file.name)] ?? file.type;
   if (!type.startsWith(`${kind}/`) || !Object.values(TYPES).includes(type))
@@ -57,9 +63,12 @@ export function mediaType(
           ? 'Choose an MP4, MOV, M4V, WebM, WMV, or AVI video.'
           : 'Choose an MP3, M4A, WAV, or OGG audio file.',
     };
-  if (file.size === 0 || file.size > MAX_MEDIA_BYTES)
+  const limit = shared ? SHARED_MEDIA_BYTES : MAX_MEDIA_BYTES;
+  if (file.size === 0 || file.size > limit)
     return {
-      error: `Media files can be up to ${MAX_MEDIA_BYTES / (1024 * 1024)} MB.`,
+      error: shared
+        ? `In a shared presentation, clips can be up to ${limit / (1024 * 1024)} MB.`
+        : `Media files can be up to ${limit / (1024 * 1024)} MB.`,
     };
   return { type };
 }
