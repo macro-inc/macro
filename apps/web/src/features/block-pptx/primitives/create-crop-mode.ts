@@ -101,8 +101,11 @@ export function createCropMode(options: CropModeOptions) {
     await renderBackdrop(s.index, picture.id);
   }
 
-  /** Leaves crop mode, applying the crop when it changed. */
-  async function commit() {
+  /**
+   * Leaves crop mode, applying the crop when it changed. `refocus: false`
+   * leaves keyboard focus alone (a click elsewhere already moved it).
+   */
+  async function commit(how: { refocus?: boolean } = {}) {
     const c = cropping();
     const end = state();
     const picture = shape();
@@ -114,7 +117,7 @@ export function createCropMode(options: CropModeOptions) {
     });
     if (c && end && picture && cropChanged(c.start, end))
       await session.apply(cropOps(c.slide, picture, c.start, end));
-    options.onExit?.();
+    if (how.refocus !== false) options.onExit?.();
   }
 
   /** Leaves crop mode without changing the picture. */

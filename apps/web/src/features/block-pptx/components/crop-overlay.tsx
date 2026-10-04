@@ -239,7 +239,7 @@ export function CropOverlay(props: {
         return;
       }
       if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key))
-        void crop.commit();
+        void crop.commit({ refocus: false });
     };
     const onDocumentPointerDown = (e: PointerEvent) => {
       if (!crop.active()) return;
@@ -247,7 +247,7 @@ export function CropOverlay(props: {
       if (!target || root.contains(target)) return;
       // The Crop button toggles crop mode itself.
       if (target.closest('[data-pptx-crop-toggle]')) return;
-      void crop.commit();
+      void crop.commit({ refocus: false });
     };
     document.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('pointerdown', onDocumentPointerDown, true);
