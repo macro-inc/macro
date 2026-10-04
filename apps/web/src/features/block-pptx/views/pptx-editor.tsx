@@ -1351,6 +1351,11 @@ export function PptxEditor() {
       );
     },
   });
+  /** The comment being written on this slide, for its marker. */
+  const commentDraft = () => {
+    const d = comments.draft();
+    return d && d.slide === session.currentSlide()?.id ? d : undefined;
+  };
   /** Review ▸ Spelling (F7). */
   const openSpelling = () => {
     if (readonly()) return;
@@ -2285,10 +2290,14 @@ export function PptxEditor() {
                       />
                     </Show>
                     <Show
-                      when={comments.markup() && comments.threads().length > 0}
+                      when={
+                        comments.markup() &&
+                        (comments.threads().length > 0 || commentDraft())
+                      }
                     >
                       <CommentMarkers
                         threads={comments.threads()}
+                        draft={commentDraft()}
                         scale={scale()}
                         width={slideW() * scale()}
                         height={slideH() * scale()}

@@ -23,12 +23,18 @@ export function CommentMarkers(props: {
   height: number;
   findShape: (id: number) => ShapeOutline | undefined;
   selected: string | null;
+  /** A comment being written: its marker shows where it will go. */
+  draft?: { shape?: number };
   onPick: (id: string) => void;
 }) {
-  /** Top-left corners in CSS pixels. */
+  /** Top-left corners in CSS pixels: the threads', then the draft's. */
   const positions = () => {
     const s = props.scale || 1;
-    const corners = props.threads.map((t) => {
+    const anchors: { shape?: number; x?: number; y?: number }[] = [
+      ...props.threads,
+      ...(props.draft ? [props.draft] : []),
+    ];
+    const corners = anchors.map((t) => {
       const p = markerPoint(t, props.findShape);
       // Beside a shape's top-right corner; at a position or the slide's corner.
       const onShape = t.shape !== undefined && !!props.findShape(t.shape);
@@ -90,6 +96,25 @@ export function CommentMarkers(props: {
           );
         }}
       </For>
+      <Show when={props.draft}>
+        {(_) => {
+          const at = () => positions()[props.threads.length] ?? { x: 0, y: 0 };
+          return (
+            <span
+              class="absolute text-accent drop-shadow"
+              style={{
+                left: `${at().x}px`,
+                top: `${at().y}px`,
+                width: `${SIZE}px`,
+                height: `${SIZE}px`,
+              }}
+              data-testid="pptx-comment-marker-draft"
+            >
+              <ChatFill class="size-full" />
+            </span>
+          );
+        }}
+      </Show>
     </div>
   );
 }

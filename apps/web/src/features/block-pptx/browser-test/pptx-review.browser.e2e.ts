@@ -66,11 +66,14 @@ test('adds, replies to, resolves, and deletes comments', async ({ page }) => {
   const pane = page.getByTestId('pptx-comments-pane');
   await expect(pane).toBeVisible();
   await expect(page.getByTestId('pptx-comment-draft')).toBeFocused();
+  // A marker shows where the comment will go while it is written.
+  await expect(page.getByTestId('pptx-comment-marker-draft')).toBeVisible();
   await page.getByTestId('pptx-comment-draft').fill('Is this the final title?');
   await page.getByTestId('pptx-comment-post').click();
 
   const thread = pane.getByTestId('pptx-comment-thread');
   await expect(thread).toHaveCount(1);
+  await expect(page.getByTestId('pptx-comment-marker-draft')).toHaveCount(0);
   await expect(thread.getByTestId('pptx-comment-author').first()).toHaveText(
     'Alex Morgan'
   );

@@ -33,7 +33,7 @@ export interface CommentsOptions {
 
 /** Where a thread's marker sits (slide points), PowerPoint-style. */
 export function markerPoint(
-  thread: CommentOutline,
+  thread: Pick<CommentOutline, 'shape' | 'x' | 'y'>,
   findShape: (id: number) => ShapeOutline | undefined
 ): Point {
   const shape =
