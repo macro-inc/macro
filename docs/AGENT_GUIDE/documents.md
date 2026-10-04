@@ -545,6 +545,13 @@ Layout and test hooks:
   `pptx-animation-row`s (click picks one and selects its shape; Delete or
   `pptx-animation-remove` removes it), and numbered `pptx-animation-tag`s
   mark animated shapes while the tab or pane is open.
+- **Export as pictures** (header `pptx-export-open`) opens `pptx-export`: PNG
+  or JPEG (`pptx-export-png`, `pptx-export-jpeg`), this slide, the selected
+  slides, or all (`pptx-export-current`, `pptx-export-selected`,
+  `pptx-export-all`), and a width (`pptx-export-width`); Export
+  (`pptx-export-run`) downloads one picture (`<deck> - SlideN.png`) or a zip
+  of `SlideN` pictures. Right-click a shape ▸ **Save as picture…** downloads
+  it alone as a PNG cropped to its bounds.
 - **View ▸ Show**: Ruler (`pptx-view-ruler`: inch rulers along the slide's
   top and left edges, `pptx-ruler-horizontal`/`pptx-ruler-vertical`, measured
   from the center, with the selection shaded as `pptx-ruler-span`), Gridlines

@@ -573,3 +573,50 @@ test('shows the ruler and gridlines and snaps moves to the grid', async ({
   await expect(page.getByTestId('pptx-thumbnail').first()).toBeVisible();
   await expect(page.getByTestId('pptx-gridlines')).toBeVisible();
 });
+
+test('exports slides as pictures and shapes with Save as Picture', async ({
+  page,
+}) => {
+  await open(page);
+  const read = async (download: import('@playwright/test').Download) => {
+    const path = await download.path();
+    const { readFileSync } = await import('node:fs');
+    return readFileSync(path);
+  };
+  // One slide: a PNG of the chosen width.
+  await page.getByTestId('pptx-export-open').click();
+  await page.getByTestId('pptx-export-width').selectOption('1280');
+  let download = page.waitForEvent('download');
+  await page.getByTestId('pptx-export-run').click();
+  let file = await download;
+  expect(file.suggestedFilename()).toBe('kitchen-sink-financial - Slide1.png');
+  let bytes = await read(file);
+  expect(bytes.subarray(1, 4).toString()).toBe('PNG');
+  expect(bytes.readUInt32BE(16)).toBe(1280);
+  // Every slide: JPEGs in a zip.
+  await page.getByTestId('pptx-export-open').click();
+  await page.getByTestId('pptx-export-jpeg').check();
+  await page.getByTestId('pptx-export-all').check();
+  download = page.waitForEvent('download');
+  await page.getByTestId('pptx-export-run').click();
+  file = await download;
+  expect(file.suggestedFilename()).toBe('kitchen-sink-financial.zip');
+  bytes = await read(file);
+  const { unzipSync } = await import('fflate');
+  const entries = unzipSync(new Uint8Array(bytes));
+  expect(Object.keys(entries).sort()).toEqual(
+    Array.from({ length: 8 }, (_, i) => `Slide${i + 1}.jpg`).sort()
+  );
+  expect([...entries['Slide1.jpg'].subarray(0, 2)]).toEqual([0xff, 0xd8]);
+  // A shape alone, cropped to it.
+  const at = await screen(page, 480, 226);
+  await page.mouse.click(at.x, at.y, { button: 'right' });
+  download = page.waitForEvent('download');
+  await page.getByRole('menuitem', { name: 'Save as picture…' }).click();
+  file = await download;
+  expect(file.suggestedFilename()).toBe('Title 1.png');
+  bytes = await read(file);
+  const title = (await outline(page)).slides[0].shapes.find((s) => s.id === 2)!;
+  // Rendered at 2 px per point.
+  expect(bytes.readUInt32BE(16)).toBeCloseTo(title.w * 2, -1);
+});

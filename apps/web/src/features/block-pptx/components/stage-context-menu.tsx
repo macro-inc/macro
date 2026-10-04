@@ -28,6 +28,7 @@ import CopyIcon from '@phosphor/copy.svg';
 import CopySimple from '@phosphor/copy-simple.svg';
 import CropIcon from '@phosphor/crop.svg';
 import ImageIcon from '@phosphor/image.svg';
+import ImageSquare from '@phosphor/image-square.svg';
 import LinkIcon from '@phosphor/link.svg';
 import LinkBreak from '@phosphor/link-break.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
@@ -84,6 +85,8 @@ export interface StageMenuActions {
   isGroup: boolean;
   selectionCount: number;
   textShape: boolean;
+  /** Saves the one selected shape as a picture. */
+  savePicture?: () => void;
   /** The link of the clicked text or shape, if it has one. */
   link?: string;
   /** Opens the Insert/Edit Link dialog. */
@@ -700,6 +703,13 @@ export function StageMenuItems(props: {
           disabled={ro()}
           onClick={() => a().openFormatPane('size')}
         />
+        <Show when={a().savePicture && a().selectionCount === 1}>
+          <MenuItem
+            text="Save as picture…"
+            icon={ImageSquare}
+            onClick={() => a().savePicture?.()}
+          />
+        </Show>
         <MenuItem
           text={a().isPicture ? 'Format picture…' : 'Format shape…'}
           icon={SlidersHorizontal}

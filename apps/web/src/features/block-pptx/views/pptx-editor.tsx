@@ -23,6 +23,7 @@ import CopyIcon from '@phosphor/copy.svg';
 import CopySimple from '@phosphor/copy-simple.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
+import ImageSquare from '@phosphor/image-square.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
 import Play from '@phosphor/play.svg';
 import Plus from '@phosphor/plus.svg';
@@ -56,6 +57,7 @@ import {
 } from '../components/chart-controls';
 import { CropOverlay } from '../components/crop-overlay';
 import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
+import { ExportDialog } from '../components/export-dialog';
 import { FindReplace } from '../components/find-replace';
 import { FormatPane, type PaneSection } from '../components/format-pane';
 import { LinkDialog } from '../components/link-dialog';
@@ -98,6 +100,7 @@ import {
 } from '../components/stage-context-menu';
 import { usePptxEditorContext } from '../context/pptx-editor-context';
 import { caretSegment, positionAt, selectionQuads } from '../core/caret';
+import { baseName } from '../core/export-images';
 import { type Box, boxOf, hitTest, type Point } from '../core/geometry';
 import { linkAction, linkAt } from '../core/links';
 import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
@@ -128,6 +131,7 @@ import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
 import { createThumbnails } from '../primitives/create-thumbnails';
 import { createViewOptions } from '../primitives/create-view-options';
+import { shapePicture } from '../primitives/export-pictures';
 
 const STAGE_MARGIN = 32;
 
@@ -1201,6 +1205,23 @@ export function PptxEditor() {
     slideAnimations().length > 0;
 
   const [printing, setPrinting] = createSignal(false);
+  const [exporting, setExporting] = createSignal(false);
+  /** Right-click ▸ Save as Picture: the selected shape alone, as a PNG. */
+  const saveShapePicture = async () => {
+    const shape = editor.selectedShape();
+    if (!shape) return;
+    try {
+      const bytes = await shapePicture(
+        engine,
+        session.slideIndex(),
+        slideW(),
+        shape
+      );
+      context.download(bytes, `${baseName(shape.name)}.png`, 'image/png');
+    } catch {
+      context.notifyError('That shape could not be saved as a picture.');
+    }
+  };
   /** What the Insert/Edit Link dialog links, while it is open. */
   const [linkEdit, setLinkEdit] = createSignal<LinkTarget>();
   async function openLinkDialog() {
@@ -1798,6 +1819,14 @@ export function PptxEditor() {
               <Printer />
             </RibbonButton>
             <RibbonButton
+              label="Export"
+              tooltip="Export slides as pictures"
+              data-testid="pptx-export-open"
+              onClick={() => setExporting(true)}
+            >
+              <ImageSquare />
+            </RibbonButton>
+            <RibbonButton
               label="Download"
               tooltip="Download .pptx"
               onClick={() => void download()}
@@ -2082,6 +2111,7 @@ export function PptxEditor() {
                                 .some((s) => s.kind === 'group'),
                               selectionCount: editor.selection().length,
                               textShape: !!editor.selectedShape()?.textEditable,
+                              savePicture: () => void saveShapePicture(),
                               link: menuLink(),
                               editLink: () => void openLinkDialog(),
                               openLink: followLink,
@@ -2356,6 +2386,27 @@ export function PptxEditor() {
             }}
             onClose={() => {
               setLinkEdit(undefined);
+              queueMicrotask(refocus);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={exporting() && session.outline()}>
+        {(deck) => (
+          <ExportDialog
+            engine={engine}
+            deck={deck()}
+            current={session.slideIndex()}
+            selected={deck()
+              .slides.map((s, i) =>
+                selectedSlideIds().includes(s.id) ? i : -1
+              )
+              .filter((i) => i >= 0)}
+            fileName={context.fileName()}
+            download={context.download}
+            notifyError={context.notifyError}
+            onClose={() => {
+              setExporting(false);
               queueMicrotask(refocus);
             }}
           />
