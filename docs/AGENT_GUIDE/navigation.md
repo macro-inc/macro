@@ -488,10 +488,12 @@ and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
 to remove it. The routine's top bar uses the task breadcrumb layout:
 **Routines → routine name**, followed by the three-dot menu for duplication and
-deletion. Tabs switch between **Overview** and **Run History**. Overview follows
-the project home layout: an editable title, model and trigger property chips,
-a **Next run** chip, and a plain prompt editor. The combined **Run now** button
-is on the right of the content title. Its **Run options** dropdown contains
+deletion. Tabs immediately beside that menu switch between **Overview** and
+**Run History**. Overview follows the project home layout: an editable title,
+a model property chip, and a plain prompt editor. A trigger card sits below the
+model: trigger chips at the top left, **Run now** at the top right, and the
+**Enabled** / **Disabled** status with **Next run** along the bottom.
+The **Run options** dropdown contains
 **Enable routine** / **Disable routine** and **Copy prompt**, which copies the
 current instructions, including unsaved edits. **Run History** uses full-width
 Soup rows for past agent sessions, with each run's

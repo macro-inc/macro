@@ -385,6 +385,7 @@ export function RoutineDetail(props: {
           tab={tab()}
           onTab={setTab}
           onBack={back}
+          enabled={isActive()}
           runActions={
             <RoutineRunButton
               enabled={isActive()}
