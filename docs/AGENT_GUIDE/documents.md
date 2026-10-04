@@ -484,6 +484,38 @@ Layout and test hooks:
   `pptx-chart-cell-<row>-<col>`, **Apply** `pptx-chart-apply`); Chart Design
   also changes the type (`pptx-chart-type`), title, legend, data labels, and
   colors.
+- **Equations** (Office Math, typeset by the engine): Insert ▸ **Equation**
+  (`pptx-insert-equation`, or Alt+=) starts a new equation at the caret of
+  the text being edited (selected text on one line becomes its text), or in a
+  new text box centered on the slide when no text is edited. Its arrow
+  (`pptx-insert-equation-menu`) inserts a built-in equation at once
+  (`pptx-equation-prebuilt-<id>`: `area-of-circle`, `binomial-theorem`,
+  `expansion-of-a-sum`, `fourier-series`, `pythagorean-theorem`,
+  `quadratic-formula`, `taylor-expansion`, `trig-identity-1`,
+  `trig-identity-2`). The equation is written in a floating editor
+  (`pptx-equation-editor`): LaTeX-style linear text (`pptx-equation-input`;
+  `\frac{a}{b}`, `x^2`, `\sqrt[n]{x}`, `\sum_{i=1}^n`, `\int_a^b`,
+  `\left( \right)`, `\begin{pmatrix}…\end{pmatrix}`, `\begin{cases}`, Greek,
+  `\mathbb{R}`, `\text{…}`), a live preview (`pptx-equation-preview`), errors
+  (`pptx-equation-error`), a Display toggle (`pptx-equation-display`: own
+  line, centered, versus inline), **Insert**/**Done** (`pptx-equation-insert`,
+  or Enter; Shift+Enter is a new line of text), and close
+  (`pptx-equation-close`, or Escape). An equation counts as one character
+  (U+FFFC) of its paragraph: clicking it while editing the text selects it
+  whole and shows its text in the editor, where every valid change lands on
+  the slide as it is typed (one undo step per equation); double-click focuses
+  the editor; Delete or Backspace removes a selected equation, and typing
+  replaces it. The contextual **Equation** tab (`pptx-tab-equation`, shown
+  while an equation is written or selected) has the built-ins
+  (`pptx-equation-prebuilt`, which replace the equation's text), Linear
+  (`pptx-equation-linear`, reopens the editor), Display
+  (`pptx-equation-display-toggle`), **Symbols** (`pptx-equation-symbols`,
+  then `pptx-equation-symbol-<command>` such as `pm`, `alpha`, `infty`, or
+  `pptx-equation-symbol-u<hex>` for a character without a command), and the
+  Structures galleries `pptx-equation-structure-<fraction|script|radical|integral|large-operator|bracket|function|accent|limit-and-log|operator|matrix>`
+  (item `n` is `pptx-equation-structure-<gallery>-<n>`). Symbols and
+  structures go into the linear text at its caret; a structure wraps the
+  selected linear text and puts the caret in its first empty slot.
 - **Effects**: Shape Format's **Shape effects** (`pptx-shape-effects`) and
   Picture Format's **Picture effects** (`pptx-picture-effects`) open
   PowerPoint's Shadow, Reflection, Glow, and Soft Edges flyouts (hover
@@ -648,7 +680,9 @@ Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
 chart type and data, picture crop and adjustments, and shadow, glow, soft edge,
-and reflection effects;
+and reflection effects; an equation stands in text as U+FFFC, the engine
+outline lists each paragraph's `equations` (index, LaTeX-style text, display
+flag), and the `insertEquation` and `setEquation` operations write them;
 `ReadContent` returns the same description) and changes them with
 `EditPresentation`, an atomic batch of the editor's own operations saved as a
 new version (`saveAs` creates an edited copy instead). When an `EditPresentation` result arrives in chat, an open

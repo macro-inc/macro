@@ -21,6 +21,7 @@ import {
   openPresentation,
   openPresentationEntries,
   redoEdit,
+  renderEquation,
   renderSlide,
   renderSlideLayer,
   renderSlideSpan,
@@ -78,6 +79,7 @@ function readers(key: string) {
     linkRegions: (index: number) => getLinkRegions(key, index),
     mediaBytes: (part: string) => getMediaBytes(key, part),
     presetPaths: getPresetPaths,
+    renderEquation,
     save: () => savePresentation(key),
     close: () => closePresentation(key),
     copyShapes: (index: number, shapes: number[]) =>

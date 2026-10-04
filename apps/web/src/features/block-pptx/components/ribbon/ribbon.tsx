@@ -22,6 +22,7 @@ import {
 import type { Swatch } from '../../core/palette';
 import type { DeckSetup } from '../../primitives/create-deck-setup';
 import type { EditorCommands } from '../../primitives/create-editor-commands';
+import type { EquationEditor } from '../../primitives/create-equation-editor';
 import type { ViewOptionsState } from '../../primitives/create-view-options';
 
 export interface RibbonEnv {
@@ -93,6 +94,14 @@ export interface RibbonEnv {
   extraTabs?: () => RibbonTab[];
   /** Header & Footer, slide size, and sections (dialogs and section view state). */
   deckSetup?: DeckSetup;
+  /** Insert ▸ Equation, when equations can be typeset here. */
+  equation?: {
+    editor: EquationEditor;
+    /** Starts a new equation at the caret, or in a new text box. */
+    start: () => void;
+    /** Inserts a built-in equation at once. */
+    insertBuiltIn: (latex: string) => void;
+  };
 }
 
 const RibbonContext = createContext<RibbonEnv>();
@@ -120,12 +129,15 @@ export function Ribbon(props: {
   end?: JSX.Element;
   /** Called with the id of the tab chosen. */
   onTabChange?: (id: string) => void;
+  /** Receives a function that switches tabs (to show a contextual tab). */
+  controller?: (setActive: (id: string) => void) => void;
 }) {
   const [active, setActiveRaw] = createSignal('home');
   const setActive = (id: string) => {
     setActiveRaw(id);
     props.onTabChange?.(id);
   };
+  props.controller?.(setActive);
   const current = () =>
     props.tabs.find((t) => t.id === active()) ?? props.tabs[0];
   // Clicks must not move focus out of the text being edited.

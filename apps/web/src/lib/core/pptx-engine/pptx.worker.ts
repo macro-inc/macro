@@ -301,6 +301,16 @@ async function serve(
         Transferable[],
       ];
     })
+    .with(
+      { kind: 'renderEquation' },
+      ({ latex, display, size, scale, color }) => {
+        const bytes = wasm.renderEquation(latex, display, size, scale, color);
+        return [{ id, ok: true, kind: 'png', bytes }, [bytes.buffer]] as [
+          PptxResponse,
+          Transferable[],
+        ];
+      }
+    )
     .with({ kind: 'textLayout' }, ({ docKey, index, shape, cell }) => {
       const layout = JSON.parse(
         documentFor(docKey).textLayout(index, shape, cell?.row, cell?.col)

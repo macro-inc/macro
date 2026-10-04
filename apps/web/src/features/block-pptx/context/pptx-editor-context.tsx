@@ -97,6 +97,15 @@ export interface PresentationEngine {
     width: number,
     height: number
   ) => Promise<Record<string, PresetPath[]>>;
+  /**
+   * A PNG of an equation in the linear format (`size` points, `scale`
+   * pixels per point, `color` `RRGGBB`), for the equation editor; rejects
+   * with what is wrong with the text.
+   */
+  renderEquation?: (
+    latex: string,
+    options: { display: boolean; size: number; scale: number; color: string }
+  ) => Promise<Uint8Array>;
   /** Whether other people edit the same presentation live. */
   collaborative?: boolean;
   /**

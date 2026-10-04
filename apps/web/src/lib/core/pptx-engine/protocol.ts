@@ -81,7 +81,16 @@ export type PptxRequest =
   /** Copies slides (by id) with their notes; answers `clipboard`. */
   | (Base & { kind: 'copySlides'; slides: number[] })
   /** Finds text on every slide; answers `matches`. */
-  | (Base & { kind: 'findText'; query: string; options?: FindOptions });
+  | (Base & { kind: 'findText'; query: string; options?: FindOptions })
+  /** Renders linear text as a PNG (no document needed); answers `png`. */
+  | (Base & {
+      kind: 'renderEquation';
+      latex: string;
+      display: boolean;
+      size: number;
+      scale: number;
+      color: string;
+    });
 
 /** History availability, reported after every state change. */
 export interface HistoryState {
@@ -129,4 +138,5 @@ export type PptxResponse =
     }
   | { id: number; ok: true; kind: 'clipboard'; payload: ClipboardPayload }
   | { id: number; ok: true; kind: 'matches'; matches: TextMatch[] }
+  | { id: number; ok: true; kind: 'png'; bytes: Uint8Array }
   | { id: number; ok: false; error: string };

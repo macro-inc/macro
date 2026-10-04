@@ -83,6 +83,17 @@ interface PptxEngineWasmModule {
   registerFont: (bytes: Uint8Array) => number;
   /** `PresetPath[]` JSON for a preset at `w`×`h` points, or `null`. */
   presetPaths: (name: string, w: number, h: number) => string;
+  /**
+   * PNG of an equation in the linear format (`size` points, `scale` pixels
+   * per point, `color` `RRGGBB`); throws what is wrong with the text.
+   */
+  renderEquation: (
+    latex: string,
+    display: boolean,
+    size: number,
+    scale: number,
+    color: string
+  ) => Uint8Array;
 }
 
 let modulePromise: Promise<PptxEngineWasmModule> | undefined;

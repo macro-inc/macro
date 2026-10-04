@@ -330,6 +330,23 @@ export async function getPresetPaths(
 }
 
 /**
+ * A PNG of an equation written in the linear format, `size` points tall
+ * text at `scale` pixels per point in `color` (`RRGGBB`), with empty slots
+ * as dotted boxes. Rejects with what is wrong with the text.
+ */
+export async function renderEquation(
+  latex: string,
+  options: { display: boolean; size: number; scale: number; color: string }
+): Promise<Uint8Array> {
+  return (
+    await request(
+      { kind: 'renderEquation', docKey: '', latex, ...options },
+      'png'
+    )
+  ).bytes;
+}
+
+/**
  * Copies shapes of slide `index` (back to front, with every part they use)
  * for a `pasteShapes` op, in this or another presentation.
  */
