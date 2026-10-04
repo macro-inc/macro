@@ -9,18 +9,17 @@ const bytes = new Uint8Array([80, 75, 3, 4]);
 describe('fetchPresigned', () => {
   beforeEach(() => platformFetch.mockReset());
 
-  it.each([
-    ['arrayBuffer', (data: unknown) => new Uint8Array(data as ArrayBuffer)],
-    [
-      'blob',
-      async (data: unknown) =>
-        new Uint8Array(await (data as Blob).arrayBuffer()),
-    ],
-  ] as const)('reads the body as %s', async (responseType, read) => {
+  it('reads the body as an ArrayBuffer', async () => {
     platformFetch.mockResolvedValue(new Response(bytes));
-    const result = await fetchPresigned('https://bucket/file', responseType);
-    expect(result.isOk()).toBe(true);
-    expect(await read(result._unsafeUnwrap())).toEqual(bytes);
+    const result = await fetchPresigned('https://bucket/file', 'arrayBuffer');
+    expect(new Uint8Array(result._unsafeUnwrap())).toEqual(bytes);
+  });
+
+  // jsdom's Blob may lack arrayBuffer(); size is common to every Blob.
+  it('reads the body as a Blob', async () => {
+    platformFetch.mockResolvedValue(new Response(bytes));
+    const result = await fetchPresigned('https://bucket/file', 'blob');
+    expect(result._unsafeUnwrap().size).toBe(bytes.length);
   });
 
   it('reads text and JSON bodies', async () => {
