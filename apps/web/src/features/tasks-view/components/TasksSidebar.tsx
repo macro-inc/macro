@@ -10,7 +10,7 @@ import { openProject } from '@app/features/projects/open-project';
 import { ProjectsSidebarSection } from '@app/features/projects/projects';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate, useParams } from '@app/lib/split-router';
-import { reviewsSplitRoute } from '@app/routes/routes';
+import { projectDetailRoute, reviewsSplitRoute } from '@app/routes/routes';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
@@ -225,9 +225,16 @@ export function TasksSidebar() {
             onCreate={() =>
               layout.popoverSplit({ type: 'component', id: 'project-compose' })
             }
-            onOpen={(id, event) =>
-              openProject(layout, id, { newSplit: event.shiftKey })
-            }
+            onOpen={(id, event) => {
+              if (event.shiftKey) {
+                openProject(layout, id, { newSplit: true });
+                return;
+              }
+              navigate({
+                route: projectDetailRoute,
+                params: { projectId: id, section: 'overview' },
+              });
+            }}
           />
         </Show>
         <div ref={tourTarget(TASKS_TOUR.tags)}>
