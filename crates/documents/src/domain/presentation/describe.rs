@@ -4,7 +4,8 @@
 use pptx_engine::Presentation;
 use pptx_engine::edit::{AnimationClass, AnimationRepeat, AnimationStart, RepeatUntil};
 use pptx_engine::inspect::{
-    AnimationOutline, ChartOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline,
+    AnimationOutline, ChartOutline, DeckOutline, HeaderFooterOutline, ShapeKindName, ShapeOutline,
+    SlideOutline, TableOutline,
 };
 use std::fmt::Write as _;
 
@@ -273,6 +274,9 @@ fn slide(out: &mut String, s: &SlideOutline) {
         s.id,
         quote(&s.layout)
     );
+    if let Some(hf) = &s.header_footer {
+        let _ = writeln!(out, "  header & footer: {}", header_footer(hf));
+    }
     if let Some(t) = &s.transition {
         let direction = t
             .direction
@@ -297,6 +301,62 @@ fn slide(out: &mut String, s: &SlideOutline) {
     }
     if let Some(notes) = &s.notes {
         let _ = writeln!(out, "  speaker notes: {}", quote(notes));
+    }
+}
+
+/// What a slide shows of Header & Footer.
+fn header_footer(hf: &HeaderFooterOutline) -> String {
+    let mut parts = Vec::new();
+    if hf.slide_number {
+        parts.push("slide number".to_owned());
+    }
+    if hf.date {
+        parts.push(match (&hf.date_text, &hf.date_format) {
+            (Some(text), _) => format!("fixed date {}", quote(text)),
+            (None, Some(format)) => format!("automatic date ({format})"),
+            (None, None) => "date".to_owned(),
+        });
+    }
+    if hf.footer {
+        parts.push(format!(
+            "footer {}",
+            quote(hf.footer_text.as_deref().unwrap_or_default())
+        ));
+    }
+    parts.join(", ")
+}
+
+/// 1-based slide numbers as ranges (`1-3, 5`).
+fn slide_ranges(deck: &DeckOutline, ids: &[u32]) -> String {
+    let mut numbers: Vec<usize> = ids
+        .iter()
+        .filter_map(|id| deck.slides.iter().position(|s| s.id == *id))
+        .map(|i| i + 1)
+        .collect();
+    numbers.sort_unstable();
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    for n in numbers {
+        match ranges.last_mut() {
+            Some((_, end)) if *end + 1 == n => *end = n,
+            _ => ranges.push((n, n)),
+        }
+    }
+    match ranges.as_slice() {
+        [] => "no slides".to_owned(),
+        [(a, b)] if a == b => format!("slide {a}"),
+        _ => {
+            let list: Vec<String> = ranges
+                .iter()
+                .map(|(a, b)| {
+                    if a == b {
+                        a.to_string()
+                    } else {
+                        format!("{a}-{b}")
+                    }
+                })
+                .collect();
+            format!("slides {}", list.join(", "))
+        }
     }
 }
 
@@ -328,6 +388,15 @@ pub fn describe(pres: &mut Presentation, slides: Option<&[usize]>) -> anyhow::Re
             "Theme fonts: headings {}, body {}",
             quote(&fonts.major),
             quote(&fonts.minor)
+        );
+    }
+    for section in deck.sections.iter().flatten() {
+        let _ = writeln!(
+            out,
+            "Section {} (id {}): {}",
+            quote(&section.name),
+            section.id,
+            slide_ranges(&deck, &section.slide_ids)
         );
     }
     for s in &deck.slides {

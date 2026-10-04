@@ -9,6 +9,9 @@ const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218140";
 const DECK: &[u8] = include_bytes!(
     "../../../../pptx_engine/tests/corpus/generated/tables-financial-statement.pptx"
 );
+/// A deck with sections and slide-number and date fields.
+const SECTIONED: &[u8] =
+    include_bytes!("../../../../pptx_engine/tests/corpus/generated/slide-features.pptx");
 
 fn receipt<T: RequiredPermission>(access_level: AccessLevel) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::try_new_authenticated_user(
@@ -303,4 +306,69 @@ async fn edited_copy_leaves_the_original_alone() {
         .await
         .unwrap();
     assert_eq!(plain, DECK);
+}
+
+#[tokio::test]
+async fn read_reports_sections_and_header_footer() {
+    let service = PresentationService::new(MemoryFiles::with(SECTIONED));
+    let text = service
+        .read(receipt(AccessLevel::View), None)
+        .await
+        .unwrap();
+    assert!(
+        text.contains(
+            "Section \"Introduction\" (id {C76F8F79-DBED-5BDD-9DD0-E9E75A5DAD59}): slides 1-2\n"
+        ),
+        "{text}"
+    );
+    assert!(text.contains("Section \"Appendix\" (id "), "{text}");
+    assert!(text.contains("  header & footer: slide number"), "{text}");
+}
+
+#[tokio::test]
+async fn section_edits_report_the_new_section() {
+    let files = MemoryFiles::with(SECTIONED);
+    let service = PresentationService::new(files.clone());
+    let slides: Vec<u32> = Presentation::open(SECTIONED.to_vec())
+        .unwrap()
+        .slides()
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    let outcome = service
+        .edit(
+            receipt(AccessLevel::Edit),
+            &[
+                EditOp::AddSection {
+                    name: "Wrap-up".into(),
+                    before_slide: slides[4],
+                },
+                EditOp::SetHeaderFooter {
+                    slides: None,
+                    slide_number: Some(true),
+                    date: None,
+                    date_text: None,
+                    date_format: None,
+                    footer: Some(true),
+                    footer_text: Some("Draft".into()),
+                    not_on_title: false,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+    assert!(outcome.structure_changed);
+    let section = outcome.created[0].section.clone().unwrap();
+    assert!(
+        outcome
+            .changed_slides
+            .contains(&format!("Section \"Wrap-up\" (id {section}): slide 5")),
+        "{}",
+        outcome.changed_slides
+    );
+    assert!(
+        outcome.changed_slides.contains("footer \"Draft\""),
+        "{}",
+        outcome.changed_slides
+    );
 }

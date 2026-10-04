@@ -40,11 +40,17 @@ fn strict_mode_calls_deserialize() {
             {"op": "addSlide", "layout": "Title Only", "after": null, "title": "Risks", "body": null},
             {"op": "formatText", "slide": 256, "shape": 2, "cell": null, "start": null, "end": null,
              "props": {"bold": true, "italic": null, "underline": null, "strike": null, "size": 28,
-                       "color": "1F4E79", "font": null, "highlight": null, "baseline": null, "link": null}}
+                       "color": "1F4E79", "font": null, "highlight": null, "baseline": null, "link": null}},
+            {"op": "setHeaderFooter", "slides": null, "slideNumber": true, "date": null,
+             "dateText": null, "dateFormat": null, "footer": null, "footerText": null,
+             "notOnTitle": null},
+            {"op": "setSlideSize", "width": 720, "height": 540, "scale": null},
+            {"op": "removeSection", "id": "{2B5E5A3C-1A8D-4C4E-9F0B-6E2D9A7C1F01}",
+             "deleteSlides": null}
         ]
     }))
     .unwrap();
-    assert_eq!(call.operations.len(), 4);
+    assert_eq!(call.operations.len(), 7);
 }
 
 #[test]

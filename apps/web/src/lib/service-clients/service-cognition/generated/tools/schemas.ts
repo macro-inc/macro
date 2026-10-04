@@ -3484,6 +3484,84 @@ export const EditPresentation = z.object({
               op: z.literal('setThemeFonts'),
             })
             .strict(),
+          z
+            .object({
+              slides: z
+                .union([z.array(z.number().int().gte(0)), z.null()])
+                .optional(),
+              slideNumber: z.union([z.boolean(), z.null()]).optional(),
+              date: z.union([z.boolean(), z.null()]).optional(),
+              dateText: z.union([z.string(), z.null()]).optional(),
+              dateFormat: z.union([z.string(), z.null()]).optional(),
+              footer: z.union([z.boolean(), z.null()]).optional(),
+              footerText: z.union([z.string(), z.null()]).optional(),
+              notOnTitle: z.boolean().optional(),
+              op: z.literal('setHeaderFooter'),
+            })
+            .strict(),
+          z
+            .object({
+              width: z.number(),
+              height: z.number(),
+              scale: z
+                .union([
+                  z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('none'),
+                      z.literal('fit'),
+                      z.literal('maximize'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
+                  z.null(),
+                ])
+                .optional(),
+              op: z.literal('setSlideSize'),
+            })
+            .strict(),
+          z
+            .object({
+              name: z.string(),
+              beforeSlide: z.number().int().gte(0),
+              op: z.literal('addSection'),
+            })
+            .strict(),
+          z
+            .object({
+              id: z.string(),
+              name: z.string(),
+              op: z.literal('renameSection'),
+            })
+            .strict(),
+          z
+            .object({
+              id: z.string(),
+              deleteSlides: z.boolean().optional(),
+              op: z.literal('removeSection'),
+            })
+            .strict(),
+          z
+            .object({
+              id: z.string(),
+              toIndex: z.number().int().gte(0),
+              op: z.literal('moveSection'),
+            })
+            .strict(),
         ];
         const errors = schemas.reduce<z.ZodError[]>(
           (errors, schema) =>
@@ -3520,6 +3598,7 @@ export const PresentationEditOutcome = z.object({
     z.object({
       slide: z.number().int().gte(0),
       shape: z.union([z.number().int().gte(0), z.null()]).optional(),
+      section: z.union([z.string(), z.null()]).optional(),
     })
   ),
   structureChanged: z.boolean(),
