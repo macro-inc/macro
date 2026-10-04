@@ -446,29 +446,45 @@ export function createFigEditor(options: FigEditorOptions) {
   };
 
   /** A resize drag on one layer: new page bounds → position and size. */
-  const startResize = (info: NodeInfo, start: Rect) => {
+  /**
+   * A resize drag on the selection: each layer scales with the selection's
+   * page bounds (`start`) as they become the dragged rectangle.
+   */
+  const startResize = (ids: string[], start: Rect, known?: NodeInfo) => {
     const key = `resize-${++dragKey}`;
+    const page = viewer.page();
+    const infos: Promise<NodeInfo[]> =
+      known && ids.length === 1 && ids[0] === known.id
+        ? Promise.resolve([known])
+        : Promise.all(ids.map((id) => engine.nodeInfo(page, id)));
     let wanted: Rect | undefined;
     let running = false;
     const pump = async () => {
       if (running) return;
       running = true;
+      const items = await infos;
       while (wanted) {
         const r = wanted;
         wanted = undefined;
+        const sx = start.w > 0 ? r.w / start.w : 1;
+        const sy = start.h > 0 ? r.h / start.h : 1;
+        const round = (v: number) => Math.round(v * 100) / 100;
         await apply(
-          [
-            {
-              op: 'set',
+          items.map((info) => {
+            const b = info.bounds;
+            const nx = r.x + (b.x - start.x) * sx;
+            const ny = r.y + (b.y - start.y) * sy;
+            return {
+              op: 'set' as const,
               ids: [info.id],
               props: {
-                x: info.x + (r.x - start.x),
-                y: info.y + (r.y - start.y),
-                width: Math.max(1, r.w),
-                height: Math.max(1, r.h),
+                x: round(info.x + (nx - b.x)),
+                y: round(info.y + (ny - b.y)),
+                width: Math.max(1, round(info.width * sx)),
+                height: Math.max(1, round(info.height * sy)),
               },
-            },
-          ],
+            };
+          }),
           key
         );
       }
@@ -477,6 +493,33 @@ export function createFigEditor(options: FigEditorOptions) {
     return {
       to(rect: Rect) {
         wanted = rect;
+        void pump();
+      },
+      async end() {
+        await pump();
+        await queue;
+      },
+    };
+  };
+
+  /** A rotation drag on one layer: degrees as the panel shows them. */
+  const startRotate = (id: string) => {
+    const key = `rotate-${++dragKey}`;
+    let wanted: number | undefined;
+    let running = false;
+    const pump = async () => {
+      if (running) return;
+      running = true;
+      while (wanted !== undefined) {
+        const rotation = wanted;
+        wanted = undefined;
+        await apply([{ op: 'set', ids: [id], props: { rotation } }], key);
+      }
+      running = false;
+    };
+    return {
+      to(degrees: number) {
+        wanted = degrees;
         void pump();
       },
       async end() {
@@ -593,6 +636,7 @@ export function createFigEditor(options: FigEditorOptions) {
     insertInstance,
     startMove,
     startResize,
+    startRotate,
     create,
     importImages,
     saveNow,

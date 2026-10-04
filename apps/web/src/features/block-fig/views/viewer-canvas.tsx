@@ -20,6 +20,7 @@ import {
 import { drawOverlay, type OverlayModel } from '../components/overlay';
 import { type Point, screenToPage } from '../core/camera';
 import { measure } from '../core/measure';
+import { rotationFor } from '../core/rotation';
 import { type Guide, snapMove } from '../core/snap';
 import type { FigEditor, ShapeTool } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
@@ -53,6 +54,14 @@ const HANDLE_CURSORS: Record<Handle, string> = {
 /** Distance (CSS px) within which a handle (or edge) takes a press. */
 const HANDLE_SLOP = 6;
 
+/** How far beyond a corner (CSS px) a press rotates instead. */
+const ROTATE_REACH = 18;
+
+/** A curved arrow, the rotate cursor. */
+const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M6 15a7 7 0 1 1 3 4" fill="none" stroke="white" stroke-width="4" stroke-linecap="round"/><path d="M6 15a7 7 0 1 1 3 4" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round"/><path d="M3 12l3 4 3-4z" fill="black" stroke="white" stroke-width="0.8"/></svg>'
+)}") 12 12, auto`;
+
 type Pressed = { row: LayerRow; wasSelected: boolean } | undefined;
 
 type Drag =
@@ -77,6 +86,14 @@ type Drag =
       handle: Handle;
       start: Rect;
       resizer: ReturnType<FigEditor['startResize']>;
+    }
+  | {
+      kind: 'rotate';
+      /** Page point the layer turns about. */
+      center: Point;
+      startAngle: number;
+      startRotation: number;
+      rotator: ReturnType<FigEditor['startRotate']>;
     }
   | {
       kind: 'pinch';
@@ -354,18 +371,36 @@ export function ViewerCanvas(props: {
 
   const pageAt = (p: Point) => screenToPage(viewer.camera(), p);
 
-  /** The resize handle (or edge) of a single selection under a point. */
-  const handleAt = (p: Point): Handle | undefined => {
-    if (!editing() || viewer.selected().length !== 1) return undefined;
+  /** Whether the selection can be resized or rotated directly. */
+  const transformable = () => {
+    if (!editing()) return false;
+    const sel = viewer.selected();
+    if (sel.length === 0 || sel.some((s) => s.id.startsWith('I'))) return false;
+    if (sel.length > 1) return true;
     const info = props.info?.();
+    return !!info && info.id === sel[0].id && !info.locked;
+  };
+
+  /** The selection's box on screen. */
+  const screenBox = () => {
     const b = viewer.selectionBounds();
-    if (!info || !b || Math.abs(info.rotation) > 0.01) return undefined;
-    if (info.id.startsWith('I') || info.locked) return undefined;
+    if (!b) return undefined;
     const c = viewer.camera();
     const x0 = (b.x - c.x) * c.zoom;
     const y0 = (b.y - c.y) * c.zoom;
-    const x1 = x0 + b.w * c.zoom;
-    const y1 = y0 + b.h * c.zoom;
+    return { b, x0, y0, x1: x0 + b.w * c.zoom, y1: y0 + b.h * c.zoom };
+  };
+
+  /** The resize handle (or edge) of the selection under a point. */
+  const handleAt = (p: Point): Handle | undefined => {
+    if (!transformable()) return undefined;
+    const info = props.info?.();
+    if (viewer.selected().length === 1 && Math.abs(info?.rotation ?? 0) > 0.01)
+      return undefined;
+    const box = screenBox();
+    if (!box) return undefined;
+    const { b, x0, y0, x1, y1 } = box;
+    const c = viewer.camera();
     const near = (a: number, v: number) => Math.abs(a - v) <= HANDLE_SLOP;
     const inX = p.x >= x0 - HANDLE_SLOP && p.x <= x1 + HANDLE_SLOP;
     const inY = p.y >= y0 - HANDLE_SLOP && p.y <= y1 + HANDLE_SLOP;
@@ -384,6 +419,25 @@ export function ViewerCanvas(props: {
     if (w) return 'w';
     if (e) return 'e';
     return undefined;
+  };
+
+  /** Whether a point is just beyond a corner of a single selection. */
+  const rotateAt = (p: Point): boolean => {
+    if (!transformable() || viewer.selected().length !== 1) return false;
+    const box = screenBox();
+    if (!box) return false;
+    const { x0, y0, x1, y1 } = box;
+    const outside = p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1;
+    if (!outside) return false;
+    return [
+      [x0, y0],
+      [x1, y0],
+      [x0, y1],
+      [x1, y1],
+    ].some(([cx, cy]) => {
+      const d = Math.hypot(p.x - cx, p.y - cy);
+      return d > HANDLE_SLOP && d <= HANDLE_SLOP + ROTATE_REACH;
+    });
   };
 
   const [cursorOverride, setCursorOverride] = (() => {
@@ -425,12 +479,28 @@ export function ViewerCanvas(props: {
     const handle = handleAt(p);
     const info = props.info?.();
     const bounds = viewer.selectionBounds();
-    if (handle && info && bounds && props.editor) {
+    if (handle && bounds && props.editor) {
       drag = {
         kind: 'resize',
         handle,
         start: bounds,
-        resizer: props.editor.startResize(info, bounds),
+        resizer: props.editor.startResize(
+          viewer.selected().map((s) => s.id),
+          bounds,
+          info
+        ),
+      };
+      return;
+    }
+    if (rotateAt(p) && info && bounds && props.editor) {
+      const center = { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
+      const at = pageAt(p);
+      drag = {
+        kind: 'rotate',
+        center,
+        startAngle: Math.atan2(at.y - center.y, at.x - center.x),
+        startRotation: info.rotation,
+        rotator: props.editor.startRotate(info.id),
       };
       return;
     }
@@ -511,7 +581,13 @@ export function ViewerCanvas(props: {
     if (!drag) {
       if (e.pointerType !== 'touch' && !panning()) {
         const handle = handleAt(p);
-        setCursorOverride(handle ? HANDLE_CURSORS[handle] : undefined);
+        setCursorOverride(
+          handle
+            ? HANDLE_CURSORS[handle]
+            : rotateAt(p)
+              ? ROTATE_CURSOR
+              : undefined
+        );
         if (!isShapeTool(viewer.tool())) hoverAt(p);
       }
       return;
@@ -533,6 +609,12 @@ export function ViewerCanvas(props: {
     } else if (drag.kind === 'resize') {
       const rect = resizeRect(drag.start, drag.handle, pageAt(p), e.shiftKey);
       drag.resizer.to(rect);
+    } else if (drag.kind === 'rotate') {
+      const at = pageAt(p);
+      const angle = Math.atan2(at.y - drag.center.y, at.x - drag.center.x);
+      drag.rotator.to(
+        rotationFor(drag.startRotation, drag.startAngle, angle, e.shiftKey)
+      );
     } else if (drag.kind === 'press') {
       const press = drag;
       press.current = p;
@@ -617,6 +699,8 @@ export function ViewerCanvas(props: {
       void finishCreate(ended, e.shiftKey);
     } else if (ended.kind === 'resize') {
       void ended.resizer.end();
+    } else if (ended.kind === 'rotate') {
+      void ended.rotator.end();
     } else if (ended.kind === 'press') {
       if (ended.mover) {
         guides = [];

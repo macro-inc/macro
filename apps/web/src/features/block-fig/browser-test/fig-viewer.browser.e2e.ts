@@ -360,6 +360,37 @@ test('adds and edits shadows', async ({ page }) => {
   await expect(page.getByTestId('fig-effect-0-y')).toBeHidden();
 });
 
+test('resizes several layers and rotates one', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [140, 140]);
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [200, 100], [260, 160]);
+  await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
+  await canvas.focus();
+  await page.keyboard.press('Control+a');
+  await expect(page.getByText('2 layers selected')).toBeVisible();
+  // The selection box spans 100–260 × 100–160; its corner doubles it.
+  await dragOnCanvas(page, [260, 160], [420, 220]);
+  await page
+    .getByTestId('fig-layer-row')
+    .filter({ hasText: 'Rectangle 2' })
+    .click();
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('300');
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('120');
+  await page
+    .getByTestId('fig-layer-row')
+    .filter({ hasText: 'Rectangle 1' })
+    .click();
+  await expect(page.getByTestId('fig-field-w')).toHaveValue('80');
+  // Dragging just beyond a corner turns it.
+  await dragOnCanvas(page, [190, 90], [200, 180]);
+  await expect(page.getByTestId('fig-field-rotation')).not.toHaveValue('0');
+});
+
 test('edits fills from the design panel and undoes', async ({ page }) => {
   await openNew(page);
   await page.getByTestId('fig-canvas').focus();

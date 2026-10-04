@@ -491,7 +491,8 @@ Layout and test hooks:
   (⌥ drags a copy, ⇧ constrains, edges and centers snap to siblings and the
   parent frame with red guides; in an auto layout frame the dragged layer
   takes the slot it is dropped over), drag the selection's corners or edges to
-  resize (⇧ keeps proportions), draw with the frame, rectangle, ellipse, and
+  resize (⇧ keeps proportions; several selected layers scale together), drag
+  just beyond a corner of one layer to rotate it (⇧ snaps to 15°), draw with the frame, rectangle, ellipse, and
   text tools (a click places a default size; new layers go into the frame
   under the pointer), double-click or Enter on a text layer to type into it
   (`fig-text-editor`; Escape ends, an emptied layer is removed), and drop or
