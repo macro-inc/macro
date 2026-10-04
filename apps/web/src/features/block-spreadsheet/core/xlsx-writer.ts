@@ -26,6 +26,12 @@ import {
   exportImplicitIntersections,
   markImplicitIntersections,
 } from './xlsx-formula';
+import {
+  conditionalFormattingXml,
+  dataValidationsXml,
+  differentialXml,
+  notesParts,
+} from './xlsx-sheet-rules';
 import { type XlsxCellStyle, xlsxCellStyle } from './xlsx-styles';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -101,6 +107,21 @@ class StyleTable {
   private borders = new Map<string, number>([['', 0]]);
   private xfs = new Map<string, number>();
   private cache = new Map<string, number>();
+  private dxfs = new Map<string, number>();
+
+  /** The `dxfId` of a conditional format's differential format. */
+  dxf(style: Parameters<typeof differentialXml>[0]): number {
+    const key = differentialXml(
+      style,
+      style?.numberFormat ? this.format(style.numberFormat) : undefined
+    );
+    let index = this.dxfs.get(key);
+    if (index === undefined) {
+      index = this.dxfs.size;
+      this.dxfs.set(key, index);
+    }
+    return index;
+  }
 
   constructor(defaultFont: { name: string; size: number }) {
     this.font({
@@ -111,6 +132,19 @@ class StyleTable {
       strike: false,
     });
     this.xfs.set('0,0,0,0,', 0);
+  }
+
+  /** The `numFmtId` of a number format code. */
+  private format(code: string): number {
+    let format: number | undefined = BUILTIN_FORMATS[code];
+    if (format === undefined) {
+      format = this.formats.get(code);
+      if (format === undefined) {
+        format = 164 + this.formats.size;
+        this.formats.set(code, format);
+      }
+    }
+    return format;
   }
 
   private font(font: XlsxCellStyle['font']) {
@@ -142,14 +176,7 @@ class StyleTable {
     const cached = this.cache.get(key);
     if (cached !== undefined) return cached;
     const style = xlsxCellStyle(cell, defaultFont);
-    let format: number | undefined = BUILTIN_FORMATS[style.numFmt];
-    if (format === undefined) {
-      format = this.formats.get(style.numFmt);
-      if (format === undefined) {
-        format = 164 + this.formats.size;
-        this.formats.set(style.numFmt, format);
-      }
-    }
+    const format = this.format(style.numFmt);
     const font = this.font(style.font);
     let fill = 0;
     if (style.fill) {
@@ -222,7 +249,7 @@ class StyleTable {
       )
       .join(
         ''
-      )}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${this.xfs.size}">${xfs}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>`;
+      )}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${this.xfs.size}">${xfs}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="${this.dxfs.size}">${[...this.dxfs.keys()].join('')}</dxfs><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>`;
   }
 }
 
@@ -384,6 +411,8 @@ export function writeXlsxWorkbook(
     input.sheets.findIndex((sheet) => !sheet.metadata?.hidden)
   );
   const files: Record<string, Uint8Array> = {};
+  // Sheets with notes, by 1-based number.
+  const noted: number[] = [];
   input.sheets.forEach((sheet, sheetIndex) => {
     const metadata = sheet.metadata ?? {};
     const values = sheet.values ?? {};
@@ -592,6 +621,7 @@ export function writeXlsxWorkbook(
       freeze && (freeze.rows || freeze.columns)
         ? `<pane${freeze.columns ? ` xSplit="${freeze.columns}"` : ''}${freeze.rows ? ` ySplit="${freeze.rows}"` : ''} topLeftCell="${formatCellAddress(freeze.rows, freeze.columns)}" activePane="${freeze.rows && freeze.columns ? 'bottomRight' : freeze.rows ? 'bottomLeft' : 'topRight'}" state="frozen"/>`
         : '';
+    const notes = notesParts(metadata.notes, sheetIndex + 1);
     const dimension =
       rows.size && occupied.size
         ? `A1:${formatCellAddress(maxRow, maxColumn)}`
@@ -604,8 +634,22 @@ export function writeXlsxWorkbook(
           : ''
       }<dimension ref="${dimension}"/><sheetViews><sheetView workbookViewId="0"${sheetIndex === firstVisible ? ' tabSelected="1"' : ''}${metadata.gridlines === false ? ' showGridLines="0"' : ''}${pane ? `>${pane}</sheetView>` : '/>'}</sheetViews><sheetFormatPr defaultColWidth="${DEFAULT_COLUMN_CHARACTERS}" defaultRowHeight="${defaultRowHeight}"/>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${rowXml}</sheetData>${
         metadata.autoFilter ? `<autoFilter ref="${metadata.autoFilter}"/>` : ''
-      }${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`
+      }${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}${conditionalFormattingXml(
+        metadata.conditionalFormats,
+        (style) => styles.dxf(style),
+        addFunctionPrefixes
+      )}${dataValidationsXml(metadata.validations, addFunctionPrefixes)}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${notes ? '<legacyDrawing r:id="rId1"/>' : ''}</worksheet>`
     );
+    if (notes) {
+      const number = sheetIndex + 1;
+      noted.push(number);
+      files[`xl/comments${number}.xml`] = strToU8(notes.comments);
+      files[`xl/drawings/vmlDrawing${number}.vml`] = strToU8(notes.drawing);
+      files[`xl/worksheets/_rels/sheet${number}.xml.rels`] = strToU8(
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${PACKAGE_RELATIONSHIPS}"><Relationship Id="rId1" Type="${RELATIONSHIPS}/vmlDrawing" Target="../drawings/vmlDrawing${number}.vml"/><Relationship Id="rId2" Type="${RELATIONSHIPS}/comments" Target="../comments${number}.xml"/></Relationships>`
+      );
+    }
   });
   const definedNames = input.sheets.flatMap((sheet, index) => [
     ...(sheet.metadata?.definedNames ?? []).map(
@@ -627,7 +671,14 @@ export function writeXlsxWorkbook(
   const count = input.sheets.length;
   files['[Content_Types].xml'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${input.sheets
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${noted.length ? '<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>' : ''}${noted
+      .map(
+        (number) =>
+          `<Override PartName="/xl/comments${number}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>`
+      )
+      .join(
+        ''
+      )}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${input.sheets
       .map(
         (_, index) =>
           `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`

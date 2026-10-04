@@ -1,3 +1,4 @@
+import type { ConditionalStyle } from '@macro-inc/spreadsheet/sheet-rules';
 import { strFromU8 } from 'fflate';
 import { SaxesParser, type SaxesTagNS } from 'saxes';
 import {
@@ -73,6 +74,12 @@ type Fill = {
   bg?: ColorSpec;
   gradient?: ColorSpec[];
 };
+/** A differential format, as conditional formatting rules apply. */
+type Dxf = {
+  font?: Font;
+  fill?: Fill;
+  numberFormat?: string;
+};
 type Xf = {
   numFmtId: number;
   fontId: number;
@@ -90,6 +97,31 @@ function attributes(node: SaxesTagNS): Attributes {
 
 const flag = (value: Attributes) =>
   value.val === undefined || (value.val !== '0' && value.val !== 'false');
+
+/** One element inside a `<dxf>`: font, fill and number format. */
+function readDifferential(
+  dxf: Dxf,
+  local: string,
+  parent: string | undefined,
+  value: Attributes
+) {
+  if (local === 'font') dxf.font = {};
+  else if (local === 'fill') dxf.fill = {};
+  else if (local === 'numFmt' && parent === 'dxf')
+    dxf.numberFormat = value.formatCode;
+  else if (dxf.font && parent === 'font') {
+    if (local === 'b') dxf.font.bold = flag(value);
+    else if (local === 'i') dxf.font.italic = flag(value);
+    else if (local === 'strike') dxf.font.strike = flag(value);
+    else if (local === 'u') dxf.font.underline = value.val ?? 'single';
+    else if (local === 'color') dxf.font.color = value;
+  } else if (dxf.fill && local === 'patternFill')
+    dxf.fill.pattern = value.patternType;
+  else if (dxf.fill && parent === 'patternFill') {
+    if (local === 'fgColor') dxf.fill.fg = value;
+    else if (local === 'bgColor') dxf.fill.bg = value;
+  }
+}
 
 /** Theme colours in SpreadsheetML index order (light/dark pairs swapped). */
 export function readXlsxTheme(
@@ -185,6 +217,18 @@ function tinted(hex: string, tint: number): string {
 export type XlsxStylesheet = {
   /** Macro styles for a cell's `s` index, relative to `defaultFont`. */
   cellStyle: (index: number) => SpreadsheetCellStyle;
+  /** The format of a conditional formatting rule's `dxfId`. */
+  differentialStyle: (index: number) => ConditionalStyle | undefined;
+  /**
+   * Reads a format written inside an Excel 2010 rule, one element at a time
+   * with its parent's name, then converts it.
+   */
+  inlineDifferential: () => {
+    read: (local: string, parent: string, value: Attributes) => void;
+    style: () => ConditionalStyle;
+  };
+  /** A `<color>` element's attributes as #RRGGBB. */
+  color: (attributes: Record<string, string>) => string | undefined;
   /** The Excel number format code for a cell's `s` index. */
   numberFormat: (index: number) => string;
   /** The workbook's Normal font; cells only store differences from it. */
@@ -202,6 +246,8 @@ export function readXlsxStylesheet(
   const fills: Fill[] = [];
   const borders: Record<string, Edge>[] = [];
   const xfs: Xf[] = [];
+  const dxfs: Dxf[] = [];
+  let dxf: Dxf | undefined;
   const palette = [...INDEXED_COLORS];
   const customPalette: string[] = [];
   const parser = new SaxesParser({ xmlns: true });
@@ -218,6 +264,14 @@ export function readXlsxStylesheet(
     const parent = stack.at(-1);
     stack.push(node.local);
     const value = attributes(node);
+    if (node.local === 'dxf' && parent === 'dxfs') {
+      dxf = {};
+      return;
+    }
+    if (dxf) {
+      readDifferential(dxf, node.local, parent, value);
+      return;
+    }
     switch (node.local) {
       case 'numFmt':
         if (parent === 'numFmts' && value.formatCode !== undefined)
@@ -284,7 +338,10 @@ export function readXlsxStylesheet(
   });
   parser.on('closetag', (node) => {
     stack.pop();
-    if (node.local === 'font' && font) {
+    if (node.local === 'dxf' && dxf) {
+      dxfs.push(dxf);
+      dxf = undefined;
+    } else if (node.local === 'font' && font) {
       fonts.push(font);
       font = undefined;
     } else if (node.local === 'fill' && fill) {
@@ -485,7 +542,37 @@ export function readXlsxStylesheet(
       )
     );
   };
+  const conditionalStyle = (definition: Dxf): ConditionalStyle => {
+    const style: ConditionalStyle = {};
+    const { font: dxfFont, fill: dxfFill } = definition;
+    if (dxfFont?.bold !== undefined) style.bold = dxfFont.bold;
+    if (dxfFont?.italic !== undefined) style.italic = dxfFont.italic;
+    if (dxfFont?.underline !== undefined)
+      style.underline = dxfFont.underline !== 'none';
+    if (dxfFont?.strike !== undefined) style.strikethrough = dxfFont.strike;
+    const text = color(dxfFont?.color);
+    if (text) style.textColor = text;
+    // A rule's solid fill is its background color; some writers use the
+    // foreground color instead.
+    if (dxfFill && dxfFill.pattern !== 'none') {
+      const background = color(dxfFill.bg) ?? color(dxfFill.fg);
+      if (background) style.fillColor = background;
+    }
+    if (definition.numberFormat) style.numberFormat = definition.numberFormat;
+    return style;
+  };
   return {
+    differentialStyle: (index) =>
+      dxfs[index] ? conditionalStyle(dxfs[index]) : undefined,
+    inlineDifferential() {
+      const dxf: Dxf = {};
+      return {
+        read: (local, parent, value) =>
+          readDifferential(dxf, local, parent, value),
+        style: () => conditionalStyle(dxf),
+      };
+    },
+    color: (spec) => color(spec),
     cellStyle(index) {
       let style = styles.get(index);
       if (!style) {

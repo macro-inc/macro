@@ -1,3 +1,7 @@
+import {
+  MAX_NOTE_LENGTH,
+  MAX_SHEET_NOTES,
+} from '@macro-inc/spreadsheet/sheet-rules';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import { SaxesParser, type SaxesTagNS } from 'saxes';
 import {
@@ -34,11 +38,43 @@ import {
   translateFormula,
   type WorkbookTable,
 } from './xlsx-formula';
+import { createSheetRulesReader } from './xlsx-sheet-rules';
 import {
   readXlsxStylesheet,
   readXlsxTheme,
   type XlsxStylesheet,
 } from './xlsx-stylesheet';
+
+/** Elements of conditional formatting and data validation rules. */
+const RULE_ELEMENTS = new Set([
+  'conditionalFormatting',
+  'cfRule',
+  'cfvo',
+  'color',
+  'iconSet',
+  'dataBar',
+  'formula',
+  'dataValidation',
+  'formula1',
+  'formula2',
+  'f',
+  'sqref',
+  // An Excel 2010 rule's inline format.
+  'dxf',
+  'font',
+  'b',
+  'i',
+  'strike',
+  'u',
+  'numFmt',
+  'fill',
+  'patternFill',
+  'fgColor',
+  'bgColor',
+  'gradientFill',
+  'stop',
+  'border',
+]);
 
 const MAIN_NAMESPACES = new Set([
   'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
@@ -155,6 +191,112 @@ function relationships(archive: XlsxArchive, part: string) {
     });
   });
   return result;
+}
+
+/**
+ * A sheet's notes by cell address: legacy Excel comments, and threaded
+ * comments with their replies, which Excel also saves as legacy comments
+ * with placeholder text.
+ */
+function readNotes(
+  context: WorkbookContext,
+  entry: SheetEntry
+): Record<string, string> | undefined {
+  const notes: Record<string, string> = {};
+  let truncated = false;
+  const add = (ref: string | undefined, note: string) => {
+    const position = parseCellAddress(ref ?? '');
+    const text = note.replace(/\r\n?/g, '\n').trim();
+    if (!position || position.row >= SPREADSHEET_MAX_ROWS || !text) return;
+    if (Object.keys(notes).length >= MAX_SHEET_NOTES) {
+      truncated = true;
+      return;
+    }
+    if (text.length > MAX_NOTE_LENGTH) truncated = true;
+    notes[formatCellAddress(position.row, position.column)] = text.slice(
+      0,
+      MAX_NOTE_LENGTH
+    );
+  };
+  const relations = [
+    ...relationships(context.archive, entry.path).values(),
+  ].filter((relation) => !relation.external);
+  const threaded = new Set<string>();
+  for (const relation of relations) {
+    if (relation.type !== 'threadedComment') continue;
+    const bytes = context.archive.read(relation.target);
+    if (!bytes) continue;
+    const threads = new Map<string, { ref: string; texts: string[] }>();
+    let current: { ref: string; texts: string[] } | undefined;
+    let reading = false;
+    parse(bytes, relation.target, (parser) => {
+      parser.on('opentag', (node) => {
+        const value = attributes(node);
+        if (node.local === 'threadedComment') {
+          const parent = value.parentId && threads.get(value.parentId);
+          current = parent || { ref: value.ref ?? '', texts: [] };
+          current.texts.push('');
+          if (!parent && value.id) threads.set(value.id, current);
+        } else if (node.local === 'text' && current) reading = true;
+      });
+      parser.on('text', (chunk) => {
+        if (reading && current)
+          current.texts[current.texts.length - 1] += chunk;
+      });
+      parser.on('closetag', (node) => {
+        if (node.local === 'text') reading = false;
+        else if (node.local === 'threadedComment') current = undefined;
+      });
+    });
+    for (const { ref, texts } of threads.values()) {
+      add(
+        ref,
+        texts
+          .map((text) => text.trim())
+          .filter(Boolean)
+          .join('\n\n')
+      );
+      threaded.add(ref);
+    }
+    if (threads.size)
+      context.warnings.add(
+        'Threaded comments are imported as notes; replies are kept in the note text.'
+      );
+  }
+  for (const relation of relations) {
+    if (relation.type !== 'comments') continue;
+    const bytes = context.archive.read(relation.target);
+    if (!bytes) continue;
+    let ref: string | undefined;
+    let note = '';
+    let inText = false;
+    let inPhonetic = false;
+    parse(bytes, relation.target, (parser) => {
+      parser.on('opentag', (node) => {
+        if (node.local === 'comment') {
+          ref = attributes(node).ref;
+          note = '';
+        } else if (node.local === 'text') inText = true;
+        else if (node.local === 'rPh') inPhonetic = true;
+      });
+      parser.on('text', (chunk) => {
+        if (inText && !inPhonetic && ref !== undefined) note += chunk;
+      });
+      parser.on('closetag', (node) => {
+        if (node.local === 'rPh') inPhonetic = false;
+        else if (node.local === 'text') inText = false;
+        else if (node.local === 'comment') {
+          if (ref && !threaded.has(ref)) add(ref, unescapeText(note));
+          ref = undefined;
+        }
+      });
+    });
+  }
+  if (truncated)
+    context.warnings.add(
+      `Notes are limited to ${MAX_SHEET_NOTES} per sheet and ${MAX_NOTE_LENGTH} characters each.`
+    );
+  return Object.keys(notes).length ? notes : undefined;
 }
 
 /** Text that the cell parser would otherwise read as a number, date or formula. */
@@ -326,6 +468,12 @@ function readWorksheet(
   let inPhonetic = false;
   let inSheetData = false;
   let elements = 0;
+  const rules = createSheetRulesReader({
+    styles,
+    warnings,
+    formula: (source, row, column) =>
+      importFormula(source, context, entry.name, row, column, false),
+  });
 
   const place = (row: number, column: number, placed: SpreadsheetCell) => {
     if (row >= SPREADSHEET_MAX_ROWS) {
@@ -548,6 +696,11 @@ function readWorksheet(
 
   parse(bytes, entry.path, (parser) => {
     parser.on('opentag', (node) => {
+      if (
+        RULE_ELEMENTS.has(node.local) &&
+        rules.open(node.local, node.uri, attributes(node))
+      )
+        return;
       if (!MAIN_NAMESPACES.has(node.uri)) return;
       const value = attributes(node);
       switch (node.local) {
@@ -709,12 +862,6 @@ function readWorksheet(
             metadata.autoFilter = `${formatCellAddress(range.top, range.left)}:${formatCellAddress(range.bottom, range.right)}`;
           return;
         }
-        case 'conditionalFormatting':
-          warnings.add('Conditional formatting rules are not imported.');
-          return;
-        case 'dataValidation':
-          warnings.add('Data validation and dropdown rules are not imported.');
-          return;
         case 'hyperlink':
           warnings.add(
             'Hyperlinks are imported as display text; link targets are not retained.'
@@ -728,12 +875,14 @@ function readWorksheet(
       }
     });
     parser.on('text', (chunk) => {
+      rules.text(chunk);
       if (!cell || !text || inPhonetic) return;
       if (text === 'formula') cell.formulaText += chunk;
       else if (text === 'value') cell.value += chunk;
       else cell.inline += unescapeText(chunk);
     });
     parser.on('closetag', (node) => {
+      if (RULE_ELEMENTS.has(node.local)) rules.close(node.local, node.uri);
       if (!MAIN_NAMESPACES.has(node.uri)) return;
       if (node.local === 'rPh') inPhonetic = false;
       else if (node.local === 'f' || node.local === 'v' || node.local === 't')
@@ -836,6 +985,12 @@ function readWorksheet(
   }
   if (hiddenColumns.length >= columnCount) hiddenColumns.length = 0;
   if (merges.length) metadata.merges = merges;
+  const { conditionalFormats, validations } = rules.finish();
+  if (conditionalFormats.length)
+    metadata.conditionalFormats = conditionalFormats;
+  if (validations.length) metadata.validations = validations;
+  const notes = readNotes(context, entry);
+  if (notes) metadata.notes = notes;
   if (hiddenRows.length && hiddenRows.length < rowCount)
     metadata.hiddenRows = hiddenRows.filter((row) => row < rowCount);
   if (hiddenColumns.length) metadata.hiddenColumns = hiddenColumns;

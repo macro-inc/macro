@@ -191,8 +191,6 @@ export function xlsxFeatureWarnings(names: string[]): string[] {
   for (const name of names) {
     if (/^xl\/(charts|drawings|media)\//.test(name))
       warnings.add('Charts, drawings and images are not imported.');
-    if (/^xl\/(?:comments|threadedComments)/.test(name))
-      warnings.add('Cell comments and notes are not imported.');
     if (/^xl\/pivot/.test(name))
       warnings.add(
         'Pivot tables are not imported; existing cell values are retained.'

@@ -75,6 +75,14 @@ Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, i
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
 
+Imported Excel workbooks keep conditional formatting, data validation and notes.
+Conditional formats recolor cells and draw data bars and icons, and they update as
+values change. A selected cell with a list rule shows an arrow at its right edge:
+click it or press Alt+Down to choose a value. Typing a value the rule does not allow
+shows the rule's message in the footer, and a "stop" rule keeps the previous value.
+A red corner marks a cell with a note; selecting the cell shows the note, and any
+input message, beside it.
+
 Select a cell to inspect its address and input in the formula bar. Double-click
 a cell, start typing, or use the formula bar to edit its value. Formulas begin
 with `=` and may refer to cells or ranges, for example `=SUM(B2:B5)`. Check both

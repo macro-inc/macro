@@ -490,15 +490,19 @@ describe('Excel workbook files', () => {
     for (const term of [
       'Charts',
       'External workbook',
-      'validation',
       'Hidden sheets',
       'Merged ranges',
       'Frozen panes',
       'Hyperlinks',
       'Rich text',
-      'comments',
     ])
       expect(warning).toContain(term);
+    // Notes and data validation are imported.
+    expect(warning).not.toMatch(/validation|comments/i);
+    expect(imported.sheets[0].metadata).toMatchObject({
+      notes: { C4: 'review' },
+      validations: [{ range: 'D1', type: 'list', formulas: ['"a,b"'] }],
+    });
     expect(imported.sheets[0].cells.B1).toBeUndefined();
     expect(imported.sheets[0].cells.A1.value).toBe('merged');
     expect(imported.sheets[0].cells.C2.value).toBe('bold plain');
@@ -745,7 +749,15 @@ describe('Excel workbook files', () => {
     const result = await decodeXlsx(zipSync(entries));
     expect(performance.now() - started).toBeLessThan(2_000);
     expect(result.sheets[0].cells.A1.value).toBe('42');
-    expect(result.warnings.join(' ')).toContain('Data validation');
+    expect(result.sheets[0].metadata?.validations).toEqual([
+      {
+        range: 'A1:XFD100000',
+        type: 'whole',
+        operator: 'between',
+        formulas: ['1'],
+        prompt: '😀 > & "',
+      },
+    ]);
     expect(result.sheets[0].metadata?.definedNames).toEqual([
       { name: 'WholeSheet', formula: "'Sheet 1'!$A$1:$XFD$1048576" },
     ]);

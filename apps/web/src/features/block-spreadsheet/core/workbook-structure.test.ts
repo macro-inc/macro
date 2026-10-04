@@ -129,6 +129,78 @@ describe('row and column structure', () => {
     expect(next[0].metadata?.merges).toEqual(['C2:D4']);
     expect(next[0].metadata?.hiddenRows).toEqual([3]);
   });
+  it('moves notes, rule ranges and rule formulas with their cells', () => {
+    const sheets = workbook();
+    sheets[0].metadata = {
+      notes: { A1: 'Header', A3: 'Removed', B5: 'Kept' },
+      conditionalFormats: [
+        {
+          range: 'A2:A10 C4',
+          type: 'expression',
+          formulas: ['$A2>$B$1'],
+        },
+        { range: 'D3', type: 'containsBlanks' },
+        {
+          range: 'E1:E9',
+          type: 'colorScale',
+          thresholds: [{ type: 'min' }, { type: 'num', value: '$B$6' }],
+          colors: ['#FFFFFF', '#00FF00'],
+        },
+      ],
+      validations: [
+        { range: 'F2:F99999', type: 'list', formulas: ['Model!$A$1:$A$4'] },
+        { range: 'G6', type: 'whole', formulas: ['$B$6', '100'] },
+      ],
+    };
+    const deleted = changeWorkbookAxis(sheets, {
+      sheetId: 'one',
+      axis: 'row',
+      index: 2,
+      count: 1,
+      kind: 'delete',
+    });
+    expect(deleted[0].metadata).toMatchObject({
+      notes: { A1: 'Header', B4: 'Kept' },
+      conditionalFormats: [
+        { range: 'A2:A9 C3', formulas: ['$A2>$B$1'] },
+        {
+          range: 'E1:E8',
+          thresholds: [{ type: 'min' }, { type: 'num', value: '$B$5' }],
+        },
+      ],
+      validations: [
+        { range: 'F2:F99998', formulas: ['Model!$A$1:$A$4'] },
+        { range: 'G5', formulas: ['$B$5', '100'] },
+      ],
+    });
+    expect(deleted[0].metadata?.conditionalFormats).toHaveLength(2);
+    // Rows inserted above move a rule; its range is clipped at the sheet's
+    // last row instead of blocking the insertion.
+    const inserted = changeWorkbookAxis(sheets, {
+      sheetId: 'one',
+      axis: 'row',
+      index: 0,
+      count: 2,
+      kind: 'insert',
+    });
+    expect(inserted[0].metadata?.conditionalFormats?.[0]).toMatchObject({
+      range: 'A4:A12 C6',
+      formulas: ['$A4>$B$3'],
+    });
+    expect(inserted[0].metadata?.validations?.[0].range).toBe('F4:F100000');
+    // Another sheet's rows move rules that refer to them.
+    const model = changeWorkbookAxis(sheets, {
+      sheetId: 'two',
+      axis: 'row',
+      index: 0,
+      count: 1,
+      kind: 'insert',
+    });
+    expect(model[0].metadata?.validations?.[0]).toMatchObject({
+      range: 'F2:F99999',
+      formulas: ['Model!$A$2:$A$5'],
+    });
+  });
 });
 
 it.each([

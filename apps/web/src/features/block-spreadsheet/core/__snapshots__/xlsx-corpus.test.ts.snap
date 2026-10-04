@@ -115,10 +115,7 @@ exports[`real-world XLSX corpus > closedxml-template-table-source-pivot-t… 1`]
   "sheets": 28,
   "styledCells": 2126,
   "warnings": [
-    "Cell comments and notes are not imported.",
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Macro cannot calculate these Excel functions yet, so their formulas show errors: _XLL.DSSDATA.",
@@ -143,7 +140,6 @@ exports[`real-world XLSX corpus > exceljs-test-issue-877-spare-parts-inve… 1`]
   "styledCells": 3786,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
     "Hyperlinks are imported as display text; link targets are not retained.",
@@ -169,10 +165,7 @@ exports[`real-world XLSX corpus > figshare-ucl-social-enterprise-financia… 1`]
   "sheets": 17,
   "styledCells": 101113,
   "warnings": [
-    "Cell comments and notes are not imported.",
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
@@ -213,9 +206,7 @@ exports[`real-world XLSX corpus > github-alibhatti23-dcf-comps-lbo-merger… 1`]
   "sheets": 8,
   "styledCells": 831,
   "warnings": [
-    "Cell comments and notes are not imported.",
     "Charts, drawings and images are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
   ],
@@ -253,10 +244,8 @@ exports[`real-world XLSX corpus > ironcalc-example-pivots-charts-comments… 1`]
   "sheets": 10,
   "styledCells": 128,
   "warnings": [
-    "Cell comments and notes are not imported.",
     "Chart sheets and other non-grid sheets are not imported.",
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
     "Diagonal borders are not imported.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
@@ -323,7 +312,6 @@ exports[`real-world XLSX corpus > ironcalc-template-gantt-project-tracker… 1`]
   "sheets": 4,
   "styledCells": 5541,
   "warnings": [
-    "Conditional formatting rules are not imported.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
   ],
 }
@@ -363,7 +351,6 @@ exports[`real-world XLSX corpus > ironcalc-template-travel-expenses-track… 1`]
   "sheets": 2,
   "styledCells": 1475,
   "warnings": [
-    "Conditional formatting rules are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
   ],
@@ -384,7 +371,6 @@ exports[`real-world XLSX corpus > irs-soi-2023-partnerships-table3-balanc… 1`]
   "sheets": 1,
   "styledCells": 8677,
   "warnings": [
-    "Conditional formatting rules are not imported.",
     "Font sizes are rounded and limited to 8–36 pt.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
   ],
@@ -426,7 +412,6 @@ exports[`real-world XLSX corpus > libreoffice-forum-mso-de-104083-pivot-w… 1`]
   "sheets": 2,
   "styledCells": 12208,
   "warnings": [
-    "Cell comments and notes are not imported.",
     "Charts, drawings and images are not imported.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
@@ -530,7 +515,6 @@ exports[`real-world XLSX corpus > nrel-sam-ppa-single-owner-project-finan… 1`]
   "styledCells": 28010,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
@@ -554,8 +538,6 @@ exports[`real-world XLSX corpus > nrel-sam-residential-solar-cash-flow.xl… 1`]
   "styledCells": 32545,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Patterned fills are shown as a blended solid color.",
@@ -579,7 +561,6 @@ exports[`real-world XLSX corpus > obr-efo-ready-reckoner-spring-2025.xlsx 1`] = 
   "styledCells": 12262,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hyperlinks are imported as display text; link targets are not retained.",
@@ -605,7 +586,6 @@ exports[`real-world XLSX corpus > obr-public-finances-databank-2026-09.xl… 1`]
   "warnings": [
     "Chart sheets and other non-grid sheets are not imported.",
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
@@ -653,7 +633,6 @@ exports[`real-world XLSX corpus > openxmlsdk-business-startup-costs-pl-te… 1`]
   "sheets": 6,
   "styledCells": 3731,
   "warnings": [
-    "Data validation and dropdown rules are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Font sizes are rounded and limited to 8–36 pt.",
@@ -676,9 +655,7 @@ exports[`real-world XLSX corpus > packt-loan-amortization-schedule.xlsx 1`] = `
   "roundTrip": "identical",
   "sheets": 1,
   "styledCells": 138,
-  "warnings": [
-    "Data validation and dropdown rules are not imported.",
-  ],
+  "warnings": [],
 }
 `;
 
@@ -696,8 +673,6 @@ exports[`real-world XLSX corpus > packt-project-finance-model.xlsx 1`] = `
   "sheets": 10,
   "styledCells": 5437,
   "warnings": [
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
   ],
 }
@@ -718,8 +693,6 @@ exports[`real-world XLSX corpus > packt-wazobia-3-statement-dcf-valuation… 1`]
   "styledCells": 3821,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
@@ -793,8 +766,6 @@ exports[`real-world XLSX corpus > poi-conditional-formatting-samples.xlsx 1`] = 
   "styledCells": 1838,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
@@ -843,8 +814,6 @@ exports[`real-world XLSX corpus > poi-data-validation-table-range-county-… 1`]
   "styledCells": 176,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Font sizes are rounded and limited to 8–36 pt.",
@@ -891,7 +860,6 @@ exports[`real-world XLSX corpus > poi-formula-eval-test-data.xlsx 1`] = `
   "sheets": 4,
   "styledCells": 591,
   "warnings": [
-    "Cell comments and notes are not imported.",
     "Charts, drawings and images are not imported.",
     "Hyperlinks are imported as display text; link targets are not retained.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
@@ -938,8 +906,6 @@ exports[`real-world XLSX corpus > poi-structured-refs-lots-with-lookups-b… 1`]
   "styledCells": 4022,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
@@ -1135,8 +1101,6 @@ exports[`real-world XLSX corpus > zenodo-ccs-cement-post-tax-dcf-model.xl… 1`]
   "styledCells": 20467,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Excel filters are retained for export; Macro displays all rows.",
     "Hyperlinks are imported as display text; link targets are not retained.",
@@ -1165,8 +1129,6 @@ exports[`real-world XLSX corpus > zenodo-circular-economy-business-case-c… 1`]
   "styledCells": 20074,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Conditional formatting rules are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
     "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
@@ -1215,7 +1177,6 @@ exports[`real-world XLSX corpus > zenodo-offshore-wind-lcoe-dcf-model.xlsx 1`] =
   "styledCells": 6665,
   "warnings": [
     "Charts, drawings and images are not imported.",
-    "Data validation and dropdown rules are not imported.",
     "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
     "Hyperlinks are imported as display text; link targets are not retained.",

@@ -1,5 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import type { ConditionalAppearance } from '@macro-inc/spreadsheet/conditional-formatting';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -36,7 +37,14 @@ import {
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
-import { cellBackground, cellBorderColor, cellForeground } from './cell-colors';
+import { CellListMenu } from './CellListMenu';
+import { ConditionalIcon } from './ConditionalIcon';
+import {
+  cellBackground,
+  cellBorderColor,
+  cellForeground,
+  dataBarBackground,
+} from './cell-colors';
 import { FormulaInput } from './FormulaInput';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
@@ -49,10 +57,12 @@ export type GridValue = {
   number?: number;
   error?: string;
   warning?: string;
+  conditional?: ConditionalAppearance;
 };
 
 const ROW_HEIGHT = 21;
 const COLUMN_HEADER_HEIGHT = 24;
+const LIST_BUTTON_SIZE = 18;
 const ROW_HEADER_WIDTH = 46;
 const CELL_PADDING_X = 3;
 const CELL_PADDING_Y = 2;
@@ -165,6 +175,13 @@ export function SpreadsheetGrid(props: {
   ) => void | Promise<void>;
   onCopyMetadata?: (cut?: boolean) => string;
   values: Record<string, GridValue>;
+  /** Excel notes by address, marked in their cells. */
+  notes?: Record<string, string>;
+  /** The active cell's data validation input message. */
+  inputMessage?: { title?: string; message: string };
+  /** The active cell's list of allowed values, offered in a dropdown. */
+  listItems?: string[];
+  onPickListItem?: (item: string) => void;
   /** The first calculation is running; formulas without results shimmer. */
   pendingFormulas?: boolean;
   remoteCursors: SpreadsheetCursor[];
@@ -208,6 +225,8 @@ export function SpreadsheetGrid(props: {
   const hiddenRows = createMemo(() => new Set(props.hiddenRows));
   const defaultFontSize = () => props.defaultFont?.size ?? 10;
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
+  // The cell whose list is open; moving the selection closes it.
+  const [listOpenAt, setListOpenAt] = createSignal<string>();
   const [resizing, setResizing] = createSignal<{
     column: number;
     width: number;
@@ -965,6 +984,16 @@ export function SpreadsheetGrid(props: {
               openCellMenu(rect.left + Math.min(rect.width, 24), rect.bottom);
               return;
             }
+            if (
+              event.altKey &&
+              event.key === 'ArrowDown' &&
+              !props.readonly &&
+              props.listItems?.length
+            ) {
+              event.preventDefault();
+              setListOpenAt(cellAddress(props.selection.anchor));
+              return;
+            }
             const previous = props.selection.focus;
             props.onKeyDown(event);
             if (
@@ -1301,6 +1330,9 @@ export function SpreadsheetGrid(props: {
                       const selected = () => selectedCell(position);
                       const value = () => props.values[address];
                       const cell = () => props.cells[address];
+                      // Conditional formatting draws over the cell's style.
+                      const look = () => value()?.conditional;
+                      const fill = () => look()?.fillColor ?? cell()?.fillColor;
                       const border = (
                         edge: 'Top' | 'Right' | 'Bottom' | 'Left'
                       ) => {
@@ -1320,22 +1352,23 @@ export function SpreadsheetGrid(props: {
                               : style === 'dotted'
                                 ? 'dotted'
                                 : 'solid';
-                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], cell()?.fillColor)}`;
+                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], fill())}`;
                       };
                       // A fill covers the gridlines around its cell, as in
                       // Excel; the right and bottom lines are drawn here.
-                      const gridline = (edge: 'Right' | 'Bottom') =>
-                        props.showGridlines === false ||
-                        cell()?.fillColor ||
-                        props.cells[
-                          cellAddress(
-                            edge === 'Right'
-                              ? { row, column: column + 1 }
-                              : { row: row + 1, column }
-                          )
-                        ]?.fillColor
+                      const gridline = (edge: 'Right' | 'Bottom') => {
+                        const next = cellAddress(
+                          edge === 'Right'
+                            ? { row, column: column + 1 }
+                            : { row: row + 1, column }
+                        );
+                        return props.showGridlines === false ||
+                          fill() ||
+                          props.values[next]?.conditional?.fillColor ||
+                          props.cells[next]?.fillColor
                           ? '1px solid transparent'
                           : undefined;
+                      };
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
                         return align && align !== 'auto'
@@ -1372,9 +1405,16 @@ export function SpreadsheetGrid(props: {
                           aria-selected={selected()}
                           data-address={address}
                           aria-description={
-                            props.comments?.hasComment(address)
-                              ? 'Has comments'
-                              : undefined
+                            [
+                              props.comments?.hasComment(address)
+                                ? 'Has comments'
+                                : '',
+                              props.notes?.[address]
+                                ? `Note: ${props.notes[address]}`
+                                : '',
+                            ]
+                              .filter(Boolean)
+                              .join('. ') || undefined
                           }
                           onMouseEnter={(event) => {
                             if (
@@ -1408,20 +1448,25 @@ export function SpreadsheetGrid(props: {
                             'border-bottom':
                               border('Bottom') ?? gridline('Bottom'),
                             'border-left': border('Left'),
-                            'background-color': cellBackground(
-                              cell()?.fillColor
-                            ),
+                            'background-color': cellBackground(fill()),
                             color: cellForeground(
-                              cell()?.textColor,
-                              cell()?.fillColor
+                              look()?.textColor ?? cell()?.textColor,
+                              fill()
                             ),
                             'font-family': fontFamily(cell()),
                             'font-size': `${fontPixels(cell(), defaultFontSize()) * scale()}px`,
-                            'font-style': cell()?.italic ? 'italic' : undefined,
+                            'font-style':
+                              (look()?.italic ?? cell()?.italic)
+                                ? 'italic'
+                                : undefined,
                             'text-decoration-line':
                               [
-                                cell()?.underline ? 'underline' : '',
-                                cell()?.strikethrough ? 'line-through' : '',
+                                (look()?.underline ?? cell()?.underline)
+                                  ? 'underline'
+                                  : '',
+                                (look()?.strikethrough ?? cell()?.strikethrough)
+                                  ? 'line-through'
+                                  : '',
                               ]
                                 .filter(Boolean)
                                 .join(' ') || undefined,
@@ -1438,7 +1483,7 @@ export function SpreadsheetGrid(props: {
                           }}
                           class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-surface text-ink select-none"
                           classList={{
-                            'font-semibold': cell()?.bold,
+                            'font-semibold': look()?.bold ?? cell()?.bold,
                             'tabular-nums': value()?.number !== undefined,
                             'text-failure': !!value()?.error,
                           }}
@@ -1498,11 +1543,34 @@ export function SpreadsheetGrid(props: {
                               props.onEdit();
                           }}
                         >
+                          <Show when={look()?.dataBar}>
+                            {(bar) => (
+                              <span
+                                aria-hidden="true"
+                                data-data-bar
+                                class="pointer-events-none absolute inset-y-0.5"
+                                style={{
+                                  left: `${Math.min(bar().axis, bar().value) * 100}%`,
+                                  width: `${Math.abs(bar().value - bar().axis) * 100}%`,
+                                  background: dataBarBackground(bar()),
+                                }}
+                              />
+                            )}
+                          </Show>
+                          <Show when={look()?.icon}>
+                            {(icon) => (
+                              <ConditionalIcon
+                                name={icon().name}
+                                color={icon().color}
+                              />
+                            )}
+                          </Show>
                           <Show
                             when={active() && props.editing}
                             fallback={
                               <div
-                                class="w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
+                                class="relative w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
+                                classList={{ 'pl-5': !!look()?.icon }}
                                 style={{
                                   'white-space': cell()?.wrap
                                     ? 'pre-wrap'
@@ -1529,11 +1597,13 @@ export function SpreadsheetGrid(props: {
                                     />
                                   }
                                 >
-                                  {decorated()
-                                    ? props.mentions!.renderText(
-                                        cell()!.value.replace(/^'/, '')
-                                      )
-                                    : display(address)}
+                                  {look()?.showValue === false
+                                    ? ''
+                                    : decorated()
+                                      ? props.mentions!.renderText(
+                                          cell()!.value.replace(/^'/, '')
+                                        )
+                                      : display(address)}
                                 </Show>
                               </div>
                             }
@@ -1557,6 +1627,13 @@ export function SpreadsheetGrid(props: {
                               onBlur={() => {
                                 if (props.editing) props.onCommit();
                               }}
+                            />
+                          </Show>
+                          <Show when={props.notes?.[address]}>
+                            <span
+                              aria-hidden="true"
+                              data-note-marker
+                              class="pointer-events-none absolute right-0 top-0 size-0 border-t-[6px] border-l-[6px] border-t-failure border-l-transparent"
                             />
                           </Show>
                           <Show when={props.comments?.hasComment(address)}>
@@ -1647,6 +1724,85 @@ export function SpreadsheetGrid(props: {
               class="pointer-events-none absolute z-[2] border-2 border-accent"
               style={activeStyle()}
             />
+            <Show
+              when={
+                !props.readonly &&
+                !props.editing &&
+                !props.formulaEditing &&
+                !!props.listItems?.length &&
+                props.listItems
+              }
+            >
+              {(items) => {
+                const address = () => cellAddress(props.selection.anchor);
+                const size = () =>
+                  Math.min(
+                    rowHeights()[props.selection.anchor.row],
+                    LIST_BUTTON_SIZE * scale()
+                  );
+                return (
+                  <CellListMenu
+                    address={address()}
+                    items={items()}
+                    open={listOpenAt() === address()}
+                    onOpenChange={(open) =>
+                      setListOpenAt(open ? address() : undefined)
+                    }
+                    style={{
+                      left: `${columnOffsets()[props.selection.anchor.column + 1] + 1}px`,
+                      top: `${rowOffsets()[props.selection.anchor.row + 1] - size()}px`,
+                      width: `${size()}px`,
+                      height: `${size()}px`,
+                    }}
+                    onPick={(item) => props.onPickListItem?.(item)}
+                    onRestoreFocus={focusGrid}
+                  />
+                );
+              }}
+            </Show>
+            <Show
+              when={
+                !props.editing &&
+                !props.pickingReference &&
+                listOpenAt() !== cellAddress(props.selection.anchor) &&
+                (props.inputMessage ||
+                  props.notes?.[cellAddress(props.selection.anchor)])
+              }
+            >
+              <div
+                data-cell-note
+                class="pointer-events-none absolute z-[5] max-w-64 whitespace-pre-wrap break-words rounded-md border border-edge-muted bg-surface px-2 py-1.5 text-xs leading-4 text-ink shadow-md"
+                style={{
+                  left: `${columnOffsets()[props.selection.anchor.column] + 8}px`,
+                  top: `${rowOffsets()[props.selection.anchor.row + 1] + 4}px`,
+                }}
+              >
+                <Show when={props.inputMessage}>
+                  {(message) => (
+                    <p>
+                      <Show when={message().title}>
+                        <strong class="block font-semibold">
+                          {message().title}
+                        </strong>
+                      </Show>
+                      {message().message}
+                    </p>
+                  )}
+                </Show>
+                <Show when={props.notes?.[cellAddress(props.selection.anchor)]}>
+                  {(note) => (
+                    <p
+                      classList={{
+                        'mt-1.5 border-t border-edge-muted pt-1.5':
+                          !!props.inputMessage,
+                      }}
+                    >
+                      {note()}
+                    </p>
+                  )}
+                </Show>
+              </div>
+            </Show>
             <Show when={props.referenceSelection}>
               {(range) => (
                 <div

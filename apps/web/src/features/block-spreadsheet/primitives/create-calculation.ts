@@ -170,6 +170,7 @@ export function createCalculation(
             arrayFormulas: sheet.metadata?.arrayFormulas,
             // SUBTOTAL(101-111) and AGGREGATE can leave hidden rows out.
             hiddenRows: sheet.metadata?.hiddenRows,
+            conditionalFormats: sheet.metadata?.conditionalFormats,
           },
         };
         const previous = sent.get(sheet.id);

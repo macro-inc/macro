@@ -337,6 +337,20 @@ Import keeps what Excel calculates and shows:
 - 1904-based dates are converted. Unknown error literals, rich text, phonetic
   runs, and invalid cell or merge references degrade to text or warnings rather
   than failing the import.
+- Conditional formatting, data validation (including Excel 2010 `x14` rules that
+  list values from another sheet) and notes (legacy and threaded comments, with
+  replies flattened to text) are kept in sheet metadata and exported again.
+  `packages/spreadsheet/src/conditional-formatting.ts` gives the rules to IronCalc,
+  which evaluates them after each calculation: cell values, formulas, text, date
+  periods, blanks, errors, duplicates, top/bottom and above/below average rules,
+  color scales, data bars and icon sets. Each result carries the cell's
+  appearance. `core/sheet-validation.ts` checks typed entries against list,
+  number, date, time and text-length rules that show an error alert: a stop alert
+  rejects the entry, warnings and information accept it, and each shows the
+  rule's message in the footer. List rules offer their values in a dropdown on the
+  active cell (Alt+Down). Input messages and notes show beside the active cell.
+  Inserting or deleting rows and columns moves rule ranges, rule formulas and
+  notes.
 
 Export writes `fullCalcOnLoad`, cached results for every formula and spilled
 cell, `_xlfn` prefixes, dynamic-array metadata for formulas that need array
@@ -371,7 +385,8 @@ production transport.
 The [browser fixture](browser-test/README.md) runs the composed editor with real
 calculation and Excel workers. Its Playwright suite covers formula autocomplete
 and range picking, menu/dialog focus, sheet navigation, read-only transitions,
-Excel round trips, workbook import undo, and formatting without remounts or flashes.
+Excel round trips, imported conditional formatting, data validation and notes,
+workbook import undo, and formatting without remounts or flashes.
 Its separate mobile suite uses Android Chrome and iPhone WebKit emulation for
 touch editing, formula suggestions, selection/reference handles, menus, sheets,
 permissions, and compact layouts. Android gestures use trusted touch input;

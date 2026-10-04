@@ -61,3 +61,19 @@ function inkStrength(color: string): number | undefined {
 export function cellBorderColor(color?: string, fill?: string): string {
   return cellForeground(color, fill) ?? 'var(--color-ink)';
 }
+
+/** An Excel data bar: a gradient fades toward the bar's end, which is the
+ * left for negative values. */
+export function dataBarBackground(bar: {
+  value: number;
+  axis: number;
+  color: string;
+  negativeColor: string;
+  gradient: boolean;
+}): string {
+  const negative = bar.value < bar.axis;
+  const color = negative ? bar.negativeColor : bar.color;
+  if (!bar.gradient) return color;
+  const faded = `color-mix(in srgb, ${color} 25%, transparent)`;
+  return `linear-gradient(to ${negative ? 'left' : 'right'}, ${color}, ${faded})`;
+}

@@ -24,7 +24,7 @@ export type CalculationSheetPatch = {
   rowCount: number;
   metadata?: Pick<
     WorkbookSheetMetadata,
-    'definedNames' | 'arrayFormulas' | 'hiddenRows'
+    'definedNames' | 'arrayFormulas' | 'hiddenRows' | 'conditionalFormats'
   >;
   /** Every input, replacing the worker's copy of the sheet. */
   cells?: CalculationCells;

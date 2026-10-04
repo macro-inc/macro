@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import { Button } from '@ui/components/Button';
 import {
   createDeferred,
@@ -39,6 +40,13 @@ import {
   selectionBounds,
 } from '../core/grid-selection';
 import { selectionToggleStyles } from '../core/selection-formatting';
+import {
+  listItems,
+  type RangeValues,
+  rangeAddresses,
+  validateInput,
+  validationAt,
+} from '../core/sheet-validation';
 import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
 import {
   SPREADSHEET_MAX_COLUMNS,
@@ -91,6 +99,44 @@ export function SpreadsheetEditor(props: {
     }
   );
   const showCalculationStatus = createCalculationStatus(calculation.busy);
+  // Data validation reads lists and bounds from the rule's own sheet, a
+  // named sheet, or a defined name, using calculated values where present.
+  const sheetById = (id: string | undefined) =>
+    props.store.workbook().find((sheet) => sheet.id === id);
+  const rangeValues =
+    (homeSheetId: string | undefined): RangeValues =>
+    (sheetName, range) => {
+      const sheet =
+        sheetName === undefined
+          ? sheetById(homeSheetId)
+          : props.store
+              .workbook()
+              .find(
+                (entry) => entry.name.toLowerCase() === sheetName.toLowerCase()
+              );
+      if (!sheet) return;
+      const results = calculation.workbookValues()[sheet.id] ?? {};
+      return rangeAddresses(range).map((address) => {
+        const result = results[address];
+        if (result) return { text: result.display, number: result.number };
+        return {
+          text: cellPlainText(sheet.cells[address]?.value ?? '').replace(
+            /^'/,
+            ''
+          ),
+        };
+      });
+    };
+  const definedNames = (homeSheetId: string | undefined) => [
+    ...(sheetById(homeSheetId)?.metadata?.definedNames ?? []).filter(
+      (name) => name.local
+    ),
+    ...props.store
+      .workbook()
+      .flatMap((sheet) =>
+        (sheet.metadata?.definedNames ?? []).filter((name) => !name.local)
+      ),
+  ];
   const grid = createGridController({
     ...props.store,
     canEdit: editable,
@@ -99,8 +145,33 @@ export function SpreadsheetEditor(props: {
     hiddenRows: () => props.store.activeSheet().metadata?.hiddenRows ?? [],
     hiddenColumns: () =>
       props.store.activeSheet().metadata?.hiddenColumns ?? [],
+    validate: (sheetId, address, value) =>
+      validateInput(
+        validationAt(sheetById(sheetId)?.metadata?.validations, address),
+        value,
+        rangeValues(sheetId),
+        definedNames(sheetId)
+      ),
   });
   const values = calculation.values;
+  const activeValidation = createMemo(() =>
+    validationAt(
+      props.store.activeSheet().metadata?.validations,
+      grid.activeAddress()
+    )
+  );
+  const activeList = createMemo(() => {
+    const rule = activeValidation();
+    if (rule?.type !== 'list' || rule.dropdown === false) return;
+    const sheetId = props.store.activeSheetId();
+    return listItems(rule, rangeValues(sheetId), definedNames(sheetId));
+  });
+  const inputMessage = () => {
+    const rule = activeValidation();
+    return rule?.showPrompt && (rule.prompt || rule.promptTitle)
+      ? { title: rule.promptTitle, message: rule.prompt ?? '' }
+      : undefined;
+  };
   const workbookActions = createWorkbookActions({
     store: props.store,
     values: calculation.workbookValues,
@@ -675,6 +746,19 @@ export function SpreadsheetEditor(props: {
           onFill={grid.fill}
           onCopyMetadata={grid.copyMetadata}
           values={values()}
+          notes={props.store.activeSheet().metadata?.notes}
+          inputMessage={inputMessage()}
+          listItems={activeList()}
+          onPickListItem={(item) => {
+            if (!editable()) return;
+            grid.commit();
+            // A choice is literal text, even one that starts like a formula.
+            props.store.setCells({
+              [grid.activeAddress()]: {
+                value: item.startsWith('=') ? `'${item}` : item,
+              },
+            });
+          }}
           pendingFormulas={
             calculation.busy() &&
             !(props.store.activeSheetId() in calculation.workbookValues())

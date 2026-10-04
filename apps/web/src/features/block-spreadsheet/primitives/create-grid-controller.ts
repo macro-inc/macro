@@ -31,6 +31,7 @@ import {
   serializeTable,
 } from '../core/grid-selection';
 import { selectionToggleStyles } from '../core/selection-formatting';
+import type { ValidationOutcome } from '../core/sheet-validation';
 import {
   SPREADSHEET_DEFAULT_STYLE,
   SPREADSHEET_MAX_CELL_LENGTH,
@@ -54,6 +55,12 @@ type GridSource = {
   copyCells?: (copies: CellCopy[]) => Promise<SpreadsheetCellEdits>;
   setCells: (edits: Record<string, Partial<SpreadsheetCell> | null>) => void;
   setSelection?: (selection: SpreadsheetSelection) => void;
+  /** Checks typed input against the cell's data validation rule. */
+  validate?: (
+    sheetId: string | undefined,
+    address: string,
+    value: string
+  ) => ValidationOutcome;
   undo: () => void;
   redo: () => void;
 };
@@ -115,6 +122,19 @@ export function createGridController(source: GridSource) {
     | { prefix: string; suffix: string; anchor: CellPosition; sheetId?: string }
     | undefined;
   const [notice, setNotice] = createSignal('');
+  // A rejected entry's message outlives the move that ends its edit (Enter,
+  // Tab or a click), and clears with the next action.
+  let keepNotice = false;
+  function clearNotice() {
+    if (!keepNotice) setNotice('');
+  }
+  function alert(message: string) {
+    setNotice(message);
+    keepNotice = true;
+    queueMicrotask(() => {
+      keepNotice = false;
+    });
+  }
   const activeAddress = () => cellAddress(selection().anchor);
   let originalValue = '';
   let originalCell: SpreadsheetCell | undefined;
@@ -153,7 +173,7 @@ export function createGridController(source: GridSource) {
                 }
               : { anchor: origin, focus: origin }
           );
-          setNotice('');
+          clearNotice();
         },
         { defer: true }
       )
@@ -200,7 +220,7 @@ export function createGridController(source: GridSource) {
 
   function cancelPendingCopy() {
     operation++;
-    setNotice('');
+    clearNotice();
   }
 
   function undo() {
@@ -227,6 +247,24 @@ export function createGridController(source: GridSource) {
     editTarget = undefined;
     resetReference();
     if (source.canEdit() && value !== originalValue) {
+      const outcome = source.validate?.(
+        target?.sheetId ?? source.sheetId?.(),
+        address,
+        value
+      );
+      if (outcome && !outcome.valid) {
+        alert(
+          outcome.title
+            ? `${outcome.title}: ${outcome.message}`
+            : outcome.message
+        );
+        // A stop alert rejects the entry; warnings and information allow it.
+        if (outcome.style === 'stop') {
+          if (target && target.sheetId !== source.sheetId?.())
+            source.setActiveSheet?.(target.sheetId);
+          return;
+        }
+      }
       const edits = {
         [address]: { value: normalizeCellInput(value, originalCell) },
       };
@@ -246,7 +284,7 @@ export function createGridController(source: GridSource) {
       anchor: extend ? current.anchor : bounded,
       focus: bounded,
     }));
-    setNotice('');
+    clearNotice();
   }
 
   function selectRange(anchor: CellPosition, focus: CellPosition) {
@@ -256,7 +294,7 @@ export function createGridController(source: GridSource) {
       anchor: boundPosition(anchor),
       focus: boundPosition(focus),
     });
-    setNotice('');
+    clearNotice();
   }
 
   function beginEdit(location: 'cell' | 'formula', initial?: string) {

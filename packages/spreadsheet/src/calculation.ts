@@ -8,6 +8,11 @@ import {
 import { format as formatExcelNumber } from 'ssf';
 import { cellDateMention, cellPlainText } from './cell-mentions';
 import {
+  addConditionalFormats,
+  type ConditionalAppearance,
+  readConditionalAppearance,
+} from './conditional-formatting';
+import {
   formatCellAddress,
   parseCellAddress,
   SPREADSHEET_DEFAULT_STYLE,
@@ -30,6 +35,8 @@ export type CalculatedCell = {
   value?: string | number | boolean | null;
   /** Rows and columns an array formula's result occupies from this anchor. */
   spill?: { rows: number; columns: number };
+  /** Conditional formatting that applies to the cell. */
+  conditional?: ConditionalAppearance;
 };
 
 export type SpreadsheetCalculation = Record<string, CalculatedCell>;
@@ -770,6 +777,10 @@ type EnteredSheet = {
   arrays: Map<string, { width: number; height: number }>;
   /** Each array formula's result cells beyond its anchor. */
   spills: Map<string, string[]>;
+  /** Whether the engine has conditional formatting rules for the sheet. */
+  conditionalRules: boolean;
+  /** Cells conditional formatting changed in the last read. */
+  conditional: Set<string>;
 };
 
 /** An engine model with every sheet entered, kept for incremental updates. */
@@ -818,6 +829,8 @@ function prepareSheet(
     width: 0,
     arrays: new Map(),
     spills: new Map(),
+    conditionalRules: false,
+    conditional: new Set(),
   };
   const literals: { address: string; row: number; column: number }[] = [];
   const formulas: typeof literals = [];
@@ -1142,6 +1155,20 @@ function buildWorkbook(sheets: CalculationSheet[]): EngineWorkbook {
       for (const { address, row, column } of order)
         enterCell(workbook, sheetIndex, address, row, column);
     }
+    // Rules may read any sheet, so they follow every cell.
+    let conditionalCells = 0;
+    for (const [sheetIndex, sheet] of bounded.entries()) {
+      const covered = addConditionalFormats(
+        model,
+        sheetIndex,
+        sheet.metadata?.conditionalFormats,
+        sheet.rowCount,
+        Math.max(26, workbook.entered[sheetIndex].width),
+        1_000_000 - conditionalCells
+      );
+      conditionalCells += covered;
+      workbook.entered[sheetIndex].conditionalRules = covered > 0;
+    }
     model.resumeEvaluation();
     model.evaluate();
     return workbook;
@@ -1173,9 +1200,47 @@ function readWorkbook(
         readCell(workbook, sheetIndex, address, row, column, includeTypes)
       );
     readSpills(workbook, sheetIndex, values, write, includeTypes);
+    readConditional(workbook, sheetIndex, write, includeTypes);
     results[sheet.id] = values;
   }
   return results;
+}
+
+/**
+ * Conditional formatting results: each matched cell's own result with its
+ * appearance, a blank result for an empty matched cell, and their own results
+ * again for cells that no longer match.
+ */
+function readConditional(
+  workbook: EngineWorkbook,
+  sheetIndex: number,
+  write: ResultWriter,
+  includeTypes: boolean
+) {
+  const entered = workbook.entered[sheetIndex];
+  if (!entered.conditionalRules && !entered.conditional.size) return;
+  const appearance = readConditionalAppearance(workbook.model, sheetIndex);
+  for (const address of new Set([
+    ...entered.conditional,
+    ...appearance.keys(),
+  ])) {
+    const position = parseCellAddress(address);
+    if (!position) continue;
+    const own = readCell(
+      workbook,
+      sheetIndex,
+      address,
+      position.row,
+      position.column,
+      includeTypes
+    );
+    const look = appearance.get(address);
+    write(
+      address,
+      look ? { ...(own ?? { display: '' }), conditional: look } : own
+    );
+  }
+  entered.conditional = new Set(appearance.keys());
 }
 
 function sameCalculatedCell(left: CalculatedCell, right: CalculatedCell) {
@@ -1187,7 +1252,8 @@ function sameCalculatedCell(left: CalculatedCell, right: CalculatedCell) {
     left.type === right.type &&
     left.value === right.value &&
     left.spill?.rows === right.spill?.rows &&
-    left.spill?.columns === right.spill?.columns
+    left.spill?.columns === right.spill?.columns &&
+    JSON.stringify(left.conditional) === JSON.stringify(right.conditional)
   );
 }
 
@@ -1296,6 +1362,7 @@ function createWorkbookCalculationSession(): WorkbookCalculationSession {
           for (const [address, { row, column }] of entered.formulas)
             read(address, row, column);
           readSpills(current, sheetIndex, values, write, includeTypes);
+          readConditional(current, sheetIndex, write, includeTypes);
           const changed: Record<string, CalculatedCell | null> = {};
           for (const [address, old] of before) {
             const now = values[address];

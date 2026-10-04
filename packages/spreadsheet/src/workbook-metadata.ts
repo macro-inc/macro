@@ -1,4 +1,12 @@
 import {
+  type ConditionalFormat,
+  type DataValidation,
+  MAX_SHEET_RULES,
+  validConditionalFormat,
+  validDataValidation,
+  validNotes,
+} from './sheet-rules';
+import {
   parseCellAddress,
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
@@ -22,6 +30,12 @@ export type WorkbookSheetMetadata = {
   tabColor?: string;
   /** The imported workbook's default font, for cells without their own. */
   defaultFont?: { name: string; size: number };
+  /** Excel notes by cell address. */
+  notes?: Record<string, string>;
+  /** Excel data validation rules. */
+  validations?: DataValidation[];
+  /** Excel conditional formatting rules, highest priority first. */
+  conditionalFormats?: ConditionalFormat[];
 };
 
 export function validWorkbookRange(range: unknown): range is string {
@@ -61,6 +75,9 @@ export function parseWorkbookMetadata(
             'gridlines',
             'tabColor',
             'defaultFont',
+            'notes',
+            'validations',
+            'conditionalFormats',
           ].includes(key)
       )
     )
@@ -139,6 +156,18 @@ export function parseWorkbookMetadata(
       return;
     if (value.autoFilter !== undefined && !validWorkbookRange(value.autoFilter))
       return;
+    if (value.notes !== undefined && !validNotes(value.notes)) return;
+    for (const [key, valid] of [
+      ['validations', validDataValidation],
+      ['conditionalFormats', validConditionalFormat],
+    ] as const)
+      if (
+        value[key] !== undefined &&
+        (!Array.isArray(value[key]) ||
+          value[key].length > MAX_SHEET_RULES ||
+          !value[key].every(valid))
+      )
+        return;
     if (
       value.definedNames !== undefined &&
       (!Array.isArray(value.definedNames) ||

@@ -35,7 +35,8 @@ function sameResult(left: CalculatedCell, right: CalculatedCell) {
     left.type === right.type &&
     left.value === right.value &&
     left.spill?.rows === right.spill?.rows &&
-    left.spill?.columns === right.spill?.columns
+    left.spill?.columns === right.spill?.columns &&
+    JSON.stringify(left.conditional) === JSON.stringify(right.conditional)
   );
 }
 
