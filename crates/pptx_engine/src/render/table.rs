@@ -1,42 +1,97 @@
-//! Table rendering (`a:tbl` in a graphic frame).
+//! Table rendering (`a:tbl` in a graphic frame), and the table layout the
+//! editor shares with it so cell editors and hit testing line up with the
+//! drawing.
 
 use super::build::{Builder, text_layout_nodes};
 use super::paint::{fill_paint, line_stroke};
 use super::scene::Node;
-use super::text::{LayoutParams, layout};
-use crate::model::presentation::SlideContext;
+use super::text::{LayoutParams, TextLayout, layout};
+use crate::font::FontDb;
+use crate::model::presentation::{PartRef, SlideContext};
 use crate::model::shape::Shape;
-use crate::model::table::{Edge, Table, find_table_style, resolve_table};
+use crate::model::table::{Cell, Edge, Table, find_table_style, resolve_table};
+use crate::model::text::TextBody;
 use crate::opc::rel_type;
 use crate::path::{Affine, Path, Point, Rect};
-use crate::xml::{NodeId, Ns};
+use crate::xml::{NodeId, Ns, XmlDoc};
+
+/// A table resolved and laid out the way it is drawn.
+#[derive(Clone, Debug)]
+pub struct TableLayout {
+    /// The resolved table.
+    pub table: Table,
+    /// Column boundaries from the frame's left edge (points), one more than columns.
+    pub xs: Vec<f32>,
+    /// Row boundaries from the frame's top edge (points), rows grown to fit their text.
+    pub ys: Vec<f32>,
+}
+
+impl TableLayout {
+    /// The rectangle (frame space) of `rows × cols` grid cells from `(row, col)`,
+    /// clipped to the grid.
+    pub fn rect(&self, row: usize, col: usize, rows: usize, cols: usize) -> Rect {
+        let last_col = self.xs.len().saturating_sub(1);
+        let last_row = self.ys.len().saturating_sub(1);
+        let (c0, r0) = (col.min(last_col), row.min(last_row));
+        let (c1, r1) = ((col + cols).min(last_col), (row + rows).min(last_row));
+        Rect::from_ltrb(self.xs[c0], self.ys[r0], self.xs[c1], self.ys[r1])
+    }
+
+    /// The rectangle of a resolved cell, including the cells it spans.
+    pub fn cell_rect(&self, cell: &Cell) -> Rect {
+        self.rect(cell.row, cell.col, cell.row_span, cell.grid_span)
+    }
+
+    /// Row heights after rows grew to fit their text (points).
+    pub fn row_heights(&self) -> Vec<f32> {
+        self.ys.windows(2).map(|w| w[1] - w[0]).collect()
+    }
+}
+
+/// The deck's table styles part (`ppt/tableStyles.xml`), by name.
+pub fn table_styles_part(ctx: &SlideContext) -> Option<String> {
+    let rels = &ctx.presentation.rels;
+    rels.first_of_type(rel_type::TABLE_STYLES)
+        .map(|r| rels.resolve(r))
+}
+
+/// The style id (`a:tableStyleId`) a table uses.
+pub fn table_style_id(doc: &XmlDoc, tbl: NodeId) -> Option<String> {
+    doc.child(tbl, Ns::A, "tblPr")
+        .and_then(|p| doc.child(p, Ns::A, "tableStyleId"))
+        .map(|n| doc.text(n).trim().to_owned())
+        .filter(|id| !id.is_empty())
+}
+
+/// Resolves a table and lays it out as the renderer draws it. `styles` is
+/// the deck's table styles part (see [`table_styles_part`]).
+pub fn layout_table(
+    ctx: &SlideContext,
+    styles: Option<&PartRef>,
+    part: &PartRef,
+    tbl: NodeId,
+    fonts: &FontDb,
+) -> TableLayout {
+    let style = table_style_id(&part.doc, tbl).and_then(|id| find_table_style(ctx, styles, &id));
+    let table = resolve_table(ctx, part, tbl, style.as_ref());
+    let (xs, ys) = grid_positions(fonts, &table);
+    TableLayout { table, xs, ys }
+}
+
+/// Lays out a cell's text in its rectangle; the layout's origin is the
+/// rectangle's top-left corner.
+pub fn cell_text_layout(text: &TextBody, rect: Rect, fonts: &FontDb) -> TextLayout {
+    layout(text, rect.w, rect.h, fonts, LayoutParams::from_body(text))
+}
 
 /// Resolves and lays out the table of a graphic frame.
-pub fn resolve(
-    b: &mut Builder<'_>,
-    ctx: &SlideContext,
-    s: &Shape,
-    tbl: NodeId,
-) -> (Table, Vec<f32>, Vec<f32>) {
-    let doc = &s.part.doc;
-    let style_id = doc
-        .child(tbl, Ns::A, "tblPr")
-        .and_then(|p| doc.child(p, Ns::A, "tableStyleId"))
-        .map(|n| doc.text(n).trim().to_owned());
-    let styles_part = ctx
-        .presentation
-        .rels
-        .first_of_type(rel_type::TABLE_STYLES)
-        .map(|r| ctx.presentation.rels.resolve(r))
-        .and_then(|name| b.loader.part(&name));
-    let style = style_id.and_then(|id| find_table_style(ctx, styles_part.as_ref(), &id));
-    let table = resolve_table(ctx, &s.part, tbl, style.as_ref());
-    let (xs, ys) = grid_positions(b, &table);
-    (table, xs, ys)
+fn resolve(b: &mut Builder<'_>, ctx: &SlideContext, s: &Shape, tbl: NodeId) -> TableLayout {
+    let styles = table_styles_part(ctx).and_then(|name| b.loader.part(&name));
+    layout_table(ctx, styles.as_ref(), &s.part, tbl, b.fonts)
 }
 
 /// Column and row boundary offsets (points), rows grown to fit their text.
-fn grid_positions(b: &Builder<'_>, t: &Table) -> (Vec<f32>, Vec<f32>) {
+fn grid_positions(fonts: &FontDb, t: &Table) -> (Vec<f32>, Vec<f32>) {
     let mut xs = vec![0.0f32];
     for w in &t.cols {
         xs.push(xs.last().copied().unwrap_or(0.0) + w);
@@ -57,7 +112,7 @@ fn grid_positions(b: &Builder<'_>, t: &Table) -> (Vec<f32>, Vec<f32>) {
                 let Some(text) = &cell.text else { continue };
                 let end_col = (cell.col + cell.grid_span).min(ncols);
                 let w = xs[end_col] - xs[cell.col];
-                let lay = layout(text, w, 1.0e6, b.fonts, LayoutParams::from_body(text));
+                let lay = layout(text, w, 1.0e6, fonts, LayoutParams::from_body(text));
                 let lines = lay
                     .lines
                     .last()
@@ -87,13 +142,14 @@ pub fn table_nodes(
     world: &Affine,
     out: &mut Vec<Node>,
 ) {
-    let (table, xs, ys) = resolve(b, ctx, s, tbl);
+    let grid = resolve(b, ctx, s, tbl);
+    let table = &grid.table;
     let ncols = table.cols.len();
     let nrows = table.rows.len();
     if ncols == 0 || nrows == 0 {
         return;
     }
-    let total = Rect::from_xywh(0.0, 0.0, xs[ncols], ys[nrows]);
+    let total = Rect::from_xywh(0.0, 0.0, grid.xs[ncols], grid.ys[nrows]);
     if let Some(p) = fill_paint(&table.background, total, world, b.loader) {
         out.push(Node::Fill {
             path: Path::rect(total).transform(world),
@@ -101,10 +157,6 @@ pub fn table_nodes(
             even_odd: false,
         });
     }
-    let cell_rect = |r: usize, c: usize, rs: usize, cs: usize| {
-        let (c1, r1) = ((c + cs).min(ncols), (r + rs).min(nrows));
-        Rect::from_ltrb(xs[c], ys[r], xs[c1], ys[r1])
-    };
     let visible = || {
         table
             .rows
@@ -113,7 +165,7 @@ pub fn table_nodes(
             .filter(|c| !c.h_merge && !c.v_merge && c.col < ncols && c.row < nrows)
     };
     for cell in visible() {
-        let rect = cell_rect(cell.row, cell.col, cell.row_span, cell.grid_span);
+        let rect = grid.cell_rect(cell);
         if let Some(p) = fill_paint(&cell.fill, rect, world, b.loader) {
             out.push(Node::Fill {
                 path: Path::rect(rect).transform(world),
@@ -127,8 +179,8 @@ pub fn table_nodes(
         if text.is_empty() {
             continue;
         }
-        let rect = cell_rect(cell.row, cell.col, cell.row_span, cell.grid_span);
-        let lay = layout(text, rect.w, rect.h, b.fonts, LayoutParams::from_body(text));
+        let rect = grid.cell_rect(cell);
+        let lay = cell_text_layout(text, rect, b.fonts);
         let t = world
             .pre_concat(&Affine::translate(f64::from(rect.x), f64::from(rect.y)))
             .pre_concat(&lay.transform);
@@ -144,7 +196,7 @@ pub fn table_nodes(
     // Border weights are points: scaling a group does not change them.
     let scale = 1.0;
     for cell in visible() {
-        let rect = cell_rect(cell.row, cell.col, cell.row_span, cell.grid_span);
+        let rect = grid.cell_rect(cell);
         let edges = [
             (
                 Edge::Left,
