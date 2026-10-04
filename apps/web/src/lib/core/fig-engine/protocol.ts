@@ -20,6 +20,7 @@ export type QueryMethod =
   | 'geometry'
   | 'outline'
   | 'search'
+  | 'components'
   | 'inRect';
 
 export type FigRequest =

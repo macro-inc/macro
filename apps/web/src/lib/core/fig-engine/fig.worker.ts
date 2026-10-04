@@ -122,6 +122,9 @@ async function serve(request: FigRequest) {
         case 'summary':
           json = f.summary();
           break;
+        case 'components':
+          json = f.components();
+          break;
         case 'layers':
           json = f.layers(a as number, (b as string | null) ?? undefined);
           break;

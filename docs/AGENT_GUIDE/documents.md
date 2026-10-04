@@ -462,6 +462,14 @@ is no live collaboration: the last save wins.
 
 Layout and test hooks:
 
+- **Left panel tabs**: `fig-tab-layers` and `fig-tab-assets`. Assets
+  (`fig-assets`) lists the file's components (`fig-asset`, searchable with
+  `fig-assets-search`); editors click one to place an instance in the middle
+  of the view, and the arrow beside it (or a click, read-only) goes to the
+  main component. ⌥⌘K makes the selection a component (a frame becomes one;
+  other layers are wrapped), duplicating or pasting a main component places
+  an instance, and ⌥⌘B detaches an instance into ordinary layers (nested
+  instances too).
 - **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
   (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
   (`fig-page` buttons; pages named only with dashes are dividers; editors

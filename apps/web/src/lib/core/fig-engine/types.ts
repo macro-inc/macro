@@ -244,3 +244,14 @@ export interface NodeGeometry {
   corners: [Vec2, Vec2, Vec2, Vec2];
   bounds: Rect;
 }
+
+/** A component, for the assets list. */
+export interface ComponentInfo {
+  id: string;
+  name: string;
+  /** The component set a variant belongs to. */
+  set: string | null;
+  page: number;
+  width: number;
+  height: number;
+}

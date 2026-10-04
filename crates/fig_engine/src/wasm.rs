@@ -411,6 +411,11 @@ impl FigFile {
         Ok(inspect::outline(&self.doc, scene, i))
     }
 
+    /// The file's components, page by page (`ComponentInfo[]` JSON).
+    pub fn components(&self) -> Result<String, JsError> {
+        to_json(&inspect::components(&self.doc))
+    }
+
     /// Layers whose name or text contains `query` (`SearchHit[]` JSON).
     pub fn search(&mut self, page: usize, query: &str, limit: usize) -> Result<String, JsError> {
         self.scene(page)?;

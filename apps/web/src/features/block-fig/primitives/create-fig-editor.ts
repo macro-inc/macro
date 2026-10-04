@@ -106,7 +106,16 @@ export type Op =
   | { op: 'group'; ids: string[]; frame?: boolean }
   | { op: 'ungroup'; ids: string[] }
   | { op: 'reflow'; ids: string[] }
-  | { op: 'autoLayout'; ids: string[] };
+  | { op: 'autoLayout'; ids: string[] }
+  | { op: 'createComponent'; ids: string[] }
+  | {
+      op: 'instantiate';
+      component: string;
+      parent: string;
+      x: number;
+      y: number;
+    }
+  | { op: 'detach'; ids: string[] };
 
 export interface FigEditorOptions {
   engine: FigEngine;
@@ -281,6 +290,35 @@ export function createFigEditor(options: FigEditorOptions) {
     const targets = editableIds();
     if (targets.length === 0) return;
     const result = await apply([{ op: 'autoLayout', ids: targets }]);
+    await selectCreated(result);
+  };
+
+  /** ⌥⌘K: a frame becomes a component; other layers are wrapped. */
+  const createComponent = async () => {
+    const targets = editableIds();
+    if (targets.length === 0) return;
+    const result = await apply([{ op: 'createComponent', ids: targets }]);
+    await selectCreated(result);
+  };
+
+  /** ⌥⌘B: instances become ordinary layers. */
+  const detachInstance = () => apply([{ op: 'detach', ids: editableIds() }]);
+
+  /** Places an instance of a component in the middle of the view. */
+  const insertInstance = async (component: {
+    id: string;
+    width: number;
+    height: number;
+  }) => {
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    const x = Math.round(c.x + v.w / 2 / c.zoom - component.width / 2);
+    const y = Math.round(c.y + v.h / 2 / c.zoom - component.height / 2);
+    const page = viewer.pages[viewer.page()];
+    if (!page) return;
+    const result = await apply([
+      { op: 'instantiate', component: component.id, parent: page.id, x, y },
+    ]);
     await selectCreated(result);
   };
 
@@ -533,6 +571,9 @@ export function createFigEditor(options: FigEditorOptions) {
     cut,
     addAutoLayout,
     removeAutoLayout,
+    createComponent,
+    detachInstance,
+    insertInstance,
     startMove,
     startResize,
     create,

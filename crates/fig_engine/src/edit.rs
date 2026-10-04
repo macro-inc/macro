@@ -52,6 +52,11 @@ pub mod flags {
     pub const LAYOUT_CHILD: u32 = 1 << 20;
     /// How a layer follows its frame when the frame is resized.
     pub const CONSTRAINTS: u32 = 1 << 21;
+    /// The node's type changed (a frame made a component, an instance
+    /// detached).
+    pub const TYPE: u32 = 1 << 22;
+    /// Which component an instance shows.
+    pub const INSTANCE_OF: u32 = 1 << 23;
 }
 
 /// A paint as the editor describes it.
@@ -240,6 +245,23 @@ pub enum Op {
     AutoLayout {
         ids: Vec<String>,
     },
+    /// "Create component" (⌥⌘K): a frame becomes a component; other layers
+    /// are wrapped in a new one.
+    CreateComponent {
+        ids: Vec<String>,
+    },
+    /// Places an instance of a component with its top left at a page point,
+    /// on top of `parent` (a page or frame).
+    Instantiate {
+        component: String,
+        parent: String,
+        x: f64,
+        y: f64,
+    },
+    /// "Detach instance" (⌥⌘B).
+    Detach {
+        ids: Vec<String>,
+    },
     /// Creates a layer in `parent` (a page or layer id), on top unless
     /// `index` (bottom is 0) says otherwise.
     Create {
@@ -316,6 +338,7 @@ struct Txn<'a> {
     relayout: Vec<NodeIdx>,
 }
 
+mod components;
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -1022,6 +1045,25 @@ impl<'a> Txn<'a> {
                     }
                 }
             }
+            Op::CreateComponent { ids } => {
+                let all = self.layers(ids)?;
+                self.create_component(&all)?;
+            }
+            Op::Instantiate {
+                component,
+                parent,
+                x,
+                y,
+            } => {
+                let component = self.resolve(component)?;
+                let parent = self.resolve(parent)?;
+                self.place_instance(component, parent, Vec2::new(*x, *y))?;
+            }
+            Op::Detach { ids } => {
+                for i in self.layers(ids)? {
+                    self.detach_instance(i)?;
+                }
+            }
             Op::AutoLayout { ids } => {
                 let all = self.layers(ids)?;
                 self.add_auto_layout(&all)?;
@@ -1119,6 +1161,19 @@ impl<'a> Txn<'a> {
                         .iter()
                         .position(|&c| c == i)
                         .map_or(siblings.len(), |p| p + 1);
+                    // Duplicating a main component makes an instance of it
+                    // (but a cut component is pasted back as itself, and a
+                    // variant copied in its set stays a variant).
+                    let in_set = self.doc.props(parent).is_state_group == Some(true);
+                    if self.doc.props(i).node_type() == NodeType::Symbol
+                        && !self.doc.node(i).removed
+                        && !in_set
+                    {
+                        let t = self.doc.props(i).transform();
+                        let copy = self.instantiate(i, parent, at, t)?;
+                        self.translate(copy, *dx, *dy);
+                        continue;
+                    }
                     let copy = self.copy_tree(i, parent, at);
                     self.translate(copy, *dx, *dy);
                     let guid = self.doc.props(copy).guid.unwrap_or_default();

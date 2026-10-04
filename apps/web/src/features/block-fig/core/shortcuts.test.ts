@@ -139,6 +139,15 @@ describe('editing shortcuts', () => {
     ).toBe('bring-to-front');
   });
 
+  it('makes components and detaches instances', () => {
+    expect(
+      shortcutAction(key('˚', 'KeyK', { metaKey: true, altKey: true }), true)
+    ).toBe('create-component');
+    expect(
+      shortcutAction(key('b', 'KeyB', { ctrlKey: true, altKey: true }), false)
+    ).toBe('detach-instance');
+  });
+
   it('adds and removes auto layout', () => {
     expect(shortcutAction(key('A', 'KeyA', { shiftKey: true }), true)).toBe(
       'add-auto-layout'

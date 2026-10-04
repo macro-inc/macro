@@ -613,3 +613,50 @@ pub fn effect_kinds(props: &Props) -> impl Iterator<Item = EffectKind> + '_ {
 
 #[cfg(test)]
 mod test;
+
+/// A component, for the assets list.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComponentInfo {
+    pub id: String,
+    pub name: String,
+    /// The component set a variant belongs to.
+    pub set: Option<String>,
+    pub page: usize,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// Every component in the document, in page and layer order.
+pub fn components(doc: &Document) -> Vec<ComponentInfo> {
+    let mut out = Vec::new();
+    for (page, &p) in doc.pages.iter().enumerate() {
+        let mut stack: Vec<crate::NodeIdx> = doc.node(p).children.iter().rev().copied().collect();
+        while let Some(i) = stack.pop() {
+            let node = doc.node(i);
+            if node.removed {
+                continue;
+            }
+            let props = doc.props(i);
+            if props.node_type() == NodeType::Symbol {
+                let set = node
+                    .parent
+                    .filter(|&s| doc.props(s).is_state_group == Some(true))
+                    .map(|s| doc.props(s).name().to_owned());
+                out.push(ComponentInfo {
+                    id: props.guid.map(|g| g.to_string()).unwrap_or_default(),
+                    name: props.name().to_owned(),
+                    set,
+                    page,
+                    width: props.size().x,
+                    height: props.size().y,
+                });
+                continue;
+            }
+            if props.node_type() != NodeType::Instance {
+                stack.extend(node.children.iter().rev().copied());
+            }
+        }
+    }
+    out
+}

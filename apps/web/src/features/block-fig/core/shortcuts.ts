@@ -49,6 +49,8 @@ export type ViewerAction =
   | 'ungroup'
   | 'frame-selection'
   | 'add-auto-layout'
+  | 'create-component'
+  | 'detach-instance'
   | 'remove-auto-layout'
   | 'bring-forward'
   | 'send-backward'
@@ -100,6 +102,8 @@ export function shortcutAction(
 
   if (mod && e.altKey) {
     if (e.code === 'KeyG') return 'frame-selection';
+    if (e.code === 'KeyK') return 'create-component';
+    if (e.code === 'KeyB') return 'detach-instance';
     if (e.code === 'BracketRight') return 'bring-to-front';
     if (e.code === 'BracketLeft') return 'send-to-back';
     return undefined;
@@ -240,6 +244,8 @@ export const EDIT_ACTIONS: ReadonlySet<ViewerAction> = new Set<ViewerAction>([
   'frame-selection',
   'add-auto-layout',
   'remove-auto-layout',
+  'create-component',
+  'detach-instance',
   'bring-forward',
   'send-backward',
   'bring-to-front',
@@ -298,6 +304,8 @@ export const SHORTCUT_GROUPS: { title: string; items: ShortcutHelp[] }[] = [
       { action: 'Frame selection', keys: ['mod', '⌥', 'G'] },
       { action: 'Add auto layout', keys: ['⇧', 'A'] },
       { action: 'Remove auto layout', keys: ['⌥', '⇧', 'A'] },
+      { action: 'Create component', keys: ['mod', '⌥', 'K'] },
+      { action: 'Detach instance', keys: ['mod', '⌥', 'B'] },
       { action: 'Bring forward', keys: ['mod', ']'] },
       { action: 'Send backward', keys: ['mod', '['] },
       { action: 'Bring to front', keys: ['mod', '⌥', ']'] },

@@ -605,6 +605,32 @@ impl<'s> Build<'s> {
         if edits & flags::TEXT != 0 {
             self.text(m, p);
         }
+        if edits & flags::TYPE != 0 {
+            let t = match p.node_type() {
+                NodeType::RoundedRectangle => "ROUNDED_RECTANGLE",
+                other => type_name(other),
+            };
+            self.set_enum(m, "type", t);
+            if p.node_type() != NodeType::Instance {
+                for f in [
+                    "symbolData",
+                    "derivedSymbolData",
+                    "componentPropAssignments",
+                    "overriddenSymbolID",
+                ] {
+                    m.remove(s, f);
+                }
+            }
+        }
+        if edits & flags::INSTANCE_OF != 0
+            && let Some(symbol) = p.symbol.as_deref()
+            && let Some(id) = symbol.symbol_id
+            && let Some(def) = self.sub(m.def, "symbolData")
+        {
+            let mut sm = Msg::new(def);
+            self.guid_field(&mut sm, "symbolID", id);
+            m.set(s, "symbolData", Value::Msg(Box::new(sm)));
+        }
         if edits & flags::CONSTRAINTS != 0
             && let Some((h, v)) = &p.constraints
         {

@@ -8,6 +8,7 @@ import type { NodeInfo, Rect } from '@core/fig-engine/types';
 import {
   createEffect,
   createSignal,
+  For,
   on,
   onCleanup,
   onMount,
@@ -27,6 +28,7 @@ import {
 } from '../core/shortcuts';
 import { createFigEditor } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
+import { AssetsPanel } from './assets-panel';
 import { LayersPanel } from './layers-panel';
 import { TextEditor } from './text-editor';
 import { ViewerCanvas } from './viewer-canvas';
@@ -55,6 +57,7 @@ export function FigViewer() {
   const [altHeld, setAltHeld] = createSignal(false);
   const [deepHeld, setDeepHeld] = createSignal(false);
   const [showShortcuts, setShowShortcuts] = createSignal(false);
+  const [leftTab, setLeftTab] = createSignal<'layers' | 'assets'>('layers');
   const [info, setInfo] = createSignal<NodeInfo>();
   let root!: HTMLDivElement;
   let searchInput: HTMLInputElement | undefined;
@@ -183,6 +186,7 @@ export function FigViewer() {
       .with('find', () => {
         viewer.setUiHidden(false);
         viewer.setLayersOpen(true);
+        setLeftTab('layers');
         queueMicrotask(() => searchInput?.focus());
       })
       .with('show-shortcuts', () => setShowShortcuts((s) => !s))
@@ -201,6 +205,8 @@ export function FigViewer() {
       .with('ungroup', () => void editor.ungroup())
       .with('frame-selection', () => void editor.group(true))
       .with('add-auto-layout', () => void editor.addAutoLayout())
+      .with('create-component', () => void editor.createComponent())
+      .with('detach-instance', () => void editor.detachInstance())
       .with('remove-auto-layout', () => void editor.removeAutoLayout())
       .with('bring-forward', () => void editor.arrange('forward'))
       .with('send-backward', () => void editor.arrange('backward'))
@@ -372,14 +378,39 @@ export function FigViewer() {
     >
       <Show when={showLayers()}>
         <aside class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel">
-          <LayersPanel
-            viewer={viewer}
-            engine={engine}
-            editor={editor}
-            searchRef={(el) => {
-              searchInput = el;
-            }}
-          />
+          <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2 text-xs">
+            <For each={['layers', 'assets'] as const}>
+              {(t) => (
+                <button
+                  type="button"
+                  class="rounded-md px-2 py-1 font-medium"
+                  classList={{
+                    'bg-hover text-ink': leftTab() === t,
+                    'text-ink-muted': leftTab() !== t,
+                  }}
+                  data-testid={`fig-tab-${t}`}
+                  onClick={() => setLeftTab(t)}
+                >
+                  {t === 'layers' ? 'Layers' : 'Assets'}
+                </button>
+              )}
+            </For>
+          </div>
+          <Show
+            when={leftTab() === 'layers'}
+            fallback={
+              <AssetsPanel viewer={viewer} engine={engine} editor={editor} />
+            }
+          >
+            <LayersPanel
+              viewer={viewer}
+              engine={engine}
+              editor={editor}
+              searchRef={(el) => {
+                searchInput = el;
+              }}
+            />
+          </Show>
         </aside>
       </Show>
       <div class="relative min-w-0 flex-1">

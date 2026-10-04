@@ -12,6 +12,7 @@
 export interface WasmFigFile {
   /** `FileSummary` JSON. */
   summary: () => string;
+  components: () => string;
   /** `PageLayout` JSON. */
   openPage: (page: number) => string;
   /** Premultiplied RGBA, `width × height × 4` bytes. */

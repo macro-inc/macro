@@ -10,6 +10,7 @@
 
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type {
+  ComponentInfo,
   FileSummary,
   LayerRow,
   NodeGeometry,
@@ -266,6 +267,11 @@ export class FigEngine {
   /** The file's pages and details as they are now (after edits). */
   currentSummary(): Promise<FileSummary> {
     return this.query('summary');
+  }
+
+  /** Every component in the file (after edits), for the assets list. */
+  components(): Promise<ComponentInfo[]> {
+    return this.query('components');
   }
 
   layers(page: number, parent?: string): Promise<LayerRow[]> {
