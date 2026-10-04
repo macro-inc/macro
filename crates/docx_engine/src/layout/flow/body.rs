@@ -11,7 +11,7 @@ use super::super::{Chrome, Item, Page, ParaBox, StoryRef};
 use super::anchors::PageGeom;
 use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
-    para_box, prev_record, rebreak, space_before, stack_story, table_box,
+    para_box, prev_record, rebreak, space_after, space_before, stack_story, table_box,
 };
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
@@ -953,7 +953,15 @@ impl<'e, 'a> Flow<'e, 'a> {
             let mut pending: Vec<i64> = ids.iter().map(|(_, id)| *id).collect();
             pending.extend(&line_notes);
             let note_h = self.notes_needed(&pending);
-            if y + line.height / spread > bottom - note_h + EPS {
+            // Above footnotes, a paragraph's space after must fit as well.
+            let notes =
+                !pending.is_empty() || self.cur.as_ref().is_some_and(|c| !c.notes.is_empty());
+            let after = if notes && k + 1 == lines.len() {
+                space_after(props)
+            } else {
+                0.0
+            };
+            if y + line.height / spread + after > bottom - note_h + EPS {
                 break;
             }
             y += line.height;

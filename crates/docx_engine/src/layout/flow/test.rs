@@ -768,3 +768,39 @@ fn footnotes_leave_room_for_the_continuation_notice() {
         "{with_notice}"
     );
 }
+
+#[test]
+fn space_after_must_fit_above_footnotes() {
+    // One-line paragraphs 11.5pt high with 12pt after, the first with a
+    // footnote: the notes (default 12pt separator and an 11.5pt note) end
+    // the column at 696.5.
+    let paras = |note: bool| -> String {
+        (0..30)
+            .map(|k| {
+                let reference = if note && k == 0 {
+                    r#"<w:r><w:footnoteReference w:id="1"/></w:r>"#
+                } else {
+                    ""
+                };
+                format!(
+                    r#"<w:p><w:pPr><w:spacing w:after="240"/></w:pPr><w:r><w:t>P{k}</w:t></w:r>{reference}</w:p>"#
+                )
+            })
+            .collect()
+    };
+    let footnotes = r#"<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> The note.</w:t></w:r></w:p></w:footnote>"#;
+    let count = |note: bool| {
+        let l = layout(
+            &format!("{}{LETTER}", paras(note)),
+            &Parts {
+                footnotes: Some(footnotes),
+                ..arial_10()
+            },
+        );
+        page_texts(&l, 0).len()
+    };
+    // The 27th paragraph's line would fit above the notes, its space after
+    // would not. Without notes the space after may run into the margin.
+    assert_eq!(count(true), 26);
+    assert_eq!(count(false), 28);
+}
