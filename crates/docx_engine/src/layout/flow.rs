@@ -19,6 +19,8 @@ use crate::model::section::{HeaderRefs, Section};
 use pptx_engine::font::FontDb;
 use std::collections::HashMap;
 
+pub(super) use stack::TableCache;
+
 /// Layout choices.
 #[derive(Clone, Debug)]
 pub struct LayoutOptions {

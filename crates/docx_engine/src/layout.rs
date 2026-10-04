@@ -233,6 +233,8 @@ pub struct LayoutCache {
     /// Paragraphs showing page fields, by the values they show (a footer's
     /// page number on every page).
     dynamic: Mutex<crate::hash::FxMap<(StoryRef, BlockId, u64), Cached>>,
+    /// Laid-out tables.
+    tables: flow::TableCache,
     /// Resolved formats of one style sheet generation.
     formats: Mutex<Option<(u64, Arc<format::FormatCache>)>>,
     /// Page count of the last layout (the first guess for page-count fields).
@@ -320,19 +322,28 @@ impl LayoutCache {
         guard.0 += 1;
     }
 
-    /// Ends a layout pass, dropping paragraphs it did not use.
+    /// The current layout pass.
+    pub(crate) fn epoch(&self) -> u64 {
+        self.paras.lock().unwrap_or_else(|e| e.into_inner()).0
+    }
+
+    /// Ends a layout pass, dropping the paragraphs and tables it did not
+    /// use, unless something else still holds them (a cached table holds
+    /// its paragraphs, a layout the lines it shows).
     pub(crate) fn end(&self) {
         let mut guard = self.paras.lock().unwrap_or_else(|e| e.into_inner());
         let epoch = guard.0;
+        let keep = |c: &Cached| c.epoch == epoch || Arc::strong_count(&c.pb) > 1;
         guard.1.retain(|_, list| {
-            list.retain(|c| c.epoch == epoch);
+            list.retain(keep);
             !list.is_empty()
         });
         drop(guard);
         self.dynamic
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .retain(|_, c| c.epoch == epoch);
+            .retain(|_, c| keep(c));
+        self.tables.end(epoch);
     }
 
     /// The format cache for a style sheet generation.
