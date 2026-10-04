@@ -28,16 +28,21 @@ export function keyAction(event: Key, mac: boolean): KeyAction | null {
   const mod = mac ? event.metaKey : event.ctrlKey;
   const word = mac ? event.altKey : event.ctrlKey;
   const extend = event.shiftKey;
-  const move = (unit: Unit, forward: boolean): KeyAction => ({
+  const move = (unit: Unit, forward: boolean, visual = false): KeyAction => ({
     kind: 'ops',
-    ops: [{ op: 'move', unit, forward, extend }],
+    ops: [
+      visual
+        ? { op: 'move', unit, forward, extend, visual }
+        : { op: 'move', unit, forward, extend },
+    ],
   });
   switch (event.key) {
     case 'ArrowLeft':
     case 'ArrowRight': {
+      // Left and right on the page (reversed in right-to-left text).
       const forward = event.key === 'ArrowRight';
-      if (mac && event.metaKey) return move('lineBoundary', forward);
-      return move(word ? 'word' : 'char', forward);
+      if (mac && event.metaKey) return move('lineBoundary', forward, true);
+      return move(word ? 'word' : 'char', forward, true);
     }
     case 'ArrowUp':
     case 'ArrowDown': {

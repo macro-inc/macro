@@ -150,12 +150,18 @@ pub(super) fn line_nodes(r: &mut Renderer<'_>, pl: &PlacedLine, out: &mut Vec<No
         }
         let x0 = pl.x + lines.x[k];
         let x1 = x0 + lines.adv[k];
+        // Right-to-left text runs leftwards: a segment grows on either side.
+        let touches = |a: f32, b: f32| (b - x0).abs() < 0.5 || (x1 - a).abs() < 0.5;
         match segments.last_mut() {
-            Some(s) if s.run == c.run && (s.x1 - x0).abs() < 0.5 => {
-                s.x1 = x1;
+            Some(s) if s.run == c.run && touches(s.x0, s.x1) => {
+                s.x0 = s.x0.min(x0);
+                s.x1 = s.x1.max(x1);
                 if c.kind == Kind::Text {
                     match s.words.last_mut() {
-                        Some(w) if (w.1 - x0).abs() < 0.5 => w.1 = x1,
+                        Some(w) if touches(w.0, w.1) => {
+                            w.0 = w.0.min(x0);
+                            w.1 = w.1.max(x1);
+                        }
                         _ => s.words.push((x0, x1)),
                     }
                 }

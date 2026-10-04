@@ -161,6 +161,10 @@ pub enum EditOp {
         /// Extend the selection instead of moving the caret.
         #[serde(default)]
         extend: bool,
+        /// `forward` means rightwards on the page (arrow keys): in a
+        /// right-to-left paragraph that is backwards in the text.
+        #[serde(default)]
+        visual: bool,
     },
     /// Selects the whole body.
     SelectAll,
@@ -2047,8 +2051,10 @@ impl Session {
                 unit,
                 forward,
                 extend,
+                visual,
             } => {
-                self.move_caret(*unit, *forward, *extend);
+                let flip = *visual && self.right_to_left(&self.sel.focus.clone());
+                self.move_caret(*unit, *forward != flip, *extend);
                 self.pending = None;
                 Ok(None)
             }
@@ -2400,6 +2406,12 @@ impl Session {
             }
             Pos::new(from.block.clone(), word_backward(&text, from.offset))
         }
+    }
+
+    /// Whether the paragraph at a position reads right to left.
+    fn right_to_left(&self, pos: &Pos) -> bool {
+        geometry::locate(&self.layout, &self.index, pos)
+            .is_some_and(|(_, pl, _)| pl.para.inline.levels.last().is_some_and(|l| l % 2 == 1))
     }
 
     fn move_caret(&mut self, unit: Unit, forward: bool, extend: bool) {

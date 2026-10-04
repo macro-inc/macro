@@ -6,6 +6,7 @@
 //! columns and pages ([`flow`]) with Word's rules for spacing, keeping lines
 //! together, widows and orphans, sections, headers, footers and notes.
 
+pub mod bidi;
 pub mod drawing;
 mod flow;
 pub mod fonts;

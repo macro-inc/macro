@@ -66,7 +66,17 @@ export type ParaPatch = {
 
 export type EditOp =
   | { op: 'select'; anchor: Pos; focus: Pos }
-  | { op: 'move'; unit?: Unit; forward: boolean; extend?: boolean }
+  /**
+   * Move the caret (or extend the selection). With `visual` (arrow keys),
+   * `forward` means rightwards, which is backwards in right-to-left text.
+   */
+  | {
+      op: 'move';
+      unit?: Unit;
+      forward: boolean;
+      extend?: boolean;
+      visual?: boolean;
+    }
   | { op: 'selectAll' }
   | { op: 'selectWord'; at: Pos }
   | { op: 'selectParagraph'; at: Pos }

@@ -4,6 +4,7 @@
 //! opportunity; list labels, field results that depend on the page, and
 //! note numbers are synthetic clusters that occupy no content offsets.
 
+use super::bidi::{self, Class};
 use super::drawing::{Drawing, parse_drawing};
 use super::fonts::{Font, Fonts};
 use super::format::{Formats, ParaFormat};
@@ -12,6 +13,7 @@ use crate::model::content::Attrs;
 use crate::model::numbering::{Label, NumFmt, Suffix, format_number};
 use crate::model::props::{RunProps, VertAlign};
 use crate::xml::parse_int;
+use pptx_engine::font::arabic::{self, JoinForm, Joining};
 use pptx_engine::model::color::Rgba;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -200,6 +202,9 @@ pub struct Inline {
     pub label_len: usize,
     /// Hyperlink targets by cluster range (start, end, relationship id or anchor).
     pub links: Vec<(usize, usize, String)>,
+    /// Embedding level of each cluster (Unicode bidirectional algorithm);
+    /// empty when the paragraph is all left to right.
+    pub levels: Vec<u8>,
 }
 
 /// A field being read.
@@ -476,7 +481,12 @@ impl Builder<'_, '_> {
     /// Measures and pushes one visible character.
     fn text_char(&mut self, ch: char, next: Option<char>, offset: usize, len: usize, run: u16) {
         let given = &self.out.runs[run as usize].props;
-        let complex = given.cs_flag || given.rtl || is_complex(ch);
+        // A run marked right to left (or complex script) is complex-script
+        // text throughout (its size and weight), though Word sets its Latin
+        // letters and digits in the run's Latin font.
+        let marked = given.cs_flag || given.rtl;
+        let complex = marked || is_complex(ch);
+        let latin = marked && !is_complex(ch) && ch.is_ascii_alphanumeric();
         let run = if complex {
             self.complex_style(run)
         } else {
@@ -485,7 +495,8 @@ impl Builder<'_, '_> {
         let props = Arc::clone(&self.out.runs[run as usize].props);
         let fonts = self.ctx.fonts;
         let (family, bold, italic, mut size) = if complex {
-            (&props.cs, props.bold_cs, props.italic_cs, props.size_cs)
+            let family = if latin { &props.ascii } else { &props.cs };
+            (family, props.bold_cs, props.italic_cs, props.size_cs)
         } else if is_cjk(ch) || (props.hint.as_deref() == Some("eastAsia") && !ch.is_ascii()) {
             (&props.east_asia, props.bold, props.italic, props.size)
         } else if ch.is_ascii() {
@@ -516,6 +527,14 @@ impl Builder<'_, '_> {
         let mut advance = g.advance * size * props.scale + props.spacing;
         if ch == '\u{00A0}' {
             advance = fonts.glyph(font, ' ').advance * size * props.scale + props.spacing;
+        }
+        // An Arabic family drawn by a substitute keeps its own widths.
+        if complex && let Some((letters, space)) = fonts.arabic_widths(family) {
+            if matches!(ch, ' ' | '\u{00A0}') {
+                advance = space * size * props.scale + props.spacing;
+            } else if g.font.face != font.face || arabic::joining(ch) != Joining::None {
+                advance = g.advance * letters * size * props.scale + props.spacing;
+            }
         }
         // Pair kerning only when the run asks for it.
         if props.kern > 0.0
@@ -576,6 +595,113 @@ impl Builder<'_, '_> {
         {
             c.advance = c.size.max(1.0);
         }
+    }
+
+    /// Joins Arabic letters: each takes its initial, medial, final or
+    /// isolated presentation form, and lam with a following alef becomes
+    /// one ligature (the alef's cluster then draws nothing).
+    fn shape_arabic(&mut self) {
+        let clusters = &mut self.out.clusters;
+        if !clusters
+            .iter()
+            .any(|c| c.kind == Kind::Text && arabic::joining(c.ch) != Joining::None)
+        {
+            return;
+        }
+        let types: Vec<Joining> = clusters
+            .iter()
+            .map(|c| match c.kind {
+                Kind::Text => arabic::joining(c.ch),
+                // Bookmarks and other hidden markers do not break a word.
+                Kind::Zero => Joining::Transparent,
+                _ => Joining::None,
+            })
+            .collect();
+        let forms = arabic::forms_of(&types);
+        let fonts = self.ctx.fonts;
+        let db = fonts.db();
+        let runs = &self.out.runs;
+        let measure = |c: &Cluster, glyph: u16, face| {
+            let props = &runs[c.run as usize].props;
+            let letters = fonts.arabic_widths(&props.cs).map_or(1.0, |w| w.0);
+            db.advance(face, glyph) * letters * c.size * props.scale + props.spacing
+        };
+        let mut i = 0;
+        while i < clusters.len() {
+            let (Some(form), Some(font)) = (forms[i], clusters[i].font) else {
+                i += 1;
+                continue;
+            };
+            let face = font.face;
+            let joined = matches!(form, JoinForm::Medial | JoinForm::Final);
+            let lam_alef = (clusters[i].ch == '\u{0644}')
+                .then(|| clusters.get(i + 1))
+                .flatten()
+                .filter(|next| next.kind == Kind::Text && next.font.map(|f| f.face) == Some(face))
+                .and_then(|next| arabic::lam_alef(next.ch, joined))
+                .and_then(|lig| db.glyph(face, lig));
+            if let Some(glyph) = lam_alef {
+                let advance = measure(&clusters[i], glyph, face);
+                let c = &mut clusters[i];
+                c.glyph = glyph;
+                c.advance = advance;
+                let tail = &mut clusters[i + 1];
+                tail.kind = Kind::Zero;
+                tail.glyph = 0;
+                tail.advance = 0.0;
+                i += 2;
+                continue;
+            }
+            if let Some(glyph) =
+                arabic::presentation_form(clusters[i].ch, form).and_then(|p| db.glyph(face, p))
+            {
+                let advance = measure(&clusters[i], glyph, face);
+                let c = &mut clusters[i];
+                c.glyph = glyph;
+                c.advance = advance;
+            }
+            i += 1;
+        }
+    }
+
+    /// Resolves the clusters' embedding levels when the paragraph is right
+    /// to left or holds right-to-left text, and mirrors brackets that read
+    /// right to left.
+    fn resolve_bidi(&mut self) {
+        let base = u8::from(self.para.props.bidi);
+        let clusters = &self.out.clusters;
+        let classes: Vec<Class> = clusters
+            .iter()
+            .map(|c| match c.kind {
+                Kind::Text => bidi::class(c.ch),
+                Kind::Space => Class::Ws,
+                Kind::Tab => Class::S,
+                Kind::LineBreak => Class::Ws,
+                Kind::Zero | Kind::Anchor(_) | Kind::SoftHyphen => Class::Bn,
+                Kind::End => Class::B,
+                _ => Class::On,
+            })
+            .collect();
+        if !bidi::needed(&classes, base == 1) {
+            return;
+        }
+        let rtl: Vec<bool> = clusters
+            .iter()
+            .map(|c| self.out.runs[c.run as usize].props.rtl)
+            .collect();
+        let levels = bidi::levels(&classes, &rtl, base);
+        let db = self.ctx.fonts.db();
+        for (c, &level) in self.out.clusters.iter_mut().zip(&levels) {
+            if level % 2 == 0 || c.kind != Kind::Text {
+                continue;
+            }
+            if let (Some(m), Some(font)) = (bidi::mirror(c.ch), c.font)
+                && let Some(glyph) = db.glyph(font.face, m)
+            {
+                c.glyph = glyph;
+            }
+        }
+        self.out.levels = levels;
     }
 
     fn tab(&mut self, offset: usize, len: usize, run: u16) {
@@ -800,6 +926,8 @@ pub fn build(
         ptab: None,
         size: 0.0,
     });
+    b.shape_arabic();
+    b.resolve_bidi();
     b.out
 }
 

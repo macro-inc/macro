@@ -815,7 +815,8 @@ updates live and shows each collaborator's caret with their name
 
 - Pages are `[data-docx-page="<index>"]` elements. Click a page to place the
   caret, drag to select, double-click for a word and triple-click for a
-  paragraph. Keystrokes go to a hidden textarea, `[data-docx-input]`
+  paragraph. On a touch screen a swipe scrolls, a tap places the caret, and
+  a double tap or a held press selects a word. Keystrokes go to a hidden textarea, `[data-docx-input]`
   (labelled `Document text`); it must have focus, which a click on a page
   gives it. Read text back from another tab or after a download, not from
   the page.
@@ -841,6 +842,9 @@ updates live and shows each collaborator's caret with their name
   (`[data-docx-replace]`) and `Replace all` (`[data-docx-replace-all]`);
   replacements follow tracked changes and one undo takes back a replace all.
   Escape closes the bar with the current match selected.
+- Arabic and Hebrew paragraphs lay out right to left as in Word (joined
+  Arabic letters, mixed-direction lines in visual order); the left and
+  right arrow keys move left and right on the page.
 - Mod+Z, Mod+Shift+Z and Ctrl+Y (or the toolbar buttons) undo and redo your
   own edits only, never a collaborator's. Mod+B/I/U format, Tab and
   Shift+Tab indent list items, Enter splits paragraphs and Shift+Enter

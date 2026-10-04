@@ -89,7 +89,26 @@ pub(crate) struct Stop {
     pub cluster: usize,
 }
 
-/// Caret stops of line `li` of a paragraph, left to right.
+/// Whether a cluster reads right to left.
+fn rtl(pb: &ParaBox, ci: usize) -> bool {
+    pb.inline.levels.get(ci).is_some_and(|l| l % 2 == 1)
+}
+
+/// The x of the caret before a cluster: its left edge, or its right edge
+/// in right-to-left text.
+fn leading_x(pb: &ParaBox, ci: usize) -> f32 {
+    let x = pb.lines.x[ci];
+    if rtl(pb, ci) { x + pb.lines.adv[ci] } else { x }
+}
+
+/// The x of the caret after a cluster.
+fn trailing_x(pb: &ParaBox, ci: usize) -> f32 {
+    let x = pb.lines.x[ci];
+    if rtl(pb, ci) { x } else { x + pb.lines.adv[ci] }
+}
+
+/// Caret stops of line `li` of a paragraph, in text order (left to right
+/// unless the line holds right-to-left text).
 pub(crate) fn line_stops(pb: &ParaBox, li: usize) -> Vec<Stop> {
     let lines = &pb.lines;
     let Some(line) = lines.lines.get(li) else {
@@ -108,7 +127,7 @@ pub(crate) fn line_stops(pb: &ParaBox, li: usize) -> Vec<Stop> {
         if c.kind == Kind::End {
             stops.push(Stop {
                 offset: c.offset as usize,
-                x: lines.x[ci],
+                x: leading_x(pb, ci),
                 cluster: ci,
             });
             last_visible = None;
@@ -116,7 +135,7 @@ pub(crate) fn line_stops(pb: &ParaBox, li: usize) -> Vec<Stop> {
         }
         stops.push(Stop {
             offset: c.offset as usize,
-            x: lines.x[ci],
+            x: leading_x(pb, ci),
             cluster: ci,
         });
         last_visible = Some(ci);
@@ -126,7 +145,7 @@ pub(crate) fn line_stops(pb: &ParaBox, li: usize) -> Vec<Stop> {
         let c = &clusters[ci];
         stops.push(Stop {
             offset: c.offset as usize + c.len as usize,
-            x: lines.x[ci] + lines.adv[ci],
+            x: trailing_x(pb, ci),
             cluster: ci,
         });
     }
@@ -251,8 +270,10 @@ fn distance(pl: &PlacedLine, x: f32, y: f32) -> f32 {
 fn stop_at_x(pl: &PlacedLine, x: f32) -> (Stop, bool) {
     let stops = line_stops(&pl.para, pl.line);
     let rel = x - pl.x;
-    let mut chosen = stops.first().copied();
-    for w in stops.windows(2) {
+    let mut by_x = stops.clone();
+    by_x.sort_by(|a, b| a.x.total_cmp(&b.x));
+    let mut chosen = by_x.first().copied();
+    for w in by_x.windows(2) {
         let mid = (w[0].x + w[1].x) / 2.0;
         if rel >= mid {
             chosen = Some(w[1]);
@@ -306,6 +327,51 @@ fn x_on_line(pl: &PlacedLine, offset: usize) -> f32 {
     pl.x + stop.map_or(0.0, |s| s.x)
 }
 
+/// The page x spans of a line's clusters within offsets `lo..hi`, merged
+/// where they touch; with `mark`, a sliver for the paragraph mark at the
+/// line's end (on the left in a right-to-left paragraph).
+fn cluster_spans(pl: &PlacedLine, lo: usize, hi: usize, mark: bool) -> Vec<(f32, f32)> {
+    let pb = &pl.para;
+    let line = pl.line();
+    let mut spans: Vec<(f32, f32)> = (line.start..line.end)
+        .filter(|&ci| {
+            let c = &pb.inline.clusters[ci];
+            let start = c.offset as usize;
+            ci >= pb.inline.label_len
+                && c.len > 0
+                && c.kind != Kind::End
+                && start >= lo
+                && start < hi
+        })
+        .map(|ci| {
+            let x = pl.x + pb.lines.x[ci];
+            (x, x + pb.lines.adv[ci])
+        })
+        .collect();
+    if mark {
+        let rtl_para = pb.inline.levels.last().is_some_and(|l| l % 2 == 1);
+        let end = (line.start..line.end).find(|&ci| pb.inline.clusters[ci].kind == Kind::End);
+        if let Some(ci) = end {
+            let x = pl.x + pb.lines.x[ci];
+            let right = x + pb.lines.adv[ci];
+            spans.push(if rtl_para {
+                (right - 5.0, right)
+            } else {
+                (x, x + 5.0)
+            });
+        }
+    }
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut merged: Vec<(f32, f32)> = Vec::new();
+    for (a, b) in spans {
+        match merged.last_mut() {
+            Some(m) if a <= m.1 + 0.5 => m.1 = m.1.max(b),
+            _ => merged.push((a, b)),
+        }
+    }
+    merged
+}
+
 /// Highlight rectangles for the range between two ordered positions;
 /// `paras` lists the paragraphs from `from.block` to `to.block` inclusive.
 pub fn range_rects(
@@ -345,9 +411,23 @@ pub fn range_rects(
             if lo == hi && !mark {
                 continue;
             }
+            let line = pl.line();
+            if !pl.para.inline.levels.is_empty() {
+                // Bidirectional text: the selected clusters, wherever they
+                // are on the line.
+                for (x0, x1) in cluster_spans(pl, lo, hi, mark) {
+                    out.push(PageRect {
+                        page,
+                        x: x0,
+                        y: pl.y,
+                        w: (x1 - x0).max(1.0),
+                        h: line.height,
+                    });
+                }
+                continue;
+            }
             let x0 = x_on_line(pl, lo);
             let x1 = x_on_line(pl, hi) + if mark { 5.0 } else { 0.0 };
-            let line = pl.line();
             out.push(PageRect {
                 page,
                 x: x0,

@@ -665,3 +665,78 @@ fn paragraph_positions_count_from_above_the_space_before() {
         );
     }
 }
+
+/// A right-to-left paragraph (or not) of runs marked right to left.
+fn rtl_para(bidi: bool, rpr: &str, text: &str) -> String {
+    let ppr = if bidi { "<w:pPr><w:bidi/></w:pPr>" } else { "" };
+    format!(
+        r#"<w:p>{ppr}<w:r><w:rPr>{rpr}<w:rtl/></w:rPr><w:t xml:space="preserve">{text}</w:t></w:r></w:p>"#
+    )
+}
+
+#[test]
+fn right_to_left_paragraphs_read_from_the_right() {
+    let body = format!(
+        "{}{LETTER}",
+        rtl_para(true, "", "\u{05E9}\u{05DC}\u{05D5}\u{05DD} abc 12")
+    );
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let pl = ls[0];
+    let (x, adv) = (&pl.para.lines.x, &pl.para.lines.adv);
+    let width = 468.0;
+    // The first letter sits at the right edge, the next ones to its left.
+    assert!((x[0] + adv[0] - width).abs() < 0.5, "{} {}", x[0], adv[0]);
+    assert!(x[1] < x[0] && x[2] < x[1]);
+    // Latin text and numbers keep their own order inside it.
+    let at = |c: char| {
+        let i = pl
+            .para
+            .inline
+            .clusters
+            .iter()
+            .position(|k| k.ch == c)
+            .unwrap();
+        x[i]
+    };
+    assert!(at('a') < at('b') && at('b') < at('c'));
+    assert!(at('1') < at('2'));
+    // ...and come after (left of) the Hebrew word.
+    assert!(at('c') < x[3]);
+}
+
+#[test]
+fn hebrew_and_arabic_take_the_weight_of_their_run() {
+    let body = format!(
+        "{}{}{LETTER}",
+        rtl_para(true, "<w:b/><w:bCs/>", "\u{05E9}"),
+        rtl_para(true, "", "\u{05E9}")
+    );
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let face = |i: usize| ls[i].para.inline.clusters[0].font.unwrap();
+    let (bold, regular) = (face(0), face(1));
+    assert_eq!(fonts().family(bold.face), "Noto Sans Hebrew");
+    assert_ne!(bold.face, regular.face, "a bold face, not the regular one");
+    assert!(!bold.synthetic_bold);
+}
+
+#[test]
+fn arabic_letters_join() {
+    // beh seen meem, then lam alef.
+    let body = format!(
+        "{}{LETTER}",
+        rtl_para(true, "", "\u{0628}\u{0633}\u{0645} \u{0644}\u{0627}")
+    );
+    let l = layout(&body, &arial_10());
+    let ls = lines(&l, &StoryRef::Body);
+    let clusters = &ls[0].para.inline.clusters;
+    let face = clusters[0].font.unwrap().face;
+    let glyph = |c: char| fonts().glyph(face, c).unwrap();
+    assert_eq!(fonts().family(face), "Noto Sans Arabic");
+    assert_eq!(clusters[0].glyph, glyph('\u{FE91}'), "initial beh");
+    assert_eq!(clusters[1].glyph, glyph('\u{FEB4}'), "medial seen");
+    assert_eq!(clusters[2].glyph, glyph('\u{FEE2}'), "final meem");
+    assert_eq!(clusters[4].glyph, glyph('\u{FEFB}'), "lam-alef");
+    assert_eq!(clusters[5].kind, Kind::Zero);
+}

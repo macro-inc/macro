@@ -92,9 +92,23 @@ the editor's first format.
 ### Fonts
 
 Layout uses `pptx_engine`'s bundled metric-compatible fonts (Liberation,
-Carlito, Caladea, DejaVu and others) and its substitution table. Native
-builds compile them in with the `embedded-fonts` feature; the wasm build
-always does. Hosts can register more fonts.
+Carlito, Caladea, DejaVu and others) and its substitution table, with Noto
+faces for Arabic and Hebrew (in the serif or sans-serif style of the text
+around them). Native builds compile them in with the `embedded-fonts`
+feature; the wasm build always does. Hosts can register more fonts.
+
+### Right-to-left text
+
+`layout::bidi` resolves embedding levels with the Unicode Bidirectional
+Algorithm for paragraphs that are right to left (`w:bidi`) or hold
+right-to-left text, then lays each line out in visual order: a
+right-to-left paragraph's line is mirrored so its start (indent, list
+number, first tab) is on the right, and runs against the paragraph's
+direction are reversed in place; brackets mirror. Word's own behaviour is
+followed where it differs: in runs marked `w:rtl`, separators do not join
+numbers (`78/265` shows as `265/78`) and Latin letters and digits keep the
+Latin font. Carets, hit testing, selections and the arrow keys follow the
+visual order.
 
 ## Using it
 
@@ -144,9 +158,12 @@ where Word PDFs exist they decide.
 
 ## Known gaps
 
-- Text: no bidirectional reordering of right-to-left text and no
-  complex-script shaping (Arabic joining, Indic reordering). No automatic
-  hyphenation (soft hyphens are honoured).
+- Text: Arabic joins through the Unicode presentation forms (contextual
+  letter shapes and the lam-alef ligatures), without OpenType mark
+  positioning; other complex scripts (Indic, Thai) are not shaped. Explicit
+  bidi embedding characters are ignored (Word documents use run and
+  paragraph properties instead). No automatic hyphenation (soft hyphens are
+  honoured).
 - Layout: no vertical text, no text wrapping around tight polygon wraps
   (square wrap is used), no balancing of continuous-section columns.
 - Fields are shown with their cached results, except page numbers, which
