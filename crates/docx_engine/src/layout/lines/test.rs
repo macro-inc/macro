@@ -233,6 +233,41 @@ fn page_breaks_and_widow_control() {
     );
 }
 
+/// The lines of the page after a paragraph that ends with a page break.
+fn after_page_break(settings: Option<&str>) -> Vec<(f32, String)> {
+    let body = format!(
+        r#"{}<w:p><w:r><w:t>Before</w:t></w:r><w:r><w:br w:type="page"/></w:r></w:p>{}"#,
+        para("First"),
+        para("After")
+    );
+    let (_, l) = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            settings,
+            ..Parts::default()
+        },
+    );
+    assert_eq!(l.pages.len(), 2);
+    lines(&l, 1).iter().map(|p| (p.y, line_text(p))).collect()
+}
+
+#[test]
+fn the_mark_after_a_page_break_stays_with_it() {
+    // The paragraph mark stays on the break's line, so the next page starts
+    // with the next paragraph.
+    let next = after_page_break(None);
+    assert_eq!(next.len(), 1, "{next:?}");
+    assert_eq!(next[0].1, "After");
+    assert!((next[0].0 - 72.0).abs() < 0.01, "{next:?}");
+    // Split apart, the mark starts the next page as an empty line.
+    let split = after_page_break(Some("<w:compat><w:splitPgBreakAndParaMark/></w:compat>"));
+    assert_eq!(split.len(), 2, "{split:?}");
+    assert_eq!(split[0].1, "");
+    assert!((split[0].0 - 72.0).abs() < 0.01, "{split:?}");
+    assert!(split[1].0 > 72.0 + 10.0, "{split:?}");
+}
+
 #[test]
 fn keep_with_next_moves_headings() {
     let mut body = String::new();
@@ -297,4 +332,35 @@ fn the_paragraph_mark_only_sizes_lines_without_text() {
     let (text, empty) = (ls[0].line().height, ls[1].line().height);
     assert!((text - 9.0 * 1.1499).abs() < 0.01, "{text}");
     assert!((empty - 20.0 * 1.1499).abs() < 0.01, "{empty}");
+}
+
+#[test]
+fn tabs_to_stops_past_the_right_edge_go_to_the_next_line() {
+    // Stops at 1" and 7" in a 6.5" wide text area: the second tab cannot
+    // reach its stop on the line.
+    let body = r#"<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="1440"/><w:tab w:val="left" w:pos="10080"/></w:tabs></w:pPr><w:r><w:t>from</w:t><w:tab/><w:t xml:space="preserve"> to</w:t><w:tab/><w:t>end</w:t></w:r></w:p>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, 0);
+    assert_eq!(ls.len(), 2);
+    assert_eq!(line_text(ls[0]), "from\t to");
+    // On its own line the tab goes to the first stop.
+    let p = ls[1];
+    let e = p
+        .para
+        .inline
+        .clusters
+        .iter()
+        .position(|c| c.ch == 'e')
+        .unwrap();
+    assert!(
+        (p.para.lines.x[e] - 72.0).abs() < 0.05,
+        "{}",
+        p.para.lines.x[e]
+    );
 }

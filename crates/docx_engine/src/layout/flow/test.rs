@@ -582,3 +582,60 @@ fn paragraphs_going_on_in_a_wider_column_fill_it() {
         wide[0].x
     );
 }
+
+#[test]
+fn ending_full_columns_does_not_start_a_page() {
+    // Two columns of 56 lines each fill the page; the empty paragraph that
+    // ends their section would only fit on a page of its own.
+    let filler: String = (0..112).map(|k| para(&format!("Line {k}"))).collect();
+    let body = format!(
+        "{filler}{}{}<w:sectPr>{PAGE}</w:sectPr>",
+        section_end("nextPage", r#"<w:cols w:num="2" w:space="720"/>"#),
+        para("Next"),
+    );
+    let l = layout(&body, &arial_10());
+    assert_eq!(page_texts(&l, 0).len(), 112);
+    assert_eq!(l.pages.len(), 2);
+    assert_eq!(page_texts(&l, 1), vec!["Next".to_owned()]);
+}
+
+#[test]
+fn suppressed_top_spacing_lifts_the_first_line_of_a_page() {
+    // At least 18pt lines of 10pt text.
+    let body = format!(
+        r#"<w:p><w:pPr><w:spacing w:line="360" w:lineRule="atLeast"/></w:pPr><w:r><w:t>Top</w:t></w:r><w:r><w:br/><w:t>Next</w:t></w:r></w:p><w:sectPr>{PAGE}</w:sectPr>"#
+    );
+    let plain = layout(&body, &arial_10());
+    assert!((find(&plain, 0, "Top").y - 72.0).abs() < 0.01);
+    let settings = "<w:compat><w:suppressTopSpacing/></w:compat>";
+    let l = layout(
+        &body,
+        &Parts {
+            settings: Some(settings),
+            ..arial_10()
+        },
+    );
+    // The first line keeps only its text's size; the next is not lifted.
+    let (top, next) = (find(&l, 0, "Top"), find(&l, 0, "Next"));
+    assert!((top.y - (72.0 - 8.0)).abs() < 0.01, "{}", top.y);
+    assert!((next.y - top.y - 18.0).abs() < 0.01, "{}", next.y);
+}
+
+#[test]
+fn multiple_spacing_below_the_last_line_may_run_into_the_margin() {
+    // Triple-spaced lines of 10pt text, 34.5pt each: the 19th line's text
+    // ends within the 648pt column, its spacing below it does not.
+    let body: String = (0..25)
+        .map(|k| {
+            format!(
+                r#"<w:p><w:pPr><w:spacing w:line="720" w:lineRule="auto"/></w:pPr><w:r><w:t>Line {k}</w:t></w:r></w:p>"#
+            )
+        })
+        .collect();
+    let l = layout(&format!("{body}{LETTER}"), &arial_10());
+    assert_eq!(page_texts(&l, 0).len(), 19);
+    let last = find(&l, 0, "Line 18");
+    let line = last.line();
+    assert!(last.y + line.height > 720.0, "{}", last.y);
+    assert!(last.y + line.height / 3.0 <= 720.0, "{}", last.y);
+}

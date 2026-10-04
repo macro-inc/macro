@@ -40,6 +40,12 @@ struct LineOut {
     right: f32,
     /// The text shown.
     text: String,
+    /// The paragraph's style.
+    style: Option<String>,
+    /// The paragraph's line spacing rule.
+    spacing: String,
+    /// Whether the line starts its paragraph.
+    first: bool,
 }
 
 /// One page.
@@ -150,6 +156,9 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
                     width: line.width,
                     right: l.x + line.right,
                     text: line_text(l),
+                    style: l.para.format.props.style.clone(),
+                    spacing: format!("{:?}", l.para.format.props.line),
+                    first: line.start == 0,
                 });
             }
         }
