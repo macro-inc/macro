@@ -15,7 +15,7 @@ import type { LoroDoc } from 'loro-crdt';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { readCommentMarks } from '../core/comment-marks';
-import { sharedParagraphTexts } from '../core/docx-loro';
+import { readCollabState, sharedParagraphTexts } from '../core/docx-loro';
 import { buildSeedSnapshot } from '../core/docx-seed';
 import ComplexMsa from '../core/fixtures/complex-msa.docx?url';
 import MutualNda from '../core/fixtures/mutual-nda.docx?url';
@@ -36,8 +36,68 @@ declare global {
       sharedParagraphs: () => string[];
       marks: () => Record<string, unknown>;
       editor: () => DocxEditor | undefined;
+      /** Puts the caret in (or selects) the paragraph starting with `prefix`. */
+      place: (
+        prefix: string,
+        where: 'start' | 'end' | 'all'
+      ) => Promise<boolean>;
+      /** Shared formatting of the paragraph starting with `prefix`. */
+      sharedBlock: (
+        prefix: string
+      ) => { props: string; attrs: Record<string, string>[] } | null;
     };
   }
+}
+
+/** Fixture helpers that read the engine and the shared document. */
+function helpers(
+  editor: () => DocxEditor | undefined,
+  doc: () => LoroDoc | undefined
+) {
+  return {
+    place: async (prefix: string, where: 'start' | 'end' | 'all') => {
+      const current = editor();
+      if (!current) return false;
+      const found = (await current.paragraphs()).find((p) =>
+        p.text.replace(/\uFFFC/g, '').startsWith(prefix)
+      );
+      if (!found) return false;
+      const end = { block: found.id, offset: found.text.length };
+      const start = { block: found.id, offset: 0 };
+      current.run([
+        where === 'all'
+          ? { op: 'select', anchor: start, focus: end }
+          : {
+              op: 'select',
+              anchor: where === 'end' ? end : start,
+              focus: where === 'end' ? end : start,
+            },
+      ]);
+      await current.idle();
+      document.querySelector<HTMLTextAreaElement>('[data-docx-input]')?.focus();
+      return true;
+    },
+    sharedBlock: (prefix: string) => {
+      const shared = doc();
+      if (!shared) return null;
+      const block = readCollabState(shared).blocks.find(
+        (b) =>
+          b.k === 'p' &&
+          (b.t ?? [])
+            .map((op) => ('insert' in op ? op.insert : ''))
+            .join('')
+            .replace(/\uFFFC/g, '')
+            .startsWith(prefix)
+      );
+      if (!block) return null;
+      return {
+        props: block.x,
+        attrs: (block.t ?? []).map((op) =>
+          'insert' in op ? (op.attributes ?? {}) : {}
+        ),
+      };
+    },
+  };
 }
 
 const FIXTURES: Record<string, string> = {
@@ -287,6 +347,10 @@ function Fixture() {
         : {};
     },
     editor,
+    ...helpers(editor, () => {
+      const state = session.state();
+      return state.t === 'ready' ? state.doc : undefined;
+    }),
   };
   onCleanup(() => Reflect.deleteProperty(window, 'docxFixture'));
 
@@ -300,7 +364,10 @@ function Fixture() {
         keyed
         fallback={
           <div class="p-6 text-sm text-ink-muted" data-fixture-state>
-            {session.state().t}
+            {(() => {
+              const state = session.state();
+              return state.t === 'error' ? `error: ${state.message}` : state.t;
+            })()}
           </div>
         }
       >
@@ -409,6 +476,7 @@ function LocalFixture() {
       return doc ? Object.fromEntries(readCommentMarks(doc)) : {};
     },
     editor,
+    ...helpers(editor, () => docs()?.[0]),
   };
   return (
     <main class="flex h-screen w-screen overflow-hidden bg-page font-sans text-ink">

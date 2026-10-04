@@ -23,6 +23,11 @@ export interface DocxEngine {
 }
 
 export type DocxCollabOptions = {
+  /**
+   * Whether this peer keeps an undo history of its own edits (default true;
+   * viewers only follow along).
+   */
+  undo?: boolean;
   /** The selection to store with an undo step. */
   selection?: () => Selection | undefined;
   /** Called with the engine's result after changes from elsewhere applied. */
@@ -66,7 +71,7 @@ export class DocxCollab {
   private inflight: Touched | null = null;
   private flushing = false;
   private restored: Selection | undefined;
-  private readonly undoManager: UndoManager;
+  private readonly undoManager: UndoManager | undefined;
   private readonly unsubscribe: () => void;
 
   constructor(
@@ -76,6 +81,7 @@ export class DocxCollab {
   ) {
     configureDocxText(doc);
     this.unsubscribe = doc.subscribe((batch) => this.onEvents(batch));
+    if (options.undo === false) return;
     this.undoManager = new UndoManager(doc, {
       mergeInterval: 800,
       maxUndoSteps: 300,
@@ -98,7 +104,7 @@ export class DocxCollab {
   /** Stops listening; the Loro document and engine stay as they are. */
   dispose() {
     this.unsubscribe();
-    this.undoManager.free();
+    this.undoManager?.free();
   }
 
   private serial<T>(run: () => Promise<T>): Promise<T> {
@@ -181,19 +187,19 @@ export class DocxCollab {
 
   /** Undoes this peer's last step in the shared document. */
   undo(): boolean {
-    return this.undoManager.undo();
+    return this.undoManager?.undo() ?? false;
   }
 
   /** Redoes this peer's last undone step. */
   redo(): boolean {
-    return this.undoManager.redo();
+    return this.undoManager?.redo() ?? false;
   }
 
   canUndo(): boolean {
-    return this.undoManager.canUndo();
+    return this.undoManager?.canUndo() ?? false;
   }
 
   canRedo(): boolean {
-    return this.undoManager.canRedo();
+    return this.undoManager?.canRedo() ?? false;
   }
 }

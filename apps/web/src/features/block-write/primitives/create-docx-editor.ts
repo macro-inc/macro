@@ -76,7 +76,6 @@ export function createDocxEditor(options: DocxEditorOptions) {
   /** Opens the shared document, migrating the first format if needed. */
   async function openShared(doc: LoroDoc) {
     configureDocxText(doc);
-    const seed = Math.floor(Math.random() * 2 ** 48);
     const version = docxFormatVersion(doc);
     if (version !== undefined && version < DOCX_FORMAT_VERSION) {
       if (!options.editable) {
@@ -89,38 +88,77 @@ export function createDocxEditor(options: DocxEditorOptions) {
       clearV1(doc);
       writeCollabState(doc, migrated, DOCX_ORIGINS.migrate);
     }
-    return engine.openCollabDocument(docKey, readCollabState(doc), seed);
+    return engine.openCollabDocument(
+      docKey,
+      readCollabState(doc),
+      Math.floor(Math.random() * 2 ** 48)
+    );
+  }
+
+  /** Keeps the engine in step with the shared document from now on. */
+  function follow(doc: LoroDoc) {
+    collab = new DocxCollab(doc, adapter, {
+      undo: options.editable,
+      selection: () => state()?.selection,
+      onRemote: (result, restored) => {
+        take(result);
+        if (restored)
+          run([
+            {
+              op: 'select',
+              anchor: restored.anchor,
+              focus: restored.focus,
+            },
+          ]);
+      },
+      onError: options.onError,
+    });
+  }
+
+  /**
+   * A viewer of a first-format document shows it as it is until an editor
+   * migrates it, then reopens from the shared blocks and follows along.
+   */
+  function awaitMigration(doc: LoroDoc) {
+    const unsubscribe = doc.subscribe(() => {
+      if (docxFormatVersion(doc) !== DOCX_FORMAT_VERSION) return;
+      unsubscribe();
+      void (async () => {
+        const reopened = await engine.openCollabDocument(
+          docKey,
+          readCollabState(doc),
+          Math.floor(Math.random() * 2 ** 48)
+        );
+        if (disposed) return;
+        follow(doc);
+        show(reopened);
+        renderer.invalidate();
+      })().catch((error: unknown) => options.onError?.(error));
+    });
+    onCleanup(unsubscribe);
+  }
+
+  function show(opened: { pages: PageInfo[]; state: EditResult }) {
+    setPages(opened.pages);
+    renderer.update(opened.pages);
+    take(opened.state);
   }
 
   async function open() {
-    const opened = options.doc
-      ? await openShared(options.doc)
+    const doc = options.doc;
+    const opened = doc
+      ? await openShared(doc)
       : await engine.openDocument(
           docKey,
           (options.original ?? new Uint8Array()).slice().buffer
         );
     if (disposed) return;
-    if (options.doc && options.editable) {
-      await engine.setExternalUndo(docKey, true);
-      collab = new DocxCollab(options.doc, adapter, {
-        selection: () => state()?.selection,
-        onRemote: (result, restored) => {
-          take(result);
-          if (restored)
-            run([
-              {
-                op: 'select',
-                anchor: restored.anchor,
-                focus: restored.focus,
-              },
-            ]);
-        },
-        onError: options.onError,
-      });
+    if (doc) {
+      if (options.editable) await engine.setExternalUndo(docKey, true);
+      if (docxFormatVersion(doc) === DOCX_FORMAT_VERSION) follow(doc);
+      else awaitMigration(doc);
     }
-    setPages(opened.pages);
-    renderer.update(opened.pages);
-    take(opened.state);
+    show(opened);
     setStyles(await engine.styles(docKey));
     setReady(true);
   }

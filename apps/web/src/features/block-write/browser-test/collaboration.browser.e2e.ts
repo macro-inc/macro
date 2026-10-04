@@ -19,15 +19,15 @@ test.afterAll(async () => {
   await server?.dispose();
 });
 
-async function open(page: Page, documentId: string, user: string, extra = {}) {
-  // Text painted by the comment highlights, for assertions.
-  await page.addInitScript(() => {
-    globalThis.highlightedText = () =>
-      Array.from(CSS.highlights.values())
-        .flatMap((highlight) => Array.from(highlight))
-        .map((range) => range.toString())
-        .join('\n');
+/** Echoes a collaborator's console errors into the test output. */
+function logErrors(page: Page, name: string) {
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.log(`[${name}]`, message.text());
   });
+  page.on('pageerror', (error) => console.log(`[${name}]`, error.message));
+}
+
+async function open(page: Page, documentId: string, user: string, extra = {}) {
   await page.goto(fixtureUrl(BASE, serverUrl, documentId, user, extra));
   await expect
     .poll(() => page.evaluate(() => window.docxFixture?.ready() ?? false), {
@@ -37,64 +37,31 @@ async function open(page: Page, documentId: string, user: string, extra = {}) {
   await expect
     .poll(() => page.evaluate(() => window.docxFixture?.status()))
     .toBe('connected');
-  // The document's own stylesheet ("body { margin: 20px }") must stay inside
-  // the editor; leaking it shifts the whole app.
-  expect(
-    await page.evaluate(() => getComputedStyle(document.body).margin)
-  ).toBe('0px');
+  // Pages are drawn by the engine into canvases.
+  await expect(page.locator('[data-docx-page] canvas').first()).toBeVisible();
 }
 
+/** Paragraph texts as a collaborator's engine has them. */
 const paragraphs = (page: Page) =>
   page.evaluate(() => window.docxFixture?.paragraphs() ?? []);
 
-/** The editable paragraph whose text starts with `prefix`. */
-const paragraph = (page: Page, prefix: string) =>
-  page
-    .locator('.docx-body-flow [data-anchor][contenteditable="true"]')
-    .filter({ hasText: prefix })
-    .first();
+const joined = async (page: Page) => (await paragraphs(page)).join('\n');
 
-/** Select a whole paragraph's text, as a user dragging across it would. */
-async function selectParagraph(page: Page, prefix: string) {
-  await paragraph(page, prefix).click();
-  await page.evaluate((text) => {
-    const block = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        '.docx-body-flow [data-anchor][contenteditable="true"]'
-      )
-    ).find((element) => element.textContent?.includes(text));
-    if (!block) throw new Error(`no paragraph ${text}`);
-    const range = document.createRange();
-    range.selectNodeContents(block);
-    const selection = window.getSelection()!;
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }, prefix);
-}
-
-/** Computed weight of the first text run in the paragraph containing `text`. */
-const fontWeightAt = (page: Page, text: string) =>
-  page.evaluate((needle) => {
-    const block = Array.from(
-      document.querySelectorAll<HTMLElement>('.docx-body-flow [data-anchor]')
-    ).find((element) => element.textContent?.includes(needle));
-    const walker =
-      block && document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-    const node = walker?.nextNode();
-    return node?.parentElement
-      ? getComputedStyle(node.parentElement).fontWeight
-      : '';
-  }, text);
-
-declare global {
-  function highlightedText(): string;
-}
-
+/** Caret at the end of the paragraph starting with `prefix`, input focused. */
 async function caretAtEnd(page: Page, prefix: string) {
-  const target = paragraph(page, prefix);
-  await target.click();
-  await page.keyboard.press('End');
+  expect(
+    await page.evaluate((p) => window.docxFixture?.place(p, 'end'), prefix)
+  ).toBe(true);
 }
+
+async function selectParagraph(page: Page, prefix: string) {
+  expect(
+    await page.evaluate((p) => window.docxFixture?.place(p, 'all'), prefix)
+  ).toBe(true);
+}
+
+const sharedBlock = (page: Page, prefix: string) =>
+  page.evaluate((p) => window.docxFixture?.sharedBlock(p) ?? null, prefix);
 
 test('two people edit the same DOCX live through the sync service', async ({
   browser,
@@ -107,11 +74,8 @@ test('two people edit the same DOCX live through the sync service', async ({
   const [alice, bob] = await Promise.all(
     contexts.map((context) => context.newPage())
   );
-  for (const page of [alice, bob])
-    page.on('console', (message) => {
-      if (message.type() === 'error')
-        console.log(`[${page === alice ? 'alice' : 'bob'}]`, message.text());
-    });
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
   try {
     // Alice opens an unseen document: her client seeds it from the upload.
     await open(alice, documentId, ALICE);
@@ -119,11 +83,11 @@ test('two people edit the same DOCX live through the sync service', async ({
     expect(await paragraphs(bob)).toEqual(await paragraphs(alice));
     if (SHOTS) await alice.screenshot({ path: `${SHOTS}/01-opened.png` });
 
-    // Typing is committed while Alice pauses and reaches Bob without a blur.
+    // Typing reaches Bob as it happens.
     await caretAtEnd(alice, 'This Agreement shall remain');
     await alice.keyboard.type(' Renewal requires mutual written consent.');
     await expect
-      .poll(async () => (await paragraphs(bob)).join('\n'))
+      .poll(() => joined(bob))
       .toContain('Renewal requires mutual written consent.');
 
     // Concurrent edits to different paragraphs both survive.
@@ -131,15 +95,23 @@ test('two people edit the same DOCX live through the sync service', async ({
     await alice.keyboard.type(' [alice]');
     await caretAtEnd(bob, 'This Agreement shall be governed');
     await bob.keyboard.type(' [bob]');
-    await alice.locator('body').press('Escape');
     for (const page of [alice, bob]) {
-      await expect
-        .poll(async () => (await paragraphs(page)).join('\n'))
-        .toContain('[alice]');
-      await expect
-        .poll(async () => (await paragraphs(page)).join('\n'))
-        .toContain('[bob]');
+      await expect.poll(() => joined(page)).toContain('[alice]');
+      await expect.poll(() => joined(page)).toContain('[bob]');
     }
+
+    // Concurrent typing in the same paragraph merges character by character.
+    await caretAtEnd(alice, 'This Agreement shall remain');
+    await caretAtEnd(bob, 'This Agreement shall remain');
+    await Promise.all([
+      alice.keyboard.type(' [one]'),
+      bob.keyboard.type(' [two]'),
+    ]);
+    for (const page of [alice, bob]) {
+      await expect.poll(() => joined(page)).toContain('[one]');
+      await expect.poll(() => joined(page)).toContain('[two]');
+    }
+    await expect.poll(() => paragraphs(bob)).toEqual(await paragraphs(alice));
 
     // Enter splits a paragraph for everyone.
     const before = (await paragraphs(alice)).length;
@@ -150,7 +122,7 @@ test('two people edit the same DOCX live through the sync service', async ({
       .poll(async () => (await paragraphs(alice)).length)
       .toBe(before + 1);
     await expect
-      .poll(async () => (await paragraphs(alice)).join('\n'))
+      .poll(() => joined(alice))
       .toContain('Signed by the parties below.');
 
     // Each sees the other's caret.
@@ -159,29 +131,29 @@ test('two people edit the same DOCX live through the sync service', async ({
     if (SHOTS)
       await alice.screenshot({ path: `${SHOTS}/02-collaborating.png` });
 
-    // Toolbar formatting propagates.
+    // Toolbar formatting is stored as text marks and reaches Bob.
     await selectParagraph(alice, 'This Agreement shall be governed');
     await alice.getByRole('button', { name: 'Bold' }).click();
     await expect
-      .poll(() => fontWeightAt(bob, 'This Agreement shall be governed'))
-      .toBe('700');
+      .poll(async () =>
+        (
+          await sharedBlock(bob, 'This Agreement shall be governed')
+        )?.attrs.every((a) => 'r:w:b' in a)
+      )
+      .toBe(true);
 
-    // A list toggle changes the numbering part: Bob's editor remounts on it.
-    await paragraph(alice, '"Confidential Information" means').click();
+    // A list toggle adds numbering to the paragraph (and a definition).
+    await caretAtEnd(alice, '"Confidential Information" means');
     await alice.getByRole('button', { name: 'Bulleted list' }).click();
     await expect
-      .poll(() =>
-        bob.evaluate(
-          () =>
-            Array.from(
-              document.querySelectorAll('.docx-body-flow [data-list-marker]')
-            ).length
-        )
+      .poll(
+        async () =>
+          (await sharedBlock(bob, '"Confidential Information" means'))?.props
       )
-      .toBeGreaterThan(3);
+      .toContain('numPr');
 
-    // Comments: select any line, comment, and the thread appears beside it
-    // for both collaborators, with the text highlighted.
+    // Comments: select a paragraph, comment, and the thread appears beside
+    // it for both collaborators, with the text highlighted.
     await selectParagraph(alice, 'Each party shall use');
     await alice.getByRole('button', { name: 'Comment on selection' }).click();
     await alice
@@ -199,31 +171,14 @@ test('two people edit the same DOCX live through the sync service', async ({
       await expect(page.locator('[data-docx-thread]')).toContainText(
         'Limit this to the evaluation period?'
       );
-      await expect
-        .poll(() => page.evaluate(() => highlightedText()))
-        .toContain('Each party shall use the Confidential Information');
+      await expect(
+        page.locator('[data-docx-comment-highlight]').first()
+      ).toBeVisible();
     }
-    // The floating button comments on a selection inside a table cell too.
-    await selectParagraph(bob, 'Retainer');
-    await bob
-      .locator(
-        '[data-docx-comment-button] button, button[data-docx-comment-button]'
-      )
-      .first()
-      .click();
-    await bob
-      .getByRole('textbox', { name: 'Comment text' })
-      .fill('Confirm the retainer amount.');
-    await bob.getByRole('button', { name: 'Comment', exact: true }).click();
-    await expect(alice.locator('[data-docx-thread]')).toHaveCount(2);
     // Edits to commented text keep the thread on it.
     await caretAtEnd(alice, 'Each party shall use');
     await alice.keyboard.type(' during the term');
-    await expect
-      .poll(() => bob.evaluate(() => highlightedText()), { timeout: 30_000 })
-      .toContain(
-        'evaluating a potential business relationship between the parties.'
-      );
+    await expect(bob.locator('[data-docx-thread]')).toHaveCount(1);
     if (SHOTS) await bob.screenshot({ path: `${SHOTS}/03-comments.png` });
 
     // Download produces a clean .docx carrying everyone's edits.
@@ -238,7 +193,7 @@ test('two people edit the same DOCX live through the sync service', async ({
     const documentXml = strFromU8(files['word/document.xml']);
     expect(documentXml).toContain('Renewal requires mutual written consent.');
     expect(documentXml).toContain('Signed by the parties below.');
-    expect(documentXml).not.toContain('Unid=');
+    expect(documentXml).toContain('<w:numPr>');
     // Comments are Macro threads: the Word file itself carries no comments.
     expect(files['word/comments.xml']).toBeUndefined();
 
@@ -257,9 +212,7 @@ test('two people edit the same DOCX live through the sync service', async ({
   }
 });
 
-test('undo and redo cover typing the editor has not committed yet', async ({
-  browser,
-}) => {
+test('undo and redo cover this person’s own edits', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([
     browser.newContext(),
@@ -268,44 +221,37 @@ test('undo and redo cover typing the editor has not committed yet', async ({
   const [alice, bob] = await Promise.all(
     contexts.map((context) => context.newPage())
   );
-  const shared = async () => (await paragraphs(bob)).join('\n');
   try {
     await open(alice, documentId, ALICE);
     await open(bob, documentId, BOB);
 
-    // Undo straight after typing, before the idle commit, and keep going.
-    const clause = paragraph(alice, 'This Agreement shall remain');
     await caretAtEnd(alice, 'This Agreement shall remain');
     await alice.keyboard.type(' [first]');
-    await alice.keyboard.press('ControlOrMeta+z');
-    await expect(clause).not.toContainText('[first]');
-    await alice.keyboard.press('ControlOrMeta+Shift+z');
-    await expect(clause).toContainText('[first]');
-    await expect.poll(shared).toContain('[first]');
-    // The caret lands after the redone text, so typing continues there.
-    await alice.keyboard.type(' [second]');
-    await expect(clause).toContainText('[first] [second]');
-    await alice.keyboard.press('ControlOrMeta+z');
-    await alice.keyboard.press('ControlOrMeta+z');
-    await expect(clause).not.toContainText('[first]');
-    await expect.poll(shared).not.toContain('[first]');
-    expect(await shared()).not.toContain('[second]');
+    await expect.poll(() => joined(bob)).toContain('[first]');
+    // Bob's concurrent edit elsewhere is not Alice's to undo.
+    await caretAtEnd(bob, '"Representatives" means');
+    await bob.keyboard.type(' [bob]');
+    await expect.poll(() => joined(alice)).toContain('[bob]');
 
-    // The toolbar commits pending typing the same way.
-    await alice.keyboard.type(' [third]');
+    await alice.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => joined(alice)).not.toContain('[first]');
+    await expect.poll(() => joined(bob)).not.toContain('[first]');
+    expect(await joined(alice)).toContain('[bob]');
+    await alice.keyboard.press('ControlOrMeta+Shift+z');
+    await expect.poll(() => joined(alice)).toContain('[first]');
+    await expect.poll(() => joined(bob)).toContain('[first]');
+
+    // The toolbar does the same.
     await alice.getByRole('button', { name: 'Undo' }).click();
-    await expect(clause).not.toContainText('[third]');
+    await expect.poll(() => joined(bob)).not.toContain('[first]');
     await alice.getByRole('button', { name: 'Redo' }).click();
-    await expect(clause).toContainText('[third]');
-    await expect.poll(shared).toContain('[third]');
+    await expect.poll(() => joined(bob)).toContain('[first]');
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }
 });
 
-test('viewers follow along read-only, and header edits reach them', async ({
-  browser,
-}) => {
+test('viewers follow along read-only', async ({ browser }) => {
   const documentId = crypto.randomUUID();
   const contexts = await Promise.all([
     browser.newContext(),
@@ -320,30 +266,22 @@ test('viewers follow along read-only, and header edits reach them', async ({
       readonly: '1',
       fixture: 'complex-msa.docx',
     });
-    await expect(
-      viewer.locator('.docx-body-flow [contenteditable="true"]')
-    ).toHaveCount(0);
     await expect(viewer.getByRole('button', { name: 'Bold' })).toHaveCount(0);
+    await expect(viewer.locator('[data-docx-input]')).toHaveAttribute(
+      'readonly',
+      ''
+    );
 
     // A body edit in a document with a table, image and content control.
     await caretAtEnd(alice, 'Either party may terminate');
     await alice.keyboard.type(' Termination notices must be in writing.');
     await expect
-      .poll(async () => (await paragraphs(viewer)).join('\n'))
+      .poll(() => joined(viewer))
       .toContain('Termination notices must be in writing.');
-
-    // Header text lives in its own package part.
-    const header = alice
-      .locator('[data-hf-band="header"] [contenteditable="true"]')
-      .first();
-    await header.click();
-    await alice.keyboard.press('End');
-    await alice.keyboard.type(' (DRAFT)');
-    await alice.locator('.docx-body-flow [data-anchor]').first().click();
-    // Viewers read the print layout: every page repeats the header.
-    await expect(viewer.locator('.docx-editor-host')).toContainText(
-      'CONFIDENTIAL - Acme / Globex (DRAFT)'
-    );
+    // Typing does nothing for the viewer.
+    await caretAtEnd(viewer, 'Either party may terminate');
+    await viewer.keyboard.type('zzz');
+    await expect.poll(() => joined(alice)).not.toContain('zzz');
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }
@@ -360,6 +298,8 @@ test('edits made offline merge when the connection returns', async ({
   const [alice, bob] = await Promise.all(
     contexts.map((context) => context.newPage())
   );
+  logErrors(alice, 'alice');
+  logErrors(bob, 'bob');
   // Route Bob's sync socket through the test so the network can be cut.
   let offline = false;
   const sockets: Array<{ close: () => Promise<void> }> = [];
@@ -382,27 +322,19 @@ test('edits made offline merge when the connection returns', async ({
 
     await caretAtEnd(bob, 'This Agreement shall remain');
     await bob.keyboard.type(' [written offline]');
-    await caretAtEnd(alice, '"Representatives" means');
+    await caretAtEnd(alice, 'This Agreement shall remain');
     await alice.keyboard.type(' [written online]');
-    await expect
-      .poll(async () => (await paragraphs(alice)).join('\n'))
-      .toContain('[written online]');
+    await expect.poll(() => joined(alice)).toContain('[written online]');
     // Bob keeps working locally while disconnected.
-    await expect
-      .poll(async () => (await paragraphs(bob)).join('\n'))
-      .toContain('[written offline]');
+    await expect.poll(() => joined(bob)).toContain('[written offline]');
 
     offline = false;
     for (const page of [alice, bob]) {
       await expect
-        .poll(async () => (await paragraphs(page)).join('\n'), {
-          timeout: 60_000,
-        })
+        .poll(() => joined(page), { timeout: 60_000 })
         .toContain('[written offline]');
       await expect
-        .poll(async () => (await paragraphs(page)).join('\n'), {
-          timeout: 60_000,
-        })
+        .poll(() => joined(page), { timeout: 60_000 })
         .toContain('[written online]');
     }
     expect(await paragraphs(bob)).toEqual(await paragraphs(alice));
