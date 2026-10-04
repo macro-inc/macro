@@ -9,6 +9,7 @@ import ArrowsOut from '@phosphor/arrows-out.svg';
 import EyeSlash from '@phosphor/eye-slash.svg';
 import GearSix from '@phosphor/gear-six.svg';
 import GridFour from '@phosphor/grid-four.svg';
+import Layout from '@phosphor/layout.svg';
 import MagnifyingGlassMinus from '@phosphor/magnifying-glass-minus.svg';
 import MagnifyingGlassPlus from '@phosphor/magnifying-glass-plus.svg';
 import Notepad from '@phosphor/notepad.svg';
@@ -300,6 +301,21 @@ export function ViewTab() {
           Slide Sorter
         </RibbonTextButton>
       </RibbonGroup>
+      <Show when={env.openSlideMaster}>
+        {(open) => (
+          <RibbonGroup label="Master views">
+            <RibbonTextButton
+              label="Slide Master"
+              tooltip="Slide Master: edit the slide masters and layouts"
+              data-testid="pptx-view-slide-master"
+              onClick={() => open()()}
+            >
+              <Layout />
+              Slide Master
+            </RibbonTextButton>
+          </RibbonGroup>
+        )}
+      </Show>
       <RibbonGroup label="Zoom">
         <RibbonButton
           label="Zoom out"

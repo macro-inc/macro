@@ -141,6 +141,11 @@ export interface ShapeOutline {
   name: string;
   kind: ShapeKind;
   placeholder?: string;
+  /**
+   * Placeholder index (`p:ph/@idx`, 0 when absent), for placeholders. Slide
+   * placeholders inherit from the layout placeholder with the same index.
+   */
+  placeholderIndex?: number;
   x: number;
   y: number;
   w: number;
@@ -313,10 +318,14 @@ export interface EffectsOutline {
 }
 
 export interface SlideOutline {
-  /** Stable slide id (survives reordering). */
+  /** Stable slide id (survives reordering); a master's or layout's id for those. */
   id: number;
+  /** 0-based position (in Slide Master view order for a master or layout). */
   index: number;
+  /** Layout name (a master's or layout's own name for those). */
   layout: string;
+  /** The layout's id (`DeckOutline.masters`); absent for a master. */
+  layoutId?: number;
   hidden: boolean;
   title?: string;
   shapes: ShapeOutline[];
@@ -380,11 +389,46 @@ export interface LayoutInfo {
   master: string;
 }
 
+/** A slide layout of a master (`inspect::MasterLayoutOutline`). */
+export interface MasterLayoutOutline {
+  /** Layout id (≥ 2147483648); addresses the layout like a slide id. */
+  id: number;
+  name: string;
+  /** Layout type (`title`, `obj`, `titleOnly`, `blank`, `cust`...). */
+  kind: string;
+  /** Slides using it, in deck order (a used layout cannot be deleted). */
+  slideIds: number[];
+  /** Placeholder types in z-order (`title`, `body`, `obj`, `pic`, `dt`, `ftr`, `sldNum`...). */
+  placeholders: string[];
+  /** The master's background graphics are hidden on it. */
+  hideBackgroundGraphics: boolean;
+}
+
+/** A slide master and its layouts (`inspect::MasterOutline`). */
+export interface MasterOutline {
+  /** Master id (≥ 2147483648); addresses the master like a slide id. */
+  id: number;
+  /** Its own name, else its theme's ("Office Theme"). */
+  name: string;
+  /** Placeholder types on the master, in z-order. */
+  placeholders: string[];
+  layouts: MasterLayoutOutline[];
+}
+
+/**
+ * The smallest master or layout id; slide ids are smaller. Reads that take a
+ * slide index (`render`, `slideOutline`, `textLayout`...) take a master's or
+ * layout's id in its place, and ops take it in place of a slide id.
+ */
+export const MASTER_ID_BASE = 2147483648;
+
 export interface DeckOutline {
   width: number;
   height: number;
   slides: SlideOutline[];
   layouts: LayoutInfo[];
+  /** Slide masters with their layouts (Slide Master view), in order. */
+  masters?: MasterOutline[];
   /** `[slot, '#RRGGBB']` pairs of the first master's theme (`dk1`, `accent1`...). */
   themeColors: [string, string][];
   /** The theme's heading (major) and body (minor) Latin fonts. */
@@ -908,7 +952,56 @@ export type EditOp =
    */
   | { op: 'removeSection'; id: string; deleteSlides?: boolean }
   /** Moves a section and its slides to a 0-based index among the sections. */
-  | { op: 'moveSection'; id: string; toIndex: number };
+  | { op: 'moveSection'; id: string; toIndex: number }
+  /**
+   * Slide Master ▸ Insert Layout (a title and the master's footers), or a
+   * copy of `duplicate`; after `after` (a master id: first), else after the
+   * copied layout, else last. The new layout's id is in `created[].slide`.
+   */
+  | {
+      op: 'addLayout';
+      master?: number;
+      after?: number;
+      duplicate?: number;
+      name?: string;
+    }
+  /** Renames a layout, or a master (its theme name). */
+  | { op: 'renameLayout'; layout: number; name: string }
+  /**
+   * Deletes a layout no slide uses (a master keeps one), or with a master id
+   * a master none of whose layouts is used (another must remain).
+   */
+  | { op: 'deleteLayout'; layout: number }
+  /** Slide Master ▸ Insert Placeholder; the new shape's id is in `created[].shape`. */
+  | {
+      op: 'insertPlaceholder';
+      layout: number;
+      kind: PlaceholderKind;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      /** Content and text placeholders only. */
+      vertical?: boolean;
+    }
+  /** Slide Master ▸ Title, Footers, and Hide Background Graphics of a layout. */
+  | {
+      op: 'setLayoutOptions';
+      layout: number;
+      title?: boolean;
+      footers?: boolean;
+      hideBackgroundGraphics?: boolean;
+    };
+
+/** What a placeholder inserted on a layout holds (Insert Placeholder). */
+export type PlaceholderKind =
+  | 'content'
+  | 'text'
+  | 'picture'
+  | 'chart'
+  | 'table'
+  | 'smartArt'
+  | 'media';
 
 /**
  * How content follows a new slide size: `none` keeps it as is; `fit`
@@ -955,7 +1048,12 @@ export interface EditResult {
   created: Created[];
   /** Ids of slides whose rendering changed. */
   changedSlides: number[];
-  /** Slides were added, removed, or reordered, or the slide size or sections changed. */
+  /** Ids of slide masters and layouts whose own rendering changed (Slide Master view). */
+  changedLayouts?: number[];
+  /**
+   * Slides were added, removed, or reordered, the slide size or sections
+   * changed, or masters or layouts were added, removed, reordered, or renamed.
+   */
   structureChanged: boolean;
   /** Text replacements made by `replaceText` operations. */
   replaced: number;
