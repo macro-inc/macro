@@ -2,7 +2,9 @@
 //! shapes with their ids, kinds, positions, text, tables, and animations.
 
 use pptx_engine::Presentation;
-use pptx_engine::edit::{AnimationClass, AnimationRepeat, AnimationStart, RepeatUntil};
+use pptx_engine::edit::{
+    AnimationClass, AnimationRepeat, AnimationStart, GuideOrient, RepeatUntil,
+};
 use pptx_engine::inspect::{
     AnimationOutline, ChartOutline, DeckOutline, EffectsOutline, HeaderFooterOutline,
     PictureOutline, ShapeKindName, ShapeOutline, SlideOutline, TableOutline,
@@ -114,9 +116,13 @@ fn shape(out: &mut String, s: &ShapeOutline, depth: usize, animations: &[Animati
         .map(|f| format!(" fill={f}"))
         .unwrap_or_default();
     let hidden = if s.hidden { " hidden" } else { "" };
+    let direction = s
+        .text_direction
+        .map(|d| format!(" text direction={d}"))
+        .unwrap_or_default();
     let _ = writeln!(
         out,
-        "{pad}- shape {} ({}{placeholder}) {} at x={:.0} y={:.0} w={:.0} h={:.0}{rotation}{geometry}{fill}{hidden}",
+        "{pad}- shape {} ({}{placeholder}) {} at x={:.0} y={:.0} w={:.0} h={:.0}{rotation}{geometry}{fill}{direction}{hidden}",
         s.id,
         kind_name(s.kind),
         quote(&s.name),
@@ -343,6 +349,10 @@ fn table_cell(table: &TableOutline, r: usize, c: usize) -> String {
             None => "{merged}".to_owned(),
         };
     }
+    let text = match cell.text_direction {
+        Some(d) => format!("{text} {{text direction {d}}}"),
+        None => text,
+    };
     match (cell.row_span, cell.col_span) {
         (1, 1) => text,
         (1, n) => format!("{text} {{spans {n} columns}}"),
@@ -484,6 +494,17 @@ pub fn describe(pres: &mut Presentation, slides: Option<&[usize]>) -> anyhow::Re
             section.id,
             slide_ranges(&deck, &section.slide_ids)
         );
+    }
+    if !deck.guides.is_empty() {
+        let guides: Vec<String> = deck
+            .guides
+            .iter()
+            .map(|g| match g.orient {
+                GuideOrient::Horizontal => format!("horizontal at y={:.0}", g.position),
+                GuideOrient::Vertical => format!("vertical at x={:.0}", g.position),
+            })
+            .collect();
+        let _ = writeln!(out, "Drawing guides: {}", guides.join(", "));
     }
     for s in &deck.slides {
         if slides.is_some_and(|wanted| !wanted.contains(&(s.index + 1))) {

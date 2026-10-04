@@ -179,6 +179,39 @@ async fn shape_links_are_set_and_described() {
 }
 
 #[tokio::test]
+async fn text_direction_and_guides_are_set_and_described() {
+    let files = MemoryFiles::with(DECK);
+    let service = PresentationService::new(files.clone());
+    let (slide, shape) = first_text_shape(DECK);
+    let ops: Vec<EditOp> = serde_json::from_value(serde_json::json!([
+        { "op": "formatBody", "slide": slide, "shape": shape,
+          "props": { "direction": "vert270" } },
+        { "op": "setGuides", "guides": [
+            { "orient": "vertical", "position": 480 },
+            { "orient": "horizontal", "position": 270 }
+        ] }
+    ]))
+    .unwrap();
+    let outcome = service
+        .edit(receipt(AccessLevel::Edit), &ops)
+        .await
+        .unwrap();
+    assert!(
+        outcome.changed_slides.contains(" text direction=vert270"),
+        "{}",
+        outcome.changed_slides
+    );
+    let text = service
+        .read(receipt(AccessLevel::View), None)
+        .await
+        .unwrap();
+    assert!(
+        text.contains("Drawing guides: vertical at x=480, horizontal at y=270"),
+        "{text}"
+    );
+}
+
+#[tokio::test]
 async fn animations_are_edited_and_described() {
     let files = MemoryFiles::with(DECK);
     let service = PresentationService::new(files.clone());
