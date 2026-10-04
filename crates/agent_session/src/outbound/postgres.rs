@@ -11,6 +11,7 @@ mod test;
 
 mod pull_request;
 mod queue;
+mod recovery;
 mod sharing;
 mod turn_state;
 mod working_branch;
@@ -1251,17 +1252,24 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
             return Err(AgentSessionError::FencedOut(session));
         }
 
-        // One transaction means one `now()`, so the batch is spread over
-        // consecutive microseconds in append order: readers order by
-        // `(created_at, id)`, and the ids are v7 without a monotonic
-        // counter, so same-instant rows would otherwise interleave.
+        // Start after the durable tail while holding the session lock, then
+        // spread the batch over consecutive microseconds. Transaction start
+        // time can predate a lock wait or a previous batch's synthetic tail;
+        // readers must see append order rather than UUID tie-breaking.
         let stamped = sqlx::query!(
             r#"
             INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
             SELECT frame.id, $1, frame.user_id, frame.direction, frame.content,
-                   now() + (frame.ordinality - 1) * interval '1 microsecond'
+                   stamp.created_at + (frame.ordinality - 1) * interval '1 microsecond'
             FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::jsonb[])
                 WITH ORDINALITY AS frame(id, user_id, direction, content, ordinality)
+            CROSS JOIN (
+                SELECT GREATEST(statement_timestamp(), (
+                    SELECT created_at + interval '1 microsecond'
+                    FROM agent_session_log WHERE agent_session_id = $1
+                    ORDER BY created_at DESC, id DESC LIMIT 1
+                )) AS created_at
+            ) AS stamp
             RETURNING id, created_at
             "#,
             session.as_uuid(),
@@ -1357,8 +1365,12 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
         let id = macro_uuid::generate_uuid_v7();
         let created_at = sqlx::query_scalar!(
             r#"
-            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+            VALUES ($1, $2, $3, $4, $5, GREATEST(statement_timestamp(), (
+                SELECT created_at + interval '1 microsecond'
+                FROM agent_session_log WHERE agent_session_id = $2
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            )))
             RETURNING created_at
             "#,
             id,
@@ -1543,12 +1555,14 @@ impl<B: BotFacts + 'static> SessionOwnership for PgAgentSessionRepo<B> {
                 INSERT INTO harness_replica (id, last_heartbeat_at)
                 VALUES ($2, now())
                 ON CONFLICT (id) DO UPDATE SET last_heartbeat_at = now()
+                RETURNING id
             )
             UPDATE agent_session
             SET manager_replica_id = $2,
                 manager_fence = manager_fence + 1,
                 modified_at = now()
-            WHERE id = $1
+            FROM replica
+            WHERE agent_session.id = $1 AND replica.id = $2
               AND (
                 manager_replica_id IS NULL
                 OR manager_replica_id = $2

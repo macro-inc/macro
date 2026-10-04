@@ -19,6 +19,7 @@ import {
 } from '../document-location';
 import { authorizedContext } from './authorized-context';
 import {
+  type DocumentLoadBundle,
   documentLoadQueryOptions,
   fetchDocumentLoadBundle,
 } from './documentLoadBundle';
@@ -43,24 +44,39 @@ const readyLocation = z.object({
   content: z.object({ state: z.literal('ready') }),
 });
 
+function fetchBundle(documentId: string, session?: DocumentCacheSession) {
+  return session
+    ? queryClient.fetchQuery({
+        ...documentLoadQueryOptions(documentId),
+        queryKey: documentLoadKeys.authorizedBundle(
+          session.userId,
+          session.epoch,
+          documentId
+        ).queryKey,
+        // Authorization must not borrow a token from an earlier connection
+        // or an in-flight request belonging to a different signed-in user.
+        staleTime: 0,
+      })
+    : throwOnErr(() => fetchDocumentLoadBundle(documentId));
+}
+
+function bindBundle(
+  documentId: string,
+  session: DocumentCacheSession | undefined,
+  bundle: DocumentLoadBundle
+): FreshSyncDocumentContext {
+  return {
+    syncService: true,
+    ...(session ? authorizedContext(documentId, session, bundle) : bundle),
+  };
+}
+
 async function loadRemote(
   documentId: string,
   session?: DocumentCacheSession
 ): Promise<FreshSyncDocumentContext> {
   const [bundle, initialLocation] = await Promise.all([
-    session
-      ? queryClient.fetchQuery({
-          ...documentLoadQueryOptions(documentId),
-          queryKey: documentLoadKeys.authorizedBundle(
-            session.userId,
-            session.epoch,
-            documentId
-          ).queryKey,
-          // Authorization must not borrow a token from an earlier connection
-          // or an in-flight request belonging to a different signed-in user.
-          staleTime: 0,
-        })
-      : throwOnErr(() => fetchDocumentLoadBundle(documentId)),
+    fetchBundle(documentId, session),
     throwOnErr(() => fetchDocumentLocation({ documentId })),
   ]);
   let location: unknown = initialLocation;
@@ -77,10 +93,7 @@ async function loadRemote(
       },
     ]);
   }
-  return {
-    syncService: true,
-    ...(session ? authorizedContext(documentId, session, bundle) : bundle),
-  };
+  return bindBundle(documentId, session, bundle);
 }
 
 const loader = createSyncDocumentContextLoader({
@@ -103,8 +116,19 @@ const loader = createSyncDocumentContextLoader({
   onSessionChange: onDocumentSessionChange,
 });
 
-/** Open cached native documents before network work; authorize synchronization separately. */
-export async function fetchSyncDocumentOpenContext(documentId: string) {
+// An uploaded file (DOCX) stays in document storage until its first editor
+// seeds it into sync-service, so its location is never sync-service content
+// and there is no local snapshot to open from offline. Synchronization still
+// uses the same session-bound authorization.
+const fileLoader = createSyncDocumentContextLoader({
+  cache: offlineDocumentContextCache,
+  loadRemote: async (documentId, session) =>
+    bindBundle(documentId, session, await fetchBundle(documentId, session)),
+  hasLocalSnapshot: async () => false,
+  onSessionChange: onDocumentSessionChange,
+});
+
+async function openWith(opener: typeof loader, documentId: string) {
   if (isNativeMobilePlatform() && !offlineDocumentContextCache.capture()) {
     const epoch = documentSessionEpoch();
     await prefetchUserInfo();
@@ -115,5 +139,15 @@ export async function fetchSyncDocumentOpenContext(documentId: string) {
       return LoadErrors.UNAUTHORIZED;
     }
   }
-  return loadResult(catchToResult(() => loader.load(documentId)));
+  return loadResult(catchToResult(() => opener.load(documentId)));
+}
+
+/** Open cached native documents before network work; authorize synchronization separately. */
+export function fetchSyncDocumentOpenContext(documentId: string) {
+  return openWith(loader, documentId);
+}
+
+/** Open a stored-file document (DOCX), which needs no sync-service content, with the same authorization. */
+export function fetchFileDocumentOpenContext(documentId: string) {
+  return openWith(fileLoader, documentId);
 }

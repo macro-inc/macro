@@ -1,5 +1,5 @@
 use crate::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
-use crate::api::tool_selection::{choose_tools_prompt, service_tools};
+use crate::api::tool_selection::{service_tools, structured_completion_prompt};
 use crate::model::stream::ToolSet;
 use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
@@ -116,13 +116,6 @@ pub async fn structured_completion(
             code: Some(error.code().to_string()),
         })?;
 
-    let tools_prompt = choose_tools_prompt(&request.toolset, &*ctx.all_tools_prompt);
-
-    let system_prompt = match &request.additional_instructions {
-        Some(instructions) => format!("{}\n{}", tools_prompt, instructions),
-        None => tools_prompt.to_string(),
-    };
-
     // Tool-free completions (for example, query proposals) must not discover
     // connectors or execute built-in tools. Omitting the tool prompt alone
     // does not remove the agent's capabilities.
@@ -133,6 +126,15 @@ pub async fn structured_completion(
         &user_id,
     )
     .await;
+
+    // Both phases need the registered tools' reference, including SQL syntax.
+    // The formatter has no executable tools of its own.
+    let system_prompt = structured_completion_prompt(
+        &request.toolset,
+        &*ctx.all_tools_prompt,
+        request.additional_instructions.as_deref(),
+        &toolset.request_schemas().unwrap_or_default(),
+    );
 
     let user_message = ChatMessage {
         role: Role::User,

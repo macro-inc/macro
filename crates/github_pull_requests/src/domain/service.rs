@@ -4,6 +4,7 @@
 mod test;
 
 mod changes;
+mod index;
 
 pub use changes::{GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore};
 
@@ -22,12 +23,10 @@ use super::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
         GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
         GithubPullRequestSortDirection, GithubPullRequestStatus, GithubPullRequestWrite,
-        GithubRepositoryIdentity, StoredGithubPullRequest, UpsertGithubPullRequest,
-        UpsertedGithubPullRequest,
+        StoredGithubPullRequest, UpsertGithubPullRequest, UpsertedGithubPullRequest,
     },
     ports::{
-        GithubPullRequestFacetRepository, GithubPullRequestFacetService,
-        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestListing,
+        GithubPullRequestFacetRepository, GithubPullRequestFacetService, GithubPullRequestListing,
         GithubPullRequestListingRepository, GithubPullRequestRepository, GithubPullRequestService,
     },
 };
@@ -272,49 +271,6 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
             .map_err(repository_error)?;
 
         StoredGithubPullRequest::from_record(&record, row)
-    }
-}
-
-impl<F, R> GithubPullRequestIndexer for GithubPullRequestServiceImpl<F, R>
-where
-    F: ForeignEntityService,
-    R: GithubPullRequestRepository + GithubPullRequestIndexRepository,
-{
-    #[tracing::instrument(err, skip(self, repositories), fields(repositories = repositories.len()))]
-    async fn index_repositories(
-        &self,
-        repositories: &[GithubRepositoryIdentity],
-    ) -> Result<u64, GithubPullRequestError> {
-        let mut indexed = 0;
-        for repository in repositories {
-            let Some(repository_id) = i64::try_from(repository.id).ok().filter(|id| *id != 0)
-            else {
-                continue;
-            };
-            let pull_requests = GithubPullRequestIndexRepository::latest_pull_request_metadata(
-                &self.repo,
-                &repository.owner,
-                &repository.name,
-            )
-            .await
-            .map_err(repository_error)?;
-            for metadata in &pull_requests {
-                let Some(mut row) = GithubPullRequestWrite::from_metadata(metadata) else {
-                    tracing::warn!("pull request metadata has no typed columns");
-                    continue;
-                };
-                row.repository_id = Some(repository_id);
-                match self.repo.upsert_row(&row).await {
-                    Ok(()) => indexed += 1,
-                    Err(error) => tracing::error!(
-                        error=?error, github_key=%row.github_key,
-                        "failed to store pull request row"
-                    ),
-                }
-            }
-        }
-
-        Ok(indexed)
     }
 }
 

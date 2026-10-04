@@ -1,4 +1,4 @@
-import { ConcreteBlockRegistry } from '@core/block';
+import { BlockRegistry } from '@core/block';
 import { describe, expect, it } from 'vitest';
 
 const definitionFiles = import.meta.glob(
@@ -11,7 +11,7 @@ const definitionFiles = import.meta.glob(
 );
 
 describe('block definition discovery', () => {
-  it('has one definition file for every concrete block', () => {
+  it('has one definition file for every block', () => {
     const discoveredNames = Object.keys(definitionFiles).map((path) =>
       path
         .split('/')
@@ -19,6 +19,6 @@ describe('block definition discovery', () => {
         ?.replace(/^block-/, '')
     );
 
-    expect(discoveredNames.sort()).toEqual([...ConcreteBlockRegistry].sort());
+    expect(discoveredNames.sort()).toEqual([...BlockRegistry].sort());
   });
 });

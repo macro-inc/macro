@@ -262,3 +262,93 @@ fn invalid_additional_parameters_fail_before_transport() {
         ));
     }
 }
+
+async fn assert_replayed_tool_names(streaming: bool) {
+    use crate::types::{AssistantMessagePart as Part, ChatMessage, ChatMessageContent, Role};
+    let transport = CaptureTransport::default();
+    let client = gemini::Client::builder()
+        .api_key("test-google-key")
+        .http_client(transport.clone())
+        .build()
+        .unwrap();
+    let model = GeminiModel::new(
+        Model::try_from("google/gemini-3.8-flash").unwrap(),
+        Arc::new(client),
+    );
+    // Exercise the same persisted-parts conversion as structured completion.
+    // Two parallel calls to the same tool must retain distinct correlation ids.
+    let parts = vec![
+        Part::ToolCall {
+            name: "QueryDatabase".into(),
+            id: "call-a".into(),
+            json: json!({"sql":"SELECT * FROM Books"}),
+        },
+        Part::ToolCall {
+            name: "QueryDatabase".into(),
+            id: "call-b".into(),
+            json: json!({"sql":"SELECT COUNT(*) FROM Books"}),
+        },
+        Part::ToolCallResponseJson {
+            name: "QueryDatabase".into(),
+            id: "call-a".into(),
+            json: json!({"rows": []}),
+        },
+        Part::ToolCallErr {
+            name: "QueryDatabase".into(),
+            id: "call-b".into(),
+            description: "Read unavailable".into(),
+        },
+        Part::Text {
+            text: "The second read failed.".into(),
+        },
+    ];
+    let mut messages = vec![Message::user("Find books")];
+    messages.extend(crate::to_rig_messages(&[ChatMessage {
+        role: Role::Assistant,
+        content: ChatMessageContent::AssistantMessageParts(parts),
+        attachments: None,
+    }]));
+    messages.push(Message::user("Format the answer as JSON"));
+    let mut request = request();
+    request.chat_history = rig_core::OneOrMany::many(messages).unwrap();
+    request.tools.clear();
+    request.additional_params = None;
+    request.tool_choice = None;
+    request.output_schema = None;
+    if streaming {
+        let mut stream = model.completion().stream(request).await.unwrap();
+        let _ = stream.next().await;
+    } else {
+        assert!(model.completion().completion(request).await.is_err());
+    }
+    let captured = transport.0.lock().unwrap();
+    let body = &captured[0].1;
+    for (index, id) in ["call-a", "call-b"].iter().enumerate() {
+        let call = &body["contents"][1]["parts"][index]["functionCall"];
+        let result = &body["contents"][2]["parts"][index]["functionResponse"];
+        assert_eq!(call["name"], "QueryDatabase");
+        assert_eq!(result["name"], call["name"]);
+        assert_eq!(call["id"], *id);
+        assert_eq!(result["id"], *id);
+    }
+    assert!(
+        body["contents"][2]["parts"][0]["functionResponse"]["response"]
+            .to_string()
+            .contains("rows")
+    );
+    assert!(
+        body["contents"][2]["parts"][1]["functionResponse"]["response"]
+            .to_string()
+            .contains("Read unavailable")
+    );
+}
+
+#[tokio::test]
+async fn structured_completion_replays_tool_names_with_no_tools() {
+    assert_replayed_tool_names(false).await;
+}
+
+#[tokio::test]
+async fn streaming_replays_tool_names_with_no_tools() {
+    assert_replayed_tool_names(true).await;
+}

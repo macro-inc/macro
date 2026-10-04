@@ -30,9 +30,14 @@
   height: 28px;
 }
 
-.agents-page-providers li:first-child svg {
+.agents-page-providers li[data-agent='Hermes'] svg {
   width: 18px;
   height: 36px;
+}
+
+/* The MCP settings window sits under the provider row. */
+.agents-page-mcp {
+  margin-top: 8px;
 }
 
 @media (max-width: 699px) {
