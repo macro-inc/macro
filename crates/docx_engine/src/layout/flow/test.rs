@@ -141,3 +141,62 @@ fn header_paragraphs_do_not_take_body_list_labels() {
     let part = header_part();
     assert_eq!(text(lines(&l, &part)[0]), "Header");
 }
+
+/// A one-inch picture anchored to its paragraph with `wrap`.
+fn anchored_picture(wrap: &str, offset_emu: i64) -> String {
+    format!(
+        r#"<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>{offset_emu}</wp:posOffset></wp:positionV><wp:extent cx="914400" cy="914400"/><wp:effectExtent l="0" t="0" r="0" b="0"/>{wrap}<wp:docPr id="1" name="p"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rIdX"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>"#
+    )
+}
+
+#[test]
+fn top_and_bottom_floats_push_text_below_them() {
+    let body = format!(
+        "<w:p>{}<w:r><w:t>Beside</w:t></w:r></w:p><w:p><w:r><w:t>Next</w:t></w:r></w:p>",
+        anchored_picture("<wp:wrapTopAndBottom/>", 0)
+    );
+    let l = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let ls = lines(&l, &StoryRef::Body);
+    // The picture spans 72..144: its paragraph's text goes below it.
+    assert!((ls[0].y - 144.0).abs() < 0.01, "{}", ls[0].y);
+    // Text that ignores it stays put.
+    let body = format!(
+        "<w:p>{}<w:r><w:t>Over</w:t></w:r></w:p>",
+        anchored_picture("<wp:wrapNone/>", 0)
+    );
+    let l = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    assert!((lines(&l, &StoryRef::Body)[0].y - 72.0).abs() < 0.01);
+}
+
+#[test]
+fn text_continues_below_a_band_further_down() {
+    // A picture an inch below its paragraph: the paragraph's line stays on
+    // top, the next paragraph jumps the band instead of the page.
+    let body = format!(
+        "<w:p>{}<w:r><w:t>Above</w:t></w:r></w:p><w:p><w:r><w:t>Below</w:t></w:r></w:p>",
+        anchored_picture("<wp:wrapTopAndBottom/>", 914400 / 6)
+    );
+    let l = layout(
+        &body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    assert_eq!(l.pages.len(), 1);
+    let ls = lines(&l, &StoryRef::Body);
+    assert!((ls[0].y - 72.0).abs() < 0.01, "{}", ls[0].y);
+    assert!((ls[1].y - (72.0 + 12.0 + 72.0)).abs() < 0.01, "{}", ls[1].y);
+}

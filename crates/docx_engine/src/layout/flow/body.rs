@@ -1,7 +1,8 @@
 //! The body paginator: sections, columns, pages, keep rules, notes.
 
+use super::super::drawing::Wrap;
 use super::super::format::TableCtx;
-use super::super::inline::FieldValues;
+use super::super::inline::{FieldValues, Kind};
 use super::super::lines::LineEnd;
 use super::super::{Item, Page, ParaBox, StoryRef};
 use super::anchors::{PageGeom, resolve};
@@ -513,7 +514,7 @@ impl<'e, 'a> Flow<'e, 'a> {
             while let Some(&(_, bottom)) = c
                 .bands
                 .iter()
-                .find(|(top, bottom)| *top < c.y - EPS && *bottom > c.y + EPS)
+                .find(|(top, bottom)| *top <= c.y + EPS && *bottom > c.y + EPS)
             {
                 c.y = bottom;
             }
@@ -768,6 +769,8 @@ impl<'e, 'a> Flow<'e, 'a> {
         if let Some(c) = &mut self.cur {
             c.y += before;
         }
+        // Where the paragraph's floating drawings are positioned from.
+        let mut anchor_top = self.reserve_float_bands(&pb, col_left, width);
         let mut join = self.border_join(blocks, i, &props, self.prev.as_ref());
         let lines_len = pb.lines.lines.len();
         let mut li = 0;
@@ -824,9 +827,14 @@ impl<'e, 'a> Flow<'e, 'a> {
                     if first_fragment && let Some(c) = &mut self.cur {
                         c.y -= bt;
                     }
+                    let next = pb.lines.lines.get(li).map_or(0.0, |l| l.height);
+                    if self.jump_band(next + bt) {
+                        continue;
+                    }
                     self.next_column(false);
                     // A new column starts a new border box.
                     join.prev = false;
+                    anchor_top = self.reserve_float_bands(&pb, col_left, width);
                     continue;
                 }
                 take = 1;
@@ -851,7 +859,7 @@ impl<'e, 'a> Flow<'e, 'a> {
                 &mut items,
                 &mut anchors,
                 &mut notes,
-                y,
+                if first_fragment { anchor_top } else { y },
             );
             self.number_lines(&pb, li, li + take, col_left, y);
             let last_fragment = li + take >= lines_len;
@@ -894,11 +902,97 @@ impl<'e, 'a> Flow<'e, 'a> {
                         self.start_page(sect, true);
                     }
                     LineEnd::ColumnBreak => self.next_column(true),
-                    _ => self.next_column(false),
+                    _ => {
+                        // Lines continue below a band that stopped them.
+                        let next = pb.lines.lines.get(li).map_or(0.0, |l| l.height);
+                        if !self.jump_band(next) {
+                            self.next_column(false);
+                        }
+                    }
                 }
             }
         }
         self.prev = Some(prev_record(&props));
+    }
+
+    /// Reserves the bands of the floating drawings in `pb` that leave no
+    /// room for text beside them, for a paragraph starting at the current
+    /// position; moves to the next column first when such a drawing does
+    /// not fit. Returns the paragraph top the drawings are positioned from.
+    fn reserve_float_bands(&mut self, pb: &Arc<ParaBox>, col_left: f32, width: f32) -> f32 {
+        for attempt in 0..2 {
+            let Some(c) = &self.cur else {
+                return 0.0;
+            };
+            let top = c.y;
+            let geom = self.page_geom();
+            let mut bands = Vec::new();
+            for line in &pb.lines.lines {
+                for k in line.start..line.end {
+                    let Kind::Anchor(o) = pb.inline.clusters[k].kind else {
+                        continue;
+                    };
+                    let d = &pb.inline.objects[o as usize];
+                    let Some(anchor) = &d.anchor else {
+                        continue;
+                    };
+                    let a = PendingAnchor {
+                        drawing: Arc::new(d.clone()),
+                        para_top: top,
+                        line_top: top + line.top,
+                        char_x: col_left + pb.lines.x[k],
+                        story: pb.story.clone(),
+                    };
+                    let Some(r) = resolve(&a, &geom) else {
+                        continue;
+                    };
+                    let beside_column = r.x + r.w <= col_left || r.x >= col_left + width;
+                    let no_room = match anchor.wrap {
+                        Wrap::TopAndBottom => true,
+                        Wrap::Square | Wrap::Tight => r.w >= width * WIDE_FRAME,
+                        Wrap::None => false,
+                    };
+                    if no_room && !beside_column && !anchor.behind {
+                        bands.push((r.y - anchor.dist[0], r.y + r.h + anchor.dist[1]));
+                    }
+                }
+            }
+            let bottom = c.bottom - c.notes_height;
+            let overflows = bands.iter().any(|&(_, b)| b > bottom + EPS);
+            if attempt == 0 && overflows && c.placed_any {
+                self.next_column(false);
+                continue;
+            }
+            if let Some(c) = &mut self.cur {
+                c.bands.extend(bands);
+            }
+            return top;
+        }
+        self.cur.as_ref().map_or(0.0, |c| c.y)
+    }
+
+    /// When a band starts within `next` points below the current position
+    /// and there is room below it, moves past it and says so.
+    fn jump_band(&mut self, next: f32) -> bool {
+        let Some(c) = &mut self.cur else {
+            return false;
+        };
+        let bottom = c.bottom - c.notes_height;
+        let band = c
+            .bands
+            .iter()
+            .filter(|(top, _)| *top >= c.y - EPS && *top < c.y + next + EPS)
+            .map(|&(_, b)| b)
+            .fold(None, |acc: Option<f32>, b| {
+                Some(acc.map_or(b, |a| a.max(b)))
+            });
+        match band {
+            Some(b) if b + next <= bottom + EPS => {
+                c.y = b;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// How many lines from `li` fit in the current column, and the note
@@ -995,6 +1089,9 @@ impl<'e, 'a> Flow<'e, 'a> {
                 .as_ref()
                 .map_or((0.0, false), |c| (c.y, c.placed_any));
             if y + h > self.avail_bottom() + EPS && placed_any && !moved {
+                if self.jump_band(h) {
+                    continue;
+                }
                 self.next_column(false);
                 moved = true;
                 // Repeat header rows at the top of the new page.
