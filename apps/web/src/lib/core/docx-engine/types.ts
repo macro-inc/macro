@@ -168,10 +168,16 @@ export type FormatState = {
   font: string | null;
   size: number | null;
   color: string | null;
+  /** A Word highlight name (`yellow`, ...), when highlighted. */
+  highlight: string | null;
   style: string | null;
   styleName: string | null;
   align: Alignment | null;
   list: boolean;
+  /** Line spacing as a multiple of single spacing, when it is one. */
+  lineSpacing: number | null;
+  /** The selection starts in a table. */
+  table: boolean;
   /** The document records everyone's edits as tracked changes. */
   tracking: boolean;
   /** The selection (or the caret) touches a tracked change. */

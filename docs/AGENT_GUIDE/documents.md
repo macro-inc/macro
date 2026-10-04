@@ -820,12 +820,18 @@ updates live and shows each collaborator's caret with their name
   (labelled `Document text`); it must have focus, which a click on a page
   gives it. Read text back from another tab or after a download, not from
   the page.
-- Editors get a toolbar labelled `Document formatting`: `Undo`, `Redo`, a
-  `Paragraph style` select, a `Font size` select, `Bold`, `Italic`,
-  `Underline`, `Strikethrough`, `Bulleted list`, `Numbered list`, the
-  alignment buttons, `Insert table`, `Track changes`, `Hide tracked changes` /
-  `Show tracked changes`, `Comment on selection`, `Find and replace` and
-  `Download .docx` (viewers get `Find and replace` and `Download .docx`).
+- Editors get a toolbar labelled `Document formatting`: `Undo`, `Redo`, the
+  `Paragraph style`, `Font` and `Font size` selects, `Bold`, `Italic`,
+  `Underline`, `Strikethrough`, `Superscript`, `Subscript`, the `Text color`
+  and `Highlight` menus (`[data-docx-menu="color"]`,
+  `[data-docx-menu="highlight"]`), `Clear formatting`, `Bulleted list`,
+  `Numbered list`, the alignment buttons, `Decrease indent`, `Increase
+  indent`, the `Line spacing` menu, `Insert table` (inside a table also the
+  `Table rows and columns` menu, `[data-docx-menu="table"]`, to insert or
+  delete rows and columns or the table), `Track changes`, `Hide tracked
+  changes` / `Show tracked changes`, `Comment on selection`, `Find and
+  replace` and `Download .docx` (viewers get `Find and replace` and
+  `Download .docx`).
   While tracking is on (or the caret is on a tracked change) it also shows
   `Accept change`, `Reject change`, `Accept all changes` and `Reject all
   changes`.

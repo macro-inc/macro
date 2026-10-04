@@ -400,6 +400,8 @@ pub struct FormatState {
     pub size: Option<f32>,
     /// Text color (`RRGGBB`), when not automatic.
     pub color: Option<String>,
+    /// Highlight color name (`yellow`, `green`...), when highlighted.
+    pub highlight: Option<String>,
     /// Paragraph style id.
     pub style: Option<String>,
     /// Paragraph style name.
@@ -408,6 +410,10 @@ pub struct FormatState {
     pub align: Option<Alignment>,
     /// Whether the paragraph is in a list.
     pub list: bool,
+    /// Line spacing as a multiple of single spacing, when it is one.
+    pub line_spacing: Option<f32>,
+    /// Whether the selection starts in a table.
+    pub table: bool,
     /// Whether the document tracks changes.
     pub tracking: bool,
     /// Whether the selection (or the caret) touches a tracked change.
@@ -1489,6 +1495,20 @@ impl Session {
             Align::Left => Alignment::Left,
         });
         state.list = para.props.num.is_some();
+        state.line_spacing = match para.props.line {
+            crate::model::props::LineSpacing::Auto(m) => Some((m * 100.0).round() / 100.0),
+            _ => None,
+        };
+        state.table = self.story().ancestors(&start.block).iter().any(|id| {
+            self.story()
+                .get(id)
+                .is_some_and(|b| b.kind == BlockKind::Cell)
+        });
+        state.highlight = attrs
+            .run_props()
+            .find(|(q, _)| q.ends_with(":highlight") || *q == "highlight")
+            .and_then(|(_, xml)| revise::attribute(xml, "val"))
+            .filter(|v| v != "none");
         state.tracking = self.doc.parts().settings.track_revisions;
         state.revision = self.touches_revision(&start, &end, &paras);
         state.can_undo = !self.undo.is_empty();

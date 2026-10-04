@@ -47,6 +47,8 @@ declare global {
       ) => { props: string; attrs: Record<string, string>[] } | null;
       /** XML of the shared part whose name ends with `suffix`. */
       sharedPart: (suffix: string) => string | null;
+      /** How many shared blocks there are of a kind (`p`, `tbl`, `tr`, `tc`...). */
+      sharedCount: (kind: string) => number;
     };
   }
 }
@@ -78,6 +80,12 @@ function helpers(
       await current.idle();
       document.querySelector<HTMLTextAreaElement>('[data-docx-input]')?.focus();
       return true;
+    },
+    sharedCount: (kind: string) => {
+      const shared = doc();
+      return shared
+        ? readCollabState(shared).blocks.filter((b) => b.k === kind).length
+        : 0;
     },
     sharedBlock: (prefix: string) => {
       const shared = doc();

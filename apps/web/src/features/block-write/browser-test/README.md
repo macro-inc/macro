@@ -21,6 +21,8 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
   - header and footer editing in place;
   - tracked changes recorded per author, then rejected for everyone;
   - find and replace (one match, then all, undone in one step);
+  - toolbar formatting (highlight, color, line spacing) and table rows;
+  - touch input (swipe, tap, double tap, held press);
   - read-only viewers following along;
   - an offline merge.
 
