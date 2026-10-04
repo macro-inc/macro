@@ -46,6 +46,55 @@ struct LineOut {
     spacing: String,
     /// Whether the line starts its paragraph.
     first: bool,
+    /// The paragraph's space before (points).
+    before: f32,
+    /// Whether the paragraph starts on a new page (`pageBreakBefore`).
+    page_break_before: bool,
+    /// Room for the line's content (points).
+    avail: f32,
+    /// See [`fit_stats`].
+    fit: [f32; 4],
+}
+
+/// The natural width of a line's content and of its spaces, the natural
+/// width of the next line's first word with the space before it (0 at the
+/// paragraph's end), and of the line's last word: what decides whether one
+/// more word fits.
+fn fit_stats(l: &PlacedLine) -> [f32; 4] {
+    let pb = &l.para;
+    let line = l.line();
+    let clusters = &pb.inline.clusters;
+    let mut end = line.end;
+    while end > line.start && matches!(clusters[end - 1].kind, Kind::Space | Kind::End | Kind::Zero)
+    {
+        end -= 1;
+    }
+    let content = &clusters[line.start..end];
+    let natural: f32 = content.iter().map(|c| c.advance).sum();
+    let spaces: f32 = content
+        .iter()
+        .filter(|c| c.kind == Kind::Space)
+        .map(|c| c.advance)
+        .sum();
+    let gap: f32 = clusters[end..line.end]
+        .iter()
+        .filter(|c| c.kind == Kind::Space)
+        .map(|c| c.advance)
+        .sum();
+    let next = pb.lines.lines.get(l.line + 1).map_or(0.0, |n| {
+        gap + clusters[n.start..n.end]
+            .iter()
+            .take_while(|c| c.kind != Kind::Space)
+            .map(|c| c.advance)
+            .sum::<f32>()
+    });
+    let last: f32 = content
+        .iter()
+        .rev()
+        .take_while(|c| c.kind != Kind::Space)
+        .map(|c| c.advance)
+        .sum();
+    [natural, spaces, next, last]
 }
 
 /// One page.
@@ -159,6 +208,10 @@ pub fn run(args: &Args) -> Result<bool, Box<dyn std::error::Error>> {
                     style: l.para.format.props.style.clone(),
                     spacing: format!("{:?}", l.para.format.props.line),
                     first: line.start == 0,
+                    before: l.para.format.props.before,
+                    page_break_before: l.para.format.props.page_break_before,
+                    avail: line.right - line.left,
+                    fit: fit_stats(l),
                 });
             }
         }

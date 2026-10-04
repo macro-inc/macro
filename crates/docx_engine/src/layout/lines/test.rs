@@ -335,6 +335,30 @@ fn the_paragraph_mark_only_sizes_lines_without_text() {
 }
 
 #[test]
+fn lines_of_mixed_fonts_take_the_tallest_ascent_with_its_own_leading() {
+    // A 12pt Symbol bullet before 12pt Arial text. Symbol's ascent (1.005
+    // em, no leading) tops Arial's leading plus ascent (0.938 em); Word
+    // does not add Arial's leading on top of Symbol's ascent.
+    let body = r#"<w:p><w:r><w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/><w:sz w:val="24"/></w:rPr><w:t>a</w:t></w:r><w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve"> text</w:t></w:r></w:p>"#;
+    let (_, l) = layout(
+        body,
+        &Parts {
+            styles: Some(ARIAL_10),
+            ..Parts::default()
+        },
+    );
+    let line = lines(&l, 0)[0].line().clone();
+    let ascent = 12.0 * 2059.0 / 2048.0;
+    let descent = 12.0 * 443.0 / 2048.0;
+    assert!((line.baseline - ascent).abs() < 0.01, "{}", line.baseline);
+    assert!(
+        (line.height - (ascent + descent)).abs() < 0.01,
+        "{}",
+        line.height
+    );
+}
+
+#[test]
 fn tabs_to_stops_past_the_right_edge_go_to_the_next_line() {
     // Stops at 1" and 7" in a 6.5" wide text area: the second tab cannot
     // reach its stop on the line.

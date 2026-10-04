@@ -552,7 +552,10 @@ fn line_height(
     ctx: &LineCtx<'_>,
     adv: &[f32],
 ) -> (f32, f32) {
-    let mut ascent: f32 = 0.0;
+    // Each font's external leading sits above its ascent: the line's top
+    // part is the largest of them, its bottom part the largest descent.
+    let mut above: f32 = 0.0;
+    let mut object: f32 = 0.0;
     let mut descent: f32 = 0.0;
     let mut leading: f32 = 0.0;
     let mut seen = false;
@@ -563,7 +566,7 @@ fn line_height(
             Kind::Zero | Kind::Anchor(_) => continue,
             Kind::Object(o) => {
                 let d = &inline.objects[o as usize];
-                ascent = ascent.max(d.height + d.effect[1] + d.effect[3]);
+                object = object.max(d.height + d.effect[1] + d.effect[3]);
                 seen = true;
             }
             Kind::End => {
@@ -573,13 +576,13 @@ fn line_height(
                 if text || (c.ch == '\u{0}' && seen) {
                     continue;
                 }
-                ascent = ascent.max(style.ascent);
+                above = above.max(style.leading + style.ascent);
                 descent = descent.max(style.descent);
                 leading = leading.max(style.leading);
                 seen = true;
             }
             _ => {
-                ascent = ascent.max(style.ascent);
+                above = above.max(style.leading + style.ascent);
                 descent = descent.max(style.descent);
                 leading = leading.max(style.leading);
                 seen = true;
@@ -591,15 +594,17 @@ fn line_height(
     if !seen {
         // A line of hidden content: the paragraph mark's metrics.
         let style = &inline.runs[inline.clusters[end - 1].run as usize];
-        ascent = style.ascent;
+        above = style.leading + style.ascent;
         descent = style.descent;
         leading = style.leading;
     }
-    let natural = ascent + descent + leading;
+    // Pictures stand on the baseline below the text's leading.
+    let top = above.max(object + leading);
+    let natural = top + descent;
     let (mut height, mut baseline) = match ctx.props.line {
         LineSpacing::Auto(m) if m >= 1.0 => {
             // Extra space of multiple line spacing goes below the text.
-            (natural * m, leading + ascent)
+            (natural * m, top)
         }
         LineSpacing::Auto(m) => {
             // Reduced spacing takes the space from above the text.

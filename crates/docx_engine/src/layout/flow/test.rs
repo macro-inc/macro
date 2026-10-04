@@ -296,6 +296,94 @@ fn rows_that_cannot_split_move_whole() {
     assert!(page_texts(&l, 1).iter().any(|t| t == "Cell line 0"));
 }
 
+/// `before` filler lines, then a one-column table of `rows`, each given
+/// as (row properties, cell content).
+fn table_after(before: usize, rows: &[(&str, &str)]) -> String {
+    let filler: String = (0..before)
+        .map(|i| format!("<w:p><w:r><w:t>Filler {i}</w:t></w:r></w:p>"))
+        .collect();
+    let rows: String = rows
+        .iter()
+        .map(|(tr, cell)| {
+            format!(
+                r#"<w:tr><w:trPr>{tr}</w:trPr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>{cell}</w:tc></w:tr>"#
+            )
+        })
+        .collect();
+    format!(
+        r#"{filler}<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>{rows}</w:tbl><w:p/>{LETTER}"#
+    )
+}
+
+#[test]
+fn rows_break_between_lines_as_widow_control_allows() {
+    // A four-line paragraph whose first three lines fit on the page: two
+    // stay, two go on, so neither page has a single line of it.
+    let cell = r#"<w:p><w:r><w:t>L1</w:t><w:br/><w:t>L2</w:t><w:br/><w:t>L3</w:t><w:br/><w:t>L4</w:t></w:r></w:p>"#;
+    let l = layout(&table_after(53, &[("", cell)]), &arial_10());
+    let cells = |page| -> Vec<String> {
+        page_texts(&l, page)
+            .into_iter()
+            .filter(|t| t.starts_with('L'))
+            .collect()
+    };
+    assert_eq!(cells(0), ["L1", "L2"]);
+    assert_eq!(cells(1), ["L3", "L4"]);
+    // Two one-line paragraphs with room for one: the row leaves no single
+    // line behind and goes over whole.
+    let cell = r#"<w:p><w:r><w:t>L1</w:t></w:r></w:p><w:p><w:r><w:t>L2</w:t></w:r></w:p>"#;
+    let l = layout(&table_after(55, &[("", cell)]), &arial_10());
+    assert!(!page_texts(&l, 0).iter().any(|t| t.starts_with('L')));
+    assert_eq!(
+        page_texts(&l, 1)
+            .into_iter()
+            .filter(|t| t.starts_with('L'))
+            .collect::<Vec<_>>(),
+        ["L1", "L2"]
+    );
+}
+
+#[test]
+fn header_rows_and_rows_kept_with_the_next_stay_together() {
+    let para =
+        |t: &str, ppr: &str| format!("<w:p><w:pPr>{ppr}</w:pPr><w:r><w:t>{t}</w:t></w:r></w:p>");
+    let header = ("<w:tblHeader/>", para("Head", ""));
+    let kept = ("", para("Kept", "<w:keepNext/>"));
+    let (row, free, last) = (para("Row", ""), para("Free", ""), para("Last", ""));
+    for (filler, rows) in [
+        // Room for one more line: not the header alone.
+        (
+            55,
+            vec![(header.0, header.1.as_str()), ("", &row), ("", &row)],
+        ),
+        // Room for three: the first row, not both kept rows without the
+        // last.
+        (
+            53,
+            vec![
+                ("", &free),
+                (kept.0, kept.1.as_str()),
+                (kept.0, kept.1.as_str()),
+                ("", &last),
+            ],
+        ),
+    ] {
+        let l = layout(&table_after(filler, &rows), &arial_10());
+        let first = page_texts(&l, 0);
+        let second = page_texts(&l, 1);
+        // A header row never ends a page alone; rows kept with the next
+        // go over with the row they keep with.
+        assert!(
+            !first.iter().any(|t| t == "Head" || t == "Kept"),
+            "{first:?}"
+        );
+        assert!(
+            second.iter().any(|t| t == "Kept" || t == "Head"),
+            "{second:?}"
+        );
+    }
+}
+
 #[test]
 fn rows_taller_than_a_page_split_instead_of_overflowing() {
     let l = layout(
@@ -739,4 +827,143 @@ fn arabic_letters_join() {
     assert_eq!(clusters[2].glyph, glyph('\u{FEE2}'), "final meem");
     assert_eq!(clusters[4].glyph, glyph('\u{FEFB}'), "lam-alef");
     assert_eq!(clusters[5].kind, Kind::Zero);
+}
+
+/// A paragraph with 12pt space before (and `ppr` besides, and `spacing`
+/// attributes), `run` before its text `t`.
+fn spaced(t: &str, ppr: &str, spacing: &str, run: &str) -> String {
+    format!(
+        r#"<w:p><w:pPr>{ppr}<w:spacing w:before="240" {spacing}/></w:pPr><w:r>{run}<w:t>{t}</w:t></w:r></w:p>"#
+    )
+}
+
+#[test]
+fn space_before_stays_at_a_page_top_only_after_a_page_break() {
+    let page_break = r#"<w:br w:type="page"/>"#;
+    let body = [
+        para("One"),
+        // Starting a page of its own is no hard break.
+        spaced("Two", "<w:pageBreakBefore/>", "", ""),
+        format!("<w:p><w:r>{page_break}</w:r></w:p>"),
+        spaced("Three", "", "", ""),
+        // A paragraph that starts with a page break starts after it.
+        spaced("Four", "", "", page_break),
+        // (Exactly spaced lines leave the space out there.)
+        spaced("Five", "", r#"w:line="300" w:lineRule="exact""#, page_break),
+    ]
+    .concat();
+    let l = layout(&format!("{body}{LETTER}"), &arial_10());
+    assert_eq!(l.pages.len(), 5);
+    for (page, t, y) in [
+        (1, "Two", 72.0),
+        (2, "Three", 84.0),
+        (3, "Four", 84.0),
+        (4, "Five", 72.0),
+    ] {
+        let line = find(&l, page, t);
+        assert!((line.y - y).abs() < 0.01, "{t}: {}", line.y);
+    }
+    // A heading kept with the paragraph after it moves to the next page
+    // without its space before.
+    let filler: String = (0..54).map(|k| para(&format!("Line {k}"))).collect();
+    let body = format!(
+        "{filler}{}{}{LETTER}",
+        spaced("Heading", "<w:keepNext/>", "", ""),
+        para(&"word ".repeat(200)),
+    );
+    let l = layout(&body, &arial_10());
+    let heading = find(&l, 1, "Heading");
+    assert!((heading.y - 72.0).abs() < 0.01, "{}", heading.y);
+}
+
+#[test]
+fn sections_keep_space_before_from_word_2013_on() {
+    let body = format!(
+        "{}{}{}<w:sectPr>{PAGE}</w:sectPr>",
+        para("One"),
+        section_end("nextPage", ""),
+        spaced("Two", "", "", ""),
+    );
+    for (mode, y) in [(14, 72.0), (15, 84.0)] {
+        let settings = format!(
+            r#"<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="{mode}"/></w:compat>"#
+        );
+        let l = layout(
+            &body,
+            &Parts {
+                settings: Some(&settings),
+                ..arial_10()
+            },
+        );
+        let two = find(&l, 1, "Two");
+        assert!((two.y - y).abs() < 0.01, "mode {mode}: {}", two.y);
+    }
+}
+
+#[test]
+fn footnotes_leave_room_for_the_continuation_notice() {
+    let separator = r#"<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>"#;
+    // An empty paragraph with a 20pt mark: 23pt high.
+    let notice = r#"<w:footnote w:type="continuationNotice" w:id="0"><w:p><w:pPr><w:rPr><w:sz w:val="40"/></w:rPr></w:pPr></w:p></w:footnote>"#;
+    let note = r#"<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> The note.</w:t></w:r></w:p></w:footnote>"#;
+    let body = format!(
+        r#"<w:p><w:r><w:t>Text</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r></w:p>{LETTER}"#
+    );
+    let note_bottom = |footnotes: &str| {
+        let l = layout(
+            &body,
+            &Parts {
+                footnotes: Some(footnotes),
+                ..arial_10()
+            },
+        );
+        let line = l.pages[0]
+            .lines_of(&StoryRef::Footnote(1))
+            .next()
+            .expect("the note");
+        line.y + line.line().height
+    };
+    let plain = note_bottom(&format!("{separator}{note}"));
+    assert!((plain - 720.0).abs() < 0.01, "{plain}");
+    let with_notice = note_bottom(&format!("{separator}{notice}{note}"));
+    assert!(
+        (with_notice - (720.0 - 20.0 * 1.1499)).abs() < 0.01,
+        "{with_notice}"
+    );
+}
+
+#[test]
+fn space_after_must_fit_above_footnotes() {
+    // One-line paragraphs 11.5pt high with 12pt after, the first with a
+    // footnote: the notes (default 12pt separator and an 11.5pt note) end
+    // the column at 696.5.
+    let paras = |note: bool| -> String {
+        (0..30)
+            .map(|k| {
+                let reference = if note && k == 0 {
+                    r#"<w:r><w:footnoteReference w:id="1"/></w:r>"#
+                } else {
+                    ""
+                };
+                format!(
+                    r#"<w:p><w:pPr><w:spacing w:after="240"/></w:pPr><w:r><w:t>P{k}</w:t></w:r>{reference}</w:p>"#
+                )
+            })
+            .collect()
+    };
+    let footnotes = r#"<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve"> The note.</w:t></w:r></w:p></w:footnote>"#;
+    let count = |note: bool| {
+        let l = layout(
+            &format!("{}{LETTER}", paras(note)),
+            &Parts {
+                footnotes: Some(footnotes),
+                ..arial_10()
+            },
+        );
+        page_texts(&l, 0).len()
+    };
+    // The 27th paragraph's line would fit above the notes, its space after
+    // would not. Without notes the space after may run into the margin.
+    assert_eq!(count(true), 26);
+    assert_eq!(count(false), 28);
 }

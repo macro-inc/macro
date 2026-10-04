@@ -49,6 +49,9 @@ fn breaks_after_hyphens_and_cjk() {
     assert!(!breaks_after('-', Some('1')));
     assert!(breaks_after('中', Some('文')));
     assert!(!breaks_after('a', Some('b')));
+    // A joiner keeps a hyphen with what follows.
+    assert!(!breaks_after('-', Some('\u{200D}')));
+    assert!(!breaks_after('\u{2060}', Some('中')));
 }
 
 #[test]

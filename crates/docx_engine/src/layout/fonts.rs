@@ -6,6 +6,10 @@
 //! Caladea) share their originals' advance widths and vertical metrics, so
 //! line breaks and line heights match the originals.
 
+mod widths;
+
+pub use widths::Widths;
+
 use pptx_engine::font::{FaceId, FontChoice, FontDb, SymbolFont, remap_symbol};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -32,7 +36,8 @@ impl VMetrics {
 /// hhea descender, hhea line gap) of the fonts Word documents name most,
 /// taken from the Microsoft originals. Layout uses them whenever a document
 /// asks for one of these families, so line heights match Word even where
-/// the bundled substitute's vertical metrics differ (Caladea's do).
+/// the bundled substitute's vertical metrics differ (Caladea's do, and the
+/// Unicode face that draws Symbol and Wingdings bullets).
 const TRUE_METRICS: &[(&str, [f32; 6])] = &[
     (
         "times new roman",
@@ -57,6 +62,8 @@ const TRUE_METRICS: &[(&str, [f32; 6])] = &[
         "traditional arabic",
         [2048.0, 2095.0, 1044.0, 2095.0, 1044.0, 0.0],
     ),
+    ("symbol", [2048.0, 2059.0, 443.0, 2059.0, 443.0, 0.0]),
+    ("wingdings", [2048.0, 1841.0, 420.0, 1841.0, 420.0, 0.0]),
 ];
 
 /// Arabic families drawn with a Noto substitute: how wide their letters
@@ -133,6 +140,8 @@ pub struct Font {
     pub synthetic_italic: bool,
     /// Characters are remapped from a symbol font encoding.
     pub symbol: Option<SymbolKind>,
+    /// The advances of the font the face stands in for, when known.
+    pub widths: Option<Widths>,
 }
 
 /// A symbol font encoding (hashable mirror of [`SymbolFont`]).
@@ -227,6 +236,7 @@ impl<'a> Fonts<'a> {
             synthetic_bold: choice.synthetic_bold,
             synthetic_italic: choice.synthetic_italic,
             symbol,
+            widths: Widths::for_family(&lower, bold),
         };
         self.choices.borrow_mut().insert(key, font);
         Some(font)
@@ -308,7 +318,10 @@ impl<'a> Fonts<'a> {
             Some(id) => Glyph {
                 font,
                 id,
-                advance: self.db.advance(font.face, id),
+                advance: font
+                    .widths
+                    .and_then(|w| w.advance(mapped))
+                    .unwrap_or_else(|| self.db.advance(font.face, id)),
             },
             None => {
                 let fallback = self.db.fallback_for(
@@ -324,6 +337,7 @@ impl<'a> Fonts<'a> {
                             synthetic_bold: c.synthetic_bold,
                             synthetic_italic: c.synthetic_italic,
                             symbol: None,
+                            widths: None,
                         },
                         id,
                         advance: self.db.advance(c.face, id),
