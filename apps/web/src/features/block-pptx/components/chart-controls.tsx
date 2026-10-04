@@ -406,8 +406,6 @@ export function ChartDataEditor(props: {
     }
   };
 
-  const cellClass =
-    'h-7 w-full min-w-0 border-0 bg-transparent px-1.5 text-xs text-ink outline-none focus:bg-accent-bg';
   return (
     <Dialog
       open
@@ -459,7 +457,7 @@ export function ChartDataEditor(props: {
                             }
                           >
                             <input
-                              class={cellClass}
+                              class="h-7 w-full min-w-0 border-0 bg-transparent px-1.5 text-xs text-ink outline-none focus:bg-accent-bg"
                               classList={{
                                 'text-right tabular-nums': r > 0 && c > 0,
                               }}
