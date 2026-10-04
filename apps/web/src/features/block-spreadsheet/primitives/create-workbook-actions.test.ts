@@ -80,12 +80,27 @@ describe('workbook import and export actions', () => {
     expect(store.sheets()).toHaveLength(1);
     expect(store.cells().A1.value).toBe('original');
     expect(actions.preview()?.data.warnings).toEqual(imported.warnings);
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(store.sheets()).toHaveLength(2);
     expect(store.cells().A1.value).toBe('=2+2');
     store.undo();
     expect(store.sheets()).toHaveLength(1);
     expect(store.cells().A1.value).toBe('original');
+  });
+
+  it('shows the pending import before a long write holds the main thread', async () => {
+    const { store, actions } = setup();
+    vi.mocked(importWorkbookFile).mockResolvedValue(imported);
+    await actions.importExcel(file);
+    const confirming = actions.confirmImport();
+    expect(actions.importing()).toBe(true);
+    expect(store.sheets()).toHaveLength(1);
+    await actions.confirmImport();
+    expect(store.sheets()).toHaveLength(1);
+    await confirming;
+    expect(actions.importing()).toBe(false);
+    expect(store.sheets()).toHaveLength(2);
+    expect(actions.preview()).toBeUndefined();
   });
 
   it('cancels without changes and refuses imports after permission revocation', async () => {
@@ -96,7 +111,7 @@ describe('workbook import and export actions', () => {
     expect(store.sheets()).toHaveLength(1);
     await actions.importExcel(file);
     setCanEdit(false);
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(store.sheets()).toHaveLength(1);
     expect(actions.preview()).toBeDefined();
   });
@@ -107,7 +122,7 @@ describe('workbook import and export actions', () => {
     await actions.importExcel(file);
     actions.setImportMode('replace');
     store.setCells({ B1: { value: 'new work' } });
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(actions.importError()).toContain('changed since the preview');
     expect(store.cells().B1.value).toBe('new work');
     expect(store.sheets()).toHaveLength(1);
@@ -119,7 +134,7 @@ describe('workbook import and export actions', () => {
     vi.mocked(importWorkbookFile).mockResolvedValue(imported);
     await actions.importExcel(file);
     actions.setImportMode('replace');
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(store.activeSheet().name).toBe('Imported');
     expect(store.cells().A1.value).toBe('=2+2');
     store.undo();
@@ -140,7 +155,7 @@ describe('workbook import and export actions', () => {
       sheets: [{ ...imported.sheets[0], name: 'Sheet1' }],
     });
     await actions.importExcel(file);
-    actions.confirmImport();
+    await actions.confirmImport();
     expect(actions.importError()).toContain('already exists');
     expect(store.cells()).toEqual({});
     expect(store.sheets()).toHaveLength(1);

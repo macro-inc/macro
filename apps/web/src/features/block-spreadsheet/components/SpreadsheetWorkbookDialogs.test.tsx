@@ -208,6 +208,39 @@ describe('workbook dialogs', () => {
     expect(radios[3].checked).toBe(true);
   });
 
+  it('keeps the dialog and its controls locked while an import is written', () => {
+    const close = vi.fn();
+    render(() => (
+      <SpreadsheetImportDialog
+        preview={preview}
+        mode="append"
+        onMode={() => {}}
+        error=""
+        readonly={false}
+        importing
+        onConfirm={() => {}}
+        onClose={close}
+      />
+    ));
+    expect(
+      screen
+        .getByRole('button', { name: 'Importing…' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('group', { name: 'Import location' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+    });
+    expect(close).not.toHaveBeenCalled();
+  });
+
   it('links import errors and disables all mutation controls when read-only', () => {
     const confirm = vi.fn();
     render(() => (

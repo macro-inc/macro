@@ -91,6 +91,8 @@ export function SpreadsheetImportDialog(props: {
   onMode: (mode: 'append' | 'replace') => void;
   error: string;
   readonly: boolean;
+  /** The confirmed import is being written; the dialog stays until it ends. */
+  importing?: boolean;
   onConfirm: () => void;
   onClose: () => void;
   onRestoreFocus?: () => void;
@@ -102,7 +104,7 @@ export function SpreadsheetImportDialog(props: {
       onRestoreFocus={props.onRestoreFocus}
       open={!!props.preview}
       onOpenChange={(open) => {
-        if (!open) props.onClose();
+        if (!open && !props.importing) props.onClose();
       }}
       position="center"
       class="w-120 max-w-[calc(100vw-2rem)]"
@@ -138,7 +140,7 @@ export function SpreadsheetImportDialog(props: {
         </Show>
         <fieldset
           class="space-y-3 text-sm"
-          disabled={props.readonly}
+          disabled={props.readonly || props.importing}
           aria-describedby={props.error ? errorId : undefined}
         >
           <legend class="mb-3 text-xs font-medium text-ink-muted">
@@ -181,16 +183,21 @@ export function SpreadsheetImportDialog(props: {
           </p>
         </Show>
         <div class="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={props.onClose}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={props.importing}
+            onClick={props.onClose}
+          >
             Cancel
           </Button>
           <Button
             size="sm"
             variant="strong"
-            disabled={props.readonly}
+            disabled={props.readonly || props.importing}
             onClick={props.onConfirm}
           >
-            Import workbook
+            {props.importing ? 'Importing…' : 'Import workbook'}
           </Button>
         </div>
       </div>

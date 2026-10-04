@@ -948,6 +948,7 @@ export function SpreadsheetEditor(props: {
         onMode={workbookActions.setImportMode}
         error={workbookActions.importError()}
         readonly={!editable()}
+        importing={workbookActions.importing()}
         onConfirm={workbookActions.confirmImport}
         onClose={workbookActions.closePreview}
       />

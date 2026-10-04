@@ -25,6 +25,7 @@ export function createWorkbookActions(options: {
     'append'
   );
   const [importError, setImportError] = createSignal('');
+  const [importing, setImporting] = createSignal(false);
   const [sheetDialog, setSheetDialog] = createSignal<{
     kind: 'rename' | 'delete';
     id: string;
@@ -112,10 +113,18 @@ export function createWorkbookActions(options: {
       }
     }
   }
-  function confirmImport() {
+  async function confirmImport() {
     const current = preview();
-    if (!current || !options.store.canEdit()) return;
+    if (!current || importing() || !options.store.canEdit()) return;
+    // Writing a large workbook holds the main thread for seconds, so show the
+    // pending dialog first. Hidden tabs never paint; the timeout covers them.
+    setImporting(true);
+    await new Promise((resolve) => {
+      globalThis.requestAnimationFrame?.(() => setTimeout(resolve));
+      setTimeout(resolve, 50);
+    });
     try {
+      if (preview() !== current || !options.store.canEdit()) return;
       if (importMode() === 'replace') {
         if (current.revision !== options.store.workbook()) {
           setImportError(
@@ -135,6 +144,8 @@ export function createWorkbookActions(options: {
           ? error.message
           : 'Unable to import this workbook.'
       );
+    } finally {
+      setImporting(false);
     }
   }
   async function exportExcel() {
@@ -184,6 +195,7 @@ export function createWorkbookActions(options: {
     setImportMode,
     importError,
     confirmImport,
+    importing,
     closePreview: () => setPreview(undefined),
     importExcel,
     exportExcel,
