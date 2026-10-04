@@ -221,9 +221,7 @@ pub fn emit_frame(
     out.extend(items);
     for a in &f.anchors {
         let mut a = a.clone();
-        a.para_top += rect.y;
-        a.line_top += rect.y;
-        a.char_x += rect.x;
+        a.shift(rect.x, rect.y);
         anchors.push(a);
     }
 }

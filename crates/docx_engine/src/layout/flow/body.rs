@@ -13,6 +13,7 @@ use super::stack::{
     BorderJoin, PendingAnchor, PrevPara, Stack, StackCtx, border_space, decorate, emit_lines,
     para_box, placed, prev_record, space_before, stack_story, table_box,
 };
+use super::textbox::text_box_items;
 use super::{Env, offset_items};
 use crate::model::block::{Block, BlockId, BlockKind};
 use crate::model::props::ParaProps;
@@ -235,22 +236,25 @@ impl<'e, 'a> Flow<'e, 'a> {
             col_left: s.left,
             col_width: s.text_width(),
         };
+        let on_page = OnPage {
+            env: self.env,
+            fields: &fields,
+            geom: &geom,
+        };
         if let Some(mut h) = header {
             offset_items(&mut h.items, s.left + s.gutter, s.header);
             for a in &mut h.anchors {
-                a.para_top += s.header;
-                a.line_top += s.header;
-                a.char_x += s.left;
+                a.shift(s.left, s.header);
             }
             if !s.top_exact {
                 top = top.max(s.header + h.height);
             }
             chrome.extend(h.items);
-            place_anchors(&h.anchors, &geom, &mut behind, &mut front);
+            place_anchors(&on_page, &h.anchors, &mut behind, &mut front);
             place_frames(
+                &on_page,
                 &mut h.frames,
                 (s.left + s.gutter, s.header),
-                &geom,
                 &mut chrome,
                 &mut behind,
                 &mut front,
@@ -260,19 +264,17 @@ impl<'e, 'a> Flow<'e, 'a> {
             let y = s.page_h - s.footer - f.height;
             offset_items(&mut f.items, s.left + s.gutter, y);
             for a in &mut f.anchors {
-                a.para_top += y;
-                a.line_top += y;
-                a.char_x += s.left;
+                a.shift(s.left, y);
             }
             if !s.bottom_exact {
                 bottom = bottom.min(y);
             }
             chrome.extend(f.items);
-            place_anchors(&f.anchors, &geom, &mut behind, &mut front);
+            place_anchors(&on_page, &f.anchors, &mut behind, &mut front);
             place_frames(
+                &on_page,
                 &mut f.frames,
                 (s.left + s.gutter, y),
-                &geom,
                 &mut chrome,
                 &mut behind,
                 &mut front,
@@ -567,13 +569,19 @@ impl<'e, 'a> Flow<'e, 'a> {
             f.para_top = self.cur.as_ref().map_or(0.0, |c| c.y);
         }
         let geom = self.page_geom();
+        let fields = self.fields();
         let rect = resolve_frame(&f, &geom);
         let mut items = Vec::new();
         let mut anchors = Vec::new();
         emit_frame(&f, rect, &mut items, &mut anchors);
+        let on_page = OnPage {
+            env: self.env,
+            fields: &fields,
+            geom: &geom,
+        };
         if let Some(c) = &mut self.cur {
             c.body.extend(items);
-            place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
+            place_anchors(&on_page, &anchors, &mut c.behind, &mut c.front);
             if in_flow {
                 c.y = c.y.max(rect.y + rect.h + f.props.v_space);
                 c.placed_any = true;
@@ -911,9 +919,15 @@ impl<'e, 'a> Flow<'e, 'a> {
                 }
             }
             let geom = self.page_geom();
+            let fields = self.fields();
+            let on_page = OnPage {
+                env: self.env,
+                fields: &fields,
+                geom: &geom,
+            };
             if let Some(c) = &mut self.cur {
                 c.body.extend(items);
-                place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
+                place_anchors(&on_page, &anchors, &mut c.behind, &mut c.front);
                 c.y = bottom;
                 c.placed_any = true;
                 c.hard = false;
@@ -968,6 +982,9 @@ impl<'e, 'a> Flow<'e, 'a> {
                         line_top: top + line.top,
                         char_x: col_left + pb.lines.x[k],
                         story: pb.story.clone(),
+                        block: pb.block.clone(),
+                        object: o,
+                        cell: None,
                     };
                     let Some(r) = resolve(&a, &geom) else {
                         continue;
@@ -1150,42 +1167,54 @@ fn hard_break(pb: &ParaBox) -> bool {
         .any(|l| matches!(l.ends, LineEnd::PageBreak | LineEnd::ColumnBreak))
 }
 
+/// The page floating drawings and frames go on.
+struct OnPage<'p, 'a> {
+    /// For the text in text boxes.
+    env: &'p Env<'a>,
+    /// The page's field values.
+    fields: &'p FieldValues,
+    /// The page.
+    geom: &'p PageGeom,
+}
+
 /// Places a header's or footer's text frames, given where its stack went.
 fn place_frames(
+    page: &OnPage<'_, '_>,
     frames: &mut [PendingFrame],
     origin: (f32, f32),
-    geom: &PageGeom,
     out: &mut Vec<Item>,
     behind: &mut Vec<Item>,
     front: &mut Vec<Item>,
 ) {
     for f in frames {
         f.offset(origin.0, origin.1);
-        let rect = resolve_frame(f, geom);
+        let rect = resolve_frame(f, page.geom);
         let mut anchors = Vec::new();
         emit_frame(f, rect, out, &mut anchors);
-        place_anchors(&anchors, geom, behind, front);
+        place_anchors(page, &anchors, behind, front);
     }
 }
 
-/// Places floating drawings behind or in front of the text.
+/// Places floating drawings behind or in front of the text, with the text
+/// of text boxes over their shapes.
 fn place_anchors(
+    page: &OnPage<'_, '_>,
     anchors: &[PendingAnchor],
-    geom: &PageGeom,
     behind: &mut Vec<Item>,
     front: &mut Vec<Item>,
 ) {
     let mut sorted: Vec<&PendingAnchor> = anchors.iter().collect();
     sorted.sort_by_key(|a| a.drawing.anchor.as_ref().map_or(0, |x| x.z));
     for a in sorted {
-        let Some(rect) = resolve(a, geom) else {
+        let Some(rect) = resolve(a, page.geom) else {
             continue;
         };
-        let item = placed(Arc::clone(&a.drawing), rect, a.story.clone());
-        if a.drawing.anchor.as_ref().is_some_and(|x| x.behind) {
-            behind.push(item);
+        let out = if a.drawing.anchor.as_ref().is_some_and(|x| x.behind) {
+            &mut *behind
         } else {
-            front.push(item);
-        }
+            &mut *front
+        };
+        out.push(placed(Arc::clone(&a.drawing), rect, a.story.clone()));
+        out.extend(text_box_items(page.env, page.fields, a, rect));
     }
 }

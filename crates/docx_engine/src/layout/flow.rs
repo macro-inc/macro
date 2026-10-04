@@ -1,10 +1,11 @@
 //! Flowing the body into pages and columns.
 
 mod anchors;
+mod body;
 mod frames;
 mod split;
-mod body;
 mod stack;
+mod textbox;
 
 use super::fonts::Fonts;
 use super::format::{Formats, TableCtx};
@@ -136,12 +137,8 @@ impl<'a> Env<'a> {
         if fmt.mark.vanish {
             return None;
         }
-        let label = Counters::default().next(
-            self.formats.numbering,
-            self.formats.styles,
-            num_id,
-            ilvl,
-        )?;
+        let label =
+            Counters::default().next(self.formats.numbering, self.formats.styles, num_id, ilvl)?;
         let props = self.formats.label_props(&fmt, &label);
         Some((label, props))
     }

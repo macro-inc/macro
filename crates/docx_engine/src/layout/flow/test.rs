@@ -1,7 +1,7 @@
 use crate::Document;
 use crate::layout::inline::Kind;
 use crate::layout::{Item, Layout, PlacedLine, StoryRef};
-use crate::test_support::{Parts, docx, fonts};
+use crate::test_support::{Parts, docx, fonts, shape_paragraph};
 
 const ARIAL_10: &str = r#"<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="20"/></w:rPr></w:rPrDefault></w:docDefaults>"#;
 
@@ -471,4 +471,52 @@ fn keeping_with_the_next_paragraph_stops_at_a_page_break() {
     let l = layout(&body, &arial_10());
     assert_eq!(l.pages.len(), 2);
     assert!(page_texts(&l, 1).iter().any(|t| t == "Heading"));
+}
+
+fn drawing_rects(l: &Layout) -> Vec<pptx_engine::path::Rect> {
+    l.pages[0]
+        .all_items()
+        .filter_map(|i| match i {
+            Item::Drawing(d) => Some(d.rect),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn text_box_text_sits_in_its_shape() {
+    let body = format!(
+        "{}{LETTER}",
+        shape_paragraph("page", 200, 300, Some("Inside"))
+    );
+    let l = layout(&body, &arial_10());
+    let inside = l.pages[0]
+        .all_items()
+        .find_map(|i| match i {
+            Item::Line(p) if text(p) == "Inside" => Some(p),
+            _ => None,
+        })
+        .expect("the text box text");
+    assert!(matches!(inside.para.story, StoryRef::TextBox(..)));
+    // Inside the shape, past its default insets of 7.2pt and 3.6pt.
+    assert!((inside.x - 207.2).abs() < 0.01, "{}", inside.x);
+    assert!((inside.y - 303.6).abs() < 0.01, "{}", inside.y);
+}
+
+#[test]
+fn drawings_in_table_cells_are_positioned_in_the_cell() {
+    let cell = shape_paragraph("column", 10, 0, None);
+    let body = format!(
+        r#"<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc><w:tc>{cell}</w:tc></w:tr></w:tbl><w:p/>{LETTER}"#
+    );
+    let l = layout(&body, &arial_10());
+    let rects = drawing_rects(&l);
+    // The first cell's text lines up with the margin (tables before Word
+    // 2013), so the second cell's text starts 100pt to the right of it.
+    assert_eq!(rects.len(), 1);
+    assert!(
+        (rects[0].x - (72.0 + 100.0 + 10.0)).abs() < 0.01,
+        "{}",
+        rects[0].x
+    );
 }

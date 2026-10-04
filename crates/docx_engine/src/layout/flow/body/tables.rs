@@ -5,7 +5,7 @@ use super::super::super::StoryRef;
 use super::super::anchors::PageGeom;
 use super::super::split::split_row;
 use super::super::stack::{TableBox, emit_row, table_box};
-use super::{EPS, Flow, place_anchors};
+use super::{EPS, Flow, OnPage, place_anchors};
 use crate::model::block::Block;
 use crate::model::props::TablePosition;
 
@@ -158,9 +158,15 @@ impl Flow<'_, '_> {
             .collect();
         self.add_notes(&ids);
         let geom = self.page_geom();
+        let fields = self.fields();
+        let on_page = OnPage {
+            env: self.env,
+            fields: &fields,
+            geom: &geom,
+        };
         if let Some(c) = &mut self.cur {
             c.body.extend(items);
-            place_anchors(&anchors, &geom, &mut c.behind, &mut c.front);
+            place_anchors(&on_page, &anchors, &mut c.behind, &mut c.front);
             c.y += tb.rows[r].height;
             c.placed_any = true;
             c.hard = false;

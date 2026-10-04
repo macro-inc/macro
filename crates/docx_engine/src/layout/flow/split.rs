@@ -139,8 +139,7 @@ pub fn split_stack(stack: &Stack, cut: f32) -> (Stack, Stack) {
             a.anchors.push(anchor.clone());
         } else {
             let mut anchor = anchor.clone();
-            anchor.para_top -= shift;
-            anchor.line_top -= shift;
+            anchor.shift(0.0, -shift);
             b.anchors.push(anchor);
         }
     }

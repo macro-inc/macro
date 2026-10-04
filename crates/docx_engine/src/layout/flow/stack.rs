@@ -29,6 +29,25 @@ pub struct PendingAnchor {
     pub char_x: f32,
     /// Story of the anchoring paragraph.
     pub story: StoryRef,
+    /// The anchoring paragraph.
+    pub block: BlockId,
+    /// The drawing's index among the paragraph's objects.
+    pub object: u16,
+    /// The text area of the table cell the drawing is positioned in, when
+    /// it is: left edge (as `char_x`) and width.
+    pub cell: Option<(f32, f32)>,
+}
+
+impl PendingAnchor {
+    /// Moves it along with its container.
+    pub fn shift(&mut self, dx: f32, dy: f32) {
+        self.para_top += dy;
+        self.line_top += dy;
+        self.char_x += dx;
+        if let Some((x, _)) = &mut self.cell {
+            *x += dx;
+        }
+    }
 }
 
 /// Blocks laid out top to bottom.
@@ -399,6 +418,9 @@ pub(super) fn emit_lines(
                     line_top: top,
                     char_x: x + pb.lines.x[c],
                     story: pb.story.clone(),
+                    block: pb.block.clone(),
+                    object: o,
+                    cell: None,
                 });
             }
         }
@@ -776,9 +798,10 @@ pub(super) fn emit_row(
         out.extend(items);
         for a in &cell.content.anchors {
             let mut a = a.clone();
-            a.para_top += content_y;
-            a.line_top += content_y;
-            a.char_x += cx + g.margins[1];
+            a.shift(cx + g.margins[1], content_y);
+            if a.cell.is_none() && a.drawing.anchor.as_ref().is_some_and(|x| x.in_cell) {
+                a.cell = Some((cx + g.margins[1], cell.width - g.margins[1] - g.margins[3]));
+            }
             anchors.push(a);
         }
         notes.extend(cell.content.notes.iter().copied());
