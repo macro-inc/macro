@@ -677,21 +677,26 @@ export const emailClient = {
   },
 
   async importGmailSignature(linkId?: string) {
-    return fetchWithToken<PatchSettingsResponse, 'NO_SIGNATURE_FOUND'>(
-      `${emailHost}/email/settings/import-signature`,
-      {
-        method: 'POST',
-        headers: emailLinkHeaders(linkId),
-        errorResponseHandler: async (response) => {
-          if (response.status === 404) {
-            return { code: 'NO_SIGNATURE_FOUND' as const, message: '' };
-          }
-          return {
-            code: 'HTTP_ERROR' as const,
-            message: `HTTP error! status: ${response.status}`,
-          };
-        },
-      }
-    );
+    return fetchWithToken<
+      PatchSettingsResponse,
+      'NO_SIGNATURE_FOUND' | typeof SIGNATURE_IMAGES_UNRESOLVED_CODE
+    >(`${emailHost}/email/settings/import-signature`, {
+      method: 'POST',
+      headers: emailLinkHeaders(linkId),
+      errorResponseHandler: async (response) => {
+        if (response.status === 404) {
+          return { code: 'NO_SIGNATURE_FOUND' as const, message: '' };
+        }
+        // Same 422 contract as patchSettings: Gmail images that couldn't be
+        // rehosted, so nothing was saved.
+        if (response.status === 422) {
+          return { code: SIGNATURE_IMAGES_UNRESOLVED_CODE, message: '' };
+        }
+        return {
+          code: 'HTTP_ERROR' as const,
+          message: `HTTP error! status: ${response.status}`,
+        };
+      },
+    });
   },
 };

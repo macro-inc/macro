@@ -1,9 +1,11 @@
 use crate::api::context::ApiContext;
+use crate::api::email::settings::patch::UnresolvedSignatureImagesError;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email_api_client::domain::models::{EmailApiError, TokenFreshness};
+use email_service::util::process_pre_insert::sfs_map;
 use email_utils::sanitize_html_fragment;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
@@ -22,6 +24,10 @@ pub enum ImportSignatureError {
     TokenError(#[from] EmailApiError),
     #[error("Failed to update settings")]
     DatabaseError(#[from] anyhow::Error),
+    /// At least one Gmail signature image couldn't be fetched and would render
+    /// broken for recipients, so nothing is saved (same rule as `patch.rs`).
+    #[error("{0} signature image(s) could not be loaded")]
+    UnresolvedSignatureImages(u32),
 }
 
 impl IntoResponse for ImportSignatureError {
@@ -36,6 +42,13 @@ impl IntoResponse for ImportSignatureError {
             ImportSignatureError::DatabaseError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response()
             }
+            ImportSignatureError::UnresolvedSignatureImages(count) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(UnresolvedSignatureImagesError {
+                    unresolved_image_count: count,
+                }),
+            )
+                .into_response(),
         }
     }
 }
@@ -56,6 +69,7 @@ pub struct ImportSignatureResponse {
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 404, description = "No signature found in Gmail"),
+        (status = 422, body = UnresolvedSignatureImagesError),
         (status = 500, body = ErrorResponse),
         (status = 502, description = "Failed to communicate with Gmail"),
     )
@@ -89,7 +103,23 @@ pub async fn import_signature_handler(
         .filter(|sig| !sig.trim().is_empty())
         .ok_or(ImportSignatureError::NoSignatureFound)?;
 
-    let sanitized_signature = sanitize_html_fragment(&signature);
+    let mut sanitized_signature = sanitize_html_fragment(&signature);
+
+    // Move Gmail-hosted images onto SFS so they render for recipients, matching
+    // `patch_settings_handler`. A rehost *error* never blocks the import.
+    match sfs_map::rehost_html_images(&ctx.db, &ctx.sfs_client, &sanitized_signature).await {
+        Ok((rehosted, unresolved)) => {
+            if unresolved > 0 {
+                return Err(ImportSignatureError::UnresolvedSignatureImages(
+                    unresolved as u32,
+                ));
+            }
+            sanitized_signature = rehosted;
+        }
+        Err(e) => {
+            tracing::warn!(error = ?e, "signature image rehost failed; importing signature unchanged");
+        }
+    }
 
     let patch = service::settings::SettingsPatch::new(
         api::settings::Settings {

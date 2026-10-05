@@ -130,6 +130,10 @@ export function SignatureSection(props: { link: EmailLink }) {
             toast.success('Signature imported from Gmail');
           } else if (result.reason === 'no_signature') {
             toast.failure('No signature found in Gmail');
+          } else if (result.reason === 'unresolved_images') {
+            setSaveError(
+              "Couldn't import images from your Gmail signature. Add the text here and use the image button to add images."
+            );
           } else {
             toast.failure('Failed to import signature. Please try again.');
           }

@@ -1,7 +1,10 @@
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
-import { emailClient } from '@service-email/client';
+import {
+  emailClient,
+  SIGNATURE_IMAGES_UNRESOLVED_CODE,
+} from '@service-email/client';
 import type {
   ListLinksResponse,
   PatchSettingsResponse,
@@ -87,7 +90,10 @@ type ImportGmailSignatureVars = { linkId: string };
 
 export type ImportGmailSignatureResult =
   | { success: true; settings: Settings }
-  | { success: false; reason: 'no_signature' | 'error' };
+  | {
+      success: false;
+      reason: 'no_signature' | 'unresolved_images' | 'error';
+    };
 
 type ImportGmailSignatureCallbacks = MutationCallbacks<
   ImportGmailSignatureResult,
@@ -114,13 +120,12 @@ export function useImportGmailSignatureMutation(
       return result.match(
         (response) => ({ success: true, settings: response.settings }),
         (errors) => {
-          const noSignature = errors.some(
-            (e) => e.code === 'NO_SIGNATURE_FOUND'
-          );
-          return {
-            success: false,
-            reason: noSignature ? 'no_signature' : 'error',
-          };
+          const has = (code: string) => errors.some((e) => e.code === code);
+          if (has('NO_SIGNATURE_FOUND'))
+            return { success: false, reason: 'no_signature' };
+          if (has(SIGNATURE_IMAGES_UNRESOLVED_CODE))
+            return { success: false, reason: 'unresolved_images' };
+          return { success: false, reason: 'error' };
         }
       );
     },
