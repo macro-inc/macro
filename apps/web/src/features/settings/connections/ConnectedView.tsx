@@ -2,10 +2,10 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
+import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import { LeftoverRow } from './leftover-row';
 import type { ConnectionsModel } from './model';
 import { isConnectionsEmpty } from './model';
-import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
 import { availableStarters, providerIcon } from './provider-meta';
 import { useConnectionsView } from './view-state';
 

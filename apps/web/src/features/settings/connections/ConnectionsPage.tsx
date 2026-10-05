@@ -7,10 +7,10 @@ import {
 import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import { createEffect, on, Show } from 'solid-js';
+import { SettingsPage } from '../primitives';
 import { ConnectedView } from './ConnectedView';
 import { DiscoverView } from './DiscoverView';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
-import { SettingsPage } from './primitives';
 import { useConnectionsModel } from './use-connections-model';
 import { ConnectionsViewProvider, useConnectionsView } from './view-state';
 
@@ -64,6 +64,7 @@ function ConnectionsContent(props: { onOpenMacroMcp: () => void }) {
           title="Connections"
           description={description}
           onBack={view.provider() ? view.closeProvider : undefined}
+          backLabel="Connections"
         >
           <div class="flex items-center gap-3 text-sm text-ink-muted">
             Couldn't load Connections.

@@ -1,3 +1,4 @@
+import CaretLeftIcon from '@phosphor/caret-left.svg';
 import { cn, Layer } from '@ui';
 import { createContext, type JSX, Show, useContext } from 'solid-js';
 
@@ -30,11 +31,19 @@ export function SettingsPage(props: {
   showTitleInSheet?: boolean;
   /** Optional one-line subtitle; accepts text or inline markup (e.g. a link). */
   description?: JSX.Element;
+  /** Quiet line under the description (e.g. a cross-tab signpost). */
+  signpost?: JSX.Element;
+  /** Brand mark left of the title, for provider detail pages. */
+  icon?: JSX.Element;
   /** Right-aligned controls beside the title (e.g. a global toggle). */
   actions?: JSX.Element;
+  /** Renders a back affordance above the title for drill-in subpages. */
+  onBack?: () => void;
+  backLabel?: string;
   children: JSX.Element;
 }) {
   const inSheet = useContext(SettingsSheetContext);
+  const inset = () => (inSheet ? 'px-4' : 'px-6');
   return (
     <div
       data-settings-page
@@ -52,24 +61,44 @@ export function SettingsPage(props: {
             : 'px-10 pt-4 pb-24 @max-[480px]/settings-page:px-4 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
         )}
       >
+        <Show when={props.onBack}>
+          <div class={cn('mb-5', inset())}>
+            <button
+              type="button"
+              class="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-ink-muted outline-none hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+              onClick={props.onBack}
+            >
+              <CaretLeftIcon class="size-4" />
+              {props.backLabel ?? 'Back'}
+            </button>
+          </div>
+        </Show>
         {/* Headers are inset by the card's inner padding so the title and
             section labels line up with the leftmost content inside the cards,
             while the cards themselves stay full-width. */}
         <header
           class={cn(
             'flex items-start justify-between gap-4 @max-[480px]/settings-page:flex-col @max-[480px]/settings-page:gap-3',
-            inSheet ? 'px-4' : 'px-6'
+            inset()
           )}
         >
           <div class="flex flex-col gap-1.5 min-w-0">
-            <Show when={!inSheet || props.showTitleInSheet}>
-              <h1 class="text-2xl/tight font-semibold text-ink">
-                {props.title}
-              </h1>
+            <Show when={!inSheet || props.showTitleInSheet || props.onBack}>
+              <div class="flex min-w-0 items-center gap-3">
+                <Show when={props.icon}>
+                  <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-7 [&_img]:size-7">
+                    {props.icon}
+                  </div>
+                </Show>
+                <h1 class="min-w-0 text-2xl/tight font-semibold text-ink">
+                  {props.title}
+                </h1>
+              </div>
             </Show>
             <Show when={props.description}>
               <p class="text-sm text-ink-muted">{props.description}</p>
             </Show>
+            <Show when={props.signpost}>{props.signpost}</Show>
           </div>
           <Show when={props.actions}>
             <div class="shrink-0 pt-1">{props.actions}</div>
@@ -90,7 +119,7 @@ export function SettingsPage(props: {
  * can also drop a bare card straight under the title.
  */
 export function SettingsSection(props: {
-  title?: string;
+  title?: JSX.Element;
   description?: string;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
@@ -163,6 +192,8 @@ export function SettingsRow(props: {
    * Requires an ancestor carrying `@container`.
    */
   stackOnNarrow?: boolean;
+  /** Soften the label when the row is paused / disabled. */
+  muted?: boolean;
   class?: string;
 }) {
   const inSheet = useContext(SettingsSheetContext);
@@ -187,7 +218,9 @@ export function SettingsRow(props: {
       )}
     >
       <div class="flex flex-col gap-0.5 min-w-0">
-        <div class="text-sm text-ink">{props.label}</div>
+        <div class={cn('text-sm', props.muted ? 'text-ink-muted' : 'text-ink')}>
+          {props.label}
+        </div>
         <Show when={props.description}>
           <div
             class={cn(
@@ -264,26 +297,49 @@ export function ChoiceRow(props: {
  */
 export function IntegrationRow(props: {
   /** The brand icon, rendered at its native size inside a fixed slot. */
-  icon: JSX.Element;
+  icon?: JSX.Element;
   title: JSX.Element;
   description?: JSX.Element;
+  /** Proven facts under the description (e.g. connected accounts). Wraps. */
+  facts?: JSX.Element;
   /** Optional indicator shown right after the title (e.g. a connection dot). */
   status?: JSX.Element;
+  /** Soften title and icon when the row is paused / disabled. */
+  muted?: boolean;
   children?: JSX.Element;
   class?: string;
 }) {
   return (
     <div class={cn('flex items-center gap-4 px-6 py-4', props.class)}>
-      <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6">
-        {props.icon}
-      </div>
+      <Show when={props.icon}>
+        <div
+          class={cn(
+            'flex size-9 shrink-0 items-center justify-center [&_svg]:size-6 [&_img]:size-6',
+            props.muted && 'opacity-50'
+          )}
+        >
+          {props.icon}
+        </div>
+      </Show>
       <div class="flex-1 min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
-          <div class="text-sm font-medium text-ink truncate">{props.title}</div>
+          <div
+            class={cn(
+              'text-sm font-medium truncate',
+              props.muted ? 'text-ink-muted' : 'text-ink'
+            )}
+          >
+            {props.title}
+          </div>
           <Show when={props.status}>{props.status}</Show>
         </div>
         <Show when={props.description}>
           <div class="text-sm text-ink-muted truncate">{props.description}</div>
+        </Show>
+        <Show when={props.facts}>
+          <div class="ph-no-capture text-xs text-ink-extra-muted">
+            {props.facts}
+          </div>
         </Show>
       </div>
       <Show when={props.children}>
