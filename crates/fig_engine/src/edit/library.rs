@@ -8,6 +8,7 @@ use crate::error::Result;
 use crate::library::{
     AssetKind, LIBRARIES_KEY, Manifest, ManifestAsset, PUBLISHED_KEY, hash, local_assets,
 };
+use crate::model::library::MacroData;
 use crate::model::{LibraryLink, Props};
 use std::sync::Arc;
 
@@ -20,7 +21,7 @@ fn with_value(
     entries: Option<&[(Arc<str>, Arc<str>)]>,
     key: &str,
     value: Option<&str>,
-) -> Option<Arc<[(Arc<str>, Arc<str>)]>> {
+) -> Option<MacroData> {
     let mut list: Vec<(Arc<str>, Arc<str>)> = entries.unwrap_or_default().to_vec();
     match (list.iter().position(|(k, _)| k.as_ref() == key), value) {
         (Some(at), Some(v)) => list[at].1 = v.into(),

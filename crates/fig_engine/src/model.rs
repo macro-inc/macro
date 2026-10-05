@@ -571,7 +571,7 @@ pub struct Props {
     pub library: Option<Arc<LibraryLink>>,
     /// Macro's own data on the node (`pluginData` under
     /// [`library::MACRO_PLUGIN`]): key and value.
-    pub macro_data: Option<Arc<[(Arc<str>, Arc<str>)]>>,
+    pub macro_data: Option<library::MacroData>,
     /// On an instance's override or derived layout entry: made by the
     /// editor (and written when saving); the file's own are kept as they
     /// are.
