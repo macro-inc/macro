@@ -470,6 +470,10 @@ fn children_align_against_padding_wider_than_the_frame() {
     // Centred on the 10 px the padding overlaps by: 22 + (-10 - 11) / 2.
     assert_eq!(bounds(&doc, &kid).0, 11.5);
     assert_eq!(bounds(&doc, &kid).1, 11.0);
+    // Stretched across, it keeps a pixel: 22 + (-10 - 1) / 2.
+    set(&mut doc, &mut h, &kid, r#"{"sizingHorizontal":"FILL"}"#);
+    assert_eq!(bounds(&doc, &kid).2, 1.0);
+    assert_eq!(bounds(&doc, &kid).0, 16.5);
 }
 
 #[test]

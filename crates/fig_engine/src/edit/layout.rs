@@ -407,17 +407,17 @@ impl Txn<'_> {
             }
         }
         // Padding can leave less than nothing inside; children are still
-        // aligned against it.
+        // aligned against it, and stretched ones keep at least a pixel.
         let inner_cross = cross_size - cross_start - cross_end;
-        let stretch_to = inner_cross.max(0.01);
         for item in items.iter_mut() {
             let extra = split(item.extra, h).1;
+            let stretch_to = (inner_cross - extra).max(1.0);
             if item.child.stretches()
-                && (cross_of(item) - stretch_to).abs() > EPS
+                && (cross_of(item) - extra - stretch_to).abs() > EPS
                 && !self.keeps_size(item.i, cross_of(item) - extra)
             {
                 let i = item.i;
-                let v = item.child.clamp((stretch_to - extra).max(0.01), !h);
+                let v = item.child.clamp(stretch_to, !h);
                 let (w, ht) = if h { (None, Some(v)) } else { (Some(v), None) };
                 self.size_child(i, w, ht);
                 item.bounds = self.flow_box(i, al.strokes_in_layout).0;
