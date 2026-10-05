@@ -18,8 +18,8 @@ import { FigViewerProvider } from '../context/fig-viewer-context';
 import type { FigCommentAnchor, FigPerson } from '../core/comments';
 import { FigViewer } from '../views/fig-viewer';
 import { CollabFixture, type FixturePerson } from './collab-fixture';
-import { createMemoryComments, FIXTURE_PEOPLE } from './memory-comments';
 import { fixtureFontSource } from './font-source';
+import { createMemoryComments, FIXTURE_PEOPLE } from './memory-comments';
 
 declare const __FIG_CORPUS_URL__: string;
 

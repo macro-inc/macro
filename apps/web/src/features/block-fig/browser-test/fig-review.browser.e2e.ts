@@ -325,8 +325,11 @@ test('comments: pins, replies, mentions, unread, resolve, and moving with the fr
   await x.fill('-200');
   await x.press('Enter');
   await page.getByTestId('fig-tool-comment').click();
+  expect(before).toBeTruthy();
+  // The frame moved left by 200 page units; the pin follows.
+  await expect
+    .poll(async () => (before?.x ?? 0) - ((await pin.boundingBox())?.x ?? 0))
+    .toBeGreaterThan(20);
   const after = await pin.boundingBox();
-  expect(before && after).toBeTruthy();
-  expect((before?.x ?? 0) - (after?.x ?? 0)).toBeGreaterThan(20);
   expect(Math.abs((before?.y ?? 0) - (after?.y ?? 0))).toBeLessThan(2);
 });

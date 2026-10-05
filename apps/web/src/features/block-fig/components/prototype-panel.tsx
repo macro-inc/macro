@@ -43,8 +43,9 @@ const label = (value: string) =>
     .replace(/_/g, ' ')
     .replace(/^./, (c) => c.toUpperCase());
 
-const select =
-  'w-full min-w-0 rounded-md border border-edge-muted bg-input px-1.5 py-1 text-ink text-xs';
+const control =
+  'min-w-0 rounded-md border border-edge-muted bg-input px-1.5 py-1 text-ink text-xs';
+const select = `w-full ${control}`;
 
 export function PrototypePanel(props: {
   info: PrototypeInfo | undefined;
@@ -322,7 +323,7 @@ export function PrototypePanel(props: {
                             min="0"
                             max="10000"
                             step="50"
-                            class={`${select} w-20 shrink-0`}
+                            class={`${control} w-16 shrink-0`}
                             aria-label="Duration (ms)"
                             title="Duration (ms)"
                             data-testid="fig-proto-duration"
