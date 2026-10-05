@@ -94,6 +94,7 @@ use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
 use agent_session::outbound::broker_lifecycle_publisher::BrokerLifecyclePublisher;
+use agent_session::outbound::broker_log_realtime::BrokerLogRealtime;
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -312,9 +313,14 @@ async fn run() -> anyhow::Result<()> {
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
-        ConnectionGatewayAgentSessionRealtime::new(
-            connection_gateway.clone(),
-            session_audience.clone(),
+        // Frames reach this process's viewers through the gateway and every
+        // other process's through the broker (the GraphQL log subscription).
+        BrokerLogRealtime::new(
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
+            broker.clone(),
         ),
         agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
             HaikuAgentSessionNameGenerator::new(recorder.clone()),
