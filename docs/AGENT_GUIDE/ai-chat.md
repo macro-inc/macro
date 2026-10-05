@@ -622,7 +622,7 @@ rollout is active (always in dev and local; flag-controlled in production).
    quota reset. Check cancellation in both flag states.
 
 For frontend-only checks against dev, use Settings → Usage → **Developer tools**
-to simulate 100% usage and open the limit dialog, then reset the preview. This is
+to open the Free or paid usage-limit dialog directly, then reset the preview. This is
 a display override, not a quota change. To test actual refusal handling without
 hosted AI spending, intercept only the tested AI request in Chrome DevTools and
 return the matching 402 body; restore the response afterward. Backend admission

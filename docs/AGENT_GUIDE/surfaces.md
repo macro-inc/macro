@@ -2045,6 +2045,9 @@ editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
 redirect to Stripe Checkout; unsupported custom amounts are disabled. Free
 accounts see `View plans` instead of purchase or reload controls; paid team
 members who are not the payer cannot manage billing.
+Unlimited enterprise plans show `Unlimited` and do not offer credit purchases
+or automatic reload. The development paid-plan preview can still display
+those controls, with purchases disabled.
 
 The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
 It contains Minimum balance (default `$10`), Target balance (default `$100`),
@@ -2052,8 +2055,13 @@ optional Maximum monthly spend (`No limit`), a payment-method management link,
 and the automatic-charge warning. Balance-triggered reload is not implemented
 by the backend yet, so saving is disabled outside its explicit developer preview.
 Existing postpaid usage billing is shown separately and can be turned off by the
-payer. Local **Developer tools** can preview 100% usage or Auto-Reload without
-changing account billing; Reset preview restores server data.
+payer. Local **Developer tools** offer `Preview Free plan` and `Preview paid plan`
+to display either Usage page with sample usage, regardless of the signed-in
+account's tier. `Open Free usage-limit dialog` and `Open paid usage-limit dialog`
+open the corresponding exhausted-usage prompt directly. The previews also work
+before the usage summary loads or when it fails. The paid-plan preview allows
+testing Auto-Reload settings. Purchases and payment management are disabled during any
+preview; `Reset preview` restores server data and closes the usage-limit dialog.
 
 `Billing` shows the current plan and `Manage`, an `Upgrade` section for Free
 users with Premium (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
