@@ -494,10 +494,14 @@ Layout and test hooks:
   `fig-page-delete`), and the layer tree (`fig-layer-row`, `data-layer-id` is
   the Figma node id such as `12:34`, or `I12:34;56:78` inside instances).
   Rows list top-most first, as Figma does; instance and component rows are
-  purple. Editors can double-click a row (or ⌘R) to rename it
-  (`fig-layer-rename`), toggle visibility and lock on hover
-  (`fig-layer-visibility`), and drag rows to reorder or move them into
-  frames and groups.
+  purple. A click selects a row, Shift-click the rows between it and the
+  selection, ⌘/Ctrl-click toggles a row; after a click the arrow keys move
+  through the tree (`fig-layer-tree`; Left and Right collapse and expand),
+  ⌥L collapses everything, and the list scrolls to the selection. Editors
+  can double-click a row (or ⌘R) to rename it (`fig-layer-rename`), toggle
+  visibility and lock on hover (`fig-layer-visibility`), and drag rows to
+  reorder or move them into frames and groups. Right-click a row for the
+  layer menu (below).
 - **Canvas** (`fig-canvas`): click selects with Figma's rules (inside a
   top-level frame the click selects the frame's child; sections are
   transparent; ⌘/Ctrl-click selects the deepest layer; double-click goes one
@@ -518,13 +522,27 @@ Layout and test hooks:
   opacity, visibility, and text (typing included) are overridden on the
   instance, as in Figma; text bound to a component text property sets the
   property.
+- **Context menu** (`fig-context-menu`): right-clicking a layer on the
+  canvas selects it (a selection it belongs to is kept) and lists Figma's
+  layer actions with their shortcuts, as `fig-menu-<action>` items: `copy`,
+  `paste-here`, `paste-replace`, `copy-png`, `bring-to-front`,
+  `bring-forward`, `send-backward`, `send-to-back`, `group`, `ungroup`,
+  `frame-selection`, `add-auto-layout` / `remove-auto-layout`,
+  `create-component`, `detach-instance`, `toggle-visible`, `toggle-locked`,
+  `flip-horizontal` (⇧H), `flip-vertical` (⇧V), `rename`, and `delete`
+  (read-only viewers get copy, copy as PNG, and zoom to selection). On
+  empty canvas: `paste-here` (pastes copied layers with their top left at
+  the click), `toggle-ui`, `toggle-rulers`, `toggle-pixel-grid`,
+  `toggle-outline`, the zoom actions, and `select-all`.
 - **Design panel** (`fig-design-panel`, toggled with ⌥8): alignment buttons
   (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
   position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|
   radius|opacity|font-size|stroke-weight>`; type a value or arithmetic, or
   drag the label to scrub), fills and strokes (`fig-fills`, `fig-strokes`,
-  rows `fig-fill-<n>` with a hex input `fig-fill-<n>-hex`, opacity,
-  visibility, and remove; "+" adds), stroke weight and position, clip
+  rows `fig-fill-<n>` / `fig-stroke-<n>`, top paint first, with a hex
+  input `fig-fill-<n>-hex`, opacity `-opacity`, `-visibility`, and
+  `-remove`; "+" adds; drag a row's grip to reorder), stroke weight,
+  position, and dashes (`fig-field-dash`: `4, 2`, or `None`), clip
   content (`fig-clip-content`), the Text section for text layers (`fig-type`:
   family `fig-font-family`, weight `fig-font-weight`, `fig-italic`, size,
   line height `fig-field-line-height` as `Auto`, a percentage, or pixels,
@@ -543,7 +561,24 @@ Layout and test hooks:
   offset, blur `fig-effect-<n>-blur`, spread, and color), and
   export buttons (`fig-export-1x|2x|3x`). Read-only viewers see the same
   values as text. The Code tab shows CSS (`fig-css`). With nothing selected
-  it shows the page name and canvas color.
+  it shows the page name and canvas color (`fig-page-color` opens the
+  picker). With several layers selected (`fig-mixed`) it shows what they
+  share; differing values read "Mixed", typing sets all of them, and "+"
+  replaces mixed fills or strokes with one.
+- **Color and paint pickers**: a paint's swatch (`fig-fill-<n>-swatch`,
+  `fig-stroke-<n>-swatch`, `fig-effect-<n>-swatch`) opens the picker
+  beside the panel (`fig-paint-popover`): the kind (`fig-paint-type`:
+  Solid, Linear, Radial, Angular, Diamond, or Image, which asks for a
+  file), for gradients the stop bar (`fig-gradient-bar`; click it to add a
+  stop, drag a `fig-gradient-stop`, Delete removes the selected one), and
+  the color picker (`fig-color-picker`): the saturation and brightness
+  square (`fig-color-area`), hue and opacity sliders (`fig-color-hue`,
+  `fig-color-alpha`), the eyedropper where the browser has one
+  (`fig-color-eyedropper`), the format (`fig-color-format`: Hex, RGB, HSL,
+  HSB) with its fields `fig-color-field-<n>` and opacity
+  `fig-color-alpha-field`, and "On this page" swatches
+  (`fig-color-swatch`). Dragging previews live and is one undo step;
+  Escape closes the picker.
 - **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
   (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Text (T),
   Hand (H) as `fig-tool-<name>`, undo/redo (`fig-undo`,
@@ -557,7 +592,7 @@ Layout and test hooks:
   ⌘/Ctrl+⇧E export. Editing: ⌘Z/⇧⌘Z undo and redo, ⌘D duplicate, ⌘C/⌘X/⌘V,
   Delete, arrows nudge (⇧ by 10), ⌘G group, ⇧⌘G ungroup, ⌥⌘G frame
   selection, ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[ front/back, ⇧⌘H hide,
-  ⇧⌘L lock, ⌘R rename.
+  ⇧⌘L lock, ⇧H / ⇧V flip, ⌘R rename.
 
 The viewer has a browser fixture that needs no backend. From `apps/web`
 (build the engine first with `just ensure-fig-engine-wasm`):

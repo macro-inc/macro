@@ -478,6 +478,15 @@ impl FigFile {
         to_json(&inspect::search(&self.doc, scene, query, limit))
     }
 
+    /// The distinct solid colors the page uses, most used first
+    /// (`string[]` JSON of `RRGGBB` or `RRGGBBAA`).
+    #[wasm_bindgen(js_name = pageColors)]
+    pub fn page_colors(&mut self, page: usize, limit: usize) -> Result<String, JsError> {
+        self.scene(page)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&inspect::page_colors(&self.doc, scene, limit))
+    }
+
     /// Children of `parent` (the page when absent) whose frames intersect a
     /// page rectangle (`string[]` JSON).
     #[wasm_bindgen(js_name = inRect)]

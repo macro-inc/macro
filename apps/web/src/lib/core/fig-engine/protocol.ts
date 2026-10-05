@@ -20,6 +20,7 @@ export type QueryMethod =
   | 'geometry'
   | 'outline'
   | 'search'
+  | 'pageColors'
   | 'components'
   | 'inRect';
 

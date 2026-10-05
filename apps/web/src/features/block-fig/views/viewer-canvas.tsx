@@ -233,23 +233,31 @@ export function ViewerCanvas(props: {
   });
 
   // The compositor and canvases are external systems synced from state.
-  let shownPage: { page: number; outline: boolean } | undefined;
+  let shownPage:
+    | { page: number; outline: boolean; background: string }
+    | undefined;
   createEffect(
     on(
       () => [viewer.layout(), viewer.outlineView()] as const,
       ([layout, outline]) => {
         if (!layout) return;
         const page = viewer.page();
-        if (shownPage?.page === page && shownPage.outline === outline) {
+        const color = cssColor(background());
+        if (
+          shownPage?.page === page &&
+          shownPage.outline === outline &&
+          shownPage.background === color
+        ) {
           // Same page after an edit: keep the tiles, update the bounds.
           compositor.setContent(viewer.contentBounds());
         } else {
-          shownPage = { page, outline };
+          // A new page, view, or canvas color: render it afresh.
+          shownPage = { page, outline, background: color };
           compositor.setPage({
             page,
             outline,
             content: viewer.contentBounds(),
-            background: cssColor(background()),
+            background: color,
           });
         }
         requestDraw();

@@ -150,6 +150,9 @@ async function serve(request: FigRequest) {
         case 'search':
           json = f.search(a as number, b as string, c as number);
           break;
+        case 'pageColors':
+          json = f.pageColors(a as number, b as number);
+          break;
         case 'inRect':
           json = f.inRect(
             a as number,

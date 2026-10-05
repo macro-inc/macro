@@ -14,6 +14,8 @@ import type { NodeInfo, Rect, Sizing } from '@core/fig-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
 import type { FigSharing } from '../context/fig-viewer-context';
 import { type Alignment, alignOffset } from '../core/align';
+import { type Point, unionRects } from '../core/camera';
+import type { PaintType, StopSpec } from '../core/paint';
 import type { Measure } from '../core/type';
 import type { FigViewer, Selected } from './create-fig-viewer';
 
@@ -67,6 +69,8 @@ export interface Patch {
   /** Replaces the effects, bottom first. */
   effects?: EffectSpec[];
   strokeCap?: 'NONE' | 'ROUND' | 'SQUARE' | 'ARROW_LINES' | 'ARROW_EQUILATERAL';
+  /** Dash and gap lengths along strokes; empty for a solid stroke. */
+  dashPattern?: number[];
 }
 
 /** An effect as the editor sends it: an existing one kept, or a new one. */
@@ -94,6 +98,10 @@ export interface PaintSpec {
   color?: string;
   opacity?: number;
   visible?: boolean;
+  /** Switches the kind: `SOLID` or a gradient (stops carried over). */
+  type?: PaintType;
+  /** A gradient's stops, replacing its current ones. */
+  stops?: StopSpec[];
 }
 
 export type Arrangement = 'forward' | 'backward' | 'front' | 'back';
@@ -138,7 +146,8 @@ export type Op =
       x: number;
       y: number;
     }
-  | { op: 'detach'; ids: string[] };
+  | { op: 'detach'; ids: string[] }
+  | { op: 'flip'; ids: string[]; vertical?: boolean };
 
 export interface FigEditorOptions {
   engine: FigEngine;
@@ -510,6 +519,56 @@ export function createFigEditor(options: FigEditorOptions) {
     viewer.select([]);
   };
 
+  /**
+   * Pastes copied layers moved by `place` (given their bounds), replacing
+   * `replace` in the same step.
+   */
+  const pasteMoved = async (
+    place: (bounds: Rect) => Point,
+    replace: string[] = []
+  ) => {
+    if (clipboard.length === 0) return;
+    const geometry = await engine
+      .geometry(viewer.page(), clipboard)
+      .catch(() => []);
+    const bounds = unionRects(geometry.map((g) => g.bounds));
+    const to = bounds ? place(bounds) : undefined;
+    const d =
+      to && bounds ? { x: to.x - bounds.x, y: to.y - bounds.y } : undefined;
+    const ops: Op[] = [
+      {
+        op: 'duplicate',
+        ids: clipboard,
+        dx: Math.round(d?.x ?? 0),
+        dy: Math.round(d?.y ?? 0),
+      },
+    ];
+    if (replace.length > 0) ops.push({ op: 'delete', ids: replace });
+    const result = await apply(ops);
+    await selectCreated(result);
+  };
+
+  /** Figma's "Paste here": copied layers with their top left at a point. */
+  const pasteHere = (at: Point) => pasteMoved(() => at);
+
+  /** "Paste to replace": copied layers centered where the selection was. */
+  const pasteToReplace = () => {
+    const targets = editableIds();
+    const was = viewer.selectionBounds();
+    if (targets.length === 0 || !was) return paste();
+    return pasteMoved(
+      (b) => ({
+        x: was.x + (was.w - b.w) / 2,
+        y: was.y + (was.h - b.h) / 2,
+      }),
+      targets
+    );
+  };
+
+  /** ⇧H / ⇧V: mirrors the selection about each layer's center. */
+  const flip = (vertical: boolean) =>
+    apply([{ op: 'flip', ids: editableIds(), vertical }]);
+
   // ---- drags ---------------------------------------------------------------
 
   /** A move drag: offsets accumulate; one engine step at a time. */
@@ -769,6 +828,11 @@ export function createFigEditor(options: FigEditorOptions) {
     copy,
     paste,
     cut,
+    pasteHere,
+    pasteToReplace,
+    /** Whether layers copied in this file can be pasted. */
+    canPaste: () => clipboard.length > 0,
+    flip,
     addAutoLayout,
     removeAutoLayout,
     createComponent,

@@ -19,132 +19,28 @@ import AlignRight from '@phosphor/align-right.svg';
 import AlignTop from '@phosphor/align-top.svg';
 import Copy from '@phosphor/copy.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
-import Minus from '@phosphor/minus.svg';
-import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
-import { cssColor, cssFor } from '../core/css';
+import { cssFor } from '../core/css';
 import { formatMeasure } from '../core/measure';
+import type { MixedInfo } from '../core/mixed';
+import { formatDashes, parseDashes } from '../core/paint';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
-import type { PaintSpec, Patch } from '../primitives/create-fig-editor';
+import type { Patch } from '../primitives/create-fig-editor';
 import {
   AutoLayoutControls,
   ConstraintControls,
   SizingControls,
 } from './auto-layout-controls';
-import {
-  NumberField,
-  PaintEditRow,
-  paintHex,
-  TextField,
-} from './design-fields';
+import { ColorPicker } from './color-picker';
+import { NumberField, ParsedField, TextField } from './design-fields';
 import { EffectList } from './effect-controls';
+import { MixedFields } from './mixed-fields';
+import { PaintList, paintLabel, paintSwatch } from './paint-controls';
+import { Section } from './panel-section';
+import { SwatchPopover } from './swatch-popover';
 import { TypeControls } from './type-controls';
-
-function Section(props: {
-  title: string;
-  children: JSX.Element;
-  /** A "+" action in the header (add a fill, say). */
-  onAdd?: () => void;
-  /** A "−" action in the header (remove auto layout, say). */
-  onRemove?: () => void;
-  testId?: string;
-}) {
-  return (
-    <section
-      class="border-edge-muted border-b px-3 py-3"
-      data-testid={props.testId}
-    >
-      <div class="mb-2 flex items-center justify-between">
-        <h3 class="font-semibold text-ink text-xs">{props.title}</h3>
-        <Show when={props.onAdd}>
-          {(add) => (
-            <button
-              type="button"
-              aria-label={`Add ${props.title.toLowerCase()}`}
-              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => add()()}
-            >
-              <Plus class="size-3.5" />
-            </button>
-          )}
-        </Show>
-        <Show when={props.onRemove}>
-          {(remove) => (
-            <button
-              type="button"
-              aria-label={`Remove ${props.title.toLowerCase()}`}
-              class="rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => remove()()}
-            >
-              <Minus class="size-3.5" />
-            </button>
-          )}
-        </Show>
-      </div>
-      <div class="flex flex-col gap-1.5">{props.children}</div>
-    </section>
-  );
-}
-
-/** Paint specs that keep every paint except `edit` applied to one. */
-function paintSpecs(
-  paints: PaintInfo[],
-  index: number,
-  edit: (spec: PaintSpec, paint: PaintInfo) => PaintSpec | null
-): PaintSpec[] {
-  const out: PaintSpec[] = [];
-  paints.forEach((p, k) => {
-    const spec: PaintSpec = { keep: k };
-    const next = k === index ? edit(spec, p) : spec;
-    if (next) out.push(next);
-  });
-  return out;
-}
-
-/** Editable paint list (fills or strokes), top paint first as in Figma. */
-function PaintList(props: {
-  paints: PaintInfo[];
-  kind: 'fill' | 'stroke';
-  onChange: (specs: PaintSpec[], live: boolean) => void;
-}) {
-  const indexed = () =>
-    props.paints.map((paint, index) => ({ paint, index })).reverse();
-  const change = (
-    index: number,
-    edit: (spec: PaintSpec, paint: PaintInfo) => PaintSpec | null,
-    live = false
-  ) => props.onChange(paintSpecs(props.paints, index, edit), live);
-  return (
-    <For each={indexed()}>
-      {({ paint, index }) => (
-        <PaintEditRow
-          paint={paint}
-          swatch={swatchBackground(paint)}
-          label={paintLabel(paint)}
-          testId={`fig-${props.kind}-${index}`}
-          onColor={(hex) =>
-            change(index, (spec, p) => ({
-              ...spec,
-              color:
-                hex.length === 6 && (p.alpha ?? 1) < 1
-                  ? (paintHex({ ...p, color: hex }) ?? hex)
-                  : hex,
-            }))
-          }
-          onOpacity={(opacity, live) =>
-            change(index, (spec) => ({ ...spec, opacity }), live)
-          }
-          onToggle={() =>
-            change(index, (spec, p) => ({ ...spec, visible: !p.visible }))
-          }
-          onRemove={() => change(index, () => null)}
-        />
-      )}
-    </For>
-  );
-}
 
 function Field(props: { label: string; value: string | number }) {
   return (
@@ -182,32 +78,24 @@ function radiusLabel(r: {
         .join(', ');
 }
 const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+/** A page's canvas color as `RRGGBB`. */
+const pageHex = (page: PageSummary) =>
+  page.background
+    .slice(0, 3)
+    .map((v) =>
+      Math.round(v * 255)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')
+    .toUpperCase();
 const title = (s: string) =>
   s
     .toLowerCase()
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
-
-function swatchBackground(p: PaintInfo): string {
-  if (p.type === 'SOLID' && p.color) return cssColor(p.color, p.alpha ?? 1);
-  if (p.stops) {
-    const stops = p.stops
-      .map((s) => `${cssColor(s.color, s.alpha)} ${s.position * 100}%`)
-      .join(', ');
-    return `linear-gradient(90deg, ${stops})`;
-  }
-  return 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 8px 8px';
-}
-
-function paintLabel(p: PaintInfo): string {
-  if (p.type === 'SOLID' && p.color) return p.color;
-  if (p.type === 'IMAGE') return `Image · ${title(p.scaleMode ?? 'FILL')}`;
-  return (
-    title(p.type.replace('GRADIENT_', '')) +
-    (p.type.startsWith('GRADIENT') ? ' gradient' : '')
-  );
-}
 
 function PaintRow(props: { paint: PaintInfo }) {
   const p = () => props.paint;
@@ -218,7 +106,7 @@ function PaintRow(props: { paint: PaintInfo }) {
     >
       <span
         class="size-4 shrink-0 rounded-sm border border-edge-muted"
-        style={{ background: swatchBackground(p()) }}
+        style={{ background: paintSwatch(p()) }}
       />
       <span class="min-w-0 flex-1 truncate font-mono text-ink">
         {paintLabel(p())}
@@ -331,6 +219,16 @@ export function DesignPanel(props: {
   fontFamilies?: readonly string[];
   /** Adds auto layout to the selection (⇧A); absent when read-only. */
   onAddAutoLayout?: () => void;
+  /** Colors the color pickers offer (the page's). */
+  swatches?: readonly string[];
+  /** A color picker opened (to load the page's colors). */
+  onPickerOpen?: () => void;
+  /** Adds an image file for an image fill; resolves to its hash. */
+  onAddImage?: (file: File) => Promise<string | undefined>;
+  /** Sets the page's canvas color; absent when read-only. */
+  onPageColor?: (hex: string, live: boolean) => void;
+  /** Several selected layers' shared and mixed values. */
+  mixed?: MixedInfo;
 }) {
   const [tab, setTab] = createSignal<'design' | 'code'>('design');
   return (
@@ -364,28 +262,64 @@ export function DesignPanel(props: {
         <Show
           when={props.info}
           fallback={
-            <Show when={props.page}>
-              {(page) => (
-                <Section title="Page">
-                  <Field label="Name" value={page().name} />
-                  <div class="flex items-center gap-2 rounded-md bg-inset px-2 py-1">
-                    <span
-                      class="size-4 rounded-sm border border-edge-muted"
-                      style={{
-                        background: `rgb(${page()
-                          .background.slice(0, 3)
-                          .map((v) => Math.round(v * 255))
-                          .join(',')})`,
-                      }}
-                    />
-                    <span class="text-ink-muted">Canvas color</span>
-                  </div>
-                  <Show when={props.selectionCount > 1}>
-                    <span class="text-ink-muted">
-                      {props.selectionCount} layers selected
-                    </span>
-                  </Show>
-                </Section>
+            <Show
+              when={props.selectionCount > 1 && props.mixed}
+              fallback={
+                <Show when={props.page}>
+                  {(page) => (
+                    <Section title="Page">
+                      <Field label="Name" value={page().name} />
+                      <div class="flex items-center gap-2 rounded-md bg-inset px-2 py-1">
+                        <Show
+                          when={props.onPageColor}
+                          fallback={
+                            <span
+                              class="size-4 rounded-sm border border-edge-muted"
+                              style={{ background: `#${pageHex(page())}` }}
+                            />
+                          }
+                        >
+                          {(onColor) => (
+                            <SwatchPopover
+                              swatch={`#${pageHex(page())}`}
+                              label="Canvas color"
+                              testId="fig-page-color"
+                              onOpenChange={(open) => {
+                                if (open) props.onPickerOpen?.();
+                              }}
+                            >
+                              <ColorPicker
+                                value={pageHex(page())}
+                                opaque
+                                swatches={props.swatches}
+                                onChange={(hex, live) => onColor()(hex, live)}
+                              />
+                            </SwatchPopover>
+                          )}
+                        </Show>
+                        <span class="text-ink-muted">Canvas color</span>
+                        <span class="ml-auto font-mono text-ink-muted">
+                          {pageHex(page())}
+                        </span>
+                      </div>
+                      <Show when={props.selectionCount > 1}>
+                        <span class="text-ink-muted">
+                          {props.selectionCount} layers selected
+                        </span>
+                      </Show>
+                    </Section>
+                  )}
+                </Show>
+              }
+            >
+              {(mixed) => (
+                <MixedFields
+                  mixed={mixed()}
+                  onPatch={props.onPatch}
+                  swatches={props.swatches}
+                  onPickerOpen={props.onPickerOpen}
+                  onAddImage={props.onAddImage}
+                />
               )}
             </Show>
           }
@@ -714,6 +648,9 @@ export function DesignPanel(props: {
                   <PaintList
                     paints={info().fills}
                     kind="fill"
+                    swatches={props.swatches}
+                    onPickerOpen={props.onPickerOpen}
+                    onAddImage={props.onAddImage}
                     onChange={(fills, live) => props.onPatch?.({ fills }, live)}
                   />
                 </Section>
@@ -740,6 +677,9 @@ export function DesignPanel(props: {
                   <PaintList
                     paints={info().strokes}
                     kind="stroke"
+                    swatches={props.swatches}
+                    onPickerOpen={props.onPickerOpen}
+                    onAddImage={props.onAddImage}
                     onChange={(strokes, live) =>
                       props.onPatch?.({ strokes }, live)
                     }
@@ -772,6 +712,21 @@ export function DesignPanel(props: {
                         <option value="CENTER">Center</option>
                         <option value="OUTSIDE">Outside</option>
                       </select>
+                      <div class="col-span-2">
+                        <ParsedField
+                          label="Dash"
+                          shown={formatDashes(info().dashPattern) || 'None'}
+                          testId="fig-field-dash"
+                          parse={(text) =>
+                            text.trim().toLowerCase() === 'none'
+                              ? []
+                              : parseDashes(text)
+                          }
+                          onChange={(dashPattern) =>
+                            props.onPatch?.({ dashPattern }, false)
+                          }
+                        />
+                      </div>
                     </div>
                   </Show>
                 </Section>
@@ -828,6 +783,8 @@ export function DesignPanel(props: {
                 >
                   <EffectList
                     effects={info().effects}
+                    swatches={props.swatches}
+                    onPickerOpen={props.onPickerOpen}
                     onChange={(effects, live) =>
                       props.onPatch?.({ effects }, live)
                     }

@@ -16,11 +16,13 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DesignPanel } from '../components/design-panel';
+import { FigContextMenu } from '../components/fig-context-menu';
 import { FollowFrame, PeerAvatars } from '../components/peer-presence';
 import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
 import { type Point, zoomLabel } from '../core/camera';
+import { type MixedInfo, mergeInfos } from '../core/mixed';
 import { stepPage } from '../core/pages';
 import { type FigPeer, storesFile } from '../core/presence';
 import {
@@ -29,7 +31,8 @@ import {
   shortcutAction,
   type ViewerAction,
 } from '../core/shortcuts';
-import { createFigEditor } from '../primitives/create-fig-editor';
+import { createFigContextMenu } from '../primitives/create-fig-context-menu';
+import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { createPeerOverlays } from '../primitives/create-peer-overlays';
 import { AssetsPanel } from './assets-panel';
@@ -100,6 +103,75 @@ export function FigViewer() {
         });
     })
   );
+
+  // ---- design panel ---------------------------------------------------------
+
+  // Several selected layers: their shared and mixed values.
+  const [mixed, setMixed] = createSignal<MixedInfo>();
+  let mixedRequest = 0;
+  const loadMixed = async (ids: string[], request: number) => {
+    try {
+      const infos = await Promise.all(
+        ids.slice(0, 200).map((id) => engine.nodeInfo(viewer.page(), id))
+      );
+      if (request === mixedRequest) setMixed(mergeInfos(infos));
+    } catch {
+      if (request === mixedRequest) setMixed(undefined);
+    }
+  };
+  createEffect(
+    on([viewer.selected, viewer.editVersion], ([selected]) => {
+      const request = ++mixedRequest;
+      if (selected.length < 2) setMixed(undefined);
+      else
+        void loadMixed(
+          selected.map((s) => s.id),
+          request
+        );
+    })
+  );
+
+  // A drag in the design panel (scrubbing a value, a color) sends live
+  // edits and commits on release: one undo step per drag.
+  let gesture: { what: string; key: string } | undefined;
+  let gestures = 0;
+  const gestureKey = (what: string, live: boolean) => {
+    if (gesture?.what !== what)
+      gesture = live ? { what, key: `panel-${what}-${++gestures}` } : undefined;
+    const key = gesture?.key;
+    if (!live) gesture = undefined;
+    return key;
+  };
+  const patchSelection = (patch: Patch, live: boolean) =>
+    void editor.setProps(patch, gestureKey(Object.keys(patch).join(','), live));
+  const setPageColor = (hex: string, live: boolean) => {
+    const page = viewer.pages[viewer.page()];
+    if (!page) return;
+    void editor.apply(
+      [{ op: 'set', ids: [page.id], props: { fills: [{ color: hex }] } }],
+      gestureKey('page-color', live)
+    );
+  };
+
+  /** The page's colors, offered by the color pickers (loaded on opening). */
+  const [swatches, setSwatches] = createSignal<string[]>([]);
+  const loadSwatches = async () => {
+    try {
+      setSwatches(await engine.pageColors(viewer.page()));
+    } catch {
+      setSwatches([]);
+    }
+  };
+  const addImage = async (file: File) => {
+    try {
+      return (await engine.addImage(await file.arrayBuffer())).hash;
+    } catch (e) {
+      context.notifyError(
+        e instanceof Error ? e.message : `${file.name} could not be added`
+      );
+      return undefined;
+    }
+  };
 
   // ---- export -------------------------------------------------------------
 
@@ -235,6 +307,8 @@ export function FigViewer() {
         const locked = info()?.locked ?? false;
         void editor.setProps({ locked: !locked });
       })
+      .with('flip-horizontal', () => void editor.flip(false))
+      .with('flip-vertical', () => void editor.flip(true))
       .with('rename', () => viewer.requestRename())
       .with('nudge-left', () => void editor.nudge(-1, 0))
       .with('nudge-right', () => void editor.nudge(1, 0))
@@ -313,9 +387,20 @@ export function FigViewer() {
     if (following()) setFollowing(undefined);
   };
 
+  const contextMenu = createFigContextMenu({
+    viewer,
+    engine,
+    editor,
+    mac: IS_MAC,
+    run,
+    focus: () => root.focus({ preventScroll: true }),
+  });
+
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    // Menus (portaled, so their events bubble here) handle their own keys.
+    if (target.closest('[role="menu"]')) return;
     // A focused select or button keeps the keys it uses itself.
     const control = target.closest('select, button, a[href]');
     if (control && controlOwnsKey(control.tagName, e)) return;
@@ -446,7 +531,10 @@ export function FigViewer() {
       onPaste={onPaste}
     >
       <Show when={showLayers()}>
-        <aside class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel">
+        <aside
+          class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel"
+          onContextMenu={contextMenu.onLayers}
+        >
           <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2 text-xs">
             <For each={['layers', 'assets'] as const}>
               {(t) => (
@@ -486,6 +574,7 @@ export function FigViewer() {
         class="relative min-w-0 flex-1"
         onPointerDown={stopFollowing}
         onWheel={stopFollowing}
+        onContextMenu={contextMenu.onCanvas}
       >
         <ViewerCanvas
           viewer={viewer}
@@ -570,6 +659,13 @@ export function FigViewer() {
               onClose={() => setShowShortcuts(false)}
             />
           </Show>
+          <FigContextMenu
+            at={contextMenu.menu()?.at}
+            entries={contextMenu.menu()?.entries ?? []}
+            mac={IS_MAC}
+            onSelect={contextMenu.choose}
+            onClose={contextMenu.close}
+          />
         </ViewerCanvas>
       </div>
       <Show when={showDesign()}>
@@ -579,15 +675,12 @@ export function FigViewer() {
             onAlign={
               editor.enabled() ? (how) => void editor.align(how) : undefined
             }
-            onPatch={
-              editor.enabled()
-                ? (patch, live) =>
-                    void editor.setProps(
-                      patch,
-                      live ? `panel-${Object.keys(patch).join(',')}` : undefined
-                    )
-                : undefined
-            }
+            onPatch={editor.enabled() ? patchSelection : undefined}
+            onPageColor={editor.enabled() ? setPageColor : undefined}
+            swatches={swatches()}
+            mixed={mixed()}
+            onPickerOpen={() => void loadSwatches()}
+            onAddImage={editor.enabled() ? addImage : undefined}
             onAddAutoLayout={
               editor.enabled() ? () => void editor.addAutoLayout() : undefined
             }

@@ -41,6 +41,8 @@ export interface WasmFigFile {
   outline: (page: number, id: string) => string;
   /** `SearchHit[]` JSON. */
   search: (page: number, query: string, limit: number) => string;
+  /** `string[]` JSON of `RRGGBB[AA]` colors. */
+  pageColors: (page: number, limit: number) => string;
   /** `string[]` JSON. */
   inRect: (
     page: number,
