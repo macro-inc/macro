@@ -178,6 +178,9 @@ jobs:
     - name: Test
       run: bunx vitest
       working-directory: apps/web
+    - name: Sign-up Browser Tests
+      run: just test-signup-browser
+      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

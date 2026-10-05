@@ -99,3 +99,26 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
         "build still produces the vite bundle: {build}"
     );
 }
+
+#[test]
+fn test_job_runs_signup_browser_tests_after_vitest() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    // The job and its vitest step are both named "Test"; slice from the job.
+    let start = yaml.find("name: Test\n").expect("Test job");
+    let end = yaml[start..]
+        .find("name: Cycles Import Check")
+        .map_or(yaml.len(), |offset| start + offset);
+    let test_job = &yaml[start..end];
+    let vitest = test_job.find("bunx vitest").expect("vitest step");
+    let browser = test_job
+        .find("just test-signup-browser")
+        .expect("sign-up browser step");
+    assert!(
+        vitest < browser,
+        "browser tests run after vitest: {test_job}"
+    );
+    assert!(
+        test_job.contains("playwright: 'true'"),
+        "the Test job installs Playwright's Chromium: {test_job}"
+    );
+}

@@ -167,6 +167,11 @@ bundle-smoke-server *ARGS:
 test-watch:
     bunx --bun vitest
 
+# Sign-in, sign-up, and onboarding in Chromium against fake backends (no network).
+test-signup-browser:
+    bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts
+    bunx playwright test --config src/features/auth/browser-test/playwright.config.ts
+
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test
     bun run --cwd ../../packages/email-renderer test:browser
