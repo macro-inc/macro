@@ -26,10 +26,11 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { getWebOrigin } from '@core/util/webOrigin';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import { useFormSharePermissionsQuery } from '@queries/storage/forms';
 import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import type { FormTab } from './components/form-tabs';
 import { AudiencePanel } from './components/share/audience-panel';
 import { FormProvider } from './context/form-context';
@@ -38,12 +39,20 @@ import { respondLink } from './core/respond-link';
 import { createAppFormContext } from './form-context-production';
 import { createAudienceChange } from './primitives/create-audience-change';
 import { FormPageView } from './views/form-page-view';
+import { RespondView } from './views/respond-view';
 
-function FormBlockContent(props: { initialTab: FormTab | undefined }) {
+function FormBlockContent(props: {
+  respondOnly: boolean;
+  initialTab: FormTab | undefined;
+}) {
   const formId = useBlockId();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const context = createAppFormContext();
+  const context = createAppFormContext({
+    openRelated: (destination) =>
+      replaceOrInsertSplit({ type: 'database', id: destination.databaseId }),
+    openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
+  });
   const source = context.createFormSource(() => formId);
   const summary = context.responses.createSummary(
     () => formId,
@@ -91,6 +100,8 @@ function FormBlockContent(props: { initialTab: FormTab | undefined }) {
       audience: AudienceForShare,
     };
   });
+  const openRespond = () =>
+    insertSplit({ type: 'form', id: formId, params: { view: 'respond' } });
   const shares = useFormSharePermissionsQuery(
     () => formId,
     () => source.detail()?.access === 'owner'
@@ -100,20 +111,38 @@ function FormBlockContent(props: { initialTab: FormTab | undefined }) {
       ? (shares.data.channelSharePermissions ?? []).length > 0 ||
         !!shares.data.teamShareAccessLevel
       : undefined;
-  // Only owners publish (share) a form nobody has responded to yet.
-  const canPublish = () => {
+  // Only owners publish (share); other editors open the respond view.
+  const published = () => {
     const detail = source.detail();
-    if (detail?.access !== 'owner') return false;
+    if (!detail) return false;
+    if (detail.access !== 'owner') return true;
     const counts = summary.value();
     return (
       primaryAction({
         audience: detail.form.audience,
         responses: counts ? counts.submitted + counts.stopped : 0,
         shared: shared(),
-      }) === 'publish'
+      }) === 'open'
     );
   };
   const name = () => source.detail()?.form.name ?? 'Form';
+  const primary = (): JSX.Element => (
+    <Show
+      when={published()}
+      fallback={
+        <Button variant="cta" size="sm" onClick={openShare}>
+          <PaperPlaneTilt class="size-3.5" />
+          Publish
+        </Button>
+      }
+    >
+      <Button variant="outline" size="sm" onClick={openRespond}>
+        <ArrowSquareOut class="size-3.5" />
+        Open form
+      </Button>
+    </Show>
+  );
+  let respondScroll: HTMLDivElement | undefined;
   return (
     <FormProvider value={context}>
       <SplitHeaderLeft>
@@ -122,51 +151,71 @@ function FormBlockContent(props: { initialTab: FormTab | undefined }) {
       <SplitHeaderRight>
         <BlockLiveIndicators />
         <div class="order-[1000] flex items-center gap-1.5">
-          <Show when={canPublish()}>
-            <Button variant="cta" size="sm" onClick={openShare}>
-              <PaperPlaneTilt class="size-3.5" />
-              Publish
-            </Button>
+          <Show
+            when={
+              !props.respondOnly &&
+              source.detail() &&
+              source.detail()?.access !== 'view'
+            }
+          >
+            {primary()}
           </Show>
           <ShareTrigger onClick={openShare} />
         </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
-      <FormPageView
-        source={source}
-        tab={tab()}
-        respondLink={link()}
-        onTabChange={changeTab}
-        onOpenDatabase={(databaseId) =>
-          replaceOrInsertSplit({ type: 'database', id: databaseId })
+      <Show
+        when={props.respondOnly}
+        fallback={
+          <FormPageView
+            source={source}
+            tab={tab()}
+            respondLink={link()}
+            onTabChange={changeTab}
+            onOpenDatabase={(databaseId) =>
+              replaceOrInsertSplit({ type: 'database', id: databaseId })
+            }
+            onOpenShare={openShare}
+            onTrashed={() => returnSplitToRecentListView(panel.handle)}
+          />
         }
-        onOpenShare={openShare}
-        onTrashed={() => returnSplitToRecentListView(panel.handle)}
-      />
+      >
+        <div
+          ref={respondScroll}
+          class="h-full min-h-0 overflow-y-auto bg-canvas-base touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+        >
+          <Show when={source.detail()}>
+            {(detail) => (
+              <RespondView
+                detail={detail()}
+                refetch={source.refetch}
+                compact={false}
+                scrollContainer={() => respondScroll}
+              />
+            )}
+          </Show>
+        </div>
+      </Show>
     </FormProvider>
   );
 }
 
 export default function FormBlock(props: { view?: unknown }) {
   const flag = useFeatureFlag(enableForms);
+  // The flag gates authoring only: with it off, a form opens on its respond
+  // view, and the service decides who may answer.
   return (
-    <Show
-      when={flag().enabled || flag().loading}
-      fallback={
-        <div class="grid size-full place-items-center p-6 text-sm text-ink-muted">
-          Forms are not enabled for this account.
-        </div>
-      }
-    >
-      <DocumentBlockContainer>
-        <FormBlockContent
-          initialTab={
-            props.view === 'responses' || props.view === 'share'
-              ? props.view
-              : undefined
-          }
-        />
-      </DocumentBlockContainer>
-    </Show>
+    <DocumentBlockContainer>
+      <FormBlockContent
+        respondOnly={
+          props.view === 'respond' || (!flag().enabled && !flag().loading)
+        }
+        initialTab={
+          props.view === 'responses' || props.view === 'share'
+            ? props.view
+            : undefined
+        }
+      />
+    </DocumentBlockContainer>
   );
 }

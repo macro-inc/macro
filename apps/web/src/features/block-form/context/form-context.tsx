@@ -1,10 +1,14 @@
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
+import type { SubmittedAnswer } from '../core/answers';
 import type {
   FormAudience,
+  FormCellValue,
   FormColumn,
   FormColumnKind,
   FormDetail,
+  FormEntityKind,
+  FormEntityReference,
   FormLayout,
   FormStatus,
   GateRules,
@@ -121,9 +125,45 @@ export type FormMetadataPatch = {
   tallyVisible?: boolean;
 };
 
+export type SubmitOutcome =
+  | { kind: 'submitted'; responseId: string }
+  | { kind: 'stopped'; sectionId: string; message: string };
+
+/** The viewer's own response: `null` before they respond. */
+export type MyResponse = {
+  status: 'submitted' | 'stopped';
+  submittedAt: string;
+  answers: SubmittedAnswer[];
+};
+
+export type MyResponseSource = {
+  response: Accessor<MyResponse | null | undefined>;
+  failure: Accessor<FormLoadFailure | undefined>;
+  refetch: () => Promise<void>;
+};
+
 export type ReadSource<Value> = {
   value: Accessor<Value | undefined>;
   failure: Accessor<FormLoadFailure | undefined>;
+};
+
+/** A picker the app owns, filling one answer. */
+export type EntityPickerProps = {
+  target: FormEntityKind;
+  multi: boolean;
+  value: FormCellValue | undefined;
+  onChange: (value: FormCellValue) => void;
+  label: string;
+  invalid: boolean;
+};
+
+export type RelationPickerProps = {
+  databaseId: string;
+  tableId: string;
+  value: FormCellValue | undefined;
+  onChange: (value: FormCellValue) => void;
+  label: string;
+  invalid: boolean;
 };
 
 export type ConditionEditorProps = {
@@ -133,11 +173,17 @@ export type ConditionEditorProps = {
   onChange: (rules: GateRules | null) => void;
 };
 
+export type ResponsesGridProps = {
+  databaseId: string;
+  tableId: string;
+};
+
 /**
  * What Macro Forms needs from the app. Production wiring lives in
  * `../form-context-production.tsx`; tests supply their own.
  */
 export type FormContext = {
+  viewer: { userId: Accessor<string | undefined> };
   createFormSource: (formId: Accessor<string>) => FormDetailSource;
   createTableSource: (
     databaseId: Accessor<string | undefined>,
@@ -172,17 +218,46 @@ export type FormContext = {
   }) => Promise<boolean>;
   columns: (databaseId: string, tableId: string) => FormColumnWrites;
   responses: {
+    submit: (
+      formId: string,
+      answers: SubmittedAnswer[]
+    ) => ResultAsync<SubmitOutcome, FormWriteFailure>;
+    editMine: (
+      formId: string,
+      answers: SubmittedAnswer[]
+    ) => ResultAsync<SubmitOutcome, FormWriteFailure>;
+    createMine: (formId: Accessor<string>) => MyResponseSource;
     createSummary: (
       formId: Accessor<string>,
       enabled: Accessor<boolean>
     ) => ReadSource<ResponseCounts>;
+    /** People in the channels a form was posted to, its owner excluded. */
+    createInvited: (
+      formId: Accessor<string>,
+      ownerId: Accessor<string>,
+      enabled: Accessor<boolean>
+    ) => ReadSource<number | null>;
+    /** Download the linked table as CSV, the grid's own export. */
+    exportCsv: (
+      databaseId: string,
+      tableId: string
+    ) => ResultAsync<void, FormWriteFailure>;
   };
+  /** Upload a file for a file question; answers the link the cell stores. */
+  uploadFile: (file: File) => ResultAsync<string, FormWriteFailure>;
+  /** Open a direct conversation with the form's owner (stop screen, RFC 02 §4). */
+  messageOwner: (ownerId: string) => ResultAsync<void, FormWriteFailure>;
   notify: {
     success: (message: string) => void;
     failure: (message: string) => void;
   };
   ui: {
+    renderEntityPicker: (props: EntityPickerProps) => JSX.Element;
+    renderRelationPicker: (props: RelationPickerProps) => JSX.Element;
     renderConditionEditor: (props: ConditionEditorProps) => JSX.Element;
+    renderResponsesGrid: (props: ResponsesGridProps) => JSX.Element;
+    /** A person's or entity's name, as mentions show it. */
+    renderEntityLabel: (entity: FormEntityReference) => JSX.Element;
   };
 };
 

@@ -2,9 +2,13 @@
 import { ThrownResultError } from '@core/util/result';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
 import {
+  editMyResponse,
   putFormLayout,
+  submitResponse,
   updateForm,
   useFormDetailQuery,
+  useFormInvitedCount,
+  useMyResponseQuery,
   useResponseSummaryQuery,
 } from '@queries/storage/forms';
 import {
@@ -14,6 +18,8 @@ import {
 } from '@queries/storage/forms-sync';
 import type { FormsError } from '@service-storage/forms';
 import type { FormErrorCode } from '@service-storage/generated/schemas/formErrorCode';
+import type { MyResponse as WireMyResponse } from '@service-storage/generated/schemas/myResponse';
+import type { SubmissionOutcome } from '@service-storage/generated/schemas/submissionOutcome';
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -24,8 +30,11 @@ import type {
   FormRefusal,
   FormTableSource,
   FormWriteFailure,
+  MyResponseSource,
   ReadSource,
+  SubmitOutcome,
 } from '../context/form-context';
+import type { SubmittedAnswer } from '../core/answers';
 import type { FormDetail, FormLayout } from '../core/form-model';
 import type { ResponseCounts } from '../core/response-stats';
 import { toFormDetail, toLayoutDocument } from './form-detail';
@@ -185,6 +194,65 @@ export function updateFormMetadata(
     .mapErr(writeFailureOf);
 }
 
+function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
+  return match(outcome)
+    .returnType<SubmitOutcome>()
+    .with({ outcome: 'submitted' }, ({ response }) => ({
+      kind: 'submitted',
+      responseId: response,
+    }))
+    .with({ outcome: 'stopped' }, ({ section, message }) => ({
+      kind: 'stopped',
+      sectionId: section,
+      message,
+    }))
+    .exhaustive();
+}
+
+export function submitFormResponse(
+  formId: string,
+  answers: SubmittedAnswer[]
+): ResultAsync<SubmitOutcome, FormWriteFailure> {
+  return submitResponse(formId, { answers })
+    .map(toSubmitOutcome)
+    .mapErr(writeFailureOf);
+}
+
+export function editMyFormResponse(
+  formId: string,
+  answers: SubmittedAnswer[]
+): ResultAsync<SubmitOutcome, FormWriteFailure> {
+  return editMyResponse(formId, { answers })
+    .map(toSubmitOutcome)
+    .mapErr(writeFailureOf);
+}
+
+function toMyResponse(mine: WireMyResponse) {
+  return {
+    status: mine.response.status,
+    submittedAt: mine.response.submittedAt,
+    answers: mine.answers,
+  };
+}
+
+export function createMyResponseSource(
+  formId: Accessor<string>,
+  userId: Accessor<string | undefined>
+): MyResponseSource {
+  const query = useMyResponseQuery(formId, userId);
+  return {
+    response: () => {
+      if (!userId()) return null;
+      if (!query.isSuccess) return undefined;
+      return query.data ? toMyResponse(query.data) : null;
+    },
+    failure: () => (query.isError ? loadFailureOf(query.error) : undefined),
+    refetch: async () => {
+      await query.refetch();
+    },
+  };
+}
+
 export function createSummarySource(
   formId: Accessor<string>,
   enabled: Accessor<boolean>
@@ -204,5 +272,24 @@ export function createSummarySource(
           }
         : undefined,
     failure: () => (query.isError ? loadFailureOf(query.error) : undefined),
+  };
+}
+
+export function createInvitedSource(
+  formId: Accessor<string>,
+  ownerId: Accessor<string>,
+  enabled: Accessor<boolean>
+): ReadSource<number | null> {
+  const invited = useFormInvitedCount(
+    () => formId() || undefined,
+    ownerId,
+    enabled
+  );
+  return {
+    value: invited.count,
+    failure: () => {
+      const error = invited.error();
+      return error ? loadFailureOf(error) : undefined;
+    },
   };
 }

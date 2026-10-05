@@ -4,9 +4,10 @@ A form is a questionnaire whose answers land as rows of one database table.
 Every question is a column of that table; the form stores only presentation
 (sections, order, help text, required, gates). Authoring is behind the
 `enable-forms` flag (`VITE_ENABLE_FORMS=true|false`; on under `bun run dev`
-and HMR, PostHog otherwise). With it off, the form at `/app/form/<uuid>`
-says forms aren't enabled, and no Create entry or database form control
-exists.
+and HMR, PostHog otherwise). With it off, `/app/form/<uuid>` opens on the
+respond view (no builder), and no Create entry or database form control
+exists. Responding (the respond route) does not depend on the flag: the
+service decides who may respond.
 
 ## Creating
 
@@ -24,10 +25,11 @@ exists.
 
 Editors see three tabs, kept per split (a split opened with
 `params.view` `responses` or `share` starts there), with the status at the right ("Accepting responses · closes Oct 3",
-"Closed", "Table deleted"). Viewers see the form's sections and questions,
-read-only, without tabs. For owners, the header shows **Publish** (opens
-sharing) until someone responds or the form is shared (public, a channel, the
-team). The header badge follows the form's own access.
+"Closed", "Table deleted"). Viewers (respondents) land on the respond page
+instead. The header's primary button, for owners, is **Publish** (opens sharing)
+until someone responds or the form is shared (public, a channel, the team),
+then **Open form** (respond view in a new split); other editors always see
+**Open form**. The header badge follows the form's own access.
 
 ### Build
 
@@ -64,8 +66,11 @@ A centered column of sections, each a card of question rows, with the rail
 
 ### Responses
 
-The counts (Submitted, Stopped at each gate, Rows in the table) and **Open
-database**, which opens the linked database where each response is a row.
+The linked table's grid, embedded and live, with **Open database**, **Export
+CSV** and tiles: Responses, Stopped at a gate (per gate in its hint), Rows in
+the table, and (owners, when posted in channels) People in its channels (the
+owner excluded; a dash for public forms). Every row of the table shows,
+including rows added in the grid.
 
 ### Share
 
@@ -89,8 +94,24 @@ appears without access to its database. Deleting a database table warns which
 forms it deletes; deleting a column warns which forms ask it (both say so
 while still checking, or when the check failed, instead of saying nothing).
 
+## Responding
+
+`/app/form/<uuid>/respond` is one page in two shells: signed-in visitors see
+it inside the app shell (sidebar, command menu); anonymous visitors get a
+focused page, so a public form never hits login. Signed in, a respondent
+keeps their identity on either audience and can edit their response while the
+form is open; anonymous visitors cannot. One section per screen with
+**Back / Next**, **Submit** on the last. Next checks required answers and any
+gate locally; a failing gate shows "This form can't take your response" with
+the gate's message (never its rules), **Check my answers** and, signed in,
+**Message the owner** (opens a direct conversation). Submit shows the
+confirmation with a receipt; signed-in respondents (either audience) get
+**Edit my response** while it is open and land on their receipt when they
+return. A closed form says "This form is closed"; a returning respondent
+sees their saved answers with that reason.
+
 ## Reading responses as an agent
 
-Open the database (`/app/database/<uuid>`) the
+Use the Responses tab grid, or open the database (`/app/database/<uuid>`) the
 form names under **Stores to**. Each submission is a row; the `Submitted` and
 `Respondent` columns are written by the form.
