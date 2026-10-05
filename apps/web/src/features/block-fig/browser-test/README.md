@@ -38,7 +38,10 @@ and shadows from the design panel with undo and redo, typing and styling
 text, auto layout (adding it, gap and padding, sizing, drag to reorder),
 constraints, resizing several layers and rotating one, components
 (creating, placing instances from Assets, overriding their layers,
-detaching), adding pages, and read-only access.
+detaching), adding pages, boolean operations and flattening, drawing
+with the pen and editing points, SVG export (compared with the PNG) and
+Copy as SVG, copying layers into another file through the system
+clipboard, and read-only access.
 
 `FIG_CORPUS_DIR` (with a trailing slash) serves another directory of
 files; `--port` runs a second server beside the default one.
