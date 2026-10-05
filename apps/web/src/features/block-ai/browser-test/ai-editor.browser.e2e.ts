@@ -261,10 +261,13 @@ test('groups, arranges, copies, pastes, and deletes', async ({ page }) => {
   const view = await fitted(canvas);
   const red = view.at(RED_BOX);
   const blue = view.at(BLUE_CIRCLE);
+  const rect = (await objectAt(page, RED_BOX))?.id;
+  const circle = (await objectAt(page, BLUE_CIRCLE))?.id;
   await page.mouse.click(red.x, red.y);
   await page.keyboard.down('Shift');
   await page.mouse.click(blue.x, blue.y);
   await page.keyboard.up('Shift');
+  await expect.poll(() => selectedRows(page)).toHaveLength(2);
 
   await page.keyboard.press(`${MOD}+g`);
   await expect
@@ -275,12 +278,16 @@ test('groups, arranges, copies, pastes, and deletes', async ({ page }) => {
     .poll(async () => (await engineRows(page)).map((r) => r.kind))
     .toEqual(['layer', 'layer', 'text', 'path', 'path']);
 
-  // ⌘] brings the rectangle in front of the circle.
+  // ⌘] brings the rectangle in front of the circle (rows: top-most first).
   await page.mouse.click(red.x, red.y);
+  await expect.poll(() => selectedRows(page)).toHaveLength(1);
+  const order = async () => {
+    const ids = (await engineRows(page)).map((r) => r.id);
+    return ids.indexOf(rect ?? -1) < ids.indexOf(circle ?? -1);
+  };
+  expect(await order()).toBe(false);
   await page.keyboard.press(`${MOD}+BracketRight`);
-  await expect
-    .poll(async () => (await objectAt(page, { x: 290, y: 175 }))?.bounds)
-    .toEqual({ x0: 100, y0: 100, x1: 300, y1: 250 });
+  await expect.poll(order).toBe(true);
 
   // Copy and paste: a copy 10 pt away, selected.
   await page.keyboard.press(`${MOD}+c`);
@@ -292,6 +299,7 @@ test('groups, arranges, copies, pastes, and deletes', async ({ page }) => {
 
   // ⌘D duplicates.
   await page.mouse.click(blue.x, blue.y);
+  await expect.poll(() => selectedRows(page)).toHaveLength(1);
   await page.keyboard.press(`${MOD}+d`);
   await expect.poll(async () => (await engineRows(page)).length).toBe(6);
 });
@@ -304,6 +312,7 @@ test('direct selection moves anchor points', async ({ page }) => {
   await page.keyboard.press('a');
   const red = view.at(RED_BOX);
   await page.mouse.click(red.x, red.y);
+  await expect(page.getByTestId('ai-field-w')).toHaveValue('200');
   // The rectangle's top-left anchor, dragged up and left.
   await dragOn(page, view.at({ x: 100, y: 100 }), view.at({ x: 50, y: 60 }));
   await expect

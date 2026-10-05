@@ -272,7 +272,13 @@ export function AiEditorView() {
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]'))
       return;
-    if (target.closest('[role="menu"], [role="dialog"]')) return;
+    // Menus (and the buttons that opened them) keep their keys.
+    if (
+      target.closest(
+        '[role="menu"], [role="dialog"], [aria-haspopup][aria-expanded="true"]'
+      )
+    )
+      return;
     const control = target.closest('button, a[href]');
     if (control && controlOwnsKey(control.tagName, e)) return;
     if (e.key === ' ') {

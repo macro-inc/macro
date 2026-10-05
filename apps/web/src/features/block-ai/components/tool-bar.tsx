@@ -102,6 +102,7 @@ export function ToolBar(props: {
           none={props.fill.none}
           label="Fill"
           testId="ai-swatch-fill"
+          side="right"
           disabled={!props.editable}
           onChange={props.onFill}
         />
@@ -113,6 +114,7 @@ export function ToolBar(props: {
           none={props.stroke.none}
           label="Stroke"
           testId="ai-swatch-stroke"
+          side="right"
           disabled={!props.editable}
           onChange={props.onStroke}
         />

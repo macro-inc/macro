@@ -36,6 +36,8 @@ export function MenuItems(props: {
         ) : (
           <button
             type="button"
+            role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+            aria-checked={item.checked}
             data-testid={item.testId}
             class="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-ink hover:bg-hover"
             onClick={() => {
@@ -123,11 +125,21 @@ export function StatusBar(props: {
         </span>
         <div aria-hidden="true" class="mx-1 h-5 w-px bg-edge-muted" />
       </Show>
-      <div ref={menu} class="relative">
+      <div
+        ref={menu}
+        class="relative"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && open()) {
+            e.stopPropagation();
+            setOpen(false);
+          }
+        }}
+      >
         <Button
           variant="ghost"
           size="sm"
           class="min-w-16 gap-0.5 tabular-nums"
+          aria-haspopup="menu"
           aria-expanded={open()}
           data-testid="ai-zoom-menu"
           onClick={() => setOpen((o) => !o)}
@@ -136,7 +148,10 @@ export function StatusBar(props: {
           <CaretDown class="size-3" />
         </Button>
         <Show when={open()}>
-          <div class="absolute right-0 bottom-full z-50 mb-2 w-60 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg">
+          <div
+            role="menu"
+            class="absolute right-0 bottom-full z-50 mb-2 w-60 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg"
+          >
             <MenuItems items={props.zoomItems} onDone={() => setOpen(false)} />
           </div>
         </Show>

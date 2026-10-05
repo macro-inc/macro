@@ -17,12 +17,22 @@ export function MainMenu(props: { items: (MenuItem | 'divider')[] }) {
   document.addEventListener('pointerdown', onDocumentDown);
   onCleanup(() => document.removeEventListener('pointerdown', onDocumentDown));
   return (
-    <div ref={root} class="relative">
+    <div
+      ref={root}
+      class="relative"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && open()) {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <Button
         variant="ghost"
         size="icon-md"
         label="Main menu"
-        tooltip="Main menu"
+        tooltip={open() ? undefined : 'Main menu'}
+        aria-haspopup="menu"
         aria-expanded={open()}
         data-testid="ai-main-menu"
         onClick={() => setOpen((o) => !o)}
@@ -30,7 +40,10 @@ export function MainMenu(props: { items: (MenuItem | 'divider')[] }) {
         <List />
       </Button>
       <Show when={open()}>
-        <div class="absolute top-full left-0 z-50 mt-1 w-64 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg">
+        <div
+          role="menu"
+          class="absolute top-full left-0 z-50 mt-1 w-64 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg"
+        >
           <MenuItems items={props.items} onDone={() => setOpen(false)} />
         </div>
       </Show>

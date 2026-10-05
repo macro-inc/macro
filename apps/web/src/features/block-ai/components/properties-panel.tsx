@@ -222,7 +222,9 @@ function PaintRow(props: {
         }
       >
         <div class="flex min-w-0 flex-1 items-center rounded-md bg-inset px-1">
-          <span class="text-ink-muted">#</span>
+          <Show when={!props.paint.none && !props.paint.mixed}>
+            <span class="text-ink-muted">#</span>
+          </Show>
           <TextField
             value={
               props.paint.mixed
