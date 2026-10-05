@@ -9,7 +9,7 @@ export interface ReminderQuickPreset {
   date: Date;
 }
 
-/** Common one-shot choices, computed when the form opens so labels are exact. */
+/** Common one-shot choices, calculated relative to the supplied time. */
 export function reminderQuickPresets(now: Date): ReminderQuickPreset[] {
   // Elapsed time, not a local wall-clock mutation: adding 30 via setMinutes
   // becomes 90 elapsed minutes when daylight saving time falls back.

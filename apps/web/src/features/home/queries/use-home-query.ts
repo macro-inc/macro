@@ -28,7 +28,7 @@ import {
   isSnippetEntity,
   type WithNotification,
 } from '@entity';
-import { notificationIsRead } from '@entity/utils/notification';
+import { unreadFilterFn } from '@entity/utils/filter';
 import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
@@ -181,11 +181,7 @@ export function useHomeEntitiesQuery(
       let snapshot: UnifiedNotification[] | undefined;
       const notifications = () => (snapshot ??= scopedNotifications(entity));
       if (!matchesTab(entity, context.tab, notifications)) return false;
-      return entity.type === 'email'
-        ? !entity.isRead
-        : notifications().some(
-            (notification) => !notificationIsRead(notification)
-          );
+      return unreadFilterFn({ ...entity, notifications });
     });
   };
 

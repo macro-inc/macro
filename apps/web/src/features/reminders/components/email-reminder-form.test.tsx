@@ -50,6 +50,21 @@ it('supports arrow-key selection and preserves the condition when editing', () =
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(onSave).toHaveBeenCalledWith(new Date(2026, 9, 1, 17), 'regardless');
 });
+it('refreshes presets against the current time when the query changes', () => {
+  vi.setSystemTime(new Date(2026, 9, 1, 16, 50));
+  const { onSave } = setup();
+  const input = screen.getByRole('combobox');
+  expect(screen.getByRole('option', { name: /Later today/ })).toBeTruthy();
+
+  vi.setSystemTime(new Date(2026, 9, 1, 17, 30));
+  fireEvent.input(input, { target: { value: 'later' } });
+  expect(screen.queryByRole('option', { name: /Later today/ })).toBeNull();
+
+  fireEvent.input(input, { target: { value: '' } });
+  expect(screen.queryByRole('option', { name: /Later today/ })).toBeNull();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onSave).toHaveBeenCalledWith(new Date(2026, 9, 1, 18), 'if_no_reply');
+});
 it('exposes removal separately from selecting a new time', () => {
   const onRemove = vi.fn();
   const { onSave } = setup({ onRemove, initialTime: '2026-11-01T06:30:15Z' });

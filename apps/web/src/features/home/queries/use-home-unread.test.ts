@@ -165,7 +165,7 @@ describe('Home unread presence', () => {
     expect(mocks.withLocalOverrides).toHaveBeenCalledTimes(101);
   });
 
-  it('does not read email notifications and stops on an unread, non-archived email', () => {
+  it('reads notifications only for read emails and stops on an unread, non-archived email', () => {
     const inbox = setup();
     const read = vi.fn(() => []);
     expect(
@@ -176,8 +176,30 @@ describe('Home unread presence', () => {
         withNotifications(channel, read),
       ])
     ).toBe(true);
-    expect(read).not.toHaveBeenCalled();
+    expect(read).toHaveBeenCalledOnce();
   });
+
+  it.each(['unseen', 'seen', 'done'] as const)(
+    'keeps the badge and row unread state aligned for a %s email reminder',
+    (state) => {
+      const inbox = setup();
+      const email = withNotifications({ ...emailRow, isRead: true }, [
+        {
+          ...notification('email-reminder', state, {
+            tag: 'reminder',
+            content: { description: 'Follow up', reminderId: 'reminder' },
+          }),
+          entity_type: 'email_thread',
+          entity_id: emailRow.id,
+        },
+      ]);
+      expect(inbox.hasUnreadEntity([email])).toBe(state === 'unseen');
+      expect(inbox.transformEntities([email]).some(unreadFilterFn)).toBe(
+        state === 'unseen'
+      );
+      expect(email.isRead).toBe(true);
+    }
+  );
 
   it('retains the same answers as list transformation across membership and thread cases', () => {
     const inbox = setup();

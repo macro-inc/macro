@@ -8,15 +8,13 @@ import {
 
 /** Resolve typed times once per query, rejecting past times and DST gaps. */
 export function createReminderTimeOptions(query: Accessor<string>) {
-  const now = new Date();
-  const presets = reminderQuickPresets(now);
   const dates = useDateSearch({
     query,
-    baseDate: now,
     defaultTime: REMINDER_DEFAULT_TIME,
   });
   return createMemo<readonly ReminderTimeOption[]>(() => {
     const search = query().trim().toLowerCase();
+    const presets = reminderQuickPresets(new Date());
     if (!search) return presets;
     const wallTime = parseTime(search)?.time;
     const parsed = dates()
