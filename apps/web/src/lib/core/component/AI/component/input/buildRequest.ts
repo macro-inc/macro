@@ -1,10 +1,9 @@
 import { analytics } from '@app/lib/analytics';
+import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
-
-import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';

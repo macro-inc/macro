@@ -3,10 +3,10 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import { cancelAiEdit, requestAiEditWithToast } from '../queries/ai-edit';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { cancelAiEdit, requestAiEditWithToast } from '../queries/ai-edit';
 
 false && clickOutside;
 

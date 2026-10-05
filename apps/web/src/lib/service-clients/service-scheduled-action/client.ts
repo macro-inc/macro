@@ -7,7 +7,7 @@ import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
 import {
-  AI_USAGE_LIMIT_ERROR,
+  type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type {

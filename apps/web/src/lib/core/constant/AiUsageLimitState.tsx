@@ -1,3 +1,4 @@
+import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';
 import type { AiDenyCode } from '@service-auth/ai-billing-types';
 import { createSignal } from 'solid-js';
 
@@ -22,4 +23,3 @@ export const useAiUsageLimitState = () => {
   };
   return { usageLimitOpen, usageLimitCode, showUsageLimit, hideUsageLimit };
 };
-import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';

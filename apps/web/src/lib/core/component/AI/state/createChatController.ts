@@ -1,3 +1,4 @@
+import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
 import {
@@ -6,7 +7,6 @@ import {
 } from '@core/component/AI/util/stream';
 import { tailContext } from '@core/component/LexicalMarkdown/tailContext';
 import { toast } from '@core/component/Toast/Toast';
-import { isAiDenyCode } from '@app/lib/service-clients/ai-usage-limit';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
 import type { EditorState } from 'lexical';

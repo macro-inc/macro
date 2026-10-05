@@ -1,7 +1,7 @@
+import { toastAiEditResult } from '@app/features/block-md/queries/ai-edit';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { hasActiveAiEdit, requestAiEdit } from './client';
-import { toastAiEditResult } from '@app/features/block-md/queries/ai-edit';
 
 const { failure, permissionToken, span } = vi.hoisted(() => ({
   failure: vi.fn(),

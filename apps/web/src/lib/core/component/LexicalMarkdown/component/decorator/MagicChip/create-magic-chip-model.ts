@@ -9,8 +9,8 @@ import {
   toolLabel,
 } from '@app/features/block-agent/component/parts/shared';
 import type { InteractionController } from '@app/features/block-agent/context/interaction';
-import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
+import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import {

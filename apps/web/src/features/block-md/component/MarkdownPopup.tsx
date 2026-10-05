@@ -61,11 +61,6 @@ import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-so
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
-import {
-  cancelAiEdit,
-  hasActiveAiEdit,
-  requestAiEditWithToast,
-} from '../queries/ai-edit';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Toolbar } from '@ui';
 import {
@@ -88,6 +83,11 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import {
+  cancelAiEdit,
+  hasActiveAiEdit,
+  requestAiEditWithToast,
+} from '../queries/ai-edit';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 

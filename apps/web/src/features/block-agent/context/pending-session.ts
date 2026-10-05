@@ -21,7 +21,6 @@
  */
 
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
-import { issueSessionAction } from '../queries/issue-session-action';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
@@ -31,6 +30,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
+import { issueSessionAction } from '../queries/issue-session-action';
 import { effortConfigOption } from '../state/session-config';
 import { confirmSessionControl } from './confirm-session-control';
 

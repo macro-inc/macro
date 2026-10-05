@@ -1,7 +1,10 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
-import { AI_USAGE_LIMIT_ERROR, readAiUsageLimitError } from '../ai-usage-limit';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  readAiUsageLimitError,
+} from '../ai-usage-limit';
 import type {
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,

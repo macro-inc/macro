@@ -12,7 +12,7 @@ import type { DocumentTextPart } from '@service-cognition/generated/schemas/docu
 import { err, ok, type Result } from 'neverthrow';
 import type OpenAI from 'openai';
 import {
-  AI_USAGE_LIMIT_ERROR,
+  type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
