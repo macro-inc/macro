@@ -607,14 +607,15 @@ impl<'a> Txn<'a> {
     fn resize(&mut self, i: NodeIdx, width: Option<f64>, height: Option<f64>) {
         let props = self.doc.props(i);
         let old = props.size();
-        let w = width.unwrap_or(old.x).max(0.01);
+        // An axis left alone keeps its size (a flat vector stays flat).
+        let w = width.map_or(old.x, |w| w.max(0.01));
         // Lines have no height.
         let min_h = if props.node_type() == NodeType::Line {
             0.0
         } else {
             0.01
         };
-        let h = height.unwrap_or(old.y).max(min_h);
+        let h = height.map_or(old.y, |h| h.max(min_h));
         if (w - old.x).abs() < 1e-9 && (h - old.y).abs() < 1e-9 {
             return;
         }

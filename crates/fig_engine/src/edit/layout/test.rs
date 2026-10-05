@@ -406,3 +406,66 @@ fn children_align_against_padding_wider_than_the_frame() {
     assert_eq!(bounds(&doc, &kid).0, 11.5);
     assert_eq!(bounds(&doc, &kid).1, 11.0);
 }
+
+#[test]
+fn lines_keep_no_thickness_when_filling() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let frame = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":600,"height":20}"#,
+    );
+    let line = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"LINE","x":0,"y":0,"width":100,"height":0}"#,
+    );
+    let avatar = make(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"type":"RECTANGLE","x":200,"y":0,"width":20,"height":20}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"layoutMode":"HORIZONTAL","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &line,
+        r#"{"sizingHorizontal":"FILL","sizingVertical":"FILL"}"#,
+    );
+    // Stretched across, a line stays flat in the middle of the frame; along
+    // the flow it fills as usual.
+    assert_eq!(bounds(&doc, &line), (0.0, 10.0, 580.0, 0.0));
+    assert_eq!(bounds(&doc, &avatar).0, 580.0);
+
+    // Filling down a column it cannot get taller: it sits in the middle of
+    // its share.
+    let column = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":100,"width":200,"height":31}"#,
+    );
+    let rule = make(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"type":"LINE","x":0,"y":100,"width":200,"height":0}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &column,
+        r#"{"layoutMode":"VERTICAL","primaryAlign":"MAX","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
+    );
+    set(&mut doc, &mut h, &rule, r#"{"sizingVertical":"FILL"}"#);
+    assert_eq!(bounds(&doc, &rule), (0.0, 15.5, 200.0, 0.0));
+}

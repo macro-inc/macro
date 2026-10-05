@@ -22,6 +22,10 @@ struct Item {
     /// Being dragged: it keeps its place on screen, and the others make
     /// room for it.
     floating: bool,
+    /// The length the child takes up along the main axis when that differs
+    /// from its own (a line filling the frame keeps no width and sits in
+    /// the middle of its share).
+    slot: Option<f64>,
 }
 
 const EPS: f64 = 1e-6;
@@ -68,6 +72,7 @@ impl Txn<'_> {
                     bounds: self.local_bounds(c),
                     child,
                     floating: self.floating.contains(&c),
+                    slot: None,
                 })
             })
             .collect()
@@ -219,6 +224,10 @@ impl Txn<'_> {
                     // Figma keeps squeezed fill children at least a pixel.
                     let share = item.child.clamp(share, h).max(1.0);
                     let i = item.i;
+                    if self.is_thin(i, main_of(item)) {
+                        item.slot = Some(share);
+                        continue;
+                    }
                     let (w, ht) = if h {
                         (Some(share), None)
                     } else {
@@ -248,7 +257,10 @@ impl Txn<'_> {
         let inner_cross = cross_size - cross_start - cross_end;
         let stretch_to = inner_cross.max(0.01);
         for item in items.iter_mut() {
-            if item.child.stretches() && (cross_of(item) - stretch_to).abs() > EPS {
+            if item.child.stretches()
+                && (cross_of(item) - stretch_to).abs() > EPS
+                && !self.is_thin(item.i, cross_of(item))
+            {
                 let i = item.i;
                 let v = item.child.clamp(stretch_to, !h);
                 let (w, ht) = if h { (None, Some(v)) } else { (Some(v), None) };
@@ -258,7 +270,8 @@ impl Txn<'_> {
         }
 
         // Place them.
-        let used: f64 = items.iter().map(main_of).sum();
+        let slot_of = |it: &Item| it.slot.unwrap_or_else(|| main_of(it));
+        let used: f64 = items.iter().map(slot_of).sum();
         let free = main_size - pad_start - pad_end - used;
         let n = items.len() as f64;
         let (mut at, gap) = match al.primary_align.as_deref() {
@@ -275,10 +288,12 @@ impl Txn<'_> {
             _ => (pad_start, spacing),
         };
         for it in &items {
-            let (main, cross) = (main_of(it), cross_of(it));
+            let (main, cross, slot) = (main_of(it), cross_of(it), slot_of(it));
             if !it.floating {
                 let align = match it.child.align.as_deref() {
                     Some(a @ ("MIN" | "CENTER" | "MAX")) => Some(a),
+                    // A line stretched across sits in the middle.
+                    Some("STRETCH") if self.is_thin(it.i, cross) => Some("CENTER"),
                     _ => al.counter_align.as_deref(),
                 };
                 let offset = match align {
@@ -286,7 +301,7 @@ impl Txn<'_> {
                     Some("MAX") => inner_cross - cross,
                     _ => 0.0,
                 };
-                let target = join(at, cross_start + offset, h);
+                let target = join(at + (slot - main) / 2.0, cross_start + offset, h);
                 let d = Vec2::new(target.x - it.bounds.x, target.y - it.bounds.y);
                 if d.x.abs() > EPS || d.y.abs() > EPS {
                     let mut t = self.doc.props(it.i).transform();
@@ -295,7 +310,7 @@ impl Txn<'_> {
                     self.edit(it.i, flags::TRANSFORM).transform = Some(t);
                 }
             }
-            at += main + gap;
+            at += slot + gap;
         }
 
         let limits = self
@@ -315,6 +330,14 @@ impl Txn<'_> {
         } else {
             false
         }
+    }
+
+    /// Whether a layer of `extent` along an axis keeps that size when the
+    /// layout would fill or stretch it: a line (or a flat vector) has no
+    /// thickness to scale, so Figma centres it in the space instead.
+    fn is_thin(&self, i: NodeIdx, extent: f64) -> bool {
+        let t = self.doc.props(i).node_type();
+        extent.abs() < EPS && !t.is_frame_like() && t != NodeType::Text
     }
 
     /// Resizes a child the layout sized: text re-wraps, and a child that is
