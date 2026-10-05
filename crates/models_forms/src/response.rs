@@ -92,11 +92,11 @@ pub struct FormResponse {
     /// Saved, or stopped at a gate.
     pub status: ResponseStatus,
     /// The gate that stopped it.
-    #[schema(value_type = Option<Uuid>)]
+    #[schema(value_type = Option<Uuid>, required = true)]
     pub stopped_at_section: Option<FormSectionId>,
     /// The row holding the answers; `null` when stopped, or once the row was
     /// deleted from the table.
-    #[schema(value_type = Option<Uuid>)]
+    #[schema(value_type = Option<Uuid>, required = true)]
     pub row: Option<RowId>,
     /// When it was first submitted.
     pub submitted_at: DateTime<Utc>,

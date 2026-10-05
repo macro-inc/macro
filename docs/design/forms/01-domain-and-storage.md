@@ -48,7 +48,8 @@ CREATE TABLE forms (
     submitted_column_id UUID REFERENCES database_columns(id) ON DELETE SET NULL,
     respondent_column_id UUID REFERENCES database_columns(id) ON DELETE SET NULL,
     -- 'members': signed-in Macro users, one response each.
-    -- 'public': anyone with the link, anonymous, no uniqueness.
+    -- 'public': anyone with the link; signed-in people respond once as themselves.
+    -- Anonymous visitors can submit without a per-person limit.
     audience TEXT NOT NULL DEFAULT 'members' CHECK (audience IN ('members', 'public')),
     -- Whether respondents may see option tallies (polls).
     tally_visible BOOLEAN NOT NULL DEFAULT FALSE,

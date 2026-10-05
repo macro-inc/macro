@@ -102,11 +102,11 @@ pub struct Form {
     #[schema(value_type = Uuid)]
     pub table_id: TableId,
     /// The date column each submission stamps; `null` once deleted.
-    #[schema(value_type = Option<Uuid>)]
+    #[schema(value_type = Option<Uuid>, required = true)]
     pub submitted_column_id: Option<ColumnId>,
     /// The person column each signed-in submission names its respondent in;
     /// `null` once deleted.
-    #[schema(value_type = Option<Uuid>)]
+    #[schema(value_type = Option<Uuid>, required = true)]
     pub respondent_column_id: Option<ColumnId>,
     /// Who may respond.
     pub audience: Audience,
@@ -115,6 +115,7 @@ pub struct Form {
     /// Whether its owner closed it.
     pub status: FormStatus,
     /// When it stops taking responses, if it does.
+    #[schema(required = true)]
     pub closes_at: Option<DateTime<Utc>>,
     /// What a respondent reads once their response is saved; empty for the
     /// default.

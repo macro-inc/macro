@@ -460,3 +460,56 @@ fn error_schema_requires_nullable_fields_that_are_always_serialized() {
         );
     }
 }
+
+#[test]
+fn form_and_response_schemas_require_every_field_they_always_serialize() {
+    use utoipa::PartialSchema;
+
+    let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
+    let form = Form {
+        id: FORM,
+        name: "RSVP".into(),
+        description: "".into(),
+        owner_id: "macro|owner@macro.com".into(),
+        database_id: DATABASE,
+        table_id: TABLE,
+        submitted_column_id: None,
+        respondent_column_id: None,
+        audience: Audience::Members,
+        tally_visible: false,
+        status: FormStatus::Open,
+        closes_at: None,
+        confirmation_message: "".into(),
+        created_at: now,
+        updated_at: now,
+    };
+    let response = FormResponse {
+        id: FormResponseId::from_uuid(Uuid::from_u128(0xe1)),
+        form_id: FORM,
+        status: ResponseStatus::Stopped,
+        stopped_at_section: None,
+        row: None,
+        submitted_at: now,
+        updated_at: now,
+    };
+    for (name, wire, schema) in [
+        (
+            "Form",
+            serde_json::to_value(form).unwrap(),
+            serde_json::to_value(Form::schema()).unwrap(),
+        ),
+        (
+            "FormResponse",
+            serde_json::to_value(response).unwrap(),
+            serde_json::to_value(FormResponse::schema()).unwrap(),
+        ),
+    ] {
+        let required = schema["required"].as_array().unwrap();
+        for field in wire.as_object().unwrap().keys() {
+            assert!(
+                required.contains(&json!(field)),
+                "{name}.{field} is always sent but not required"
+            );
+        }
+    }
+}
