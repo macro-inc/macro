@@ -10,6 +10,7 @@
 
 use crate::error::{FigError, Result, corrupt};
 use crate::zip::ZipArchive;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Read;
 use std::ops::{Deref, Range};
@@ -40,6 +41,36 @@ enum Images<'a> {
     /// Refer to stored ones in place (the archive's bytes, shared).
     Share(&'a Arc<Vec<u8>>),
     Skip,
+}
+
+/// A document's message still compressed, to inflate as it is read
+/// ([`Container::open_streaming`]).
+pub(crate) struct MessageStream<'a> {
+    chunk: Cow<'a, [u8]>,
+}
+
+impl MessageStream<'_> {
+    /// The message from its start, inflated as it is read (zstd; older
+    /// files' deflate is inflated whole).
+    pub fn reader(&self) -> Result<Box<dyn Read + '_>> {
+        if self.chunk.starts_with(&ZSTD_MAGIC) {
+            let decoder = ruzstd::decoding::StreamingDecoder::new(&self.chunk[..])
+                .map_err(|e| corrupt(format!("zstd: {e}")))?;
+            return Ok(Box::new(decoder.take(MAX_CHUNK as u64 + 1)));
+        }
+        Ok(Box::new(std::io::Cursor::new(decompress(&self.chunk)?)))
+    }
+
+    /// The message's size when its frame says (else a guess).
+    pub fn size_hint(&self) -> usize {
+        if self.chunk.starts_with(&ZSTD_MAGIC)
+            && let Ok(decoder) = ruzstd::decoding::StreamingDecoder::new(&self.chunk[..])
+            && decoder.decoder.content_size() > 0
+        {
+            return decoder.decoder.content_size().min(MAX_CHUNK as u64) as usize;
+        }
+        self.chunk.len() * 4
+    }
 }
 
 /// The pieces of a `.fig` file, decompressed.
@@ -86,22 +117,45 @@ impl Container {
         Self::open_with(bytes, Images::Skip)
     }
 
-    fn open_with(bytes: &[u8], images: Images) -> Result<Container> {
-        if bytes.starts_with(b"PK") {
-            return Self::open_zip(bytes, images);
-        }
-        Self::open_document(bytes, HashMap::new(), None, None)
+    /// The document without the image files, its message left compressed
+    /// (`message` is empty) to be read as a stream: a large file's message
+    /// is hundreds of megabytes inflated.
+    pub(crate) fn open_streaming(bytes: &[u8]) -> Result<(Container, MessageStream<'_>)> {
+        let (container, chunk) = Self::open_parts(bytes, Images::Skip, false)?;
+        Ok((container, MessageStream { chunk }))
     }
 
-    fn open_zip(bytes: &[u8], mode: Images) -> Result<Container> {
+    fn open_with(bytes: &[u8], images: Images) -> Result<Container> {
+        Ok(Self::open_parts(bytes, images, true)?.0)
+    }
+
+    /// The container, with the message inflated (`inflate`) or returned
+    /// still compressed.
+    fn open_parts<'a>(
+        bytes: &'a [u8],
+        images: Images,
+        inflate: bool,
+    ) -> Result<(Container, Cow<'a, [u8]>)> {
+        if bytes.starts_with(b"PK") {
+            return Self::open_zip(bytes, images, inflate);
+        }
+        let (container, chunk) = Self::open_document(bytes, HashMap::new(), None, None, inflate)?;
+        Ok((container, Cow::Borrowed(chunk)))
+    }
+
+    fn open_zip<'a>(
+        bytes: &'a [u8],
+        mode: Images,
+        inflate: bool,
+    ) -> Result<(Container, Cow<'a, [u8]>)> {
         let zip = ZipArchive::new(bytes)?;
         let canvas_entry = zip.find("canvas.fig").ok_or(FigError::NotFigma)?;
         let canvas_copy;
         let canvas = match zip.stored_range(canvas_entry) {
-            Some(range) => &bytes[range],
+            Some(range) => Cow::Borrowed(&bytes[range]),
             None => {
                 canvas_copy = zip.read(canvas_entry)?;
-                &canvas_copy
+                Cow::Owned(canvas_copy)
             }
         };
         let mut images = HashMap::new();
@@ -124,15 +178,29 @@ impl Container {
                 meta = serde_json::from_slice(&zip.read(entry)?).ok();
             }
         }
-        Self::open_document(canvas, images, thumbnail, meta)
+        match canvas {
+            Cow::Borrowed(canvas) => {
+                let (container, chunk) =
+                    Self::open_document(canvas, images, thumbnail, meta, inflate)?;
+                Ok((container, Cow::Borrowed(chunk)))
+            }
+            Cow::Owned(canvas) => {
+                let (container, chunk) =
+                    Self::open_document(&canvas, images, thumbnail, meta, inflate)?;
+                let chunk = chunk.to_vec();
+                Ok((container, Cow::Owned(chunk)))
+            }
+        }
     }
 
+    /// The document's parts, and its message chunk as stored.
     fn open_document(
         bytes: &[u8],
         images: HashMap<String, Encoded>,
         thumbnail: Option<Vec<u8>>,
         meta: Option<serde_json::Value>,
-    ) -> Result<Container> {
+        inflate: bool,
+    ) -> Result<(Container, &[u8])> {
         if bytes.len() < 12 || !bytes.starts_with(b"fig-") {
             return Err(FigError::NotFigma);
         }
@@ -158,21 +226,28 @@ impl Container {
             return Err(corrupt("missing schema or message chunk"));
         }
         let schema = decompress(chunks[0])?;
-        let message = decompress(chunks[1])?;
+        let message = if inflate {
+            decompress(chunks[1])?
+        } else {
+            Vec::new()
+        };
         let thumbnail = thumbnail.or_else(|| {
             chunks
                 .get(2)
                 .filter(|chunk| chunk.starts_with(b"\x89PNG"))
                 .map(|chunk| chunk.to_vec())
         });
-        Ok(Container {
-            version,
-            schema,
-            message,
-            images,
-            thumbnail,
-            meta,
-        })
+        Ok((
+            Container {
+                version,
+                schema,
+                message,
+                images,
+                thumbnail,
+                meta,
+            },
+            chunks[1],
+        ))
     }
 }
 

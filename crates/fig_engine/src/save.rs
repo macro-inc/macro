@@ -1245,7 +1245,7 @@ fn created_record(
 /// was opened from. Records of unedited nodes are copied byte for byte;
 /// only edited ones are decoded and re-encoded.
 pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
-    let mut container = Container::open_without_images(original)?;
+    let (mut container, stream) = Container::open_streaming(original)?;
     let wants = |bits: u64| doc.nodes.iter().any(|n| !n.removed && n.edits & bits != 0);
     let wants_shapes = wants(flags::BOOLEAN | flags::VECTOR);
     let wants_handoff = wants(flags::EXPORTS | flags::LAYOUT_GRIDS | flags::GUIDES);
@@ -1324,15 +1324,15 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
         );
     }
 
-    let data = container.message.as_slice();
-    let mut r = Reader::new(data);
-    // The archive is written in place: the message is deflated into its
-    // `canvas.fig` entry as records are copied, so neither the new message
-    // nor the compressed document is held apart from it.
+    // The original message is inflated as it is read, and the new one
+    // deflated into the archive's `canvas.fig` entry as records are copied:
+    // neither message is ever held whole.
+    let mut w = Window::new(stream.reader()?);
+    let mut at = 0;
     let images: usize = doc.images.values().map(|i| i.len()).sum();
-    let mut zip = crate::zip::ZipWriter::with_capacity(data.len() / 2 + images + (1 << 20));
+    let mut zip = crate::zip::ZipWriter::with_capacity(stream.size_hint() / 2 + images + (1 << 20));
     let canvas = zip.begin("canvas.fig");
-    let at = document_header(container.version, &container.schema, zip.data());
+    let header = document_header(container.version, &container.schema, zip.data());
     let mut out = Deflated::new(zip.data());
     let def = schema.def(message_def);
     let mut wrote_blobs = false;
@@ -1358,8 +1358,9 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
         .count();
     let drops = plans.values().any(|p| matches!(p, Plan::Drop));
     loop {
-        let start = r.at;
-        let id = r.var_uint()?;
+        w.release(at);
+        let start = at;
+        let id = w.read(&mut at, |r| r.var_uint())?;
         if id == 0 {
             break;
         }
@@ -1367,15 +1368,17 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
             .field_by_id(id)
             .ok_or_else(|| corrupt(format!("kiwi: Message has no field {id}")))?;
         if field.array && field.name == "nodeChanges" {
-            let count = r.var_uint()? as usize;
+            let count = w.read(&mut at, |r| r.var_uint())? as usize;
             // The count goes before the records: those deleted are counted
-            // out first (when there are any).
+            // out first (when there are any), reading the message once more.
             let mut dropped = 0;
             if drops {
-                let mut scan = Reader::new(data);
-                scan.at = r.at;
+                let mut scan = Window::new(stream.reader()?);
+                let mut scan_at = at;
                 for _ in 0..count {
-                    let guid = scan_guid(&decoder, &schema, &mut scan, node_def)?;
+                    scan.release(scan_at);
+                    let guid =
+                        scan.read(&mut scan_at, |r| scan_guid(&decoder, &schema, r, node_def))?;
                     if guid
                         .and_then(|g| plans.get(&g))
                         .is_some_and(|p| matches!(p, Plan::Drop))
@@ -1387,9 +1390,10 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
             out.w.var_uint(id);
             out.w.var_uint((count - dropped + created) as u32);
             for _ in 0..count {
-                let rs = r.at;
-                let guid = scan_guid(&decoder, &schema, &mut r, node_def)?;
-                let raw = &data[rs..r.at];
+                w.release(at);
+                let rs = at;
+                let guid = w.read(&mut at, |r| scan_guid(&decoder, &schema, r, node_def))?;
+                let raw = w.slice(rs, at);
                 let decode = || decoder.decode(&mut Reader::new(raw), node_def);
                 if let Some(g) = guid
                     && let Some(slot) = sources.get_mut(&g)
@@ -1436,20 +1440,21 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
                 out.flush_full();
             }
         } else if field.array && field.name == "blobs" {
-            let count = r.var_uint()?;
-            let rs = r.at;
-            for _ in 0..count {
-                decoder.skip(&mut r, field.ty, 0)?;
-            }
+            let count = w.read(&mut at, |r| r.var_uint())?;
             let added = (doc.blobs.len() - doc.original_blobs) as u32;
             out.w.var_uint(id);
             out.w.var_uint(count + added);
-            out.write(&data[rs..r.at]);
+            for _ in 0..count {
+                w.release(at);
+                let rs = at;
+                w.read(&mut at, |r| decoder.skip(r, field.ty, 0))?;
+                out.write(w.slice(rs, at));
+            }
             out.write(&new_blobs());
             wrote_blobs = true;
         } else {
-            decoder.skip_field(&mut r, field, 0)?;
-            out.write(&data[start..r.at]);
+            w.read(&mut at, |r| decoder.skip_field(r, field, 0))?;
+            out.write(w.slice(start, at));
         }
     }
     if !wrote_blobs
@@ -1463,12 +1468,94 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
     }
     out.w.var_uint(0);
     out.finish();
-    end_chunk(zip.data(), at);
+    end_chunk(zip.data(), header);
     zip.end(canvas, "canvas.fig");
-    // The decoded original is no longer needed: release it before the
-    // thumbnail is drawn (big files' messages are hundreds of megabytes).
-    container.message = Vec::new();
+    drop(w);
     Ok(package(zip, doc, container.meta.as_ref()))
+}
+
+/// The original message while saving, inflated a piece at a time: only the
+/// records around the one being copied are held.
+struct Window<'s> {
+    source: Box<dyn std::io::Read + 's>,
+    bytes: Vec<u8>,
+    /// Where in the message `bytes` starts.
+    base: usize,
+    /// The source has no more.
+    end: bool,
+}
+
+/// How much a window inflates at least at a time.
+const WINDOW_STEP: usize = 4 << 20;
+
+impl<'s> Window<'s> {
+    fn new(source: Box<dyn std::io::Read + 's>) -> Self {
+        Self {
+            source,
+            bytes: Vec::new(),
+            base: 0,
+            end: false,
+        }
+    }
+
+    /// Inflates more: at least as much as is held, so a record of any size
+    /// takes few rounds.
+    fn grow(&mut self) -> Result<()> {
+        let want = WINDOW_STEP.max(self.bytes.len());
+        let start = self.bytes.len();
+        self.bytes.resize(start + want, 0);
+        let mut got = 0;
+        while got < want {
+            match self.source.read(&mut self.bytes[start + got..]) {
+                Ok(0) => {
+                    self.end = true;
+                    break;
+                }
+                Ok(n) => got += n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(corrupt(format!("message: {e}"))),
+            }
+        }
+        self.bytes.truncate(start + got);
+        Ok(())
+    }
+
+    /// `f` reading from message offset `*at`, inflating more until what it
+    /// reads is there; `*at` moves past what it read.
+    fn read<T>(
+        &mut self,
+        at: &mut usize,
+        mut f: impl FnMut(&mut Reader) -> Result<T>,
+    ) -> Result<T> {
+        loop {
+            let mut r = Reader {
+                bytes: &self.bytes,
+                at: *at - self.base,
+            };
+            match f(&mut r) {
+                Ok(v) => {
+                    *at = self.base + r.at;
+                    return Ok(v);
+                }
+                Err(e) if self.end => return Err(e),
+                Err(_) => self.grow()?,
+            }
+        }
+    }
+
+    /// Message bytes `from..to`, which a read has just passed over.
+    fn slice(&self, from: usize, to: usize) -> &[u8] {
+        &self.bytes[from - self.base..to - self.base]
+    }
+
+    /// Lets go of what comes before message offset `at` (copied already).
+    fn release(&mut self, at: usize) {
+        let done = at - self.base;
+        if done >= WINDOW_STEP && done * 2 >= self.bytes.len() && done <= self.bytes.len() {
+            self.bytes.drain(..done);
+            self.base = at;
+        }
+    }
 }
 
 /// The schema with the boolean and vector fields this engine writes, when
