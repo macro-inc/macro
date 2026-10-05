@@ -654,6 +654,7 @@ impl<'a> Painter<'a> {
         };
         let stroke = tiny_skia::Stroke {
             width,
+            dash: stroke_dash(props),
             ..Default::default()
         };
         let mut outlines: Vec<Path> = self
@@ -802,6 +803,7 @@ fn line_stroke(props: &Props) -> Vec<Shape> {
         } else {
             tiny_skia::LineJoin::Miter
         },
+        dash: stroke_dash(props),
         ..Default::default()
     };
     let mut shapes: Vec<Shape> = path
@@ -821,6 +823,20 @@ fn line_stroke(props: &Props) -> Vec<Shape> {
         }
     }
     shapes
+}
+
+/// The stroke's dashes, if it has any: dash and gap lengths, repeated as
+/// SVG does when there is an odd number of them.
+fn stroke_dash(props: &Props) -> Option<tiny_skia::StrokeDash> {
+    let pattern = props.dash_pattern.as_deref()?;
+    if pattern.is_empty() || pattern.iter().all(|&d| d <= 0.0) {
+        return None;
+    }
+    let mut dashes = pattern.to_vec();
+    if dashes.len() % 2 == 1 {
+        dashes.extend_from_within(..);
+    }
+    tiny_skia::StrokeDash::new(dashes, 0.0)
 }
 
 /// Whether a node's geometry is an open path (lines and open vectors have

@@ -559,6 +559,12 @@ impl<'s> Build<'s> {
         }
         if edits & flags::STROKE_WEIGHT != 0 {
             m.set(s, "strokeWeight", Value::Float(p.stroke_weight()));
+            match p.dash_pattern.as_deref() {
+                Some(d) => {
+                    m.set(s, "dashPattern", Value::Floats(d.into()));
+                }
+                None => m.remove(s, "dashPattern"),
+            }
         }
         if edits & flags::STROKE_ALIGN != 0 {
             self.set_enum(
