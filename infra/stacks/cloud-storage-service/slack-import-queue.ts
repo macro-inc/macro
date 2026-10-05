@@ -4,10 +4,13 @@ import { Queue } from '../../packages/resources/src/resources/queue';
 
 interface SlackImportQueueArgs {
   stagingBucketArn: pulumi.Input<string>;
+  notificationIngressQueueArn: pulumi.Input<string>;
   tags: { [key: string]: string };
 }
 
-/** Independent worker queue and policies; DSS only signs and verifies uploads. */
+/** Independent worker queue and policies; DSS only signs and verifies uploads.
+ * The worker policy also grants sqs:SendMessage on the notification ingress queue.
+ */
 export class SlackImportQueue extends pulumi.ComponentResource {
   readonly queue: aws.sqs.Queue;
   readonly dlq: aws.sqs.Queue;
@@ -16,7 +19,11 @@ export class SlackImportQueue extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    { stagingBucketArn, tags }: SlackImportQueueArgs,
+    {
+      stagingBucketArn,
+      notificationIngressQueueArn,
+      tags,
+    }: SlackImportQueueArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:SlackImportQueue', name, {}, opts);
@@ -76,6 +83,11 @@ export class SlackImportQueue extends pulumi.ComponentResource {
               // Also authorizes SendMessageBatch for the durable outbox.
               Action: ['sqs:SendMessage'],
               Resource: [this.queue.arn],
+            },
+            {
+              Effect: 'Allow',
+              Action: ['sqs:SendMessage'],
+              Resource: [notificationIngressQueueArn],
             },
           ],
         },
