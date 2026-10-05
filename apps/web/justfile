@@ -168,9 +168,11 @@ test-watch:
     bunx --bun vitest
 
 # Sign-in, sign-up, and onboarding in Chromium against fake backends (no network).
-test-signup-browser:
-    bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts
-    bunx playwright test --config src/features/auth/browser-test/playwright.config.ts
+# Flags pass through to Playwright: `--ui` to watch and step through, `--headed`
+# to see the browser. With --ui, closing the onboarding window opens auth's.
+test-signup-browser *ARGS:
+    bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts {{ARGS}}
+    bunx playwright test --config src/features/auth/browser-test/playwright.config.ts {{ARGS}}
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test

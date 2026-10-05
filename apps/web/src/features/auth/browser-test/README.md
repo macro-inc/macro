@@ -10,7 +10,8 @@ auth service would append, and the view redeems it. Both fake backends persist i
 sessionStorage across these reloads. When a signed-in user would enter the app,
 the fixture renders a `landed` marker instead.
 
-Run the suite from `apps/web` (the config starts or reuses the fixture server):
+Run the suite from `apps/web` (the config starts or reuses the fixture server).
+Add `--ui` to watch and step through each test, or `--headed` to see the browser:
 
 ```sh
 bunx playwright test --config src/features/auth/browser-test/playwright.config.ts

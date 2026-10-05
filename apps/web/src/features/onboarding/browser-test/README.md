@@ -10,7 +10,8 @@ real page loads. Google sign-up and the inbox OAuth reload into the flow, and
 checkout returns on Stripe's success or cancel leg. Leaving onboarding renders
 a `landed` marker showing where the app would have navigated.
 
-Run the suite from `apps/web` (the config starts or reuses the fixture server):
+Run the suite from `apps/web` (the config starts or reuses the fixture server).
+Add `--ui` to watch and step through each test, or `--headed` to see the browser:
 
 ```sh
 bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts
