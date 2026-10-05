@@ -44,7 +44,7 @@ bunx playwright test --config src/features/block-fig/browser-test/playwright.con
 They cover rendering, the layers and pages lists, Figma's selection rules
 (top-level frames select their child, double-click into instances), Escape,
 frame and page navigation, zoom shortcuts, export, the shortcuts dialog,
-and editing: drawing, moving (lifted off the page while dragged, one edit at the drop), and saving shapes, lines and arrows, fills
+and editing: drawing, moving (lifted off the page while dragged, one edit at the drop, also when let go before the drag starts), and saving shapes, lines and arrows, fills
 and shadows from the design panel with undo and redo, typing and styling
 text, auto layout (adding it, gap and padding, sizing, drag to reorder),
 constraints, resizing several layers and rotating one, components

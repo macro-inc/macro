@@ -236,15 +236,41 @@ test('draws, moves, and saves shapes', async ({ page }) => {
     .toEqual([]);
 });
 
+/** The color of the tile canvas at a canvas point (CSS pixels). */
+function colorAt(page: Page, x: number, y: number) {
+  return page
+    .getByTestId('fig-canvas')
+    .locator('canvas')
+    .first()
+    .evaluate(
+      (node, [px, py]) => {
+        const c = node as HTMLCanvasElement;
+        const k = c.width / c.getBoundingClientRect().width;
+        const [r, g, b] = c
+          .getContext('2d')
+          ?.getImageData(Math.round(px * k), Math.round(py * k), 1, 1).data ?? [
+          0, 0, 0,
+        ];
+        if (r > 200 && g < 60 && b < 60) return 'red';
+        if (b > 200 && r < 60 && g < 60) return 'blue';
+        return 'other';
+      },
+      [x, y]
+    );
+}
+
+/** Sets the selection's first fill. */
+async function fillSelection(page: Page, hex: string) {
+  await page.getByTestId('fig-fill-0-hex').fill(hex);
+  await page.getByTestId('fig-fill-0-hex').press('Enter');
+}
+
 test('moves layers lifted off the page, one edit at the drop', async ({
   page,
 }) => {
   await openNew(page);
   const canvas = page.getByTestId('fig-canvas');
-  const fill = async (hex: string) => {
-    await page.getByTestId('fig-fill-0-hex').fill(hex);
-    await page.getByTestId('fig-fill-0-hex').press('Enter');
-  };
+  const fill = (hex: string) => fillSelection(page, hex);
   // A red layer, then a blue one above it.
   await canvas.focus();
   await page.keyboard.press('r');
@@ -254,25 +280,8 @@ test('moves layers lifted off the page, one edit at the drop', async ({
   await page.keyboard.press('r');
   await dragOnCanvas(page, [300, 100], [400, 200]);
   await fill('0000FF');
-  // The tile canvas at a canvas point (CSS pixels; 100% shows page units).
-  const color = (x: number, y: number) =>
-    canvas
-      .locator('canvas')
-      .first()
-      .evaluate(
-        (node, [px, py]) => {
-          const c = node as HTMLCanvasElement;
-          const k = c.width / c.getBoundingClientRect().width;
-          const [r, g, b] = c
-            .getContext('2d')
-            ?.getImageData(Math.round(px * k), Math.round(py * k), 1, 1)
-            .data ?? [0, 0, 0];
-          if (r > 200 && g < 60 && b < 60) return 'red';
-          if (b > 200 && r < 60 && g < 60) return 'blue';
-          return 'other';
-        },
-        [x, y]
-      );
+  // The tile canvas at a canvas point (100% shows page units).
+  const color = (x: number, y: number) => colorAt(page, x, y);
   const redX = async () => {
     const engine = await page.evaluateHandle(() => window.figFixture.engine());
     return engine.evaluate(async (e) => {
@@ -309,6 +318,52 @@ test('moves layers lifted off the page, one edit at the drop', async ({
   await page.keyboard.press('Control+z');
   await expect(page.getByTestId('fig-field-x')).toHaveValue('100');
   await expect.poll(() => color(120, 150)).toBe('red');
+  await expect
+    .poll(() => page.evaluate(() => window.figFixture.errors()))
+    .toEqual([]);
+});
+
+test('lands a drag let go before it started', async ({ page }) => {
+  await openNew(page);
+  const canvas = page.getByTestId('fig-canvas');
+  await canvas.focus();
+  await page.keyboard.press('r');
+  await dragOnCanvas(page, [100, 100], [200, 200]);
+  await fillSelection(page, 'FF0000');
+  const xs = async () => {
+    const engine = await page.evaluateHandle(() => window.figFixture.engine());
+    return engine.evaluate(async (e) => {
+      if (!e) return [];
+      const ids = (await e.layers(0)).map((r) => r.id);
+      const geometry = await e.geometry(0, ids);
+      return geometry.map((g) => g.bounds.x).sort((a, b) => a - b);
+    });
+  };
+  // ⌥-drag a copy and let go at once, all before the engine answers: the
+  // press is decided, and the copy made, after the pointer is up. The copy
+  // still lands, once.
+  await canvas.evaluate((host) => {
+    const r = host.getBoundingClientRect();
+    const at = (x: number, buttons: number) => ({
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      bubbles: true,
+      cancelable: true,
+      altKey: true,
+      clientX: r.left + x,
+      clientY: r.top + 150,
+      button: 0,
+      buttons,
+    });
+    host.dispatchEvent(new PointerEvent('pointerdown', at(150, 1)));
+    host.dispatchEvent(new PointerEvent('pointermove', at(300, 1)));
+    host.dispatchEvent(new PointerEvent('pointerup', at(300, 0)));
+  });
+  await expect.poll(xs).toEqual([100, 250]);
+  await expect(page.getByTestId('fig-field-x')).toHaveValue('250');
+  await expect.poll(() => colorAt(page, 270, 150)).toBe('red');
+  await expect.poll(() => colorAt(page, 120, 150)).toBe('red');
   await expect
     .poll(() => page.evaluate(() => window.figFixture.errors()))
     .toEqual([]);

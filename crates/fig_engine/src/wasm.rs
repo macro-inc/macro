@@ -69,21 +69,24 @@ struct NodeGeometry {
 }
 
 /// Which layers a render draws (see [`render::Layers`]); everything when
-/// absent.
+/// absent. A spec mixing these, or with any other field, does not parse.
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LayersSpec {
-    /// Only these layers (transparent, unclipped by their ancestors).
-    only: Option<Vec<String>>,
-    /// With `only`: where the first layer's origin is drawn (page
-    /// coordinates), wherever the document has it now.
-    anchor: Option<[f64; 2]>,
+#[serde(untagged, deny_unknown_fields)]
+enum LayersSpec {
+    /// Only these layers (transparent, unclipped by their ancestors), the
+    /// first one's origin drawn at `anchor` (page coordinates) wherever the
+    /// document has it now.
+    Only {
+        only: Vec<String>,
+        anchor: Option<[f64; 2]>,
+    },
     /// Everything but these layers (opaque, as the whole page).
-    skip: Option<Vec<String>>,
-    /// What paints after this layer (transparent)…
-    after: Option<String>,
-    /// …and before this one.
-    before: Option<String>,
+    Skip { skip: Vec<String> },
+    /// What paints after `after` (transparent) and before `before`.
+    Window {
+        after: Option<String>,
+        before: Option<String>,
+    },
 }
 
 #[derive(Serialize)]
@@ -456,11 +459,7 @@ impl FigFile {
         };
         let layers = match &spec {
             None => Layers::All,
-            Some(LayersSpec {
-                only: Some(ids),
-                anchor,
-                ..
-            }) => {
+            Some(LayersSpec::Only { only: ids, anchor }) => {
                 let nodes: Vec<SceneIdx> =
                     ids.iter().map(|id| find(id)).collect::<Result<_, _>>()?;
                 let shift = match (anchor, nodes.first()) {
@@ -472,10 +471,10 @@ impl FigFile {
                 };
                 Layers::Only { nodes, shift }
             }
-            Some(LayersSpec {
-                skip: Some(ids), ..
-            }) => Layers::Skip(ids.iter().map(|id| find(id)).collect::<Result<_, _>>()?),
-            Some(LayersSpec { after, before, .. }) => Layers::Window {
+            Some(LayersSpec::Skip { skip: ids }) => {
+                Layers::Skip(ids.iter().map(|id| find(id)).collect::<Result<_, _>>()?)
+            }
+            Some(LayersSpec::Window { after, before }) => Layers::Window {
                 after: after.as_deref().map(find).transpose()?,
                 before: before.as_deref().map(find).transpose()?,
             },

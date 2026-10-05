@@ -902,6 +902,12 @@ export function ViewerCanvas(props: {
     const start = viewer.selectionBounds();
     press.mover = startMove(ids, press.prepared);
     movePress(press, press.current, false);
+    // The pointer came up while this was starting (a copy being made, or
+    // the press still resolving): the move ends where it got to.
+    if (drag !== press) {
+      void press.mover.end();
+      return;
+    }
     if (start) {
       const targets = await snapTargets(ids).catch(() => []);
       press.snap = { start, targets, lines: props.aids?.linesNear(start) };

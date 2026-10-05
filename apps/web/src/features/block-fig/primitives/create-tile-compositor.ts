@@ -531,11 +531,21 @@ export function createTileCompositor(options: TileCompositorOptions) {
     // render anchored where the lift started, the rest leaves them out). A
     // dropped lift keeps its parts: the move itself is what changed.
     if (lift && !lift.frozen) {
+      const cancelParts: number[] = [];
       for (const part of partsOf(lift)) {
-        for (const e of part.tiles.values()) {
-          if (tileTouches(e.key, rect) && e.bitmap) e.stale = true;
+        for (const [id, e] of part.tiles) {
+          if (!tileTouches(e.key, rect)) continue;
+          // As for the page's tiles: a render under way still lands, but
+          // the part renders again.
+          if (e.pending) {
+            cancelParts.push(e.pending.id);
+            e.pending = undefined;
+          }
+          if (e.bitmap) e.stale = true;
+          else part.tiles.delete(id);
         }
       }
+      engine.cancel(cancelParts);
       requestLift();
     }
     afterEdit();
