@@ -451,6 +451,7 @@ export function isArchiveType(ext: string): boolean {
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
+  if (entity === 'automation') return 'routine';
   if (entity in ENTITY_ICON_CONFIGS) {
     return entity as EntityWithValidIcon;
   } else if (isBlockAlias(entity)) {

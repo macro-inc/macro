@@ -1,5 +1,8 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import { describe, expect, it } from 'vitest';
+import { verifyBlockName } from '@core/constant/allBlocks';
+import { extractChannelMentionsFromMarkdown } from '@macro-inc/lexical-core/utils/markdown-mentions';
+import { blockNameToItemType } from '@service-storage/client';
+import { describe, expect, it, vi } from 'vitest';
 import { buildPostMessageRequest } from '../message-payload';
 
 const snap = (mentions: ItemMention[]) => ({
@@ -8,7 +11,48 @@ const snap = (mentions: ItemMention[]) => ({
   attachments: [],
 });
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 describe('authored group references', () => {
+  it('sends routine references with the same wire type as headless extraction, including saved mentions', () => {
+    const blockNames = ['routine', 'automation'];
+    const snapshot = snap(
+      blockNames.map((blockName) => {
+        const itemType = blockNameToItemType(verifyBlockName(blockName));
+        if (itemType !== 'routine')
+          throw new Error('Routine misclassified as ' + itemType);
+        return { itemType, itemId: 'routine-1' };
+      })
+    );
+    const result = buildPostMessageRequest({ snapshot });
+    const markdown = blockNames
+      .map(
+        (blockName) =>
+          `<m-document-mention>${JSON.stringify({ documentId: 'routine-1', blockName, documentName: 'Review tasks', blockParams: {} })}</m-document-mention>`
+      )
+      .join(' ');
+    expect(result.mentions).toEqual([
+      { entity_type: 'automation', entity_id: 'routine-1' },
+    ]);
+    expect(result.mentions).toEqual(
+      extractChannelMentionsFromMarkdown(markdown).map(
+        ({ entityType, entityId }) => ({
+          entity_type: entityType,
+          entity_id: entityId,
+        })
+      )
+    );
+  });
+
   it('preserves display-only mention chips in the body without blocking a send', () => {
     const snapshot = {
       ...snap([

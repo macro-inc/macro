@@ -28,6 +28,8 @@ export const DEFAULT_ITEM_TYPE: ItemType = 'document';
  * or they will not appear in the references side panel.
  */
 export function itemTypeToReferenceEntityType(itemType: ItemType): string {
+  // The reference API retains its original discriminator for routines.
+  if (itemType === 'routine') return 'automation';
   return itemType === 'email' ? 'thread' : itemType;
 }
 
@@ -41,6 +43,7 @@ export function itemTypeToReferenceEntityType(itemType: ItemType): string {
 export function stringToItemType(str: string): ItemType | undefined {
   return match<string, ItemType | undefined>(str)
     .with('email', 'thread', 'email_thread', () => 'email')
+    .with('routine', 'automation', () => 'routine')
     .with(
       'agent_session',
       'call',

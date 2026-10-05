@@ -62,7 +62,7 @@ export function decodeLegacyPair(
 ): SplitContent | undefined {
   if (!type || !id) return;
 
-  if (type === 'routine') return routineContent(id);
+  if (type === 'routine' || type === 'automation') return routineContent(id);
 
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) return { type: 'component', id: agentsRoute };
@@ -106,7 +106,8 @@ export function decodeLegacyPair(
 }
 
 function legacyEntry(type: string, id: string): SplitRouterEntry | undefined {
-  if (type === 'routine') return { location: routineLocation(id) };
+  if (type === 'routine' || type === 'automation')
+    return { location: routineLocation(id) };
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) {
     return {
@@ -165,6 +166,8 @@ export const handleLegacySplitPath: UnmatchedSplitPathHandler = (context) => {
   if (
     context.matchedRouteId &&
     context.matchedRouteId !== 'settings' &&
+    context.matchedRouteId !== ROUTINE_DETAIL_ROUTE_ID &&
+    context.matchedRouteId !== ROUTINE_CREATE_ROUTE_ID &&
     !context.matchedRouteId.startsWith('view-') &&
     context.matchedRouteId !== 'legacy-content'
   ) {
@@ -204,7 +207,9 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
-  if (content.type === 'routine') return routineLocation(content.id);
+  // Persisted panes can still contain the old block discriminator.
+  if (['routine', 'automation'].includes(content.type))
+    return routineLocation(content.id);
   if (content.type === 'component' && content.id === 'routines') {
     return routineLocation(routineIdFromContent(content));
   }

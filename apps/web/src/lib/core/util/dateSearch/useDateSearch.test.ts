@@ -756,6 +756,34 @@ describe('useDateSearch with time', () => {
 });
 
 describe('useDateSearch with defaultTime', () => {
+  it.each([
+    { defaultTime: { hours: 8, minutes: 0 }, hours: 8, minutes: 0 },
+    { defaultTime: { hours: 9, minutes: 0 }, hours: 9, minutes: 0 },
+    { defaultTime: undefined, hours: 23, minutes: 59 },
+  ])(
+    'preserves preset time for email, reminders, and date properties: $hours:$minutes',
+    ({ defaultTime, hours, minutes }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 9, 5, 7, 30));
+      try {
+        createRoot((dispose) => {
+          const options = useDateSearch({
+            query: () => 'in 2 days',
+            defaultTime,
+          });
+          const first = options()[0];
+          expect(first.type).toBe('preset');
+          expect(first.date.getDate()).toBe(7);
+          expect(first.date.getHours()).toBe(hours);
+          expect(first.date.getMinutes()).toBe(minutes);
+          dispose();
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
   // Use a date far in the future so the "past" filter doesn't interfere
   const baseDate = new Date('2099-06-15T06:00:00'); // 6 AM so "today" at 8am is still in the future
   const defaultTime = { hours: 8, minutes: 0 };

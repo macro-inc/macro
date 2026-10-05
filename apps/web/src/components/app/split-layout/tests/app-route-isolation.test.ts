@@ -68,8 +68,34 @@ describe('application route import isolation', () => {
   it('canonicalizes existing routine links and block navigation', () => {
     const routes = createRoutesManifest(appSplitRoutes);
     for (const id of ['routine-1', 'new']) {
-      const entry = decodeRoute(routes, ['routine', id]);
-      expect(encodeRoute(routes, entry!)).toEqual(['routines', id]);
+      for (const type of ['routine', 'automation']) {
+        const entry = decodeRoute(routes, [type, id]);
+        expect(encodeRoute(routes, entry!)).toEqual(['routines', id]);
+        const saved = JSON.parse(
+          JSON.stringify({
+            type,
+            id,
+            entryMetadata: {
+              route: {
+                matches: [{ id: 'legacy-content', params: { type, id } }],
+              },
+            },
+          })
+        );
+        expect(
+          encodeRoute(routes, {
+            location: resolveContentLocation(routes, saved),
+          })
+        ).toEqual(['routines', id]);
+        expect(
+          encodeRoute(routes, {
+            location: resolveContentLocation(routes, {
+              ...saved,
+              entryMetadata: undefined,
+            }),
+          })
+        ).toEqual(['routines', id]);
+      }
       const location = splitLocationFromContent(routes, {
         type: 'routine',
         id,

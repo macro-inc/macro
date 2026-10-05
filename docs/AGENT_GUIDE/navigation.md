@@ -450,6 +450,8 @@ Open **Agents → Routines** for your routines. Opening a routine updates the UR
 to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
 URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
+Saved split layouts and document/channel/spreadsheet mentions using the old
+block name also open routines; newly copied links use `/app/routines/<uuid>`.
 On the legacy
 or touch Agents screen, use the **Routines** button above the list. Routines use
 full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**

@@ -25,7 +25,10 @@ function RunOnceSettings(props: {
   const [search, setSearch] = createSignal('');
   const [calendar, setCalendar] = createSignal(false);
   const dates = useDateSearch({
-    query: search,
+    query: () =>
+      search()
+        .trim()
+        .replace(/^in\s+/i, ''),
     defaultTime: { hours: 9, minutes: 0 },
   });
   const options = () =>

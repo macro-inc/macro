@@ -97,6 +97,11 @@ const entityGlyphs: [
 afterEach(cleanup);
 
 describe('entity glyphs', () => {
+  it('keeps the routine icon and label for saved mentions using the old block name', () => {
+    expect(getIconConfig('automation')).toEqual(getIconConfig('routine'));
+    expect(getIconConfig('automation').icon).toBe(RoutineIcon);
+  });
+
   beforeEach(() => {
     vi.mocked(itemToBlockName).mockReset();
   });

@@ -888,6 +888,28 @@ describe('layoutManager', () => {
       });
     }
 
+    it.each([
+      '/md/document-a/automation/routine-a',
+      '/automation/routine-a/md/document-a',
+      '/md/document-a/~/automation/routine-a',
+      '/automation/routine-a/~/md/document-a',
+    ])('restores every pane in a saved routine layout: %s', async (url) => {
+      const { manager, router, location, dispose } = ingressRouter(url);
+      await router.settled();
+      const contents = manager.splits().map((split) => split.content);
+      expect(contents).toHaveLength(2);
+      expect(location.read().pathname).toContain('drive/md/document-a');
+      expect(
+        contents.some(
+          (content) => routineIdFromContent(content) === 'routine-a'
+        )
+      ).toBe(true);
+      expect(location.read().pathname).not.toContain('automation');
+      expect(location.read().pathname).toContain('routines/routine-a');
+      router.dispose();
+      dispose();
+    });
+
     it('navigates routine identities in the same pane and restores their history', async () => {
       const { manager, router, location, dispose } = ingressRouter('/routines');
       await router.settled();

@@ -44,7 +44,7 @@ function LegacyAgentsView() {
   });
   const entities = useRoutineEntities();
   return (
-    <div class="flex size-full flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+    <div class="flex size-full flex-col touch:pt-(--mobile-content-inset-top)">
       <div
         class="flex gap-1 border-b border-edge-muted px-4 py-2"
         role="group"
@@ -72,7 +72,10 @@ function LegacyAgentsView() {
           Routines
         </button>
       </div>
-      <div class="min-h-0 flex-1 overflow-auto">
+      <div
+        class="min-h-0 flex-1 overflow-auto"
+        style={{ '--mobile-content-inset-top': '0px' }}
+      >
         <SoupView
           viewName="Agents"
           initialFilters={preset?.filters}

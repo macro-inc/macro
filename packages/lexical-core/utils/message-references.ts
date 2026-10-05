@@ -25,6 +25,8 @@ export function messageReference(
   id: string
 ): AuthoredMessageReference | undefined {
   if (kind === 'email' || kind === 'email_thread') kind = 'thread';
+  // Keep the server's reference wire type while accepting the current UI name.
+  if (kind === 'routine') kind = 'automation';
   if (kind === 'user' && id.startsWith('bot|')) kind = 'bot';
   switch (kind) {
     case 'user':
