@@ -9,7 +9,7 @@ use super::models::{
     AiUsageBilling, AllowanceDecision, AllowanceStore, BillingError, BillingPeriod,
     BillingSettings, CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS,
     OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope,
-    PeriodAllowance, PlanTier, Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
+    PeriodAllowance, Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
@@ -572,7 +572,7 @@ where
             return Ok(AllowanceDecision::Allow);
         }
         let position = self.position(user, Utc::now()).await?;
-        if position.entitlement.unlimited || position.entitlement.tier == PlanTier::Free {
+        if !position.entitlement.is_metered() {
             return Ok(AllowanceDecision::Allow);
         }
         let snapshot = self.snapshot_at(user, &position).await?;
@@ -598,7 +598,7 @@ where
         }
         let now = Utc::now();
         let position = self.position(user, now).await?;
-        if position.entitlement.unlimited || !position.entitlement.tier.is_paid() {
+        if !position.entitlement.is_metered() {
             return Ok(());
         }
         // The previous period first, so a tail that ran past the boundary is
