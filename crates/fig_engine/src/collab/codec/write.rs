@@ -270,6 +270,7 @@ impl<'a> Writer<'a> {
             decorations,
             layout_size,
             lines,
+            first_baseline,
         } = t;
         self.list(glyphs, |w, g| {
             let Glyph {
@@ -304,6 +305,7 @@ impl<'a> Writer<'a> {
         });
         self.opt(layout_size, |w, s| w.vec2(s));
         self.u32(*lines);
+        self.opt(first_baseline, |w, v| w.f32(*v));
     }
 
     fn text_style(&mut self, t: &TextStyle) {
@@ -356,6 +358,7 @@ impl<'a> Writer<'a> {
             counter_sizing,
             counter_spacing,
             reverse_z,
+            strokes_in_layout,
         } = a;
         self.str(mode);
         for v in [
@@ -374,6 +377,7 @@ impl<'a> Writer<'a> {
         self.opt_str(counter_sizing);
         self.f32(*counter_spacing);
         self.bool(*reverse_z);
+        self.bool(*strokes_in_layout);
     }
 
     fn layout_child(&mut self, c: &LayoutChild) {
@@ -414,6 +418,7 @@ impl<'a> Writer<'a> {
             fills,
             strokes,
             stroke_weight,
+            stroke_sides,
             stroke_align,
             stroke_cap,
             stroke_join,
@@ -467,6 +472,11 @@ impl<'a> Writer<'a> {
         self.opt(fills, |w, v| w.paints(v));
         self.opt(strokes, |w, v| w.paints(v));
         self.opt(stroke_weight, |w, v| w.f32(*v));
+        self.opt(stroke_sides, |w, s| {
+            for v in s {
+                w.f32(*v);
+            }
+        });
         self.opt(stroke_align, |w, v| w.u8(enc_align(*v)));
         self.opt_str(stroke_cap);
         self.opt_str(stroke_join);

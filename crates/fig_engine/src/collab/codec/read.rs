@@ -289,6 +289,7 @@ impl<'a> Reader<'a> {
             })?,
             layout_size: self.opt(Self::vec2)?,
             lines: self.u32()?,
+            first_baseline: self.opt(Self::f32)?,
         })
     }
 
@@ -327,6 +328,7 @@ impl<'a> Reader<'a> {
             counter_sizing: self.opt_string()?,
             counter_spacing: self.f32()?,
             reverse_z: self.bool()?,
+            strokes_in_layout: self.bool()?,
         })
     }
 
@@ -358,6 +360,7 @@ impl<'a> Reader<'a> {
             fills: self.opt(Self::paints)?,
             strokes: self.opt(Self::paints)?,
             stroke_weight: self.opt(Self::f32)?,
+            stroke_sides: self.opt(|r| Ok([r.f32()?, r.f32()?, r.f32()?, r.f32()?]))?,
             stroke_align: self.opt(|r| Ok(dec_align(r.u8()?)))?,
             stroke_cap: self.opt_arc_str()?,
             stroke_join: self.opt_arc_str()?,

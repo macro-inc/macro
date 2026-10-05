@@ -213,8 +213,17 @@ fn entries_round_trip_every_property() {
     .unwrap();
     h.apply(&mut doc, &ops, None).unwrap();
     for node in &doc.nodes {
+        // Fields the showcase leaves unset are set here, so they round-trip too.
+        let mut props = node.props.clone();
+        props.stroke_sides = Some([1.0, 2.0, 3.0, 4.0]);
+        if let Some(a) = &mut props.auto_layout {
+            Arc::make_mut(a).strokes_in_layout = true;
+        }
+        if let Some(t) = &mut props.text_layout {
+            Arc::make_mut(t).first_baseline = Some(13.5);
+        }
         let state = NodeState {
-            props: node.props.clone(),
+            props,
             removed: node.removed,
             listed: true,
             edits: node.edits,
