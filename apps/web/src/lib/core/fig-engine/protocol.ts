@@ -29,6 +29,8 @@ export type QueryMethod =
   | 'exportSvg'
   | 'vectorNetwork'
   | 'prototype'
+  | 'layoutAids'
+  | 'exportables'
   | 'fonts'
   | 'textGeometry';
 
@@ -57,6 +59,9 @@ export type FigRequest =
     }
   | { id: number; kind: 'export'; page: number; node: string; scale: number }
   | { id: number; kind: 'thumbnail' }
+  /** Exports layers with presets (`ExportRequest` JSON). */
+  | { id: number; kind: 'exportFiles'; page: number; request: string }
+  | { id: number; kind: 'exportFramesPdf'; page: number }
   | {
       id: number;
       kind: 'edit';
@@ -113,6 +118,14 @@ export type FigResponse =
     }
   | { id: number; ok: true; kind: 'query'; json: string }
   | { id: number; ok: true; kind: 'png'; bytes: ArrayBuffer | null }
+  | {
+      id: number;
+      ok: true;
+      kind: 'file';
+      name: string;
+      mime: string;
+      bytes: ArrayBuffer;
+    }
   | { id: number; ok: true; kind: 'edit'; json: string }
   | { id: number; ok: true; kind: 'saved'; bytes: ArrayBuffer }
   | {

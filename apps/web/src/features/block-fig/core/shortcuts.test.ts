@@ -40,6 +40,21 @@ describe('viewer shortcuts', () => {
     expect(shortcutAction(key('=', 'Equal'), true)).toBe('zoom-in');
   });
 
+  it('toggles layout grids with ⌃G on macOS and Ctrl+⇧4 elsewhere', () => {
+    expect(shortcutAction(key('g', 'KeyG', { ctrlKey: true }), true)).toBe(
+      'toggle-layout-grids'
+    );
+    expect(shortcutAction(key('g', 'KeyG', { ctrlKey: true }), false)).toBe(
+      'group'
+    );
+    expect(
+      shortcutAction(
+        key('$', 'Digit4', { ctrlKey: true, shiftKey: true }),
+        false
+      )
+    ).toBe('toggle-layout-grids');
+  });
+
   it('uses ⌘ on macOS and Ctrl elsewhere', () => {
     expect(shortcutAction(key('a', 'KeyA', { metaKey: true }), true)).toBe(
       'select-all'

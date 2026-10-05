@@ -206,7 +206,14 @@ pub fn copy(doc: &Document, original: &[u8], ids: &[NodeIdx]) -> Result<Copied> 
         }
         scan = next;
     }
-    write_copy(doc, original, &roots, &layers, &components, &component_nodes)
+    write_copy(
+        doc,
+        original,
+        &roots,
+        &layers,
+        &components,
+        &component_nodes,
+    )
 }
 
 /// Writes a copy: `layers` (the subtrees of `roots`, parents first) on its

@@ -66,7 +66,11 @@ properties, variant switching, swapping and resetting instances, editing
 a component set's variants and properties, binding layers to properties,
 and applying, creating, renaming, and detaching styles; on `variables.fig`
 (a collection with Light and Dark modes) it lists variables, binds fill
-colors to them, and switches a frame's mode. `fig-review` opens
+colors to them, and switches a frame's mode. `fig-handoff` covers export
+presets (adding, editing, saving, a ZIP of several and a single file, the
+preview), Export frames to PDF, Dev Mode inspect and its code languages and
+assets, layout grids (adding columns, drawing, ⌃G, snapping, saving), and
+ruler guides (dragging from a ruler, snapping, deleting). `fig-review` opens
 `prototype.fig` (a flow with navigate, dissolve and slide transitions, an
 overlay, Back, Close, a link, and a legacy connection, made by
 `fig_engine::testing::prototype_file`) and covers presenting (flow order,

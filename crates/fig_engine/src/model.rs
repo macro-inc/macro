@@ -11,6 +11,7 @@ use std::fmt;
 use std::sync::Arc;
 
 pub mod geom;
+pub mod handoff;
 pub mod library;
 pub mod paint;
 pub mod prototype;
@@ -18,6 +19,9 @@ pub mod text;
 pub mod variables;
 
 pub use geom::{Affine, Rect, Vec2};
+pub use handoff::{
+    Axis, ExportConstraint, ExportFormat, ExportSetting, GridAlign, GridPattern, Guide, LayoutGrid,
+};
 pub use library::LibraryLink;
 pub use paint::{
     BlendMode, Color, ColorStop, Effect, EffectKind, GradientKind, ImageFilters, ImagePaint,
@@ -346,16 +350,6 @@ impl LayoutChild {
     }
 }
 
-/// An export preset (`Export` section in the inspector).
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportSetting {
-    pub format: String,
-    pub suffix: String,
-    pub constraint: String,
-    pub value: f32,
-}
-
 /// A reference from a component's sublayer to one of the component's
 /// properties: the sublayer's `field` follows the property's value.
 #[derive(Clone, Debug, PartialEq)]
@@ -561,6 +555,10 @@ pub struct Props {
     /// (`vectorData.styleOverrideTable`), by the style id their geometry
     /// carries.
     pub vector_styles: Option<Arc<[StyleRun]>>,
+    /// A frame's layout grids (drawn over the canvas, never exported).
+    pub layout_grids: Option<Arc<[LayoutGrid]>>,
+    /// Ruler guides of a page or frame.
+    pub guides: Option<Arc<[Guide]>>,
     /// Prototype interactions on the layer.
     pub interactions: Option<Arc<[Interaction]>>,
     /// A flow starting point on a top-level frame.
@@ -607,6 +605,7 @@ impl Props {
             vector_styles,
             text_style_id, key, style_type, sort_position, soft_deleted, variant_specs,
             variant_orders, props_bubbled, variable, variable_modes, mode_by_set,
+            layout_grids, guides,
             interactions, flow_start, overlay, prototype_start, library, macro_data,
         );
     }

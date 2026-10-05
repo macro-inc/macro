@@ -75,7 +75,8 @@ impl Ids {
             let mut data = seed.to_vec();
             data.extend_from_slice(&g.session.to_le_bytes());
             let d = hash::sha1(&data);
-            LIBRARY_SESSIONS | (u32::from_le_bytes([d[0], d[1], d[2], d[3]]) & (LIBRARY_SESSIONS - 1))
+            LIBRARY_SESSIONS
+                | (u32::from_le_bytes([d[0], d[1], d[2], d[3]]) & (LIBRARY_SESSIONS - 1))
         });
         Guid {
             session,
@@ -688,9 +689,11 @@ impl Txn<'_> {
                 .flat_map(|s| s.overrides.iter())
                 .filter(|o| o.text_content.is_some())
                 .filter_map(|o| {
-                    o.guid_path
-                        .as_deref()
-                        .map(|path| path.iter().map(|&g| super::super::guid_of(self.doc, g)).collect())
+                    o.guid_path.as_deref().map(|path| {
+                        path.iter()
+                            .map(|&g| super::super::guid_of(self.doc, g))
+                            .collect()
+                    })
                 })
                 .collect();
             let props = self.edit(i, flags::DERIVED | flags::SIZE);

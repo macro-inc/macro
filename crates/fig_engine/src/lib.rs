@@ -9,6 +9,7 @@ pub mod decode;
 pub mod document;
 pub mod edit;
 pub mod error;
+pub mod export;
 pub mod geometry;
 pub mod images;
 pub mod inspect;

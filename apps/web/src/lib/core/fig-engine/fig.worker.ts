@@ -187,6 +187,12 @@ async function serve(request: FigRequest) {
         case 'prototype':
           json = f.prototype(a as number);
           break;
+        case 'layoutAids':
+          json = f.layoutAids(a as number);
+          break;
+        case 'exportables':
+          json = f.exportables(a as number, b as string);
+          break;
       }
       post({ id: request.id, ok: true, kind: 'query', json });
       return;
@@ -199,6 +205,32 @@ async function serve(request: FigRequest) {
       );
       const bytes = png.slice().buffer;
       post({ id: request.id, ok: true, kind: 'png', bytes }, [bytes]);
+      return;
+    }
+    case 'exportFiles': {
+      const file = openFile().exportFiles(request.page, request.request);
+      const bytes = file.bytes.slice().buffer;
+      const { name, mime } = file;
+      file.free();
+      post({ id: request.id, ok: true, kind: 'file', name, mime, bytes }, [
+        bytes,
+      ]);
+      return;
+    }
+    case 'exportFramesPdf': {
+      const bytes = openFile().exportFramesPdf(request.page).slice().buffer;
+      const name = 'frames.pdf';
+      post(
+        {
+          id: request.id,
+          ok: true,
+          kind: 'file',
+          name,
+          mime: 'application/pdf',
+          bytes,
+        },
+        [bytes]
+      );
       return;
     }
     case 'thumbnail': {

@@ -29,6 +29,7 @@ import {
   pasteParent,
 } from '../core/clipboard';
 import type { DesignOp } from '../core/design-system';
+import type { HandoffOp } from '../core/handoff-ops';
 import type { PaintType, StopSpec } from '../core/paint';
 import type { InteractionSpec } from '../core/prototype';
 import type { Measure } from '../core/type';
@@ -190,6 +191,7 @@ export type Op =
   | { op: 'setVector'; id: string; network: VectorNetwork }
   | { op: 'setInteractions'; id: string; interactions: InteractionSpec[] }
   | { op: 'setFlowStart'; id: string; name: string | null }
+  | HandoffOp
   | DesignOp;
 
 export interface FigEditorOptions {

@@ -3,6 +3,8 @@
  * the serde types in `inspect.rs` and `wasm.rs`.
  */
 
+import type { ExportSetting, LayoutGridInfo } from './handoff-types';
+
 export interface Vec2 {
   x: number;
   y: number;
@@ -235,13 +237,6 @@ export interface AutoLayout {
   reverseZ: boolean;
 }
 
-export interface ExportSetting {
-  format: string;
-  suffix: string;
-  constraint: string;
-  value: number;
-}
-
 export interface PropDef {
   name: string;
   kind: string;
@@ -283,6 +278,8 @@ export interface NodeInfo {
   constrained: boolean;
   constraints: [string, string] | null;
   exportSettings: ExportSetting[];
+  /** A frame's layout grids. */
+  layoutGrids: LayoutGridInfo[];
   mainComponent: string | null;
   description: string | null;
   componentProperties: PropDef[];

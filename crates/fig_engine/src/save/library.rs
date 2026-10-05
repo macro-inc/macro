@@ -38,7 +38,11 @@ impl Build<'_> {
                 m.set(s, field, Value::Bool(v));
             }
             if let Some(v) = &l.version {
-                let field = if symbol { "sharedSymbolVersion" } else { "version" };
+                let field = if symbol {
+                    "sharedSymbolVersion"
+                } else {
+                    "version"
+                };
                 m.set(s, field, Value::Str(v.as_ref().into()));
             }
             if let Some(v) = &l.published_version {

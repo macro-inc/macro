@@ -5,9 +5,9 @@ use super::{
     enc_node_type, enc_prop_field, enc_scale_mode, enc_style_type, enc_variable_type, enc_winding,
 };
 use crate::model::{
-    Action, Affine, AutoLayout, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
-    ExportSetting, FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild,
-    LibraryLink,
+    Action, Affine, AutoLayout, Axis, Baseline, Color, ColorStop, CornerRadii, Decoration, Effect,
+    ExportConstraint, ExportFormat, ExportSetting, FlowStart, Glyph, GridAlign, GridPattern, Guid,
+    Guide, ImageFilters, ImagePaint, Interaction, LayoutChild, LayoutGrid, LibraryLink,
     OverlaySettings, Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props,
     StyleRun, SymbolData, TextContent, TextLayout, TextStyle, Variable, VariableMode,
     VariableValue, VariantOrder, VariantSpec, Vec2, VectorData,
@@ -432,6 +432,77 @@ impl<'a> Writer<'a> {
         self.opt(max_size, |w, v| w.vec2(v));
     }
 
+    fn export_setting(&mut self, e: &ExportSetting) {
+        let ExportSetting {
+            format,
+            suffix,
+            constraint,
+            value,
+            svg_outline_text,
+            svg_include_id,
+            contents_only,
+            use_absolute_bounds,
+            quality,
+        } = e;
+        self.u8(match format {
+            ExportFormat::Png => 0,
+            ExportFormat::Jpeg => 1,
+            ExportFormat::Svg => 2,
+            ExportFormat::Pdf => 3,
+        });
+        self.str(suffix);
+        self.u8(match constraint {
+            ExportConstraint::ContentScale => 0,
+            ExportConstraint::ContentWidth => 1,
+            ExportConstraint::ContentHeight => 2,
+        });
+        self.f32(*value);
+        self.bool(*svg_outline_text);
+        self.bool(*svg_include_id);
+        self.bool(*contents_only);
+        self.bool(*use_absolute_bounds);
+        self.u8(*quality);
+    }
+
+    fn axis(&mut self, a: Axis) {
+        self.bool(a == Axis::Y);
+    }
+
+    fn layout_grid(&mut self, g: &LayoutGrid) {
+        let LayoutGrid {
+            pattern,
+            axis,
+            align,
+            visible,
+            count,
+            offset,
+            section_size,
+            gutter,
+            color,
+        } = g;
+        self.bool(*pattern == GridPattern::Grid);
+        self.axis(*axis);
+        self.u8(match align {
+            GridAlign::Min => 0,
+            GridAlign::Center => 1,
+            GridAlign::Stretch => 2,
+            GridAlign::Max => 3,
+        });
+        self.bool(*visible);
+        self.var(u64::from(*count as u32));
+        self.f32(*offset);
+        self.f32(*section_size);
+        self.f32(*gutter);
+        self.color(color);
+    }
+
+    fn ruler_guide(&mut self, g: &Guide) {
+        let Guide { axis, offset, guid } = g;
+        self.axis(*axis);
+        self.f32(*offset);
+        self.opt(guid, |w, g| w.guid(g));
+    }
+
     fn interaction(&mut self, i: &Interaction) {
         let Interaction {
             id,
@@ -592,6 +663,8 @@ impl<'a> Writer<'a> {
             mode_by_set,
             generated,
             vector_styles,
+            layout_grids,
+            guides,
             interactions,
             flow_start,
             overlay,
@@ -695,18 +768,7 @@ impl<'a> Writer<'a> {
         self.opt(auto_layout, |w, a| w.auto_layout(a));
         self.opt(layout_child, |w, c| w.layout_child(c));
         self.opt(export_settings, |w, list| {
-            w.list(list, |w, e| {
-                let ExportSetting {
-                    format,
-                    suffix,
-                    constraint,
-                    value,
-                } = e;
-                w.str(format);
-                w.str(suffix);
-                w.str(constraint);
-                w.f32(*value);
-            });
+            w.list(list, Self::export_setting)
         });
         self.opt_str(boolean_operation);
         self.opt(vector_data, |w, v| {
@@ -763,6 +825,8 @@ impl<'a> Writer<'a> {
         self.opt(vector_styles, |w, list| {
             w.list(list, |w, run| w.style_run(run))
         });
+        self.opt(layout_grids, |w, list| w.list(list, Self::layout_grid));
+        self.opt(guides, |w, list| w.list(list, Self::ruler_guide));
         self.opt(interactions, |w, list| {
             w.list(list, |w, i| w.interaction(i))
         });

@@ -6,8 +6,7 @@ use super::{Op, Txn, flags};
 use crate::document::NodeIdx;
 use crate::error::Result;
 use crate::library::{
-    AssetKind, LIBRARIES_KEY, Manifest, ManifestAsset, PUBLISHED_KEY, hash,
-    local_assets,
+    AssetKind, LIBRARIES_KEY, Manifest, ManifestAsset, PUBLISHED_KEY, hash, local_assets,
 };
 use crate::model::{LibraryLink, Props};
 use std::sync::Arc;
@@ -76,7 +75,10 @@ impl Txn<'_> {
             .collect();
         let mut manifest = Manifest {
             assets: Vec::new(),
-            note: note.map(str::trim).filter(|n| !n.is_empty()).map(str::to_owned),
+            note: note
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_owned),
         };
         for (i, kind, version) in computed {
             let publishable = crate::library::is_published_name(self.doc, i);

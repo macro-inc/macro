@@ -28,6 +28,7 @@ import {
 } from '../components/overlay';
 import { PeerCursors } from '../components/peer-presence';
 import { type Point, screenToPage } from '../core/camera';
+import { type SnapLines, snapResize } from '../core/layout-grid';
 import { measure } from '../core/measure';
 import type { PeerOverlay } from '../core/presence';
 import { rotationFor } from '../core/rotation';
@@ -45,6 +46,10 @@ import {
 } from '../core/vector';
 import type { FigEditor, ShapeTool } from '../primitives/create-fig-editor';
 import type { FigViewer } from '../primitives/create-fig-viewer';
+import type {
+  GuideDrag,
+  LayoutAidsController,
+} from '../primitives/create-layout-aids';
 import { createTileCompositor } from '../primitives/create-tile-compositor';
 
 /** Pointer travel (CSS px) that turns a click into a drag. */
@@ -106,7 +111,7 @@ type Drag =
       resolved?: Pressed;
       mover?: ReturnType<FigEditor['startMove']>;
       /** The selection's bounds at the start, and what it snaps to. */
-      snap?: { start: Rect; targets: Rect[] };
+      snap?: { start: Rect; targets: Rect[]; lines?: SnapLines };
       marquee: boolean;
       additive: boolean;
     }
@@ -116,6 +121,8 @@ type Drag =
       handle: Handle;
       start: Rect;
       resizer: ReturnType<FigEditor['startResize']>;
+      /** Layout grid and guide lines the moving edges snap to. */
+      lines?: SnapLines;
     }
   | {
       kind: 'rotate';
@@ -132,6 +139,8 @@ type Drag =
     }
   /** The pen placed a point; dragging pulls out its handle. */
   | { kind: 'pen'; start: Point }
+  /** A ruler guide dragged out of a ruler, or moved. */
+  | { kind: 'guide'; guide: GuideDrag }
   /** A point or handle of the layer being edited. */
   | {
       kind: 'vector';
@@ -218,6 +227,10 @@ export function ViewerCanvas(props: {
   peers?: () => PeerOverlay[];
   /** The pointer in page coordinates (`null` when it leaves the canvas). */
   onPointer?: (page: Point | null) => void;
+  /** Layout grids and ruler guides. */
+  aids?: LayoutAidsController;
+  /** Dev Mode: hovering measures from the selection without ⌥. */
+  devMode?: () => boolean;
   children?: JSX.Element;
 }) {
   const viewer = props.viewer;
@@ -342,7 +355,7 @@ export function ViewerCanvas(props: {
   const measurements = () => {
     const a = viewer.selectionBounds();
     const b = viewer.hoverBounds();
-    if (!props.altHeld() || !a || !b) return [];
+    if ((!props.altHeld() && !props.devMode?.()) || !a || !b) return [];
     if (viewer.selected().some((s) => s.id === viewer.hover()?.id)) return [];
     return measure(a, b);
   };
@@ -398,6 +411,7 @@ export function ViewerCanvas(props: {
       darkCanvas: luminance(background()) < 0.35,
       vector: vectorOverlay(),
       peers: props.peers?.(),
+      layoutAids: props.aids?.model(),
     };
   };
 
@@ -413,6 +427,8 @@ export function ViewerCanvas(props: {
         () => props.editor?.penPath(),
         () => props.editor?.vectorEdit(),
         () => props.peers?.(),
+        () => props.aids?.model(),
+        () => props.devMode?.(),
       ],
       requestDraw
     )
@@ -576,6 +592,12 @@ export function ViewerCanvas(props: {
       return;
     }
     if (e.button !== 0) return;
+    const guide = props.aids?.press(p);
+    if (guide) {
+      drag = { kind: 'guide', guide };
+      props.aids?.move(guide, p);
+      return;
+    }
     const tool = viewer.tool();
     const editor = props.editor;
     if (editing() && tool === 'pen' && editor) {
@@ -638,6 +660,7 @@ export function ViewerCanvas(props: {
           bounds,
           info
         ),
+        lines: props.aids?.linesNear(bounds),
       };
       return;
     }
@@ -688,7 +711,7 @@ export function ViewerCanvas(props: {
     movePress(press, press.current, false);
     if (start) {
       const targets = await snapTargets(ids).catch(() => []);
-      press.snap = { start, targets };
+      press.snap = { start, targets, lines: props.aids?.linesNear(start) };
     }
   };
 
@@ -714,7 +737,8 @@ export function ViewerCanvas(props: {
         dx,
         dy,
         press.snap.targets,
-        5 / z
+        5 / z,
+        press.snap.lines
       );
       dx = constrain && dx === 0 ? 0 : Math.round(snapped.dx);
       dy = constrain && dy === 0 ? 0 : Math.round(snapped.dy);
@@ -741,7 +765,7 @@ export function ViewerCanvas(props: {
             ? HANDLE_CURSORS[handle]
             : rotateAt(p)
               ? ROTATE_CURSOR
-              : undefined
+              : props.aids?.cursorAt(p)
         );
         if (!isShapeTool(viewer.tool())) hoverAt(p);
       }
@@ -782,8 +806,14 @@ export function ViewerCanvas(props: {
             : moveHandle(edit.network, drag.hit, at, drag.mirror)
         );
       }
+    } else if (drag.kind === 'guide') {
+      props.aids?.move(drag.guide, p);
     } else if (drag.kind === 'resize') {
-      const rect = resizeRect(drag.start, drag.handle, pageAt(p), e.shiftKey);
+      const free = resizeRect(drag.start, drag.handle, pageAt(p), e.shiftKey);
+      const rect =
+        drag.lines && !e.shiftKey
+          ? snapResize(free, drag.handle, drag.lines, 5 / viewer.camera().zoom)
+          : free;
       drag.resizer.to(rect);
     } else if (drag.kind === 'rotate') {
       const at = pageAt(p);
@@ -890,6 +920,8 @@ export function ViewerCanvas(props: {
       void ended.mover.end();
     } else if (ended.kind === 'pen') {
       requestDraw();
+    } else if (ended.kind === 'guide') {
+      void props.aids?.drop(ended.guide, local(e));
     } else if (ended.kind === 'resize') {
       void ended.resizer.end();
     } else if (ended.kind === 'rotate') {

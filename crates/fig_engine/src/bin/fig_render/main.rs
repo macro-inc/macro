@@ -2,6 +2,7 @@
 //! and fidelity scores against the thumbnails Figma embeds in its files.
 
 mod collab;
+mod pdf;
 mod prototype;
 mod text;
 
@@ -159,6 +160,12 @@ enum Command {
         limit: usize,
         files: Vec<PathBuf>,
     },
+    /// "Export frames to PDF" for each file's first page.
+    Pdf {
+        #[arg(long, default_value = "out")]
+        out: PathBuf,
+        files: Vec<PathBuf>,
+    },
     /// Lay out the text in fonts from a directory again and report how far
     /// the glyphs land from Figma's layout.
     Text {
@@ -233,6 +240,12 @@ fn main() {
             if !scores.is_empty() {
                 let mean = scores.iter().sum::<f64>() / scores.len() as f64;
                 println!("mean similarity {mean:.4} over {} files", scores.len());
+            }
+        }
+        Command::Pdf { out, files } => {
+            std::fs::create_dir_all(&out).expect("output directory");
+            for path in files {
+                pdf::export(&path, &out);
             }
         }
         Command::Svg { out, limit, files } => {

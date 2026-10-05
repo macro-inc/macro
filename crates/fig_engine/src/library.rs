@@ -330,7 +330,9 @@ pub fn published(doc: &Document) -> PublishedLibrary {
         let p = doc.props(i);
         let (Some(key), Some(version)) = (
             p.key.as_deref(),
-            p.library.as_ref().and_then(|l| l.published_version.as_deref()),
+            p.library
+                .as_ref()
+                .and_then(|l| l.published_version.as_deref()),
         ) else {
             continue;
         };
@@ -347,7 +349,9 @@ pub fn published(doc: &Document) -> PublishedLibrary {
             description: p.description.as_deref().map(str::to_owned),
             set: set.map(|s| doc.props(s).name().to_owned()),
             set_key: set.and_then(|s| doc.props(s).key.as_deref().map(str::to_owned)),
-            page: doc.page_of(i).and_then(|pg| doc.pages.iter().position(|&x| x == pg)),
+            page: doc
+                .page_of(i)
+                .and_then(|pg| doc.pages.iter().position(|&x| x == pg)),
             width: p.size().x,
             height: p.size().y,
             style: if kind == AssetKind::Style {

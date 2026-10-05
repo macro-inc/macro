@@ -1001,6 +1001,18 @@ Layout and test hooks:
   opacity, visibility, and text (typing included) are overridden on the
   instance, as in Figma; text bound to a component text property sets the
   property.
+- **Main menu, layout grids, and guides**: the menu at the top of the
+  layers panel (`fig-main-menu`) has `fig-menu-export-frames-pdf` ("Export frames
+  to PDF": the page's top-level frames as a multi-page vector PDF),
+  `fig-menu-export-selection`, and the Layout grids and Rulers toggles (also
+  in the zoom menu, `fig-layout-grids-toggle`). Frames' layout grids draw
+  over the canvas (never in exports) until toggled off. With rulers shown
+  (⇧R), editors drag from the top ruler for a horizontal guide or the left
+  one for a vertical guide; a guide dropped on a top-level frame belongs to
+  it, otherwise to the page. Dragging a guide moves it, dropping it on its
+  ruler deletes it, and guides hide with the rulers. Moving and resizing
+  layers snap to guides and to the edges of visible columns and rows of the
+  frames they are over, as well as to other layers.
 - **Context menu** (`fig-context-menu`): right-clicking a layer on the
   canvas selects it (a selection it belongs to is kept) and lists Figma's
   layer actions with their shortcuts, as `fig-menu-<action>` items: `copy`,
@@ -1049,9 +1061,37 @@ Layout and test hooks:
   operations (`fig-boolean-row`, shown for two or more layers or a boolean
   layer: `fig-boolean-<union|subtract|intersect|exclude>`, pressed for the
   boolean's current operation, which a click changes, and `fig-flatten`),
-  and export buttons (`fig-export-1x|2x|3x`, `fig-export-svg` to download
-  SVG, and `fig-copy-svg` for Copy as SVG). Read-only viewers see the same
-  values as text. The Code tab shows CSS (`fig-css`). With nothing selected
+  a Layout grid section for frames (`fig-layout-grids`: "+" adds a 10 px
+  grid; rows `fig-grid-<n>` with color `fig-grid-color-<n>`, kind
+  `fig-grid-type-<n>` (`GRID`, `COLUMNS`, `ROWS`), `fig-grid-visible-<n>`,
+  `fig-grid-remove-<n>`, and `fig-grid-settings-<n>` opening count
+  `fig-grid-count-<n>` (a number or `Auto`), type `fig-grid-align-<n>`
+  (Stretch/Left/Center/Right), width or height `fig-grid-size-<n>`, margin
+  or offset `fig-grid-offset-<n>`, and `fig-grid-gutter-<n>`), and the
+  Export section (`fig-export`): "+" adds a preset (1x PNG, then 2x, 3x…;
+  rows `fig-export-row-<n>` with size `fig-export-size-<n>` typed as `2x`,
+  `0.5x`, `512w`, or `300h`, `fig-export-suffix-<n>`, format
+  `fig-export-format-<n>` (`PNG`, `JPEG`, `SVG`, `PDF`), and for SVG and
+  JPG `fig-export-options-<n>`: `fig-export-outline-text-<n>`,
+  `fig-export-include-id-<n>`, or `fig-export-quality-<n>`; "−" is
+  `fig-export-remove-<n>`). Presets are saved in the file (read-only viewers
+  keep theirs for the session). `fig-export-button` ("Export <name>")
+  downloads one file named as Figma names it (`Icon@2x.png`) or a ZIP of
+  several, `fig-export-preview-toggle` shows a preview
+  (`fig-export-preview`), and `fig-copy-svg` is Copy as SVG; ⌘/Ctrl+⇧E
+  exports the selection with its presets (1x PNG without). Read-only
+  viewers see the same values as text. The Code tab is Dev Mode's inspect
+  panel (`fig-dev-inspect`): size and position (`fig-dev-width`,
+  `fig-dev-height`), auto layout padding and gap (`fig-dev-padding`),
+  typography with its text style (`fig-dev-text-style`, `fig-dev-font`),
+  colors with the style or variable they come from (`fig-dev-colors`,
+  rows `fig-dev-color`), effects, code with a language switch
+  (`fig-code-lang-css|tailwind|swiftui|compose`; the code is `fig-css` or
+  `fig-code-<language>`, copied with `fig-code-copy`), and the layer's and
+  its layers' export presets as downloads (`fig-dev-asset`). While the Code
+  tab shows, hovering a layer measures from the selection without ⌥, and a
+  selected auto layout frame's padding and gaps are shaded with their
+  sizes. With nothing selected
   it shows the page name and canvas color (`fig-page-color` opens the
   picker), then the file's local styles (`fig-local-styles`: color, text,
   effect, and grid styles by folder; a `fig-local-style` row, with
@@ -1194,7 +1234,7 @@ Layout and test hooks:
 - **Keyboard**, as in Figma: ⇧0 100%, ⇧1 fit, ⇧2 selection, ⌘/Ctrl +/−, N and
   ⇧N next/previous frame, PageDown/PageUp pages, Enter children, ⇧Enter and
   Esc parent, Tab/⇧Tab siblings, ⌘/Ctrl+A select all, ⇧R rulers, ⇧' pixel
-  grid, ⌘/Ctrl+Y outline view, ⌘/Ctrl+\\ hide UI, ⌘/Ctrl+⇧C copy as PNG,
+  grid, ⌃G (Ctrl+⇧4 off macOS) layout grids, ⌘/Ctrl+Y outline view, ⌘/Ctrl+\\ hide UI, ⌘/Ctrl+⇧C copy as PNG,
   ⌘/Ctrl+⇧E export. Editing: ⌘Z/⇧⌘Z undo and redo, ⌘D duplicate, ⌘C/⌘X/⌘V,
   Delete, arrows nudge (⇧ by 10), ⌘G group, ⇧⌘G ungroup, ⌥⌘G frame
   selection, ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[ front/back, ⇧⌘H hide,

@@ -18,8 +18,6 @@ import AlignLeft from '@phosphor/align-left.svg';
 import AlignRight from '@phosphor/align-right.svg';
 import AlignTop from '@phosphor/align-top.svg';
 import Copy from '@phosphor/copy.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
@@ -234,10 +232,12 @@ export function DesignPanel(props: {
   /** Aligns the selection; absent when the file is read-only. */
   onAlign?: (how: Alignment) => void;
   page: PageSummary | undefined;
-  onExport: (scale: number) => void;
-  onExportSvg: () => void;
-  onCopySvg: () => void;
-  onCopyPng: () => void;
+  /** The Export section of the selected layer. */
+  exportSection?: JSX.Element;
+  /** The Layout grid section of the selected frame. */
+  layoutGrids?: JSX.Element;
+  /** The Code tab's content (Dev Mode inspect); CSS when absent. */
+  code?: JSX.Element;
   /** Boolean operations on the selection; absent when read-only. */
   onBoolean?: (operation: BooleanOperation) => void;
   onFlatten?: () => void;
@@ -398,7 +398,11 @@ export function DesignPanel(props: {
           {(info) => (
             <Show
               when={tab() === 'design'}
-              fallback={<CodeTab info={info()} onCopy={props.onCopyText} />}
+              fallback={
+                props.code ?? (
+                  <CodeTab info={info()} onCopy={props.onCopyText} />
+                )
+              }
             >
               <div class="border-edge-muted border-b px-3 py-3">
                 <Show
@@ -626,6 +630,7 @@ export function DesignPanel(props: {
                   )}
                 </Show>
               </Show>
+              {props.layoutGrids}
               <Section title="Appearance">
                 <div class="grid grid-cols-2 gap-1.5">
                   <Show
@@ -878,45 +883,7 @@ export function DesignPanel(props: {
                   </For>
                 </Section>
               </Show>
-              <Section title="Export">
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={[1, 2, 3]}>
-                    {(scale) => (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid={`fig-export-${scale}x`}
-                        onClick={() => props.onExport(scale)}
-                      >
-                        <DownloadSimple />
-                        PNG {scale}x
-                      </Button>
-                    )}
-                  </For>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    data-testid="fig-export-svg"
-                    onClick={props.onExportSvg}
-                  >
-                    <DownloadSimple />
-                    SVG
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={props.onCopyPng}>
-                    <Copy />
-                    Copy
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    data-testid="fig-copy-svg"
-                    onClick={props.onCopySvg}
-                  >
-                    <Copy />
-                    Copy as SVG
-                  </Button>
-                </div>
-              </Section>
+              {props.exportSection}
             </Show>
           )}
         </Show>

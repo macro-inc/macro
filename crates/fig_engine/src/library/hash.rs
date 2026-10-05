@@ -16,7 +16,13 @@ use std::fmt::Write as _;
 
 /// SHA-1 of `data`.
 pub(crate) fn sha1(data: &[u8]) -> [u8; 20] {
-    let mut h: [u32; 5] = [0x6745_2301, 0xEFCD_AB89, 0x98BA_DCFE, 0x1032_5476, 0xC3D2_E1F0];
+    let mut h: [u32; 5] = [
+        0x6745_2301,
+        0xEFCD_AB89,
+        0x98BA_DCFE,
+        0x1032_5476,
+        0xC3D2_E1F0,
+    ];
     let mut msg = data.to_vec();
     let bits = (data.len() as u64).wrapping_mul(8);
     msg.push(0x80);
@@ -88,7 +94,10 @@ fn at_file_precision(text: &str) -> String {
     while i < bytes.len() {
         let c = bytes[i];
         let boundary = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-        if boundary && (c.is_ascii_digit() || (c == b'-' && bytes.get(i + 1).is_some_and(u8::is_ascii_digit))) {
+        if boundary
+            && (c.is_ascii_digit()
+                || (c == b'-' && bytes.get(i + 1).is_some_and(u8::is_ascii_digit)))
+        {
             let start = i;
             i += 1;
             while i < bytes.len()

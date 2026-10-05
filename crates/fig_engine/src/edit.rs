@@ -78,6 +78,13 @@ pub mod flags {
     pub const STYLES: u64 = 1 << 31;
     /// Prototype interactions and a frame's flow starting point.
     pub const PROTOTYPE: u64 = 1 << 32;
+    // Handoff and layout aids (see `edit::handoff`).
+    /// A layer's export presets.
+    pub const EXPORTS: u64 = 1 << 33;
+    /// A frame's layout grids.
+    pub const LAYOUT_GRIDS: u64 = 1 << 34;
+    /// A page's or frame's ruler guides.
+    pub const GUIDES: u64 = 1 << 35;
     /// Team libraries: an asset's key and publishing or library details,
     /// a copy's override key, and Macro's data (the libraries a file
     /// uses, what a library published).
@@ -607,6 +614,22 @@ pub enum Op {
         collection: String,
         mode: Option<String>,
     },
+    // ---- handoff and layout aids (see `edit::handoff`) --------------------
+    /// Replaces layers' export presets.
+    SetExports {
+        ids: Vec<String>,
+        settings: Vec<crate::model::ExportSetting>,
+    },
+    /// Replaces frames' layout grids.
+    SetLayoutGrids {
+        ids: Vec<String>,
+        grids: Vec<GridSpec>,
+    },
+    /// Replaces the ruler guides of a page or frame.
+    SetGuides {
+        id: String,
+        guides: Vec<GuideSpec>,
+    },
     // ---- team libraries (see `edit::library`) ------------------------------
     /// "Publish library": the file's components, component sets, styles,
     /// and variables get keys (from `seed`, the library's document id) and
@@ -673,6 +696,7 @@ struct Txn<'a> {
 mod components;
 mod design;
 mod flip;
+mod handoff;
 mod instance_layout;
 mod library;
 mod overrides;
@@ -681,8 +705,9 @@ mod paste;
 mod prototype;
 pub mod shapes;
 pub(crate) use design::parse_variant_name;
-pub(crate) use overrides::guid_of;
+pub use handoff::{GridSpec, GuideSpec};
 pub use library::{LIBRARY_SESSIONS, LibrarySpec};
+pub(crate) use overrides::guid_of;
 pub(crate) use paste::remap_props;
 pub use paste::{At, PasteSpec, View};
 pub use prototype::{ActionSpec, InteractionSpec};
@@ -1654,6 +1679,9 @@ impl<'a> Txn<'a> {
             | Op::DeleteStyle { .. }
             | Op::BindVariable { .. }
             | Op::SetVariableMode { .. } => self.apply_design(op)?,
+            Op::SetExports { ids, settings } => self.set_exports(ids, settings)?,
+            Op::SetLayoutGrids { ids, grids } => self.set_layout_grids(ids, grids)?,
+            Op::SetGuides { id, guides } => self.set_guides(id, guides)?,
             Op::PublishLibrary { .. } | Op::SetLibraries { .. } => self.apply_library(op)?,
         }
         Ok(())
