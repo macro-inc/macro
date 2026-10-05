@@ -750,8 +750,11 @@ export function writeXlsxWorkbook(
       : undefined;
     if (notes) relate('comments', `../comments${sheetIndex + 1}.xml`);
     for (const pivot of metadata.pivotTables ?? []) {
-      const parts = pivotParts(pivot, pivotCount + 1, (code) =>
-        styles.format(code)
+      const parts = pivotParts(
+        pivot,
+        pivotCount + 1,
+        (code) => styles.format(code),
+        (style) => styles.dxf(style)
       );
       if (!parts) {
         warnings.add(

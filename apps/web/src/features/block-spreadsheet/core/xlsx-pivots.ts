@@ -1,3 +1,4 @@
+import type { ConditionalStyle } from '@macro-inc/spreadsheet/sheet-rules';
 import {
   MAX_PIVOT_PART_LENGTH,
   MAX_SHEET_PIVOT_TABLES,
@@ -29,16 +30,6 @@ function mainPrefix(xml: string, root: string): string | undefined {
     ? new RegExp(`xmlns:${prefix}="${MAIN}"`).test(xml)
     : new RegExp(`xmlns="${MAIN}"`).test(xml);
   return declared ? (prefix ? `${prefix}:` : '') : undefined;
-}
-
-/** Remove an element and its content wherever it appears. */
-function withoutElement(xml: string, element: string): string {
-  return xml
-    .replace(new RegExp(`<${element}\\b[^>]*/>`, 'g'), '')
-    .replace(
-      new RegExp(`<${element}\\b[^>]*>[\\s\\S]*?</${element}>`, 'g'),
-      ''
-    );
 }
 
 /** Change, add or remove attributes of a part's root element. */
@@ -115,6 +106,8 @@ export function readSheetPivotTables(options: {
   sheetName: string;
   tables: WorkbookTable[];
   customFormat: (id: number) => string | undefined;
+  /** A differential format by its `dxfId`. */
+  differential: (index: number) => ConditionalStyle | undefined;
   warnings: Set<string>;
 }): SheetPivotTable[] {
   const { archive, warnings } = options;
@@ -179,11 +172,31 @@ export function readSheetPivotTables(options: {
       continue;
     }
     // Formats of pivot areas refer to the workbook's differential formats,
-    // which export writes anew; Excel applies the table's style instead.
-    for (const element of ['formats', 'conditionalFormats'])
-      table = withoutElement(table, `${tablePrefix}${element}`);
-    if (/\bdxfId="/.test(table))
-      table = withoutElement(table, `${tablePrefix}extLst`);
+    // which export writes anew: keep each, numbered in order of use.
+    // Equal formats share one number, as export writes each once.
+    const styles: ConditionalStyle[] = [];
+    const differentials = new Map<string, number>();
+    table = table.replace(/\bdxfId="(\d+)"/g, (_, id: string) => {
+      const style = options.differential(Number(id)) ?? {};
+      const key = JSON.stringify(style);
+      let index = differentials.get(key);
+      if (index === undefined) {
+        index = styles.length;
+        differentials.set(key, index);
+        styles.push(style);
+      }
+      return `dxfId="${index}"`;
+    });
+    // A custom pivot style is not written; Excel's default takes its place.
+    table = table.replace(
+      new RegExp(
+        `(<${tablePrefix}pivotTableStyleInfo\\b[^>]*\\sname=")([^"]*)"`
+      ),
+      (whole, start: string, name: string) =>
+        /^PivotStyle(?:Light|Medium|Dark)\d+$/.test(name)
+          ? whole
+          : `${start}PivotStyleLight16"`
+    );
     // Without its records, Excel reads the source again when the file opens.
     const relationshipPrefix = new RegExp(
       `xmlns:([A-Za-z_][\\w.-]*)="${RELATIONSHIPS}"`
@@ -236,6 +249,7 @@ export function readSheetPivotTables(options: {
       location: cells,
       ...(reference && { source: reference }),
       ...(Object.keys(formats).length && { formats }),
+      ...(styles.length && { styles }),
     });
   }
   if (pivots.length)
@@ -304,7 +318,8 @@ export function pivotTableName(pivot: SheetPivotTable): string | undefined {
 export function pivotParts(
   pivot: SheetPivotTable,
   cacheId: number,
-  format: (code: string) => number
+  format: (code: string) => number,
+  differential: (style: ConditionalStyle) => number
 ): { table: string; cache: string } | undefined {
   const tablePrefix = mainPrefix(pivot.table, 'pivotTableDefinition');
   const cachePrefix = mainPrefix(pivot.cache, 'pivotCacheDefinition');
@@ -314,13 +329,21 @@ export function pivotParts(
       const code = pivot.formats?.[id];
       return code ? `numFmtId="${format(code)}"` : attribute;
     });
-  const table = numberFormats(
-    withLocation(
-      withRootAttributes(pivot.table, `${tablePrefix}pivotTableDefinition`, {
-        cacheId: String(cacheId),
-      }),
-      tablePrefix,
-      pivot.location
+  const differentials = (part: string) =>
+    part.replace(
+      /\bdxfId="(\d+)"/g,
+      (_, id: string) =>
+        `dxfId="${differential(pivot.styles?.[Number(id)] ?? {})}"`
+    );
+  const table = differentials(
+    numberFormats(
+      withLocation(
+        withRootAttributes(pivot.table, `${tablePrefix}pivotTableDefinition`, {
+          cacheId: String(cacheId),
+        }),
+        tablePrefix,
+        pivot.location
+      )
     )
   );
   let cache = numberFormats(pivot.cache);

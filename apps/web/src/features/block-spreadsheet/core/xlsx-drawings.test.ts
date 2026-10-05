@@ -8,6 +8,7 @@ import { chartScene } from './chart-scene';
 import { formatCellAddress } from './spreadsheet-document';
 import type { WorkbookFileData } from './workbook-file-types';
 import { decodeXlsx, encodeXlsx } from './xlsx-codec';
+import { chartPart } from './xlsx-drawings';
 import { withLightness } from './xlsx-stylesheet';
 
 const fixture = () =>
@@ -387,5 +388,81 @@ describe('Excel drawings', () => {
       '<a:srgbClr val="C0504D"><a:lumMod val="75000"/></a:srgbClr>'
     );
     expect(plan.chart.source).not.toContain('externalData');
+  });
+});
+
+describe('fixed chart values', () => {
+  it('keeps fixed values, writing names as text and titles as rich text', async () => {
+    const imported = await decodeXlsx(fixture());
+    const sales = imported.sheets[0];
+    // As after its data sheet was deleted: the chart keeps what it showed.
+    const drawings = (sales.metadata?.drawings ?? []).map((drawing, index) =>
+      index === 0 && drawing.type === 'chart'
+        ? {
+            ...drawing,
+            chart: {
+              ...drawing.chart,
+              references: [
+                '{"Revenue"}',
+                '{"Jan","Feb"}',
+                '{1000,1250}',
+                '{"Costs"}',
+                '{"Jan","Feb"}',
+                '{700,}',
+              ],
+            },
+          }
+        : drawing
+    );
+    const exported = await encodeXlsx({
+      ...imported,
+      sheets: [
+        { ...sales, metadata: { ...sales.metadata, drawings } },
+        imported.sheets[1],
+      ],
+    });
+    const chart = strFromU8(unzipSync(exported.bytes)['xl/charts/chart1.xml']);
+    expect(chart).toContain('<tx><v>Revenue</v></tx>');
+    expect(chart).toContain(
+      '<val><numLit><formatCode>General</formatCode><ptCount val="2"/><pt idx="0"><v>1000</v></pt><pt idx="1"><v>1250</v></pt></numLit></val>'
+    );
+    expect(chart).toContain(
+      '<cat><strLit><ptCount val="2"/><pt idx="0"><v>Jan</v></pt><pt idx="1"><v>Feb</v></pt></strLit></cat>'
+    );
+    const again = drawingsOf(await decodeXlsx(exported.bytes), 'Sales')[0];
+    if (again.type !== 'chart') throw new Error('Expected a chart.');
+    // Names written as text are names again; values and labels stay fixed.
+    expect(again.chart.references).toEqual([
+      '{"Jan","Feb"}',
+      '{1000,1250}',
+      '{"Jan","Feb"}',
+      '{700,}',
+    ]);
+    const shown = chartData(again.chart, () => undefined);
+    expect(shown.categories).toEqual(['Jan', 'Feb']);
+    expect(
+      shown.plots[0].series.map(({ name, values }) => ({ name, values }))
+    ).toEqual([
+      { name: 'Revenue', values: [1000, 1250] },
+      { name: 'Costs', values: [700, null] },
+    ]);
+  });
+
+  it('writes a fixed title as rich text', () => {
+    const namespaces =
+      'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"';
+    const part = chartPart(
+      {
+        plots: [{ kind: 'column', series: [{ nameRef: 1, values: 2 }] }],
+        references: ['{"Plan"}', '{"Budget"}', '{1,2}'],
+        source: `<c:chartSpace ${namespaces}><c:chart><c:title><c:tx><c:strRef><c:f>Old!$A$1</c:f></c:strRef></c:tx></c:title><c:plotArea><c:barChart><c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>Old!$B$1</c:f></c:strRef></c:tx><c:val><c:numRef><c:f>Old!$B$2:$B$3</c:f></c:numRef></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>`,
+      },
+      () => undefined
+    );
+    expect(part).toContain(
+      '<c:title><c:tx><c:rich xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:bodyPr/><a:p><a:r><a:t>Plan</a:t></a:r></a:p></c:rich></c:tx></c:title>'
+    );
+    expect(part).toContain('<c:tx><c:v>Budget</c:v></c:tx>');
+    expect(part).toContain('<c:numLit>');
   });
 });

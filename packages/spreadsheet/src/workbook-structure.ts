@@ -1,5 +1,5 @@
 import { getTokens, Model } from '@ironcalc/wasm';
-import type { DrawingPoint } from './sheet-drawings';
+import { type DrawingPoint, isChartLiteral } from './sheet-drawings';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -107,7 +107,12 @@ function sheetFormulas(metadata: WorkbookSheetMetadata | undefined) {
         if (threshold.value !== undefined) formulas.push(threshold.value);
   }
   for (const drawing of metadata?.drawings ?? [])
-    if (drawing.type === 'chart') formulas.push(...drawing.chart.references);
+    if (drawing.type === 'chart')
+      formulas.push(
+        ...drawing.chart.references.filter(
+          (reference) => !isChartLiteral(reference)
+        )
+      );
   for (const pivot of metadata?.pivotTables ?? [])
     if (pivot.source !== undefined) formulas.push(pivot.source);
   return formulas;
@@ -150,7 +155,10 @@ function withSheetFormulas(
             ...drawing,
             chart: {
               ...drawing.chart,
-              references: drawing.chart.references.map(take),
+              // Fixed values stay as they are.
+              references: drawing.chart.references.map((reference) =>
+                isChartLiteral(reference) ? reference : take()
+              ),
             },
           }
         : drawing

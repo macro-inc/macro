@@ -1,5 +1,13 @@
 import type { LoroDoc } from 'loro-crdt';
-import { validImageKey, validImageUrl } from './sheet-drawings';
+import {
+  type ChartRange,
+  type ChartValue,
+  chartLiteral,
+  parseChartReference,
+  type SheetChart,
+  validImageKey,
+  validImageUrl,
+} from './sheet-drawings';
 import { formulaReferencesSheet } from './sheet-references';
 import {
   parseWorkbookMetadata,
@@ -11,6 +19,7 @@ export { formulaReferencesSheet } from './sheet-references';
 
 import {
   createSpreadsheetEntryReader,
+  formatCellAddress,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
   parseCellAddress,
@@ -164,7 +173,37 @@ export function renameSpreadsheetSheet(
   doc.commit({ origin: 'spreadsheet-sheet-rename' });
 }
 
-export function deleteSpreadsheetSheet(doc: LoroDoc, sheetId: string) {
+/**
+ * The values of the deleted sheet's cells a chart reference reads, written
+ * as fixed values: a series of numbers for values and x values, text
+ * otherwise.
+ */
+function fixedChartReference(
+  chart: SheetChart,
+  index: number,
+  values: ChartValue[]
+): string {
+  const numeric = chart.plots.some((plot) =>
+    plot.series.some(
+      (series) =>
+        series.values === index ||
+        (plot.kind === 'scatter' && series.categories === index)
+    )
+  );
+  return chartLiteral(values, numeric ? 'number' : 'text');
+}
+
+/**
+ * Delete a sheet. Charts on other sheets that read it keep the values they
+ * showed, as fixed values, as Excel keeps its charts' last values; `read`
+ * gives calculated values, and literal cells are used without it. Pivot
+ * tables that summarize it keep their values as cells.
+ */
+export function deleteSpreadsheetSheet(
+  doc: LoroDoc,
+  sheetId: string,
+  read?: (range: ChartRange) => ChartValue[] | undefined
+) {
   const sheets = readSpreadsheetSheets(doc);
   const sheet = existingSheet(doc, sheetId);
   if (sheets.length <= 1)
@@ -173,27 +212,50 @@ export function deleteSpreadsheetSheet(doc: LoroDoc, sheetId: string) {
   const metadata = doc.getMap('spreadsheetSheetMetadata');
   const readsSheet = (reference: string) =>
     formulaReferencesSheet(`=${reference.replace(/^\[0\]!/, '')}`, sheet.name);
+  let cells: SpreadsheetCells | undefined;
+  const values = (range: ChartRange): ChartValue[] => {
+    const calculated = read?.(range);
+    if (calculated) return calculated;
+    cells ??= readSpreadsheetCells(doc, sheetId);
+    const result: ChartValue[] = [];
+    for (let row = range.top; row <= range.bottom; row++)
+      for (let column = range.left; column <= range.right; column++) {
+        const cell = cells[formatCellAddress(row, column)];
+        const text = cell?.value.startsWith('=') ? '' : (cell?.value ?? '');
+        const number = text.trim() === '' ? Number.NaN : Number(text);
+        result.push(Number.isFinite(number) ? { text, number } : { text });
+        if (result.length >= 10_000) return result;
+      }
+    return result;
+  };
   for (const current of sheets) {
     if (current.id === sheetId) continue;
     const value = parseWorkbookMetadata(metadata.get(current.id));
-    if (
-      value?.drawings?.some(
-        (drawing) =>
-          drawing.type === 'chart' && drawing.chart.references.some(readsSheet)
-      )
-    )
-      throw new Error(
-        `A chart on “${current.name}” draws data from “${sheet.name}”. Delete the chart before deleting the sheet.`
-      );
+    if (!value) continue;
+    let changed = false;
+    const drawings = value.drawings?.map((drawing) => {
+      if (drawing.type !== 'chart') return drawing;
+      const references = drawing.chart.references.map((reference, index) => {
+        const range = readsSheet(reference)
+          ? parseChartReference(reference.replace(/^\[0\]!/, ''))
+          : undefined;
+        if (!range) return reference;
+        changed = true;
+        return fixedChartReference(drawing.chart, index, values(range));
+      });
+      return { ...drawing, chart: { ...drawing.chart, references } };
+    });
     // Pivot tables summarizing the sheet keep their values as cells.
-    const pivotTables = value?.pivotTables?.filter(
+    const pivotTables = value.pivotTables?.filter(
       (pivot) => pivot.source === undefined || !readsSheet(pivot.source)
     );
-    if (value && pivotTables?.length !== value.pivotTables?.length)
+    if (pivotTables?.length !== value.pivotTables?.length) changed = true;
+    if (changed)
       metadata.set(
         current.id,
         JSON.stringify({
           ...value,
+          drawings,
           pivotTables: pivotTables?.length ? pivotTables : undefined,
         })
       );

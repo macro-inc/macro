@@ -90,8 +90,8 @@ the image description. Click one to select it, then press Delete to remove it
 (undo restores it) or Escape to return to the cells. Charts cannot be created or
 edited in Macro. Pivot tables show their last values as ordinary cells; the Excel
 download keeps them, and Excel rebuilds them from their data when the file opens.
-A sheet whose data a chart on another sheet reads cannot be deleted until the
-chart is.
+Deleting a sheet whose data a chart on another sheet reads keeps the chart: it
+shows the values it had, which no longer change.
 
 Select a cell to inspect its address and input in the formula bar. Double-click
 a cell, start typing, or use the formula bar to edit its value. Formulas begin

@@ -32,12 +32,7 @@ import {
 import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { cellEditValue } from '../core/cell-input';
-import {
-  type ChartReader,
-  type ChartValue,
-  chartData,
-  MAX_CHART_POINTS,
-} from '../core/chart-data';
+import { chartData, createChartReader } from '../core/chart-data';
 import { encodeCsv } from '../core/csv-export';
 import { formulaRangeReference } from '../core/formula-reference';
 import {
@@ -55,7 +50,6 @@ import {
 } from '../core/sheet-validation';
 import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
 import {
-  formatCellAddress,
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
 } from '../core/spreadsheet-document';
@@ -144,40 +138,6 @@ export function SpreadsheetEditor(props: {
         (sheet.metadata?.definedNames ?? []).filter((name) => !name.local)
       ),
   ];
-  // Charts read calculated values, or literal cells before calculation.
-  const chartReader =
-    (homeSheetId: string): ChartReader =>
-    (range) => {
-      const sheet =
-        range.sheet === undefined
-          ? sheetById(homeSheetId)
-          : props.store
-              .workbook()
-              .find(
-                (entry) =>
-                  entry.name.toLowerCase() === range.sheet!.toLowerCase()
-              );
-      if (!sheet) return;
-      const results = calculation.workbookValues()[sheet.id] ?? {};
-      const values: ChartValue[] = [];
-      for (let row = range.top; row <= range.bottom; row++)
-        for (let column = range.left; column <= range.right; column++) {
-          if (values.length >= MAX_CHART_POINTS) return values;
-          const address = formatCellAddress(row, column);
-          const result = results[address];
-          if (result) {
-            values.push({ text: result.display, number: result.number });
-            continue;
-          }
-          const text = sheet.cells[address]?.value ?? '';
-          const number = text.trim() === '' ? Number.NaN : Number(text);
-          values.push({
-            text: cellPlainText(text),
-            ...(Number.isFinite(number) && { number }),
-          });
-        }
-      return values;
-    };
   const grid = createGridController({
     ...props.store,
     canEdit: editable,
@@ -793,7 +753,11 @@ export function SpreadsheetEditor(props: {
           chartData={(chart) =>
             chartData(
               chart,
-              chartReader(props.store.activeSheetId()),
+              createChartReader(
+                props.store.workbook,
+                calculation.workbookValues,
+                props.store.activeSheetId()
+              ),
               definedNames(props.store.activeSheetId())
             )
           }

@@ -92,12 +92,19 @@ describe('collaborative workbook', () => {
     doc.free();
   });
 
-  it('keeps charts and pivot tables reading a renamed sheet, and their data while charts use it', () => {
+  it('keeps charts and pivot tables reading a renamed sheet, and the values charts show when it is deleted', () => {
     const doc = new LoroDoc();
     const [data, report] = importSpreadsheetSheets(doc, [
       {
         ...blank('Data'),
-        cells: { A1: { value: 'Month' }, B1: { value: 'Sales' } },
+        cells: {
+          A1: { value: 'Month' },
+          B1: { value: 'Sales' },
+          A2: { value: 'Jan' },
+          B2: { value: '10' },
+          A3: { value: 'Feb' },
+          B3: { value: '=B2*2' },
+        },
       },
       {
         ...blank('Report'),
@@ -111,9 +118,12 @@ describe('collaborative workbook', () => {
               height: 200,
               chart: {
                 plots: [
-                  { kind: 'line', series: [{ categories: 0, values: 1 }] },
+                  {
+                    kind: 'line',
+                    series: [{ nameRef: 0, categories: 1, values: 2 }],
+                  },
                 ],
-                references: ['Data!$A$2:$A$13', "'Data'!$B$2:$B$13"],
+                references: ['Data!$B$1', 'Data!$A$2:$A$3', "'Data'!$B$2:$B$3"],
                 source:
                   '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:pivotSource><c:name>[Book.xlsx]Data!PivotTable1</c:name></c:pivotSource></c:chartSpace>',
               },
@@ -124,7 +134,7 @@ describe('collaborative workbook', () => {
               table: '<pivotTableDefinition name="Summary"/>',
               cache: '<pivotCacheDefinition/>',
               location: 'F1:G13',
-              source: 'Data!$A$1:$B$13',
+              source: 'Data!$A$1:$B$3',
             },
           ],
         },
@@ -138,27 +148,44 @@ describe('collaborative workbook', () => {
       drawings: [
         {
           chart: {
-            references: ["'Sales 2024'!$A$2:$A$13", "'Sales 2024'!$B$2:$B$13"],
+            references: [
+              "'Sales 2024'!$B$1",
+              "'Sales 2024'!$A$2:$A$3",
+              "'Sales 2024'!$B$2:$B$3",
+            ],
             source: expect.stringContaining(
               "<c:name>[Book.xlsx]'Sales 2024'!PivotTable1</c:name>"
             ),
           },
         },
       ],
-      pivotTables: [{ source: "'Sales 2024'!$A$1:$B$13" }],
+      pivotTables: [{ source: "'Sales 2024'!$A$1:$B$3" }],
     });
-    expect(() => deleteSpreadsheetSheet(doc, data)).toThrow(
-      'A chart on “Report” draws data from “Sales 2024”.'
+    // The chart keeps the values it showed: calculated ones when given, and
+    // literal cells otherwise. The pivot table keeps its values as cells.
+    const other = new LoroDoc();
+    other.import(doc.export({ mode: 'snapshot' }));
+    deleteSpreadsheetSheet(doc, data, (range) =>
+      range.top === 1 && range.left === 1
+        ? [
+            { text: '10', number: 10 },
+            { text: '20', number: 20 },
+          ]
+        : undefined
     );
-    // Without the chart, the pivot table keeps only its values.
-    const current = metadata();
-    doc
-      .getMap('spreadsheetSheetMetadata')
-      .set(report, JSON.stringify({ ...current, drawings: undefined }));
-    doc.commit();
-    deleteSpreadsheetSheet(doc, data);
     expect(metadata()?.pivotTables).toBeUndefined();
+    expect(metadata()?.drawings).toMatchObject([
+      { chart: { references: ['{"Sales"}', '{"Jan","Feb"}', '{10,20}'] } },
+    ]);
+    deleteSpreadsheetSheet(other, data);
+    expect(
+      readSpreadsheetWorkbook(other).find((sheet) => sheet.id === report)
+        ?.metadata?.drawings
+    ).toMatchObject([
+      { chart: { references: ['{"Sales"}', '{"Jan","Feb"}', '{10,}'] } },
+    ]);
     doc.free();
+    other.free();
   });
 
   it('merges independent styles, cells and appended rows on a new shared sheet', () => {

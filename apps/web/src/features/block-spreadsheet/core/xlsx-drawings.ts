@@ -3,14 +3,16 @@ import {
   type ChartKind,
   type ChartPlot,
   type ChartSeries,
+  type ChartValue,
+  chartLiteral,
   type DrawingPoint,
   MAX_CHART_SOURCE_LENGTH,
   MAX_SHEET_DRAWINGS,
+  parseChartLiteral,
   type SheetChart,
   type SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
 import { match } from 'ts-pattern';
-import type { ChartValue } from './chart-data';
 import {
   SPREADSHEET_MAX_COLUMNS,
   SPREADSHEET_MAX_ROWS,
@@ -229,6 +231,9 @@ export function themeAccents(theme: (string | undefined)[]): string[] {
   );
 }
 
+/** A namespace prefix as it is matched in a pattern. */
+const escaped = (prefix: string) => prefix.replace(/[.]/g, '\\.');
+
 /** The prefix of the chart namespace in a part, `''` when it is the default. */
 function chartPrefix(source: string): string | undefined {
   const match =
@@ -359,10 +364,32 @@ export function readChart(
   let axis: { id?: string; position?: string; crosses?: string } | undefined;
   // The chart's own title, not an axis title; its depth in `stack`.
   let titleDepth: number | undefined;
+  // Whether the chart is linked to a pivot table, from its parser callbacks.
+  const linked = { pivot: false };
+  // Fixed values a series reads instead of cells, as they are read.
+  let literal:
+    | {
+        kind: 'number' | 'text';
+        points: Map<number, string>;
+        count: number;
+        at: number;
+      }
+    | undefined;
   /** The child of the series an element is inside, such as `tx` or `val`. */
   const seriesPart = () => {
     const index = stack.lastIndexOf('ser');
     return index < 0 ? undefined : stack[index + 1];
+  };
+  /** Record a data source, in document order, as what its series reads. */
+  const source = (reference: string) => {
+    references.push(reference);
+    const index = references.length - 1;
+    const part = series && seriesPart();
+    if (series && part === 'tx') series.nameRef = index;
+    else if (series && (part === 'cat' || part === 'xVal'))
+      series.categories = index;
+    else if (series && (part === 'val' || part === 'yVal'))
+      series.values = index;
   };
   parse(bytes, path, (parser) => {
     parser.on('opentag', (node) => {
@@ -378,6 +405,19 @@ export function readChart(
         else if (node.local === 'legendPos')
           legend = LEGENDS[value.val as keyof typeof LEGENDS] ?? 'right';
         else if (node.local === 'legend') legend ??= 'right';
+        else if (node.local === 'pivotSource') linked.pivot = true;
+        else if (node.local === 'numLit' || node.local === 'strLit')
+          literal = {
+            kind: node.local === 'numLit' ? 'number' : 'text',
+            points: new Map(),
+            count: 0,
+            at: 0,
+          };
+        else if (literal && node.local === 'ptCount')
+          literal.count = Number(value.val) || 0;
+        else if (literal && node.local === 'pt')
+          literal.at = Number(value.idx) || 0;
+        else if (literal && node.local === 'v') text = '';
         else if (parent === 'plotArea' && CHART_TYPES[node.local]) {
           const kind = CHART_TYPES[node.local];
           plot = {
@@ -466,15 +506,27 @@ export function readChart(
       }
       if (node.uri !== CHART_NAMESPACE) return;
       if (node.local === 'f' && text !== undefined) {
-        references.push(text.trim());
-        const index = references.length - 1;
+        source(text.trim());
         text = undefined;
-        const part = series && seriesPart();
-        if (series && part === 'tx') series.nameRef = index;
-        else if (series && (part === 'cat' || part === 'xVal'))
-          series.categories = index;
-        else if (series && (part === 'val' || part === 'yVal'))
-          series.values = index;
+      } else if (literal && node.local === 'v' && text !== undefined) {
+        literal.points.set(literal.at, text);
+        text = undefined;
+      } else if (
+        literal &&
+        (node.local === 'numLit' || node.local === 'strLit')
+      ) {
+        const { kind, points, count } = literal;
+        const length = Math.min(
+          100_000,
+          Math.max(count, ...[...points.keys()].map((index) => index + 1))
+        );
+        const values = Array.from({ length }, (_, index) => {
+          const text = points.get(index) ?? '';
+          const number = text.trim() === '' ? Number.NaN : Number(text);
+          return Number.isFinite(number) ? { text, number } : { text };
+        });
+        literal = undefined;
+        source(chartLiteral(values, kind));
       } else if (node.local === 'v' && text !== undefined) {
         if (series && seriesPart() === 'tx') nameParts.push(text.trim());
         else if (titleDepth !== undefined) title ??= text;
@@ -512,8 +564,8 @@ export function readChart(
       'Radar, bubble, stock and surface charts are kept for export but not drawn.'
     );
   const xml = new TextDecoder().decode(bytes);
-  const source = chartSource(xml, theme);
-  if (!source)
+  const kept = chartSource(xml, theme);
+  if (!kept)
     warnings.add(
       'Some charts keep only their data and type; their formatting is not exported.'
     );
@@ -541,7 +593,8 @@ export function readChart(
     plots: chartPlots,
     references,
     colors: themeAccents(theme),
-    ...(source && { source }),
+    ...(linked.pivot && { pivot: true as const }),
+    ...(kept && { source: kept }),
   };
 }
 
@@ -804,17 +857,16 @@ const numberText = (value: number) =>
     ? String(value)
     : String(Number(value.toPrecision(15)));
 
-/** Cached values Excel and viewers draw from until they recalculate. */
-function cache(
+/** Points of a cache or of fixed values, as Excel writes them. */
+function points(
   prefix: string,
-  kind: 'numRef' | 'strRef',
-  values: ChartValue[] | undefined
+  kind: 'number' | 'text',
+  values: ChartValue[]
 ): string {
-  if (!values?.length) return '';
   const element = (local: string) => `${prefix}${local}`;
-  const points = values
+  const items = values
     .map((value, index) =>
-      kind === 'numRef'
+      kind === 'number'
         ? value.number === undefined
           ? ''
           : `<${element('pt')} idx="${index}"><${element('v')}>${numberText(value.number)}</${element('v')}></${element('pt')}>`
@@ -823,9 +875,45 @@ function cache(
           : ''
     )
     .join('');
-  return kind === 'numRef'
-    ? `<${element('numCache')}><${element('formatCode')}>General</${element('formatCode')}><${element('ptCount')} val="${values.length}"/>${points}</${element('numCache')}>`
-    : `<${element('strCache')}><${element('ptCount')} val="${values.length}"/>${points}</${element('strCache')}>`;
+  return kind === 'number'
+    ? `<${element('formatCode')}>General</${element('formatCode')}><${element('ptCount')} val="${values.length}"/>${items}`
+    : `<${element('ptCount')} val="${values.length}"/>${items}`;
+}
+
+/** Cached values Excel and viewers draw from until they recalculate. */
+function cache(
+  prefix: string,
+  kind: 'numRef' | 'strRef',
+  values: ChartValue[] | undefined
+): string {
+  if (!values?.length) return '';
+  const local = kind === 'numRef' ? 'numCache' : 'strCache';
+  return `<${prefix}${local}>${points(prefix, kind === 'numRef' ? 'number' : 'text', values)}</${prefix}${local}>`;
+}
+
+/**
+ * A data source of a chart part: a reference with a cache of its values,
+ * or fixed values. `kind` is the element the part had.
+ */
+function dataSource(
+  prefix: string,
+  kind: string,
+  reference: string,
+  values: ChartValues,
+  name?: string
+): string {
+  const numeric = kind === 'numRef' || kind === 'numLit';
+  const literal = parseChartLiteral(reference);
+  if (literal)
+    return numeric
+      ? `<${prefix}numLit>${points(prefix, 'number', literal)}</${prefix}numLit>`
+      : `<${prefix}strLit>${points(prefix, 'text', literal)}</${prefix}strLit>`;
+  const formula = `<${prefix}f>${xml(reference)}</${prefix}f>`;
+  if (kind === 'multiLvlStrRef')
+    return `<${prefix}multiLvlStrRef>${formula}</${prefix}multiLvlStrRef>`;
+  const element = numeric ? 'numRef' : 'strRef';
+  const cached = name === undefined ? values(reference) : [{ text: name }];
+  return `<${prefix}${element}>${formula}${cache(prefix, element, cached)}</${prefix}${element}>`;
 }
 
 /**
@@ -858,7 +946,7 @@ function keptChart(
   let source = chart.source;
   const prefix = source && chartPrefix(source);
   if (!source || prefix === undefined) return;
-  const name = (local: string) => `${prefix}${local}`;
+  const name = (local: string) => `${escaped(prefix)}${local}`;
   const link = new RegExp(
     `<${name('pivotSource')}>[\\s\\S]*?<${name('name')}>([^<]*)</${name('name')}>[\\s\\S]*?</${name('pivotSource')}>`
   ).exec(source);
@@ -871,30 +959,60 @@ function keptChart(
         /<(?:[\w.-]+:)?ext\b[^>]*>\s*<(?:[\w.-]+:)?pivotOptions\w*\b[\s\S]*?<\/(?:[\w.-]+:)?ext>/g,
         ''
       );
-  const formula = new RegExp(`<${name('f')}>([^<]*)</${name('f')}>`, 'g');
-  if ((source.match(formula) ?? []).length !== chart.references.length) return;
-  let index = 0;
-  const referenced = source.replace(
-    formula,
-    () => `<${name('f')}>${xml(chart.references[index++])}</${name('f')}>`
+  // Each data source in order is a reference; a pivot chart's series
+  // names are cached as its pivot table shows them.
+  const sources = new RegExp(
+    `<${escaped(prefix)}(numRef|strRef|multiLvlStrRef|numLit|strLit)\\b[^>]*>[\\s\\S]*?</${escaped(prefix)}\\1>`,
+    'g'
   );
-  const withCaches = referenced.replace(
-    new RegExp(
-      `<${name('(numRef|strRef)')}>(\\s*)<${name('f')}>([^<]*)</${name('f')}>`,
-      'g'
-    ),
-    (match, kind: 'numRef' | 'strRef', _space: string, reference: string) =>
-      `${match}${cache(
-        prefix,
-        kind,
-        values(
-          reference
-            .replace(/&quot;/g, '"')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&')
+  if ((source.match(sources) ?? []).length !== chart.references.length) return;
+  const names = new Map(
+    chart.pivot && linked && pivotExists(linked.sheet, linked.name)
+      ? chart.plots.flatMap((plot) =>
+          plot.series.flatMap((series) =>
+            series.nameRef !== undefined && series.name !== undefined
+              ? [[series.nameRef, series.name] as const]
+              : []
+          )
         )
-      )}`
+      : []
+  );
+  let index = 0;
+  const withCaches = source.replace(
+    sources,
+    (_, kind: string, offset: number, whole: string) => {
+      const at = index++;
+      const reference = chart.references[at];
+      const literal = parseChartLiteral(reference);
+      // A name or title holds one text, not a list of values.
+      const before = whole.slice(Math.max(0, offset - 200), offset);
+      const named = new RegExp(`<${escaped(prefix)}tx>\\s*$`).test(before);
+      if (literal && named) {
+        const text = literal
+          .map((value) => value.text.trim())
+          .filter(Boolean)
+          .join(' ');
+        return new RegExp(
+          `<${escaped(prefix)}title>\\s*<${escaped(prefix)}tx>\\s*$`
+        ).test(before)
+          ? `<${prefix}rich xmlns:a="${DRAWING}"><a:bodyPr/><a:p><a:r><a:t>${xml(text)}</a:t></a:r></a:p></${prefix}rich>`
+          : `<${prefix}v>${xml(text)}</${prefix}v>`;
+      }
+      // Labels may be text even where the part read numbers.
+      const labels =
+        literal &&
+        literal.some(
+          (value) => value.text !== '' && value.number === undefined
+        ) &&
+        new RegExp(`<${escaped(prefix)}(?:cat|xVal)>\\s*$`).test(before);
+      return dataSource(
+        prefix,
+        labels ? 'strLit' : kind,
+        reference,
+        values,
+        names.get(at)
+      );
+    }
   );
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${withCaches}`;
 }
@@ -904,11 +1022,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
   const reference = (index: number | undefined, kind: 'numRef' | 'strRef') =>
     index === undefined
       ? ''
-      : `<c:${kind}><c:f>${xml(chart.references[index])}</c:f>${cache(
-          'c:',
-          kind,
-          values(chart.references[index])
-        )}</c:${kind}>`;
+      : dataSource('c:', kind, chart.references[index], values);
   const palette = chart.colors ?? themeAccents([]);
   let seriesIndex = 0;
   const groups = chart.plots.map((plot) => {
@@ -924,11 +1038,20 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
             : plot.kind === 'pie' || plot.kind === 'doughnut'
               ? ''
               : `<c:spPr>${value.noFill ? '<a:noFill/>' : solid}</c:spPr>`;
+        // A fixed name is written as its text.
+        const fixed =
+          value.nameRef === undefined
+            ? undefined
+            : parseChartLiteral(chart.references[value.nameRef])
+                ?.map((item) => item.text.trim())
+                .filter(Boolean)
+                .join(' ');
+        const label = fixed ?? value.name;
         const name =
-          value.nameRef !== undefined
+          value.nameRef !== undefined && fixed === undefined
             ? `<c:tx>${reference(value.nameRef, 'strRef')}</c:tx>`
-            : value.name
-              ? `<c:tx><c:v>${xml(value.name)}</c:v></c:tx>`
+            : label
+              ? `<c:tx><c:v>${xml(label)}</c:v></c:tx>`
               : '';
         const categories =
           plot.kind === 'scatter'

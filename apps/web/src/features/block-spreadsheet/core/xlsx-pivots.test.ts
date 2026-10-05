@@ -1,5 +1,6 @@
 import { strFromU8, unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
+import { chartData } from './chart-data';
 import { decodeXlsx, encodeXlsx } from './xlsx-codec';
 import { corpusBytes, corpusEntries } from './xlsx-fixtures/corpus';
 
@@ -103,9 +104,50 @@ describe('Excel pivot tables', () => {
     expect(used.size).toBeGreaterThan(0);
     for (const id of used)
       expect(Object.values(pivot.formats ?? {})).toContain(codes.get(id));
-    // Its pivot chart stays linked to it.
-    expect(text(files, 'xl/charts/chart1.xml')).toContain(
+    // Its pivot chart stays linked to it, and names its series as the pivot
+    // table does: by year, not by the cells above them ("Datum 2015").
+    const chart = text(files, 'xl/charts/chart1.xml');
+    expect(chart).toContain(
       '<c:name>[Summe KW Pivot.xlsx]Tabelle1!PivotTable2</c:name>'
+    );
+    expect(chart).toContain('<c:pt idx="0"><c:v>2015</c:v></c:pt>');
+    const drawing = imported.sheets[0].metadata?.drawings?.[0];
+    if (drawing?.type !== 'chart') throw new Error('Expected a chart.');
+    expect(drawing.chart.pivot).toBe(true);
+    const shown = chartData(drawing.chart, () => undefined);
+    expect(shown.plots[0].series.map((series) => series.name)).toEqual([
+      '2015',
+      '2016',
+      '2017',
+    ]);
+  });
+
+  it('keeps the formats of pivot table areas', async () => {
+    const imported = await decodeXlsx(
+      corpus('closedxml-template-table-source-pivot-tables.xlsx')
+    );
+    const pivot = imported.sheets
+      .flatMap((sheet) => sheet.metadata?.pivotTables ?? [])
+      .find((entry) => entry.table.includes('name="FinalLiabilityPivotTable"'));
+    // Differential formats are numbered in order of use.
+    expect(pivot?.table).toContain('<format dxfId="0">');
+    expect(pivot?.styles).toContainEqual({ numberFormat: '#,##0' });
+    const files = unzipSync((await encodeXlsx(imported)).bytes);
+    const dxfs = [
+      ...text(files, 'xl/styles.xml').matchAll(/<dxf>([\s\S]*?)<\/dxf>/g),
+    ].map(([, body]) => body);
+    const table = Object.keys(files)
+      .filter((name) => /^xl\/pivotTables\/pivotTable\d+\.xml$/.test(name))
+      .map((name) => text(files, name))
+      .find((part) => part.includes('name="FinalLiabilityPivotTable"'));
+    const used = [...(table ?? '').matchAll(/dxfId="(\d+)"/g)].map(([, id]) =>
+      Number(id)
+    );
+    expect(used.length).toBeGreaterThan(0);
+    // Each refers to a format the download contains.
+    for (const id of used) expect(dxfs[id]).toBeDefined();
+    expect(used.some((id) => dxfs[id].includes('formatCode="#,##0"'))).toBe(
+      true
     );
   });
 

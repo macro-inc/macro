@@ -1,19 +1,23 @@
+import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import {
   type ChartGrouping,
   type ChartKind,
+  type ChartRange,
+  type ChartValue,
+  parseChartLiteral,
   parseChartReference,
   type SheetChart,
 } from '@macro-inc/spreadsheet/sheet-drawings';
+import type { WorkbookCalculation } from './calculation';
+import { formatCellAddress } from './spreadsheet-document';
+import type { SpreadsheetWorkbookSheet } from './workbook-document';
 
-/** A cell's value as charts read it: its displayed text, and its number. */
-export type ChartValue = { text: string; number?: number };
+export type { ChartValue } from '@macro-inc/spreadsheet/sheet-drawings';
 /**
  * Reads a reference that names a sheet and cells, row by row, up to
  * `MAX_CHART_POINTS` values.
  */
-export type ChartReader = (
-  range: NonNullable<ReturnType<typeof parseChartReference>>
-) => ChartValue[] | undefined;
+export type ChartReader = (range: ChartRange) => ChartValue[] | undefined;
 
 export type ChartSeriesData = {
   name: string;
@@ -56,6 +60,44 @@ const DEFAULT_PALETTE = [
 export const MAX_CHART_POINTS = 5_000;
 
 /**
+ * Reads cells as charts show them: calculated values, or the literal cells
+ * before the first calculation. References without a sheet read `home`.
+ */
+export function createChartReader(
+  sheets: () => SpreadsheetWorkbookSheet[],
+  values: () => WorkbookCalculation,
+  home?: string
+): ChartReader {
+  return (range) => {
+    const sheet = sheets().find((entry) =>
+      range.sheet === undefined
+        ? entry.id === home
+        : entry.name.toLowerCase() === range.sheet.toLowerCase()
+    );
+    if (!sheet) return;
+    const results = values()[sheet.id] ?? {};
+    const read: ChartValue[] = [];
+    for (let row = range.top; row <= range.bottom; row++)
+      for (let column = range.left; column <= range.right; column++) {
+        if (read.length >= MAX_CHART_POINTS) return read;
+        const address = formatCellAddress(row, column);
+        const result = results[address];
+        if (result) {
+          read.push({ text: result.display, number: result.number });
+          continue;
+        }
+        const text = sheet.cells[address]?.value ?? '';
+        const number = text.trim() === '' ? Number.NaN : Number(text);
+        read.push({
+          text: cellPlainText(text),
+          ...(Number.isFinite(number) && { number }),
+        });
+      }
+    return read;
+  };
+}
+
+/**
  * A reference as charts write it: `[0]!` marks a name in the same
  * workbook, and a name may stand for a range.
  */
@@ -82,7 +124,10 @@ export function chartData(
 ): ChartData {
   const values = (index: number | undefined) => {
     if (index === undefined) return;
-    const target = range(chart.references[index] ?? '', names);
+    const reference = chart.references[index] ?? '';
+    const literal = parseChartLiteral(reference);
+    if (literal) return literal.slice(0, MAX_CHART_POINTS);
+    const target = range(reference, names);
     return target ? read(target)?.slice(0, MAX_CHART_POINTS) : undefined;
   };
   const palette = chart.colors?.length ? chart.colors : DEFAULT_PALETTE;
@@ -98,7 +143,9 @@ export function chartData(
       const labels = values(series.categories);
       if (plot.kind !== 'scatter' && labels && !categories)
         categories = labels.map((value) => value.text);
+      // A pivot chart's series are named as its pivot table names them.
       const name =
+        (chart.pivot && series.name) ||
         values(series.nameRef)
           ?.map((value) => value.text.trim())
           .filter(Boolean)

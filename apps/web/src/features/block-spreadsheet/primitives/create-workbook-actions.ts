@@ -1,5 +1,6 @@
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { WorkbookCalculation } from '../core/calculation';
+import { createChartReader } from '../core/chart-data';
 import {
   type WorkbookFileData,
   XLSX_MAX_BYTES,
@@ -62,7 +63,12 @@ export function createWorkbookActions(options: {
     try {
       if (dialog.kind === 'rename')
         options.store.renameSheet(dialog.id, sheetName());
-      else options.store.deleteSheet(dialog.id);
+      // Charts reading the sheet keep the values they show.
+      else
+        options.store.deleteSheet(
+          dialog.id,
+          createChartReader(options.store.workbook, options.values)
+        );
       setSheetDialog(undefined);
     } catch (error) {
       setSheetError(

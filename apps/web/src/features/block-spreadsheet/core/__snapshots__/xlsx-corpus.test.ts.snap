@@ -403,7 +403,7 @@ exports[`real-world XLSX corpus > libreoffice-forum-mso-de-104083-pivot-w… 1`]
   },
   "cells": 9524,
   "formulas": 2303,
-  "roundTrip": "Tabelle1 metadata",
+  "roundTrip": "identical",
   "sheets": 2,
   "styledCells": 12208,
   "warnings": [

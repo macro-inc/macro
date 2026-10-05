@@ -200,7 +200,8 @@ const onlyKeys = (value: object, keys: readonly string[]) =>
 const record = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
-function validStyle(value: unknown) {
+/** A differential format: what a rule or a pivot table area applies. */
+export function validConditionalStyle(value: unknown) {
   return (
     record(value) &&
     onlyKeys(value, [
@@ -273,7 +274,7 @@ export function validConditionalFormat(value: unknown) {
     flag(value.percent) &&
     flag(value.bottom) &&
     flag(value.below) &&
-    optional(value.style, validStyle) &&
+    optional(value.style, validConditionalStyle) &&
     flag(value.stopIfTrue) &&
     optional(
       value.thresholds,

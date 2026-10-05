@@ -1,9 +1,11 @@
 import { type SheetDrawing, validDrawings } from './sheet-drawings';
 import {
   type ConditionalFormat,
+  type ConditionalStyle,
   type DataValidation,
   MAX_SHEET_RULES,
   validConditionalFormat,
+  validConditionalStyle,
   validDataValidation,
   validNotes,
 } from './sheet-rules';
@@ -59,6 +61,8 @@ export type SheetPivotTable = {
   source?: string;
   /** Custom number formats the parts use, by `numFmtId`. */
   formats?: Record<string, string>;
+  /** The differential formats of its areas, by the `dxfId` the table uses. */
+  styles?: ConditionalStyle[];
 };
 export const MAX_SHEET_PIVOT_TABLES = 64;
 export const MAX_PIVOT_PART_LENGTH = 300_000;
@@ -69,7 +73,9 @@ function validPivotTable(value: unknown): boolean {
   const formats = pivot.formats;
   return (
     Object.keys(pivot).every((key) =>
-      ['table', 'cache', 'location', 'source', 'formats'].includes(key)
+      ['table', 'cache', 'location', 'source', 'formats', 'styles'].includes(
+        key
+      )
     ) &&
     typeof pivot.table === 'string' &&
     pivot.table.length <= MAX_PIVOT_PART_LENGTH &&
@@ -80,6 +86,10 @@ function validPivotTable(value: unknown): boolean {
     validWorkbookRange(pivot.location) &&
     (pivot.source === undefined ||
       (typeof pivot.source === 'string' && pivot.source.length <= 1_000)) &&
+    (pivot.styles === undefined ||
+      (Array.isArray(pivot.styles) &&
+        pivot.styles.length <= 200 &&
+        pivot.styles.every(validConditionalStyle))) &&
     (formats === undefined ||
       (!!formats &&
         typeof formats === 'object' &&

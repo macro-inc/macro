@@ -371,13 +371,17 @@ Import keeps what Excel calculates and shows:
   cache definition without records, marked to refresh on load, in
   `metadata.pivotTables`; Macro shows the values Excel last saved, and Excel or
   LibreOffice rebuilds the table from its source cells when the download opens.
-  A table source becomes its range, custom number formats are rewritten for the
-  exported styles, and area formats are dropped in favor of the pivot style.
+  A table source becomes its range, and custom number formats and area formats
+  (number formats, fonts and fills) are rewritten for the exported styles; a
+  custom pivot style falls back to Excel's default.
   The location and source move with rows and columns, follow sheet renames,
   and a pivot table whose source is deleted keeps only its values. Pivot tables
   over other workbooks or data connections keep only their values, and pivot
-  charts linked to them become ordinary charts. Renaming a sheet updates the
-  charts that read it; deleting it is refused while a chart reads it.
+  charts linked to them become ordinary charts, while pivot charts keep the
+  series names their pivot table gives. Renaming a sheet updates the charts
+  that read it. Deleting it keeps the values those charts showed as fixed
+  values (`{1,2,3}` references, exported as `numLit`/`strLit`), as Excel keeps
+  a chart's last values.
 
 Confirming an import writes its cells in commits of 5,000 under sheet ids no
 reader knows yet, outside undo history, and yields to the page between commits

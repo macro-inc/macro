@@ -559,10 +559,14 @@ export function createSpreadsheetStore(options: {
       setActiveSheet(created);
       return created;
     },
-    deleteSheet(id: string) {
+    /** `read` gives the calculated values charts keep from the sheet. */
+    deleteSheet(
+      id: string,
+      read?: Parameters<typeof deleteSpreadsheetSheet>[2]
+    ) {
       const doc = options.source.doc();
       if (!doc || !editable()) return;
-      deleteSpreadsheetSheet(doc, id);
+      deleteSpreadsheetSheet(doc, id, read);
       refresh();
     },
     appendSheets: (

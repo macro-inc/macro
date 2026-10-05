@@ -9,6 +9,8 @@ export const MAX_SHEET_DRAWINGS = 200;
 export const MAX_IMAGE_URL_LENGTH = 2_800_000;
 /** A chart part kept for export, at most. */
 export const MAX_CHART_SOURCE_LENGTH = 400_000;
+/** Fixed values a chart reference holds, at most, written out. */
+export const MAX_CHART_LITERAL_LENGTH = 100_000;
 
 /**
  * A corner of a drawing: a cell, and a distance into it in pixels at 100%
@@ -68,16 +70,89 @@ export type SheetChart = {
   title?: string;
   legend?: (typeof LEGEND_POSITIONS)[number];
   plots: ChartPlot[];
-  /** Every range the chart reads, as A1 references with sheet names. */
+  /**
+   * Every range the chart reads, as A1 references with sheet names, or fixed
+   * values written as an array constant such as `{1,2,,4}` or `{"Q1","Q2"}`.
+   */
   references: string[];
   /** The workbook's theme accents, for series and slices without colors. */
   colors?: string[];
   /**
+   * A pivot chart: its series are named as Excel last showed them, as its
+   * pivot table names them rather than its cells.
+   */
+  pivot?: true;
+  /**
    * Excel's chart part without cached values, kept so export preserves its
-   * formatting. Its `<c:f>` elements are `references`, in order.
+   * formatting. Its data sources (`numRef`, `strRef`, `multiLvlStrRef`,
+   * `numLit` and `strLit`) are `references`, in order.
    */
   source?: string;
 };
+
+/** A cell's value as charts read it: its displayed text, and its number. */
+export type ChartValue = { text: string; number?: number };
+
+/** Whether a chart reference holds fixed values rather than cells. */
+export const isChartLiteral = (reference: string) =>
+  reference.trimStart().startsWith('{');
+
+/**
+ * Fixed values as a chart keeps them: numbers, quoted text (`""` for a
+ * quote) and nothing for a blank, as in `{1,"two",,4}`.
+ */
+export function chartLiteral(
+  values: ChartValue[],
+  kind: 'number' | 'text'
+): string {
+  return `{${values
+    .map((value) =>
+      kind === 'number'
+        ? value.number !== undefined && Number.isFinite(value.number)
+          ? String(value.number)
+          : ''
+        : value.text === ''
+          ? ''
+          : `"${value.text.replace(/"/g, '""')}"`
+    )
+    .join(',')}}`;
+}
+
+/** The values of a fixed chart reference, or undefined if it is not one. */
+export function parseChartLiteral(reference: string): ChartValue[] | undefined {
+  const text = reference.trim();
+  if (!text.startsWith('{') || !text.endsWith('}')) return;
+  const end = text.length - 1;
+  const values: ChartValue[] = [];
+  if (end === 1) return values;
+  let index = 1;
+  for (;;) {
+    if (text[index] === '"') {
+      let value = '';
+      index++;
+      for (;;) {
+        if (index >= end) return;
+        if (text[index] !== '"') value += text[index++];
+        else if (text[index + 1] === '"') {
+          value += '"';
+          index += 2;
+        } else break;
+      }
+      index++;
+      values.push({ text: value });
+    } else {
+      let token = '';
+      while (index < end && text[index] !== ',') token += text[index++];
+      token = token.trim();
+      const number = Number(token);
+      if (token !== '' && !Number.isFinite(number)) return;
+      values.push(token === '' ? { text: '' } : { text: token, number });
+    }
+    if (index === end) return values;
+    if (text[index] !== ',') return;
+    index++;
+  }
+}
 
 type DrawingBase = {
   id: string;
@@ -198,17 +273,27 @@ function validChart(value: unknown): boolean {
   const references = chart.references;
   return (
     Object.keys(chart).every((key) =>
-      ['title', 'legend', 'plots', 'references', 'colors', 'source'].includes(
-        key
-      )
+      [
+        'title',
+        'legend',
+        'plots',
+        'references',
+        'colors',
+        'pivot',
+        'source',
+      ].includes(key)
     ) &&
+    (chart.pivot === undefined || chart.pivot === true) &&
     text(chart.title, 1_000) &&
     (chart.legend === undefined ||
       (LEGEND_POSITIONS as readonly unknown[]).includes(chart.legend)) &&
     Array.isArray(references) &&
     references.length <= 2_000 &&
     references.every(
-      (reference) => typeof reference === 'string' && reference.length <= 1_000
+      (reference) =>
+        typeof reference === 'string' &&
+        reference.length <=
+          (isChartLiteral(reference) ? MAX_CHART_LITERAL_LENGTH : 1_000)
     ) &&
     Array.isArray(chart.plots) &&
     chart.plots.length <= 16 &&

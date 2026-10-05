@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chartLiteral,
+  parseChartLiteral,
   parseChartReference,
   type SheetDrawing,
   validDrawings,
@@ -87,6 +89,33 @@ describe('sheet drawings', () => {
     expect(validImageUrl('data:image/jpeg;base64,/9j/4AAQ')).toBe(true);
     expect(validImageUrl('data:image/svg+xml;base64,PHN2Zy8+')).toBe(false);
     expect(validImageUrl('https://example.com/logo.png')).toBe(false);
+  });
+
+  it('writes and reads fixed chart values', () => {
+    const values = [
+      { text: '1,000', number: 1000 },
+      { text: '' },
+      { text: 'Q"1"' },
+      { text: '-2.5', number: -2.5 },
+    ];
+    expect(chartLiteral(values, 'number')).toBe('{1000,,,-2.5}');
+    const text = chartLiteral(values, 'text');
+    expect(text).toBe('{"1,000",,"Q""1""","-2.5"}');
+    expect(parseChartLiteral(text)).toEqual([
+      { text: '1,000' },
+      { text: '' },
+      { text: 'Q"1"' },
+      { text: '-2.5' },
+    ]);
+    expect(parseChartLiteral('{1000,,-2.5,}')).toEqual([
+      { text: '1000', number: 1000 },
+      { text: '' },
+      { text: '-2.5', number: -2.5 },
+      { text: '' },
+    ]);
+    expect(parseChartLiteral('{}')).toEqual([]);
+    for (const invalid of ['Sheet1!A1', '{1,two}', '{"open}', '{1;2}'])
+      expect(parseChartLiteral(invalid)).toBeUndefined();
   });
 
   it('parses chart references', () => {

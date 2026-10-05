@@ -997,6 +997,7 @@ function readWorksheet(
     sheetName: entry.name,
     tables: context.tables,
     customFormat: context.styles.customFormat,
+    differential: context.styles.differentialStyle,
     warnings,
   });
   if (pivotTables.length) metadata.pivotTables = pivotTables;
