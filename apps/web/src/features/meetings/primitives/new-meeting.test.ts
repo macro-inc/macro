@@ -48,7 +48,19 @@ function setup(overrides: Partial<NewMeetingCapabilities> = {}) {
     const invite = vi.fn(async () => {
       events.push('ring');
     });
-    const draft = createNewMeeting({ people, create, invite, ...overrides });
+    const prepareRoom = vi.fn(async () => ({
+      id: 'prepared-room',
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    }));
+    const cancelRoom = vi.fn(async () => undefined);
+    const draft = createNewMeeting({
+      people,
+      create,
+      invite,
+      prepareRoom,
+      cancelRoom,
+      ...overrides,
+    });
     const join = vi.fn(async () => {
       events.push('join');
       return credentials;
@@ -67,7 +79,7 @@ function setup(overrides: Partial<NewMeetingCapabilities> = {}) {
       join,
       connect: async () => {
         await connect();
-        await draft.ring();
+        void draft.ring();
       },
       disconnect: async () => {
         setActiveCallId(null);
@@ -83,12 +95,91 @@ function setup(overrides: Partial<NewMeetingCapabilities> = {}) {
       connect,
       release,
       events,
+      prepareRoom,
+      cancelRoom,
+      dispose,
       setPeople,
     };
   });
 }
 
 describe('new meeting setup', () => {
+  it('can warm a restored setup without reusing its cancelled room', async () => {
+    const { draft, prepareRoom, cancelRoom } = setup();
+    await draft.warmup();
+    draft.cancel();
+    await draft.warmup();
+    expect(cancelRoom).toHaveBeenCalledOnce();
+    expect(prepareRoom).toHaveBeenCalledTimes(2);
+  });
+
+  it('prepares once without creating or inviting, then claims the room on Start', async () => {
+    const { draft, create, invite, prepareRoom, cancelRoom, dispose } = setup();
+    await Promise.all([draft.warmup(), draft.warmup()]);
+    expect(prepareRoom).toHaveBeenCalledOnce();
+    expect(create).not.toHaveBeenCalled();
+    expect(invite).not.toHaveBeenCalled();
+    await draft.prepare(new AbortController().signal);
+    expect(create).toHaveBeenCalledExactlyOnceWith('prepared-room');
+    dispose();
+    expect(cancelRoom).not.toHaveBeenCalled();
+  });
+
+  it('cancels an unused room including a preparation that finishes after disposal', async () => {
+    for (const late of [false, true]) {
+      let finish!: (room: { id: string; expiresAt: string }) => void;
+      const prepareRoom = () =>
+        new Promise<{ id: string; expiresAt: string }>((resolve) => {
+          finish = resolve;
+        });
+      const { draft, dispose, cancelRoom, create } = setup({ prepareRoom });
+      const warming = draft.warmup();
+      if (late) dispose();
+      finish({
+        id: 'unused',
+        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+      });
+      await warming;
+      if (!late) dispose();
+      expect(cancelRoom).toHaveBeenCalledExactlyOnceWith('unused');
+      expect(create).not.toHaveBeenCalled();
+    }
+  });
+
+  it('falls back to ordinary creation when preparation fails or expires', async () => {
+    for (const failed of [false, true]) {
+      const { draft, create } = setup({
+        prepareRoom: async () => {
+          if (failed) throw new Error('offline');
+          return { id: 'expired', expiresAt: new Date(0).toISOString() };
+        },
+      });
+      await draft.warmup();
+      await draft.prepare(new AbortController().signal);
+      expect(create).toHaveBeenCalledExactlyOnceWith(undefined);
+    }
+  });
+
+  it('does not create a meeting when Start is cancelled during room preparation', async () => {
+    let finish!: (room: { id: string; expiresAt: string }) => void;
+    const { draft, create } = setup({
+      prepareRoom: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    const warming = draft.warmup();
+    const attempt = new AbortController();
+    const starting = draft.prepare(attempt.signal);
+    attempt.abort();
+    finish({
+      id: 'unused',
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    });
+    await Promise.all([starting, warming]);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('keeps selection local until Start, then creates, connects and rings once', async () => {
     const { draft, session, create, invite, events } = setup();
     draft.select(new Set([alice.id, bob.id]));
@@ -104,6 +195,24 @@ describe('new meeting setup', () => {
       bob.id,
     ]);
     expect(session.joinedCallId()).toBe(credentials.callId);
+  });
+
+  it('enters the connected call while invitations are still pending', async () => {
+    let finish!: () => void;
+    const invite = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const { draft, session } = setup({ invite });
+    draft.select(new Set([alice.id]));
+    await session.join(undefined, preferences);
+    expect(session.joining()).toBe(false);
+    expect(session.joinedCallId()).toBe(credentials.callId);
+    expect(draft.inviting()).toBe(true);
+    finish();
+    await vi.waitFor(() => expect(draft.inviting()).toBe(false));
   });
 
   it('starts without invitees and reuses its meeting without ringing again on rejoin', async () => {

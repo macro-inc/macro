@@ -103,28 +103,32 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
 
       <Show
         when={
-          !props.hasNotifications &&
-          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          props.scheduleStatus ||
+          (!props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
         }
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
-          <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
-            <Match when={isTaskEntity(props.entity)}>
-              <Entity.Properties
-                entity={props.entity}
-                maxUserStackUsers={0}
-                showCaret={false}
-              />
-            </Match>
-            <Match
-              when={props.entity.type === 'calendar_event' && props.entity}
-            >
-              {(entity) => <CalendarEventWhen entity={entity()} />}
-            </Match>
-          </Switch>
+          {props.scheduleStatus}
+          <Show when={!props.hasNotifications}>
+            <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+              <Match when={isTaskEntity(props.entity)}>
+                <Entity.Properties
+                  entity={props.entity}
+                  maxUserStackUsers={0}
+                  showCaret={false}
+                />
+              </Match>
+              <Match
+                when={props.entity.type === 'calendar_event' && props.entity}
+              >
+                {(entity) => <CalendarEventWhen entity={entity()} />}
+              </Match>
+            </Switch>
+          </Show>
         </Entity.Slot>
       </Show>
     </Entity.Layout>

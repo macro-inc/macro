@@ -17,19 +17,156 @@ use std::sync::{
 
 const USER: &str = "macro|runner@macro.com";
 
+struct Admission {
+    result: std::result::Result<(), AiAdmissionError>,
+    calls: Mutex<Vec<(String, AiFeature)>>,
+}
+
+impl AiAdmissionService for Admission {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: AiFeature,
+    ) -> ai_billing::AdmissionFuture<'a> {
+        self.calls.lock().unwrap().push((user.to_string(), feature));
+        Box::pin(async { self.result })
+    }
+}
+
+fn admission(result: std::result::Result<(), AiAdmissionError>) -> Arc<Admission> {
+    Arc::new(Admission {
+        result,
+        calls: Mutex::default(),
+    })
+}
+
+struct StalledAdmission;
+
+impl AiAdmissionService for StalledAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: AiFeature,
+    ) -> ai_billing::AdmissionFuture<'a> {
+        Box::pin(std::future::pending())
+    }
+}
+
+#[tokio::test]
+async fn shutdown_during_admission_releases_claim_without_contacting_runner() {
+    let executor =
+        executor(Repo::default(), Runner::default()).with_admission(Arc::new(StalledAdmission));
+    let mut request = Box::pin(executor.execute_action(action()));
+    assert!(futures::poll!(&mut request).is_pending());
+    tokio::task::yield_now().await;
+    assert!(executor.repo.claim.lock().unwrap().is_some());
+    executor.cancellation.cancel();
+    assert!(request.await.unwrap_err().is::<ExecutionCancelled>());
+    drain(&executor).await;
+    assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
+    assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 0);
+    assert!(executor.runner.cancellations.lock().unwrap().is_empty());
+    assert!(executor.live_updates.0.lock().unwrap().is_empty());
+}
+
+fn admission_failures() -> [AiAdmissionError; 2] {
+    [
+        AiAdmissionError::Denied(ai_billing::DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ]
+}
+
+#[tokio::test]
+async fn manual_and_cron_refusals_release_claims_and_advance_schedule_without_resources() {
+    for error in admission_failures() {
+        // Both the manual service and cron dispatchers use execute_action.
+        let admission = admission(Err(error));
+        let executor =
+            executor(Repo::default(), Runner::default()).with_admission(admission.clone());
+        let returned = executor.execute_action(action()).await.unwrap_err();
+        assert_eq!(returned.downcast_ref::<AiAdmissionError>(), Some(&error));
+        drain(&executor).await;
+        assert_eq!(
+            *admission.calls.lock().unwrap(),
+            [(USER.into(), AiFeature::Automation)]
+        );
+        assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 0);
+        assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
+        assert!(executor.runner.cancellations.lock().unwrap().is_empty());
+        assert!(executor.live_updates.0.lock().unwrap().is_empty());
+        assert_eq!(executor.repo.claims.load(Ordering::SeqCst), 1);
+        assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
+        assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 1);
+        assert!(executor.repo.claim.lock().unwrap().is_none());
+        let records = executor.repo.records.lock().unwrap();
+        assert_eq!(records.len(), 1);
+        assert!(!records[0].is_success);
+        assert!(records[0].resource_id.is_none());
+        assert_eq!(records[0].result["error"], error.to_string());
+    }
+}
+
+#[tokio::test]
+async fn event_refusals_return_terminal_bookkeeping_without_replaying_or_releasing_early() {
+    for error in admission_failures() {
+        let admission = admission(Err(error));
+        let executor =
+            executor(Repo::default(), Runner::default()).with_admission(admission.clone());
+        let result = executor.execute(&event_run(), std::future::pending()).await;
+        assert_eq!(result.outcome, EventRunOutcome::Failed);
+        let record = result.record.unwrap();
+        assert!(!record.is_success);
+        assert!(record.resource_id.is_none());
+        assert_eq!(record.result["error"], error.to_string());
+        assert_eq!(
+            *admission.calls.lock().unwrap(),
+            [(USER.into(), AiFeature::Automation)]
+        );
+        assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 0);
+        assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
+        assert!(executor.live_updates.0.lock().unwrap().is_empty());
+        assert!(executor.runner.cancellations.lock().unwrap().is_empty());
+        // The event worker finalizes this failure and releases run.token atomically.
+        assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 0);
+        assert!(executor.repo.records.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn admitted_model_execution_uses_the_persisted_owner_and_automation_feature() {
+    let admission = admission(Ok(()));
+    let executor = executor(Repo::default(), Runner::default()).with_admission(admission.clone());
+    executor.runner.finish.cancel();
+    executor.execute_action(action()).await.unwrap();
+    drain(&executor).await;
+    assert_eq!(
+        *admission.calls.lock().unwrap(),
+        [(USER.into(), AiFeature::Automation)]
+    );
+    assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 1);
+    assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 1);
+    assert!(executor.repo.records.lock().unwrap()[0].is_success);
+}
+
 #[derive(Default)]
 struct Repo {
     claim: Mutex<Option<ClaimToken>>,
     claims: AtomicUsize,
     claimed_revisions: Mutex<Vec<i64>>,
     releases: AtomicUsize,
+    rescheduled: AtomicUsize,
     records: Mutex<Vec<ActionExecutionRecord>>,
     fail_persistence: bool,
     stall_persistence: bool,
 }
 
 impl ScheduledActionRepo for Repo {
-    async fn claim_action(&self, _: &Uuid, revision: ConfigurationRevision) -> Result<ClaimToken> {
+    async fn claim_action(
+        &self,
+        _: &Uuid,
+        revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<ClaimToken> {
         self.claims.fetch_add(1, Ordering::SeqCst);
         self.claimed_revisions.lock().unwrap().push(revision.get());
         let mut claim = self.claim.lock().unwrap();
@@ -54,6 +191,7 @@ impl ScheduledActionRepo for Repo {
         Ok(())
     }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
+        self.rescheduled.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn update_last_executed(&self, _: &Uuid, _: DateTime<Utc>) -> Result<()> {

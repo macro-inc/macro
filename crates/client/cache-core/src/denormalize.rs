@@ -145,16 +145,26 @@ fn denormalize_record_with_entity_resolvers(
 pub(crate) struct ReadSession<'a> {
     data: Json,
     pending: Vec<PendingRecord<'a>>,
+    deleted_items: BTreeSet<Vec<ResponsePath<'a>>>,
     miss: Option<(EntityKey<'static>, String)>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum ResponsePath<'a> {
     Field(&'a str),
     Index(usize),
 }
 
+#[derive(Clone, Copy)]
+enum DeletedRecord {
+    Miss,
+    Null,
+    Omit,
+}
+
 struct PendingRecord<'a> {
+    deleted: DeletedRecord,
+    aliases: Vec<EntityKey<'static>>,
     key: EntityKey<'static>,
     type_name: &'a str,
     selections: &'a [Selection],
@@ -176,7 +186,10 @@ impl<'a> ReadSession<'a> {
                 type_name,
                 selections,
                 destination: Some(Vec::new()),
+                deleted: DeletedRecord::Miss,
+                aliases: Vec::new(),
             }],
+            deleted_items: BTreeSet::new(),
             miss: None,
         }
     }
@@ -198,11 +211,18 @@ impl<'a> ReadSession<'a> {
                 entity_resolvers,
                 plans,
                 pending: &mut self.pending,
+                deleted_items: &mut self.deleted_items,
                 miss: &mut self.miss,
                 path: pending.destination.unwrap_or_default(),
                 retain_output,
             };
-            let data = walk.read_record(&pending.key, pending.type_name, pending.selections)?;
+            let data = walk.read_record(
+                &pending.key,
+                pending.type_name,
+                pending.selections,
+                pending.deleted,
+                pending.aliases,
+            )?;
             if retain_output {
                 let mut slot = &mut self.data;
                 for segment in walk.path {
@@ -226,6 +246,24 @@ impl<'a> ReadSession<'a> {
         if let Some((entity, field)) = self.miss.take() {
             return Ok(ReadOutcome::Miss { entity, field });
         }
+        // Keep array positions stable until every suspended branch has finished.
+        // Remove later indices and deeper paths first so earlier paths stay valid.
+        for path in std::mem::take(&mut self.deleted_items).into_iter().rev() {
+            let Some((ResponsePath::Index(index), parent)) = path.split_last() else {
+                continue;
+            };
+            let mut slot = &mut self.data;
+            for segment in parent {
+                slot = match segment {
+                    ResponsePath::Field(field) => slot.get_mut(*field),
+                    ResponsePath::Index(index) => slot.get_mut(*index),
+                }
+                .expect("deleted response slot remains present");
+            }
+            slot.as_array_mut()
+                .expect("deleted list item")
+                .remove(*index);
+        }
         Ok(ReadOutcome::Complete(self.data.take()))
     }
 }
@@ -237,6 +275,7 @@ struct Walk<'a, 'document, S: RecordSource, D: DependencyTracker> {
     entity_resolvers: &'a EntityResolverLookup,
     plans: &'a mut ReadPlans<'document>,
     pending: &'a mut Vec<PendingRecord<'document>>,
+    deleted_items: &'a mut BTreeSet<Vec<ResponsePath<'document>>>,
     miss: &'a mut Option<(EntityKey<'static>, String)>,
     path: Vec<ResponsePath<'document>>,
     retain_output: bool,
@@ -248,20 +287,47 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         key: &EntityKey<'static>,
         type_name: &'document str,
         selections: &'document [Selection],
+        deleted: DeletedRecord,
+        mut aliases: Vec<EntityKey<'static>>,
     ) -> Result<Json, DenormalizeError> {
-        self.deps.record(key);
-        let Some(record) = self.source.get(key) else {
-            self.pending.push(PendingRecord {
-                key: key.clone(),
-                type_name,
-                selections,
-                destination: self.retain_output.then(|| self.path.clone()),
-            });
-            return Ok(Json::Null);
+        let mut key = key.clone();
+        let record = loop {
+            self.deps.record(&key);
+            if aliases.contains(&key) || aliases.len() >= crate::identity::MAX_ALIAS_CHAIN_DEPTH {
+                self.mark_miss(&key, "cyclic cache identity".into());
+                return Ok(Json::Null);
+            }
+            let Some(record) = self.source.get(&key) else {
+                self.pending.push(PendingRecord {
+                    key,
+                    type_name,
+                    selections,
+                    deleted,
+                    aliases,
+                    destination: self.retain_output.then(|| self.path.clone()),
+                });
+                return Ok(Json::Null);
+            };
+            if let Some(target) = crate::identity::alias_target(record) {
+                aliases.push(key);
+                key = target.clone();
+                continue;
+            }
+            break record;
         };
+        if record.fields.get(crate::identity::DELETED_FIELD) == Some(&CacheValue::Bool(true)) {
+            match deleted {
+                DeletedRecord::Miss => self.mark_miss(&key, "deleted cache identity".into()),
+                DeletedRecord::Omit if self.retain_output => {
+                    self.deleted_items.insert(self.path.clone());
+                }
+                _ => {}
+            }
+            return Ok(Json::Null);
+        }
         let concrete = record.typename().unwrap_or(type_name);
-        self.deps.field(key, concrete, "__typename");
-        self.read_fields(key, &record.fields, concrete, selections)
+        self.deps.field(&key, concrete, "__typename");
+        self.read_fields(&key, &record.fields, concrete, selections)
     }
 
     fn read_fields(
@@ -290,6 +356,10 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                     }
                 }
             }
+            if out.contains_key(&field.response_key) {
+                self.deleted_items
+                    .retain(|path| !path.starts_with(&self.path));
+            }
             let value = self.read_field(owner, fields, concrete, planned_field)?;
             self.path.pop();
             if let Some(value) = value {
@@ -314,26 +384,32 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             }
             FieldSource::Missing(key) => {
                 self.deps.field(owner, concrete, key);
+                if matches!(fields.get(key.as_ref()), Some(CacheValue::Null)) {
+                    return Ok(Some(Json::Null));
+                }
                 self.mark_miss(owner, key.to_string());
                 Ok(None)
             }
             FieldSource::Entity {
                 key,
-                type_name,
+                ty,
                 storage_key,
             } => {
                 self.deps.field(owner, concrete, storage_key);
-                self.read_record(key, type_name, &field.node.selection_set)
+                // A server-observed null wins over an argument-derived relation.
+                if matches!(fields.get(storage_key.as_ref()), Some(CacheValue::Null)) {
+                    return Ok(Some(Json::Null));
+                }
+                self.read_value(owner, field.node, ty, &CacheValue::Ref(key.clone()))
                     .map(Some)
             }
-            FieldSource::Stored { key, type_name } => {
+            FieldSource::Stored { key, ty } => {
                 self.deps.field(owner, concrete, key);
                 let Some(value) = fields.get(key.as_ref()) else {
                     self.mark_miss(owner, key.to_string());
                     return Ok(None);
                 };
-                self.read_value(owner, field.node, type_name, value)
-                    .map(Some)
+                self.read_value(owner, field.node, ty, value).map(Some)
             }
         }
     }
@@ -348,7 +424,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         &mut self,
         owner: &EntityKey<'static>,
         field: &'document FieldNode,
-        named_type: &'static str,
+        ty: &meta::FieldType,
         value: &CacheValue,
     ) -> Result<Json, DenormalizeError> {
         Ok(match value {
@@ -358,7 +434,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             CacheValue::String(value) => Json::String(value.clone()),
             CacheValue::Opaque(value) => {
                 serde_json::from_str(value).map_err(|_| DenormalizeError::Shape {
-                    type_name: named_type.to_string(),
+                    type_name: ty.name.to_string(),
                     field: field.name.clone(),
                 })?
             }
@@ -366,16 +442,28 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                 let mut out = Vec::with_capacity(items.len());
                 for (index, item) in items.iter().enumerate() {
                     self.path.push(ResponsePath::Index(index));
-                    out.push(self.read_value(owner, field, named_type, item)?);
+                    out.push(self.read_value(owner, field, ty, item)?);
                     self.path.pop();
                 }
                 Json::Array(out)
             }
-            CacheValue::Ref(key) => self.read_record(key, named_type, &field.selection_set)?,
+            CacheValue::Ref(key) => self.read_record(
+                key,
+                ty.name,
+                &field.selection_set,
+                if ty.list {
+                    DeletedRecord::Omit
+                } else if ty.nullable {
+                    DeletedRecord::Null
+                } else {
+                    DeletedRecord::Miss
+                },
+                Vec::new(),
+            )?,
             CacheValue::Object(map) => {
                 let concrete = match map.get("__typename") {
                     Some(CacheValue::String(typename)) => typename.as_str(),
-                    _ => named_type,
+                    _ => ty.name,
                 };
                 self.read_fields(owner, map, concrete, &field.selection_set)?
             }

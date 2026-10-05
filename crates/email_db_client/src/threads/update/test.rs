@@ -332,3 +332,68 @@ async fn repeated_metadata_recompute_is_noop(pool: Pool<Postgres>) -> anyhow::Re
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../email/fixtures", scripts("email_thread_labels"))
+)]
+async fn returned_sent_only_metadata_preserves_visibility_without_rewriting(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let sent_label = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_labels (id, link_id, provider_label_id, name) VALUES ($1, $2, 'SENT', 'SENT')",
+        sent_label, link_id,
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent = TRUE WHERE thread_id = $1",
+        thread_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_message_labels (message_id, label_id) SELECT id, $2 FROM email_messages WHERE thread_id = $1",
+        thread_id, sent_label,
+    ).execute(&pool).await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    // All ordinary metadata already matches, including raw inbox_visible=false.
+    sqlx::query!(
+        "UPDATE email_threads SET reminder_returned_at = NOW() WHERE id = $1",
+        thread_id
+    )
+    .execute(&pool)
+    .await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    let restored = sqlx::query!(
+        "SELECT inbox_visible, latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        restored.inbox_visible,
+        "the effective override must repair false visibility"
+    );
+    assert!(restored.latest_inbound_message_ts.is_none());
+
+    // A fixed old timestamp makes an unintended rewrite observable without sleeps.
+    let previous = sqlx::query_scalar!(
+        "UPDATE email_threads SET updated_at = '2000-01-01T00:00:00Z' WHERE id = $1 RETURNING updated_at",
+        thread_id,
+    ).fetch_one(&pool).await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    let repeated = sqlx::query!(
+        "SELECT inbox_visible, updated_at FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(repeated.inbox_visible);
+    assert_eq!(
+        repeated.updated_at, previous,
+        "matching effective visibility must not rewrite metadata"
+    );
+    Ok(())
+}

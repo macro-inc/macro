@@ -3,7 +3,6 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
@@ -27,7 +26,7 @@ import FileRs from '@phosphor/file-rs.svg';
 import FileSql from '@phosphor/file-sql.svg';
 import FileTs from '@phosphor/file-ts.svg';
 import TrashCan from '@phosphor/trash-simple.svg';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, CopyButton, cn, Dropdown } from '@ui';
 import {
   $getNodeByKey,
   type EditorThemeClasses,
@@ -181,18 +180,19 @@ export function CodeBoxAccessory(props: {
     );
   }
 
-  const copyCode = () => {
+  const copyCode = async () => {
     const code = props.editor.read(() => {
       const node = $getNodeByKey(props.nodeKey);
       if (!node) return '';
       return node.getTextContent();
     });
-    if (!code) return;
+    if (!code) return false;
     try {
-      navigator.clipboard.writeText(code);
-      toast.success('Copied code to clipboard');
+      await navigator.clipboard.writeText(code);
+      return true;
     } catch (e) {
       console.error('Failed to copy code to clipboard', e);
+      return false;
     }
   };
 
@@ -276,19 +276,19 @@ export function CodeBoxAccessory(props: {
                 <TrashCan />
               </Button>
             </Show>
-            <Button
+            <CopyButton
               variant="ghost"
               size="icon-sm"
               class="text-ink-extra-muted/50 h-full"
               tooltip="Copy Code"
-              on:click={(e) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                copyCode();
+                return copyCode();
               }}
             >
               <Copy />
-            </Button>
+            </CopyButton>
           </div>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
@@ -403,14 +403,15 @@ export const StaticCodeBoxAccessory = (props: {
   const isPreviewMode = () => props.isPreviewMode?.() ?? localPreviewMode();
   const setIsPreviewMode = props.setIsPreviewMode ?? setLocalPreviewMode;
 
-  const copyCode = () => {
+  const copyCode = async () => {
     const code = props.code;
-    if (!code) return;
+    if (!code) return false;
     try {
-      navigator.clipboard.writeText(code);
-      toast.success('Copied code to clipboard');
+      await navigator.clipboard.writeText(code);
+      return true;
     } catch (e) {
       console.error('Failed to copy code to clipboard', e);
+      return false;
     }
   };
 
@@ -443,19 +444,19 @@ export const StaticCodeBoxAccessory = (props: {
               </Switch>
             </div>
           </Show>
-          <Button
+          <CopyButton
             variant="ghost"
             size="icon-sm"
             class="text-ink-extra-muted/50 h-full"
             tooltip="Copy Code"
-            on:click={(e) => {
+            onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              copyCode();
+              return copyCode();
             }}
           >
             <Copy />
-          </Button>
+          </CopyButton>
         </div>
       </div>
       <Show when={isPreviewMode() && showPreviewToggle()}>

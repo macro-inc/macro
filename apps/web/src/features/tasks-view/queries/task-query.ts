@@ -15,9 +15,12 @@ import {
   TASK_FACETS,
   type TaskFacetContext,
 } from '../filters/task-facets';
-import type { TaskGroupBy, TaskSortId, TaskTab } from '../types';
-
-import { taskMembershipScope } from './task-membership';
+import type {
+  TaskGroupBy,
+  TaskReferenceScope,
+  TaskSortId,
+  TaskTab,
+} from '../types';
 
 type TaskAst = BackendAstNode;
 
@@ -43,13 +46,19 @@ const documentScope = (tab: TaskTab, userId: string | undefined): TaskAst => {
 const propertyScope = (
   tab: TaskTab,
   userId: string | undefined,
-  compiledFacets: TaskAst | undefined
+  compiledFacets: TaskAst | undefined,
+  reference: TaskReferenceScope | undefined
 ): TaskAst | undefined => {
   const groups: TaskAst[] = [];
   if (compiledFacets) groups.push(compiledFacets);
 
   if (tab === 'my-tasks' && userId) {
     groups.push(entityPropertyLiteral(SYSTEM_PROPERTY_IDS.ASSIGNEES, userId));
+  }
+  if (reference) {
+    groups.push(
+      entityPropertyLiteral(reference.propertyDefinitionId, reference.entityId)
+    );
   }
 
   return combine('&', groups);
@@ -102,8 +111,8 @@ export type BuildTaskQueryOptions = {
   facetContext?: TaskFacetContext;
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];
-  /** Authorized membership scope; an empty set deliberately matches no tasks. */
-  taskIds?: readonly string[];
+  /** Only tasks whose property references this entity. */
+  reference?: TaskReferenceScope;
 };
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
@@ -126,17 +135,15 @@ export function buildTaskQuery(
   const properties = propertyScope(
     options.tab,
     options.userId,
-    compiledFacets.propf
+    compiledFacets.propf,
+    options.reference
   );
 
   const taskDocuments = documentScope(options.tab, options.userId);
 
-  let documents: TaskAst = compiledFacets.df
+  const documents: TaskAst = compiledFacets.df
     ? { '&': [taskDocuments, compiledFacets.df] }
     : taskDocuments;
-  if (options.taskIds !== undefined) {
-    documents = { '&': [documents, taskMembershipScope(options.taskIds)] };
-  }
 
   const body: SoupAstBody = {
     ...nonTaskTargets,

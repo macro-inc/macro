@@ -1,6 +1,6 @@
 //! Kafka worker that turns committed posts into agent-session events.
 
-// The consumer loop is generic over the trigger source, and the select! it
+// The consumer loop is generic over the trigger topic, and the select! it
 // awaits in nests the concrete service types past the default query depth.
 #![recursion_limit = "256"]
 
@@ -8,36 +8,57 @@ mod config;
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_message_event;
+use agent_trigger::domain::project_assignment::ProjectAssignmentService;
 use agent_trigger::domain::service::AgentTriggerService;
-use agent_trigger::domain::sources::{ChannelTriggerEvents, MessageTriggerEvents, TriggerEvents};
+use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
+use agent_trigger::domain::task_assignment::{
+    ProjectTaskAssignmentContext, TaskAssignmentContext, process_task_assignment,
+};
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
+    BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
     LexicalExplicitReplyExtractor, MessageThreadHistory, VisionImageCaptioner,
 };
 use anyhow::Context as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
+use connection_gateway_client::client::ConnectionGatewayClient;
+use document_storage_service_client::DocumentStorageServiceClient;
+use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
+use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
 };
-use macro_service_urls::{LexicalServiceUrl, StaticFileServiceUrl};
+use macro_service_urls::{
+    ConnectionGatewayUrl, DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
+};
+use messages::domain::api::MessageCommands;
 use messages::outbound::pg_message_repo::PgMessageRepository;
+use properties::{
+    PermissionServiceImpl, PropertiesPgRepo, PropertiesService, PropertiesServiceImpl,
+};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
+use system_properties::{
+    PgSystemPropertiesRepository, SystemPropertiesService, SystemPropertiesServiceImpl,
+};
 use tracing::Instrument as _;
 
 struct AgentTriggerConsumerGroup;
 
 impl GroupName for AgentTriggerConsumerGroup {
     const GROUP_NAME: &'static str = "agent-trigger-service";
+    // Existing partitions resume committed offsets. Newly subscribed topics
+    // start with future events, without assigning agents to historical tasks.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 /// The concrete trigger service this binary composes.
@@ -59,6 +80,30 @@ type ChannelTypes = ChannelRepoTypeLookup<PgChannelsRepo>;
 
 type TriggerKafkaAdapter<M> = KafkaConsumerAdapter<AgentTriggerConsumerGroup, M>;
 type TriggerConsumer<M> = MacroEventConsumerService<M, TriggerKafkaAdapter<M>>;
+
+// This worker only posts silent assignment roots. Session replies and their
+// notifications are delivered by the harness's full message service.
+struct SilentAssignmentNotifications;
+
+impl messages::domain::delivery::DiscussionNotifier for SilentAssignmentNotifications {
+    async fn send(
+        &self,
+        _: messages::domain::delivery::DiscussionNotification<'_>,
+    ) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
+impl properties::NotificationService for SilentAssignmentNotifications {
+    type Err = anyhow::Error;
+
+    async fn send_task_assigned<'a>(
+        &self,
+        _: properties::domain::model::TaskAssignedNotification<'a>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+}
 
 fn commit_message<M: MacroEventCollection + 'static>(
     consumer: &TriggerConsumer<M>,
@@ -91,7 +136,23 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
     );
-    let recorder = ai_usage::pg_recorder(pool.clone());
+    let recorder =
+        ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        config.enable_ai_usage_enforcement,
+    );
+    let task_context = ProjectTaskAssignmentContext::new(
+        DssTaskAssignmentContext::new(
+            DocumentStorageServiceClient::new(
+                config.document_storage_service_auth_key.clone(),
+                DocumentStorageServiceUrl::new()?.to_string(),
+            ),
+            lexical.clone(),
+        ),
+        SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
+        EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
+    );
     let images = VisionImageCaptioner::new(
         static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
         recorder.clone(),
@@ -119,32 +180,80 @@ async fn run() -> anyhow::Result<()> {
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-    );
-    let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
+    )
+    .with_admission(admission);
+    let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool.clone()));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())?,
         macro_event_broker::GlobalSpawner,
+    );
+    let project_assignments = ProjectAssignmentService::new(
+        PropertiesServiceImpl::new(
+            PropertiesPgRepo::new(pool.clone()),
+            Some(PermissionServiceImpl::new(
+                pool.clone(),
+                Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+                    pool.clone(),
+                ))),
+            )),
+            None::<SilentAssignmentNotifications>,
+        )
+        .with_event_broker(publisher.clone()),
+        SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
+        EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
+    );
+    let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
+        messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            ),
+        ),
+        messages::outbound::connection_gateway::ConnectionGatewayMessages(Arc::new(
+            ConnectionGatewayClient::new(
+                config.internal_api_key.clone(),
+                ConnectionGatewayUrl::new()?.to_string(),
+            ),
+        )),
+        SilentAssignmentNotifications,
+    );
+    let messages = messages::domain::service::MessageService::new(
+        PgMessageRepository::new(pool),
+        messages::domain::effects::MessageEffects::new(
+            messages::outbound::broker::BrokerMessagePublisher::new(publisher.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+            discussion_delivery,
+        ),
     );
     let consumer =
         KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(config.kafka_brokers.as_ref())?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
 
-    match config.agent_trigger_event_source {
-        agent_trigger::domain::sources::TriggerEventSource::Messages => {
-            consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
-        }
-        agent_trigger::domain::sources::TriggerEventSource::Channels => {
-            consume::<ChannelTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
-        }
-    }
+    consume::<MessageTriggerEvents>(
+        consumer,
+        &trigger,
+        &publisher,
+        &channel_types,
+        &messages,
+        &task_context,
+        &project_assignments,
+    )
+    .await
 }
 
-/// Read one trigger source until shutdown, evaluating every committed post.
+/// Read the trigger topic until shutdown, evaluating every committed post.
 async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
     trigger: &Trigger,
     publisher: &Publisher,
     channel_types: &ChannelTypes,
+    messages: &dyn MessageCommands,
+    task_context: &impl TaskAssignmentContext,
+    project_assignments: &ProjectAssignmentService<
+        impl PropertiesService,
+        impl SystemPropertiesService,
+        impl EntityAccessService,
+    >,
 ) -> anyhow::Result<()> {
     let consumer = consumer
         .subscribe::<Events>()
@@ -153,7 +262,6 @@ async fn consume<Events: TriggerEvents>(
 
     tracing::info!(
         topics = ?Events::topics(),
-        source = ?Events::SOURCE,
         group = AgentTriggerConsumerGroup::GROUP_NAME,
         "agent trigger service listening"
     );
@@ -196,6 +304,12 @@ async fn consume<Events: TriggerEvents>(
 
                     if let Some(posted) = &decoded.posted {
                         process_message_event(trigger, publisher, channel_types, posted).await?;
+                    }
+                    if let Some(assignment) = &decoded.assignment {
+                        process_task_assignment(trigger, publisher, messages, task_context, assignment).await?;
+                    }
+                    if let Some(added) = &decoded.project_task {
+                        project_assignments.process(added).await?;
                     }
                     commit_message(&consumer, kafka_message)?;
                     Ok(())

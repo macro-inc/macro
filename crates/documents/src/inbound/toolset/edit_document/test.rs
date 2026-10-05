@@ -29,6 +29,78 @@ use model_owner::{CreationPrincipal, Owner};
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 
+use ai_billing::domain::{
+    DenyReason,
+    admission::{AdmissionFuture, AiAdmissionError, AiAdmissionService},
+};
+
+struct Refuse(AiAdmissionError);
+impl AiAdmissionService for Refuse {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> AdmissionFuture<'a> {
+        Box::pin(async move {
+            assert_eq!(user.as_ref(), TEST_USER_ID);
+            assert_eq!(feature, ai_usage::AiFeature::AiEditing);
+            Err(self.0)
+        })
+    }
+}
+
+#[tokio::test]
+async fn direct_edit_tool_surfaces_admission_failure_without_worker_calls() {
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let (result, worker) = call_edit_document_in("md", false, |context| {
+            context.with_admission(Arc::new(Refuse(error)))
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err().description,
+            format!("{}: {error}", error.code())
+        );
+        assert!(worker.edit_calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn permission_errors_still_precede_quota_errors() {
+    let (result, worker) = call_edit_document_in("md", false, |mut context| {
+        context.entity_access_service = Arc::new(FakeEntityAccessService {
+            access_level: AccessLevel::View,
+        });
+        context.with_admission(Arc::new(Refuse(AiAdmissionError::Unavailable)))
+    })
+    .await;
+    assert_eq!(
+        result.unwrap_err().description,
+        "you do not have edit access to this document"
+    );
+    assert!(worker.edit_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn cancelled_tool_does_not_start_worker() {
+    let worker = FakeEditingWorker::default();
+    let context = tool_context(FakeDocumentService::new("md"), worker.clone());
+    let request = request_context();
+    request.cancel.cancel();
+    let tool = EditDocument {
+        document_id: TEST_DOCUMENT_ID.into(),
+        instructions: "edit".into(),
+        fast: false,
+    };
+    assert_eq!(
+        tool.call(context, request).await.unwrap_err().description,
+        "cancelled"
+    );
+    assert!(worker.edit_calls.lock().unwrap().is_empty());
+}
+
 const TEST_USER_ID: &str = "macro|editor@example.com";
 const TEST_DOCUMENT_ID: &str = "019fd3b9-3c6c-7c05-89c2-a27f0121813b";
 
@@ -454,6 +526,15 @@ impl EditingWorkerService for FakeEditingWorker {
         panic!("unexpected spreadsheet call")
     }
 
+    async fn word_document(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::word_document::WordDocumentRequest,
+    ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
+        panic!("unexpected word document call")
+    }
+
     async fn add_comment_mark(
         &self,
         document_id: &str,
@@ -844,4 +925,10 @@ fn only_markdown_is_editable() {
         ensure_markdown(&document_with_file_type(None)).is_err(),
         "a document with no file type must be rejected"
     );
+}
+
+#[test]
+fn word_documents_are_pointed_at_the_word_tools() {
+    let error = ensure_markdown(&document_with_file_type(Some("docx"))).unwrap_err();
+    assert!(error.description.contains("EditWordDocument"));
 }

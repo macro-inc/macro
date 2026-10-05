@@ -24,7 +24,7 @@ mod test;
 use crate::domain::ingestion::{WebhookEventIngestionError, WebhookEventIngestionService};
 use crate::topics::DeclaredMacroEvent;
 use anyhow::Context as _;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
@@ -40,6 +40,9 @@ struct WebhookEventIngestionConsumerGroup;
 
 impl GroupName for WebhookEventIngestionConsumerGroup {
     const GROUP_NAME: &'static str = "webhook-event-ingestion";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type WebhookKafkaAdapter =
@@ -104,6 +107,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     }
                     DeclaredMacroEvent::ChannelMacroEvent(event) => {
                         service.ingest_channel_event(event.event().clone()).await
+                    }
+                    DeclaredMacroEvent::MessageMacroEvent(event) => {
+                        service.ingest_message_event(event.event().clone()).await
                     }
                     DeclaredMacroEvent::WebhookMacroEvent(event) => {
                         service.ingest_webhook_event(event.event().clone()).await

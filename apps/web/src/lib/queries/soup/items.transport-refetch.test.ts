@@ -96,6 +96,8 @@ vi.mock('./graphql/grouped-items', () => ({
 }));
 
 import { refreshActiveGraphqlSoupQueries } from './graphql/active-queries';
+import { makeGraphqlGroupedSoupInput } from './graphql/ast';
+import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 import {
   type SoupAstItemsData,
@@ -241,6 +243,50 @@ describe('Soup refetch transport selection', () => {
     expect(restRefetch).toHaveBeenCalledOnce();
     expect(groupedQuery.refresh).not.toHaveBeenCalled();
   });
+
+  it.each(['inbox', 'drafts', 'sent', 'all'] as const)(
+    'keeps grouped %s mail on REST even when GraphQL is explicitly requested and cached mail exists',
+    async (emailView) => {
+      testState.graphqlEnabled = true;
+      vi.mocked(createGraphqlGroupedSoupAstItemsQuery).mockImplementationOnce(
+        (args) => ({
+          ...groupedQuery,
+          // Use the real AST eligibility boundary, not the default supported mock.
+          isSupported: () => {
+            const request = args();
+            if (!request.groupBy) return false;
+            try {
+              makeGraphqlGroupedSoupInput({
+                ...request,
+                groupBy: request.groupBy,
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          data: () => ({ cachedMail: true, entities: [], groups: [] }),
+        })
+      );
+      const query = createRoot((dispose) => {
+        disposeRoot = dispose;
+        return useSoupAstItemsQuery(() => ({
+          params: { sort_method: 'updated_at' },
+          body: { emailView },
+          groupBy: { type: 'date' },
+          transport: 'graphql',
+        }));
+      });
+      expect(query.transport).toBe('rest');
+      expect(query.data).toBeUndefined(); // Never exposes the private cached-Mail projection.
+      const restOptions = vi.mocked(useInfiniteQuery).mock.calls.at(-1)?.[0];
+      expect(restOptions?.().enabled).toBe(true);
+      await query.refetch();
+      await refreshActiveGraphqlSoupQueries();
+      expect(restRefetch).toHaveBeenCalledOnce();
+      expect(groupedQuery.refresh).not.toHaveBeenCalled();
+    }
+  );
 
   it('uses GraphQL refetch and mutation-driven refresh when the flag is on', async () => {
     testState.graphqlEnabled = true;

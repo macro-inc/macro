@@ -16,7 +16,7 @@ inbound = [
   "ports",
 ]
 outbound = ["ports"]
-resources = ["outbound", "dep:properties", "dep:system_properties", "dep:models_properties"]
+resources = ["outbound", "dep:properties", "dep:system_properties"]
 ports = ["dep:entity_access", "dep:tracing"]
 postgres = [
   "dep:sqlx",
@@ -35,7 +35,7 @@ bot_id = { path = "../bot_id", optional = true }
 schemars = { workspace = true, optional = true }
 properties = { path = "../properties", optional = true, default-features = false }
 system_properties = { path = "../system_properties", optional = true }
-models_properties = { path = "../models_properties", optional = true }
+models_properties = { path = "../models_properties" }
 activity = { path = "../activity", default-features = false }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
@@ -69,6 +69,8 @@ anyhow = { workspace = true }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
+properties = { path = "../properties", default-features = false, features = ["outbound"] }
 serde_json = { workspace = true }
+system_properties = { path = "../system_properties" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }

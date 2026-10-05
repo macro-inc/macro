@@ -26,6 +26,7 @@ use item_filters::{
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
         crm_company::CrmCompanyLiteral,
+        database_row::DatabaseRowLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
@@ -347,6 +348,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut calendar_events = Vec::new();
     let mut reminders = Vec::new();
     let mut agent_sessions = Vec::new();
+    let mut database_rows = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -373,12 +375,14 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
             EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
             EntityType::AgentSession => agent_sessions.push(AgentSessionLiteral::Id(id)),
+            EntityType::DatabaseRow => database_rows.push(DatabaseRowLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
             | EntityType::Skill
-            | EntityType::ScheduledAction => {
+            | EntityType::ScheduledAction
+            | EntityType::Database => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -415,9 +419,11 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             foreign_entities,
             ForeignEntityLiteral::Id(nil),
         )),
+        github_pull_request_filter: None,
         reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
         agent_session_filter: Some(literal_tree(agent_sessions, AgentSessionLiteral::Id(nil))),
         initiative_filter: Some(literal_tree(initiatives, InitiativeLiteral::Id(nil))),
+        database_row_filter: Some(literal_tree(database_rows, DatabaseRowLiteral::Id(nil))),
         properties_filter: None,
     })
 }

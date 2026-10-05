@@ -323,7 +323,7 @@
 }
 .setup-graphic .supermodule-cta-headline {
   fill: var(--color-ink);
-  font-family: rajdhani, body, sans-serif;
+  font-family: Inter, body, sans-serif;
   font-size: 32px;
   font-weight: 700;
   letter-spacing: 0.08em;

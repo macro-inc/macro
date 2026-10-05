@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH sources AS (\n                SELECT DISTINCT id, auth_entity\n                FROM UNNEST($1::text[], $2::text[]) AS source(id, auth_entity)\n            )\n            SELECT\n                assignee.value ->> 'githubUserId' AS \"github_user_id!\",\n                (ARRAY_AGG(\n                    assignee.value ->> 'login'\n                    ORDER BY gpr.updated_at DESC, gpr.github_key\n                ) FILTER (WHERE assignee.value ->> 'login' IS NOT NULL))[1] AS login,\n                COUNT(*) AS \"count!\"\n            FROM github_pull_request gpr\n            CROSS JOIN LATERAL jsonb_array_elements(gpr.assignees) AS assignee(value)\n            WHERE assignee.value ->> 'githubUserId' IS NOT NULL\n              AND EXISTS (\n                SELECT 1\n                FROM foreign_entity fe\n                JOIN sources s\n                  ON s.id = fe.stored_for_id AND s.auth_entity = fe.stored_for_auth_entity\n                WHERE fe.foreign_entity_source = $3::text\n                  AND fe.foreign_entity_id = gpr.github_key\n              )\n            GROUP BY assignee.value ->> 'githubUserId'\n            ORDER BY COUNT(*) DESC, assignee.value ->> 'githubUserId'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "login",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "5525330b29617a1f95c5938df412cdc09b15b0c5f100472b277646b251cbcf68"
+}

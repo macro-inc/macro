@@ -127,6 +127,7 @@ fn attributed_update_and_delete_map_to_activities() {
     assert_eq!(activity.subject_id, "macro|editor@example.com");
 
     let deleted = envelope(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: Some(user("macro|editor@example.com")),
         actor: None,
@@ -177,6 +178,7 @@ fn unattributable_mutations_are_dropped() {
     assert_eq!(updated.event.ingest(updated.event_id), Ingest::Ignore);
 
     let deleted = envelope(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: None,
         actor: None,
@@ -375,6 +377,7 @@ fn attributed_sync_content_is_an_edited_activity() {
 #[test]
 fn replaying_an_event_derives_identical_activity_ids() {
     let event = envelope(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+        sub_type: None,
         document_id: DOCUMENT_ID.to_string(),
         actor_user_id: Some(user("macro|editor@example.com")),
         actor: None,
@@ -528,6 +531,7 @@ async fn unavailable_debounce_is_best_effort_and_does_not_stall_other_activity()
         .unwrap();
         assert_eq!(result, Ingest::Ignore);
         let deleted = DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
+            sub_type: None,
             document_id: DOCUMENT_ID.to_owned(),
             actor_user_id: Some(user("macro|alice@example.com")),
             actor: None,

@@ -15,7 +15,7 @@ import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
@@ -80,7 +80,7 @@ export function agentSessionTitle(
  * toolbar: static label, shared entity actions, the session's pull request
  * once one exists, and external-provider links.
  *
- * Rename lives on the title menu (channel / automation), not on a tap of
+ * Rename lives on the title menu (channel / routine), not on a tap of
  * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
  * the dropdown instead of an inline editor.
  */
@@ -192,7 +192,7 @@ export function AgentSplitHeader(props: {
           <Show when={props.session?.pullRequestUrl}>
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
-          <Show when={!isMobile()}>
+          <Show when={!isTouchDevice()}>
             <ChangesToggle />
             <For each={tools}>
               {(tool) => (

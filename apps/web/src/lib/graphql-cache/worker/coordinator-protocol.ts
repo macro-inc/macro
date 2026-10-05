@@ -554,6 +554,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'data',
           'linkPatches',
           'revalidations',
+          'identityBindings',
           'createdAtMs',
           'owner',
           'nowMs',
@@ -568,6 +569,32 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         (value.linkPatches === undefined || Array.isArray(value.linkPatches)) &&
         (value.revalidations === undefined ||
           Array.isArray(value.revalidations)) &&
+        (value.identityBindings === undefined ||
+          (Array.isArray(value.identityBindings) &&
+            value.identityBindings.length <= 32 &&
+            value.identityBindings.every(
+              (binding) =>
+                isRecord(binding) &&
+                hasOnlyKeys(binding, [
+                  'localKey',
+                  'responsePath',
+                  'referenceFields',
+                  'revalidationVariables',
+                  'deleteRecord',
+                ]) &&
+                (binding.deleteRecord === undefined ||
+                  typeof binding.deleteRecord === 'boolean') &&
+                isValidNormalizedRecordKey(binding.localKey) &&
+                Array.isArray(binding.responsePath) &&
+                binding.responsePath.length <= 16 &&
+                binding.responsePath.every(isString) &&
+                (binding.referenceFields === undefined ||
+                  (Array.isArray(binding.referenceFields) &&
+                    binding.referenceFields.every(isString))) &&
+                (binding.revalidationVariables === undefined ||
+                  (Array.isArray(binding.revalidationVariables) &&
+                    binding.revalidationVariables.every(isString)))
+            ))) &&
         isSafeNonNegativeInteger(value.createdAtMs) &&
         isString(value.owner) &&
         isSafeNonNegativeInteger(value.nowMs) &&
@@ -633,11 +660,13 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'leaseOwner',
           'leaseGeneration',
           'error',
+          'errorCode',
         ]) &&
         isString(value.transactionId) &&
         isString(value.leaseOwner) &&
         isString(value.leaseGeneration) &&
-        isString(value.error)
+        isString(value.error) &&
+        isOptionalString(value.errorCode)
       );
     case 'read-records-by-keys':
       return (

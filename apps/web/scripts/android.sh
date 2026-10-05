@@ -25,6 +25,18 @@ fi
 firebase_destination=tauri/src-tauri/gen/android/app/google-services.json
 bun scripts/android-firebase.ts "$action" "${firebase_config:---doppler}" "$firebase_destination"
 
+# Only release builds need the upload key. Stop parsing at Cargo's separator.
+release_build=true
+for arg in "$@"; do
+  case "$arg" in
+    --) break ;;
+    --debug|-d|--help|-h|--version|-V) release_build=false ;;
+  esac
+done
+if [[ "$action" == "build" && "$release_build" == true ]]; then
+  bun scripts/android-release.ts ensure-signing "$HOME/.macro-android-signing" tauri/src-tauri/gen/android/keystore.properties
+fi
+
 if [[ "$(uname)" == "Darwin" ]]; then
   export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
   if [[ -z "${JAVA_HOME:-}" && -d /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ]]; then

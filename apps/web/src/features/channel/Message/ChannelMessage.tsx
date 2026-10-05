@@ -123,7 +123,10 @@ function RegularMessageLayout(props: {
         <div class="flex items-baseline gap-1 min-w-0">
           <Message.SenderName />
           <Message.AgentBadge />
-          <Message.Timestamp class="shrink-0" format="time" />
+          <Message.Timestamp
+            class="shrink-0"
+            format={props.parent.type === 'channel' ? 'time' : 'dateAndTime'}
+          />
           <Message.EditedIndicator class="shrink-0" />
           <Message.AgentSessionLink class="ml-auto" />
         </div>

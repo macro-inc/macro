@@ -1,20 +1,23 @@
 //! Inbound image-generation service and outbound provider/storage capabilities.
 use super::models::{
-    GenerateImageError, GeneratedImage, GeneratedImageDocument, ImageGenerationError,
-    ImageGenerationRequest, ImageReference, NewGeneratedImage, NewImageDocument, ReadImageError,
-    ReferenceImage, SaveImageError,
+    GenerateImageError, GeneratedImage, ImageGenerationError, ImageGenerationRequest,
+    ImageReference, NewGeneratedImage, NewStaticImage, ReadImageError, ReferenceImage,
+    SaveImageError, StoredGeneratedImage, StoredImage,
 };
+use ai_usage::{UsageContext, UsageRecorder};
 use model_owner::CreationPrincipal;
 use std::future::Future;
-use uuid::Uuid;
 
 /// Renders an image from a text prompt and optional reference photos.
 #[async_trait::async_trait]
 pub trait ImageGenerator: Send + Sync + 'static {
-    /// Generate one image for `request`.
+    /// Generate one image for `request`, recording provider-reported usage even
+    /// when the response cannot be turned into an image.
     async fn generate_image(
         &self,
         request: &ImageGenerationRequest,
+        usage: &UsageContext,
+        recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError>;
 }
 
@@ -28,6 +31,8 @@ impl ImageGenerator for UnconfiguredImageGenerator {
     async fn generate_image(
         &self,
         _request: &ImageGenerationRequest,
+        _usage: &UsageContext,
+        _recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError> {
         Err(ImageGenerationError::Unavailable)
     }
@@ -57,22 +62,33 @@ impl ImageReferenceReader for UnconfiguredImageReferenceReader {
     }
 }
 
-/// Saves generated image bytes through the owning document domain.
-pub trait ImageDocumentStore: Send + Sync {
-    /// Store a document using the caller's identity and verified destination.
+/// Saves generated image bytes to static file service.
+pub trait ImageStore: Send + Sync {
+    /// Upload image bytes and return their permanent location.
     fn save_image(
         &self,
-        principal: &CreationPrincipal,
-        image: NewImageDocument,
-    ) -> impl Future<Output = Result<Uuid, SaveImageError>> + Send;
+        image: NewStaticImage,
+    ) -> impl Future<Output = Result<StoredImage, SaveImageError>> + Send;
 }
 
-/// Inbound port for generating an image and saving it as a Macro document.
+/// Inbound port for generating an image and saving it as a static file.
 pub trait ImageGenerationService: Send + Sync {
     /// Generate and persist an image for the creating principal.
     fn create_generated_image(
         &self,
         principal: &CreationPrincipal,
         image: NewGeneratedImage,
-    ) -> impl Future<Output = Result<GeneratedImageDocument, GenerateImageError>> + Send;
+    ) -> impl Future<Output = Result<StoredGeneratedImage, GenerateImageError>> + Send;
+}
+
+/// Composes saved images using the editor's serialization contract.
+#[async_trait::async_trait]
+pub trait ImageMarkdownComposer: Send + Sync {
+    /// Return channel markup that preserves the intrinsic image dimensions.
+    async fn compose_image(
+        &self,
+        image: &StoredImage,
+        width: u32,
+        height: u32,
+    ) -> Result<String, super::models::ComposeImageError>;
 }

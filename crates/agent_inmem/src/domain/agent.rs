@@ -34,6 +34,7 @@ use agent_client_protocol::{
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_session::domain::model::AgentSessionId;
+use ai_billing::domain::{AiAdmissionError, AiAdmissionService};
 use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
@@ -42,6 +43,7 @@ use model_owner::Owner;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
+use crate::domain::admission::admit_turn;
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
@@ -111,6 +113,8 @@ pub struct AgentState {
     pub owner: Owner,
     /// Runs the actual turns.
     pub engine: Arc<dyn TurnEngine>,
+    /// Admission for new provider-backed turns, including direct ACP requests.
+    pub admission: Arc<dyn AiAdmissionService>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -625,13 +629,22 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     connection.spawn({
                         let connection = connection.clone();
                         async move {
-                            let stop =
+                            let result =
                                 run_turn(&state, &connection, request.session_id, prompt, cancel)
                                     .await;
-                            // A closed connection is the only way this fails,
-                            // and failing the spawned task would tear the
-                            // whole (already closing) server down.
-                            let _ = responder.respond(PromptResponse::new(stop));
+                            // A closed connection is the only way responding fails.
+                            // Admission failure must not tear down resumable state.
+                            let _ = match result {
+                                Ok(stop) => responder.respond(PromptResponse::new(stop)),
+                                Err(error) => responder.respond_with_error(
+                                    AcpError::new(-32603, error.to_string()).data(
+                                        serde_json::json!({
+                                            "code": error.code(),
+                                            "retryable": error.is_retryable(),
+                                        }),
+                                    ),
+                                ),
+                            };
                             Ok(())
                         }
                         .instrument(span)
@@ -724,8 +737,22 @@ async fn run_turn(
     acp_session_id: SessionId,
     prompt: UserPrompt,
     cancel: CancellationToken,
-) -> StopReason {
-    let _turn = state.turn_lock.lock().await;
+) -> Result<StopReason, AiAdmissionError> {
+    // Mark every exit (including denial or a dropped connection) complete so
+    // cancelled/failed requests do not remain outstanding.
+    let _completed = cancel.clone().drop_guard();
+    let _turn = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        turn = state.turn_lock.lock() => turn,
+    };
+    // Check at execution time, not enqueue time. Cancellation stays responsive
+    // even if billing is slow, and neither denial nor cancellation adds history.
+    tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        result = admit_turn(state.admission.as_ref(), &state.owner) => result?,
+    }
     let TurnInput {
         messages,
         model,
@@ -811,9 +838,9 @@ async fn run_turn(
     state.push_turn(prompt, turn_parts);
 
     if was_cancelled || cancel.is_cancelled() {
-        StopReason::Cancelled
+        Ok(StopReason::Cancelled)
     } else {
-        StopReason::EndTurn
+        Ok(StopReason::EndTurn)
     }
 }
 

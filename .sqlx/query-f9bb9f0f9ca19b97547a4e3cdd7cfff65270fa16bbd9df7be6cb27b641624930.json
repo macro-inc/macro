@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Archive', $3), ($2, 'Foreign', 'macro|foreign@example.com')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9bb9f0f9ca19b97547a4e3cdd7cfff65270fa16bbd9df7be6cb27b641624930"
+}

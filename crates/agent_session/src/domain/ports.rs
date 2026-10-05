@@ -242,6 +242,8 @@ pub async fn persona_for_owner<Bots: BotDirectory>(
 /// where the bot can already post.
 #[derive(Debug, Clone)]
 pub struct SessionThread {
+    /// Update a reserved bot response for a task assignment.
+    pub reuse_origin_message: bool,
     /// Channel or document the mentioning message was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the session belongs to.
@@ -825,7 +827,7 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// Tell viewers to refetch changed session metadata.
+    /// Tell viewers to refetch changed session metadata and the durable log.
     fn publish_updated(
         &self,
         _session: AgentSessionId,

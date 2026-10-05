@@ -159,6 +159,28 @@ on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
 
+### Recover an existing instance without resetting data
+
+`run_local` and `stack up` initialize clean state, including snapshot restoration.
+Do not use them to recover an instance whose application or auth data must
+survive. Keep its generated env/Compose files and existing named volumes; start
+stopped containers with `docker start`, or recreate only the affected services
+with the same Compose project/files and `up -d --no-deps --no-build <service>`.
+Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+
+On SELinux hosts, FusionAuth can become healthy while silently skipping an
+unreadable kickstart. The generated per-instance kickstart directory uses
+`:ro,Z`: read-only with a private container label. Regenerate the override with
+`cargo x gen-compose --instance <name>`, then recreate only FusionAuth against
+its existing volumes. Verify the kickstart is readable in the container and the
+configured application API returns 200 with the local API key; a healthy process
+alone does not prove kickstart ran. Do not disable SELinux, change host permissions,
+or delete the FusionAuth database. Diagnose other bind-mount denials separately;
+private labels must not be applied to directories shared by several containers.
+
+For the synthetic Slack recovery harness and separate browser/native coverage,
+see [the Slack import runbook](SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
+
 ### Seeding sample data (recommended)
 
 A bare stack has no content to click through. The seed CLI creates a realistic

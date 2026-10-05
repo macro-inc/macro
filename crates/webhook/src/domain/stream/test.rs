@@ -271,15 +271,15 @@ fn filter_accepts_its_events_and_optional_entity_ids() {
         events: vec!["document.updated".to_string()],
         ids: Some(vec![DOCUMENT_ID.to_string()]),
     };
-    let channel_filter = WebhookFilter {
-        events: vec!["channel.message_posted".to_string()],
+    let message_filter = WebhookFilter {
+        events: vec!["message.posted".to_string()],
         ids: None,
     };
 
     assert!(document_filter.accepts("document.updated", DOCUMENT_ID));
     assert!(!document_filter.accepts("document.updated", OTHER_DOCUMENT_ID));
     assert!(!document_filter.accepts("document.created", DOCUMENT_ID));
-    assert!(channel_filter.accepts("channel.message_posted", "any-channel-id"));
+    assert!(message_filter.accepts("message.posted", "any-channel-id"));
 }
 
 #[tokio::test]

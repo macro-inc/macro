@@ -534,7 +534,10 @@ fn test_get_sort_timestamp_field_sent() {
 fn test_get_sort_timestamp_field_inbox() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let result = get_sort_timestamp_field(&view);
-    assert_eq!(result, "t.latest_inbound_message_ts");
+    assert_eq!(
+        result,
+        "GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at)"
+    );
 }
 
 #[test]

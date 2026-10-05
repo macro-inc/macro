@@ -1,6 +1,14 @@
 import { ContentLoading } from '@components/app/ContentLoading';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
-import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createMemo,
+  createSignal,
+  Index,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { SplitPanel } from '../components/SplitPanel';
 import type {
   SplitHandle,
@@ -8,46 +16,67 @@ import type {
   SplitManager,
   SplitState,
 } from '../layoutManager';
+import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSplitMotion } from './createMobileSplitMotion';
-import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
 export type MobileSplitContainerProps = {
   splitManager: Pick<SplitManager, 'getSplit'>;
-  mobileSwipeLayout: MobileSwipeLayout;
+  stack: MobilePaneStack;
   splits: Accessor<ReadonlyArray<SplitState>>;
   panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
+type Slots = readonly [SplitId | undefined, SplitId | undefined];
+
+/**
+ * Two fixed slots hold the front pane and the one behind it. A pane keeps
+ * its slot while it changes role, so going forward or back never moves or
+ * remounts it.
+ */
+function createPaneSlots(stack: MobilePaneStack): Accessor<Slots> {
+  const [slots, setSlots] = createSignal<Slots>([undefined, undefined]);
+
+  createComputed(() => {
+    const shown = [stack.behind(), stack.front()].filter(
+      (id): id is SplitId => id !== undefined
+    );
+
+    setSlots(([first, second]) => {
+      const keepFirst = first && shown.includes(first) ? first : undefined;
+      const keepSecond = second && shown.includes(second) ? second : undefined;
+      const free = shown.filter((id) => id !== keepFirst && id !== keepSecond);
+
+      return [keepFirst ?? free.shift(), keepSecond ?? free.shift()];
+    });
+  });
+
+  return slots;
+}
+
 export function MobileSplitContainer(props: MobileSplitContainerProps) {
-  const { splitManager, mobileSwipeLayout } = props;
+  const { splitManager, stack } = props;
 
   useAndroidBackNavigation(() => {
-    if (!mobileSwipeLayout.canGoBack()) return false;
-    mobileSwipeLayout.swipeBack();
+    if (!stack.canGoBack()) return false;
+    stack.goBack();
     return true;
   });
 
-  const motion = createMobileSplitMotion({
-    mobileSwipeLayout,
-  });
+  const motion = createMobileSplitMotion({ stack });
+  const slots = createPaneSlots(stack);
 
-  const slotDataFor = (slotSplitId: Accessor<SplitId | undefined>) =>
+  const paneFor = (id: SplitId) =>
     createMemo(() => {
-      const id = slotSplitId();
-      if (!id) return undefined;
       const split = props.splits().find((s) => s.id === id);
       const rawHandle = splitManager.getSplit(id);
       if (!split || !rawHandle) return undefined;
       const handle: SplitHandle = {
         ...rawHandle,
-        goBack: () => mobileSwipeLayout.swipeBack(),
-        canGoBack: () => mobileSwipeLayout.canGoBack(),
+        goBack: () => stack.goBack(),
+        canGoBack: () => stack.canGoBack(),
       };
       return { split, handle };
     });
-
-  const slotAData = slotDataFor(mobileSwipeLayout.slotASplitId);
-  const slotBData = slotDataFor(mobileSwipeLayout.slotBSplitId);
 
   return (
     <div
@@ -57,73 +86,45 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
       on:touchend={motion.handleTouchEnd}
       on:touchcancel={motion.handleTouchCancel}
     >
-      <Show when={slotAData()}>
-        {(a) => (
-          <div
-            class={motion.classForSlot(mobileSwipeLayout.fgIsSlotA())}
-            style={motion.styleForSlot(mobileSwipeLayout.fgIsSlotA())}
-            // The background slot is inert so focus (including programmatic
-            // autofocus in late-mounting content) can never land inside the
-            // invisible panel. Demoting a slot also blurs any focused child.
-            inert={!mobileSwipeLayout.fgIsSlotA()}
-            onTransitionEnd={(e) =>
-              motion.handleTransitionEnd(e, mobileSwipeLayout.fgIsSlotA())
-            }
-          >
-            {/*
-             * Key by split id so SplitPanel remounts when a slot receives a
-             * new split — and only then. Content changes inside a split
-             * (navigation, or the agent block adopting its real session id
-             * mid-typing) swap the mount without tearing the panel down,
-             * matching the desktop layout.
-             */}
-            <Show when={a().split.id} keyed>
-              {(_splitId) => (
-                <Suspense fallback={<ContentLoading />}>
-                  <SplitPanel
-                    split={a().split}
-                    handle={a().handle}
-                    active={mobileSwipeLayout.fgIsSlotA()}
-                    setPanelRef={(ref) =>
-                      props.panelRefs.set(a().split.id, ref)
-                    }
-                    index={0}
-                  />
-                </Suspense>
-              )}
-            </Show>
-          </div>
-        )}
-      </Show>
+      <Index each={slots()}>
+        {(slotId, index) => (
+          <Show when={slotId()} keyed>
+            {(id) => {
+              const pane = paneFor(id);
+              const isFront = () => stack.front() === id;
+              const isPresented = () => motion.presentedFront() === id;
 
-      <Show when={slotBData()}>
-        {(b) => (
-          <div
-            class={motion.classForSlot(!mobileSwipeLayout.fgIsSlotA())}
-            style={motion.styleForSlot(!mobileSwipeLayout.fgIsSlotA())}
-            inert={mobileSwipeLayout.fgIsSlotA()}
-            onTransitionEnd={(e) =>
-              motion.handleTransitionEnd(e, !mobileSwipeLayout.fgIsSlotA())
-            }
-          >
-            <Show when={b().split.id} keyed>
-              {(_splitId) => (
-                <Suspense fallback={<ContentLoading />}>
-                  <SplitPanel
-                    split={b().split}
-                    handle={b().handle}
-                    active={!mobileSwipeLayout.fgIsSlotA()}
-                    setPanelRef={(ref) =>
-                      props.panelRefs.set(b().split.id, ref)
-                    }
-                    index={1}
-                  />
-                </Suspense>
-              )}
-            </Show>
-          </div>
+              return (
+                <Show when={pane()}>
+                  {(current) => (
+                    <div
+                      class={motion.classFor(isFront())}
+                      style={motion.styleFor(isFront())}
+                      // Only the presented pane is interactive, so focus (including
+                      // programmatic autofocus in late-mounting content) can never
+                      // land elsewhere. Demoting a pane also blurs any focused child.
+                      inert={!isPresented()}
+                      onTransitionEnd={(e) =>
+                        motion.handleTransitionEnd(e, isFront())
+                      }
+                    >
+                      <Suspense fallback={<ContentLoading />}>
+                        <SplitPanel
+                          split={current().split}
+                          handle={current().handle}
+                          active={isPresented()}
+                          setPanelRef={(ref) => props.panelRefs.set(id, ref)}
+                          index={index}
+                        />
+                      </Suspense>
+                    </div>
+                  )}
+                </Show>
+              );
+            }}
+          </Show>
         )}
-      </Show>
+      </Index>
     </div>
   );
 }

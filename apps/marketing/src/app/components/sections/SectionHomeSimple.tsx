@@ -144,7 +144,7 @@ export function SectionHomeSimple() {
               <h2
                 style={{
                   color: 'var(--c4)',
-                  'font-family': 'cyberreader',
+                  'font-family': 'Inter',
                   'font-size': '15.5px',
                   'font-weight': '400',
                   'line-height': 1.5,
@@ -152,9 +152,9 @@ export function SectionHomeSimple() {
                   'max-width': '578px',
                 }}
               >
-                Macro replaces 11+ apps with a single system for the whole
-                company. Email, team chat, docs, tasks, calendar, CRM and agents
-                — tied together with team-level memory.
+                Emails, messages, tasks, and agent responses in one inbox.
+                Documents people and agents can edit live. Search across your
+                work, and give agents the tools to change it.
               </h2>
               {/* Email capture inline in the hero. Signup itself happens on
                 desktop, so the phone's job is just to hand us an address —
@@ -202,9 +202,9 @@ export function SectionHomeSimple() {
                   ref={heroEntrance('copy')}
                   style={{
                     color: 'var(--c4)',
-                    'font-family': 'cyberreader',
-                    'font-size': '18px',
-                    'font-weight': '300',
+                    'font-family': 'Inter',
+                    'font-size': '15px',
+                    'font-weight': '400',
                     'line-height': 1.6,
                     margin: '0',
                     'max-width': '750px',
@@ -212,9 +212,9 @@ export function SectionHomeSimple() {
                     'text-wrap': 'pretty',
                   }}
                 >
-                  Macro replaces 11+ apps with a single system for the whole
-                  company. Email, team chat, docs, tasks, calendar, CRM and
-                  agents — tied together with team-level memory.
+                  Emails, messages, tasks, and agent responses in one inbox.
+                  Documents people and agents can edit live. Search across your
+                  work, and give agents the tools to change it.
                 </h2>
               </div>
               <div
@@ -268,7 +268,7 @@ export function SectionHomeSimple() {
                       cursor: 'default',
                       display: 'inline-flex',
                       'font-family': 'body',
-                      'font-size': '20px',
+                      'font-size': '17px',
                       'font-weight': '700',
                       gap: '8px',
                       height: '40px',
@@ -303,7 +303,7 @@ export function SectionHomeSimple() {
                       cursor: 'default',
                       display: 'inline-flex',
                       'font-family': 'body',
-                      'font-size': '20px',
+                      'font-size': '17px',
                       'font-weight': '700',
                       height: '40px',
                       'justify-content': 'center',

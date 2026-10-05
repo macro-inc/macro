@@ -7,6 +7,7 @@
  */
 import type {
   ActionExecutionRecord,
+  AiAdmissionErrorBody,
   CreateScheduledAction,
   EmptyResponse,
   InProgressExecution,
@@ -195,6 +196,65 @@ export const createScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as createScheduledActionResponse;
+};
+
+export type getScheduledActionResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
+export type getScheduledActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getScheduledActionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getScheduledActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getScheduledActionResponseSuccess =
+  getScheduledActionResponse200 & {
+    headers: Headers;
+  };
+export type getScheduledActionResponseError = (
+  | getScheduledActionResponse401
+  | getScheduledActionResponse404
+  | getScheduledActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type getScheduledActionResponse =
+  | getScheduledActionResponseSuccess
+  | getScheduledActionResponseError;
+
+export const getGetScheduledActionUrl = (id: string) => {
+  return `/scheduled-actions/${id}`;
+};
+
+export const getScheduledAction = async (
+  id: string,
+  options?: RequestInit
+): Promise<getScheduledActionResponse> => {
+  const res = await fetch(getGetScheduledActionUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getScheduledActionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getScheduledActionResponse;
 };
 
 export type updateScheduledActionResponse200 = {
@@ -425,6 +485,11 @@ export type executeScheduledActionNowResponse401 = {
   status: 401;
 };
 
+export type executeScheduledActionNowResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
 export type executeScheduledActionNowResponse404 = {
   data: string;
   status: 404;
@@ -440,6 +505,11 @@ export type executeScheduledActionNowResponse500 = {
   status: 500;
 };
 
+export type executeScheduledActionNowResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
+};
+
 export type executeScheduledActionNowResponseSuccess =
   executeScheduledActionNowResponse200 & {
     headers: Headers;
@@ -447,9 +517,11 @@ export type executeScheduledActionNowResponseSuccess =
 export type executeScheduledActionNowResponseError = (
   | executeScheduledActionNowResponse400
   | executeScheduledActionNowResponse401
+  | executeScheduledActionNowResponse402
   | executeScheduledActionNowResponse404
   | executeScheduledActionNowResponse409
   | executeScheduledActionNowResponse500
+  | executeScheduledActionNowResponse503
 ) & {
   headers: Headers;
 };

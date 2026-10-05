@@ -6,7 +6,7 @@ export function animateHomepageCta(
   destination: HTMLElement
 ) {
   const button = root
-    .closest('.onboarding-flow')
+    .closest('.onboarding-flow, #app-scroll-root')
     ?.querySelector<HTMLAnchorElement>('.site-header .site-nav-start');
   if (!button) return () => {};
   let scroller = root.parentElement!;

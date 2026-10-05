@@ -4,7 +4,12 @@
  * rows and group membership without a TanStack invalidation round-trip.
  */
 
+import {
+  type CacheRevision,
+  normalizedCacheResultMetadata,
+} from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
+import { createBrowserOfflineSignal } from '@core/util/connectivity';
 import { Telemetry } from '@macro-inc/observability';
 import {
   makeGroupComparator,
@@ -26,18 +31,23 @@ import {
   type Accessor,
   createComputed,
   createMemo,
+  createSignal,
   on,
   onCleanup,
 } from 'solid-js';
+import { soupQueryExcludesDone } from '../excludes-done';
+import { groupCachedMailByDate } from '../grouped/mail-date-groups';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
-import type { GraphqlSoupAstItemsQuery } from './items';
+import { createGraphqlSoupDoneProjection } from './done-projection';
 import {
-  usePendingGraphqlSoupDeleteIds,
-  withoutPendingGraphqlSoupDeletes,
-} from './optimistic-deletions';
+  createGraphqlSoupAstItemsQuery,
+  type GraphqlSoupAstItemsQuery,
+} from './items';
+import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDone } from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -97,6 +107,51 @@ export function createGraphqlGroupedSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDone = usePendingGraphqlSoupDone();
+  const projectDone = createGraphqlSoupDoneProjection();
+  const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
+  const [now, setNow] = createSignal(new Date());
+  const dateTimer = setInterval(() => setNow(new Date()), 60_000);
+  onCleanup(() => clearInterval(dateTimer));
+  const [networkRevision, setNetworkRevision] = createSignal<CacheRevision>();
+  const [networkInput, setNetworkInput] = createSignal<unknown>();
+  const offline = createBrowserOfflineSignal();
+  let networkResultVersion = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  async function acknowledgeNetworkResult(
+    persistence: Promise<CacheRevision | undefined>,
+    queryInput: unknown,
+    version: number
+  ) {
+    try {
+      const revision = await persistence;
+      if (
+        disposed ||
+        version !== networkResultVersion ||
+        queryInput !== input()
+      )
+        return;
+      setNetworkRevision(revision);
+      setNetworkInput(queryInput);
+    } catch {
+      // Keep the local Mail fallback when the network result could not be cached.
+    }
+  }
+  const local = createGraphqlSoupAstItemsQuery(
+    () => ({ params: args().params, body: args().body }),
+    () => ({
+      ...options(),
+      localOnly: true,
+      enabled:
+        options().enabled &&
+        args().groupBy?.type === 'date' &&
+        args().body.emailView !== undefined,
+    })
+  );
+
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
     if (!groupBy) return;
@@ -112,7 +167,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const query = createUrqlQuery<
     GroupSoupQuery,
     GroupSoupQueryVariables,
-    SoupAstItemsData
+    { viewerId: string; data: SoupAstItemsData }
   >(() => {
     const queryOptions = options();
     const groupBy = args().groupBy;
@@ -125,12 +180,31 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         ? ('cache-only' as const)
         : ('cache-and-network' as const),
       keepPreviousData: queryOptions.keepPreviousData ?? false,
-      select: (data: GroupSoupQuery) =>
-        mapGraphqlGroupedSoupData(data, groupBy!, {
+      onResult: (
+        result: import('@urql/core').OperationResult<
+          GroupSoupQuery,
+          GroupSoupQueryVariables
+        >
+      ) => {
+        const metadata = normalizedCacheResultMetadata(result);
+        if (metadata?.source !== 'live-network') return;
+        const version = ++networkResultVersion;
+        setNetworkRevision(undefined);
+        if (result.error || result.data == null || result.hasNext) return;
+        void acknowledgeNetworkResult(
+          metadata.persistence ?? Promise.resolve(metadata.revision),
+          queryInput,
+          version
+        );
+      },
+      select: (data: GroupSoupQuery) => ({
+        viewerId: data.user.id,
+        data: mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,
           showSupportedForeignEntities:
             queryOptions.showSupportedForeignEntities,
         }),
+      }),
     };
 
     if (!queryOptions.enabled || !groupBy || queryInput === undefined) {
@@ -144,6 +218,13 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     };
   });
 
+  // Missing data during a refetch does not itself switch identities. A new
+  // viewer's first response still invalidates every old restoration snapshot.
+  const viewerId = createMemo<string | undefined>(
+    (previous) => query.data?.viewerId ?? previous,
+    undefined
+  );
+
   onCleanup(
     registerGraphqlSoupRevalidations(() => {
       const queryInput = input();
@@ -154,6 +235,24 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   const error = (): CombinedError | undefined => query.error ?? undefined;
+  const cachedMail = createMemo(() => {
+    const data = local.data();
+    if (
+      !options().enabled ||
+      args().groupBy?.type !== 'date' ||
+      !data?.cachedMail
+    )
+      return;
+    if (
+      !offline() &&
+      !local.localOptimistic?.() &&
+      networkRevision() !== undefined &&
+      networkInput() === input() &&
+      networkRevision() === local.localRevision?.()
+    )
+      return;
+    return groupCachedMailByDate(data, now());
+  });
   createComputed(
     on(error, (queryError) => {
       if (queryError) {
@@ -163,17 +262,26 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   return {
-    data: () =>
-      withoutPendingGraphqlSoupDeletes(query.data, pendingDeleteIds()),
+    data: createMemo(() =>
+      projectDone(
+        JSON.stringify([input(), viewerId()]),
+        cachedMail() ?? query.data?.data,
+        pendingDone(),
+        excludesDone(),
+        pendingDeleteIds()
+      )
+    ),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () => query.isLoading,
+    isLoading: () => !cachedMail() && query.isLoading,
     isFetching: () => query.isFetching,
-    isFetchingNextPage: () => false,
+    isFetchingNextPage: () => !!cachedMail() && local.isFetchingNextPage(),
     isPlaceholderData: () => false,
-    hasNextPage: () => false,
-    fetchNextPage: async () => undefined,
+    hasNextPage: () => !!cachedMail() && local.hasNextPage(),
+    fetchNextPage: async () => {
+      if (cachedMail()) await local.fetchNextPage();
+    },
     resetToInitialPage: () => undefined,
     refresh: async () => {
       if (input() === undefined) return;

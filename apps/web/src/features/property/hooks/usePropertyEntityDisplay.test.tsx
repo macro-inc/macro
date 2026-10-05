@@ -12,13 +12,18 @@ const fixture = vi.hoisted(() => ({
   projectsEnabled: undefined as (() => boolean | undefined) | undefined,
   projectMounts: 0,
   projectDisposals: 0,
+  userIcons: 0,
+  flagMounts: 0,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: fixture.projectsEnabled?.() === true,
-    loading: fixture.projectsEnabled?.() === undefined,
-  }),
+  useFeatureFlag: () => {
+    fixture.flagMounts++;
+    return () => ({
+      enabled: fixture.projectsEnabled?.() === true,
+      loading: fixture.projectsEnabled?.() === undefined,
+    });
+  },
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableProjects: { key: 'enable-projects' },
@@ -36,7 +41,12 @@ vi.mock('../../projects/queries/project-identity', () => ({
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
-vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
+vi.mock('@core/component/UserIcon', () => ({
+  UserIcon: () => {
+    fixture.userIcons++;
+    return null;
+  },
+}));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type: string) => type,
 }));
@@ -51,7 +61,11 @@ vi.mock('@core/context/channels', () => ({
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => '',
+  getDisplayNameParts: () => ({ fullName: '', firstName: '' }),
   tryMacroId: () => undefined,
+}));
+vi.mock('@queries/bots/profiles', () => ({
+  useBotProfile: () => ({ isPending: true }),
 }));
 vi.mock('@queries/preview', () => ({
   useItemPreview: () => {
@@ -79,9 +93,13 @@ afterEach(() => {
   fixture.projectsEnabled = undefined;
   fixture.projectMounts = 0;
   fixture.projectDisposals = 0;
+  fixture.userIcons = 0;
+  fixture.flagMounts = 0;
 });
 
-function setup(type: 'DOCUMENT' | 'CHANNEL' | 'INITIATIVE') {
+function setup(
+  type: 'DOCUMENT' | 'CHANNEL' | 'INITIATIVE' | 'USER' | 'COMPANY' | 'CONTACT'
+) {
   return createRoot((dispose) => {
     disposals.push(dispose);
     return usePropertyEntityDisplay(
@@ -92,6 +110,27 @@ function setup(type: 'DOCUMENT' | 'CHANNEL' | 'INITIATIVE') {
 }
 
 describe('usePropertyEntityDisplay subscription ownership', () => {
+  it('subscribes to the project flag only for project values', () => {
+    const [type, setType] = createSignal<'USER' | 'INITIATIVE'>('USER');
+    createRoot((dispose) => {
+      disposals.push(dispose);
+      usePropertyEntityDisplay(() => 'entity-1', type);
+    });
+    expect(fixture.flagMounts).toBe(0);
+    setType('INITIATIVE');
+    expect(fixture.flagMounts).toBe(1);
+  });
+
+  it('builds a person’s avatar only when something shows the icon', () => {
+    const display = setup('USER');
+    expect(fixture.userIcons).toBe(0);
+
+    display.icon();
+    display.icon();
+
+    expect(fixture.userIcons).toBe(1);
+  });
+
   it('only owns project identity queries and links while the rollout is enabled', () => {
     const [enabled, setEnabled] = createSignal(false);
     fixture.projectsEnabled = enabled;
@@ -210,4 +249,20 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(display.name()).toBe('Product design');
     expect(fixture.channelMounts).toBe(1);
   });
+});
+
+describe('usePropertyEntityDisplay CRM references', () => {
+  it.each([
+    ['COMPANY', 'Acme', 'company'],
+    ['CONTACT', 'Ada Lovelace', 'contact'],
+  ] as const)(
+    'names %s references from their preview and links to the record',
+    (type, name, block) => {
+      fixture.preview = () => ({ loading: false, access: 'access', name });
+      const display = setup(type);
+      expect(fixture.previewMounts).toBe(1);
+      expect(display.name()).toBe(name);
+      expect(display.blockOrFileType()).toBe(block);
+    }
+  );
 });

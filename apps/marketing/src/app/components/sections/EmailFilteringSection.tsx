@@ -56,7 +56,7 @@ export function EmailFilteringSection(props: { mobile: () => boolean }) {
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': mobile() ? '26px' : '42px',
-              'font-weight': '410',
+              'font-weight': '315',
               'letter-spacing': '-0.015em',
               'line-height': 1.5,
               margin: 0,
@@ -68,7 +68,7 @@ export function EmailFilteringSection(props: { mobile: () => boolean }) {
             style={{
               color: 'var(--c4)',
               'font-family': 'body',
-              'font-size': mobile() ? '15px' : '24px',
+              'font-size': mobile() ? '15px' : '21px',
               'line-height': 1.5,
               margin: 0,
             }}
@@ -77,7 +77,7 @@ export function EmailFilteringSection(props: { mobile: () => boolean }) {
             <span
               style={{
                 color: 'var(--a0)',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'letter-spacing': '0em',
               }}
             >

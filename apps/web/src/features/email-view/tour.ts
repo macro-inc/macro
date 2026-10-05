@@ -29,7 +29,7 @@ export const emailTour = defineViewTour({
       entryLabel: 'Show the email sidebar to continue',
       title: 'Organize email your way',
       description:
-        'Create tags for projects, customers, or anything you track. Apply them manually, ask an agent to tag matching email, or set up an automation to keep it organized. Choose a tag here to see its messages.',
+        'Create tags for projects, customers, or anything you track. Apply them manually, ask an agent to tag matching email, or set up a routine to keep it organized. Choose a tag here to see its messages.',
     },
     {
       target: [EMAIL_TOUR.list, EMAIL_TOUR.search],

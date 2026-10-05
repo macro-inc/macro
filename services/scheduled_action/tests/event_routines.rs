@@ -43,6 +43,7 @@ use scheduled_action::{
         },
         event_trigger::{
             EventEntityType, EventId, EventPayload, EventReference, EventRejection, IncomingEvent,
+            MessageFact,
         },
         execution::ExecutionHandle,
         models::{
@@ -111,6 +112,7 @@ impl CurrentOwnerAccess for FakeAccess {
             entity_type: match event.entity_type() {
                 EventEntityType::Document => EntityType::Document,
                 EventEntityType::Channel => EntityType::Channel,
+                EventEntityType::EmailThread => EntityType::EmailThread,
             },
         };
         let access = match event.entity_type() {
@@ -129,6 +131,16 @@ impl CurrentOwnerAccess for FakeAccess {
                     owner.clone(),
                     entity,
                     EntityPermission::ChannelViewOnly,
+                )
+                .unwrap(),
+            ),
+            EventEntityType::EmailThread => EventAccessCapability::EmailThread(
+                EntityAccessReceipt::try_new_authenticated_user(
+                    owner.clone(),
+                    entity,
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::View,
+                    },
                 )
                 .unwrap(),
             ),
@@ -398,6 +410,17 @@ fn key(action_id: Uuid, event: &IncomingEvent) -> EventRunKey {
         event_id: EventId::try_from(event.event_id).unwrap(),
     }
 }
+/// Channel posts arrive on `macro.messages` as `message.posted` with a channel parent.
+fn posted_message(mut envelope: Value) -> MessageFact {
+    let metadata = &mut envelope["metadata"];
+    metadata["parent"] = json!({"type": "channel", "id": metadata["channel_id"]});
+    metadata["root_id"] = metadata["message_id"].clone();
+    envelope["event_type"] = json!("message.posted");
+    match serde_json::from_value(envelope).unwrap() {
+        messages::outbound::broker::MessageTopicEvent::Posted(data) => MessageFact::Posted(data),
+        other => panic!("expected a posted message fact, got {other:?}"),
+    }
+}
 fn incoming(name: &str, actor: &str) -> IncomingEvent {
     let envelope = json!({"event_type":name, "metadata":{
         "document_id":generate_uuid_v7(), "owner":USER, "actor":actor,
@@ -411,6 +434,8 @@ fn incoming(name: &str, actor: &str) -> IncomingEvent {
         schema_version: 1,
         payload: if name.starts_with("document.") {
             EventPayload::Document(serde_json::from_value(envelope).unwrap())
+        } else if name == "channel.message_posted" {
+            EventPayload::Message(posted_message(envelope))
         } else {
             EventPayload::Channel(serde_json::from_value(envelope).unwrap())
         },

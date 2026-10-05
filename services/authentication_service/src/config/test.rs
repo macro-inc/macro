@@ -2,6 +2,73 @@ use authentication_service::service::signup_policy::SignupPolicyDenial;
 
 use super::*;
 
+fn config_values() -> serde_json::Value {
+    let mut values = serde_json::json!({ "ENVIRONMENT": "local" });
+    for key in [
+        "BASE_URL",
+        "DATABASE_URL",
+        "REDIS_URI",
+        "FUSIONAUTH_API_KEY_SECRET_KEY",
+        "FUSIONAUTH_CLIENT_ID",
+        "FUSIONAUTH_CLIENT_SECRET_KEY",
+        "FUSIONAUTH_BASE_URL",
+        "FUSIONAUTH_OAUTH_REDIRECT_URI",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET_KEY",
+        "MICROSOFT_CLIENT_ID",
+        "MICROSOFT_CLIENT_SECRET",
+        "MICROSOFT_TENANT_ID",
+        "MICROSOFT_TOKEN_KMS_KEY_ID",
+        "STRIPE_SECRET_KEY",
+        "SERVICE_INTERNAL_AUTH_KEY",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "GITHUB_IDP_ID",
+        "STRIPE_PRICE_ID",
+        "INTERNAL_API_KEY",
+        "KAFKA_BROKERS",
+    ] {
+        values[key] = serde_json::json!("test");
+    }
+    values
+}
+
+#[test]
+fn billing_enforcement_config_defaults_off_and_requires_a_boolean() {
+    let mut values = config_values();
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    assert_eq!(
+        config.enable_ai_usage_enforcement,
+        ai_billing::AiUsageEnforcement::Disabled
+    );
+    for enabled in [false, true] {
+        values["ENABLE_AI_USAGE_ENFORCEMENT"] = serde_json::json!(enabled);
+        let config: Config = serde_json::from_value(values.clone()).unwrap();
+        assert_eq!(config.enable_ai_usage_enforcement.is_enabled(), enabled);
+    }
+    values["ENABLE_AI_USAGE_ENFORCEMENT"] = serde_json::json!("invalid");
+    assert!(serde_json::from_value::<Config>(values).is_err());
+}
+
+#[test]
+fn billing_settlement_config_defaults_off_and_requires_a_boolean() {
+    let mut values = config_values();
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    assert_eq!(
+        config.enable_ai_usage_billing,
+        ai_billing::AiUsageBilling::Disabled
+    );
+    for enabled in [false, true] {
+        values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!(enabled);
+        let config: Config = serde_json::from_value(values.clone()).unwrap();
+        assert_eq!(config.enable_ai_usage_billing.is_enabled(), enabled);
+        // The two policies are independent.
+        assert!(!config.enable_ai_usage_enforcement.is_enabled());
+    }
+    values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!("invalid");
+    assert!(serde_json::from_value::<Config>(values).is_err());
+}
+
 #[test]
 fn complete_microsoft_credentials_are_resolved() {
     let credentials = resolve(

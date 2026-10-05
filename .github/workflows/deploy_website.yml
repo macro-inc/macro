@@ -1,0 +1,100 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_website.rs
+name: Deploy Website
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - .github/workflows/deploy_website.yml
+    - bun.lock
+    - apps/marketing/**
+    - infra/stacks/website/**
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to deploy to. e.g. (dev, prod, both)
+    secrets:
+      AWS_ACCESS_KEY:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      PULUMI_ACCESS_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        default: dev
+        options:
+        - dev
+        - prod
+        - both
+        description: The environment to deploy to (both deploys dev, then prod)
+jobs:
+  build-deploy:
+    name: Build and Deploy Website
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    concurrency:
+      group: deploy-website-${{ matrix.environment }}
+      cancel-in-progress: false
+    env:
+      CI: 'true'
+    strategy:
+      matrix:
+        environment: ${{ fromJSON(inputs.environment == 'both' && '["dev","prod"]' || format('["{0}"]', inputs.environment || 'dev')) }}
+      fail-fast: true
+      max-parallel: 1
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        lfs: 'true'
+    - name: Verify Git LFS videos were downloaded
+      run: |
+        if grep -RIl --include='*.mp4' 'version https://git-lfs.github.com/spec/v1' public src; then
+          echo "Found Git LFS pointer files instead of real videos."
+          exit 1
+        fi
+      working-directory: apps/marketing
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: /home/runner/.bun/install/cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Setup
+      uses: ./.github/actions/setup-reqs-web
+      with:
+        playwright: 'true'
+    - name: Build
+      run: env -u LD_LIBRARY_PATH -u BASH_ENV bun run build
+      env:
+        VITE_APP_BASE_URL: ${{ matrix.environment == 'prod' && 'https://macro.com' || 'https://dev.macro.com' }}
+        VITE_GOOGLE_SSO_URL: ${{ matrix.environment == 'prod' && 'https://gateway.macro.com/auth/login/sso?idp_name=google_gmail' || 'https://dev-gateway.macro.com/auth/login/sso?idp_name=google_gmail' }}
+      working-directory: apps/marketing
+    - name: Install infra dependencies
+      run: bun install
+      working-directory: infra
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    - name: Deploy with Pulumi
+      uses: pulumi/actions@8e5e406f4007fca908480587cb9893c07090f58d
+      with:
+        command: up
+        stack-name: macro-inc/${{ matrix.environment }}
+        work-dir: ./infra/stacks/website
+      env:
+        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix

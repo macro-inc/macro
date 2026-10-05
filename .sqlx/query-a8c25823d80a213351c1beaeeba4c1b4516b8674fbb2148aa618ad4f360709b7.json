@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"User\" (id, email, macro_user_id) VALUES\n        ('macro|user1@test.com', 'user1@test.com', 'd1000000-0000-0000-0000-000000000001'),\n        ('macro|delegate@test.com', 'delegate@test.com', 'd1000000-0000-0000-0000-000000000002')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a8c25823d80a213351c1beaeeba4c1b4516b8674fbb2148aa618ad4f360709b7"
+}

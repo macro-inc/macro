@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_message_labels (message_id, label_id) SELECT id, $2 FROM email_messages WHERE thread_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cfd3ab7c022a44b5a2b497ddfe4b09fd5caa22e941d3a83791010085952d1b1a"
+}

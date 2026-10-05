@@ -1,97 +1,180 @@
 import type {
-  CrmComment as CrmCommentRecord,
-  CrmThread,
-  DeleteCrmCommentResult,
+  MessageCursor,
+  MessageListItem,
+  Message as MessageRecord,
+  ThreadState,
 } from '../../../generated/storage/types.gen';
-import { unwrap } from '../../utils';
+import { type RichMessage, toBody } from '../../mentions';
+import { mapConcurrently, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { MacroEntity } from '../entity';
+import { User } from '../users/user';
 
-/** A CRM comment thread with its comments, as returned for a company or contact. */
-export interface CrmThreadWithComments {
-  /** The thread. */
-  thread: CrmThread;
-  /** The thread's comments, oldest first. */
+/** The CRM record a discussion hangs off. */
+export interface CrmCommentParent {
+  type: 'crm_company' | 'crm_contact';
+  id: string;
+}
+
+/** One of a CRM record's comment threads: its state and its comments. */
+export interface CrmCommentThread {
+  /** The thread state: root id, resolved flag, owner, timestamps. */
+  thread: ThreadState;
+  /** The thread's comments, root first, then replies oldest first. */
   comments: CrmComment[];
 }
 
+/** Thread reads in flight at once while a record's roots are expanded. */
+const THREAD_FETCH_CONCURRENCY = 8;
+
 /**
- * A comment on a CRM company or contact. Shared by both entity types, since
- * the underlying API and record shape are already unified across them.
+ * A comment on a CRM company or contact: a message whose parent is the
+ * record, addressed by the record and the message UUID. Its record and
+ * mutations are the ones document comments and channel messages use.
  */
-export class CrmComment {
+export class CrmComment extends MacroEntity<MessageRecord> {
   private constructor(
-    private readonly client: MacroClient,
-    readonly id: string,
-    private record: CrmCommentRecord,
-  ) {}
-
-  /** Wrap a record already in hand (e.g. from a list or create response). */
-  static from(client: MacroClient, record: CrmCommentRecord): CrmComment {
-    return new CrmComment(client, record.commentId, record);
+    client: MacroClient,
+    /** The company or contact this comment belongs to. */
+    readonly parent: CrmCommentParent,
+    id: string,
+    seed?: MessageRecord,
+  ) {
+    super(client, id, seed);
   }
 
-  /** The comment body (markdown). */
-  get text(): string {
-    return this.record.text;
+  private get path() {
+    return {
+      parent_type: this.parent.type,
+      parent_id: this.parent.id,
+      id: this.id,
+    };
   }
 
-  /** The id of the thread this comment belongs to. */
-  get threadId(): string {
-    return this.record.threadId;
+  protected async fetch(): Promise<MessageRecord> {
+    return unwrap(
+      await this.client.storage.entityMessageGetMessage({ path: this.path }),
+    );
   }
 
-  /** Macro user id of the comment author. */
-  get owner(): string {
-    return this.record.owner;
+  /** A handle to a comment by id. Fields load on first access. */
+  static byId(
+    client: MacroClient,
+    parent: CrmCommentParent,
+    id: string,
+  ): CrmComment {
+    return new CrmComment(client, parent, id);
   }
 
-  /** Macro user id of the actual sender, when distinct from {@link owner}. */
-  get sender(): string | undefined {
-    return this.record.sender ?? undefined;
+  /** Build a comment from a message record (pre-seeded, no fetch). */
+  static from(
+    client: MacroClient,
+    parent: CrmCommentParent,
+    record: MessageRecord,
+  ): CrmComment {
+    return new CrmComment(client, parent, record.id, record);
   }
 
-  /** Explicit ordering within the thread, if set. */
-  get order(): number | undefined {
-    return this.record.order ?? undefined;
-  }
-
-  /** Arbitrary client metadata attached to the comment. */
-  get metadata(): unknown {
-    return this.record.metadata;
-  }
+  /** The comment's text (markdown). */
+  readonly text = this.field('content');
 
   /** When the comment was created. */
-  get createdAt(): string {
-    return this.record.createdAt;
-  }
+  readonly createdAt = this.field('created_at');
 
   /** When the comment was last updated. */
-  get updatedAt(): string {
-    return this.record.updatedAt;
+  readonly updatedAt = this.field('updated_at');
+
+  /** When the comment was deleted, if it has been. */
+  readonly deletedAt = this.field('deleted_at');
+
+  /** The id of the thread this comment belongs to: its root, or itself for a root. */
+  async threadId(): Promise<string> {
+    return (await this.detail.get()).thread_id ?? this.id;
   }
 
-  /** When the comment was soft-deleted, if ever. */
-  get deletedAt(): string | undefined {
-    return this.record.deletedAt ?? undefined;
+  /** The user who wrote this comment. */
+  async author(): Promise<User> {
+    return User.byId(this.client, (await this.detail.get()).sender_id);
   }
 
-  /** Replace this comment's text (markdown). */
-  async edit(text: string): Promise<this> {
-    this.record = unwrap(
-      await this.client.storage.editCrmComment({
-        path: { comment_id: this.id },
-        body: { text },
+  /** Reply in this comment's thread. */
+  async reply(body: string | RichMessage): Promise<CrmComment> {
+    return postCrmComment(this.client, this.parent, body, {
+      threadId: await this.threadId(),
+    });
+  }
+
+  /**
+   * Replace the comment's text. Only its author may.
+   *
+   * @param body - Plain text, or a rich body composed with {@link msg}.
+   */
+  async edit(body: string | RichMessage): Promise<this> {
+    const { content, mentions } = toBody(body);
+    await this.mutate((c) =>
+      c.storage.entityMessageEdit({
+        path: this.path,
+        body: { content, mentions },
       }),
     );
     return this;
   }
 
-  /** Soft-delete this comment; the thread goes too when it was the last live one. */
-  async delete(): Promise<DeleteCrmCommentResult> {
-    return unwrap(
-      await this.client.storage.deleteCrmComment({
-        path: { comment_id: this.id },
-      }),
+  /** Delete this comment. Deleting a thread's root keeps its replies. */
+  async delete(): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.entityMessageDeleteMessage({ path: this.path }),
     );
   }
+}
+
+/** A CRM record's live comment threads, each with its comments, newest thread first. */
+export async function listCrmCommentThreads(
+  client: MacroClient,
+  parent: CrmCommentParent,
+): Promise<CrmCommentThread[]> {
+  const path = { parent_type: parent.type, parent_id: parent.id };
+  const roots = paginate<MessageListItem, MessageCursor>(async (cursor) => {
+    const page = unwrap(
+      await client.storage.messageTimeline({
+        path,
+        query: { selection: JSON.stringify({ limit: 100, cursor }) },
+      }),
+    );
+    return { items: page.items, nextCursor: page.next_cursor };
+  });
+  const items: MessageListItem[] = [];
+  for await (const item of roots) items.push(item);
+  return mapConcurrently(items, THREAD_FETCH_CONCURRENCY, async (item) => {
+    const { state, root, replies } = unwrap(
+      await client.storage.entityMessageGetThread({
+        path: { ...path, id: item.id },
+      }),
+    );
+    return {
+      thread: state,
+      comments: [root, ...replies].map((comment) =>
+        CrmComment.from(client, parent, comment),
+      ),
+    };
+  });
+}
+
+/**
+ * Post a comment on a CRM record: a new thread, or a reply when `threadId`
+ * (the thread's root comment id) is given.
+ */
+export async function postCrmComment(
+  client: MacroClient,
+  parent: CrmCommentParent,
+  body: string | RichMessage,
+  opts?: { threadId?: string },
+): Promise<CrmComment> {
+  const created = unwrap(
+    await client.storage.entityMessageCreate({
+      path: { parent_type: parent.type, parent_id: parent.id },
+      body: { ...toBody(body), thread_id: opts?.threadId ?? null },
+    }),
+  );
+  return CrmComment.from(client, parent, created);
 }

@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }

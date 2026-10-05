@@ -3,6 +3,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { createWebTracingProvider } from '@macro-inc/observability/web';
 // This static import loads the zone.js Promise patch before application modules run.
 import { ZoneContextManager } from '@macro-inc/observability/zone';
+import { initializeUiOperationTelemetry } from './ui-operation';
 
 async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
   const override = import.meta.env.VITE_ENABLE_BROWSER_OTEL;
@@ -44,6 +45,7 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
 
 /** Initialize browser telemetry and its application-level lifecycle hooks. */
 export async function initializeBrowserObservability(): Promise<void> {
+  let browserEnabled = false;
   const configuredTracesUrl =
     import.meta.env.VITE_OTEL_EXPORTER_URL ??
     (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
@@ -59,7 +61,10 @@ export async function initializeBrowserObservability(): Promise<void> {
     tracesUrl,
     logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
     contextManager: new ZoneContextManager(),
-    enabled: () => browserTelemetryEnabled(Boolean(tracesUrl)),
+    enabled: async () => {
+      browserEnabled = await browserTelemetryEnabled(Boolean(tracesUrl));
+      return browserEnabled;
+    },
   };
 
   await Telemetry.init({
@@ -68,6 +73,10 @@ export async function initializeBrowserObservability(): Promise<void> {
       createWebTracingProvider(telemetryConfig, resource, getUserId),
   });
   recordBrowserTursoCacheNavigation();
+  if (browserEnabled) {
+    const disposeUiTelemetry = initializeUiOperationTelemetry();
+    import.meta.hot?.dispose(disposeUiTelemetry);
+  }
 
   window.addEventListener('pagehide', () => void Telemetry.flush());
   window.addEventListener('error', (event) => {

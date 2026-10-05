@@ -8,10 +8,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import {
-  DocsDemoPointer,
-  DocsGraphicFrame,
-} from '../../../app/components/featureGraphics/DocsMarkdownScene';
+import { DocsGraphicFrame } from '../../../app/components/featureGraphics/DocsMarkdownScene';
 import {
   CRM_DEMO_COMPANIES,
   CRM_DEMO_DURATION,
@@ -22,6 +19,7 @@ import {
   CompanyKanbanCardSurface,
   CompanyKanbanColumn,
 } from './DemoCompanyKanban';
+import { DemoCursor } from './DemoCursor';
 import { CrmStageIcon } from './DemoStageIcon';
 import './homepage-crm.css';
 
@@ -47,7 +45,9 @@ function DemoCard(props: { company: Company }) {
   );
 }
 
-export default function HomepageCrm() {
+export default function HomepageCrm(
+  props: { playbackControls?: boolean } = {}
+) {
   const [time, setTime] = createSignal(0);
   const [paused, setPaused] = createSignal(false);
   const [visible, setVisible] = createSignal(false);
@@ -182,23 +182,20 @@ export default function HomepageCrm() {
                 <DemoCard company={moving()} />
               </div>
             </Show>
-            <div
+            <DemoCursor
               class="homepage-crm-cursor"
               style={{
                 transform: `translate(${frame().x}px, ${frame().y}px)`,
                 opacity: frame().opacity,
               }}
-            >
-              <DocsDemoPointer />
-              <span>Claude</span>
-            </div>
+            />
           </div>
         </div>
         <div class="homepage-crm-footer">
           <span class="homepage-crm-status" role="status">
             {frame().status}
           </span>
-          <Show when={!reduced()}>
+          <Show when={!reduced() && props.playbackControls !== false}>
             <div class="flex gap-3 shrink-0">
               <Show when={!complete()}>
                 <button

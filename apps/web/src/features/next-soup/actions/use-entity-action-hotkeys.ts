@@ -585,10 +585,8 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Set a reminder - 'h'. This shares the scope with the list's 'h' ("Collapse
-  // item", handlerPriority 4), so 'add' keeps both registered instead of one
-  // evicting the other. Collapse sorts first and returns false when there is
-  // nothing to collapse, which falls through to here.
+  // H reminds on entity rows. The higher-priority collapse handler consumes
+  // H only on group headers; 'add' keeps both actions in the same scope.
   registerHotkey({
     hotkey: ['h'],
     hotkeyToken: TOKENS.entity.action.createReminder,

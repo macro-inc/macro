@@ -8,6 +8,7 @@ use crate::domain::models::{
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
 use agent_session::domain::routines::RoutineSessionError;
+use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -53,7 +54,7 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     fn from(action: ScheduledAction) -> Self {
         let (schedule, timezone) = match &action.trigger {
             ActionTrigger::Cron { schedule, timezone } => (Some(schedule.clone()), Some(*timezone)),
-            ActionTrigger::Events { .. } => (None, None),
+            _ => (None, None),
         };
         Self {
             action,
@@ -136,7 +137,9 @@ where
         )
         .route(
             "/scheduled-actions/{id}",
-            put(update_action::<S, Svc, Auth>).delete(delete_action::<S, Svc, Auth>),
+            get(get_action::<S, Svc, Auth>)
+                .put(update_action::<S, Svc, Auth>)
+                .delete(delete_action::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/enabled",
@@ -246,6 +249,35 @@ where
             .map(ScheduledActionResponse::from)
             .collect::<Vec<_>>(),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}",
+    tag = "scheduled actions",
+    operation_id = "get_scheduled_action",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn get_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
+where
+    S: ScheduledActionService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let action = state.service.get_action(entity_access_receipt).await?;
+    Ok(Json(action.into()))
 }
 
 #[utoipa::path(
@@ -363,6 +395,8 @@ where
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 409, body = String, description = "Action is already running"),
+        (status = 402, body = AiAdmissionErrorBody, description = "AI allowance exhausted"),
+        (status = 503, body = AiAdmissionErrorBody, description = "AI usage validation unavailable; retry later"),
         (status = 500, body = String),
     )
 )]
@@ -441,6 +475,9 @@ impl IntoResponse for ScheduledActionApiError {
             }
             Self::Service(error) => error,
         };
+        if let Some(admission) = error.downcast_ref::<AiAdmissionError>() {
+            return (*admission).into_response();
+        }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
@@ -462,6 +499,7 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(session) = error.downcast_ref::<RoutineSessionError>() {
             let (status, message) = match session {
+                RoutineSessionError::Admission(error) => return (*error).into_response(),
                 RoutineSessionError::InvalidCommand | RoutineSessionError::ModelMismatch => {
                     (StatusCode::BAD_REQUEST, session.to_string())
                 }

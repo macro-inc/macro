@@ -7,7 +7,6 @@ import { redirectToEmailAuth } from '@core/auth/email';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
-import { restoreSettingsReturnTo } from '@core/constant/SettingsState';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useEmailLinks } from '@core/email-link';
 import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
@@ -142,9 +141,6 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const restoreLayoutBeforeConsent = (linkId: string) => {
     const stored = consumeInboxLinkReturn(linkId);
     if (!stored) return false;
-    if (stored.settingsReturnTo) {
-      restoreSettingsReturnTo(stored.settingsReturnTo);
-    }
     navigate(stored.url, { replace: true });
     return true;
   };

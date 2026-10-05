@@ -38,11 +38,6 @@ vi.mock('@solidjs/router', () => ({
     return null;
   },
   useNavigate: () => mocks.navigate,
-  useParams: () => ({
-    get taskSlug() {
-      return mocks.taskSlug;
-    },
-  }),
 }));
 
 vi.mock('@ui', () => ({
@@ -64,7 +59,7 @@ function renderRoute(): HTMLElement {
   const disposeRender = render(
     () => (
       <QueryClientProvider client={queryClient}>
-        <TaskRoute />
+        <TaskRoute taskSlug={mocks.taskSlug} />
       </QueryClientProvider>
     ),
     container

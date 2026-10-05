@@ -16,6 +16,30 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[tokio::test]
+async fn pull_request_filters_fail_explicitly_before_database_access() {
+    let pool = PgPool::connect_lazy("postgres://user@127.0.0.1:1/unused").unwrap();
+    let storage = FrecencyPgStorage::new(pool);
+    let filter = EntityFilterAst {
+        github_pull_request_filter: Some(Arc::new(Expr::Literal(
+            item_filters::ast::github_pull_request::GithubPullRequestLiteral::Draft(false),
+        ))),
+        ..Default::default()
+    };
+    let result = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(FrecencyStorageErr::UnsupportedGithubPullRequestFilter)
+    ));
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_dynamic_filter_by_document_ids(pool: PgPool) {
     let storage = FrecencyPgStorage::new(pool.clone());
@@ -966,8 +990,10 @@ async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
         call_filter: None,
         crm_company_filter: None,
         foreign_entity_filter: None,
+        github_pull_request_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1065,8 +1091,10 @@ async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
         call_filter: None,
         crm_company_filter: None,
         foreign_entity_filter: None,
+        github_pull_request_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1160,8 +1188,10 @@ async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
         call_filter: None,
         crm_company_filter: None,
         foreign_entity_filter: None,
+        github_pull_request_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1260,8 +1290,10 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
         call_filter: None,
         crm_company_filter: None,
         foreign_entity_filter: None,
+        github_pull_request_filter: None,
         reminder_filter: None,
         initiative_filter: None,
+        database_row_filter: None,
         agent_session_filter: None,
         properties_filter: None,
     };
@@ -1278,4 +1310,120 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].id.entity.entity_id, doc_early.to_string());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_dynamic_filter_document_crm_literals(pool: PgPool) {
+    use item_filters::ast::{
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
+    };
+
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let associated = Uuid::new_v4();
+    let attachment = Uuid::new_v4();
+    let unrelated = Uuid::new_v4();
+    let company = Uuid::new_v4();
+    for id in [associated, attachment, unrelated] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(id.to_string()),
+                    user_id: user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: 10.0,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+    }
+
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL session_replication_role = 'replica'")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, 'DOCUMENT', '00000001-0000-0000-0000-00000000000c', $3)"#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(associated.to_string())
+    .bind(serde_json::json!({
+        "type": "EntityReference",
+        "value": [{ "entity_type": "COMPANY", "entity_id": company.to_string() }]
+    }))
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    let (contact, message, attachment_row) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    sqlx::query(
+        "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, 'cfo@acme.com')",
+    )
+    .bind(contact)
+    .bind(Uuid::new_v4())
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO email_messages (id, thread_id, link_id, from_contact_id) VALUES ($1, $2, $3, $4)")
+        .bind(message)
+        .bind(Uuid::new_v4())
+        .bind(Uuid::new_v4())
+        .bind(contact)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO email_attachments (id, message_id) VALUES ($1, $2)")
+        .bind(attachment_row)
+        .bind(message)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO document_email (document_id, email_attachment_id) VALUES ($1, $2)")
+        .bind(attachment.to_string())
+        .bind(attachment_row)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::or(
+            Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+                property_definition_id: Uuid::parse_str("00000001-0000-0000-0000-00000000000c")
+                    .unwrap(),
+                entity_type: None,
+                value: PropertyMatchValue::EntityRef(
+                    EntityRefId::new(company.to_string()).unwrap(),
+                ),
+            })),
+            Expr::Literal(DocumentLiteral::EmailAttachmentParticipant(Email::Domain(
+                "acme.com".to_string(),
+            ))),
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    let mut ids: Vec<String> = results
+        .iter()
+        .map(|r| r.id.entity.entity_id.as_ref().to_string())
+        .collect();
+    ids.sort();
+    let mut expected = vec![associated.to_string(), attachment.to_string()];
+    expected.sort();
+    assert_eq!(ids, expected);
 }

@@ -16,6 +16,7 @@
   .ob-welcome:has(.homepage-hero-cta) { --welcome-scale: 1; gap: 24px; }
   .ob-welcome:has(.homepage-hero-cta) [data-context-scene] { height: clamp(190px, calc(100svh - 540px), 300px); }
   .ob-welcome:has(.homepage-hero-cta) h1 { font-size: 48px; }
+  .ob-welcome:has(.homepage-hero-cta) p[data-welcome-copy] { max-width: 384px; }
 }
 @media (max-width: 767px) and (max-height: 800px) {
   .ob-welcome:has(.homepage-hero-cta) { gap: 24px; }

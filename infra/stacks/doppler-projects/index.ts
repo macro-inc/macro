@@ -18,6 +18,7 @@ const SERVICE_NAMES = [
   'document-cognition',
   'agent-harness-service',
   'preview-gateway',
+  'slack-import-worker',
 ];
 
 for (const service_name of SERVICE_NAMES) {

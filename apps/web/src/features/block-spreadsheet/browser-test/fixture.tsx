@@ -1,6 +1,7 @@
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '../../../index.css';
+import { CellMentionEditor } from '@app/components/cell-text-editor/CellMentionEditor';
 import { useAppSquishHandlers } from '@components/app/useAppSquishHandlers';
 import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -16,7 +17,6 @@ import {
 } from '@macro-inc/spreadsheet/cell-mentions';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
-import { CellMentionEditor } from '../components/CellMentionEditor';
 import type { SpreadsheetWorkbookSheet } from '../core/workbook-document';
 import { createLocalSpreadsheetSource } from '../primitives/create-local-spreadsheet-source';
 import { createSpreadsheetStore } from '../primitives/create-spreadsheet-store';

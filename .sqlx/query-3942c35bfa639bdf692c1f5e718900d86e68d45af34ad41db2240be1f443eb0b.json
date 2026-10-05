@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT reminder_id, request AS \"request!: Json<EmailFollowupCommand>\" FROM reminder_email_operation\n               WHERE user_id = $1 AND operation_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "reminder_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request!: Json<EmailFollowupCommand>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3942c35bfa639bdf692c1f5e718900d86e68d45af34ad41db2240be1f443eb0b"
+}

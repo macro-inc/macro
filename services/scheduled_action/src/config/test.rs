@@ -5,16 +5,32 @@ fn config_values() -> Value {
     json!({
         "ENVIRONMENT": "local",
         "DATABASE_URL": "postgres://localhost/macro",
-        "DOCUMENT_STORAGE_SERVICE_AUTH_KEY": "test",
-        "SYNC_SERVICE_AUTH_KEY": "test",
-        "DOCUMENT_STORAGE_BUCKET": "test",
-        "DOCX_DOCUMENT_UPLOAD_BUCKET": "test",
-        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL": "test",
-        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID": "test",
-        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME": "test",
         "KAFKA_BROKERS": "existing-broker:9092",
         "INTERNAL_API_KEY": "test"
     })
+}
+
+#[test]
+fn ai_usage_enforcement_defaults_off_and_requires_a_boolean() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(
+        config.enable_ai_usage_enforcement,
+        ai_usage::AiUsageEnforcement::Disabled
+    );
+    for (value, expected) in [
+        (false, ai_usage::AiUsageEnforcement::Disabled),
+        (true, ai_usage::AiUsageEnforcement::Enabled),
+    ] {
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_ENFORCEMENT"] = json!(value);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert_eq!(config.enable_ai_usage_enforcement, expected);
+    }
+    for value in [json!("enabled"), json!(1)] {
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_ENFORCEMENT"] = value;
+        assert!(serde_json::from_value::<Config>(values).is_err());
+    }
 }
 
 #[test]

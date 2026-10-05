@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::SaveImageError;
 use ai_toolset::schema::generate_validated_input_schema;
 
 #[test]
@@ -9,16 +10,13 @@ fn schema_is_valid_and_optional_fields_default() {
         "prompt": "a lighthouse at dusk"
     }))
     .unwrap();
-    assert!(tool.file_name.is_none());
     assert!(tool.aspect_ratio.is_none());
-    assert!(tool.project_id.is_none());
     assert!(tool.reference_images.is_none());
 
     let tool: GenerateImage = serde_json::from_value(serde_json::json!({
-        "prompt": "a lighthouse at dusk", "fileName": "lighthouse", "aspectRatio": "widescreen"
+        "prompt": "a lighthouse at dusk", "aspectRatio": "widescreen"
     }))
     .unwrap();
-    assert_eq!(tool.file_name.as_deref(), Some("lighthouse"));
     assert_eq!(
         tool.aspect_ratio.map(ImageAspectRatio::from),
         Some(ImageAspectRatio::Widescreen)
@@ -125,10 +123,6 @@ fn errors_describe_what_the_agent_can_do_about_them() {
         "prompt must not be empty"
     );
     assert_eq!(
-        description(SaveImageError::Unauthorized.into()),
-        "you need edit access to the destination project"
-    );
-    assert_eq!(
         description(SaveImageError::Internal(rootcause::report!("save failed")).into()),
         "the image was generated but could not be saved to Macro"
     );
@@ -149,20 +143,47 @@ fn errors_describe_what_the_agent_can_do_about_them() {
 #[test]
 fn response_omits_an_absent_note() {
     let json = serde_json::to_value(GenerateImageResponse {
-        document_id: "doc".to_string(),
-        file_name: "lighthouse.png".to_string(),
+        static_file_id: "file".to_string(),
+        url: "https://static.example/file/image".to_string(),
         mime_type: "image/png".to_string(),
         size_bytes: 3,
+        width: Some(1536),
+        height: Some(1024),
+        markdown: None,
         note: None,
     })
     .unwrap();
     assert_eq!(
         json,
         serde_json::json!({
-            "documentId": "doc",
-            "fileName": "lighthouse.png",
+            "staticFileId": "file",
+            "url": "https://static.example/file/image",
             "mimeType": "image/png",
-            "sizeBytes": 3
+            "sizeBytes": 3,
+            "width": 1536,
+            "height": 1024
         })
     );
+}
+
+#[test]
+fn response_forwards_markup_from_the_service() {
+    let response = GenerateImageResponse::from(StoredGeneratedImage {
+        static_file: crate::domain::models::StoredImage {
+            id: uuid::Uuid::from_u128(123),
+            url: "https://static.example/file/image".to_string(),
+        },
+        mime_type: "image/png".to_string(),
+        size_bytes: 100,
+        width: 1536,
+        height: 1024,
+        markdown: "markup returned by Lexical".to_string(),
+        note: None,
+    });
+    assert_eq!(
+        response.markdown.as_deref(),
+        Some("markup returned by Lexical")
+    );
+    assert_eq!(response.width, Some(1536));
+    assert_eq!(response.height, Some(1024));
 }

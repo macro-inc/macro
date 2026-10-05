@@ -36,6 +36,12 @@ the members present before deletion; it does not produce an individual removal
 event for every member. For self-service removal, `removed_by` equals
 `member_id`.
 
+Account deletion detaches the user from their team through
+`TeamService::remove_user_from_all_teams` before the profile is removed. A team
+the user owns produces `team.deleted` with the deleted owner as
+`actor_user_id`; a team the user belongs to produces `team.member_removed` with
+`removed_by` equal to `member_id`.
+
 The automatic domain toggle performed during creation is represented only by
 `auto_join_domain` on the created event. The explicit settings operation
 produces the toggle event. A role-only PATCH produces role-change events but no

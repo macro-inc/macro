@@ -39,7 +39,11 @@ function renderTool(
       <Dynamic
         component={handler.render as Component<Record<string, unknown>>}
         response={result ? { data: result } : undefined}
-        renderContext={{ isStreaming: !result, grouped: false }}
+        renderContext={{
+          isStreaming: !result,
+          grouped: false,
+          followedBy: () => false,
+        }}
       />
     </ToolErrorContext.Provider>
   ));

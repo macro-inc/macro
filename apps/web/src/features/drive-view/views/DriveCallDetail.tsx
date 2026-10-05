@@ -48,6 +48,7 @@ function DriveCallBreadcrumb(props: { callId: string; name: string }) {
 export function DriveCallDetail(props: {
   callId: string;
   transcriptId?: string;
+  messageId?: string;
   seek?: string;
 }) {
   const detail = useCallDetail(() => props.callId);
@@ -84,6 +85,7 @@ export function DriveCallDetail(props: {
           query={detail.query}
           data={detail.data()}
           transcriptId={props.transcriptId}
+          messageId={props.messageId}
           seek={props.seek}
         />
       </div>

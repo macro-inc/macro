@@ -27,6 +27,79 @@ use std::collections::HashMap;
 use tower::ServiceExt;
 use utoipa::OpenApi;
 
+#[tokio::test]
+async fn manual_execution_returns_sanitized_admission_errors_after_authorization() {
+    use crate::domain::service::test::set_admission_error;
+    use ai_billing::{AiAdmissionError, DenyReason};
+
+    for (error, expected_status) in [
+        (
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            StatusCode::PAYMENT_REQUIRED,
+        ),
+        (
+            AiAdmissionError::Unavailable,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+    ] {
+        let svc = service(true);
+        set_admission_error(&svc, error);
+        let app = router_with(svc, FakeEntityAccessService::owner_only());
+        let (status, created) =
+            request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+        assert_eq!(status, StatusCode::CREATED);
+        let url = format!(
+            "/scheduled-actions/{}/execute",
+            created["id"].as_str().unwrap()
+        );
+        let (status, body) = request(&app, "POST", &url, "owner", Value::Null).await;
+        assert_eq!(status, expected_status);
+        assert_eq!(
+            body,
+            json!({"code": error.code(), "error": error.to_string()})
+        );
+        let (status, body) = request(&app, "POST", &url, "stranger", Value::Null).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_ne!(body["code"], error.code());
+    }
+}
+
+#[tokio::test]
+async fn remote_session_admission_uses_the_same_public_http_contract() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Unavailable,
+    ] {
+        let response = ScheduledActionApiError::from(anyhow::Error::new(
+            RoutineSessionError::Admission(error),
+        ))
+        .into_response();
+        assert_eq!(
+            response.status(),
+            ai_billing::inbound::admission::admission_status(error)
+        );
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            body,
+            json!({"code": error.code(), "error": error.to_string()})
+        );
+    }
+}
+
+#[test]
+fn manual_execution_documents_quota_and_retryable_validation_failures() {
+    let schema = serde_json::to_value(crate::swagger::ApiDoc::openapi()).unwrap();
+    let responses = &schema["paths"]["/scheduled-actions/{id}/execute"]["post"]["responses"];
+    for status in ["402", "503"] {
+        assert_eq!(
+            responses[status]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/AiAdmissionErrorBody"
+        );
+    }
+}
+
 const OTHER: &str = "macro|other@macro.com";
 const VIEWER: &str = "macro|viewer@macro.com";
 const BOT_TOKEN: &str = "team-bot-token";
@@ -409,6 +482,35 @@ async fn mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_upda
 }
 
 #[tokio::test]
+async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found() {
+    let app = router(true);
+    for events in [false, true] {
+        let (status, created) = request(
+            &app,
+            "POST",
+            "/scheduled-actions",
+            "owner",
+            serde_json::to_value(configuration(events)).unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
+        let (status, routine) = request(&app, "GET", &url, "owner", Value::Null).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(routine, created);
+        assert_eq!(
+            request(&app, "GET", &url, "invalid", Value::Null).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    let missing = format!("/scheduled-actions/{}", macro_uuid::generate_uuid_v7());
+    assert_eq!(
+        request(&app, "GET", &missing, "owner", Value::Null).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
 async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     let app = router(true);
     let (_, action) = request(
@@ -421,6 +523,7 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     .await;
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
     for (method, path, body) in [
+        ("GET", url.clone(), Value::Null),
         ("PUT", url.clone(), legacy()),
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
@@ -696,6 +799,13 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
     );
     let mut model = legacy();
     model["task"]["agent"] = Value::Null;
+    // Model selections also require the session service; they cannot bypass it
+    // by falling back to the legacy chat runner.
+    assert_eq!(
+        request(&app, "PUT", &url, "owner", model.clone()).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    *sessions.error.lock().unwrap() = None;
     assert_eq!(
         request(&app, "PUT", &url, "owner", model).await.0,
         StatusCode::OK
@@ -763,7 +873,7 @@ fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
 }
 
 #[tokio::test]
-async fn editor_can_update_another_owners_row_but_cannot_delete_it() {
+async fn grants_do_not_allow_nonowners_to_manage_routines() {
     let svc = service(true);
     let app = router_with(
         svc.clone(),
@@ -774,23 +884,15 @@ async fn editor_can_update_another_owners_row_but_cannot_delete_it() {
         ]),
     );
     let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
-    let id = macro_uuid::Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
-    set_stored_owner(
-        svc.as_ref(),
-        id,
-        Owner::from_principal_str("macro|stored-owner@macro.com").unwrap(),
-    );
+    let id = created["id"].as_str().unwrap();
     let url = format!("/scheduled-actions/{id}");
-    let (status, updated) = request(&app, "PUT", &url, "other", legacy()).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(updated["owner"], "macro|stored-owner@macro.com");
     assert_eq!(
-        request(&app, "PUT", &url, "viewer", legacy()).await.0,
-        StatusCode::UNAUTHORIZED
+        request(&app, "PUT", &url, "other", legacy()).await.0,
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
-        request(&app, "DELETE", &url, "other", Value::Null).await.0,
-        StatusCode::UNAUTHORIZED
+        request(&app, "GET", &url, "viewer", Value::Null).await.0,
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
         request(
@@ -802,19 +904,19 @@ async fn editor_can_update_another_owners_row_but_cannot_delete_it() {
         )
         .await
         .0,
-        StatusCode::OK
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
-        request(
-            &app,
-            "GET",
-            &format!("{url}/history"),
-            "stranger",
-            Value::Null
-        )
-        .await
-        .0,
+        request(&app, "PUT", &url, "viewer", legacy()).await.0,
         StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(&app, "DELETE", &url, "other", Value::Null).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(&app, "GET", &url, "owner", Value::Null).await.0,
+        StatusCode::OK
     );
     assert_eq!(
         request(&app, "DELETE", &url, "owner", Value::Null).await.0,
@@ -823,13 +925,13 @@ async fn editor_can_update_another_owners_row_but_cannot_delete_it() {
 }
 
 #[tokio::test]
-async fn executing_a_bot_owned_row_returns_the_owner_message() {
+async fn executing_a_nonuser_owned_row_returns_not_found() {
     let svc = service(true);
     let app = router_with(svc.clone(), FakeEntityAccessService::owner_only());
     let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
     let id = macro_uuid::Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
     set_stored_owner(svc.as_ref(), id, Owner::Bot(bot_id::BotId::TEST_A));
-    let (status, body) = request(
+    let (status, _) = request(
         &app,
         "POST",
         &format!("/scheduled-actions/{id}/execute"),
@@ -837,8 +939,7 @@ async fn executing_a_bot_owned_row_returns_the_owner_message() {
         Value::Null,
     )
     .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(body.as_str().unwrap().contains("owner is a bot"));
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -891,7 +992,7 @@ async fn team_bot_create_returns_400_with_the_owner_message() {
 }
 
 #[tokio::test]
-async fn list_as_grantee_includes_the_granted_routine() {
+async fn list_as_grantee_excludes_another_owners_routine() {
     let svc = service(true);
     let app = router_with(svc.clone(), FakeEntityAccessService::owner_only());
     let (_, created) = request(
@@ -912,6 +1013,5 @@ async fn list_as_grantee_includes_the_granted_routine() {
         Value::Null,
     )
     .await;
-    assert_eq!(list.as_array().unwrap().len(), 1);
-    assert_eq!(list[0]["id"], created["id"]);
+    assert_eq!(list, json!([]));
 }

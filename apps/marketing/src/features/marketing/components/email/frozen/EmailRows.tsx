@@ -1,5 +1,7 @@
-import Envelope from '@phosphor/envelope-simple.svg';
+import Envelope from '@phosphor/envelope-open.svg';
+import { Badge } from '@ui/components/Badge';
 import { For, Show } from 'solid-js';
+import { type EmailTagId, emailTags } from '../../../core/demo-email';
 import { homepagePeople } from '../../../core/homepage-demo-people';
 import type { DemoEmail } from '../email-fixtures';
 
@@ -21,15 +23,34 @@ export function InboxChip(props: { account: DemoEmail['account'] }) {
   );
 }
 
+// The app's TagPill uses the shared small, outlined Badge contract.
+export function EmailTags(props: { tags?: readonly EmailTagId[] }) {
+  return (
+    <span class="mail-row-tags flex items-center gap-1">
+      <For each={emailTags.filter((tag) => props.tags?.includes(tag.id))}>
+        {(tag) => (
+          <Badge variant="outline" size="sm" class="bg-control">
+            <span
+              class="size-2 rounded-full shrink-0"
+              style={{ background: tag.color }}
+            />
+            {tag.label}
+          </Badge>
+        )}
+      </For>
+    </span>
+  );
+}
+
 function WideRow(props: { email: DemoEmail }) {
   return (
-    <div class="mail-row-wide w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2 gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr] grid-cols-[var(--soup-row-indicator-width)_1fr_8ch] [--title-width:10rem]">
+    <div class="mail-row-wide w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2 gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr] grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)_auto_8ch] [--title-width:10rem]">
       <span class="relative size-full grid place-items-center">
         <Show when={props.email.unread}>
           <span class="size-1.5 rounded-full bg-accent" />
         </Show>
       </span>
-      <div class="font-medium truncate items-center gap-2 flex">
+      <div class="mail-row-content font-normal truncate items-center gap-2 flex">
         <Envelope class="size-4 shrink-0 text-ink-muted" />
         <span class="w-(--title-width) shrink-0 flex items-center gap-2">
           <span class="truncate max-w-32 flex gap-2 items-center">
@@ -40,11 +61,12 @@ function WideRow(props: { email: DemoEmail }) {
           </span>
         </span>
         <span class="truncate">{props.email.subject}</span>
-        <span class="text-ink/50 font-medium truncate flex-1">
+        <span class="text-ink/50 font-normal truncate flex-1">
           {props.email.snippet}
         </span>
       </div>
-      <span class="text-xs text-right text-ink-extra-muted font-medium">
+      <EmailTags tags={props.email.tags} />
+      <span class="text-xs text-right text-ink-extra-muted font-normal">
         {props.email.time}
       </span>
     </div>
@@ -96,6 +118,7 @@ function NarrowRow(props: { email: DemoEmail }) {
         <span class="text-ink/50 font-medium truncate">
           {props.email.snippet}
         </span>
+        <EmailTags tags={props.email.tags} />
       </span>
     </div>
   );
@@ -103,6 +126,7 @@ function NarrowRow(props: { email: DemoEmail }) {
 
 export function EmailRows(props: {
   emails: readonly DemoEmail[];
+  selectedId?: string;
   onOpen: (email: DemoEmail) => void;
 }) {
   return (
@@ -126,6 +150,10 @@ export function EmailRows(props: {
                 <button
                   type="button"
                   class="mail-row soup-row-wide rounded-xl relative flex flex-col py-0.5 min-h-10 mx-1 hover:bg-list-hover text-left text-ink"
+                  data-unread={!!email.unread}
+                  aria-current={
+                    props.selectedId === email.id ? 'true' : undefined
+                  }
                   onClick={() => props.onOpen(email)}
                   aria-label={`Read ${email.subject}`}
                 >

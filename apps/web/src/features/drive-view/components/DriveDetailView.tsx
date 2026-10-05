@@ -80,7 +80,8 @@ function DriveDetailTopBar() {
         aria-label="File location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <SidePanel.HeaderActionsOutlet />
         <Show when={activeDetail()}>
           {(detail) => (
             <ShareTrigger
@@ -225,7 +226,7 @@ export function DriveDetailView() {
   return (
     <>
       <DriveDetailAncestorBreadcrumbs orderOffset={breadcrumbOrderOffset()} />
-      <SidePanel.Root>
+      <SidePanel.Root floating>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
           <Show when={!hasBlockHeader()}>
             <DriveDetailTopBar />

@@ -5,11 +5,9 @@
 //! makes an offline-composed reply visible after leaving and reopening the
 //! thread.
 //!
-//! Also covers settlement: committing under the same id keeps the page
-//! readable with the draft in place, while committing under a different
-//! (server-alias) id skips the now record-less patch — the page stays
-//! readable without the draft until the revalidation lands. The skip is
-//! what makes the client-id-as-lookup-column design safe.
+//! Also covers durable identity settlement: bindings preserve reads through
+//! local handles and rebase newer queued edits to the server entity. Legacy
+//! callers without bindings retain the safe missing-reference patch behavior.
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch};
@@ -354,6 +352,7 @@ fn queued_draft_save_is_visible_in_the_thread_page_read() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -421,6 +420,7 @@ fn queued_draft_delete_removes_the_draft_from_the_thread_page_read() {
                     link_patches: &save_patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -441,6 +441,7 @@ fn queued_draft_delete_removes_the_draft_from_the_thread_page_read() {
                     link_patches: &delete_patches,
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -504,6 +505,128 @@ fn message_ids(data: &Json) -> Vec<&str> {
         .collect()
 }
 
+#[test]
+fn identity_binding_keeps_newer_edits_readable_across_commit_and_restart() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(
+                None,
+                PAGE_QUERY,
+                Some("EmailThreadPage"),
+                &page_variables(),
+                &thread_page(),
+                None,
+            )
+            .await
+            .unwrap();
+        let bindings = [cache_core::identity::IdentityBinding {
+            local_key: EntityKey("GraphqlSoupEmailMessage:draft-1".into()),
+            delete_record: false,
+            response_path: vec!["saveEmailDraft".into(), "draft".into()],
+            reference_fields: vec![],
+            revalidation_variables: vec![],
+        }];
+        let patches = [messages_patch()];
+        let first = save_response_with("draft-1", "old body");
+        let variables = json!({"input": {"draftId": "draft-1", "threadDbId": "thread-1"}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "11111111-1111-4111-8111-111111111104",
+                    query: MUTATION,
+                    operation_name: Some("SaveEmailDraft"),
+                    variables: &variables,
+                    data: &first,
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                    identity_bindings: &bindings,
+                },
+            )
+            .await
+            .unwrap();
+        let _claim = claim_head(&mut engine).await;
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "11111111-1111-4111-8111-111111111104",
+                    query: MUTATION,
+                    operation_name: Some("SaveEmailDraft"),
+                    variables: &variables,
+                    data: &save_response_with("draft-1", "newer body"),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 20,
+                    identity_bindings: &bindings,
+                },
+            )
+            .await
+            .unwrap();
+        // Reload after the first attempt and newer edit. The superseded
+        // create must still replay to establish the identity used by the edit.
+        let mut engine = Engine::new(engine.into_storage());
+        let recovered = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "recovered".into(),
+                now_ms: 2_000,
+                lease_expires_at_ms: 3_000,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(recovered.queued.superseded);
+        assert!(recovered.queued.requires_confirmation());
+        let claim = MutationClaimToken {
+            owner: "recovered".into(),
+            generation: recovered.lease_generation,
+        };
+        engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SaveEmailDraft"),
+                &variables,
+                &save_response_with("server-draft", "old body"),
+            )
+            .await
+            .unwrap();
+        let mut engine = Engine::new(engine.into_storage());
+        let ReadResult::Hit { data } = engine
+            .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+            .await
+            .unwrap()
+        else {
+            panic!("thread remains readable");
+        };
+        assert_eq!(message_ids(&data), vec!["server-draft", "msg-1"]);
+        assert_eq!(
+            data["user"]["emailThread"]["messages"][0]["bodyHtmlSanitized"],
+            "newer body"
+        );
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            "fragment Draft on GraphqlSoupEmailMessage { id bodyHtmlSanitized }",
+            "Draft",
+        )
+        .unwrap();
+        let record = engine
+            .read_records_by_keys(
+                &selection,
+                &[EntityKey("GraphqlSoupEmailMessage:draft-1".into())],
+            )
+            .await
+            .unwrap();
+        assert_eq!(record.value[0].record["id"], "server-draft");
+        assert_eq!(record.value[0].record["bodyHtmlSanitized"], "newer body");
+    });
+}
+
 // Settlement path of the shipped client-real-id design: the server response
 // carries the SAME id the enqueued link patch references, so the reapplied
 // patch points at an entity the response just wrote. The page must stay a
@@ -537,6 +660,7 @@ fn committed_draft_save_with_the_same_id_keeps_the_draft_visible() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -615,6 +739,7 @@ fn committed_alias_id_response_skips_the_patch_and_stays_readable() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await

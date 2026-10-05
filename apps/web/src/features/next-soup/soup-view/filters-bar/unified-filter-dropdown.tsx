@@ -53,6 +53,7 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from './filter-menu';
+import { toggleReminderCompletionFilter } from './reminder-completion-filter';
 import type { SearchableOption } from './searchable-multi-select';
 
 import { useTagFilter } from './tag-filter';
@@ -368,9 +369,17 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   channels: [],
   calls: [],
   folders: [],
-  // The two tabs already split reminders on the only axis they have; there is
-  // nothing further to refine by.
-  reminders: [],
+  reminders: [
+    {
+      id: 'completion',
+      label: 'Completion',
+      multiple: false,
+      options: [
+        { id: 'reminders-not-done', label: 'Not done' },
+        { id: 'reminders-done', label: 'Done' },
+      ],
+    },
+  ],
   search: [],
 };
 
@@ -468,6 +477,11 @@ export const UnifiedFilterDropdown = (
   };
 
   const toggleFilter = (optionId: string) => {
+    if (
+      currentView() === 'reminders' &&
+      toggleReminderCompletionFilter(optionId, soup.predicates, queryFilters)
+    )
+      return;
     const wasActive = soup.predicates.isActive(optionId);
     const previousDocumentTypeIds =
       currentView() === 'documents' && isDocumentTypeFilterId(optionId)

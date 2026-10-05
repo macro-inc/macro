@@ -16,11 +16,11 @@ pub(super) enum FieldSource<'a> {
     Missing(Cow<'a, str>),
     Stored {
         key: Cow<'a, str>,
-        type_name: &'static str,
+        ty: meta::FieldType,
     },
     Entity {
         key: EntityKey<'static>,
-        type_name: &'static str,
+        ty: meta::FieldType,
         storage_key: Cow<'a, str>,
     },
 }
@@ -99,15 +99,18 @@ fn compile_field<'a>(
             Some(key) => FieldSource::Entity {
                 key,
                 storage_key,
-                type_name: meta::type_meta(&resolver.target_type)
-                    .expect("compiled resolver target exists")
-                    .name,
+                ty: meta::FieldType {
+                    name: meta::type_meta(&resolver.target_type)
+                        .expect("compiled resolver target exists")
+                        .name,
+                    ..metadata.ty
+                },
             },
             None => FieldSource::Missing(storage_key),
         },
         None => FieldSource::Stored {
             key: storage_key,
-            type_name: metadata.ty.name,
+            ty: metadata.ty,
         },
     };
     Ok(Field { node, source })

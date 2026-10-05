@@ -660,3 +660,82 @@ mod tests {
         );
     }
 }
+
+/// Metadata for applying and reversing offline draft edits across Mail views.
+#[derive(SimpleObject)]
+pub struct GraphqlMailDraftState {
+    /// Complete non-draft contribution, independent of message pagination.
+    baseline: GraphqlMailDraftAggregate,
+    /// Independently replaceable draft contributions.
+    drafts: Vec<GraphqlMailDraftEntry>,
+}
+
+impl From<email::domain::models::EmailThreadDraftState> for GraphqlMailDraftState {
+    fn from(state: email::domain::models::EmailThreadDraftState) -> Self {
+        Self {
+            baseline: state.baseline.into(),
+            drafts: state
+                .drafts
+                .into_iter()
+                .map(|entry| GraphqlMailDraftEntry {
+                    id: ID(entry.id.to_string()),
+                    macro_draft: entry.macro_draft,
+                    facts: entry.facts.into(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One draft's contribution, normalized by message identity.
+#[derive(SimpleObject)]
+pub struct GraphqlMailDraftEntry {
+    /// Message identity.
+    id: ID,
+    /// Whether edits contribute their update time to Mail recency.
+    macro_draft: bool,
+    /// Aggregate contributed by this message.
+    facts: GraphqlMailDraftAggregate,
+}
+
+/// Body-free aggregate used to recompute view membership and previews.
+#[derive(SimpleObject)]
+pub struct GraphqlMailDraftAggregate {
+    /// Count including trashed messages.
+    message_count: i32,
+    /// Any message is inbox-visible.
+    inbox_visible: bool,
+    /// Every message is read.
+    is_read: bool,
+    /// Any eligible message is Signal.
+    is_signal: bool,
+    /// Any message has a calendar attachment.
+    has_calendar_attachment: bool,
+    /// Inbound or Macro-draft recency.
+    latest_inbound_message_ts: Option<String>,
+    /// Non-spam or Macro-draft recency.
+    latest_non_spam_message_ts: Option<String>,
+    /// Outbound recency.
+    latest_outbound_message_ts: Option<String>,
+    /// Latest eligible preview.
+    preview: Option<GraphqlMailPreviewMessage>,
+    /// Preview ordering timestamp.
+    preview_ts: Option<String>,
+}
+
+impl From<email::domain::models::EmailDraftAggregate> for GraphqlMailDraftAggregate {
+    fn from(facts: email::domain::models::EmailDraftAggregate) -> Self {
+        Self {
+            message_count: facts.message_count,
+            inbox_visible: facts.inbox_visible,
+            is_read: facts.is_read,
+            is_signal: facts.is_signal,
+            has_calendar_attachment: facts.has_calendar_attachment,
+            latest_inbound_message_ts: facts.latest_inbound_message_ts.map(|ts| ts.to_rfc3339()),
+            latest_non_spam_message_ts: facts.latest_non_spam_message_ts.map(|ts| ts.to_rfc3339()),
+            latest_outbound_message_ts: facts.latest_outbound_message_ts.map(|ts| ts.to_rfc3339()),
+            preview: facts.preview.map(Into::into),
+            preview_ts: facts.preview_ts.map(|ts| ts.to_rfc3339()),
+        }
+    }
+}

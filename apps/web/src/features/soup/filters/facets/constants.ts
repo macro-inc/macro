@@ -25,6 +25,24 @@ export type FilterFieldMeta = {
   domain?: unknown[];
 };
 
+function githubRepositoryId(value: unknown): number {
+  if (
+    (typeof value !== 'string' || !/^\d+$/.test(value)) &&
+    typeof value !== 'number'
+  ) {
+    throw new RangeError(
+      'GitHub repository ID must be a positive safe integer'
+    );
+  }
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new RangeError(
+      'GitHub repository ID must be a positive safe integer'
+    );
+  }
+  return id;
+}
+
 /*
  * When adding a filter, update FILTER_TARGETS and FilterTargetsMeta. New
  * targets also require TARGETS; entity targets additionally require
@@ -181,6 +199,23 @@ export const FILTER_TARGETS = {
     foreignEntityIncludesMe: { backend: 'me', compile: 'unit' },
   },
 
+  // ghprf — GitHub pull requests, narrowing fef to pull request records
+  ghprf: {
+    githubPullRequestRepositoryId: {
+      backend: 'repo',
+      formatValue: githubRepositoryId,
+    },
+    githubPullRequestAuthorId: { backend: 'au' },
+    githubPullRequestStatus: { backend: 'st' },
+    githubPullRequestInvolves: { backend: 'inv' },
+    githubPullRequestReviewRequested: { backend: 'rr' },
+    githubPullRequestDraft: { backend: 'draft', domain: [true, false] },
+    githubPullRequestAssigneeId: { backend: 'as' },
+    githubPullRequestLabel: { backend: 'lbl' },
+    githubPullRequestReviewStatus: { backend: 'rs' },
+    githubPullRequestReviewedBy: { backend: 'rb' },
+  },
+
   // ccf — crm companies
   ccf: {
     crmCompanyId: { backend: 'id' },
@@ -307,6 +342,32 @@ type FilterTargetsMeta = {
     foreignEntityIncludesMe: boolean;
   };
 
+  // ghprf — GitHub pull requests
+  ghprf: {
+    /** Numeric GitHub repository id. */
+    githubPullRequestRepositoryId: string[];
+    /** Numeric GitHub user id of the author. */
+    githubPullRequestAuthorId: string[];
+    githubPullRequestStatus: ('open' | 'closed' | 'merged')[];
+    /** Numeric GitHub user id of someone involved. */
+    githubPullRequestInvolves: string[];
+    /** Numeric GitHub user id of a requested reviewer. */
+    githubPullRequestReviewRequested: string[];
+    githubPullRequestDraft: boolean;
+    /** Numeric GitHub user id of an assignee. */
+    githubPullRequestAssigneeId: string[];
+    /** Label name. */
+    githubPullRequestLabel: string[];
+    githubPullRequestReviewStatus: (
+      | 'none'
+      | 'required'
+      | 'approved'
+      | 'changes_requested'
+    )[];
+    /** Numeric GitHub user id of someone who submitted a review. */
+    githubPullRequestReviewedBy: string[];
+  };
+
   // ccf — crm companies
   ccf: {
     crmCompanyId: string[];
@@ -357,6 +418,7 @@ export const TARGETS: Target[] = [
   'pf',
   'callf',
   'fef',
+  'ghprf',
   'ccf',
   'asf',
   'remf',
@@ -369,7 +431,7 @@ export type FieldKey = {
   [T in Target]: FieldsForTarget<T>;
 }[Target];
 
-export type EntityTarget = Exclude<Target, 'propf'>;
+export type EntityTarget = Exclude<Target, 'propf' | 'ghprf'>;
 
 export const ENTITY_TARGETS: EntityTarget[] = [
   'df',

@@ -1,3 +1,4 @@
+import type { MessageParent } from '@service-storage/messages';
 import { describe, expect, it, vi } from 'vitest';
 import type { MessageData } from '../../Message';
 import { createChannelMessageActions } from '../create-channel-message-actions';
@@ -30,6 +31,8 @@ function buildMessage(overrides?: Partial<ActionMessage>): ActionMessage {
 function buildHarness(input?: {
   userId?: string | undefined;
   channelId?: string;
+  parentType?: MessageParent['type'];
+  canModerate?: boolean;
   onReply?: Parameters<typeof createChannelMessageActions>[0]['onReply'];
   onEdit?: Parameters<typeof createChannelMessageActions>[0]['onEdit'];
   effects?: Parameters<typeof createChannelMessageActions>[0]['effects'];
@@ -40,10 +43,11 @@ function buildHarness(input?: {
 
   const getMessageActions = createChannelMessageActions({
     parent: () => ({
-      type: 'channel',
+      type: input?.parentType ?? 'channel',
       id: (() => input?.channelId ?? 'channel-1')(),
     }),
     userId: () => input?.userId,
+    canModerate: () => input?.canModerate ?? false,
     deleteMessage,
     addReaction,
     removeReaction,
@@ -61,6 +65,27 @@ function buildHarness(input?: {
 }
 
 describe('createChannelMessageActions', () => {
+  it.each([
+    ['channel', false, true],
+    ['call', false, false],
+    ['document', false, false],
+    ['document', true, true],
+  ] as const)(
+    'matches bot deletion permissions for %s (moderator: %s)',
+    (parentType, canModerate, canDelete) => {
+      const harness = buildHarness({
+        userId: 'user-1',
+        parentType,
+        canModerate,
+      });
+      const actions = harness.getMessageActions(
+        buildMessage({ sender_id: 'bot|agent-1' })
+      );
+
+      expect(!!actions.onDelete).toBe(canDelete);
+    }
+  );
+
   it('uses the live message from the reaction context when toggling', () => {
     const harness = buildHarness({ userId: 'user-1' });
     const staleMessage = buildMessage({ reactions: [] });

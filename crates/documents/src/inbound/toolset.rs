@@ -3,12 +3,14 @@
 mod comment_on_document;
 mod create_document;
 mod edit_document;
+mod presentation;
 mod read_content;
 mod read_metadata;
 mod rename_document;
 mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
+mod word_document;
 
 #[cfg(test)]
 mod comment_test;
@@ -22,16 +24,19 @@ use crate::{
     domain::ports::create::DocumentCreationService,
     domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
+    domain::presentation::{NoPresentationFiles, PresentationFiles, PresentationService},
     inbound::toolset::{
         comment_on_document::CommentOnDocument,
         create_document::CreateDocument,
         edit_document::EditDocument,
+        presentation::{EditPresentation, ReadPresentation},
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
         resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
+        word_document::{EditWordDocument, ReadWordDocument},
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -92,8 +97,19 @@ pub struct DocumentToolContext<
     /// Permission-scoped deterministic spreadsheet workflows.
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
+    /// Reading and editing uploaded Word documents through their live copy.
+    pub word_documents: Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc>>,
+
+    /// Reading and editing PowerPoint presentations. Hosts without a file
+    /// store keep the default, whose calls fail with a clear message; wire
+    /// one with [`Self::with_presentation_files`].
+    pub presentations: Arc<PresentationService>,
+
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
+
+    /// Shared admission used by the domain AI-editing use case.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
 
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
@@ -128,7 +144,10 @@ impl<
             comments: self.comments.clone(),
             messages: self.messages.clone(),
             spreadsheet: self.spreadsheet.clone(),
+            word_documents: self.word_documents.clone(),
+            presentations: self.presentations.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            admission: self.admission.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
             actor_name: self.actor_name.clone(),
@@ -174,6 +193,11 @@ impl<
             editing.clone(),
             document_permission_jwt_secret.clone(),
         ));
+        let word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            service.clone(),
+            editing.clone(),
+            document_permission_jwt_secret.clone(),
+        ));
 
         Self {
             service,
@@ -185,11 +209,38 @@ impl<
             comments,
             messages,
             spreadsheet,
+            word_documents,
+            presentations: Arc::new(PresentationService::new(Arc::new(NoPresentationFiles))),
             document_permission_jwt_secret,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
             actor_name: None,
         }
+    }
+
+    /// Configure admission for AI edits; deterministic operations do not use it.
+    pub fn with_admission(
+        mut self,
+        admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    ) -> Self {
+        self.admission = admission;
+        self
+    }
+
+    /// The AI-editing use case using the currently injected services.
+    pub fn ai_editing(&self) -> crate::domain::ai_editing::AiEditingService<EDSvc> {
+        crate::domain::ai_editing::AiEditingService::new(
+            self.editing.clone(),
+            self.admission.clone(),
+            self.recorder.clone(),
+        )
+    }
+
+    /// Store presentations the presentation tools read and edit through `files`.
+    pub fn with_presentation_files(mut self, files: Arc<dyn PresentationFiles>) -> Self {
+        self.presentations = Arc::new(PresentationService::new(files));
+        self
     }
 
     /// Set the usage recorder the EditDocument tool logs worker token usage to.
@@ -268,6 +319,10 @@ where
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditPresentation, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditWordDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }
 
 fn comment_access_error(err: AccessError) -> ToolCallError {
