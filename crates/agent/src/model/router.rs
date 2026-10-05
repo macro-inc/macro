@@ -691,6 +691,11 @@ where
 
             while let Some(item) = rig_stream.next().await {
                 liveness.observed();
+                if let Ok(MultiTurnStreamItem::StreamAssistantItem(content)) = &item
+                    && let Some(kind) = chunk_kind(content)
+                {
+                    telemetry.record_chunk(kind);
+                }
                 match item {
                     Ok(MultiTurnStreamItem::StreamAssistantItem(
                         StreamedAssistantContent::ReasoningDelta { reasoning, .. },
@@ -783,6 +788,19 @@ where
     };
 
     Box::pin(stream)
+}
+
+/// What a streamed item carries, for the model call's first-chunk timing.
+/// `None` for the final response and items rig does not model.
+fn chunk_kind<R>(content: &StreamedAssistantContent<R>) -> Option<&'static str> {
+    match content {
+        StreamedAssistantContent::Text(_) => Some("text"),
+        StreamedAssistantContent::Reasoning(_)
+        | StreamedAssistantContent::ReasoningDelta { .. } => Some("reasoning"),
+        StreamedAssistantContent::ToolCall { .. }
+        | StreamedAssistantContent::ToolCallDelta { .. } => Some("tool_call"),
+        StreamedAssistantContent::Final(_) | StreamedAssistantContent::Unknown(_) => None,
+    }
 }
 
 /// Test-only type erasure so [`ProviderAgent`] can hold an arbitrary
