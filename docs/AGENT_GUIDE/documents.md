@@ -457,8 +457,25 @@ People with edit access get an editor; others get the same view read-only
 (no shape tools, no editing shortcuts). Edits save automatically 1.5 s after
 the last change, when the tab is hidden, and on close, as a new document
 version through `PUT /documents/{id}/simple_save`. Saving rewrites only the
-edited parts of the original file, so everything else in it survives. There
-is no live collaboration: the last save wins.
+edited parts of the original file, so everything else in it survives.
+
+Everyone with the design open edits it live, as in Figma. Changes go through
+the sync service as Loro maps holding the state of each layer edited since
+sharing began (see `fig_engine::collab`); the stored `.fig` stays the base
+everyone opens, and the first person who can edit seeds the shared copy.
+Others' edits appear within a fraction of a second; edits to different
+layers merge, and edits to the same layer resolve to the latest. Undo takes
+back only your own changes. Of the people editing, one (the lowest peer id)
+stores the merged file; the others' toolbars read saved while the sync
+service holds their changes. Presence: other people's pointers with name
+tags (`fig-peer-cursor`, `data-peer="<name>"`, "(typing)" while they type),
+outlines of what they selected in their colors, and their avatars at the top
+right of the canvas (`fig-collaborators`, one `fig-collaborator` button per
+person, `data-peer="<name>"`). Clicking an avatar follows that person: their
+page and view, inside a colored frame (`fig-following`) until you click,
+scroll, or press **Stop**. A viewer who opens a design nobody has shared yet,
+or anyone when the sync service is unreachable, gets the stored file
+read-only.
 
 Layout and test hooks:
 
@@ -555,7 +572,12 @@ It opens files from `crates/fig_engine/tests/fixtures` (the synthetic
 also opens a local `.fig`. `?edit` makes the file editable and `?new` opens a
 blank design (editable); saves stay in memory, and `?reload` reopens each one
 to check it round-trips. `window.figFixture` exposes `engine()`, `saves()`,
-`errors()`, `notices()`, and `downloads()`. The Playwright suite runs with
+`errors()`, `notices()`, and `downloads()`. `?collab` (with
+`&people=alice,bob`, the default) shows several people editing one file side
+by side (`fig-person-<Name>` holds each editor), each running the real
+shared-design session over an in-page sync server;
+`window.figFixture.collab.people()` gives each person's `engine()`,
+`saves()`, `status()`, and `peers()`. The Playwright suite runs with
 `bunx playwright test --config src/features/block-fig/browser-test/playwright.config.ts`
 (set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
 installed). The sections above were verified on this fixture; the `/app/fig`

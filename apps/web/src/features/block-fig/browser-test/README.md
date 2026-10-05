@@ -40,6 +40,16 @@ constraints, resizing several layers and rotating one, components
 (creating, placing instances from Assets, overriding their layers,
 detaching), adding pages, and read-only access.
 
+`?collab` opens several people on one design side by side
+(`&people=alice,bob` by default), each with the real shared-design session
+(Loro document, WAL, awareness), engine, and viewer, connected through an
+in-page sync server (`memory-sync.ts`, the `LiveSyncSource` contract the sync
+service's transport implements); `window.figFixture.collab.people()` exposes
+each person's engine, saves, status, and peers.
+`collaboration.browser.e2e.ts` covers edits and undo reaching the other
+person, remote pointers, selections and avatars, one person storing the
+merged file, and following someone's view.
+
 `FIG_CORPUS_DIR` (with a trailing slash) serves another directory of
 files; `--port` runs a second server beside the default one.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
