@@ -25,7 +25,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
   EntitySelectionToolbar,
-  getTaskReferencedEntityIds,
   getTaskStatusOptionId,
   ListLayoutProvider,
   type TaskEntityWithProperties,
@@ -64,7 +63,6 @@ import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
-import { ProjectPropertyCell } from '@app/features/projects/project-property';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 
 function ResponsiveTaskListHeader() {
@@ -516,19 +514,7 @@ export function TaskList(props: TaskListProps) {
                             }}
                           >
                             <TaskListEntity
-                              projectSlot={
-                                projectsEnabled() ? (
-                                  <ProjectPropertyCell
-                                    taskId={entityRow().entity.id}
-                                    projectId={
-                                      getTaskReferencedEntityIds(
-                                        entityRow().entity,
-                                        SYSTEM_PROPERTY_IDS.PROJECT
-                                      )[0]
-                                    }
-                                  />
-                                ) : undefined
-                              }
+                              showProject={projectsEnabled()}
                               rowId={entityRow().id}
                               entity={entityRow().entity}
                               highlighted={list.focus.key() === entityRow().id}

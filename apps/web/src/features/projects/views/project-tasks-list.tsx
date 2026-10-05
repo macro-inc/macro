@@ -6,8 +6,9 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
+import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
-import { type ParentProps, Show } from 'solid-js';
+import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
 import { createProjectTasksDataSource } from '../queries/project-tasks';
 
@@ -21,7 +22,7 @@ export type ProjectTasksListProps = Omit<
   'children'
 > & {
   onCreateTask?: () => void;
-  onAddTasks?: () => void;
+  addTasksAction?: JSX.Element;
 };
 
 /** Embeds the actual Tasks list, including its controllers, menus and row editors. */
@@ -64,7 +65,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState } = useTasksView();
+  const { state, setState, source } = useTasksView();
   let listElement: HTMLDivElement | undefined;
   return (
     <div class="flex size-full min-h-0 flex-col">
@@ -79,14 +80,26 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
         />
         <div class="ml-auto flex shrink-0 items-center gap-3">
           <TasksControls />
-          <Show when={props.onAddTasks}>
-            <Button onClick={props.onAddTasks}>Add existing tasks</Button>
-          </Show>
+          {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button onClick={props.onCreateTask}>New task</Button>
+            <Button variant="outline" onClick={props.onCreateTask}>
+              <PlusIcon class="size-4" />
+              New task
+            </Button>
           </Show>
         </div>
       </div>
+      <Show when={source.paginationError?.()}>
+        <div
+          role="alert"
+          class="flex items-center gap-3 px-3 pb-2 text-sm text-ink-muted"
+        >
+          Some tasks could not be loaded.
+          <Button size="sm" onClick={() => source.retryPagination?.()}>
+            Try again
+          </Button>
+        </div>
+      </Show>
       <TaskList
         ref={(element) => {
           listElement = element;

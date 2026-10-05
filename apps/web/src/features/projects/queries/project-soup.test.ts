@@ -1,6 +1,11 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import { CombinedError, createClient, type Exchange } from '@urql/core';
+import {
+  CombinedError,
+  cacheExchange,
+  createClient,
+  type Exchange,
+} from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromPromise, mergeMap, pipe } from 'wonka';
@@ -50,6 +55,54 @@ afterEach(() => {
 });
 
 describe('project Soup source', () => {
+  it('reuses cached projects on remount while refreshing in the background', async () => {
+    const refresh = Promise.withResolvers<void>();
+    let networkReads = 0;
+    const exchange: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        mergeMap((operation) =>
+          fromPromise(
+            (async () => {
+              if (operation.kind === 'query' && ++networkReads > 1)
+                await refresh.promise;
+              return {
+                operation,
+                data: {
+                  user: {
+                    id: 'viewer',
+                    soup: { items: [initiative('cached')], nextCursor: null },
+                  },
+                },
+                stale: false,
+                hasNext: false,
+              };
+            })()
+          )
+        )
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [cacheExchange, exchange],
+    });
+    const mount = () =>
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        return createProjectSoupSource(
+          () => client,
+          () => ({ sort: 'updated' }),
+          () => true
+        );
+      });
+    const first = mount();
+    await vi.waitFor(() => expect(first.rows()?.[0].project.id).toBe('cached'));
+    dispose?.();
+    const second = mount();
+    await vi.waitFor(() => expect(networkReads).toBe(2));
+    expect(second.loading()).toBe(false);
+    expect(second.rows()?.[0].project.id).toBe('cached');
+    refresh.resolve();
+  });
   it('scopes all filters to initiatives and excludes folders and task documents', () => {
     const input = projectSoupInput({
       query: 'Roadmap',

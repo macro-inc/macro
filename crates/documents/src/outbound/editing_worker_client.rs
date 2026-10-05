@@ -103,6 +103,43 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     }
 
     #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn word_document(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &crate::domain::word_document::WordDocumentRequest,
+    ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/docx", self.worker_url))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(45))
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+                "request": request,
+            }))
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response
+                .json::<serde_json::Value>()
+                .await
+                .unwrap_or_default();
+            let message = body
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("Word document operation failed. Read the document again before retrying an edit.");
+            anyhow::bail!("{message} (HTTP {status})");
+        }
+        Ok(response.json().await?)
+    }
+
+    #[cfg(feature = "ai_tools")]
     #[tracing::instrument(skip_all, fields(document_id, %mark_id), err)]
     async fn add_comment_mark(
         &self,

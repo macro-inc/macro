@@ -215,6 +215,7 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'ReadChat',
       'ReadProject',
       'ReadPresentation',
+      'ReadWordDocument',
       () => <ReadIcon class="size-4" />
     )
     .with('WebFetch', () => <GlobeIcon class="size-4" />)
@@ -222,6 +223,7 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'EditDocument',
       'EditSpreadsheet',
       'EditPresentation',
+      'EditWordDocument',
       'CreateDocument',
       () => <PencilIcon class="size-4" />
     )

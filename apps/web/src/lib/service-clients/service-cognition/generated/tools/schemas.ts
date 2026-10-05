@@ -3386,6 +3386,78 @@ export const EditTagResponse = z.object({
   summary: z.string(),
 });
 
+export const EditWordDocument = z.object({
+  documentId: z.string(),
+  operations: z.array(
+    z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z
+          .object({
+            paragraph: z.string(),
+            find: z.string(),
+            replace: z.string(),
+            occurrence: z.union([z.number().int().gte(0), z.null()]).optional(),
+            type: z.literal('replaceText'),
+          })
+          .strict(),
+        z
+          .object({
+            paragraph: z.string(),
+            text: z.string(),
+            type: z.literal('setText'),
+          })
+          .strict(),
+        z
+          .object({
+            paragraph: z.string(),
+            find: z.union([z.string(), z.null()]).optional(),
+            occurrence: z.union([z.number().int().gte(0), z.null()]).optional(),
+            bold: z.union([z.boolean(), z.null()]).optional(),
+            italic: z.union([z.boolean(), z.null()]).optional(),
+            underline: z.union([z.boolean(), z.null()]).optional(),
+            strikethrough: z.union([z.boolean(), z.null()]).optional(),
+            type: z.literal('formatText'),
+          })
+          .strict(),
+        z
+          .object({
+            after: z.union([z.string(), z.null()]).optional(),
+            before: z.union([z.string(), z.null()]).optional(),
+            text: z.string(),
+            style: z.union([z.string(), z.null()]).optional(),
+            type: z.literal('insertParagraph'),
+          })
+          .strict(),
+        z.object({ id: z.string(), type: z.literal('delete') }).strict(),
+        z
+          .object({
+            paragraph: z.string(),
+            style: z.string(),
+            type: z.literal('setStyle'),
+          })
+          .strict(),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
+  ),
+});
+
+export const WordDocumentResponse = z.object({ content: z.string() });
+
 export const GenerateImage = z.object({
   prompt: z.string(),
   aspectRatio: z
@@ -6524,6 +6596,12 @@ export const ReadSpreadsheet = z.object({
   sheetId: z.union([z.string(), z.null()]).optional(),
   ranges: z.union([z.array(z.string()), z.null()]).optional(),
   includeStyles: z.union([z.boolean(), z.null()]).optional(),
+});
+
+export const ReadWordDocument = z.object({
+  documentId: z.string(),
+  start: z.union([z.number().int().gte(0), z.null()]).optional(),
+  count: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
 export const RenameChannel = z.object({

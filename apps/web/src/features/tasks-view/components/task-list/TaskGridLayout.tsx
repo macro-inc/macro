@@ -25,9 +25,10 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
+import { createMemo, For, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
+  TASK_PROJECT_COLUMN,
   type TaskGridColumn,
   taskGridTemplate,
 } from './task-grid-template';
@@ -59,7 +60,6 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
-  projectSlot?: JSX.Element;
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
@@ -118,7 +118,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         )}
         style={taskGridTemplate({
           indicator: !props.hideCheckbox,
-          project: props.projectSlot !== undefined,
+          project: props.showProject === true,
         })}
       >
         <Show when={!props.hideCheckbox}>
@@ -197,12 +197,18 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           )}
         </For>
 
-        <Show when={props.projectSlot !== undefined}>
+        <Show when={props.showProject}>
           <Entity.Slot
-            placement="initiative"
+            placement={TASK_PROJECT_COLUMN.id}
             class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
           >
-            {props.projectSlot}
+            <ListPropertyValue
+              entityId={props.entity.id}
+              property={
+                propertyMap().get(TASK_PROJECT_COLUMN.defId) ??
+                buildStubProperty(TASK_PROJECT_COLUMN)
+              }
+            />
           </Entity.Slot>
         </Show>
 

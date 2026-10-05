@@ -17,6 +17,7 @@ just ensure-cache-wasm
 just ensure-agent-fold-wasm
 just ensure-database-sql-wasm
 just ensure-pptx-engine-wasm
+just ensure-docx-engine-wasm
 just ensure-fig-engine-wasm
 
 # build.rs reads this ignored file. Restore it even if compilation fails.

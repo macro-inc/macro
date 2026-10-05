@@ -4892,6 +4892,10 @@
       "crates/user_quota",
       "crates/workspace-hack"
     ],
+    "docx_engine": [
+      "crates/docx_engine",
+      "crates/pptx_engine"
+    ],
     "docx_unzip_handler": [
       "crates/activity",
       "crates/agent",

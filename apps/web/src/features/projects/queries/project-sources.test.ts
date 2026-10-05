@@ -1,4 +1,5 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { PropertyApiValues } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -7,14 +8,6 @@ import { TASK_PROJECT_PROPERTY } from './task-project';
 const mock = vi.hoisted(() => ({
   createTask: vi.fn(),
   saveProperty: vi.fn(),
-  taskProperties: vi.fn(),
-  toastFailure: vi.fn(),
-}));
-vi.mock('@service-properties/client', () => ({
-  propertiesServiceClient: { getEntityProperties: mock.taskProperties },
-}));
-vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: mock.toastFailure },
 }));
 vi.mock('@block-md/util/taskComposerProperties', () => ({
   createTaskWithProperties: mock.createTask,
@@ -51,68 +44,50 @@ function commands() {
   });
 }
 
-/** The created task's properties as the server reports them. */
-function serverProject(projectId: string | undefined) {
-  mock.taskProperties.mockResolvedValue({
-    isErr: () => false,
-    value: {
-      properties: projectId
-        ? [
-            {
-              property: {
-                id: 'row',
-                created_at: '2026-10-03T00:00:00Z',
-                updated_at: '2026-10-03T00:00:00Z',
-              },
-              definition: {
-                id: SYSTEM_PROPERTY_IDS.PROJECT,
-                owner: { scope: 'system' },
-                display_name: 'Project',
-                data_type: 'ENTITY',
-                is_multi_select: false,
-                specific_entity_type: 'INITIATIVE',
-                is_system: true,
-                created_at: '2026-10-03T00:00:00Z',
-                updated_at: '2026-10-03T00:00:00Z',
-              },
-              value: {
-                type: 'EntityReference',
-                value: [{ entity_id: projectId, entity_type: 'INITIATIVE' }],
-              },
-            },
-          ]
-        : [],
-    },
-  });
-}
-
-it('creates a project task in one call with its Project property', async () => {
+it("keeps the composer's Project and adds the project only when it's missing", async () => {
   mock.createTask.mockResolvedValue({ documentId: 'task' });
-  serverProject('project');
   const { commands: project, dispose } = commands();
   const history = vi.fn();
+  const status: [string, PropertyApiValues] = [
+    'status',
+    { valueType: 'SELECT_STRING', values: ['done'] },
+  ];
+  const other: [string, PropertyApiValues] = [
+    SYSTEM_PROPERTY_IDS.PROJECT,
+    {
+      valueType: 'ENTITY',
+      refs: [{ entity_id: 'other', entity_type: 'INITIATIVE' }],
+    },
+  ];
+  await project.createTask(
+    'project',
+    'Moved',
+    '',
+    [status, other],
+    new Map(),
+    history
+  );
+  expect(mock.createTask).toHaveBeenLastCalledWith(
+    'Moved',
+    '',
+    [status, other],
+    new Map(),
+    history
+  );
+
   await project.createTask(
     'project',
     'Ship it',
     '',
-    [
-      ['status', { valueType: 'SELECT_STRING', values: ['done'] }],
-      [
-        SYSTEM_PROPERTY_IDS.PROJECT,
-        {
-          valueType: 'ENTITY',
-          refs: [{ entity_id: 'other', entity_type: 'INITIATIVE' }],
-        },
-      ],
-    ],
+    [status],
     new Map(),
     history
   );
-  expect(mock.createTask).toHaveBeenCalledWith(
+  expect(mock.createTask).toHaveBeenLastCalledWith(
     'Ship it',
     '',
     [
-      ['status', { valueType: 'SELECT_STRING', values: ['done'] }],
+      status,
       [
         SYSTEM_PROPERTY_IDS.PROJECT,
         {
@@ -123,29 +98,6 @@ it('creates a project task in one call with its Project property', async () => {
     ],
     new Map(),
     history
-  );
-  expect(mock.toastFailure).not.toHaveBeenCalled();
-  dispose();
-});
-
-it('says so when a created task could not join the project', async () => {
-  mock.createTask.mockResolvedValue({ documentId: 'task' });
-  serverProject(undefined);
-  const { commands: project, dispose } = commands();
-  const created = await project.createTask(
-    'project',
-    'Ship it',
-    '',
-    [],
-    new Map(),
-    vi.fn()
-  );
-  expect(created).toEqual({ documentId: 'task' });
-  expect(mock.taskProperties).toHaveBeenCalledWith(
-    expect.objectContaining({ entity_type: 'DOCUMENT', entity_id: 'task' })
-  );
-  expect(mock.toastFailure).toHaveBeenCalledWith(
-    expect.stringContaining('could not be added to the project')
   );
   dispose();
 });
