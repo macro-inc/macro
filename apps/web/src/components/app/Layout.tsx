@@ -45,7 +45,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
 import {
-  DEV_MODE_ENV,
+  enableAiUsageBilling,
   enableDatabases,
   enableReminders,
 } from '@core/constant/featureFlags';
@@ -271,9 +271,11 @@ function LayoutInner(props: RouteSectionProps) {
           <Paywall />
         </Suspense>
       </Show>
-      <Show when={DEV_MODE_ENV && usageLimitOpen()}>
-        <AiUsageLimitDialog />
-      </Show>
+      <ShowFeatureFlag flag={enableAiUsageBilling}>
+        <Show when={usageLimitOpen()}>
+          <AiUsageLimitDialog />
+        </Show>
+      </ShowFeatureFlag>
       <div class="max-h-full grow flex">
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>
