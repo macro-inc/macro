@@ -1003,6 +1003,58 @@ const shortcutSections: ShortcutSection[] = [
       },
     ],
   },
+  {
+    title: 'Email',
+    items: [
+      { keys: ['r'], codes: ['KeyR'], description: 'Reply' },
+      {
+        keys: ['opt+r'],
+        codes: ['AltLeft', 'KeyR'],
+        description: 'Reply all',
+      },
+      { keys: ['f'], codes: ['KeyF'], description: 'Forward' },
+      { keys: ['e'], codes: ['KeyE'], description: 'Mark done' },
+      {
+        keys: ['shift+e'],
+        codes: ['ShiftLeft', 'KeyE'],
+        description: 'Mark as not done',
+      },
+      { keys: ['u'], codes: ['KeyU'], description: 'Mark unread' },
+      {
+        keys: ['shift+u'],
+        codes: ['ShiftLeft', 'KeyU'],
+        description: 'Mark read',
+      },
+      { keys: ['s'], codes: ['KeyS'], description: 'Star/favorite' },
+      { keys: ['o'], codes: ['KeyO'], description: 'Expand message' },
+      {
+        keys: ['shift+o'],
+        codes: ['ShiftLeft', 'KeyO'],
+        description: 'Expand all messages',
+      },
+      {
+        keys: ['shift+m'],
+        codes: ['ShiftLeft', 'KeyM'],
+        description: 'Mute thread',
+      },
+      {
+        keys: ['#'],
+        codes: ['ShiftLeft', 'Digit3'],
+        description: 'Trash',
+      },
+      { keys: ['h'], codes: ['KeyH'], description: 'Remind me' },
+      {
+        keys: ['arrowup'],
+        codes: ['ArrowUp'],
+        description: 'Previous message',
+      },
+      {
+        keys: ['arrowdown'],
+        codes: ['ArrowDown'],
+        description: 'Next message',
+      },
+    ],
+  },
 ];
 
 const [hoveredCodes, setHoveredCodes] = createSignal<string[]>([]);
@@ -1099,6 +1151,18 @@ export function Shortcuts() {
             </h3>
             <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">
               <For each={shortcutSections[2].items}>
+                {(item) => <ShortcutRow item={item} spacer="or" />}
+              </For>
+            </div>
+          </div>
+
+          {/* Email - spans both columns with its own 2-column layout */}
+          <div class="@[600px]:col-span-2">
+            <h3 class="text-sm font-semibold text-ink mb-1.5 flex items-center gap-2">
+              {shortcutSections[3].title}
+            </h3>
+            <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">
+              <For each={shortcutSections[3].items}>
                 {(item) => <ShortcutRow item={item} spacer="or" />}
               </For>
             </div>
