@@ -80,6 +80,12 @@ const NODE_FIELDS: &[&str] = &[
     "stackCounterSizing",
     "stackCounterSpacing",
     "stackReverseZIndex",
+    "bordersTakeSpace",
+    "borderStrokeWeightsIndependent",
+    "borderTopWeight",
+    "borderRightWeight",
+    "borderBottomWeight",
+    "borderLeftWeight",
     "stackChildPrimaryGrow",
     "stackChildAlignSelf",
     "stackPositioning",
@@ -164,7 +170,7 @@ pub fn restrict_schema(schema: &mut Schema) {
             "rotation",
         ],
     );
-    schema.keep_only("Baseline", &["firstCharacter"]);
+    schema.keep_only("Baseline", &["firstCharacter", "lineY", "lineAscent"]);
     schema.keep_only("Image", &["hash", "dataBlob"]);
     schema.keep_only(
         "SymbolData",
@@ -412,6 +418,10 @@ fn text_layout(m: MsgRef) -> Option<TextLayout> {
         decorations,
         layout_size: m.msg("layoutSize").map(vec2),
         lines: m.list("baselines").count() as u32,
+        first_baseline: m
+            .msgs("baselines")
+            .next()
+            .and_then(|b| Some(b.f32("lineY").unwrap_or(0.0) + b.f32("lineAscent")?)),
     })
 }
 
@@ -491,6 +501,7 @@ fn auto_layout(m: &MsgRef) -> Option<AutoLayout> {
         counter_sizing: m.enum_name("stackCounterSizing").map(Into::into),
         counter_spacing: m.f32("stackCounterSpacing").unwrap_or(0.0),
         reverse_z: m.bool("stackReverseZIndex").unwrap_or(false),
+        strokes_in_layout: m.bool("bordersTakeSpace").unwrap_or(false),
     })
 }
 
@@ -552,6 +563,15 @@ pub fn props(m: MsgRef) -> Props {
         p.strokes = Some(m.collect_msgs("strokePaints", paint));
     }
     p.stroke_weight = m.f32("strokeWeight");
+    if m.bool("borderStrokeWeightsIndependent") == Some(true) {
+        let side = |f| m.f32(f).unwrap_or(0.0);
+        p.stroke_sides = Some([
+            side("borderTopWeight"),
+            side("borderRightWeight"),
+            side("borderBottomWeight"),
+            side("borderLeftWeight"),
+        ]);
+    }
     p.stroke_align = m.enum_name("strokeAlign").map(|a| match a {
         "INSIDE" => StrokeAlign::Inside,
         "OUTSIDE" => StrokeAlign::Outside,

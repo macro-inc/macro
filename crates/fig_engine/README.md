@@ -66,9 +66,11 @@ and reopened files render identically.
 
 Auto layout frames are laid out again when an edit changes them or their
 children: fill and stretch sizing, gaps (fixed or automatic), padding,
-alignment, min and max sizes, and hugging, which carries the change up
-through hugging parents. `fig_render relayout` re-lays out every stack in a
-file and reports the frames placed differently from Figma's own layout.
+alignment (including text baselines), min and max sizes, strokes included
+in layout, and hugging, which carries the change up through hugging
+parents. Hidden frames keep their layout until shown, as in Figma.
+`fig_render relayout` re-lays out every stack in a file and reports the
+frames placed differently from Figma's own layout.
 
 Text the editor changes is laid out again with Inter (`fonts/`, SIL Open
 Font License), embedded in the build, or a font registered at run time;
