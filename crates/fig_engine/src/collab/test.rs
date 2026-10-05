@@ -308,6 +308,17 @@ fn entries_round_trip_every_property() {
             session: 1,
             local: 10,
         });
+        props.library = Some(Arc::new(crate::model::LibraryLink {
+            publishable: Some(true),
+            version: Some("4f2a9c".into()),
+            published_version: Some("4f2a9b".into()),
+            source: Some("library-doc".into()),
+            publish_id: Some(Guid {
+                session: 3,
+                local: 4,
+            }),
+        }));
+        props.macro_data = Some(Arc::from([(Arc::from("libraries"), Arc::from("[]"))]));
         let state = NodeState {
             props,
             removed: node.removed,

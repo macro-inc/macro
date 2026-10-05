@@ -11,6 +11,10 @@
 
 import type { EditResult, FigEngine } from '@core/fig-engine/client';
 import type {
+  LibraryPackage,
+  LibrarySpec,
+} from '@core/fig-engine/library-types';
+import type {
   NodeInfo,
   PasteSpec,
   Rect,
@@ -30,6 +34,7 @@ import {
 } from '../core/clipboard';
 import type { DesignOp } from '../core/design-system';
 import type { HandoffOp } from '../core/handoff-ops';
+import type { LibraryOp } from '../core/libraries';
 import type { PaintType, StopSpec } from '../core/paint';
 import type { InteractionSpec } from '../core/prototype';
 import type { Measure } from '../core/type';
@@ -192,7 +197,8 @@ export type Op =
   | { op: 'setInteractions'; id: string; interactions: InteractionSpec[] }
   | { op: 'setFlowStart'; id: string; name: string | null }
   | HandoffOp
-  | DesignOp;
+  | DesignOp
+  | LibraryOp;
 
 export interface FigEditorOptions {
   engine: FigEngine;
@@ -518,6 +524,40 @@ export function createFigEditor(options: FigEditorOptions) {
       { op: 'instantiate', component: component.id, parent: page.id, x, y },
     ]);
     await selectCreated(result);
+  };
+
+  /** The page point that centers a `width × height` box in the view. */
+  const viewCenter = (width: number, height: number) => {
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    return {
+      x: Math.round(c.x + v.w / 2 / c.zoom - width / 2),
+      y: Math.round(c.y + v.h / 2 / c.zoom - height / 2),
+    };
+  };
+
+  /**
+   * Imports library assets (a package from the library's engine) as one
+   * step, in order with other edits, selecting what `spec.then` created.
+   */
+  const importLibrary = async (pkg: LibraryPackage, spec: LibrarySpec) => {
+    if (!enabled()) return undefined;
+    const run = queue.then(async () => {
+      try {
+        await pullShared();
+        const result = await engine.importLibrary(viewer.page(), pkg, spec);
+        await pushNow();
+        await settle(result);
+        return result;
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    });
+    queue = run;
+    const result = await run;
+    await selectCreated(result);
+    return result;
   };
 
   const removeAutoLayout = () =>
@@ -1123,6 +1163,8 @@ export function createFigEditor(options: FigEditorOptions) {
     createComponent,
     detachInstance,
     insertInstance,
+    importLibrary,
+    viewCenter,
     startMove,
     startResize,
     startRotate,

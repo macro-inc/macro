@@ -14,6 +14,7 @@ pub mod geometry;
 pub mod images;
 pub mod inspect;
 pub mod kiwi;
+pub mod library;
 pub mod model;
 pub mod render;
 pub mod save;

@@ -588,7 +588,7 @@ pub fn local_styles(doc: &Document) -> Vec<StyleInfo> {
         .filter_map(|n| {
             let p = &n.props;
             let style_type = p.style_type?;
-            let remote = p.key.is_some();
+            let remote = crate::library::is_copy(p);
             let size = Vec2::new(1.0, 1.0);
             Some((
                 remote,

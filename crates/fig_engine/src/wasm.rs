@@ -93,6 +93,8 @@ pub struct FigFile {
     history: History,
     /// Set while the file is edited together with other people.
     collab: Option<Collab>,
+    /// Scenes library thumbnails were drawn from.
+    thumbnails: crate::library::Thumbnails,
 }
 
 #[wasm_bindgen]
@@ -110,6 +112,7 @@ impl FigFile {
             original,
             history: History::default(),
             collab: None,
+            thumbnails: crate::library::Thumbnails::default(),
         })
     }
 
@@ -167,6 +170,7 @@ impl FigFile {
         touched: Vec<NodeIdx>,
         created: Vec<String>,
     ) -> Result<String, JsError> {
+        self.thumbnails.clear();
         let before = self.touched_bounds(&touched);
         let count_before = self.scene.as_ref().map_or(0, |(_, s)| s.nodes.len());
         // Property edits update the scene in place; tree changes rebuild it.
@@ -704,6 +708,78 @@ impl FigFile {
             collab.record(&mut self.doc, &mut applied.touched, false);
         }
         self.after_edit(page, applied.touched, applied.created)
+    }
+}
+
+#[wasm_bindgen]
+impl FigFile {
+    /// What publishing the file as a library would change
+    /// (`LibraryStatus` JSON).
+    #[wasm_bindgen(js_name = libraryStatus)]
+    pub fn library_status(&self) -> Result<String, JsError> {
+        to_json(&crate::library::status(&self.doc))
+    }
+
+    /// The file's published library assets (`PublishedLibrary` JSON).
+    #[wasm_bindgen(js_name = libraryAssets)]
+    pub fn library_assets(&self) -> Result<String, JsError> {
+        to_json(&crate::library::published(&self.doc))
+    }
+
+    /// The libraries the file uses and its copies of their assets
+    /// (`LibraryUse` JSON).
+    #[wasm_bindgen(js_name = libraryUses)]
+    pub fn library_uses(&self) -> Result<String, JsError> {
+        to_json(&crate::library::uses(&self.doc))
+    }
+
+    /// The assets named by `keys` (`string[]` JSON) with what they use, for
+    /// another file to import.
+    #[wasm_bindgen(js_name = libraryPackage)]
+    pub fn library_package(&self, keys: &str) -> Result<Clipboard, JsError> {
+        let keys: Vec<String> = serde_json::from_str(keys).map_err(js_err)?;
+        let copied = crate::library::package(&self.doc, &self.original, &keys).map_err(js_err)?;
+        Ok(Clipboard {
+            document: copied.document,
+            images: copied.images,
+        })
+    }
+
+    /// Imports a library package (see `libraryPackage`) as one undoable
+    /// step; `spec` is `LibrarySpec` JSON. Returns an `EditResult` JSON.
+    #[wasm_bindgen(js_name = importLibrary)]
+    pub fn import_library(
+        &mut self,
+        page: usize,
+        document: &[u8],
+        images: Option<Vec<u8>>,
+        spec: &str,
+    ) -> Result<String, JsError> {
+        let spec: crate::edit::LibrarySpec = serde_json::from_str(spec).map_err(js_err)?;
+        self.scene(page)?;
+        let mut applied = self
+            .history
+            .import_library(
+                &mut self.doc,
+                &self.original,
+                document,
+                images.as_deref(),
+                &spec,
+            )
+            .map_err(js_err)?;
+        if let Some(collab) = &mut self.collab {
+            collab.record(&mut self.doc, &mut applied.touched, false);
+        }
+        self.after_edit(page, applied.touched, applied.created)
+    }
+
+    /// A PNG of a layer on any canvas (library copies included), fitted in
+    /// `size` pixels; empty when it draws nothing.
+    #[wasm_bindgen(js_name = nodeThumbnail)]
+    pub fn node_thumbnail(&mut self, id: &str, size: u32) -> Vec<u8> {
+        crate::model::Guid::parse(id)
+            .and_then(|g| self.thumbnails.render(&self.doc, &mut self.images, g, size))
+            .unwrap_or_default()
     }
 }
 

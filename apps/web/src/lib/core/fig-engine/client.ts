@@ -15,6 +15,13 @@ import type {
   ExportRequest,
   LayoutAids,
 } from './handoff-types';
+import type {
+  LibraryPackage,
+  LibrarySpec,
+  LibraryStatus,
+  LibraryUse,
+  PublishedLibrary,
+} from './library-types';
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type { PrototypeInfo } from './prototype-types';
 import type {
@@ -504,7 +511,7 @@ export class FigEngine {
     make:
       | Extract<Body, { kind: 'edit' }>
       | (() => {
-          body: Extract<Body, { kind: 'paste' }>;
+          body: Extract<Body, { kind: 'paste' | 'importLibrary' }>;
           transfer: Transferable[];
         })
   ): Promise<EditResult> {
@@ -538,6 +545,67 @@ export class FigEngine {
     for (const { h, done } of fanned) void done.then((ok) => !ok && drop(h));
     if (r.kind !== 'edit') throw new Error('unexpected response');
     return JSON.parse(r.json) as EditResult;
+  }
+
+  /** What publishing the file as a library would change. */
+  libraryStatus(): Promise<LibraryStatus> {
+    return this.query('libraryStatus');
+  }
+
+  /** The file's published library assets. */
+  libraryAssets(): Promise<PublishedLibrary> {
+    return this.query('libraryAssets');
+  }
+
+  /** The libraries the file uses and its copies of their assets. */
+  libraryUses(): Promise<LibraryUse> {
+    return this.query('libraryUses');
+  }
+
+  /** The library assets named by `keys`, with what they use, for another file. */
+  async libraryPackage(keys: string[]): Promise<LibraryPackage> {
+    const r = await this.primary.request({
+      kind: 'libraryPackage',
+      keys: JSON.stringify(keys),
+    });
+    if (r.kind !== 'copied') throw new Error('unexpected response');
+    return {
+      document: new Uint8Array(r.document),
+      images: new Uint8Array(r.images),
+    };
+  }
+
+  /** Imports a library package as one step, in every worker. */
+  importLibrary(
+    page: number,
+    pkg: LibraryPackage,
+    spec: LibrarySpec
+  ): Promise<EditResult> {
+    return this.edit(() => {
+      const document = pkg.document.slice().buffer;
+      const images = pkg.images.length > 0 ? pkg.images.slice().buffer : null;
+      return {
+        body: {
+          kind: 'importLibrary',
+          page,
+          document,
+          images,
+          spec: JSON.stringify(spec),
+        },
+        transfer: images ? [document, images] : [document],
+      };
+    });
+  }
+
+  /** A PNG of a layer on any canvas (library copies too); null when empty. */
+  async nodeThumbnail(id: string, size: number): Promise<Blob | null> {
+    const r = await this.primary.request({
+      kind: 'nodeThumbnail',
+      node: id,
+      size,
+    });
+    if (r.kind !== 'png' || !r.bytes) return null;
+    return new Blob([r.bytes], { type: 'image/png' });
   }
 
   /** Applies edit operations (see `fig_engine::edit::Op`) as one step. */

@@ -129,6 +129,15 @@ const NODE_FIELDS: &[&str] = &[
     "backgroundEnabled",
     "derivedImmutableFrameData",
     "nodeGenerationData",
+    "componentKey",
+    "isSymbolPublishable",
+    "isPublishable",
+    "sharedSymbolVersion",
+    "version",
+    "publishedVersion",
+    "sourceLibraryKey",
+    "publishID",
+    "pluginData",
 ];
 
 const PAINT_FIELDS: &[&str] = &[
@@ -272,6 +281,7 @@ pub fn restrict_schema(schema: &mut Schema) {
         &["vectorNetworkBlob", "normalizedSize", "styleOverrideTable"],
     );
     schema.keep_only("DerivedImmutableFrameData", &["overrides"]);
+    schema.keep_only("PluginData", &["pluginID", "value", "key"]);
 }
 
 pub fn guid(m: MsgRef) -> Option<Guid> {
@@ -928,7 +938,13 @@ pub fn props(m: MsgRef) -> Props {
     p.stroke_style = style("styleIdForStrokeFill", "inheritFillStyleIDForStroke");
     p.effect_style = style("styleIdForEffect", "inheritEffectStyleID");
     p.text_style_id = style("styleIdForText", "inheritTextStyleID");
-    p.key = m.str("key").filter(|k| !k.is_empty()).map(Into::into);
+    p.key = m
+        .str("key")
+        .filter(|k| !k.is_empty())
+        .or_else(|| m.str("componentKey").filter(|k| !k.is_empty()))
+        .map(Into::into);
+    p.library = library_link(&m).map(Arc::new);
+    p.macro_data = macro_data(&m);
     p.style_type = m
         .enum_name("styleType")
         .filter(|t| *t != "NONE")
@@ -1005,6 +1021,34 @@ pub fn props(m: MsgRef) -> Props {
     });
     prototype::read(&m, &mut p);
     p
+}
+
+/// What a node records about libraries (see [`LibraryLink`]).
+fn library_link(m: &MsgRef) -> Option<LibraryLink> {
+    let text = |f: &'static str| m.str(f).filter(|v| !v.is_empty()).map(Arc::<str>::from);
+    let link = LibraryLink {
+        publishable: m
+            .bool("isSymbolPublishable")
+            .or_else(|| m.bool("isPublishable")),
+        version: text("sharedSymbolVersion").or_else(|| text("version")),
+        published_version: text("publishedVersion"),
+        source: text("sourceLibraryKey"),
+        publish_id: m.msg("publishID").and_then(guid),
+    };
+    (!link.is_empty()).then_some(link)
+}
+
+/// Macro's `pluginData` entries (other plugins' are left in the record).
+fn macro_data(m: &MsgRef) -> Option<library::MacroData> {
+    if !m.has("pluginData") {
+        return None;
+    }
+    let entries: library::MacroData = m
+        .msgs("pluginData")
+        .filter(|d| d.str("pluginID") == Some(library::MACRO_PLUGIN))
+        .filter_map(|d| Some((d.str("key")?.into(), d.str("value").unwrap_or("").into())))
+        .collect();
+    (!entries.is_empty()).then_some(entries)
 }
 
 /// The layers of a FigJam object (see [`Props::generated`]): one per entry

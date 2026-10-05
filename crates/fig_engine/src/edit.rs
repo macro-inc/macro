@@ -85,6 +85,10 @@ pub mod flags {
     pub const LAYOUT_GRIDS: u64 = 1 << 34;
     /// A page's or frame's ruler guides.
     pub const GUIDES: u64 = 1 << 35;
+    /// Team libraries: an asset's key and publishing or library details,
+    /// a copy's override key, and Macro's data (the libraries a file
+    /// uses, what a library published).
+    pub const LIBRARY: u64 = 1 << 36;
 }
 
 /// A paint as the editor describes it.
@@ -626,6 +630,20 @@ pub enum Op {
         id: String,
         guides: Vec<GuideSpec>,
     },
+    // ---- team libraries (see `edit::library`) ------------------------------
+    /// "Publish library": the file's components, component sets, styles,
+    /// and variables get keys (from `seed`, the library's document id) and
+    /// their current versions, published with `note`.
+    PublishLibrary {
+        seed: String,
+        #[serde(default)]
+        note: Option<String>,
+    },
+    /// The libraries the file uses (the Libraries dialog), replacing the
+    /// list.
+    SetLibraries {
+        libraries: Vec<crate::library::LibraryRef>,
+    },
 }
 
 /// A component property value as the editor sends it: `{"bool": true}`,
@@ -680,6 +698,7 @@ mod design;
 mod flip;
 mod handoff;
 mod instance_layout;
+mod library;
 mod overrides;
 mod paint;
 mod paste;
@@ -687,7 +706,9 @@ mod prototype;
 pub mod shapes;
 pub(crate) use design::parse_variant_name;
 pub use handoff::{GridSpec, GuideSpec};
+pub use library::{LIBRARY_SESSIONS, LibrarySpec};
 pub(crate) use overrides::guid_of;
+pub(crate) use paste::remap_props;
 pub use paste::{At, PasteSpec, View};
 pub use prototype::{ActionSpec, InteractionSpec};
 pub(crate) mod layout;
@@ -717,6 +738,18 @@ impl<'a> Txn<'a> {
     /// Like [`Txn::resolve`], but deleted layers resolve too (pasting what
     /// was cut).
     fn resolve_any(&self, id: &str) -> Result<NodeIdx> {
+        // A library asset by its key (a copy before the file's own).
+        if let Some(key) = id.strip_prefix("key:") {
+            return self
+                .doc
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| !n.removed && n.props.key.as_deref() == Some(key))
+                .max_by_key(|(_, n)| crate::library::is_copy(&n.props))
+                .map(|(i, _)| i as NodeIdx)
+                .ok_or_else(|| FigError::NoSuchNode(id.into()));
+        }
         if id.starts_with('I') {
             return Err(FigError::Unsupported(
                 "layers inside an instance cannot be edited".into(),
@@ -1649,6 +1682,7 @@ impl<'a> Txn<'a> {
             Op::SetExports { ids, settings } => self.set_exports(ids, settings)?,
             Op::SetLayoutGrids { ids, grids } => self.set_layout_grids(ids, grids)?,
             Op::SetGuides { id, guides } => self.set_guides(id, guides)?,
+            Op::PublishLibrary { .. } | Op::SetLibraries { .. } => self.apply_library(op)?,
         }
         Ok(())
     }

@@ -31,6 +31,7 @@ import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
 import { useFigViewerContext } from '../context/fig-viewer-context';
 import { type Point, zoomLabel } from '../core/camera';
+import { LIBRARY_ASSET_MIME } from '../core/libraries';
 import { MIXED, type MixedInfo, mergeInfos } from '../core/mixed';
 import { stepPage } from '../core/pages';
 import { type FigPeer, storesFile } from '../core/presence';
@@ -45,6 +46,7 @@ import { deleteVertex, VECTOR_EDITABLE } from '../core/vector';
 import { createDesignSystem } from '../primitives/create-design-system';
 import { createFigContextMenu } from '../primitives/create-fig-context-menu';
 import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
+import { createFigLibraries } from '../primitives/create-fig-libraries';
 import { createFigReview } from '../primitives/create-fig-review';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { createFontRegistry } from '../primitives/create-font-registry';
@@ -59,6 +61,7 @@ import {
   styleControlFor,
 } from './design-system-view';
 import { LayersPanel } from './layers-panel';
+import { LibraryUpdates } from './library-views';
 import { PresentMode } from './present-mode';
 import { TextEditor } from './text-editor';
 import { ViewerCanvas } from './viewer-canvas';
@@ -108,6 +111,17 @@ export function FigViewer() {
   const [leftTab, setLeftTab] = createSignal<'layers' | 'assets'>('layers');
   const [info, setInfo] = createSignal<NodeInfo>();
   const designSystem = createDesignSystem({ engine, viewer, editor });
+  const librarySource = context.libraries;
+  const libraries = librarySource
+    ? createFigLibraries({
+        engine,
+        viewer,
+        editor,
+        source: librarySource,
+        notifyError: context.notifyError,
+        notifyInfo: context.notifyInfo,
+      })
+    : undefined;
   const styleControl = styleControlFor(designSystem);
   /** Dev Mode: the design panel shows the Code tab. */
   const devMode = () =>
@@ -741,7 +755,13 @@ export function FigViewer() {
           <Show
             when={leftTab() === 'layers'}
             fallback={
-              <AssetsPanel viewer={viewer} engine={engine} editor={editor} />
+              <AssetsPanel
+                viewer={viewer}
+                engine={engine}
+                editor={editor}
+                libraries={libraries}
+                fileName={context.fileName()}
+              />
             }
           >
             <LayersPanel
@@ -777,6 +797,13 @@ export function FigViewer() {
           onPointer={collab ? setPointer : undefined}
           aids={aids}
           devMode={devMode}
+          drop={
+            libraries && {
+              type: LIBRARY_ASSET_MIME,
+              onDrop: (data, at, parent) =>
+                void libraries.dropAsset(data, at, parent),
+            }
+          }
         >
           <Show when={textEditing()}>
             {(id) => (
@@ -817,6 +844,9 @@ export function FigViewer() {
                 viewport={viewer.viewport()}
               />
             )}
+          </Show>
+          <Show when={libraries}>
+            {(l) => <LibraryUpdates libraries={l()} />}
           </Show>
           <Show when={editor.enabled() && fonts.missing().length > 0}>
             <MissingFonts

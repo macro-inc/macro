@@ -217,7 +217,7 @@ impl Txn<'_> {
 
     /// Resolves the bound colors of `root` and every layer under it (in
     /// instances, as overrides) under the modes that now apply.
-    fn refresh_bound(&mut self, root: NodeIdx) {
+    pub(crate) fn refresh_bound(&mut self, root: NodeIdx) {
         let mut stack = vec![root];
         while let Some(i) = stack.pop() {
             if self.doc.node(i).removed {

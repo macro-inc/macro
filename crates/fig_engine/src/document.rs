@@ -274,6 +274,8 @@ impl Document {
                 .iter()
                 .filter_map(|n| n.props.guid)
                 .map(|g| g.session)
+                // Copies of library assets keep sessions of their own.
+                .filter(|&s| s < crate::edit::LIBRARY_SESSIONS)
                 .max()
                 .unwrap_or(0)
                 .saturating_add(1),

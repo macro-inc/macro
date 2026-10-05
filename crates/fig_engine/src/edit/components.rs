@@ -89,6 +89,8 @@ impl Txn<'_> {
         props.variant_specs = None;
         props.variant_orders = None;
         props.key = None;
+        props.library = None;
+        props.macro_data = None;
         // An instance of a variant is named after its component set.
         if let Some(set) = self.doc.node(component).parent
             && self.doc.props(set).is_state_group == Some(true)

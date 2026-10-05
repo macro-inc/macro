@@ -231,6 +231,14 @@ export function ViewerCanvas(props: {
   aids?: LayoutAidsController;
   /** Dev Mode: hovering measures from the selection without ⌥. */
   devMode?: () => boolean;
+  /**
+   * Drag data of the given type dropped at a page point in `parent` (a
+   * library component from the Assets panel).
+   */
+  drop?: {
+    type: string;
+    onDrop: (data: string, at: Point, parent: string) => void;
+  };
   children?: JSX.Element;
 }) {
   const viewer = props.viewer;
@@ -1042,12 +1050,24 @@ export function ViewerCanvas(props: {
       }}
       onDblClick={(e) => void onDoubleClick(e)}
       onDragOver={(e) => {
-        if (editing() && e.dataTransfer?.types.includes('Files')) {
+        const types = e.dataTransfer?.types ?? [];
+        const ours = !!props.drop && types.includes(props.drop.type);
+        if (editing() && e.dataTransfer && (types.includes('Files') || ours)) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
         }
       }}
       onDrop={(e) => {
+        const drop = props.drop;
+        const data = drop && e.dataTransfer?.getData(drop.type);
+        if (drop && data && editing()) {
+          e.preventDefault();
+          const at = pageAt(local(e));
+          void viewer
+            .containerAt(at)
+            .then((parent) => drop.onDrop(data, at, parent));
+          return;
+        }
         const files = [...(e.dataTransfer?.files ?? [])];
         if (!editing() || files.length === 0) return;
         e.preventDefault();

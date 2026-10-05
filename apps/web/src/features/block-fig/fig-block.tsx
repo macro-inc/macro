@@ -64,6 +64,7 @@ import type { FigData } from './definition';
 import { createDesignCollabSession } from './queries/fig-collab';
 import { useFigComments } from './queries/fig-comments';
 import { saveFigFile } from './queries/fig-file';
+import { useFigLibrarySource } from './queries/fig-libraries';
 import { shareFigEngine } from './queries/fig-sharing';
 import {
   connectDesignSync,
@@ -91,6 +92,7 @@ function FigHost(props: {
 }) {
   const [engine, setEngine] = createSignal<FigEngine>();
   const [sharing, setSharing] = createSignal<FigSharing>();
+  const libraries = useFigLibrarySource(props.documentId);
   const [failure, setFailure] = createSignal<string>();
   onMount(() => {
     let disposed = false;
@@ -152,6 +154,7 @@ function FigHost(props: {
                 ),
               presentAt: props.present,
               fonts: createFontSource(),
+              libraries,
             }}
           >
             <FigViewer />

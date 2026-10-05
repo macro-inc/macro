@@ -3,6 +3,7 @@
 
 mod collab;
 mod lazy;
+mod library;
 mod pdf;
 mod prototype;
 mod text;
@@ -82,6 +83,13 @@ struct Cli {
 enum Command {
     /// Decode files and print a summary of each.
     Info { files: Vec<PathBuf> },
+    /// Publish each file as a library and place its components elsewhere.
+    Library {
+        /// Name the components drawn differently.
+        #[arg(long)]
+        verbose: bool,
+        files: Vec<PathBuf>,
+    },
     /// Render every page of each file to PNG.
     Render {
         #[arg(long, default_value = "out")]
@@ -206,6 +214,11 @@ fn main() {
             std::fs::create_dir_all(&out).expect("output directory");
             for path in files {
                 render_pages(&path, &out, max, outline);
+            }
+        }
+        Command::Library { verbose, files } => {
+            for path in files {
+                library::check(&path, verbose);
             }
         }
         Command::Prototype { files } => {
