@@ -255,8 +255,9 @@ enum Marked {
     Group(usize),
     /// A `/MacroGroup` that named the form it starts (nothing to pop).
     Named,
-    /// Edited text's (its content is skipped).
-    Text,
+    /// Edited text's or a masked path's: the object comes from the marked
+    /// content's properties, and its drawing is skipped.
+    Skipped,
     /// Other marked content.
     Other,
 }
@@ -883,9 +884,14 @@ impl Sink for Builder<'_, '_> {
                     Marked::Group(depth)
                 }
             }
-            t if t == marks::TEXT.as_bytes() => {
-                if let Some((kind, to_page)) = marks::read_text(self.pdf, props) {
-                    let mut node = Node::new(0, NodeKind::Text(kind));
+            t if t == marks::TEXT.as_bytes() || t == marks::PATH.as_bytes() => {
+                let content = if t == marks::TEXT.as_bytes() {
+                    marks::read_text(self.pdf, props).map(|(t, m)| (NodeKind::Text(t), m))
+                } else {
+                    marks::read_path(self.pdf, props).map(|(p, m)| (NodeKind::Path(p), m))
+                };
+                if let Some((kind, to_page)) = content {
+                    let mut node = Node::new(0, kind);
                     node.edits = 0;
                     node.transform = to_page.followed_by(&self.to_canvas);
                     node.opacity = gs.fill_alpha;
@@ -893,7 +899,7 @@ impl Sink for Builder<'_, '_> {
                     self.add(node, gs);
                 }
                 self.skip += 1;
-                Marked::Text
+                Marked::Skipped
             }
             _ => Marked::Other,
         };
@@ -908,7 +914,7 @@ impl Sink for Builder<'_, '_> {
                 }
             }
             Some(Marked::Hidden) => self.hidden = self.hidden.saturating_sub(1),
-            Some(Marked::Text) => self.skip = self.skip.saturating_sub(1),
+            Some(Marked::Skipped) => self.skip = self.skip.saturating_sub(1),
             Some(Marked::Named) | Some(Marked::Other) | None => {}
         }
     }
