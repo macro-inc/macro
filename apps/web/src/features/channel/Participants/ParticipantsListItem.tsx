@@ -29,7 +29,7 @@ export function ParticipantsListItem(props: {
 
   return (
     <div
-      class="flex items-center justify-between gap-2 py-2 px-6 text-sm w-full bg-surface hover:bg-hover"
+      class="flex items-center justify-between gap-2 py-2 px-6 text-sm w-full not-touch:hover:bg-hover"
       classList={{ 'border-b': !props.isLast }}
       style={{ 'border-color': 'var(--color-edge-muted)' }}
     >

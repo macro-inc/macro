@@ -921,12 +921,26 @@ teardown must not leave the channel showing the join screen.
 
 `Participants` tab:
 - `Copy invite link`, participant search box.
-- Add: combobox `name@company.com` + `Add Participant` button.
+- Add: combobox `Add participants by name or email` + `Add Participant` button.
 - Each row: `<name> Member|Owner` with a `Remove participant` button (owner shows
   `Cannot remove participant`, disabled).
 - Team access: `Team channel` switch (disabled until you belong to a team).
-- Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
+- Bots: `New bot`, `Search bots by name or handle` combobox, `Invite bot` — webhook-powered channel
   participants.
+
+On touch devices, this page uses `People` / `Bots` / `Settings` bubble tabs.
+Bots appears when bot management is enabled; Settings appears for channel owners
+and admins when team settings are available. People keeps search and the compact
+`Copy invite link` / `Add participants` buttons above a virtualized scrolling list.
+`Add participants` opens a bottom sheet; Bots has its own full-height list and an
+`Invite bot` sheet. Bots uses the same search toolbar and plain rows as People;
+`Search bots` filters existing bots by name, handle, or description, with compact
+`New bot` and `Invite bot` actions beside it. The fallback AI composer and New
+button are hidden throughout this page and return when leaving it. Both sheets use the standard mobile keyboard-aware layout and
+close after a successful add. Check switching tabs, closing/reopening both sheets,
+and scrolling a long participant list above the bottom dock, with and without the
+keyboard open. An invite-bot request from the channel menu opens the Bots tab and
+its invite sheet.
 
 ## Incoming call ringing
 
