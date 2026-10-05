@@ -221,3 +221,210 @@ fn write_design_system_fixture() {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/design-system.fig");
     std::fs::write(path, design_system_file()).unwrap();
 }
+/// A file with a "Theme" collection (Light and Dark modes): `Surface`
+/// (white, black) and `Brand` (blue, then `Surface`), a frame and a
+/// rectangle in it bound to them, and an instance of a component whose
+/// layer is bound to `Surface`.
+pub fn variables_file() -> Vec<u8> {
+    use crate::kiwi::{Schema, schema_from_text};
+    use crate::testing::{V, color, encode, guid, node, size, translate};
+    let text = crate::save::MACRO_SCHEMA
+        .replace("WASHI_TAPE VARIABLE", "WASHI_TAPE VARIABLE VARIABLE_SET")
+        .replace(
+            "message Paint type:PaintType",
+            "enum VariableDataType BOOLEAN FLOAT STRING ALIAS COLOR\nmessage VariableID guid:GUID assetRef:AssetRef\nmessage VariableSetID guid:GUID assetRef:AssetRef\nmessage VariableAnyValue boolValue:bool textValue:string floatValue:float alias:VariableID colorValue:Color\nmessage VariableData value:VariableAnyValue dataType:VariableDataType resolvedDataType:VariableDataType\nmessage VariableDataValuesEntry modeID:GUID variableData:VariableData\nmessage VariableDataValues entries:VariableDataValuesEntry[]\nmessage VariableSetMode id:GUID name:string sortPosition:string\nmessage VariableModeBySetMapEntry variableSetID:VariableSetID variableModeID:GUID\nmessage VariableModeBySetMap entries:VariableModeBySetMapEntry[]\nmessage Paint colorVar:VariableData type:PaintType",
+        )
+        .replace(
+            "styleIdForText:StyleId",
+            "styleIdForText:StyleId variableSetID:VariableSetID variableResolvedType:VariableDataType variableDataValues:VariableDataValues variableSetModes:VariableSetMode[] variableModeBySetMap:VariableModeBySetMap",
+        );
+    let schema_bytes = schema_from_text(&text);
+    let schema = Schema::decode(&schema_bytes).unwrap();
+    let c = |r: f32, g: f32, b: f32| color(r, g, b, 1.0);
+    let bound = |rgb: V, var: u32| {
+        V::List(vec![V::Msg(vec![
+            ("type", V::Enum("SOLID")),
+            ("color", rgb),
+            ("opacity", V::Float(1.0)),
+            ("visible", V::Bool(true)),
+            (
+                "colorVar",
+                V::Msg(vec![
+                    (
+                        "value",
+                        V::Msg(vec![("alias", V::Msg(vec![("guid", guid(var))]))]),
+                    ),
+                    ("dataType", V::Enum("ALIAS")),
+                    ("resolvedDataType", V::Enum("COLOR")),
+                ]),
+            ),
+        ])])
+    };
+    let value = |mode: u32, v: V| V::Msg(vec![("modeID", guid(mode)), ("variableData", v)]);
+    let color_value = |rgb: V| {
+        V::Msg(vec![
+            ("value", V::Msg(vec![("colorValue", rgb)])),
+            ("dataType", V::Enum("COLOR")),
+            ("resolvedDataType", V::Enum("COLOR")),
+        ])
+    };
+    let alias = |var: u32| {
+        V::Msg(vec![
+            (
+                "value",
+                V::Msg(vec![("alias", V::Msg(vec![("guid", guid(var))]))]),
+            ),
+            ("dataType", V::Enum("ALIAS")),
+            ("resolvedDataType", V::Enum("COLOR")),
+        ])
+    };
+    let variable = |local: u32, name: &str, values: Vec<V>| {
+        node(
+            local,
+            Some((2, "a")),
+            "VARIABLE",
+            name,
+            vec![
+                ("variableSetID", V::Msg(vec![("guid", guid(50))])),
+                ("variableResolvedType", V::Enum("COLOR")),
+                (
+                    "variableDataValues",
+                    V::Msg(vec![("entries", V::List(values))]),
+                ),
+            ],
+        )
+    };
+    let nodes = vec![
+        node(0, None, "DOCUMENT", "Document", vec![]),
+        node(
+            1,
+            Some((0, "!")),
+            "CANVAS",
+            "Page",
+            vec![("backgroundColor", c(1.0, 1.0, 1.0))],
+        ),
+        node(
+            2,
+            Some((0, "\"")),
+            "CANVAS",
+            "Internal",
+            vec![("internalOnly", V::Bool(true))],
+        ),
+        node(
+            50,
+            Some((2, "!")),
+            "VARIABLE_SET",
+            "Theme",
+            vec![(
+                "variableSetModes",
+                V::List(vec![
+                    V::Msg(vec![("id", guid(60)), ("name", V::Str("Light".into()))]),
+                    V::Msg(vec![("id", guid(61)), ("name", V::Str("Dark".into()))]),
+                ]),
+            )],
+        ),
+        variable(
+            51,
+            "Surface",
+            vec![
+                value(60, color_value(c(1.0, 1.0, 1.0))),
+                value(61, color_value(c(0.0, 0.0, 0.0))),
+            ],
+        ),
+        variable(
+            52,
+            "Brand",
+            vec![
+                value(60, color_value(c(0.0, 0.0, 1.0))),
+                value(61, alias(51)),
+            ],
+        ),
+        node(
+            20,
+            Some((1, "!")),
+            "SYMBOL",
+            "Chip",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(300.0, 0.0)),
+            ],
+        ),
+        node(
+            21,
+            Some((20, "!")),
+            "RECTANGLE",
+            "Chip fill",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", bound(c(1.0, 1.0, 1.0), 51)),
+            ],
+        ),
+        node(
+            10,
+            Some((1, "\"")),
+            "FRAME",
+            "Screen",
+            vec![
+                ("size", size(200.0, 100.0)),
+                ("transform", translate(0.0, 0.0)),
+                ("fillPaints", bound(c(1.0, 1.0, 1.0), 51)),
+            ],
+        ),
+        node(
+            11,
+            Some((10, "!")),
+            "RECTANGLE",
+            "Logo",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(10.0, 10.0)),
+                ("fillPaints", bound(c(0.0, 0.0, 1.0), 52)),
+            ],
+        ),
+        node(
+            30,
+            Some((10, "\"")),
+            "INSTANCE",
+            "Chip",
+            vec![
+                ("size", size(20.0, 20.0)),
+                ("transform", translate(50.0, 10.0)),
+                ("symbolData", V::Msg(vec![("symbolID", guid(20))])),
+            ],
+        ),
+    ];
+    let message = encode(
+        &schema,
+        "Message",
+        &[("nodeChanges", V::List(nodes)), ("blobs", V::List(vec![]))],
+    );
+    let mut out = b"fig-kiwi".to_vec();
+    out.extend_from_slice(&48u32.to_le_bytes());
+    for chunk in [schema_bytes, message] {
+        let compressed = miniz_oxide::deflate::compress_to_vec(&chunk, 6);
+        out.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&compressed);
+    }
+    out
+}
+
+/// The committed `variables.fig` must match [`variables_file`]; run
+/// `cargo test -p fig_engine --lib write_variables_fixture -- --ignored`
+/// after changing it.
+#[test]
+fn variables_fixture_is_current() {
+    let committed = include_bytes!("../../tests/fixtures/variables.fig");
+    assert!(
+        committed.as_slice() == variables_file().as_slice(),
+        "tests/fixtures/variables.fig is stale; regenerate it (see the doc comment)"
+    );
+}
+
+#[test]
+#[ignore = "writes tests/fixtures/variables.fig"]
+fn write_variables_fixture() {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/variables.fig");
+    std::fs::write(path, variables_file()).unwrap();
+}

@@ -13,6 +13,11 @@ import { InstanceSection } from '../components/instance-section';
 import { LocalStyles } from '../components/local-styles';
 import { StyleControl } from '../components/style-control';
 import {
+  VariableControl,
+  VariableModes,
+  VariablesList,
+} from '../components/variable-controls';
+import {
   defaultPropertyName,
   type PropertyInput,
   type StyleKind,
@@ -118,6 +123,14 @@ export function DesignSystemSections(props: {
           );
         }}
       </Show>
+      <VariableModes
+        modes={ds.info()?.modes ?? []}
+        onMode={
+          ds.editable()
+            ? (collection, mode) => void ds.setVariableMode(collection, mode)
+            : undefined
+        }
+      />
       <Show when={ds.info()?.layer}>
         {(bindings) => (
           <BindingsSection
@@ -164,17 +177,39 @@ export function styleControlFor(ds: DesignSystem) {
     EFFECT: 'effect',
   } as const;
   return (kind: StyleKind): JSX.Element => (
-    <StyleControl
-      kind={kind}
-      applied={ds.info()?.styles[KEYS[kind]] ?? null}
-      styles={ds.styles()}
-      onApply={
-        ds.editable() ? (style) => void ds.applyStyle(kind, style) : undefined
-      }
-      onCreate={
-        ds.editable() ? (name) => void ds.createStyle(kind, name) : undefined
-      }
-    />
+    <>
+      <Show when={kind === 'FILL' || kind === 'STROKE'}>
+        <VariableControl
+          kind={kind === 'STROKE' ? 'STROKE' : 'FILL'}
+          bound={
+            (kind === 'STROKE'
+              ? ds.info()?.variables.strokes[0]
+              : ds.info()?.variables.fills[0]) ?? null
+          }
+          collections={ds.variables()}
+          onBind={
+            ds.editable()
+              ? (variable) =>
+                  void ds.bindVariable(
+                    kind === 'STROKE' ? 'STROKE' : 'FILL',
+                    variable
+                  )
+              : undefined
+          }
+        />
+      </Show>
+      <StyleControl
+        kind={kind}
+        applied={ds.info()?.styles[KEYS[kind]] ?? null}
+        styles={ds.styles()}
+        onApply={
+          ds.editable() ? (style) => void ds.applyStyle(kind, style) : undefined
+        }
+        onCreate={
+          ds.editable() ? (name) => void ds.createStyle(kind, name) : undefined
+        }
+      />
+    </>
   );
 }
 
@@ -197,29 +232,32 @@ export function LocalStylesView(props: {
     return gesture;
   };
   return (
-    <LocalStyles
-      styles={ds.styles()}
-      swatches={props.swatches}
-      actions={
-        ds.editable()
-          ? {
-              onRename: (style, name) => void ds.editStyle(style, { name }),
-              onColor: (style, hex, live) =>
-                void ds.editStyle(
-                  style,
-                  { props: { fills: [{ color: hex }] } },
-                  key(`${style}-color`, live)
-                ),
-              onFontSize: (style, fontSize, live) =>
-                void ds.editStyle(
-                  style,
-                  { props: { fontSize } },
-                  key(`${style}-size`, live)
-                ),
-              onDelete: (style) => void ds.deleteStyle(style),
-            }
-          : undefined
-      }
-    />
+    <>
+      <LocalStyles
+        styles={ds.styles()}
+        swatches={props.swatches}
+        actions={
+          ds.editable()
+            ? {
+                onRename: (style, name) => void ds.editStyle(style, { name }),
+                onColor: (style, hex, live) =>
+                  void ds.editStyle(
+                    style,
+                    { props: { fills: [{ color: hex }] } },
+                    key(`${style}-color`, live)
+                  ),
+                onFontSize: (style, fontSize, live) =>
+                  void ds.editStyle(
+                    style,
+                    { props: { fontSize } },
+                    key(`${style}-size`, live)
+                  ),
+                onDelete: (style) => void ds.deleteStyle(style),
+              }
+            : undefined
+        }
+      />
+      <VariablesList collections={ds.variables()} />
+    </>
   );
 }

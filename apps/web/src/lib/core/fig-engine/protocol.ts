@@ -23,6 +23,7 @@ export type QueryMethod =
   | 'pageColors'
   | 'components'
   | 'styles'
+  | 'variables'
   | 'designInfo'
   | 'inRect'
   | 'exportSvg'

@@ -1087,7 +1087,15 @@ Layout and test hooks:
   (`fig-style-FILL|STROKE|TEXT|EFFECT`, `fig-style-detach-<kind>` detaches
   it, keeping its values) and a style picker (`fig-style-picker-<kind>`:
   `fig-style-option` items by folder, and `fig-style-create-name` with
-  `fig-style-create` to make a style from the layer and apply it).
+  `fig-style-create` to make a style from the layer and apply it). Fill
+  and Stroke also show the color variable the first paint uses
+  (`fig-variable-FILL|STROKE`, `fig-variable-detach-<kind>`) and a picker
+  of the file's color variables (`fig-variable-picker-<kind>`,
+  `fig-variable-option`). Frames get `fig-variable-modes`: per collection
+  with several modes, `fig-variable-mode-<Collection>` picks one (or
+  Auto, inherited), and bound colors inside follow. With nothing selected,
+  `fig-variables` lists the collections and their variables
+  (`fig-variable`, `data-variable-name`) with a value per mode.
 - **Color and paint pickers**: a paint's swatch (`fig-fill-<n>-swatch`,
   `fig-stroke-<n>-swatch`, `fig-effect-<n>-swatch`) opens the picker
   beside the panel (`fig-paint-popover`): the kind (`fig-paint-type`:

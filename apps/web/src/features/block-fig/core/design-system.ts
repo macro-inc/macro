@@ -71,7 +71,20 @@ export type DesignOp =
       name?: string;
       props?: Record<string, unknown>;
     }
-  | { op: 'deleteStyle'; ids: string[] };
+  | { op: 'deleteStyle'; ids: string[] }
+  | {
+      op: 'bindVariable';
+      ids: string[];
+      field: 'FILL' | 'STROKE';
+      index: number;
+      variable?: string;
+    }
+  | {
+      op: 'setVariableMode';
+      ids: string[];
+      collection: string;
+      mode?: string;
+    };
 
 /** The style type a kind of style is stored as (fills and strokes share). */
 export const styleTypeFor = (kind: StyleKind): StyleType =>

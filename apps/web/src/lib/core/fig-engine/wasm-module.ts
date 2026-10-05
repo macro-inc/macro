@@ -15,6 +15,8 @@ export interface WasmFigFile {
   components: () => string;
   /** `StyleInfo[]` JSON. */
   styles: () => string;
+  /** `CollectionInfo[]` JSON. */
+  variables: () => string;
   /** `DesignInfo` JSON. */
   designInfo: (page: number, id: string) => string;
   /** `PageLayout` JSON. */

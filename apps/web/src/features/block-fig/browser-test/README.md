@@ -50,7 +50,9 @@ properties, a component set, and color, text, and effect styles in use,
 made by `fig_engine::testing::design_system`) and covers instance
 properties, variant switching, swapping and resetting instances, editing
 a component set's variants and properties, binding layers to properties,
-and applying, creating, renaming, and detaching styles.
+and applying, creating, renaming, and detaching styles; on `variables.fig`
+(a collection with Light and Dark modes) it lists variables, binds fill
+colors to them, and switches a frame's mode.
 
 `?collab` opens several people on one design side by side
 (`&people=alice,bob` by default), each with the real shared-design session

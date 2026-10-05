@@ -10,6 +10,7 @@
 import type { FigEngine } from '@core/fig-engine/client';
 import type {
   BindableField,
+  CollectionInfo,
   DesignInfo,
   PropertyKind,
   StyleInfo,
@@ -29,6 +30,7 @@ export function createDesignSystem(options: {
   const [info, setInfo] = createSignal<DesignInfo>();
   const [styles, setStyles] = createSignal<StyleInfo[]>([]);
   const [components, setComponents] = createSignal<ComponentInfo[]>([]);
+  const [variables, setVariables] = createSignal<CollectionInfo[]>([]);
 
   let request = 0;
   /** Loads the details of the single selected layer (the latest wins). */
@@ -56,10 +58,15 @@ export function createDesignSystem(options: {
   const loadLists = async () => {
     const mine = ++listRequest;
     try {
-      const [s, c] = await Promise.all([engine.styles(), engine.components()]);
+      const [s, c, v] = await Promise.all([
+        engine.styles(),
+        engine.components(),
+        engine.variables(),
+      ]);
       if (mine !== listRequest) return;
       setStyles(s);
       setComponents(c);
+      setVariables(v);
     } catch {
       // A file that fails to answer keeps the last lists.
     }
@@ -80,6 +87,7 @@ export function createDesignSystem(options: {
   return {
     info,
     styles,
+    variables,
     components,
     editable,
     reveal,
@@ -164,6 +172,19 @@ export function createDesignSystem(options: {
       coalesce?: string
     ) => editor.apply([{ op: 'editStyle', style, ...change }], coalesce),
     deleteStyle: (style: string) => run({ op: 'deleteStyle', ids: [style] }),
+    // ---- variables ------------------------------------------------------------
+    /** Binds the selection's first fill or stroke to a color variable. */
+    bindVariable: (field: 'FILL' | 'STROKE', variable?: string) => {
+      const ids = viewer.selected().map((s) => s.id);
+      if (ids.length === 0) return Promise.resolve(undefined);
+      return run({ op: 'bindVariable', ids, field, index: 0, variable });
+    },
+    /** The selected frames' mode of a collection (none: inherited). */
+    setVariableMode: (collection: string, mode?: string) => {
+      const ids = viewer.selected().map((s) => s.id);
+      if (ids.length === 0) return Promise.resolve(undefined);
+      return run({ op: 'setVariableMode', ids, collection, mode });
+    },
   };
 }
 

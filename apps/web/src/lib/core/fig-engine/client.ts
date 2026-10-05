@@ -8,7 +8,7 @@
  * memory never shrinks while a worker lives).
  */
 
-import type { DesignInfo, StyleInfo } from './design-types';
+import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type {
   ComponentInfo,
@@ -284,6 +284,11 @@ export class FigEngine {
   /** The file's shared styles (after edits). */
   styles(): Promise<StyleInfo[]> {
     return this.query('styles');
+  }
+
+  /** The file's variable collections (after edits). */
+  variables(): Promise<CollectionInfo[]> {
+    return this.query('variables');
   }
 
   /** A layer's component, variant, property, and style details. */

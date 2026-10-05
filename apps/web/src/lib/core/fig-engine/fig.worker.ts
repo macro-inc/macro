@@ -129,6 +129,9 @@ async function serve(request: FigRequest) {
         case 'styles':
           json = f.styles();
           break;
+        case 'variables':
+          json = f.variables();
+          break;
         case 'designInfo':
           json = f.designInfo(a as number, b as string);
           break;

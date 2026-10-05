@@ -212,3 +212,32 @@ test('applies, creates, edits, and detaches styles', async ({ page }) => {
   await expect(page.getByTestId('fig-style-TEXT')).toContainText('Heading');
   await expectSavedCleanly(page);
 });
+
+test('lists variables, binds colors, and switches modes', async ({ page }) => {
+  // `variables.fig`: a Theme collection (Light, Dark) with Surface and
+  // Brand colors; a Screen frame and its Logo bound to them.
+  await page.goto('/?file=variables.fig&edit&reload');
+  await expect(page.getByTestId('fig-layer-row').first()).toBeVisible();
+  await expect(page.getByTestId('fig-variables')).toContainText('Theme');
+  await expect(page.getByTestId('fig-variable')).toHaveCount(2);
+
+  await select(page, 'Screen');
+  await expect(page.getByTestId('fig-variable-FILL')).toHaveText('Surface');
+  await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('FFFFFF');
+  const mode = page.getByTestId('fig-variable-mode-Theme');
+  await mode.selectOption({ label: 'Dark' });
+  await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('000000');
+
+  // The logo's Brand color aliases Surface in the dark mode.
+  await select(page, 'Logo');
+  await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('000000');
+  await page.getByTestId('fig-variable-detach-FILL').click();
+  await expect(page.getByTestId('fig-variable-FILL')).toHaveCount(0);
+  await page.getByTestId('fig-variable-picker-FILL').click();
+  await page
+    .getByTestId('fig-variable-option')
+    .filter({ hasText: 'Brand' })
+    .click();
+  await expect(page.getByTestId('fig-variable-FILL')).toHaveText('Brand');
+  await expectSavedCleanly(page);
+});

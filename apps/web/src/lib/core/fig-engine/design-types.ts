@@ -118,6 +118,51 @@ export interface DesignInfo {
   instance: InstanceInfo | null;
   component: ComponentPanel | null;
   layer: LayerBindings | null;
+  /** Frames: variable collections with several modes and the one picked. */
+  modes: ModeChoice[];
+  /** The color variables the paints are bound to, by paint. */
+  variables: BoundVariables;
+}
+
+/** A variable collection with several modes; `mode` null inherits. */
+export interface ModeChoice {
+  collection: NodeRef;
+  modes: NodeRef[];
+  mode: string | null;
+}
+
+export interface BoundVariables {
+  fills: (NodeRef | null)[];
+  strokes: (NodeRef | null)[];
+}
+
+/** A variable's value in one mode: one field set. */
+export interface VariableValueInfo {
+  /** `RRGGBB`, with `alpha`. */
+  color: string | null;
+  alpha: number | null;
+  number: number | null;
+  text: string | null;
+  bool: boolean | null;
+  /** The variable the value comes from. */
+  alias: string | null;
+}
+
+export interface VariableInfo {
+  id: string;
+  name: string;
+  type: 'COLOR' | 'FLOAT' | 'STRING' | 'BOOLEAN' | 'OTHER';
+  /** One per mode of the collection. */
+  values: VariableValueInfo[];
+}
+
+export interface CollectionInfo {
+  id: string;
+  name: string;
+  modes: NodeRef[];
+  variables: VariableInfo[];
+  /** From a library. */
+  remote: boolean;
 }
 
 export type StyleType = 'FILL' | 'TEXT' | 'EFFECT' | 'GRID' | 'OTHER';

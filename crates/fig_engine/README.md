@@ -155,8 +155,14 @@ the values, editing a style updates every layer using it, and typing a
 font or size into styled text detaches it, as in Figma. Saving patches the
 property, variant, and style records in place, keeping fields the engine
 does not model (sort positions, deleted entries) and writing Figma's
-variable form of values (`varValue`) beside them. `inspect::design_info`
-and `inspect::local_styles` describe all of this to the design panel.
+variable form of values (`varValue`) beside them. Variables (collections
+with their modes, and values per mode) are read; a fill or stroke color
+binds to a color variable (`colorVar`), and a frame picks a collection's
+mode (`variableModeBySetMap`). As in Figma's files, bound paints keep the
+resolved color, so binding and switching modes resolve it again (aliases
+followed) for the layers they affect, instances' layers as overrides.
+`inspect::design_info`, `inspect::local_styles`, and `inspect::variables`
+describe all of this to the design panel.
 
 ## Editing together
 
