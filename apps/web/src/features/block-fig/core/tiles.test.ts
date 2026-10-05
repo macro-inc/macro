@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createCoverage,
   quantizeScale,
   TILE,
   tileRect,
+  tilesCover,
   tilesFor,
   tileTouches,
 } from './tiles';
@@ -52,27 +52,21 @@ describe('tiles', () => {
     expect(tileTouches(key, { x: 600, y: 0, w: 100, h: 100 })).toBe(false);
   });
 
-  it('tells what opaque drawing already covers', () => {
-    const coverage = createCoverage(256, 256);
-    expect(coverage.covers(0, 0, 64, 64)).toBe(false);
-    // Only cells lying wholly inside a rectangle count as covered.
-    coverage.add(10, 0, 118, 256);
-    expect(coverage.covers(32, 0, 96, 256)).toBe(true);
-    expect(coverage.covers(16, 0, 64, 64)).toBe(false);
-    coverage.add(0, 0, 32, 256);
-    expect(coverage.covers(0, 0, 128, 256)).toBe(true);
-    expect(coverage.covers(0, 0, 129, 10)).toBe(false);
-    // Outside the content nothing is drawn, so it counts as covered.
-    coverage.addOutside(-50, -50, 200, 100);
-    expect(coverage.covers(0, 64, 256, 192)).toBe(true);
-    expect(coverage.covers(0, 0, 256, 64)).toBe(false);
-  });
-
-  it('aligns coverage to the exact tiles, leaving no seams between them', () => {
-    const coverage = createCoverage(1000, 600, { x: -100, y: -7 });
-    for (const x of [-100, 412, 924]) {
-      for (const y of [-7, 505]) coverage.add(x, y, TILE, TILE);
-    }
-    expect(coverage.covers(0, 0, 1000, 600)).toBe(true);
+  it('tells whether the tiles of a scale cover a rectangle', () => {
+    const side = TILE / 2;
+    const present = new Set(['0:0', '1:0']);
+    expect(tilesCover({ x: 10, y: 10, w: side, h: 50 }, 2, present)).toBe(true);
+    // Edges on the grid need no tile beyond them.
+    expect(tilesCover({ x: 0, y: 0, w: 2 * side, h: side }, 2, present)).toBe(
+      true
+    );
+    expect(tilesCover({ x: 0, y: 0, w: side, h: side + 1 }, 2, present)).toBe(
+      false
+    );
+    // Tiles outside the content are never rendered: they count as covering.
+    const content = { x: 0, y: 0, w: 2 * side, h: side };
+    expect(
+      tilesCover({ x: 0, y: 0, w: 2 * side, h: 3 * side }, 2, present, content)
+    ).toBe(true);
   });
 });

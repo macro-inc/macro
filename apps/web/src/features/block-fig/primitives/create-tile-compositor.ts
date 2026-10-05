@@ -30,12 +30,12 @@ import type {
 import type { Rect } from '@core/fig-engine/types';
 import type { Camera, Size } from '../core/camera';
 import {
-  createCoverage,
   quantizeScale,
   TILE,
   type TileKey,
   tileId,
   tileRect,
+  tilesCover,
   tilesFor,
   tileTouches,
 } from '../core/tiles';
@@ -335,21 +335,17 @@ export function createTileCompositor(options: TileCompositorOptions) {
       const viewW = view.viewport.w / camera.zoom;
       const viewH = view.viewport.h / camera.zoom;
       // Tiles are opaque: picked sharpest first, a tile goes unpainted where
-      // sharper ones already cover all of it (most of the view, once the
-      // exact tiles are in), so coarse stand-ins are drawn only in the gaps.
-      const coverage = createCoverage(width, height, {
-        x: -Math.round(camera.x * target),
-        y: -Math.round(camera.y * target),
-      });
-      const content = page.content;
-      if (content) {
-        coverage.addOutside(
-          (content.x - camera.x) * unit,
-          (content.y - camera.y) * unit,
-          content.w * unit,
-          content.h * unit
-        );
+      // the tiles of a sharper scale cover all of it that shows (most of the
+      // view, once the exact tiles are in), so coarse stand-ins are drawn
+      // only in the gaps.
+      const present = new Map<number, Set<string>>();
+      for (const e of cache.values()) {
+        if (!e.bitmap) continue;
+        const set = present.get(e.key.scale) ?? new Set<string>();
+        present.set(e.key.scale, set);
+        set.add(`${e.key.ix}:${e.key.iy}`);
       }
+      const sharper: number[] = [];
       const draws: {
         bitmap: ImageBitmap;
         exact: boolean;
@@ -381,10 +377,18 @@ export function createTileCompositor(options: TileCompositorOptions) {
             y = e.key.iy * TILE - Math.round(camera.y * scale);
             size = TILE;
           }
-          if (coverage.covers(x, y, size, size)) continue;
-          coverage.add(x, y, size, size);
-          draws.push({ bitmap: e.bitmap, exact, x, y, size });
+          const shown = {
+            x: Math.max(r.x, camera.x),
+            y: Math.max(r.y, camera.y),
+            w: Math.min(r.x + r.w, camera.x + viewW) - Math.max(r.x, camera.x),
+            h: Math.min(r.y + r.h, camera.y + viewH) - Math.max(r.y, camera.y),
+          };
+          const hidden = sharper.some((s) =>
+            tilesCover(shown, s, present.get(s) ?? new Set(), page?.content)
+          );
+          if (!hidden) draws.push({ bitmap: e.bitmap, exact, x, y, size });
         }
+        sharper.push(scale);
       }
       for (let k = draws.length - 1; k >= 0; k--) {
         const d = draws[k];

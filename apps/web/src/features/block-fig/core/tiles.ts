@@ -79,65 +79,28 @@ export function tileTouches(key: TileKey, rect: Rect): boolean {
   );
 }
 
-/** Side of a coverage cell, in device pixels. */
-const CELL = 32;
-
 /**
- * What opaque drawing already covers on a canvas, in cells of `CELL` device
- * pixels. Drawing tiles sharpest first, a coarser tile can be skipped when
- * sharper ones cover everything it would show. Cells are aligned to
- * `origin`, a corner of the exact scale's tiles (a multiple of `CELL`
- * pixels wide), so those tiles cover whole cells and leave no seams.
+ * Whether the tiles at `scale` in `present` (by `ix:iy`) cover a page
+ * rectangle. Tiles that miss the page's `content` are never rendered (the
+ * canvas color shows there), so they count as covering.
  */
-export function createCoverage(
-  width: number,
-  height: number,
-  origin = { x: 0, y: 0 }
-) {
-  const mod = (v: number) => ((v % CELL) + CELL) % CELL;
-  // Canvas pixel x lies at x + shiftX in cell space.
-  const shiftX = CELL - mod(origin.x);
-  const shiftY = CELL - mod(origin.y);
-  const cols = Math.max(1, Math.ceil((width + shiftX) / CELL));
-  const rows = Math.max(1, Math.ceil((height + shiftY) / CELL));
-  const cells = new Uint8Array(cols * rows);
-  /** The cells a rectangle touches, or (`whole`) lies over entirely. */
-  const span = (x: number, y: number, w: number, h: number, whole: boolean) => {
-    const start = whole ? Math.ceil : Math.floor;
-    const end = whole ? Math.floor : Math.ceil;
-    return {
-      c0: Math.max(0, start((x + shiftX) / CELL)),
-      r0: Math.max(0, start((y + shiftY) / CELL)),
-      c1: Math.min(cols, end((x + shiftX + w) / CELL)),
-      r1: Math.min(rows, end((y + shiftY + h) / CELL)),
-    };
-  };
-  return {
-    /** Whether everything a rectangle would show is covered already. */
-    covers(x: number, y: number, w: number, h: number): boolean {
-      const { c0, r0, c1, r1 } = span(x, y, w, h, false);
-      for (let r = r0; r < r1; r++) {
-        for (let c = c0; c < c1; c++) if (!cells[r * cols + c]) return false;
-      }
-      return true;
-    },
-    /** Records an opaque rectangle (the cells it lies over entirely). */
-    add(x: number, y: number, w: number, h: number) {
-      const { c0, r0, c1, r1 } = span(x, y, w, h, true);
-      if (c1 <= c0) return;
-      for (let r = r0; r < r1; r++) cells.fill(1, r * cols + c0, r * cols + c1);
-    },
-    /** Records everything outside a rectangle (where nothing is drawn). */
-    addOutside(x: number, y: number, w: number, h: number) {
-      const { c0, r0, c1, r1 } = span(x, y, w, h, false);
-      for (let r = 0; r < rows; r++) {
-        if (r < r0 || r >= r1 || c1 <= c0) {
-          cells.fill(1, r * cols, (r + 1) * cols);
-        } else {
-          cells.fill(1, r * cols, r * cols + c0);
-          cells.fill(1, r * cols + c1, (r + 1) * cols);
-        }
-      }
-    },
-  };
+export function tilesCover(
+  rect: Rect,
+  scale: number,
+  present: Set<string>,
+  content?: Rect
+): boolean {
+  const side = TILE / scale;
+  const x0 = Math.floor(rect.x / side);
+  const y0 = Math.floor(rect.y / side);
+  const x1 = Math.ceil((rect.x + rect.w) / side) - 1;
+  const y1 = Math.ceil((rect.y + rect.h) / side) - 1;
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) return false;
+  for (let iy = y0; iy <= y1; iy++) {
+    for (let ix = x0; ix <= x1; ix++) {
+      if (present.has(`${ix}:${iy}`)) continue;
+      if (!content || tileTouches({ scale, ix, iy }, content)) return false;
+    }
+  }
+  return true;
 }
