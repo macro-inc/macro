@@ -11,6 +11,12 @@
  * rebases it when a foreign row lands first, and drops it if this class
  * retracts it. Listeners only ever see fold events; whether a message is
  * still on the wire is a field on the message, never a second channel.
+ *
+ * A session opened before is folded twice: first from the raw log this
+ * browser cached at its last open, so the surface has a transcript while
+ * the fetch is on the wire, then from the fetched log, which the machine
+ * reconciles by row id. The fetched log is then what the cache holds, with
+ * every row the socket delivers after it appended.
  */
 
 import {
@@ -21,6 +27,7 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { fetchAgentSessionLog } from '@queries/agent-session/log';
+import { agentSessionLogCache } from '@queries/agent-session/log-cache';
 import { subscribeSocketSessionStarted } from '@queries/agent-session/queue-sync';
 import type { AgentSessionLogEvent } from '@queries/agent-session/realtime-protocol';
 import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
@@ -31,12 +38,17 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentAction,
+  AgentSessionLogEntryDto,
   AgentSessionResponse,
   ControlRequest,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
-import { SessionLoadTrace, traceAcquire } from './load-telemetry';
+import {
+  SessionLoadTrace,
+  traceAcquire,
+  traceCacheWrite,
+} from './load-telemetry';
 import { publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
@@ -94,6 +106,12 @@ function occupiesTurn(action: AgentAction): boolean {
 
 const RESYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000];
 
+/**
+ * How long appended rows wait before the cache is rewritten. A streaming
+ * turn delivers rows many times a second, and each write is the whole log.
+ */
+const CACHE_WRITE_DEBOUNCE_MS = 1_000;
+
 export class AgentSession {
   private static readonly open = new Map<string, AgentSession>();
 
@@ -132,8 +150,27 @@ export class AgentSession {
 
   private references = 0;
   private closed = false;
-  /** The snapshot has been folded; inputs no longer wait for it. */
+  /** The fetched snapshot has been folded; inputs no longer wait for it. */
   private ready = false;
+  /**
+   * The fetched log has been folded. Before this the machine may hold the
+   * cached log, shown but frozen: live rows wait in `buffered` and fold
+   * after the fetched snapshot, which cannot have lost them.
+   */
+  private settled = false;
+  /**
+   * What the cache holds for this session: the fetched log, with every
+   * confirmed row after it appended. Rewritten whole, debounced.
+   */
+  private cached:
+    | {
+        session: AgentSessionResponse;
+        bot: SessionBot;
+        rows: AgentSessionLogEntryDto[];
+        rowIds: Set<string>;
+      }
+    | undefined;
+  private cacheWriteTimer?: ReturnType<typeof setTimeout>;
   /** Inputs that arrived before the snapshot, in order. */
   private buffered: FoldInput[] = [];
   private readonly listeners = new Set<AgentSessionListener>();
@@ -148,6 +185,7 @@ export class AgentSession {
    * class saw them, even though each push is its own await.
    */
   private chain: Promise<void> = Promise.resolve();
+  private warming: Promise<AgentSessionRecord | undefined>;
   private loading: Promise<AgentSessionRecord>;
   private loadFailed = false;
   /** The span for the attempt in flight, ended by whatever settles it. */
@@ -176,7 +214,22 @@ export class AgentSession {
       if (event.agentSessionId === this.id) void this.resync();
     });
     this.trace = new SessionLoadTrace(id);
+    this.warming = this.startWarm();
     this.loading = this.startLoad();
+    // A surface rendering the cached log has not called `load` yet when a
+    // fast failure lands, and an unobserved rejection is reported as
+    // unhandled. The failure still reaches every caller of `load`.
+    this.loading.catch(() => undefined);
+  }
+
+  /**
+   * The session as this browser last saw it, folded from the cached log:
+   * what a surface can render while {@link load} is on the wire. Resolves
+   * to nothing when there is no cached log, or when the fetched one landed
+   * first. Never fails: a cache that cannot be read is a cache miss.
+   */
+  warm(): Promise<AgentSessionRecord | undefined> {
+    return this.warming;
   }
 
   /**
@@ -357,7 +410,36 @@ export class AgentSession {
     this.unsubscribeSocket();
     this.unsubscribeUpdated();
     clearTimeout(this.resyncTimer);
+    this.flushCacheWrite();
     closeSession(this.id);
+  }
+
+  private async startWarm(): Promise<AgentSessionRecord | undefined> {
+    const readStartedAt = performance.now();
+    let cached: Awaited<ReturnType<typeof agentSessionLogCache.read>>;
+    try {
+      cached = await agentSessionLogCache.read(this.id);
+    } catch (error) {
+      console.warn('[agent-session] cached log could not be read', error);
+      cached = undefined;
+    }
+    this.trace.cacheRead(readStartedAt, cached && { rows: cached.rows.length });
+    // `settled` is set in the same tick as the fetched snapshot's push, so
+    // checking it here and pushing below cannot interleave with that push:
+    // a cached log never replaces a fetched one.
+    if (!cached || this.closed || this.settled) return undefined;
+    const foldStartedAt = performance.now();
+    // `ready` stays false: live rows keep waiting for the fetched snapshot.
+    await this.apply([{ kind: 'snapshot', rows: cached.rows }]);
+    if (this.closed) return undefined;
+    this.trace.stage('cache_fold', foldStartedAt);
+    this.setTurn((await readSession(this.id)).metadata.turn);
+    return { session: cached.session, bot: cached.bot };
+  }
+
+  /** A surface put this session's transcript on screen. */
+  rendered(kind: 'cached' | 'fetched'): void {
+    this.trace.rendered(kind);
   }
 
   private startLoad(): Promise<AgentSessionRecord> {
@@ -378,24 +460,39 @@ export class AgentSession {
   }
 
   private async fetchAndFold(): Promise<AgentSessionRecord> {
+    const fetchStartedAt = performance.now();
     const [session, log] = await Promise.all([
-      agentHarnessServiceClient.get(this.id),
+      agentHarnessServiceClient.get(this.id).then((session) => {
+        this.trace.stage('session_fetch', fetchStartedAt);
+        return session;
+      }),
       fetchAgentSessionLog(this.id),
     ]);
     if (session.isErr()) {
       if (accessDenied(session.error)) {
+        this.forgetCached();
         throw new AgentSessionAccessDenied(this.id);
       }
       throw new Error(`agent session could not be fetched: ${this.id}`);
     }
     if (log.isErr()) {
-      if (accessDenied(log.error)) throw new AgentSessionAccessDenied(this.id);
+      if (accessDenied(log.error)) {
+        this.forgetCached();
+        throw new AgentSessionAccessDenied(this.id);
+      }
       throw new Error(`agent session log could not be fetched: ${this.id}`);
     }
     if (this.closed) throw new AgentSessionReleased(this.id);
-    this.trace.fetched(log.value.entries.length);
+    this.trace.fetched(fetchStartedAt, log.value.entries.length);
 
     const foldStartedAt = performance.now();
+    this.settled = true;
+    this.cached = {
+      session: session.value,
+      bot: log.value.bot,
+      rows: [],
+      rowIds: new Set(),
+    };
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
     // Inputs can keep arriving while each push is in flight; drain until a
     // check finds nothing, then flip ready so the next one goes straight in.
@@ -404,6 +501,66 @@ export class AgentSession {
     this.setTurn((await readSession(this.id)).metadata.turn);
     if (this.resyncRequested) void this.resync();
     return { session: session.value, bot: log.value.bot };
+  }
+
+  /** The viewer was refused: nothing cached may render for them again. */
+  private forgetCached(): void {
+    this.warming = Promise.resolve(undefined);
+    void agentSessionLogCache.remove(this.id).catch((error: unknown) => {
+      console.warn('[agent-session] cached log could not be removed', error);
+    });
+  }
+
+  /**
+   * Keep the cache's copy of the log in step with what the machine was
+   * given, once the fetched log is what it holds: a snapshot resets it, a
+   * confirmed row extends it. The machine dedupes by row id on its side;
+   * this does the same so a row delivered twice is stored once.
+   */
+  private remember(inputs: FoldInput[]): void {
+    if (!this.cached) return;
+    let changed = false;
+    for (const input of inputs) {
+      if (input.kind === 'snapshot') {
+        this.cached.rows = [...input.rows];
+        this.cached.rowIds = new Set(input.rows.map((row) => row.id));
+        changed = true;
+      } else if (input.kind === 'confirmed') {
+        if (this.cached.rowIds.has(input.row.id)) continue;
+        this.cached.rows.push(input.row);
+        this.cached.rowIds.add(input.row.id);
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleCacheWrite();
+  }
+
+  private scheduleCacheWrite(): void {
+    if (this.cacheWriteTimer !== undefined) return;
+    this.cacheWriteTimer = setTimeout(() => {
+      this.cacheWriteTimer = undefined;
+      this.writeCache();
+    }, CACHE_WRITE_DEBOUNCE_MS);
+  }
+
+  /** Write now what a pending timer would have: the session is going away. */
+  private flushCacheWrite(): void {
+    if (this.cacheWriteTimer === undefined) return;
+    clearTimeout(this.cacheWriteTimer);
+    this.cacheWriteTimer = undefined;
+    this.writeCache();
+  }
+
+  private writeCache(): void {
+    if (!this.cached) return;
+    const { session, bot, rows } = this.cached;
+    const startedAt = performance.now();
+    void agentSessionLogCache.write(this.id, { session, bot, rows }).then(
+      () => traceCacheWrite(this.id, startedAt, rows.length),
+      (error: unknown) => {
+        console.warn('[agent-session] log could not be cached', error);
+      }
+    );
   }
 
   /**
@@ -475,6 +632,7 @@ export class AgentSession {
   }
 
   private apply(inputs: FoldInput[]): Promise<void> {
+    this.remember(inputs);
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);

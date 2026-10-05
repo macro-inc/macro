@@ -1,72 +1,24 @@
-import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
-import { logSyncService } from './logger';
+import {
+  IDBSnapshotStore,
+  type SnapshotStore,
+} from '@macro-inc/browser-store/snapshot-store';
+import type { WALStore } from '@macro-inc/browser-store/wal-store';
+import { documentStoreLogger, logSyncService } from './logger';
 import { type LoroManager, LoroManagerError } from './manager';
 import type { GenericRootSchema, RawUpdate } from './shared';
-import type { WALStore } from './wal';
-
-export interface SnapshotStore<T> {
-  save(snapshot: T): Promise<void>;
-  load(): Promise<T | null>;
-  delete(): Promise<void>;
-}
 
 /** DB name for the Loro doc-snapshot store. */
 export const LORO_SNAPSHOT_DB_NAME = 'macro-document-snapshots';
 
-const DB_VERSION = 1;
-const STORE = 'snapshots';
-
-interface SnapshotSchema<T> extends DBSchema {
-  snapshots: {
-    key: string;
-    value: { scopeId: string; snapshot: T };
-  };
-}
-
-export class IDBSnapshotStore<T> implements SnapshotStore<T> {
-  private db: Promise<IDBPDatabase<SnapshotSchema<T>>>;
-
-  constructor(
-    dbName: string,
-    private readonly scopeId: string
-  ) {
-    this.db = idbOpen<SnapshotSchema<T>>(dbName, DB_VERSION, {
-      upgrade(db) {
-        db.createObjectStore(STORE, { keyPath: 'scopeId' });
-      },
-    });
-  }
-
-  public async save(snapshot: T): Promise<void> {
-    const db = await this.db;
-    await db.put(STORE, { scopeId: this.scopeId, snapshot });
-    logSyncService({
-      documentId: this.scopeId,
-      level: 'debug',
-      context: {},
-      message: 'snapshot-store: saved to IDB',
-    });
-  }
-
-  public async load(): Promise<T | null> {
-    const db = await this.db;
-    const row = await db.get(STORE, this.scopeId);
-    const found = row?.snapshot ?? null;
-    logSyncService({
-      documentId: this.scopeId,
-      level: 'debug',
-      context: {},
-      message: found
-        ? 'snapshot-store: loaded from IDB'
-        : 'snapshot-store: no snapshot found',
-    });
-    return found;
-  }
-
-  public async delete(): Promise<void> {
-    const db = await this.db;
-    await db.delete(STORE, this.scopeId);
-  }
+/** The durable snapshot of one document's Loro doc. */
+export function createDocumentSnapshotStore(
+  documentId: string
+): SnapshotStore<RawUpdate> {
+  return new IDBSnapshotStore<RawUpdate>(
+    LORO_SNAPSHOT_DB_NAME,
+    documentId,
+    documentStoreLogger(documentId)
+  );
 }
 
 /**

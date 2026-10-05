@@ -37,6 +37,7 @@ export default defineConfig({
           name: 'scheduling',
         },
       },
+      '../../packages/browser-store/vitest.config.ts',
       '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',

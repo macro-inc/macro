@@ -1,8 +1,8 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
+import type { SnapshotStore } from '@macro-inc/browser-store/snapshot-store';
+import { InMemoryWALStore } from '@macro-inc/browser-store/wal-store';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
-import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
-import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
 import {
   type DocxAgentRequest,
   type DocxAgentResult,

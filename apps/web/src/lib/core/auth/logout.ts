@@ -5,6 +5,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
+import { agentSessionLogCache } from '@queries/agent-session/log-cache';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
@@ -53,7 +54,13 @@ export async function clearLocalAuthSession() {
 
   // Queued mutations are user intent; never allow them to replay under a
   // subsequent account sharing this anonymous device cache scope.
-  await Promise.all([documentContextsCleared, clearRegisteredCaches()]);
+  await Promise.all([
+    documentContextsCleared,
+    clearRegisteredCaches(),
+    // Cached agent logs are fenced to the user who saved them, but a shared
+    // device should not keep another account's conversations around.
+    agentSessionLogCache.clear(),
+  ]);
   clearMcpAuthAttempts();
 }
 

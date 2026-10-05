@@ -1,20 +1,13 @@
 import { ingestLocalSnapshot } from '@core/collab-surface/createCollabSurface';
 import type { CollabMarkdownSession } from '@core/collab-surface/types';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
-import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
-import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
-} from '@macro-inc/collaboration/collab/snapshot-store';
+import { createDocumentSnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import type {
   InitialSync,
   LiveSyncSource,
   SyncError,
 } from '@macro-inc/collaboration/collab/source';
-import {
-  BrowserWALStore,
-  LORO_WAL_DB_NAME,
-} from '@macro-inc/collaboration/collab/wal';
+import { createDocumentWALStore } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, getOwner, runWithOwner } from 'solid-js';
@@ -51,8 +44,8 @@ export function createProjectDescriptionSession<Access>(
       // Local cache failures must not prevent a fresh server snapshot.
       void ingestLocalSnapshot(
         loroManager,
-        new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, surfaceId),
-        new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, surfaceId)
+        createDocumentSnapshotStore(surfaceId),
+        createDocumentWALStore(surfaceId)
       ).catch(() => {});
       const connection = runWithOwner(owner, () =>
         transport.connect(surfaceId, access)

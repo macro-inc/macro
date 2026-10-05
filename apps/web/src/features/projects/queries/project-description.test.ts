@@ -13,16 +13,10 @@ vi.mock('@macro-inc/collaboration/collab/manager', () => ({
   createLoroManager: () => ({ ingest: doubles.ingest }),
 }));
 vi.mock('@macro-inc/collaboration/collab/snapshot-store', () => ({
-  LORO_SNAPSHOT_DB_NAME: 'snapshots',
-  IDBSnapshotStore: class {
-    load = doubles.load;
-  },
+  createDocumentSnapshotStore: () => ({ load: doubles.load }),
 }));
 vi.mock('@macro-inc/collaboration/collab/wal', () => ({
-  LORO_WAL_DB_NAME: 'wal',
-  BrowserWALStore: class {
-    getAll = doubles.readWal;
-  },
+  createDocumentWALStore: () => ({ getAll: doubles.readWal }),
 }));
 vi.mock('@macro-inc/lexical-core/markdown-loro-schema', () => ({
   MARKDOWN_LORO_SCHEMA: {},

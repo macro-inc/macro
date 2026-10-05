@@ -1,3 +1,5 @@
+import type { SnapshotStore } from '@macro-inc/browser-store/snapshot-store';
+import type { WALStore } from '@macro-inc/browser-store/wal-store';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
@@ -6,10 +8,8 @@ import {
   LoroManagerError,
 } from '@macro-inc/collaboration/collab/manager';
 import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
+  createDocumentSnapshotStore,
   loadCachedState,
-  type SnapshotStore,
 } from '@macro-inc/collaboration/collab/snapshot-store';
 import {
   type InitialSync,
@@ -19,9 +19,7 @@ import {
   SyncSourceStatus,
 } from '@macro-inc/collaboration/collab/source';
 import {
-  BrowserWALStore,
-  LORO_WAL_DB_NAME,
-  type WALStore,
+  createDocumentWALStore,
   WALSyncer,
 } from '@macro-inc/collaboration/collab/wal';
 import type { LoroDoc } from 'loro-crdt';
@@ -113,10 +111,9 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
   });
   const snapshots =
     options.persistence?.snapshots ??
-    new IDBSnapshotStore<Uint8Array>(LORO_SNAPSHOT_DB_NAME, options.documentId);
+    createDocumentSnapshotStore(options.documentId);
   const walStore =
-    options.persistence?.wal ??
-    new BrowserWALStore<Uint8Array>(LORO_WAL_DB_NAME, options.documentId);
+    options.persistence?.wal ?? createDocumentWALStore(options.documentId);
   const [state, setState] = createSignal<DocxSessionState>({ t: 'loading' });
   const [connection, setConnection] = createSignal<DocxConnection>();
   const listeners = new Set<() => void>();

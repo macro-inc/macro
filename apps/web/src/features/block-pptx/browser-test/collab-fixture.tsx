@@ -6,9 +6,9 @@
  * the shared document to tests.
  */
 
+import type { SnapshotStore } from '@macro-inc/browser-store/snapshot-store';
+import { InMemoryWALStore } from '@macro-inc/browser-store/wal-store';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
-import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
-import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
 import { InitializeFromSnapshotRequest } from '@macro-inc/collaboration/sync-service/generated/schema';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import {
