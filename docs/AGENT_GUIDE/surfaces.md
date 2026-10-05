@@ -407,7 +407,7 @@ Carets and folder-only parents expand branches; actual tags select their exact I
 and switch the mailbox to All. Parent selection does not include descendant tags.
 
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
-`All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
+`Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
@@ -419,6 +419,14 @@ the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
 REST Soup uses `favorites_only: true`. Starring changes membership without
 changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
+
+`Archived`, directly before All, lists your own archived (Mail Done) threads: the
+All mailbox with Done applied, excluding threads teammates shared with you. It
+respects the selected inboxes and filters. The search service cannot filter
+archive state, so search within the tab keeps only archived hits on the client.
+Rows offer **Unarchive email**;
+unarchiving removes the row at once. The tab persists across reloads. An empty
+list shows `No archived email`.
 
 On desktop, a favorited email keeps a filled, muted star just before its
 timestamp. Other rows reserve only that small star slot. Hovering reveals
@@ -551,7 +559,7 @@ All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and n
 filter combinations while offline: account selection
 (including delegated inboxes), read/unread, and archive-based Done/Not Done. Mail Done
 means `inboxVisible = false`; it is **not** notification lifecycle state. Signal/Noise
-retain their Inbox scope, so archived mail is found using All + Done.
+retain their Inbox scope, so archived mail is found in Archived (All + Done).
 
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
 claim of complete mailbox coverage. These lists paginate locally beyond the first
