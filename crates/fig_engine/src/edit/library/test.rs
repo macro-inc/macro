@@ -456,6 +456,18 @@ fn library_variables_bind_and_update() {
         .unwrap();
     assert_eq!(v.values.len(), 2);
     assert!(reopened.doc.find(v.set.unwrap()).is_some());
+    // The copies keep their node types, as Figma reads them.
+    let saved = save(&app.doc, &app.original).unwrap();
+    let container = crate::container::Container::open_without_images(&saved).unwrap();
+    let schema = crate::kiwi::Schema::decode(&container.schema).unwrap();
+    let records =
+        crate::edit::paste::decode_records(&schema, &container.message).unwrap();
+    let type_of = |g: Guid| match records[&g].get(&schema, "type") {
+        Some(crate::kiwi::Value::Enum(def, v)) => schema.enum_name(*def, *v).map(str::to_owned),
+        _ => None,
+    };
+    assert_eq!(type_of(var).as_deref(), Some("VARIABLE"));
+    assert_eq!(type_of(v.set.unwrap()).as_deref(), Some("VARIABLE_SET"));
 }
 
 #[test]

@@ -540,6 +540,13 @@ impl Txn<'_> {
         let mut props = self.package_props(cx, n);
         let record = self.package_record(cx, n);
         let guid = props.guid.unwrap_or_default();
+        // Types the engine does not name (variables, collections) keep the
+        // record's.
+        let kept = if props.node_type() == NodeType::Other {
+            KEPT_FROM_RECORD | flags::TYPE
+        } else {
+            KEPT_FROM_RECORD
+        };
         let i = match self.doc.find(guid) {
             Some(i) => {
                 let node = self.touch(i);
@@ -550,7 +557,7 @@ impl Txn<'_> {
                 node.props = props;
                 node.removed = false;
                 node.children.clear();
-                node.edits |= !KEPT_FROM_RECORD & !flags::CREATED;
+                node.edits |= !kept & !flags::CREATED;
                 let created = node.edits & flags::CREATED != 0;
                 if let Some(bytes) = record {
                     if created {
@@ -572,7 +579,7 @@ impl Txn<'_> {
                 let i = self.new_node(props);
                 if let Some(bytes) = record {
                     self.doc.foreign.insert(guid, bytes);
-                    self.touch(i).edits = !KEPT_FROM_RECORD;
+                    self.touch(i).edits = !kept;
                 }
                 i
             }
