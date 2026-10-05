@@ -12,6 +12,11 @@ use crate::domain::{
 use authentication_service_client::AuthServiceClient;
 use macro_uuid::Uuid;
 use std::sync::Arc;
+use std::time::Duration;
+
+/// The read sits on the AI request path and a failed read degrades to the
+/// stored anchor, so it gets a third of the client's 15 s default.
+const SUBSCRIPTION_PERIOD_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// [`PaymentGateway`] for hosts that gate AI requests but do not own Stripe.
 /// Reads the subscription period through the authentication service and
@@ -59,7 +64,7 @@ impl PaymentGateway for HttpPaymentGateway {
         };
         let period = self
             .client
-            .ai_subscription_period(customer_id, team_id)
+            .ai_subscription_period(customer_id, team_id, SUBSCRIPTION_PERIOD_TIMEOUT)
             .await
             .map_err(|e| {
                 BillingError::Payment(

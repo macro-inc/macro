@@ -175,7 +175,6 @@ fn in_scope(subscription: &Subscription, scope: SubscriptionScope) -> bool {
     }
 }
 
-/// Active | Trialing, shared by charge selection and period selection.
 fn billable(subscription: &Subscription) -> bool {
     matches!(
         subscription.status,
@@ -183,7 +182,6 @@ fn billable(subscription: &Subscription) -> bool {
     )
 }
 
-/// The period shared by every billable subscription in `scope`.
 fn scoped_period(
     subscriptions: &[Subscription],
     scope: SubscriptionScope,

@@ -484,12 +484,10 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
-    // The AI billing gate reads allowances, credits, and overage state here.
-    // Collection (Stripe) lives in the authentication service. The gate reads
-    // a payer's subscription period from the authentication service when the
-    // stored period is missing or ended, and the recorder below asks that
-    // service to settle once a payer runs past their allowance and
-    // ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
+    // The AI billing gate reads allowances, credits, and overage state here;
+    // collection (Stripe) lives in the authentication service, which the
+    // recorder below asks to settle once a payer runs past their allowance
+    // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
     let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
         internal_api_key.clone(),
         AuthServiceUrl::new()?.to_string(),

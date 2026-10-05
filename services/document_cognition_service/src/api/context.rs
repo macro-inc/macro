@@ -47,8 +47,7 @@ pub type DcsUserPermissionsService =
     >;
 
 /// The AI billing gate: reads plan allowances, credits, and overage state.
-/// DCS never charges anyone. It reads the payer's subscription period through
-/// the authentication service and requests settlement there.
+/// DCS never charges anyone.
 pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::RolesTeamsEntitlementSource<
         DcsUserPermissionsService,

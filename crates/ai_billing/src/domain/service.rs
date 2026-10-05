@@ -195,7 +195,6 @@ where
         }
     }
 
-    /// The payer's usage period at `now`. Never fails the caller.
     async fn usage_period(
         &self,
         entitlement: &Entitlement,
@@ -243,7 +242,6 @@ where
         }
     }
 
-    /// Implementation behind `OpenSeatRelease::release`, with an explicit clock.
     async fn release_at(
         &self,
         team_id: Uuid,

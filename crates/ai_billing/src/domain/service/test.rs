@@ -158,7 +158,6 @@ struct RepoState {
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
     releases: Vec<(String, DateTime<Utc>, String)>,
     activated_seats: Vec<String>,
-    /// Every `set_period` call: payer, start, end.
     period_writes: Vec<(String, DateTime<Utc>, DateTime<Utc>)>,
 }
 
@@ -463,14 +462,11 @@ enum PayOutcome {
     Error,
 }
 
-/// How the fake provider answers subscription period reads.
 #[derive(Debug, Clone, Copy, Default)]
 enum PeriodReply {
-    /// No active or trialing subscription in the scope.
     #[default]
     Missing,
     Found(BillingPeriod),
-    /// The provider could not be reached.
     Failed,
 }
 
