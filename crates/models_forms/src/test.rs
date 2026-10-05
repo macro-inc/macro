@@ -374,3 +374,51 @@ fn a_form_takes_responses_while_open_and_before_it_closes() {
     assert!(!form(FormStatus::Open, Some(now)).accepts_responses_at(now));
     assert!(!form(FormStatus::Closed, None).accepts_responses_at(now));
 }
+
+#[test]
+fn a_listed_form_names_the_callers_access_beside_the_form() {
+    let now = Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap();
+    let listed = ListedForm {
+        form: Form {
+            id: FORM,
+            name: "RSVP".into(),
+            description: "".into(),
+            owner_id: "macro|owner@macro.com".into(),
+            database_id: DATABASE,
+            table_id: TABLE,
+            submitted_column_id: None,
+            respondent_column_id: None,
+            audience: Audience::Public,
+            tally_visible: true,
+            status: FormStatus::Closed,
+            closes_at: None,
+            confirmation_message: "Thanks".into(),
+            created_at: now,
+            updated_at: now,
+        },
+        access: FormAccess::View,
+    };
+    assert_eq!(
+        serde_json::to_value(&listed).unwrap(),
+        json!({
+            "form": {
+                "id": "00000000-0000-0000-0000-0000000000f0",
+                "name": "RSVP",
+                "description": "",
+                "ownerId": "macro|owner@macro.com",
+                "databaseId": "00000000-0000-0000-0000-0000000000db",
+                "tableId": "00000000-0000-0000-0000-00000000007a",
+                "submittedColumnId": null,
+                "respondentColumnId": null,
+                "audience": "public",
+                "tallyVisible": true,
+                "status": "closed",
+                "closesAt": null,
+                "confirmationMessage": "Thanks",
+                "createdAt": "2026-09-01T09:00:00Z",
+                "updatedAt": "2026-09-01T09:00:00Z",
+            },
+            "access": "view",
+        })
+    );
+}

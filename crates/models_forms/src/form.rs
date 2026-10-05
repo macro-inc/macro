@@ -229,3 +229,14 @@ where
 {
     Value::deserialize(deserializer).map(Some)
 }
+
+/// A form the caller reaches through a grant, as the forms catalog lists
+/// it, with the caller's level on it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedForm {
+    /// The form's facts.
+    pub form: Form,
+    /// The caller's level on it.
+    pub access: FormAccess,
+}

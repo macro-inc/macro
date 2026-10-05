@@ -16,7 +16,9 @@ mod widget;
 
 pub use detail::{FormDetail, FormQuestionDetail, FormSectionDetail, QuestionOption};
 pub use error::{FormErrorCode, FormErrorResponse, LayoutProblem};
-pub use form::{Audience, CreateForm, Form, FormAccess, FormSource, FormStatus, UpdateForm};
+pub use form::{
+    Audience, CreateForm, Form, FormAccess, FormSource, FormStatus, ListedForm, UpdateForm,
+};
 pub use ids::{FormId, FormQuestionId, FormResponseId, FormSectionId};
 pub use layout::{FormLayout, FormSection, QuestionLayout};
 pub use response::{
