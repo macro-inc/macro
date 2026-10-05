@@ -36,6 +36,23 @@ const THUMBNAIL_SIZE = 96;
 /** Designs read to find libraries, most recently viewed first. */
 const PROBE_LIMIT = 20;
 
+/** An object URL of the PNG `render` gives, or `null` when there is none. */
+async function objectUrl(
+  render: () => Promise<Blob | null>
+): Promise<string | null> {
+  try {
+    const blob = await render();
+    return blob ? URL.createObjectURL(blob) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Releases rendered thumbnails. */
+async function revokeThumbnails(list: Promise<string | null>[]) {
+  for (const url of await Promise.all(list)) if (url) URL.revokeObjectURL(url);
+}
+
 export function createFigLibraries(options: {
   engine: FigEngine;
   viewer: FigViewer;
@@ -173,8 +190,7 @@ export function createFigLibraries(options: {
   onCleanup(() => {
     for (const e of engines.values()) e.close();
     engines.clear();
-    for (const t of thumbnails.values())
-      void t.then((url) => url && URL.revokeObjectURL(url));
+    void revokeThumbnails([...thumbnails.values()]);
   });
 
   /** The published assets of the libraries read so far, by id. */
@@ -339,9 +355,7 @@ export function createFigLibraries(options: {
   const cached = (key: string, render: () => Promise<Blob | null>) => {
     let t = thumbnails.get(key);
     if (!t) {
-      t = render()
-        .then((blob) => (blob ? URL.createObjectURL(blob) : null))
-        .catch(() => null);
+      t = objectUrl(render);
       thumbnails.set(key, t);
     }
     return t;
@@ -355,9 +369,7 @@ export function createFigLibraries(options: {
 
   /** A thumbnail of this file's copy of an asset (as it is now). */
   const copyThumbnail = (copyId: string) =>
-    engine
-      .nodeThumbnail(copyId, THUMBNAIL_SIZE)
-      .then((blob) => (blob ? URL.createObjectURL(blob) : null));
+    objectUrl(() => engine.nodeThumbnail(copyId, THUMBNAIL_SIZE));
 
   return {
     uses,
