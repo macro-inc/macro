@@ -66,6 +66,16 @@ enum Command {
         verbose: bool,
         files: Vec<PathBuf>,
     },
+    /// Export the first page's top-level layers as SVG, each beside the
+    /// engine's PNG of it, to compare in a browser.
+    Svg {
+        #[arg(long, default_value = "out")]
+        out: PathBuf,
+        /// Layers per file.
+        #[arg(long, default_value_t = 4)]
+        limit: usize,
+        files: Vec<PathBuf>,
+    },
 }
 
 fn main() {
@@ -100,6 +110,12 @@ fn main() {
         Command::BenchEdit { files } => {
             for path in files {
                 bench_edit(&path);
+            }
+        }
+        Command::Svg { out, limit, files } => {
+            std::fs::create_dir_all(&out).expect("output directory");
+            for path in files {
+                export_svgs(&path, &out, limit);
             }
         }
         Command::Booleans { verbose, files } => {
@@ -680,6 +696,45 @@ fn bench_edit(path: &Path) {
         resize.0,
         resize.1
     );
+}
+
+/// Writes `<file>-<n>.svg` and `<file>-<n>.png` for the first page's
+/// top-level layers.
+fn export_svgs(path: &Path, out: &Path, limit: usize) {
+    let Some((_, doc)) = open(path) else {
+        return;
+    };
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let mut images = ImageStore::default();
+    let mut written = 0;
+    for &c in &scene.node(scene.root()).children {
+        if written >= limit {
+            break;
+        }
+        let b = scene.node(c).bounds;
+        if b.is_empty() || b.w * b.h > 4096.0 * 4096.0 {
+            continue;
+        }
+        let Some(svg) = fig_engine::svg::export(&doc, &scene, c) else {
+            continue;
+        };
+        let scale = (1024.0 / b.w.max(b.h)).min(1.0);
+        let Some(png) = render::render_node(
+            &doc,
+            &scene,
+            &mut images,
+            c,
+            scale,
+            RenderOptions::default(),
+        ) else {
+            continue;
+        };
+        let name = format!("{}-{written}", stem(path));
+        let _ = std::fs::write(out.join(format!("{name}.svg")), &svg);
+        let _ = std::fs::write(out.join(format!("{name}.png")), to_straight_png(&png));
+        println!("  {name}: {} bytes of SVG", svg.len());
+        written += 1;
+    }
 }
 
 /// Scores each boolean layer's recombined outline against Figma's.

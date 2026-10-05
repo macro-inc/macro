@@ -41,7 +41,7 @@ fn mapped(path: &Path, t: &Affine) -> Option<Path> {
 
 /// The outline a shape draws from its size (rectangles, ellipses, lines)
 /// when it has no stored geometry.
-fn box_shape(props: &Props) -> Option<Path> {
+pub(crate) fn box_shape(props: &Props) -> Option<Path> {
     let size = props.size();
     match props.node_type() {
         NodeType::Ellipse => tiny_skia::Rect::from_xywh(0.0, 0.0, size.x as f32, size.y as f32)

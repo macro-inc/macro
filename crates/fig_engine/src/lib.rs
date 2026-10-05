@@ -16,6 +16,7 @@ pub mod model;
 pub mod render;
 pub mod save;
 pub mod scene;
+pub mod svg;
 #[cfg(test)]
 pub(crate) mod testing;
 pub mod text;
