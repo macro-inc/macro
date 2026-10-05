@@ -952,7 +952,7 @@ impl<'s> Decoder<'s> {
     // keep), so it answers only whether it got through: no error values on
     // the way, and the common one-byte cases first.
 
-    #[inline]
+    #[inline(always)]
     fn skip_field_fast(&self, r: &mut Reader, field: &Field, depth: u32) -> bool {
         if !field.array {
             return self.skip_wire(r, field.wire, depth);
@@ -969,6 +969,9 @@ impl<'s> Decoder<'s> {
         }
     }
 
+    /// Scalars here; nested values call [`Decoder::skip_def`], so only
+    /// those pay for a call (and this inlines into it).
+    #[inline(always)]
     fn skip_wire(&self, r: &mut Reader, wire: Wire, depth: u32) -> bool {
         match wire {
             Wire::Bool | Wire::Byte => r.advance(1).is_ok(),
@@ -976,34 +979,34 @@ impl<'s> Decoder<'s> {
             Wire::Int64 | Wire::Uint64 => r.skip_var_fast(10),
             Wire::Float => r.skip_float(),
             Wire::String => r.skip_string().is_ok(),
-            Wire::Struct(i) => {
-                depth <= MAX_DEPTH
-                    && self
-                        .schema
-                        .def(i)
-                        .fields
-                        .iter()
-                        .all(|field| self.skip_field_fast(r, field, depth + 1))
+            Wire::Struct(i) => self.skip_def(r, i, false, depth),
+            Wire::Message(i) => self.skip_def(r, i, true, depth),
+        }
+    }
+
+    fn skip_def(&self, r: &mut Reader, i: u32, message: bool, depth: u32) -> bool {
+        if depth > MAX_DEPTH {
+            return false;
+        }
+        let def = self.schema.def(i);
+        if !message {
+            return def
+                .fields
+                .iter()
+                .all(|field| self.skip_field_fast(r, field, depth + 1));
+        }
+        loop {
+            let Some(id) = r.var_uint_fast() else {
+                return false;
+            };
+            if id == 0 {
+                return true;
             }
-            Wire::Message(i) => {
-                if depth > MAX_DEPTH {
-                    return false;
-                }
-                let def = self.schema.def(i);
-                loop {
-                    let Some(id) = r.var_uint_fast() else {
-                        return false;
-                    };
-                    if id == 0 {
-                        return true;
-                    }
-                    let Some(index) = def.index_of_id(id) else {
-                        return false;
-                    };
-                    if !self.skip_field_fast(r, &def.fields[index as usize], depth + 1) {
-                        return false;
-                    }
-                }
+            let Some(index) = def.index_of_id(id) else {
+                return false;
+            };
+            if !self.skip_field_fast(r, &def.fields[index as usize], depth + 1) {
+                return false;
             }
         }
     }
