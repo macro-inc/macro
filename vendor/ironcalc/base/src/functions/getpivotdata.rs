@@ -197,7 +197,7 @@ impl Model<'_> {
         args: &[Node],
         cell: CellReferenceIndex,
     ) -> CalcResult {
-        if args.len() < 2 || args.len() % 2 != 0 {
+        if args.len() < 2 || !args.len().is_multiple_of(2) {
             return CalcResult::new_args_number_error(cell);
         }
         let data_field = match self.get_string(&args[0], cell) {

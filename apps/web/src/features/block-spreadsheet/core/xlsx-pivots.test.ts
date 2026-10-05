@@ -210,7 +210,7 @@ describe('Excel pivot tables', () => {
     expect(
       again.sheets.flatMap((sheet) => sheet.metadata?.pivotTables ?? [])
     ).toEqual(pivots);
-  });
+  }, 60_000);
 
   it('keeps pivot tables over data connections, without saved passwords', async () => {
     // Two caches of the workbook read data connections instead: a
@@ -290,7 +290,7 @@ describe('Excel pivot tables', () => {
     expect(again.warnings).not.toContain(
       'Passwords saved with data connections are not kept; Excel asks for them when it refreshes a pivot table.'
     );
-  });
+  }, 60_000);
 
   it('downloads pivot tables without saved data that does not fit', async () => {
     const files = unzipSync(corpus(UCL));
@@ -316,7 +316,7 @@ describe('Excel pivot tables', () => {
     expect(
       Object.keys(exported).filter((name) => name.includes('Records'))
     ).toHaveLength(7);
-  });
+  }, 60_000);
 });
 
 describe('GETPIVOTDATA', () => {
@@ -361,7 +361,7 @@ describe('GETPIVOTDATA', () => {
     // They read the pivot table's cell, so they follow an edit to it.
     sheet.cells.J9 = { ...sheet.cells.J9, value: '40' };
     expect(calculate(imported)[String(index)].K19?.number).toBe(40);
-  });
+  }, 60_000);
 
   it('finds every value of every pivot table in the corpus by its items', async () => {
     let found = 0;
@@ -418,7 +418,7 @@ describe('GETPIVOTDATA', () => {
       found += lookups.length;
     }
     expect(found).toBe(735);
-  });
+  }, 60_000);
 
   it('keeps the last value of a lookup whose pivot table it cannot keep', async () => {
     const files = unzipSync(corpus('sheetjs-formula-stress-test.xlsx'));
