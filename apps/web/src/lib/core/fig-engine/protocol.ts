@@ -22,6 +22,8 @@ export type QueryMethod =
   | 'search'
   | 'pageColors'
   | 'components'
+  | 'styles'
+  | 'designInfo'
   | 'inRect'
   | 'exportSvg'
   | 'vectorNetwork';

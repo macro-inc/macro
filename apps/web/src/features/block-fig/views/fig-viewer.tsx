@@ -32,11 +32,17 @@ import {
   type ViewerAction,
 } from '../core/shortcuts';
 import { deleteVertex, VECTOR_EDITABLE } from '../core/vector';
+import { createDesignSystem } from '../primitives/create-design-system';
 import { createFigContextMenu } from '../primitives/create-fig-context-menu';
 import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
 import { createFigViewer } from '../primitives/create-fig-viewer';
 import { createPeerOverlays } from '../primitives/create-peer-overlays';
 import { AssetsPanel } from './assets-panel';
+import {
+  DesignSystemSections,
+  LocalStylesView,
+  styleControlFor,
+} from './design-system-view';
 import { LayersPanel } from './layers-panel';
 import { TextEditor } from './text-editor';
 import { ViewerCanvas } from './viewer-canvas';
@@ -77,6 +83,8 @@ export function FigViewer() {
   const [showShortcuts, setShowShortcuts] = createSignal(false);
   const [leftTab, setLeftTab] = createSignal<'layers' | 'assets'>('layers');
   const [info, setInfo] = createSignal<NodeInfo>();
+  const designSystem = createDesignSystem({ engine, viewer, editor });
+  const styleControl = styleControlFor(designSystem);
   let root!: HTMLDivElement;
   let searchInput: HTMLInputElement | undefined;
 
@@ -800,6 +808,16 @@ export function FigViewer() {
             }
             onFlatten={() => void editor.flatten()}
             onCopyText={(text) => void copyText(text)}
+            designSections={
+              <DesignSystemSections
+                ds={designSystem}
+                selected={viewer.selected()[0]?.id}
+              />
+            }
+            styleControl={styleControl}
+            pageExtra={
+              <LocalStylesView ds={designSystem} swatches={swatches()} />
+            }
           />
         </aside>
       </Show>

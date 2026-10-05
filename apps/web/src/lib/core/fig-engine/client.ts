@@ -8,6 +8,7 @@
  * memory never shrinks while a worker lives).
  */
 
+import type { DesignInfo, StyleInfo } from './design-types';
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
 import type {
   ComponentInfo,
@@ -278,6 +279,16 @@ export class FigEngine {
   /** Every component in the file (after edits), for the assets list. */
   components(): Promise<ComponentInfo[]> {
     return this.query('components');
+  }
+
+  /** The file's shared styles (after edits). */
+  styles(): Promise<StyleInfo[]> {
+    return this.query('styles');
+  }
+
+  /** A layer's component, variant, property, and style details. */
+  designInfo(page: number, id: string): Promise<DesignInfo> {
+    return this.query('designInfo', page, id);
   }
 
   layers(page: number, parent?: string): Promise<LayerRow[]> {

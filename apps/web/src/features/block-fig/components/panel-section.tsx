@@ -11,6 +11,8 @@ export function Section(props: {
   onAdd?: () => void;
   /** A "−" action in the header (remove auto layout, say). */
   onRemove?: () => void;
+  /** More header controls, before "+" (a style picker, say). */
+  actions?: JSX.Element;
   testId?: string;
 }) {
   return (
@@ -18,8 +20,9 @@ export function Section(props: {
       class="border-edge-muted border-b px-3 py-3"
       data-testid={props.testId}
     >
-      <div class="mb-2 flex items-center justify-between">
-        <h3 class="font-semibold text-ink text-xs">{props.title}</h3>
+      <div class="mb-2 flex items-center justify-between gap-1">
+        <h3 class="mr-auto font-semibold text-ink text-xs">{props.title}</h3>
+        {props.actions}
         <Show when={props.onAdd}>
           {(add) => (
             <button

@@ -28,6 +28,7 @@ import {
   encodeClipboard,
   pasteParent,
 } from '../core/clipboard';
+import type { DesignOp } from '../core/design-system';
 import type { PaintType, StopSpec } from '../core/paint';
 import type { Measure } from '../core/type';
 import { type PenPoint, penNetwork } from '../core/vector';
@@ -173,7 +174,8 @@ export type Op =
       name?: string;
       props?: Patch;
     }
-  | { op: 'setVector'; id: string; network: VectorNetwork };
+  | { op: 'setVector'; id: string; network: VectorNetwork }
+  | DesignOp;
 
 export interface FigEditorOptions {
   engine: FigEngine;
