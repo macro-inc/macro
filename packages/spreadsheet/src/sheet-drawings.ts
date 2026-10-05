@@ -176,6 +176,12 @@ export type SheetDrawing = DrawingBase &
     | { type: 'chart'; chart: SheetChart }
   );
 
+/** Where a drawing is anchored: a corner and a size, or two corners. */
+export type DrawingPlacement = Pick<
+  SheetDrawing,
+  'from' | 'to' | 'width' | 'height'
+>;
+
 const IMAGE_URL =
   /^data:image\/(?:png|jpeg|gif|webp|bmp);base64,[A-Za-z0-9+/]+=*$/;
 

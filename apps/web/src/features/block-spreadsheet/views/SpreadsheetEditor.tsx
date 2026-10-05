@@ -11,6 +11,7 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ChartDialog } from '../components/ChartDialog';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
@@ -59,6 +60,7 @@ import { SPREADSHEET_MAX_SHEETS } from '../core/workbook-document';
 import { CSV_MAX_BYTES } from '../core/workbook-file-types';
 import { createCalculation } from '../primitives/create-calculation';
 import { createCalculationStatus } from '../primitives/create-calculation-status';
+import { createDrawingActions } from '../primitives/create-drawing-actions';
 import { createGridController } from '../primitives/create-grid-controller';
 import { createSheetActions } from '../primitives/create-sheet-actions';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -180,6 +182,26 @@ export function SpreadsheetEditor(props: {
     commit: grid.commit,
     onExport: props.onExportXlsx,
   });
+  // A drawing to scroll to, select and focus; each request a new nonce.
+  const [revealDrawing, setRevealDrawing] = createSignal<{
+    id: string;
+    nonce: number;
+  }>();
+  const showDrawing = (id: string) =>
+    setRevealDrawing((current) => ({ id, nonce: (current?.nonce ?? 0) + 1 }));
+  let insertedDrawing: string | undefined;
+  const drawingActions = createDrawingActions({
+    store: props.store,
+    canEdit: editable,
+    selection: grid.selection,
+    values: calculation.workbookValues,
+    setNotice: (message) => actions.setNotice(message),
+    onCreated: (id) => {
+      insertedDrawing = id;
+      showDrawing(id);
+    },
+  });
+  let imageInput!: HTMLInputElement;
   const actions = createSheetActions(
     {
       cells: props.store.cells,
@@ -240,6 +262,13 @@ export function SpreadsheetEditor(props: {
     const pending = pendingMenuAction;
     pendingMenuAction = undefined;
     if (pending) command(pending);
+    // A drawing a menu just inserted keeps the focus.
+    const inserted = insertedDrawing;
+    insertedDrawing = undefined;
+    if (inserted) {
+      showDrawing(inserted);
+      return;
+    }
     if (
       actions.findOpen() ||
       workbookActions.preview() ||
@@ -655,6 +684,37 @@ export function SpreadsheetEditor(props: {
           grid.format(style);
           focusGrid();
         }}
+        onInsertChart={(type) => {
+          grid.commit();
+          actions.clearNotice();
+          drawingActions.insertChart(type);
+        }}
+        onInsertImage={() => imageInput.click()}
+        onSelectDrawings={
+          props.store.activeSheet().metadata?.drawings?.length
+            ? () => {
+                const [first] = [
+                  ...(props.store.activeSheet().metadata?.drawings ?? []),
+                ].sort(
+                  (a, b) =>
+                    a.from.row - b.from.row || a.from.column - b.from.column
+                );
+                if (first) showDrawing(first.id);
+              }
+            : undefined
+        }
+      />
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"
+        class="hidden"
+        aria-label="Insert image file"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = '';
+          if (file) void drawingActions.insertImage(file);
+        }}
       />
       <input
         ref={importInput}
@@ -761,17 +821,10 @@ export function SpreadsheetEditor(props: {
               definedNames(props.store.activeSheetId())
             )
           }
-          onDeleteDrawing={(id) => {
-            if (!editable()) return;
-            const metadata = props.store.activeSheet().metadata;
-            const drawings = metadata?.drawings?.filter(
-              (drawing) => drawing.id !== id
-            );
-            props.store.setMetadata({
-              ...metadata,
-              ...(drawings?.length ? { drawings } : { drawings: undefined }),
-            });
-          }}
+          onDeleteDrawing={drawingActions.deleteDrawing}
+          onPlaceDrawing={editable() ? drawingActions.placeDrawing : undefined}
+          onEditDrawing={(id) => drawingActions.setEditing(id)}
+          revealDrawing={revealDrawing()}
           inputMessage={inputMessage()}
           listItems={activeList()}
           onPickListItem={(item) => {
@@ -1034,6 +1087,22 @@ export function SpreadsheetEditor(props: {
           />
         </div>
       </div>
+      <ChartDialog
+        settings={(() => {
+          const id = drawingActions.editing();
+          return id ? drawingActions.chartSettings(id) : undefined;
+        })()}
+        onApply={(settings) => {
+          const id = drawingActions.editing();
+          return id ? drawingActions.applyChart(id, settings) : undefined;
+        }}
+        onClose={() => drawingActions.setEditing(undefined)}
+        onRestoreFocus={() => {
+          const id = revealDrawing()?.id;
+          if (id) showDrawing(id);
+          else focusGrid();
+        }}
+      />
       <SpreadsheetSheetDialog
         onRestoreFocus={() => {
           focusGrid();

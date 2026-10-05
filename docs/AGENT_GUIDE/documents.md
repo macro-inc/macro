@@ -83,12 +83,19 @@ shows the rule's message in the footer, and a "stop" rule keeps the previous val
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
 
-Imported images and charts (column, bar, line, area, pie, doughnut and scatter)
-are drawn over their cells and move with them; charts redraw as the cells they
-read change. Each is a `figure` named after the chart title ("Chart: Revenue") or
-the image description. Click one to select it, then press Delete to remove it
-(undo restores it) or Escape to return to the cells. Charts cannot be created or
-edited in Macro. Pivot tables show their last values as ordinary cells; the Excel
+Images and charts (column, bar, line, area, pie, doughnut and scatter) are drawn
+over their cells and move with them; charts redraw as the cells they read change.
+Each is a `figure` named after the chart title ("Chart: Revenue") or the image
+description. The toolbar's **Insert chart or image** menu (chart icon) adds a
+chart of the selected cells — or, from one cell, of the table around it, placed
+beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the
+active cell. Click a drawing to select it: drag it to move it, drag a handle to
+size it, press Delete to remove it (undo restores it) or Escape to return to the
+cells. Double-click a chart, press Enter, or use its pencil button to open **Edit
+chart** (type, title, legend, the cells it charts, series in rows or columns).
+From the keyboard, Ctrl+Alt+5 (also in the Insert menu) selects the first
+drawing, Tab and Shift+Tab move between drawings, arrow keys move the selected
+one (Shift sizes it, Alt by one pixel). Pivot tables show their last values as ordinary cells; the Excel
 download keeps them, and Excel rebuilds them from their data when the file opens.
 Deleting a sheet whose data a chart on another sheet reads keeps the chart: it
 shows the values it had, which no longer change.

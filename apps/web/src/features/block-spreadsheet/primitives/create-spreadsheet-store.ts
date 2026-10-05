@@ -1,4 +1,8 @@
 import {
+  validImageKey,
+  validImageUrl,
+} from '@macro-inc/spreadsheet/sheet-drawings';
+import {
   readSpreadsheetSheets,
   type SpreadsheetSheet,
 } from '@macro-inc/spreadsheet/spreadsheet-sheet-registry';
@@ -607,12 +611,22 @@ export function createSpreadsheetStore(options: {
       resizeSpreadsheetColumn(doc, column, width, activeSheetId());
       refresh();
     },
-    setMetadata(metadata: WorkbookSheetMetadata) {
+    /** `images` are stored with the change, as images it draws. */
+    setMetadata(
+      metadata: WorkbookSheetMetadata,
+      images: Record<string, string> = {}
+    ) {
       const doc = options.source.doc();
       if (!doc || !editable()) return;
       const encoded = JSON.stringify(metadata);
       if (!parseWorkbookMetadata(encoded))
         throw new Error('Invalid sheet layout.');
+      const stored = doc.getMap('spreadsheetImages');
+      for (const [key, url] of Object.entries(images)) {
+        if (!validImageKey(key) || !validImageUrl(url))
+          throw new Error('This image cannot be stored.');
+        if (stored.get(key) === undefined) stored.set(key, url);
+      }
       doc.getMap('spreadsheetSheetMetadata').set(activeSheetId(), encoded);
       doc.commit({ origin: 'spreadsheet-layout' });
       refresh();

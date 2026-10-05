@@ -6,6 +6,7 @@ import {
   literalNumberDisplay,
 } from '@macro-inc/spreadsheet/number-display';
 import type {
+  DrawingPlacement,
   SheetChart,
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
@@ -197,6 +198,11 @@ export function SpreadsheetGrid(props: {
   image?: (key: string) => string | undefined;
   chartData?: (chart: SheetChart) => ChartData;
   onDeleteDrawing?: (id: string) => void;
+  /** Move or size a drawing: its new anchors, at 100% zoom. */
+  onPlaceDrawing?: (id: string, placement: DrawingPlacement) => void;
+  onEditDrawing?: (id: string) => void;
+  /** Scroll to a drawing, select it and focus it, once per nonce. */
+  revealDrawing?: { id: string; nonce: number };
   /** The first calculation is running; formulas without results shimmer. */
   pendingFormulas?: boolean;
   remoteCursors: SpreadsheetCursor[];
@@ -466,7 +472,8 @@ export function SpreadsheetGrid(props: {
     };
   };
   /** A drawing's box in the grid, when it is near the visible area. */
-  const placeDrawing = (drawing: SheetDrawing): DrawingRect | undefined => {
+  /** A drawing's box in the grid's content, wherever it is. */
+  const drawingRect = (drawing: SheetDrawing): DrawingRect | undefined => {
     const columns = columnOffsets();
     const rows = rowOffsets();
     const at = (index: number, offsets: number[]) =>
@@ -480,16 +487,96 @@ export function SpreadsheetGrid(props: {
       ? at(drawing.to.row, rows) + drawing.to.y * scale()
       : top + (drawing.height ?? 0) * scale();
     if (right - left < 2 || bottom - top < 2) return;
-    const margin = 400;
-    if (
-      bottom < scrollTop() - margin ||
-      top > scrollTop() + (viewport.height ?? 600) + margin ||
-      right < scrollLeft() - margin ||
-      left > scrollLeft() + (viewport.width ?? 1200) + margin
-    )
-      return;
     return { left, top, width: right - left, height: bottom - top };
   };
+  /** A drawing's box when it is near the visible area. */
+  const placeDrawing = (drawing: SheetDrawing): DrawingRect | undefined => {
+    const rect = drawingRect(drawing);
+    const margin = 400;
+    if (
+      !rect ||
+      rect.top + rect.height < scrollTop() - margin ||
+      rect.top > scrollTop() + (viewport.height ?? 600) + margin ||
+      rect.left + rect.width < scrollLeft() - margin ||
+      rect.left > scrollLeft() + (viewport.width ?? 1200) + margin
+    )
+      return;
+    return rect;
+  };
+  /**
+   * The anchors of a box in the grid's content: corners in cells for a
+   * drawing that stretches with them, otherwise a corner and a size.
+   */
+  const placementOf = (
+    drawing: SheetDrawing,
+    rect: DrawingRect
+  ): DrawingPlacement => {
+    const point = (x: number, y: number) => {
+      const columns = columnOffsets();
+      const rows = rowOffsets();
+      const column = Math.min(columnCount() - 1, offsetIndex(columns, x));
+      const row = Math.min(rowCount() - 1, offsetIndex(rows, y));
+      return {
+        row,
+        column,
+        x: Math.max(0, Math.round((x - columns[column]) / scale())),
+        y: Math.max(0, Math.round((y - rows[row]) / scale())),
+      };
+    };
+    const from = point(rect.left, rect.top);
+    return drawing.to
+      ? { from, to: point(rect.left + rect.width, rect.top + rect.height) }
+      : {
+          from,
+          width: Math.round(rect.width / scale()),
+          height: Math.round(rect.height / scale()),
+        };
+  };
+  /** Drawings in reading order: down the sheet, then across. */
+  const drawingOrder = () =>
+    [...(props.drawings ?? [])].sort(
+      (a, b) => a.from.row - b.from.row || a.from.column - b.from.column
+    );
+  function revealDrawing(id: string) {
+    const drawing = props.drawings?.find((value) => value.id === id);
+    const rect = drawing && drawingRect(drawing);
+    if (!rect) return;
+    // Bring it into view below the headers, then focus it once drawn.
+    const width = viewport.width ?? 0;
+    const height = viewport.height ?? 0;
+    if (
+      rect.left < grid.scrollLeft + headerWidth() ||
+      rect.left + Math.min(rect.width, width) > grid.scrollLeft + width
+    )
+      grid.scrollLeft = Math.max(0, rect.left - headerWidth() - 16);
+    if (
+      rect.top < grid.scrollTop + headerHeight() ||
+      rect.top + Math.min(rect.height, height) > grid.scrollTop + height
+    )
+      grid.scrollTop = Math.max(0, rect.top - headerHeight() - 16);
+    setScrollTop(grid.scrollTop);
+    setScrollLeft(grid.scrollLeft);
+    setSelectedDrawing(id);
+    // After a menu that opened this returns focus, and once it is drawn.
+    let tries = 0;
+    const focus = () => {
+      const element = grid.querySelector<HTMLElement>(
+        `[data-drawing="${CSS.escape(id)}"]`
+      );
+      if (element) element.focus({ preventScroll: true });
+      else if (tries++ < 20) setTimeout(focus, 16);
+    };
+    setTimeout(focus);
+  }
+  createEffect(
+    on(
+      () => props.revealDrawing,
+      (request) => {
+        if (request) revealDrawing(request.id);
+      },
+      { defer: true }
+    )
+  );
   const activeStyle = () => ({
     left: `${columnOffsets()[props.selection.anchor.column]}px`,
     top: `${rowOffsets()[props.selection.anchor.row]}px`,
@@ -1026,6 +1113,17 @@ export function SpreadsheetGrid(props: {
               const rect =
                 cell?.getBoundingClientRect() ?? grid.getBoundingClientRect();
               openCellMenu(rect.left + Math.min(rect.width, 24), rect.bottom);
+              return;
+            }
+            // Excel's shortcut to select drawings; Tab then moves among them.
+            if (
+              event.altKey &&
+              (event.ctrlKey || event.metaKey) &&
+              event.code === 'Digit5'
+            ) {
+              event.preventDefault();
+              const first = drawingOrder()[0];
+              if (first) revealDrawing(first.id);
               return;
             }
             if (
@@ -1767,15 +1865,37 @@ export function SpreadsheetGrid(props: {
               <SheetDrawingLayer
                 drawings={props.drawings ?? []}
                 place={placeDrawing}
+                bounds={{
+                  left: columnOffsets()[0],
+                  top: rowOffsets()[0],
+                }}
                 scale={scale()}
                 image={(key) => props.image?.(key)}
                 chartData={(chart) => props.chartData!(chart)}
                 selected={selectedDrawing()}
-                readonly={props.readonly || !props.onDeleteDrawing}
+                readonly={props.readonly || !props.onPlaceDrawing}
                 onSelect={setSelectedDrawing}
                 onDelete={(id) => {
                   setSelectedDrawing(undefined);
                   props.onDeleteDrawing?.(id);
+                }}
+                onPlace={(id, rect) => {
+                  const drawing = props.drawings?.find(
+                    (value) => value.id === id
+                  );
+                  if (drawing)
+                    props.onPlaceDrawing?.(id, placementOf(drawing, rect));
+                }}
+                onEdit={(id) => props.onEditDrawing?.(id)}
+                onCycle={(id, backwards) => {
+                  const order = drawingOrder();
+                  const index = order.findIndex((value) => value.id === id);
+                  const next =
+                    order[
+                      (index + (backwards ? -1 : 1) + order.length) %
+                        order.length
+                    ];
+                  if (next) revealDrawing(next.id);
                 }}
                 onReturnFocus={focusGrid}
               />

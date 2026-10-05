@@ -304,8 +304,16 @@ compare formula, error, and formatting behavior before replacing it.
   source range in one direction; Cmd/Ctrl+D fills from the top row and Cmd/Ctrl+R
   from the left column. Fill repeats values; it does not infer numeric series.
   Plain-text clipboard data and cut preserve raw formulas verbatim.
-- Filters, creating or editing charts, editing named ranges, automatic spill
-  expansion, and drag auto-scroll remain future work.
+- The toolbar's Insert menu adds a chart of the selection (from one cell, of
+  the block of filled cells around it, read as Excel reads it:
+  `core/chart-builder.ts`) or an image file, as one undoable change. Drawings
+  move by dragging and keyboard arrows and size by their handles;
+  `primitives/create-drawing-actions.ts` writes them, and the Edit chart
+  dialog changes a chart's type, title, legend and data. Edited charts are
+  exported as Macro writes them, without the part Excel saved. Ctrl+Alt+5
+  selects a drawing from the grid and Tab moves between them.
+- Filters, editing named ranges, automatic spill expansion, and drag
+  auto-scroll remain future work.
 - CSV import writes a validated rectangle at the active cell, appending rows when
   needed. It preserves existing cell styles and supports quoted multiline fields.
   CSV exports values and drops formatting. XLSX import/export converts supported
@@ -363,8 +371,7 @@ Import keeps what Excel calculates and shows:
   `components/SpreadsheetChart.tsx`, so charts follow edits. The chart part is
   kept without its cached values (theme colors resolved), and export writes it
   back with its current ranges and fresh caches; charts without it, or too large
-  to keep, are written from what Macro knows. Clicking a drawing selects it;
-  Delete removes it and Escape returns to the cells. Radar, stock, bubble and
+  to keep, are written from what Macro knows. Radar, stock, bubble and
   surface charts are exported but not drawn; shapes, text boxes, SmartArt and
   EMF/WMF images are not imported.
 - Pivot tables. `core/xlsx-pivots.ts` keeps each pivot table's definition and its
