@@ -24,11 +24,25 @@ export type DocxAgentOperation =
       style?: string;
     }
   | { type: 'delete'; id: string }
-  | { type: 'setStyle'; paragraph: string; style: string };
+  | { type: 'setStyle'; paragraph: string; style: string }
+  | {
+      type: 'addComment';
+      paragraph: string;
+      find?: string;
+      occurrence?: number;
+      text: string;
+    };
 
 export type DocxAgentRequest =
   | { action: 'read'; start?: number; count?: number }
-  | { action: 'edit'; operations: DocxAgentOperation[] };
+  | {
+      action: 'edit';
+      operations: DocxAgentOperation[];
+      /** Record tracked changes; omitted to follow the document's setting. */
+      trackChanges?: boolean;
+      /** The name tracked changes and comments are attributed to. */
+      author?: string;
+    };
 
 export type DocxAgentResult = { content: string };
 

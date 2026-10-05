@@ -171,6 +171,15 @@ bundle-smoke-server *ARGS:
 test-watch:
     bunx --bun vitest
 
+# Sign-in, sign-up, and onboarding in Chromium against fake backends (no network).
+# Flags pass through to Playwright: `--ui` to watch and step through, `--headed`
+# to see the browser. With --ui, closing the onboarding window opens auth's.
+# The Linux dev shell points LD_LIBRARY_PATH at Nix libraries, which Playwright's
+# system-glibc Chromium can't load; Nix binaries find theirs through RPATH.
+test-signup-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts {{ARGS}}
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/auth/browser-test/playwright.config.ts {{ARGS}}
+
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test
     bun run --cwd ../../packages/email-renderer test:browser
@@ -266,7 +275,7 @@ build-cache-wasm-profile:
 # (gitignored). `--no-default-features` drops the crate's `cli` feature, whose
 # tokio/clap do not build for wasm32; the fold itself needs neither.
 build-agent-fold-wasm:
-    CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
+    CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/folds/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
 
 # Dev fast path: build the agent-fold wasm pkg only when it is missing or any
 # fold source is newer than the built artifact. A stale artifact folds with the
@@ -275,7 +284,7 @@ ensure-agent-fold-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/agent-fold/wasm/agent_fold_bg.wasm"
-    CRATE="{{justfile_directory()}}/../../crates/agent_fold"
+    CRATE="{{justfile_directory()}}/../../crates/folds/agent_fold"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-agent-fold-wasm
     fi
@@ -360,7 +369,7 @@ ensure-fig-engine-wasm:
 
 # Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts
 # from agent_fold's Rust wire types with specta. Run after changing anything
-# under crates/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
+# under crates/folds/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
 # commas, not this project's style, so biome reformats it in place - without
 # that, every regeneration would be a diff-format mismatch even with no real
 # change.

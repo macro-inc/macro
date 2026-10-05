@@ -2,6 +2,9 @@
 
 pub mod postgres;
 
+/// Internal transport for coding agent discovery and dispatch.
+pub mod coding_agents_client;
+
 /// Haiku-backed automatic session naming.
 pub mod name_generator;
 

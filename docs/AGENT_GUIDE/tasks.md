@@ -27,6 +27,12 @@ preference persists. `Load more projects` fetches the next page when available.
 The plus button beside `My projects` opens the project composer, even while the
 section is collapsed or loading. Its rows use the shared project query/cache and
 load inside a local Suspense boundary, leaving sidebar controls available.
+Once a current-query project page is cached, an offline/background refresh failure
+must not show **Could not load projects** beside those rows (or a cached empty
+result). Retrying a refresh must not reintroduce that warning merely because the
+refresh promise rejects; the cached project links remain available. Cache misses,
+server/permission errors, and failed **Load more projects** requests still show
+failure and retry controls. Verify both background refresh and manual retry.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -66,6 +72,17 @@ layouts. Narrow splits also show a close button when multiple splits are open. C
 the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
+
+## Cached grouped lists
+
+With GraphQL caching enabled, previously loaded grouped task lists remain usable
+when their background refresh fails without an HTTP response. Load a Priority-grouped
+view online, navigate away, then reopen it offline. Repeat by holding its GroupSoup
+request: cached rows should appear before the response, and rejecting that request
+must not replace them with **Tasks couldn’t be loaded**. A cached empty result is
+also usable. An initial cache miss still shows failure; HTTP and GraphQL errors
+remain visible even with cached rows. Change filters while retaining prior rows:
+those older results must not hide a failure for the new, uncached query.
 
 ## Reviews view
 

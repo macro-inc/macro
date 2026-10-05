@@ -79,6 +79,7 @@ non_empty = { path = "../non_empty" }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
   "ports",
 ] }
+rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
@@ -115,7 +116,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 models_pagination = { path = "../models_pagination" }
-rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

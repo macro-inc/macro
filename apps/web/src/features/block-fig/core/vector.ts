@@ -248,3 +248,65 @@ export function deleteVertex(net: VectorNetwork, i: number): VectorNetwork {
       .filter((r) => r.loops.length > 0),
   };
 }
+
+/** Distance from `p` to the segment `a`–`b`. */
+function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = dx * dx + dy * dy;
+  const t =
+    length === 0
+      ? 0
+      : Math.max(
+          0,
+          Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length)
+        );
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+
+/** The points a stroke keeps within `tolerance` (Douglas–Peucker). */
+function simplify(points: Vec2[], tolerance: number): Vec2[] {
+  if (points.length < 3) return points;
+  const keep = new Array<boolean>(points.length).fill(false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  while (stack.length > 0) {
+    const [from, to] = stack.pop() as [number, number];
+    let farthest = -1;
+    let distance = tolerance;
+    for (let i = from + 1; i < to; i++) {
+      const d = segmentDistance(points[i], points[from], points[to]);
+      if (d > distance) {
+        distance = d;
+        farthest = i;
+      }
+    }
+    if (farthest < 0) continue;
+    keep[farthest] = true;
+    stack.push([from, farthest], [farthest, to]);
+  }
+  return points.filter((_, i) => keep[i]);
+}
+
+/**
+ * A pencil stroke as pen points: the points it passes through, fewer where
+ * it runs straight, joined by smooth curves (the ends are corners).
+ */
+export function pencilPoints(stroke: Vec2[], tolerance: number): PenPoint[] {
+  const points = simplify(stroke, tolerance);
+  return points.map((p, i) => {
+    const before = points[i - 1];
+    const after = points[i + 1];
+    const handle =
+      before && after
+        ? { x: (after.x - before.x) / 6, y: (after.y - before.y) / 6 }
+        : ZERO;
+    const round = (v: number) => Math.round(v * 100) / 100;
+    return {
+      x: round(p.x),
+      y: round(p.y),
+      handle: { x: round(handle.x), y: round(handle.y) },
+    };
+  });
+}

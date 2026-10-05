@@ -1,10 +1,3 @@
-import {
-  AgentChangesProvider,
-  AgentChangesSplit,
-  ChangesHandoff,
-  ChangesToggle,
-  ReviewNotesDock,
-} from '@app/features/agent-changes/agent-changes';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
@@ -23,6 +16,13 @@ import {
   pendingSession,
 } from '@app/features/block-agent/context/pending-session';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
+import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
+import {
+  ChangesHandoff,
+  ChangesSplit,
+  ChangesToggle,
+  ReviewNotesDock,
+} from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -319,12 +319,12 @@ export function AgentSessionPane(props: {
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
       <AgentChangesProvider>
-        <AgentChangesSplit>
+        <ChangesSplit>
           <SessionContent
             onDeleted={props.onDeleted}
             notificationSource={props.notificationSource}
           />
-        </AgentChangesSplit>
+        </ChangesSplit>
       </AgentChangesProvider>
     </AgentSessionProvider>
   );

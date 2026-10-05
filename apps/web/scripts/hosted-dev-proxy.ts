@@ -44,11 +44,20 @@ export function hostedDevProxy(
                   const rest = path.slice(prefix.length);
                   return rest.startsWith('/') ? rest : `/${rest}`;
                 },
+                // isCrossOrigin already vetted the browser's origin. Hosted
+                // services allowlist origins (sync-service 403s any https://
+                // dev host), so forward like a server-side client.
                 configure(proxy) {
+                  proxy.on('proxyReq', (request) => {
+                    request.removeHeader('origin');
+                  });
                   proxy.on('proxyReqWs', (request, req, socket) => {
-                    if (!isCrossOrigin(req)) return;
-                    request.destroy();
-                    socket.destroy();
+                    if (isCrossOrigin(req)) {
+                      request.destroy();
+                      socket.destroy();
+                      return;
+                    }
+                    request.removeHeader('origin');
                   });
                 },
               };

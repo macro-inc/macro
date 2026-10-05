@@ -107,6 +107,7 @@ fn test() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(run_tests())
+        .add_step(run_signup_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -279,6 +280,14 @@ fn run_collaboration_biome() -> Step<Run> {
 fn run_tests() -> Step<Run> {
     Step::new("Test")
         .run("bunx vitest")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Sign-in, sign-up, and onboarding against their fake backends: real views in
+/// Chromium, no network, so they run on every web PR.
+fn run_signup_browser_tests() -> Step<Run> {
+    Step::new("Sign-up Browser Tests")
+        .run("just test-signup-browser")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

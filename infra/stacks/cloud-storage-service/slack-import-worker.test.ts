@@ -222,6 +222,7 @@ describe('Slack import Fargate worker', () => {
         'https://dev-gateway.macro.com/connection-gateway',
       OVERRIDE_SEARCH_PROCESSING_SERVICE_URL:
         'https://dev-gateway.macro.com/search-processing',
+      SLACK_IMPORT_JOIN_EMAIL_ENABLED: 'false',
     });
     expect(env.SEARCH_SERVICE_URL).toBeUndefined();
     expect(env.OVERRIDE_SEARCH_SERVICE_URL).toBeUndefined();

@@ -9,10 +9,30 @@ import {
 } from './agent-types';
 import { keysBetween } from './fractional-index';
 import {
+  encodeWrappers,
+  isDeleted,
+  isInserted,
+  markRevision,
+  Revisor,
+  revisionDate,
+  tagAttribute,
+  tracksRevisions,
+  type Wrapper,
+  withMarkRevision,
+  withParagraphChange,
+  withRowDeleted,
+  wrappersOf,
+} from './revisions';
+import {
   findStyle,
   type ParagraphStyleInfo,
   paragraphStylesFromXml,
 } from './styles';
+import {
+  readWordComments,
+  type WordComment,
+  WordCommentWriter,
+} from './word-comments';
 
 /**
  * AI tool requests on a Word document in the shared format the DOCX engine
@@ -244,6 +264,25 @@ export class WordDocument {
     block.map.set('x', props);
     block.props = props;
   }
+
+  private commentsById?: Map<string, WordComment>;
+
+  /** The document's Word comments, by id. */
+  comments(): Map<string, WordComment> {
+    this.commentsById ??= readWordComments(this.doc);
+    return this.commentsById;
+  }
+
+  /** Whether the document records edits as tracked changes. */
+  tracksChanges(): boolean {
+    return tracksRevisions(this.part('word/settings.xml'));
+  }
+
+  /** Paragraphs inside a block (itself, for a paragraph), in order. */
+  paragraphsIn(block: WordBlock): WordBlock[] {
+    if (block.kind === 'p') return [block];
+    return this.kids(block.id).flatMap((kid) => this.paragraphsIn(kid));
+  }
 }
 
 /** A fresh block id in the engine's style (base 36), unlikely to collide. */
@@ -341,6 +380,106 @@ function formattingNotes(word: WordDocument, visible: Visible): string[] {
   });
 }
 
+const COMMENT_MARK =
+  /<[\w]*:?(commentRangeStart|commentRangeEnd|commentReference)\b[^>]*:id="([^"]*)"/;
+
+/** Where Word comments sit in a paragraph's visible text. */
+class CommentRanges {
+  readonly starts = new Map<string, number>();
+  readonly ends = new Map<string, number>();
+  readonly order: string[] = [];
+
+  /** Notes a comment marker found at visible offset `at`. */
+  see(markup: string, at: number) {
+    const found = COMMENT_MARK.exec(markup);
+    if (!found) return;
+    const [, kind, id] = found;
+    if (kind === 'commentRangeEnd') this.ends.set(id, at);
+    else if (!this.starts.has(id)) {
+      this.starts.set(id, at);
+      this.order.push(id);
+    }
+  }
+
+  /** `comment 3 by Jane Doe on "Term": ...` for each known comment. */
+  notes(comments: Map<string, WordComment>, text: string): string[] {
+    return this.order.flatMap((id) => {
+      const comment = comments.get(id);
+      if (!comment) return [];
+      const from = this.starts.get(id);
+      const anchor = text.slice(from, this.ends.get(id) ?? from).trim();
+      const body = preview(comment.text.replace(/\n/g, ' '), 300);
+      return [
+        `comment ${id} by ${comment.author || 'unknown author'}${anchor ? ` on ${quote(anchor)}` : ''}: ${body}`,
+      ];
+    });
+  }
+}
+
+/** The tracked change a span of text is part of, with its author. */
+function spanRevision(
+  attrs: Attributes
+): { kind: string; author: string | null } | null {
+  const stack: Wrapper[] = wrappersOf(attrs);
+  const deleted = stack.find(isDeleted);
+  if (deleted)
+    return { kind: 'deleted', author: tagAttribute(deleted[0], 'author') };
+  const inserted = stack.find(isInserted);
+  if (inserted)
+    return { kind: 'inserted', author: tagAttribute(inserted[0], 'author') };
+  const change = Object.entries(attrs).find(([k]) =>
+    k.endsWith(':rPrChange')
+  )?.[1];
+  return change
+    ? { kind: 'formatting changed', author: tagAttribute(change, 'author') }
+    : null;
+}
+
+/** Tracked changes and Word comments in a paragraph, e.g.
+ * `deleted by Jane Doe: "two (2)"` or `comment 3 by Jane Doe on "Term": ...`. */
+function annotationNotes(word: WordDocument, block: WordBlock): string[] {
+  type Run = { kind: string; author: string; text: string };
+  const runs: Run[] = [];
+  const ranges = new CommentRanges();
+  let text = '';
+  for (const span of word.spans(block)) {
+    const attrs = span.attributes ?? {};
+    const markup = attrs.mark ?? attrs.obj;
+    if (markup) ranges.see(markup, text.length);
+    const content = span.insert.split(OBJECT).join('');
+    if (markup || 'instr' in attrs || !content) continue;
+    const revision = spanRevision(attrs);
+    if (revision) {
+      const author = revision.author || 'unknown author';
+      const last = runs[runs.length - 1];
+      if (last?.kind === revision.kind && last.author === author)
+        last.text += content;
+      else runs.push({ kind: revision.kind, author, text: content });
+    }
+    // Deleted text is not part of what the paragraph now says.
+    if (revision?.kind !== 'deleted') text += content;
+  }
+  const notes = runs
+    .filter((run) => run.text.trim())
+    .slice(0, 12)
+    .map((run) => `${run.kind} by ${run.author}: ${quote(run.text)}`);
+  if (runs.length > 12) notes.push('… more tracked changes');
+  return [...notes, ...ranges.notes(word.comments(), text)];
+}
+
+/** Tracked changes to a paragraph itself: its mark and its properties. */
+function paragraphRevision(block: WordBlock): string | null {
+  const mark = markRevision(block.props);
+  if (mark)
+    return mark.inserted
+      ? `inserted paragraph by ${mark.author || 'unknown author'}`
+      : `paragraph mark deleted by ${mark.author || 'unknown author'}`;
+  const change = /<[\w]*:?pPrChange\b[^>]*>/.exec(block.props)?.[0];
+  if (change)
+    return `properties changed by ${tagAttribute(change, 'author') || 'unknown author'}`;
+  return null;
+}
+
 function paragraphLines(
   word: WordDocument,
   block: WordBlock,
@@ -351,16 +490,17 @@ function paragraphLines(
     word.propVal(block, 'pStyle'),
     word.propVal(block, 'jc'),
     word.hasProp(block, 'numPr') ? 'numbered' : null,
+    paragraphRevision(block),
   ].filter(Boolean);
   const visible = word.visible(block);
   const text = visible.text.replace(/\n/g, '↵');
   const head = `${indent}${label}paragraph ${block.id}${traits.length ? ` (${traits.join(', ')})` : ''}`;
-  if (!text) return [`${head} (empty)`];
-  return [
-    head,
-    `${indent}  ${text}`,
-    ...formattingNotes(word, visible).map((note) => `${indent}  ${note}`),
-  ];
+  const notes = [
+    ...(text ? formattingNotes(word, visible) : []),
+    ...annotationNotes(word, block),
+  ].map((note) => `${indent}  ${note}`);
+  if (!text) return [`${head} (empty)`, ...notes];
+  return [head, `${indent}  ${text}`, ...notes];
 }
 
 function contentLines(
@@ -466,7 +606,10 @@ export function describeWord(
     .map((s) => s.id);
   const header = [
     `Word document with ${top.length} blocks${start > 1 || end < top.length ? `; showing #${start}-#${next ? next - 1 : end}` : ''}.`,
-    'Ids are stable: pass them to EditWordDocument. Text is shown plain; lines like `bold: "..."` list formatted spans. ↵ is a line break inside a paragraph.',
+    'Ids are stable: pass them to EditWordDocument. Text is shown plain, as if tracked changes were accepted; lines like `bold: "..."` list formatted spans, `inserted by`/`deleted by` lines list tracked changes and `comment` lines list Word comments. ↵ is a line break inside a paragraph.',
+    word.tracksChanges()
+      ? 'Track Changes is on: edits are recorded as tracked changes unless trackChanges is false.'
+      : 'Track Changes is off: edits apply directly unless trackChanges is true (use true for a redline).',
     ...(styleList.length
       ? [
           `Paragraph styles: ${styleList.join(', ')}${all.length > 40 ? ', …' : ''}.`,
@@ -516,13 +659,48 @@ function withStyle(w: string, props: string, style: string): string {
   return props.replace(/^(\s*<[^>]+>)/, `$1${tag}`);
 }
 
+/** A stored range of a paragraph's text as its spans. */
+function segments(
+  spans: Span[],
+  from: number,
+  to: number
+): Array<{ length: number; attrs: Attributes }> {
+  const out: Array<{ length: number; attrs: Attributes }> = [];
+  let at = 0;
+  for (const span of spans) {
+    const end = at + span.insert.length;
+    const start = Math.max(at, from);
+    const stop = Math.min(end, to);
+    if (stop > start)
+      out.push({ length: stop - start, attrs: span.attributes ?? {} });
+    at = end;
+    if (at >= to) break;
+  }
+  return out;
+}
+
 class WordEditor {
   readonly touched = new Set<string>();
   readonly deleted: string[] = [];
+  /** Ids of the comments this edit added. */
+  readonly commented: string[] = [];
   private readonly styles: ParagraphStyleInfo[];
+  private readonly comments: WordCommentWriter;
 
-  constructor(readonly word: WordDocument) {
+  constructor(
+    readonly word: WordDocument,
+    /** Records the edit as tracked changes; `null` edits directly. */
+    private readonly rev: Revisor | null,
+    private readonly author: string,
+    private readonly date: string
+  ) {
     this.styles = styles(word);
+    this.comments = new WordCommentWriter(word.doc);
+  }
+
+  /** Writes what the edit adds outside the blocks (the comments part). */
+  finish() {
+    this.comments.flush();
   }
 
   private block(id: string): WordBlock {
@@ -597,17 +775,63 @@ class WordEditor {
     const like = visible.attrs[start] ?? visible.attrs[start - 1];
     const delta: Array<Record<string, unknown>> = [];
     if (from > 0) delta.push({ retain: from });
-    if (to > from) delta.push({ delete: to - from });
-    if (text) {
-      const attributes = typingAttributes(like);
-      delta.push(
-        Object.keys(attributes).length
-          ? { insert: text, attributes }
-          : { insert: text }
-      );
+    if (this.rev) {
+      // A tracked replacement: the old text is marked deleted and the new
+      // text follows it as the author's insertion.
+      this.markDeleted(block, from, to, delta);
+      if (text)
+        delta.push({
+          insert: text,
+          attributes: this.rev.inserted(
+            typingAttributes(like),
+            this.rev.wrapper('ins')
+          ),
+        });
+    } else {
+      if (to > from) delta.push({ delete: to - from });
+      if (text) {
+        const attributes = typingAttributes(like);
+        delta.push(
+          Object.keys(attributes).length
+            ? { insert: text, attributes }
+            : { insert: text }
+        );
+      }
     }
     if (delta.length) this.word.text(block).applyDelta(delta as never);
     this.changed(block);
+  }
+
+  /** Appends to `delta` the operations marking stored `[from, to)` deleted
+   * by the author: text the author inserted is removed outright, while
+   * text already deleted and markers (bookmarks, comment ranges) stay. */
+  private markDeleted(
+    block: WordBlock,
+    from: number,
+    to: number,
+    delta: Array<Record<string, unknown>>
+  ) {
+    const rev = this.rev!;
+    if (to <= from) return;
+    const del = rev.wrapper('del');
+    for (const { length, attrs } of segments(
+      this.word.spans(block),
+      from,
+      to
+    )) {
+      const stack = wrappersOf(attrs);
+      const deleted = stack.some(isDeleted);
+      if (!deleted && stack.some((w) => rev.owns(w))) {
+        delta.push({ delete: length });
+      } else if (deleted || 'mark' in attrs) {
+        delta.push({ retain: length });
+      } else {
+        delta.push({
+          retain: length,
+          attributes: { wrap: encodeWrappers([...stack, del]) },
+        });
+      }
+    }
   }
 
   private static singleLine(text: string, what: string) {
@@ -678,7 +902,22 @@ class WordEditor {
         });
         const delta: Array<Record<string, unknown>> = [];
         if (from > 0) delta.push({ retain: from });
-        delta.push({ retain: to - from, attributes });
+        if (this.rev) {
+          // Each run keeps the formatting it had in a w:rPrChange.
+          const key = `r:${this.word.w}:rPrChange`;
+          for (const segment of segments(this.word.spans(block), from, to)) {
+            const change = this.rev.formatChange(segment.attrs, {
+              ...segment.attrs,
+              ...attributes,
+            });
+            delta.push({
+              retain: segment.length,
+              attributes: change
+                ? { ...attributes, [key]: change }
+                : attributes,
+            });
+          }
+        } else delta.push({ retain: to - from, attributes });
         this.word.text(block).applyDelta(delta as never);
         this.changed(block);
         return;
@@ -692,11 +931,55 @@ class WordEditor {
       case 'setStyle': {
         const block = this.paragraph(operation.paragraph);
         const style = this.resolveStyle(operation.style);
-        this.word.setProps(block, withStyle(this.word.w, block.props, style));
+        const props = withStyle(this.word.w, block.props, style);
+        this.word.setProps(
+          block,
+          this.rev
+            ? withParagraphChange(this.word.w, block.props, props, this.rev)
+            : props
+        );
         this.changed(block);
         return;
       }
+      case 'addComment':
+        this.comment(operation);
+        return;
     }
+  }
+
+  /** Adds a Word comment: the comment in the comments part, its range
+   * markers around the text and its reference after it. */
+  private comment(
+    operation: Extract<DocxAgentOperation, { type: 'addComment' }>
+  ) {
+    if (!operation.text.trim())
+      throw new DocxAgentError('addComment needs comment text.');
+    const block = this.paragraph(operation.paragraph);
+    const visible = this.word.visible(block);
+    const [start, end] = this.range(
+      block,
+      visible,
+      operation.find,
+      operation.occurrence
+    );
+    const [from, to] = this.stored(visible, start, end);
+    const id = this.comments.add(this.author, this.date, operation.text);
+    this.commented.push(id);
+    const w = this.word.w;
+    const marker = (local: string) => ({
+      insert: OBJECT,
+      attributes: { mark: `<${w}:${local} ${w}:id="${id}"/>` },
+    });
+    const delta: Array<Record<string, unknown>> = [];
+    if (from > 0) delta.push({ retain: from });
+    delta.push(marker('commentRangeStart'));
+    if (to > from) delta.push({ retain: to - from });
+    delta.push(marker('commentRangeEnd'), {
+      insert: OBJECT,
+      attributes: { obj: `<${w}:commentReference ${w}:id="${id}"/>` },
+    });
+    this.word.text(block).applyDelta(delta as never);
+    this.changed(block);
   }
 
   /** Paragraph properties for a paragraph added next to `anchor`. */
@@ -741,20 +1024,30 @@ class WordEditor {
     let at = anchor;
     const ordered = after ? lines : [...lines].reverse();
     for (const line of ordered) {
+      const rev = this.rev;
+      // Tracked: the text and the paragraph mark are the author's insertion.
+      const attributes = rev ? rev.inserted(like, rev.wrapper('ins')) : like;
       const spans = line
         ? [
-            Object.keys(like).length
-              ? { insert: line, attributes: like }
+            Object.keys(attributes).length
+              ? { insert: line, attributes }
               : { insert: line },
           ]
         : [];
-      at = this.word.addParagraph(at, after, props, spans);
+      const markProps = rev
+        ? withMarkRevision(this.word.w, props, rev.mark('ins'))
+        : props;
+      at = this.word.addParagraph(at, after, markProps, spans);
       this.changed(at);
     }
   }
 
   private delete(id: string) {
     const block = this.block(id);
+    if (this.rev && block.kind !== 'tr' && block.kind !== 'tc') {
+      this.deleteTracked(block, this.rev);
+      return;
+    }
     if (!block.parent) {
       if (this.word.kids('').length === 1)
         throw new DocxAgentError(
@@ -779,6 +1072,52 @@ class WordEditor {
     this.word.remove(block);
     this.touched.add(top.id);
   }
+
+  /** Deletes a block as a tracked change: its paragraphs' text and marks
+   * are marked deleted (and a table's rows), so the deletion can be
+   * accepted or rejected. Markers with no content go outright. */
+  private deleteTracked(block: WordBlock, rev: Revisor) {
+    if (block.kind !== 'p' && block.kind !== 'tbl' && block.kind !== 'sdt') {
+      const top = topOf(this.word, block);
+      this.word.remove(block);
+      if (top === block) this.deleted.push(block.id);
+      else this.touched.add(top.id);
+      return;
+    }
+    const top = topOf(this.word, block);
+    if (block.kind === 'tbl')
+      for (const row of this.word.kids(block.id).filter((r) => r.kind === 'tr'))
+        this.word.setProps(row, withRowDeleted(this.word.w, row.props, rev));
+    for (const paragraph of this.word.paragraphsIn(block))
+      this.deleteParagraphTracked(paragraph, rev);
+    if (this.word.blocks.has(top.id)) this.touched.add(top.id);
+    else this.deleted.push(top.id);
+  }
+
+  private deleteParagraphTracked(block: WordBlock, rev: Revisor) {
+    const length = this.word.text(block).length;
+    const delta: Array<Record<string, unknown>> = [];
+    this.markDeleted(block, 0, length, delta);
+    if (delta.length) this.word.text(block).applyDelta(delta as never);
+    const mark = markRevision(block.props);
+    if (mark && !mark.inserted) return;
+    if (mark?.inserted && mark.author === rev.author) {
+      // A paragraph the author added and nothing else is in goes outright
+      // (the document keeps at least one block).
+      const only = !block.parent && this.word.kids('').length === 1;
+      if (this.word.text(block).length === 0 && !only) this.word.remove(block);
+      return;
+    }
+    // The last paragraph of a cell or the document keeps its mark.
+    const siblings = this.word
+      .kids(block.parent)
+      .filter((b) => b.kind === 'p' || b.kind === 'tbl' || b.kind === 'sdt');
+    if (siblings[siblings.length - 1] === block) return;
+    this.word.setProps(
+      block,
+      withMarkRevision(this.word.w, block.props, rev.mark('del'))
+    );
+  }
 }
 
 function describeKind(kind: string): string {
@@ -796,6 +1135,19 @@ function describeKind(kind: string): string {
   }
 }
 
+/** How an edit is recorded. */
+export type WordEditOptions = {
+  /** Record tracked changes; omitted to follow the document's setting. */
+  trackChanges?: boolean;
+  /** The name tracked changes and comments are attributed to. */
+  author?: string;
+  /** When the edit is made (tests pin it). */
+  now?: Date;
+};
+
+/** The author Word shows when none is given, as the engine does. */
+const DEFAULT_AUTHOR = 'Author';
+
 /**
  * Applies `operations` to the shared document in one commit and describes
  * the blocks they changed. Any failure throws before anything is committed;
@@ -803,13 +1155,23 @@ function describeKind(kind: string): string {
  */
 export function editWord(
   doc: LoroDoc,
-  operations: readonly DocxAgentOperation[]
+  operations: readonly DocxAgentOperation[],
+  options: WordEditOptions = {}
 ): string {
   if (operations.length === 0 || operations.length > MAX_DOCX_OPERATIONS)
     throw new DocxAgentError(
       `Send between 1 and ${MAX_DOCX_OPERATIONS} operations.`
     );
-  const editor = new WordEditor(new WordDocument(doc));
+  const word = new WordDocument(doc);
+  const author = options.author?.trim() || DEFAULT_AUTHOR;
+  const date = revisionDate(options.now);
+  const tracked = options.trackChanges ?? word.tracksChanges();
+  const editor = new WordEditor(
+    word,
+    tracked ? new Revisor(word.w, author, date) : null,
+    author,
+    date
+  );
   operations.forEach((operation, index) => {
     try {
       editor.apply(operation);
@@ -821,14 +1183,26 @@ export function editWord(
       throw error;
     }
   });
+  editor.finish();
   doc.commit({ origin: 'docx-agent' });
   // How the changed blocks read now, for the agent to check.
-  const word = new WordDocument(doc);
-  const top = word.kids('');
+  const after = new WordDocument(doc);
+  const top = after.kids('');
   const count = operations.length;
+  const edits = operations.filter((o) => o.type !== 'addComment').length;
   const lines = [
     `Applied ${count} operation${count === 1 ? '' : 's'}. Everyone with the document open sees the change now.`,
   ];
+  if (edits)
+    lines.push(
+      tracked
+        ? `Edits are tracked changes by ${author}, which can be accepted or rejected in Word.`
+        : 'Edits were applied directly, not as tracked changes.'
+    );
+  if (editor.commented.length)
+    lines.push(
+      `Added Word comment${editor.commented.length === 1 ? '' : 's'} ${editor.commented.join(', ')} by ${author}; they are saved in the file.`
+    );
   if (editor.deleted.length)
     lines.push(`Deleted blocks: ${editor.deleted.join(', ')}.`);
   const touched = top.filter((b) => editor.touched.has(b.id));
@@ -836,7 +1210,7 @@ export function editWord(
     lines.push('', 'Changed blocks as they now read:');
     let size = 0;
     for (const block of touched) {
-      const shown = blockLines(word, block, `#${top.indexOf(block) + 1} `, '');
+      const shown = blockLines(after, block, `#${top.indexOf(block) + 1} `, '');
       size += shown.join('\n').length;
       if (size > READ_BUDGET) {
         lines.push('… (more changed blocks; read the document to see them)');

@@ -1,0 +1,137 @@
+import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import { render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AgentChangesProvider } from './agent-session-changes';
+import { ChangesHandoff, ChangesToggle } from './changes';
+import { useChanges } from './context/changes-controller';
+import { createMockChangesContext, mockChangeset } from './tests/mock-context';
+
+const [session, setSession] = createSignal<AgentSessionResponse>();
+const [stats, setStats] = createSignal<{
+  title?: string;
+  counts?: { additions: number; deletions: number };
+}>();
+beforeEach(() => setStats(undefined));
+/** Every session id the changes source was asked to read, in order. */
+const sourceSessionIds: Array<string | undefined> = [];
+
+vi.mock('../block-agent/context/AgentSessionContext', () => ({
+  useAgentSession: () => ({
+    userId: () => 'user-1',
+    sessionId: () => 'session-1',
+    session,
+    loadFailed: () => false,
+    issue: async () => undefined,
+  }),
+}));
+
+vi.mock('./queries/session-changes', () => ({
+  createSessionChangesSource: (sessionId: () => string | undefined) => {
+    const context = createMockChangesContext({
+      summary: { capturing: false, changeset: mockChangeset() },
+    });
+    return {
+      ...context.source,
+      summary: () => {
+        sourceSessionIds.push(sessionId());
+        return sessionId() ? context.source.summary() : undefined;
+      },
+    };
+  },
+}));
+
+vi.mock('./queries/pull-request-stats', () => ({
+  createPullRequestStatsSource: () => stats,
+}));
+
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success() {}, failure() {} },
+}));
+vi.mock('@core/util/url', () => ({ openExternalUrl() {} }));
+
+function sessionWith(fields: {
+  harness: string;
+  pullRequestUrl: string | null;
+}): AgentSessionResponse {
+  return fields as unknown as AgentSessionResponse;
+}
+
+function ChangesHostMetadata() {
+  const { context, changeCounts } = useChanges();
+  return (
+    <>
+      <span aria-label="PR title">{context.host.pullRequestTitle?.()}</span>
+      <span aria-label="PR additions">{changeCounts()?.additions}</span>
+    </>
+  );
+}
+describe('AgentChangesProvider', () => {
+  it('shares the existing PR query title and counts through host capabilities', () => {
+    setSession(
+      sessionWith({
+        harness: 'cursor',
+        pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
+      })
+    );
+    setStats({
+      title: 'Linked PR title',
+      counts: { additions: 8, deletions: 2 },
+    });
+    render(() => (
+      <AgentChangesProvider>
+        <ChangesHostMetadata />
+      </AgentChangesProvider>
+    ));
+    expect(screen.getByLabelText('PR title').textContent).toBe(
+      'Linked PR title'
+    );
+    expect(screen.getByLabelText('PR additions').textContent).toBe('8');
+    setStats({ title: 'Updated PR title' });
+    expect(screen.getByLabelText('PR title').textContent).toBe(
+      'Updated PR title'
+    );
+    expect(screen.getByLabelText('PR additions').textContent).toBe('');
+    setStats(undefined);
+    expect(screen.getByLabelText('PR title').textContent).toBe('');
+  });
+  it('hides the Changes controls until the coding session links a pull request', () => {
+    setSession(sessionWith({ harness: 'cursor', pullRequestUrl: null }));
+    sourceSessionIds.length = 0;
+    render(() => (
+      <AgentChangesProvider>
+        <ChangesToggle />
+        <ChangesHandoff />
+      </AgentChangesProvider>
+    ));
+    expect(screen.queryByRole('button', { name: /Changes/ })).toBeNull();
+    expect(screen.queryByText('Changes ready to review')).toBeNull();
+    // Nothing is fetched while there is no pull request to capture from.
+    expect(sourceSessionIds.every((id) => id === undefined)).toBe(true);
+
+    setSession(
+      sessionWith({
+        harness: 'cursor',
+        pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
+      })
+    );
+    expect(screen.getByRole('button', { name: /Changes/ })).toBeTruthy();
+    expect(screen.getByText('Changes ready to review')).toBeTruthy();
+    expect(sourceSessionIds.at(-1)).toBe('session-1');
+  });
+
+  it('keeps the controls hidden for a chat-only harness even with a pull request', () => {
+    setSession(
+      sessionWith({
+        harness: 'in-memory',
+        pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
+      })
+    );
+    render(() => (
+      <AgentChangesProvider>
+        <ChangesToggle />
+      </AgentChangesProvider>
+    ));
+    expect(screen.queryByRole('button', { name: /Changes/ })).toBeNull();
+  });
+});

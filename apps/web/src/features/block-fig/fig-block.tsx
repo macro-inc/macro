@@ -3,6 +3,7 @@
  * viewer, wired to the worker engine and document storage.
  */
 
+import { CommandState } from '@app/features/command';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   ResponsiveBlockToolbar,
@@ -23,6 +24,7 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { FigEngine } from '@core/fig-engine/client';
 import { blockDataSignal } from '@core/internal/BlockLoader';
@@ -75,6 +77,22 @@ import {
 } from './queries/fig-sync';
 import { createFontSource } from './queries/font-source';
 import { FigViewer } from './views/fig-viewer';
+
+/**
+ * ⌘K on a design opens the command menu, which then offers the design
+ * palette (Figma's actions menu, ⌘P here).
+ */
+const suggestActions = (openActions: () => void) =>
+  CommandState.setHint({
+    message: 'Did you mean to open the design palette?',
+    shortcut: IS_MAC ? '⌘P' : 'Ctrl+P',
+    matches: (e) =>
+      (IS_MAC ? e.metaKey : e.ctrlKey) &&
+      !e.altKey &&
+      !e.shiftKey &&
+      e.code === 'KeyP',
+    run: openActions,
+  });
 
 /**
  * Opens the file in the engine (and, for a shared design, applies what
@@ -185,6 +203,7 @@ function FigHost(props: {
                   presentAt: props.present,
                   fonts: createFontSource(),
                   libraries,
+                  suggestActions,
                 }}
               >
                 <FigViewer />

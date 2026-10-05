@@ -150,6 +150,7 @@ where
                         session_id: command.session_id,
                         bot_id,
                         owner: selection.owner,
+                        repo_url: None,
                         model: selection.model.clone(),
                     })
                     .await

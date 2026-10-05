@@ -74,10 +74,10 @@ const faqItems = [
     ),
   },
   {
-    q: 'Is there a free plan?',
+    q: 'Can I join as a Guest for free?',
     a: (
       <>
-        Yes. The free plan includes email alongside chat, documents, tasks, and
+        Yes. Guest access includes email alongside chat, documents, tasks, and
         AI, with usage limits. See <a href="/pricing">pricing</a> for current
         account, storage, and AI limits.
       </>

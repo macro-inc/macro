@@ -17,6 +17,7 @@ import Keyboard from '@phosphor/keyboard.svg';
 import LineSegment from '@phosphor/line-segment.svg';
 import NavigationArrow from '@phosphor/navigation-arrow.svg';
 import PenNib from '@phosphor/pen-nib.svg';
+import PencilSimple from '@phosphor/pencil-simple.svg';
 import Square from '@phosphor/square.svg';
 import TextT from '@phosphor/text-t.svg';
 import Unite from '@phosphor/unite.svg';
@@ -46,6 +47,13 @@ const TOOLS: ToolButton[] = [
   { tool: 'line', label: 'Line', key: 'L', icon: LineSegment, edit: true },
   { tool: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowUpRight, edit: true },
   { tool: 'pen', label: 'Pen', key: 'P', icon: PenNib, edit: true },
+  {
+    tool: 'pencil',
+    label: 'Pencil',
+    key: '⇧P',
+    icon: PencilSimple,
+    edit: true,
+  },
   { tool: 'text', label: 'Text', key: 'T', icon: TextT, edit: true },
   { tool: 'hand', label: 'Hand tool', key: 'H', icon: Hand, edit: false },
 ];

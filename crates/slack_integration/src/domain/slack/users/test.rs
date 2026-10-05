@@ -182,6 +182,51 @@ fn invalid_emails_and_blank_display_names_fall_back_safely() {
     }
 }
 
+fn directory_from(json: serde_json::Value) -> UserDirectory {
+    UserDirectory::new(serde_json::from_value::<Vec<ExportUser>>(json).unwrap()).unwrap()
+}
+
+#[test]
+fn name_of_matches_email_case_insensitively() {
+    let directory = directory_from(serde_json::json!([{
+        "id": "U17",
+        "name": "ignored",
+        "real_name": "Also ignored",
+        "profile": {
+            "email": "T17@Example.com",
+            "display_name": "T Seventeen",
+            "real_name": "Ignored Real"
+        }
+    }]));
+    let id = MacroUserIdStr::try_from_email("t17@example.com").unwrap();
+    assert_eq!(directory.name_of(&id), Some("T Seventeen"));
+}
+
+#[test]
+fn name_of_is_the_first_slack_id_when_emails_collide() {
+    let directory = directory_from(serde_json::json!([
+        {"id":"U2","name":"Second","profile":{"email":"Shared@Example.com","display_name":"Second"}},
+        {"id":"U1","name":"First","profile":{"email":"shared@example.com","display_name":"First"}}
+    ]));
+    let id = MacroUserIdStr::try_from_email("shared@example.com").unwrap();
+    assert_eq!(directory.name_of(&id), Some("First"));
+}
+
+#[test]
+fn name_of_is_none_for_unknown_or_bot_only_matches() {
+    let directory = directory_from(serde_json::json!([
+        {"id":"U0","name":"Bot","is_bot":true,"profile":{"email":"T17@Example.com","display_name":"Bot Name"}},
+        {"id":"U8","name":"Only Bot","is_bot":true,"profile":{"email":"bot-only@example.com","display_name":"Only Bot"}},
+        {"id":"U9","name":"Human","profile":{"email":"T17@Example.com","display_name":"Human Name"}}
+    ]));
+    let t17 = MacroUserIdStr::try_from_email("t17@example.com").unwrap();
+    let bot_only = MacroUserIdStr::try_from_email("bot-only@example.com").unwrap();
+    let unknown = MacroUserIdStr::try_from_email("missing@example.com").unwrap();
+    assert_eq!(directory.name_of(&t17), Some("Human Name"));
+    assert_eq!(directory.name_of(&bot_only), None);
+    assert_eq!(directory.name_of(&unknown), None);
+}
+
 #[test]
 fn repeated_ids_are_idempotent_but_conflicting_ids_fail_closed() {
     let user: ExportUser =

@@ -121,14 +121,33 @@ or stop.
 **Ask AI** in search (including Tab), the command menu, and mobile search opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split, while command-menu and mobile actions open a new split.
+its current split into the Agents workspace, while command-menu and mobile
+actions open a new split.
 
-**Ask Macro** and **Chat with Agent** on documents, PDFs, spreadsheets, email,
-channels, calls, and projects also open agent sessions. Their entity mention stays
+**Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
+code files, images, canvases, spreadsheets, email, channels, calls, and projects
+also open agent sessions. Like command-menu Ask AI, they open the bare session in
+a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
 in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
 and selected range; channel-message actions retain the referenced message.
 Add a question and press Send to submit that context. These actions do not create
 legacy cognition chats, regardless of the Agents workspace feature flag.
+
+## Dispatching coding agents from chat
+
+Ask a chat agent to delegate a coding task, including the repository and branch
+when relevant. The agent uses `ListCodingAgents` to discover your available coding
+agents, chooses one using its description and runtime defaults, and calls
+`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
+The available-agents tool row expands to show the returned names and descriptions.
+
+A successful dispatch starts a separate coding session and displays its live
+Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
+the dispatched turn, including progress, output, permission requests, and a linked
+pull request. **Open session** opens the coding conversation in another split so
+you can follow up there. Reloading the chat restores the same session card.
+Failed dispatches do not show a successful session card. If no coding agents are
+available, configure one in Agents before retrying.
 
 ## Where chats live
 
@@ -153,6 +172,30 @@ the shimmer.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Connections page. Personal Gmail/GitHub account links remain under Settings →
   Integrations.
+
+  To recreate Slack channels, open **Settings → Connections → Slack → Import
+  channels** (or **Connections → Slack** from the Agents workspace). The card
+  appears only for a connected, enabled Pipedream Slack account. Click **Find
+  channels** (or **Refresh** on subsequent visits), then wait for discovery and
+  member checks to update live. Search by name, purpose, or Slack channel id;
+  archived channels stay hidden until **Show archived** is checked. Select
+  individual channels or **Select all visible**, then click **Import 1 channel**
+  or **Import N channels**.
+  Filtering does not clear selections. Rows progress from **Importing…** to an
+  **Imported** link; channels already imported by another team member show
+  **by a teammate** and cannot be selected again. Imported channels appear under
+  **Channels**, with the Slack name and matched Macro teammates. Member counts
+  show how many Slack members are on your team; unchecked membership is labeled
+  separately. Unmatched members are not invited. Messages, files, private
+  channels, and direct messages are not imported, and there is no ongoing sync.
+  A failed discovery shows its error and **Retry**; an empty completed discovery
+  shows **No public channels found**. If member checks reach their time budget,
+  discovered channels remain available with unchecked membership rather than a
+  discovery failure. Conversations with unknown visibility are not listed.
+  If both Slack connector aliases are connected, the Slack page manages `slack`
+  first; `slack_v2` remains a separate row in Connections where it can be disabled
+  or disconnected.
+
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
@@ -269,6 +312,11 @@ the shimmer.
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
   the owner must have access through the connected GitHub App.
+  Paired macrod agents also receive the repository choice. With native Herdr,
+  macrod finds an existing clone or clones it using local Git credentials, then
+  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  and cannot be changed for local sessions. The native Claude/Codex TUI remains
+  interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
@@ -304,6 +352,32 @@ the shimmer.
   code and click **Look up**. Review the request and click **Approve** to connect.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
+  Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
+  and **Codex in herdr**: each session of an agent on that runtime opens a herdr
+  tab in the directory macrod started from, running the real Claude Code or Codex
+  TUI. The session page streams its tool calls and replies, and its permission
+  prompts appear as approvals. Other runtimes started inside herdr get a live
+  view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
+  Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
+  check their result and any confirmation in Herdr. For Claude, use `/fast on`
+  or `/fast off`, or bare `/fast` to open its native controls. Available speed
+  tiers depend on the native agent, model, and account. Claude also offers
+  `/effort` with an optional level, `auto`, or `status`. In Codex sessions,
+  `/effort` shows the current effort and available choices in Macro. Send
+  `/effort high` (or another supported level) to change it and wait for native
+  confirmation; `/effort default` restores the model's default. This preserves
+  the current model. `/model` still opens the picker in Herdr. Macro's model dropdown
+  changes the model of an idle native session after native confirmation and
+  displays the model identified by the session (Codex's live footer, or native
+  transcript metadata). Unexpected native dialogs must be completed in Herdr.
+  For Codex, open the current model's submenu to select **Reasoning effort**.
+  Choices come from the installed Codex catalog; the selected effort is confirmed
+  from the native session and shown beside the model. Local Herdr changes and
+  `/effort` also update this menu. The effort submenu appears once the native
+  session starts on the first prompt, before its first reply; a startup screen
+  that temporarily hides the footer is retried during the turn. The menu does not list
+  installed native skills or session-switching commands such as `/resume`.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
   Runtime and short model lists use styled dropdown buttons: open the field and
@@ -320,7 +394,11 @@ the shimmer.
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
-  choose another. Stop, queued-message advancement, and quoting remain available.
+  choose another. An unsent message in that session — the text and attached
+  files that finished uploading — stays when you leave for a channel, another
+  session, or Home and come back, including after reload. Sending or clearing
+  the input removes only that session's draft. Stop, queued-message advancement,
+  and quoting remain available.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
   Unarchive is also available from the title dropdown.
@@ -482,8 +560,10 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-In dev, paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
-usage rates). When it is used up and no credits or usage billing cover the
+Paid plans include a monthly AI allowance per seat, measured at provider cost;
+usage beyond it is billed at a markup. Both numbers come from Doppler
+(`AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`; $20 and
+5% in dev), never from code. When the allowance is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
 spending-limit / failed-charge variants). It shows the same meter and controls
@@ -790,7 +870,8 @@ When the session has opened a pull request, a compact `#N` status chip
 appears in the header (top right) and in the side-panel Details. Click it
 to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
-merged / closed.
+merged / closed. Merging happens from the PR entity's top bar or from a channel
+Magic Chip's PR row, not from this header chip.
 
 Tool rows show the tool's own name without an MCP server or workspace prefix.
 Chat MCP rows retain their service icon.
@@ -992,6 +1073,8 @@ resizing them. File selection, Escape, the backdrop, or **Hide file tree** dismi
 the drawer and restores focus to its opener. Drawer visibility never changes the
 saved wide-tree preference or width. Phones keep unified diffs and omit layout
 controls, with **Back to conversation** closing Changes.
+Closing the drawer releases its dialog handlers immediately; the exiting tree
+frame stays inert, so the animation does not intercept Escape or steal focus.
 Returning from full width restores the previous split ratio without replaying
 the opening slide or losing the conversation draft, diff state, or scroll position.
 Drag the divider beside the file tree to resize it, or focus that divider and use
@@ -1025,10 +1108,10 @@ that file in the Changes pane. Notes never go to GitHub. Collapsed files and
 unsent notes persist per session in localStorage; a new capture expands all
 files.
 
-The session header's **Changes** pill and sidebar totals display the linked
-PR's `additions` and `deletions` returned by the GitHub API, without summing
-transcript edits. The sidebar lists files from the captured PR diff. Counts
-refresh when a capture changes and every 30 seconds while the session is open.
+The Changes pane header and sidebar totals display the linked PR's `additions`
+and `deletions` returned by the GitHub API, without summing transcript edits.
+The header toggle itself has no totals. The sidebar lists files from the captured PR diff.
+Counts refresh when a capture changes and every 30 seconds while the session is open.
 Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
 or failed GitHub request never falls back to estimated transcript totals.
 

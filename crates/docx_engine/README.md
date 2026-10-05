@@ -186,7 +186,8 @@ where Word PDFs exist they decide.
   are computed; a table of contents is not regenerated.
 - Editing does not create text boxes or pictures and does not edit inside
   text boxes (it keeps them); new comments are Macro threads anchored in the
-  body, and Word's comments in the file are shown read-only. Undoing a new
+  body, and Word's comments in the file are shown read-only (the AI tools'
+  `addComment` writes Word comments, through the shared parts). Undoing a new
   footnote removes its reference; the empty note stays in the notes part,
   unreferenced.
 - Two people editing the same footnote or endnote at once: the last write

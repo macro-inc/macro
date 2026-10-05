@@ -102,6 +102,11 @@ export interface FigViewerContext {
   fonts?: FigFontSource;
   /** Other designs to use as team libraries; absent where there are none. */
   libraries?: FigLibrarySource;
+  /**
+   * ⌘K on the canvas opens the app's command menu (not Figma's actions):
+   * offer the design's own actions menu (⌘P) there.
+   */
+  suggestActions?: (openActions: () => void) => void;
 }
 
 const Context = createContext<FigViewerContext>();

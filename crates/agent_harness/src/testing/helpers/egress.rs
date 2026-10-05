@@ -76,5 +76,6 @@ pub fn test_egress() -> SandboxEgress {
         base_url: "https://egress.test".to_owned(),
         session_token: "test-session-token".to_owned(),
         mcp_servers: Vec::new(),
+        custom_servers: Vec::new(),
     }
 }

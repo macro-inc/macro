@@ -1,4 +1,5 @@
 import { pipedreamAppAvailableInEnv } from '@core/component/AI/constant/mcpServers';
+import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
 import GithubIcon from '@icon/mcp-github.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
@@ -38,6 +39,7 @@ export const EMPTY_STARTERS: FeaturedStarter[] = [
 
 export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
   ...EMPTY_STARTERS.map((item) => item.id),
+  ...SLACK_PIPEDREAM_SLUGS,
   'cursor',
 ]);
 

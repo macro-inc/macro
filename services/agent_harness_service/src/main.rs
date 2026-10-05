@@ -11,6 +11,7 @@ mod agent_runtime_directory;
 mod api;
 mod bots_directory;
 mod coding_agent;
+mod coding_agents;
 mod config;
 mod containers;
 mod external_session_requests;
@@ -34,6 +35,7 @@ use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::approval::ToolApprovalService;
 use agent_egress::domain::service::EgressServiceImpl;
+use agent_egress::outbound::custom_mcp::WithCustomMcp;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
@@ -142,6 +144,8 @@ use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
     StaticFileServiceUrl,
 };
+use mcp_client::domain::models::AesKey;
+use mcp_client::outbound::pg_server_repo::PgServerRepo;
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
@@ -300,6 +304,7 @@ async fn run() -> anyhow::Result<()> {
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     );
     let recorder =
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
@@ -389,6 +394,12 @@ async fn run() -> anyhow::Result<()> {
     // connected in Macro is an app the sandbox can reach, with nothing to
     // keep in sync. The rows hold no secrets - Pipedream owns the grants.
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
+    // Custom MCP servers - the ones a person added by URL - in the same rows
+    // document_cognition_service manages, under the same encryption key, so
+    // the proxy can refresh a stored grant and persist what comes back.
+    let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
+        .context("invalid MCP credentials encryption key")?;
+    let mcp_servers = Arc::new(PgServerRepo::new(pool.clone(), mcp_credentials_key));
 
     // The client that addresses Pipedream's remote MCP server, built from the
     // same credentials `document_cognition_service` uses.
@@ -406,11 +417,15 @@ async fn run() -> anyhow::Result<()> {
     .context("failed to build Pipedream client")?;
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
-    // slug, then the owner's Pipedream connections. The `macro` credential is
-    // signed inline with the same key authentication_service holds; what this
-    // process hands out is always single-user and minutes from expiry.
+    // slug, the owner's custom servers by URL key, then the owner's Pipedream
+    // connections. The `macro` credential is signed inline with the same key
+    // authentication_service holds; what this process hands out is always
+    // single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
-        PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), pipedream),
+        WithCustomMcp::new(
+            PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), pipedream),
+            Arc::clone(&mcp_servers),
+        ),
         MacroApiTokenSigner::new(
             pool.clone(),
             config.macro_api_token_issuer.as_ref(),
@@ -483,6 +498,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
@@ -661,7 +677,7 @@ async fn run() -> anyhow::Result<()> {
     let codex_journal_pool = pool.clone();
     let codex_manager = agent_harness::outbound::codex::CodexContainerManager::new(
         Arc::new(codex_provider),
-        codex_connections,
+        codex_connections.clone(),
         session_repo.clone(),
         Arc::new(move |id| {
             let journal = Arc::new(
@@ -770,7 +786,11 @@ async fn run() -> anyhow::Result<()> {
                 .context("egress URL needs a host")?
                 .to_owned(),
         ),
-        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url.clone()),
+        EgressProvisioner::new(
+            Arc::clone(&mcp_connections),
+            Arc::clone(&mcp_servers),
+            egress_base_url.clone(),
+        ),
         claude_cloud_agents::inbound::acp::attach,
     );
     let containers = RoutedContainerManager::new(
@@ -960,8 +980,12 @@ async fn run() -> anyhow::Result<()> {
             ),
             prompt_context,
             prompt_composer,
-            EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url)
-                .with_external_base_url(config.external_egress_base_url.clone()),
+            EgressProvisioner::new(
+                Arc::clone(&mcp_connections),
+                Arc::clone(&mcp_servers),
+                egress_base_url,
+            )
+            .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
@@ -1159,6 +1183,29 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let coding_agents = coding_agents::router(
+        coding_agents::AvailableCodingAgents::new(
+            bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                broker.clone(),
+            ),
+            PgHarnessRepo::new(pool.clone()),
+            pool.clone(),
+            codex_connections,
+            claude_credentials.clone(),
+        ),
+        agent_session::domain::routines::RoutineSessionsService::new(
+            (*bots_directory).clone(),
+            (*harness).clone(),
+            external_session_requests::BrokerExternalSessionRequests::new(
+                broker.clone(),
+                session_repo.clone(),
+            ),
+            draining_sessions.clone(),
+            (*harness).clone(),
+        ),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1222,6 +1269,7 @@ async fn run() -> anyhow::Result<()> {
             .with_claude_auth(claude_auth)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
+            .with_coding_agents(coding_agents)
             .with_capabilities(capabilities)
             .with_pull_requests(pull_requests)
             .with_tool_approvals(tool_approval_answers),

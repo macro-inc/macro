@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   queued: undefined as QueuedPromptsProps | undefined,
 }));
 
-vi.mock('@app/features/agent-changes/context/agent-changes-controller', () => ({
-  useOptionalAgentChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
+vi.mock('@app/features/changes/context/changes-controller', () => ({
+  useOptionalChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
 }));
 vi.mock('@channel/Input', () => ({
   createInputAttachmentTracker: () => ({
@@ -62,6 +62,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     sendNext: mocks.sendNext,
     steer: mocks.steer,
     turn: () => mocks.turn(),
+    sessionId: () => 'session-1',
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -83,6 +84,7 @@ vi.mock('../ui', () => ({
 vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
 beforeEach(() => {
+  localStorage.clear();
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
   mocks.session = () => ({ canEdit: false });

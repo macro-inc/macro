@@ -1,9 +1,9 @@
+import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
-  AgentChangesProvider,
-  AgentChangesSplit,
   ChangesHandoff,
+  ChangesSplit,
   ReviewNotesDock,
-} from '@app/features/agent-changes/agent-changes';
+} from '@app/features/changes/changes';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
@@ -158,7 +158,7 @@ function AgentBlockContent(props: {
             <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
-            <AgentChangesSplit>
+            <ChangesSplit>
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
@@ -190,7 +190,7 @@ function AgentBlockContent(props: {
                   </div>
                 </div>
               </AgentComposerRegion>
-            </AgentChangesSplit>
+            </ChangesSplit>
           </SidePanel.Layout>
         </div>
       </StaticMarkdownContext>

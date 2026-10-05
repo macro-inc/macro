@@ -13,13 +13,6 @@ import {
 } from '@service-cognition/onboarding';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 
-export type {
-  ConnectedServer,
-  OnboardingRow,
-  OnboardingState,
-  OnboardingStatus,
-} from '@service-cognition/onboarding';
-
 const KEYS = {
   state: ['onboarding', 'state'] as const,
 };

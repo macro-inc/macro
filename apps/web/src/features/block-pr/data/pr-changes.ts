@@ -7,12 +7,12 @@
 import type {
   ChangesSource,
   PatchRead,
-} from '@app/features/agent-changes/context/agent-changes-context';
-import type { SessionChanges } from '@app/features/agent-changes/core/changeset';
+} from '@app/features/changes/context/changes-context';
+import type { ChangesSummary } from '@app/features/changes/core/changeset';
 import {
   decodeChangeset,
   queryStatus,
-} from '@app/features/agent-changes/queries/session-changes';
+} from '@app/features/changes/queries/changes-adapter';
 import {
   useGithubPullRequestChangesPatchQuery,
   useGithubPullRequestChangesQuery,
@@ -23,7 +23,7 @@ import type { Accessor } from 'solid-js';
 export function decodePrChanges(
   dto: GithubPullRequestChangesResponse,
   now = new Date().toISOString()
-): SessionChanges {
+): ChangesSummary {
   if (dto.changeset) {
     return { changeset: decodeChangeset(dto.changeset), capturing: false };
   }

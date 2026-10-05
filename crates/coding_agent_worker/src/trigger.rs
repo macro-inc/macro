@@ -49,6 +49,8 @@ pub enum TriggerWork {
     /// the app shows the session directly and sends its own first prompt
     /// through the session once this create answers.
     OpenRequested {
+        /// Remote repository supplied by Macro, if selected.
+        repo_url: Option<String>,
         /// The id to create the session under.
         session: AgentSessionId,
         /// The agent the session runs for.
@@ -86,6 +88,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::Requested(
             AgentSessionRequestedEvent {
+                repo_url,
                 bot_id,
                 session_id,
                 owner,
@@ -93,6 +96,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
         )) => {
             let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenRequested {
+                repo_url,
                 session: session_id,
                 bot: bot_id,
                 sender,

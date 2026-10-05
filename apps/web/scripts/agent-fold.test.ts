@@ -79,7 +79,7 @@ it('decodes durable DTOs, reconciles overlap, and folds a batch like a stream', 
 it('preserves replacement events and later updates within one durable batch', () => {
   const session = '00000000-0000-0000-0000-00000000000a';
   const rows = readFileSync(
-    new URL('../../../crates/agent_fold/fixtures/load_replacement.jsonl', import.meta.url),
+    new URL('../../../crates/folds/agent_fold/fixtures/load_replacement.jsonl', import.meta.url),
     'utf8'
   ).trim().split('\n').map((line, index) => ({
     ...JSON.parse(line),

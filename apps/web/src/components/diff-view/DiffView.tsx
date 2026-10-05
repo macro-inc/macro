@@ -23,12 +23,12 @@ import {
   type JSX,
   on,
   onCleanup,
-  onMount,
   type ParentProps,
   Show,
   useContext,
 } from 'solid-js';
 import { createDiffCollapse, type DiffCollapse } from './collapse';
+import { createDiffReveal } from './create-diff-reveal';
 import { DiffCounts } from './DiffCounts';
 import { type DiffFile, type DiffStyle, splitPath } from './model/diff-file';
 import type { LineAnnotation, LineRange } from './model/lines';
@@ -158,18 +158,15 @@ function DiffNote(props: { children: JSX.Element }) {
 function Stack(props: DiffListProps) {
   const view = useDiffView();
   const activePath = createMemo(view.active);
-  const cards = new Map<string, HTMLElement>();
   const [flashing, setFlashing] = createSignal<string>();
-  const queue = createRenderQueue();
-  const [visible, setVisible] = createSignal<ReadonlySet<string>>(new Set());
   let scroller!: HTMLDivElement;
-  let observer: IntersectionObserver | undefined;
+  const diffReveal = createDiffReveal(() => scroller);
   let anchoredPath: string | undefined;
   let pendingSelection = activePath();
   let scrollingToAnchor = false;
   let resizePending = false;
   const alignAnchor = () => {
-    const card = anchoredPath ? cards.get(anchoredPath) : undefined;
+    const card = anchoredPath ? diffReveal.card(anchoredPath) : undefined;
     if (!card?.isConnected) return;
     const margin =
       Number.parseFloat(getComputedStyle(card).scrollMarginTop) || 0;
@@ -208,7 +205,7 @@ function Stack(props: DiffListProps) {
     createResizeObserver(
       () => {
         view.entries();
-        return [...cards.values()];
+        return diffReveal.cards();
       },
       () => {
         if (scrollingToAnchor) {
@@ -219,32 +216,6 @@ function Stack(props: DiffListProps) {
       }
     );
   }
-
-  const reveal = (path: string) => {
-    queue.enqueue(path, () => {
-      setVisible((paths) => new Set([...paths, path]));
-    });
-  };
-  onMount(() => {
-    // Older webviews still get queued rendering, without viewport gating.
-    if (typeof IntersectionObserver === 'undefined') {
-      for (const path of cards.keys()) reveal(path);
-      return;
-    }
-    observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const path = (entry.target as HTMLElement).dataset.path;
-          if (path) reveal(path);
-          observer?.unobserve(entry.target);
-        }
-      },
-      { root: scroller, rootMargin: '400px 0px' }
-    );
-    for (const card of cards.values()) observer.observe(card);
-  });
-  onCleanup(() => observer?.disconnect());
 
   // Jumping to a file is a DOM concern: scroll the card in and flash it.
   createEffect(
@@ -260,8 +231,8 @@ function Stack(props: DiffListProps) {
         // Entry refreshes must not reselect an unchanged path after the user
         // takes over scrolling. A pending selection still waits for its card.
         if (!path || pendingSelection !== path) return;
-        reveal(path);
-        const card = cards.get(path);
+        diffReveal.reveal(path);
+        const card = diffReveal.card(path);
         if (!card) return;
         pendingSelection = undefined;
         anchoredPath = path;
@@ -309,17 +280,9 @@ function Stack(props: DiffListProps) {
             return (
               <FileContext.Provider value={entry}>
                 <Card
-                  ref={(element: HTMLDivElement) => {
-                    const filePath = path();
-                    cards.set(filePath, element);
-                    if (observer) observer.observe(element);
-                    else if (typeof IntersectionObserver === 'undefined')
-                      reveal(filePath);
-                    onCleanup(() => {
-                      cards.delete(filePath);
-                      observer?.unobserve(element);
-                    });
-                  }}
+                  ref={(element: HTMLDivElement) =>
+                    diffReveal.register(path(), element)
+                  }
                   class={cn(
                     'shrink-0 scroll-mt-3 overflow-clip transition',
                     flashing() === path() &&
@@ -337,7 +300,7 @@ function Stack(props: DiffListProps) {
                   </header>
                   <Show when={!collapsed()}>
                     <Show
-                      when={visible().has(path())}
+                      when={diffReveal.visible(path())}
                       fallback={
                         <div
                           class="flex h-40 items-center justify-center text-xs text-ink-placeholder"

@@ -1,3 +1,7 @@
+use authentication_service::{
+    outbound::subscription_checkout::StripeCheckoutError,
+    service::subscription_checkout::CheckoutError,
+};
 use axum::{
     Json,
     http::StatusCode,
@@ -81,6 +85,10 @@ pub enum StripeOperationError {
     PromoCodeNotFound,
     #[error("Internal server error")]
     UnexpectedStripeResponse,
+    #[error("The 30-day trial is only available for your first Premium subscription")]
+    TrialUnavailable,
+    #[error("Could not create checkout")]
+    CheckoutGateway(StripeCheckoutError),
     #[error("User already has an active subscription")]
     AlreadySubscribed,
     #[error("Teams service error")]
@@ -115,6 +123,8 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
             StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
+            StripeOperationError::TrialUnavailable => StatusCode::CONFLICT,
+            StripeOperationError::CheckoutGateway(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::TeamsErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::RolesErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PlanUnavailable => StatusCode::BAD_REQUEST,
@@ -152,3 +162,16 @@ pub struct StripeSessionResponse {
 
 #[cfg(test)]
 mod test;
+
+impl From<CheckoutError<StripeCheckoutError>> for StripeOperationError {
+    fn from(error: CheckoutError<StripeCheckoutError>) -> Self {
+        match error {
+            CheckoutError::MissingCustomer => Self::MissingStripeId,
+            CheckoutError::AlreadySubscribed => Self::AlreadySubscribed,
+            CheckoutError::TrialUnavailable => Self::TrialUnavailable,
+            CheckoutError::PlanUnavailable => Self::PlanUnavailable,
+            CheckoutError::PromoCodeNotFound => Self::PromoCodeNotFound,
+            CheckoutError::Gateway(error) => Self::CheckoutGateway(error),
+        }
+    }
+}

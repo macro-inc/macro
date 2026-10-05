@@ -720,7 +720,18 @@
 
             mkdir -p "$out"
             dmgPath="$out/Macro-${appVersion}-${system}.dmg"
+            # hdiutil's automatic APFS sizing can run out of space while copying
+            # the app. Budget logical bytes (including sparse files), then leave
+            # 25% plus 64 MiB for filesystem metadata and temporary allocations.
+            appSize=$(${pkgs.coreutils}/bin/du --apparent-size --count-links --block-size=1 --summarize "$appPath")
+            read -r appBytes _ <<< "$appSize"
+            appSizeMiB=$(( (appBytes + 1048575) / 1048576 ))
+            dmgSizeMiB=$(( appSizeMiB + (appSizeMiB + 3) / 4 + 64 ))
+            echo "DMG sizing: app=$appBytes logical bytes, image=$dmgSizeMiB MiB"
+            df -h "$TMPDIR" "$out"
             hdiutil create \
+              -fs APFS \
+              -size "$dmgSizeMiB"m \
               -volname "Macro" \
               -srcfolder "$appPath" \
               -ov \

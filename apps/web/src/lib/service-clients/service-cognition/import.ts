@@ -41,7 +41,7 @@ export type ImportEntityStatus =
   | 'imported'
   | 'discarded';
 
-export type ImportInitiator = 'onboarding' | 'chat';
+export type ImportInitiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type ImportRunStatus =
   | 'running'
@@ -81,6 +81,9 @@ export type SlackChannelMeta = {
   channel_id?: string | null;
   purpose?: string | null;
   participants?: SlackParticipant[];
+  member_count?: number | null;
+  archived?: boolean;
+  members_resolved?: boolean;
 };
 
 /** One row of the import ledger. */
@@ -132,6 +135,13 @@ export const importClient = {
     return await importFetch<RunImportOutcome>('/import/run', {
       method: 'POST',
       body: JSON.stringify(args),
+    });
+  },
+
+  /** Discover candidates for manual selection. */
+  async discover(source: ImportSource) {
+    return await importFetch(`/import/runs/${source}/discover`, {
+      method: 'POST',
     });
   },
 

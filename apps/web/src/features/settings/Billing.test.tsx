@@ -64,7 +64,7 @@ vi.mock('@queries/auth', () => ({
         can_manage_billing: true,
         unlimited: state.unlimited,
         used_cents: 1_000_000,
-        included_cents: 4_000,
+        included_cents: 2_000,
         credit_balance_cents: 0,
         blocked_reason: 'ai_allowance_exhausted',
       };
@@ -75,6 +75,11 @@ vi.mock('@queries/auth', () => ({
     mutateAsync: state.changePlan,
   }),
   useCreateCheckoutSessionMutation: () => ({ mutateAsync: vi.fn() }),
+  useIncludedAiCentsByTier: () => () => ({
+    free: 0,
+    premium: 2_000,
+    max: 2_000,
+  }),
 }));
 vi.mock('@service-stripe/client', () => ({
   stripeServiceClient: { createPortalSession: vi.fn() },

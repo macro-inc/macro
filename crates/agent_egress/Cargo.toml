@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 # `AgentSessionId` only. `default-features = false` drops the crate's CLI
 # binaries (clap, tokio), which the vocabulary does not need.
-agent_fold = { path = "../agent_fold", default-features = false }
+agent_fold = { path = "../folds/agent_fold", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 axum = { workspace = true }
@@ -27,6 +27,7 @@ github = { path = "../github", default-features = false, features = [
   "sync",
 ] }
 http = { workspace = true }
+# Wrapping upstream event-stream bodies so their lifetime and volume get logged.
 http-body = { workspace = true }
 http-body-util = { workspace = true }
 lru = { workspace = true }
@@ -36,6 +37,10 @@ macro_auth = { path = "../macro_auth" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
 macro_user_id = { path = "../macro_user_id" }
+# The rows holding the owner's custom (URL-added) MCP servers and their
+# encrypted grants, and the refresh that keeps a grant live. Port and domain
+# service only; the Postgres adapter is the composition root's to build.
+mcp_client = { path = "../mcp_client" }
 macro_uuid = { path = "../macro_uuid" }
 model_owner = { path = "../model_owner" }
 # The rows saying which apps an owner connected, and the client that turns one
@@ -57,5 +62,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+futures = { workspace = true }
+# Building the stored OAuth grants the custom-server resolver reads.
+rmcp = { workspace = true, features = ["auth"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { workspace = true }
 tower = { workspace = true }

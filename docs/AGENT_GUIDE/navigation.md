@@ -297,6 +297,14 @@ stay centered and the preview body fills the remaining height below the divider.
 
 The outer sidebar is an icon rail; labels appear in tooltips.
 
+Open **More → Customize sidebar** to show, hide, or reorder available apps.
+On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
+handle also moves it. Touch devices offer move buttons. Home stays first and
+cannot be hidden. Verify that hovering within a destination row keeps the drag
+preview stable, dropping saves the order, and reopening retains it. In short
+desktop windows, the app list scrolls while More and the footer remain reachable.
+Touch devices retain the flag-gated Reviews tab in Tasks.
+
 - Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
@@ -649,9 +657,12 @@ time; equal timestamps have a stable entity-type and ID order. Searching retains
 relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
 the cache or reopening the menu with unchanged data does not reorder the results.
 
-Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
-must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. The menu shows no
+Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
+lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation
+stays mounted and usable while the optional source loads or fails. Also hold the
+skills discovery request (`/items/soup`, skill subtype) during startup: even a
+paused or disabled discovery query must not suspend navigation or Home. Releasing
+the request should populate skills without remounting the shell. The menu shows no
 loading text: while entity rows are still loading, an empty list stays blank and
 commands remain usable; a settled empty category shows **No results found**.
 Background history or channel refetches alone must not blank a settled empty
