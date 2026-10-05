@@ -559,6 +559,9 @@ impl<'a> Interp<'a> {
                     let (tx, ty) = (op.num(0), op.num(1));
                     if o == b"TD" {
                         gs.text.leading = -ty;
+                        // Text after this block depends on it (`T*`, `'`).
+                        let set = Op::new("TL", vec![Object::number(-ty)]);
+                        state::remember_text(&mut gs.text, &set, resources.res());
                     }
                     line_matrix = Affine::translate(tx, ty).followed_by(&line_matrix);
                     text_matrix = line_matrix;
@@ -585,6 +588,10 @@ impl<'a> Interp<'a> {
                         if o == b"\"" {
                             gs.text.word_spacing = op.num(0);
                             gs.text.char_spacing = op.num(1);
+                            for (name, v) in [("Tw", op.num(0)), ("Tc", op.num(1))] {
+                                let set = Op::new(name, vec![Object::number(v)]);
+                                state::remember_text(&mut gs.text, &set, resources.res());
+                            }
                         }
                         line_matrix =
                             Affine::translate(0.0, -gs.text.leading).followed_by(&line_matrix);
