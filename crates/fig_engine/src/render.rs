@@ -72,6 +72,9 @@ impl Surface {
 /// Largest layer side; pathological bounds are clamped to the region.
 const MAX_LAYER_SIDE: u32 = 8192;
 
+/// Furthest (device pixels) drawing extends past the region for effects.
+const MAX_MARGIN: f64 = 1024.0;
+
 pub(crate) struct Painter<'a> {
     pub doc: &'a Document,
     pub scene: &'a Scene,
@@ -82,6 +85,11 @@ pub(crate) struct Painter<'a> {
     pub scale: f64,
     /// Device-space region being drawn (with margin).
     pub region: Rect,
+    /// The region's margin around what was asked for.
+    margin: f64,
+    /// How far past the region the layer being drawn reaches (see
+    /// [`Painter::layer_reach`]).
+    reach: f64,
     /// Cleared masks to reuse (see [`AreaMask`]).
     masks: Vec<Mask>,
 }
@@ -104,14 +112,17 @@ pub fn render(
         base,
         scale: vp.scale,
         region,
+        margin: 0.0,
+        reach: 0.0,
         masks: Vec::new(),
     };
     // Effects sample beyond what they cover: render with a margin so blurs
     // and shadows from just outside the region are complete inside it.
-    let margin = painter.effect_margin(scene.root()).ceil().min(1024.0) as i32;
+    let margin = painter.effect_margin(scene.root()).ceil().min(MAX_MARGIN) as i32;
     let (w, h) = (vp.width as i32 + 2 * margin, vp.height as i32 + 2 * margin);
     let mut surface = Surface::new(-margin, -margin, w as u32, h as u32)?;
     painter.region = surface.device_rect();
+    painter.margin = f64::from(margin);
     if let Some(bg) = opts.background {
         surface.pixmap.fill(bg.to_skia());
     }
@@ -155,6 +166,8 @@ pub fn render_node(
         base,
         scale,
         region: Rect::new(0.0, 0.0, f64::from(vp.width), f64::from(vp.height)),
+        margin: 0.0,
+        reach: 0.0,
         masks: Vec::new(),
     };
     let mut surface = Surface::new(0, 0, vp.width, vp.height)?;
@@ -210,8 +223,33 @@ impl<'a> Painter<'a> {
         self.base.map_rect(r)
     }
 
-    /// How far (device pixels) effects in the subtree reach beyond their
-    /// node's geometry, for nodes that intersect the region.
+    /// How far (device pixels) the node's layer blurs and drop shadows
+    /// sample beyond a pixel, with a few pixels to spare for rounding.
+    fn layer_reach(&self, i: SceneIdx) -> f64 {
+        let mut reach: f64 = 0.0;
+        for e in self.props(i).effects().iter().filter(|e| e.is_visible()) {
+            let r = match e.kind {
+                EffectKind::DropShadow => {
+                    f64::from(e.radius) * 1.5
+                        + f64::from(e.spread.abs())
+                        + e.offset.x.abs().max(e.offset.y.abs())
+                }
+                EffectKind::LayerBlur if e.radius > 0.0 => f64::from(e.radius) * 1.5,
+                _ => continue,
+            };
+            reach = reach.max(r);
+        }
+        if reach > 0.0 {
+            (reach * self.scene.node(i).world.scale_factor() * self.scale + 3.0).min(MAX_MARGIN)
+        } else {
+            0.0
+        }
+    }
+
+    /// How far (device pixels) inner shadows and background blurs in the
+    /// subtree sample beyond their node's geometry, for nodes that intersect
+    /// the region. (They read the surface they draw on; layer blurs and drop
+    /// shadows extend their own layers instead.)
     fn effect_margin(&self, i: SceneIdx) -> f64 {
         let node = self.scene.node(i);
         let mut margin: f64 = 0.0;
@@ -222,13 +260,13 @@ impl<'a> Painter<'a> {
             }
             for e in props.effects().iter().filter(|e| e.is_visible()) {
                 let reach = match e.kind {
-                    EffectKind::DropShadow | EffectKind::InnerShadow => {
+                    EffectKind::InnerShadow => {
                         f64::from(e.radius) * 1.5
                             + f64::from(e.spread.abs())
                             + e.offset.x.abs().max(e.offset.y.abs())
                     }
-                    EffectKind::LayerBlur | EffectKind::BackgroundBlur => f64::from(e.radius) * 1.5,
-                    EffectKind::Other => 0.0,
+                    EffectKind::BackgroundBlur => f64::from(e.radius) * 1.5,
+                    _ => 0.0,
                 };
                 margin = margin.max(reach * node.world.scale_factor() * self.scale);
             }
@@ -273,7 +311,7 @@ impl<'a> Painter<'a> {
     ) {
         let mask_bounds = self.to_device(&self.scene.node(mask_node).bounds);
         let area = mask_bounds.intersect(&surface.device_rect());
-        let Some(mut layer) = self.layer(&area) else {
+        let Some(mut layer) = self.layer(&area, &self.region.outset(self.reach)) else {
             return;
         };
         for &c in content {
@@ -315,9 +353,9 @@ impl<'a> Painter<'a> {
         composite(surface, &layer, 1.0, tiny_skia::BlendMode::SourceOver, clip);
     }
 
-    /// A transparent layer covering `device` (clamped to the region).
-    fn layer(&self, device: &Rect) -> Option<Surface> {
-        let r = device.intersect(&self.region);
+    /// A transparent layer covering `device` within `bound`.
+    fn layer(&self, device: &Rect, bound: &Rect) -> Option<Surface> {
+        let r = device.intersect(bound);
         if r.is_empty() || r.w < 0.5 && r.h < 0.5 {
             return None;
         }
@@ -337,7 +375,9 @@ impl<'a> Painter<'a> {
         }
         let node = self.scene.node(i);
         let device = self.to_device(&node.bounds);
-        if !device.intersects(&surface.device_rect()) || !device.intersects(&self.region) {
+        if !device.intersects(&surface.device_rect())
+            || !device.intersects(&self.region.outset(self.reach))
+        {
             return;
         }
         if device.w < 0.25 && device.h < 0.25 {
@@ -379,10 +419,30 @@ impl<'a> Painter<'a> {
             self.draw_node_content_with_opacity(i, surface, clip, false, fold);
             return;
         }
-        let Some(mut layer) = self.layer(&device.intersect(&surface.device_rect())) else {
+        // Blurs and shadows sample around each pixel: their layer reaches
+        // past the surface by as far as they do, so it is complete within
+        // (and no further than any layer around it reaches past the region).
+        let outer = self.reach;
+        let layer = match self.layer_reach(i) {
+            reach if reach > 0.0 => {
+                self.reach = outer.max(reach - self.margin);
+                let bound = surface
+                    .device_rect()
+                    .outset(reach)
+                    .intersect(&self.region.outset(self.reach));
+                self.layer(&device, &bound)
+            }
+            _ => self.layer(
+                &device.intersect(&surface.device_rect()),
+                &self.region.outset(outer),
+            ),
+        };
+        let Some(mut layer) = layer else {
+            self.reach = outer;
             return;
         };
         self.draw_node_content(i, &mut layer, None, false);
+        self.reach = outer;
         for e in effects.iter().filter(|e| e.is_visible()) {
             if e.kind == EffectKind::LayerBlur && e.radius > 0.0 {
                 let sigma = f64::from(e.radius) / 2.0 * node.world.scale_factor() * self.scale;
