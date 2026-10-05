@@ -554,6 +554,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 Arc::new(creator),
                 recorder.clone(),
             )
+            .with_slack_source(Arc::new(
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+            ))
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(

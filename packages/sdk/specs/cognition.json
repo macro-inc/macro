@@ -1097,6 +1097,35 @@
         }
       }
     },
+    "/import/runs/{source}/discover": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Discover candidates for user selection without auto-importing them.",
+        "operationId": "discover_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Import source",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Discovery accepted (idempotent)"
+          },
+          "400": {
+            "description": "Unknown import source or discovery not supported"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/import/runs/{source}/dismiss": {
       "post": {
         "tags": ["import"],
@@ -3865,7 +3894,7 @@
       "Initiator": {
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
-        "enum": ["onboarding", "chat", "archive"]
+        "enum": ["onboarding", "chat", "archive", "manual"]
       },
       "JwtPayload": {
         "type": "object",
@@ -4554,9 +4583,23 @@
         "description": "Metadata for one staged Slack channel.",
         "required": ["name"],
         "properties": {
+          "archived": {
+            "type": "boolean",
+            "description": "Whether Slack has archived this channel."
+          },
           "channel_id": {
             "type": ["string", "null"],
             "description": "Slack's channel id (e.g. `C0123456789`), stable across renames."
+          },
+          "member_count": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Total human members in the Slack channel.",
+            "minimum": 0
+          },
+          "members_resolved": {
+            "type": "boolean",
+            "description": "Whether `participants` reflects a live membership read."
           },
           "name": {
             "type": "string",
@@ -4567,7 +4610,7 @@
             "items": {
               "$ref": "#/components/schemas/SlackParticipant"
             },
-            "description": "The channel's most relevant members, when discoverable."
+            "description": "Slack members matched to the Macro team roster when discovery resolved membership."
           },
           "purpose": {
             "type": ["string", "null"],
