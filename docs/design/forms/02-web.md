@@ -148,7 +148,7 @@ component is shared; only the shell differs.
 
 Header (signed in): wordmark, breadcrumb "Forms / <name>", "Responding as
 <me>", "Open in Macro". Public: a slim line "Macro Forms · Public form ·
-responses are anonymous", a footer with "Report this form" and the
+visitors who are not signed in respond anonymously", a footer with "Report this form" and the
 never-share-passwords line, and a soft "Have a Macro account? Sign in to
 edit your answer later" notice.
 

@@ -161,7 +161,7 @@ the table has two columns it will write on every submission:
 It looks for existing columns by name and kind first and reuses them, so two
 forms over one table share them. It records their ids on the form. They are
 never questions. If someone deletes one in the grid, the foreign key nulls the
-id and the form stops writing that cell; the ledger still has the data.
+id and the form stops writing that cell; the ledger still has the data. A column retyped away from its managed kind also stops receiving that metadata; the ledger remains authoritative.
 
 ## 4. Widgets: how a column kind is asked
 
