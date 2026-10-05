@@ -470,12 +470,26 @@ export function ViewerCanvas(props: {
       const r = entry.contentRect;
       const ratio = window.devicePixelRatio || 1;
       setDpr(ratio);
-      for (const canvas of [tileCanvas, overlayCanvas]) {
-        canvas.width = Math.max(1, Math.round(r.width * ratio));
-        canvas.height = Math.max(1, Math.round(r.height * ratio));
-      }
+      const width = Math.max(1, Math.round(r.width * ratio));
+      const height = Math.max(1, Math.round(r.height * ratio));
       viewer.resize({ w: r.width, h: r.height });
-      requestDraw();
+      // Sizing a canvas clears it, so it is drawn again before this frame
+      // is painted: waiting for the next frame would show it blank (black)
+      // for a frame each time the split resizes, as when the app's sidebar
+      // opens or closes.
+      if (tileCanvas.width === width && tileCanvas.height === height) {
+        requestDraw();
+        return;
+      }
+      for (const canvas of [tileCanvas, overlayCanvas]) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      if (frame !== undefined) {
+        cancelAnimationFrame(frame);
+        frame = undefined;
+      }
+      draw();
     });
     observer.observe(host);
     onCleanup(() => observer.disconnect());

@@ -576,3 +576,39 @@ test('is read-only without edit access', async ({ page }) => {
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('fig-design-panel')).toContainText('Home');
 });
+
+test('stays drawn while its split resizes', async ({ page }) => {
+  await open(page);
+  // As when the app's sidebar opens or closes: the viewer narrows, then
+  // widens again. The canvas is read right after each frame is painted.
+  const painted = await page.evaluate(async () => {
+    const viewer = document.querySelector<HTMLElement>(
+      '[data-testid="fig-viewer"]'
+    );
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      '[data-testid="fig-canvas"] canvas'
+    );
+    const host = viewer?.parentElement;
+    if (!host || !canvas) return [];
+    const corner = () => {
+      const ctx = canvas.getContext('2d');
+      const at = ctx?.getImageData(1, 1, 1, 1).data;
+      return at ? [at[0], at[1], at[2]] : [];
+    };
+    const afterPaint = () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => setTimeout(resolve, 0))
+      );
+    const out: number[][] = [];
+    const width = host.getBoundingClientRect().width;
+    for (const w of [width - 200, width - 120, width]) {
+      host.style.width = `${w}px`;
+      await afterPaint();
+      out.push(corner());
+    }
+    return out;
+  });
+  expect(painted).toHaveLength(3);
+  // Never cleared to black: the page's light background shows.
+  for (const [r, g, b] of painted) expect(r + g + b).toBeGreaterThan(600);
+});
