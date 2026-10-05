@@ -105,8 +105,8 @@ any local collection of `.fig` files after rendering changes; third-party
 files are not committed.
 
 The browser build: `just build-fig-engine-wasm` from `apps/web` (wasm-pack,
-`--target web`, SIMD enabled; `ensure-fig-engine-wasm` rebuilds only when the
-crate changed).
+`--target web`, SIMD enabled, the `fig-engine-wasm` profile with full LTO;
+`ensure-fig-engine-wasm` rebuilds only when the crate changed).
 
 ## Tests
 

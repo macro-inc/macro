@@ -1113,7 +1113,7 @@ fn scan_guid(
 /// was opened from. Records of unedited nodes are copied byte for byte;
 /// only edited ones are decoded and re-encoded.
 pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
-    let container = Container::open(original)?;
+    let container = Container::open_without_images(original)?;
     let schema = Schema::decode(&container.schema)?;
     let b = Build { schema: &schema };
     let message_def = b
@@ -1306,7 +1306,7 @@ fn package(doc: &Document, canvas: &[u8], meta: Option<&serde_json::Value>) -> V
     let mut hashes: Vec<&String> = doc.images.keys().collect();
     hashes.sort();
     for h in hashes {
-        names.push((format!("images/{h}"), doc.images[h].as_slice()));
+        names.push((format!("images/{h}"), &doc.images[h]));
     }
     let entries: Vec<(&str, &[u8])> = names.iter().map(|(n, b)| (n.as_str(), *b)).collect();
     crate::zip::write_stored(&entries)

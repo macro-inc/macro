@@ -16,7 +16,9 @@
  *   settles.
  * - Requests that fall out of view before they start are cancelled.
  * - After an edit, tiles in the changed area are re-rendered while the old
- *   ones stay on screen, so editing never flashes.
+ *   ones stay on screen, so editing never flashes. The overview's changed
+ *   tiles wait behind the view's, so a drag does not re-render the whole
+ *   page at every step.
  */
 
 import type {
@@ -74,6 +76,8 @@ export interface PageState {
 const OVERVIEW_SIDE = 2048;
 /** Quiet time after which the view counts as settled. */
 const SETTLE_MS = 140;
+/** Priority of overview tiles changed by an edit: after every view tile. */
+const AFTER_VIEW = Number.MAX_SAFE_INTEGER;
 
 export function createTileCompositor(options: TileCompositorOptions) {
   const { engine } = options;
@@ -174,14 +178,15 @@ export function createTileCompositor(options: TileCompositorOptions) {
     return quantizeScale(Math.min(OVERVIEW_SIDE / Math.max(c.w, c.h), 64));
   };
 
-  const requestOverview = () => {
+  /** The overview's tiles, first of all unless `priority` says otherwise. */
+  const requestOverview = (priority = -1) => {
     const scale = overviewScale();
     const c = page?.content;
     if (!scale || !c) return;
     const side = TILE / scale;
     for (let iy = Math.floor(c.y / side); iy * side < c.y + c.h; iy++) {
       for (let ix = Math.floor(c.x / side); ix * side < c.x + c.w; ix++) {
-        request({ scale, ix, iy }, -1, true);
+        request({ scale, ix, iy }, priority, true);
       }
     }
   };
@@ -267,14 +272,14 @@ export function createTileCompositor(options: TileCompositorOptions) {
         // Edits can grow the page's content beyond its old bounds.
         page = { ...page, content: unionContent(page.content, rect) };
       }
-      requestOverview();
+      requestOverview(AFTER_VIEW);
       if (lastView) schedule(lastView, true);
     },
 
     /** New content bounds for the same page (after edits). */
     setContent(content: Rect | undefined) {
       if (page) page = { ...page, content };
-      requestOverview();
+      requestOverview(AFTER_VIEW);
       if (lastView) schedule(lastView, true);
     },
 

@@ -42,3 +42,6 @@ wasm-bindgen = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
+
+[package.metadata.wasm-pack.profile.custom]
+wasm-opt = false

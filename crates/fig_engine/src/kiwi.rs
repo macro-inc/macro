@@ -11,6 +11,7 @@ use crate::error::{Result, corrupt};
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
+use std::sync::Arc;
 
 /// FxHash: field names are short and trusted-shape, so a multiply-rotate
 /// hash beats SipHash several times over on the lookups decoding does.
@@ -349,17 +350,14 @@ impl Schema {
     /// literal names over and over, so a small cache keyed by the name's
     /// address answers most lookups without hashing the name.
     #[inline]
-    pub fn field_index(&self, def: u32, name: &str) -> Option<u16> {
+    pub fn field_index(&self, def: u32, name: &'static str) -> Option<u16> {
         let key = (name.as_ptr() as usize, name.len(), def);
         let slot = ((key.0 >> 3) ^ key.0 >> 11 ^ (def as usize).wrapping_mul(31)) % NAME_CACHE;
         let cached = self.name_cache[slot].get();
-        // The key is the name's address; a different name can later reuse
-        // a freed one, so a hit is checked against the field's name.
-        if cached.0 == key
-            && let Some(index) = cached.1
-            && self.defs[def as usize].fields[index as usize].name == name
-        {
-            return Some(index);
+        // Static names are never freed, so an address and length name one
+        // string: a hit (or a known miss) needs no comparison.
+        if cached.0 == key {
+            return cached.1;
         }
         let index = self.defs[def as usize].index_of(name);
         self.name_cache[slot].set((key, index));
@@ -854,7 +852,7 @@ impl<'a> MsgRef<'a> {
         Self { schema, msg }
     }
 
-    pub fn get(&self, name: &str) -> Option<ValRef<'a>> {
+    pub fn get(&self, name: &'static str) -> Option<ValRef<'a>> {
         if self.msg.fields.is_empty() {
             return None;
         }
@@ -872,7 +870,7 @@ impl<'a> MsgRef<'a> {
             })
     }
 
-    pub fn has(&self, name: &str) -> bool {
+    pub fn has(&self, name: &'static str) -> bool {
         self.get(name).is_some()
     }
 
@@ -880,39 +878,39 @@ impl<'a> MsgRef<'a> {
         &self.schema.def(self.msg.def).name
     }
 
-    pub fn msg(&self, name: &str) -> Option<MsgRef<'a>> {
+    pub fn msg(&self, name: &'static str) -> Option<MsgRef<'a>> {
         self.get(name).and_then(|v| v.as_msg())
     }
 
-    pub fn f32(&self, name: &str) -> Option<f32> {
+    pub fn f32(&self, name: &'static str) -> Option<f32> {
         self.get(name).and_then(|v| v.as_f32())
     }
 
-    pub fn u32(&self, name: &str) -> Option<u32> {
+    pub fn u32(&self, name: &'static str) -> Option<u32> {
         self.get(name).and_then(|v| v.as_u32())
     }
 
-    pub fn i32(&self, name: &str) -> Option<i32> {
+    pub fn i32(&self, name: &'static str) -> Option<i32> {
         self.get(name).and_then(|v| v.as_i32())
     }
 
-    pub fn bool(&self, name: &str) -> Option<bool> {
+    pub fn bool(&self, name: &'static str) -> Option<bool> {
         self.get(name).and_then(|v| v.as_bool())
     }
 
-    pub fn str(&self, name: &str) -> Option<&'a str> {
+    pub fn str(&self, name: &'static str) -> Option<&'a str> {
         self.get(name).and_then(|v| v.as_str())
     }
 
-    pub fn enum_name(&self, name: &str) -> Option<&'a str> {
+    pub fn enum_name(&self, name: &'static str) -> Option<&'a str> {
         self.get(name).and_then(|v| v.as_enum())
     }
 
-    pub fn bytes(&self, name: &str) -> Option<&'a [u8]> {
+    pub fn bytes(&self, name: &'static str) -> Option<&'a [u8]> {
         self.get(name).and_then(|v| v.as_bytes())
     }
 
-    pub fn list(&self, name: &str) -> impl Iterator<Item = ValRef<'a>> + 'a {
+    pub fn list(&self, name: &'static str) -> impl Iterator<Item = ValRef<'a>> + 'a {
         let schema = self.schema;
         self.get(name)
             .and_then(|v| match v.value {
@@ -924,18 +922,44 @@ impl<'a> MsgRef<'a> {
             .map(move |value| ValRef { schema, value })
     }
 
-    pub fn msgs(&self, name: &str) -> impl Iterator<Item = MsgRef<'a>> + 'a {
+    pub fn msgs(&self, name: &'static str) -> impl Iterator<Item = MsgRef<'a>> + 'a {
         self.list(name).filter_map(|v| v.as_msg())
     }
 
-    pub fn floats(&self, name: &str) -> Option<&'a [f32]> {
+    /// `f` of each message in the list `name`, collected straight into one
+    /// allocation (a filtered iterator would collect into a `Vec` first and
+    /// copy it).
+    pub fn collect_msgs<T>(
+        &self,
+        name: &'static str,
+        mut f: impl FnMut(MsgRef<'a>) -> T,
+    ) -> Arc<[T]> {
+        let schema = self.schema;
+        let items = match self.get(name).map(|v| v.value) {
+            Some(Value::List(items)) => items.as_slice(),
+            _ => &[],
+        };
+        if items.iter().all(|v| matches!(v, Value::Msg(_))) {
+            items
+                .iter()
+                .map(|v| match v {
+                    Value::Msg(msg) => f(MsgRef { schema, msg }),
+                    _ => unreachable!("checked above"),
+                })
+                .collect()
+        } else {
+            self.msgs(name).map(f).collect()
+        }
+    }
+
+    pub fn floats(&self, name: &'static str) -> Option<&'a [f32]> {
         match self.get(name)?.value {
             Value::Floats(v) => Some(v),
             _ => None,
         }
     }
 
-    pub fn uints(&self, name: &str) -> Option<&'a [u32]> {
+    pub fn uints(&self, name: &'static str) -> Option<&'a [u32]> {
         match self.get(name)?.value {
             Value::Uints(v) => Some(v),
             _ => None,
