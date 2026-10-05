@@ -1276,6 +1276,7 @@ fn mention_broker_events_map_entity_mention_created_and_deleted() {
 #[test]
 fn mention_broker_events_skip_unrelated_events() {
     let events = mention_broker_events_for_event(&ChannelEvent::PictureChanged {
+        actor: user("owner@test.com"),
         channel_id: Uuid::new_v4(),
         recipients: Vec::new(),
     });
