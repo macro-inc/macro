@@ -127,12 +127,9 @@ describe('GraphQL preview hover reactivity', () => {
       preferGetMethod: false,
     });
     const executeQuery = vi.spyOn(fixture.client, 'executeQuery');
-    const [parent, parentControls, disposeParent] = createRoot((dispose) => {
+    const [parent, parentControls] = createRoot((dispose) => {
       disposals.push(dispose);
-      return [
-        ...useItemPreview(() => ({ id, type: 'document' })),
-        dispose,
-      ] as const;
+      return useItemPreview(() => ({ id, type: 'document' }));
     });
     vi.advanceTimersByTime(30);
     await flushResults();
@@ -146,18 +143,15 @@ describe('GraphQL preview hover reactivity', () => {
       operationName: 'ItemPreviews',
     });
 
-    const [popup, popupControls, disposePopup] = createRoot((dispose) => {
+    const [popup, popupControls] = createRoot((dispose) => {
       disposals.push(dispose);
       // ItemPreview's inline documentInfo depends on the parent's preview
       // object; DocumentPreviewContent derives another ItemEntity from it.
       const documentInfo = () => ({ id: parent().id, type: 'md' });
-      return [
-        ...useItemPreview(() => ({
-          id: documentInfo().id,
-          type: 'document',
-        })),
-        dispose,
-      ] as const;
+      return useItemPreview(() => ({
+        id: documentInfo().id,
+        type: 'document',
+      }));
     });
     await flushResults();
     expect(popup()).toMatchObject({ id, name: 'Roadmap', loading: false });
@@ -185,24 +179,6 @@ describe('GraphQL preview hover reactivity', () => {
     });
     expect(popupControls.documentProperties()).toMatchObject({
       canEdit: false,
-    });
-    vi.advanceTimersByTime(90);
-    await flushResults();
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(executeQuery).toHaveBeenCalledTimes(2);
-
-    // Lexical replaces decorators when a direct sibling changes. The old
-    // consumers disappear before their replacements mount in the same turn.
-    disposeParent();
-    disposePopup();
-    const replacement = createRoot((dispose) => {
-      disposals.push(dispose);
-      return useItemPreview(() => ({ id, type: 'document' }))[0];
-    });
-    expect(replacement()).toMatchObject({
-      id,
-      name: 'Renamed',
-      loading: false,
     });
     vi.advanceTimersByTime(90);
     await flushResults();

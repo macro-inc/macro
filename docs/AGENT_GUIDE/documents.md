@@ -1615,7 +1615,8 @@ With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemP
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
-fetch cascade.
+fetch cascade. Adding or changing a direct sibling of a document reference must
+leave the reference mounted without flashing or restarting its preview query.
 
 ## Embedded document cards
 

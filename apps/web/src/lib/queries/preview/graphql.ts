@@ -684,13 +684,8 @@ export function createGraphqlItemPreviewQuery(
   });
   const cachedPreview = () =>
     group()?.cached().get(normalizedRecordKey(item())!);
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
   const data = () => livePreview() ?? cachedPreview();
   const refetch = async () => {
-    if (disposed) return;
     await (await ready)?.refresh();
   };
   onCleanup(
