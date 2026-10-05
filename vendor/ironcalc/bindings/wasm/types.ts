@@ -603,3 +603,39 @@ export interface IronCalcTheme {
   /** Followed-hyperlink color. */
   fol_hlink: string;
 }
+
+/** MACRO: a pivot table as GETPIVOTDATA reads it, for setPivotTables.
+ *  Names and texts are trimmed and in lower case. */
+export interface PivotLayout {
+  /** The index of its sheet. */
+  sheet: number;
+  /** The cells it covers: [top, left, bottom, right], counted from 1. */
+  range: [number, number, number, number];
+  /** For each data field, the names it goes by. */
+  data: string[][];
+  /** Every field of its source, by index. */
+  fields: PivotLayoutField[];
+  /** Report filters: a field, and the one item it shows if it shows one. */
+  filters?: [number, number | null][];
+  /** The rows of values, top to bottom. */
+  rows: PivotLayoutLine[];
+  /** The columns of values, left to right. */
+  columns: PivotLayoutLine[];
+}
+
+export interface PivotLayoutField {
+  names: string[];
+  items: { text: string; number?: number }[];
+}
+
+/** A row or a column of values. */
+export interface PivotLayoutLine {
+  /** Its row or column number. */
+  at: number;
+  /** The items it is for, as [field, item] indexes. */
+  items: [number, number][];
+  /** The data field it shows, when data fields are listed along it. */
+  data?: number;
+  /** Whether it is a subtotal or a grand total. */
+  total?: boolean;
+}

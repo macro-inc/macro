@@ -66,11 +66,12 @@ function updateWorkbook(
   }
   inputs = next;
   const structure = JSON.stringify(
-    [...inputs.values()].map(({ id, name, rowCount, metadata }) => [
+    [...inputs.values()].map(({ id, name, rowCount, metadata, pivots }) => [
       id,
       name,
       rowCount,
       metadata ?? null,
+      pivots ?? null,
     ])
   );
   session ??= engine.session();
@@ -93,6 +94,7 @@ function updateWorkbook(
       cells: sheet.cells,
       rowCount: sheet.rowCount,
       metadata: sheet.metadata,
+      pivots: sheet.pivots,
     })),
     { includeTypes: true }
   );

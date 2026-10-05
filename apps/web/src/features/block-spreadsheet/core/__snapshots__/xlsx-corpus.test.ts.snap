@@ -965,8 +965,8 @@ exports[`real-world XLSX corpus > sec-jpmorgan-10k-fy2024-financial-repor… 1`]
 exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
 {
   "calculation": {
-    "compared": 438,
-    "matched": 414,
+    "compared": 439,
+    "matched": 415,
     "mismatchedFunctions": {
       "AREAS": 1,
       "BESSELY": 1,
@@ -992,13 +992,12 @@ exports[`real-world XLSX corpus > sheetjs-formula-stress-test.xlsx 1`] = `
     "volatile": 8,
   },
   "cells": 1845,
-  "formulas": 446,
+  "formulas": 447,
   "roundTrip": "identical",
   "sheets": 10,
   "styledCells": 164,
   "warnings": [
     "Macro cannot calculate these Excel functions yet, so their formulas show errors: ECMA.CEILING, JIS, PHONETIC, YEN.",
-    "Pivot table lookups (GETPIVOTDATA) are imported as their last calculated values.",
     "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
   ],
 }
@@ -1071,13 +1070,13 @@ exports[`real-world XLSX corpus > worldbank-commodity-prices-pink-sheet-m… 1`]
 exports[`real-world XLSX corpus > zenodo-ccs-cement-post-tax-dcf-model.xl… 1`] = `
 {
   "calculation": {
-    "compared": 1747,
-    "matched": 1747,
+    "compared": 1752,
+    "matched": 1752,
     "mismatchedFunctions": {},
     "volatile": 0,
   },
   "cells": 16138,
-  "formulas": 1747,
+  "formulas": 1752,
   "roundTrip": "identical",
   "sheets": 12,
   "styledCells": 20467,
@@ -1087,7 +1086,6 @@ exports[`real-world XLSX corpus > zenodo-ccs-cement-post-tax-dcf-model.xl… 1`]
     "Hyperlinks are imported as display text; link targets are not retained.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Patterned fills are shown as a blended solid color.",
-    "Pivot table lookups (GETPIVOTDATA) are imported as their last calculated values.",
     "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
     "Rich text is imported as plain text with the cell’s formatting.",
     "Text rotation, shrink-to-fit and right-to-left layout are not imported.",

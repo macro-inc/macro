@@ -13,6 +13,8 @@ mod database;
 pub(crate) mod date_and_time;
 mod engineering;
 mod financial;
+mod getpivotdata; // MACRO
+pub use getpivotdata::{PivotField, PivotItem, PivotLayout, PivotLine}; // MACRO
 mod information;
 mod lift; // MACRO
 mod logical;
@@ -546,6 +548,7 @@ pub enum Function {
     Subtotal,
     // MACRO: not in upstream yet
     Aggregate,
+    Getpivotdata,
 
     // Database
     Daverage,
@@ -581,6 +584,7 @@ macro_rules! impl_function_lookup {
                 // MACRO: functions the language data does not name yet.
                 match key.as_str() {
                     "AGGREGATE" => Some(Function::Aggregate),
+                    "GETPIVOTDATA" => Some(Function::Getpivotdata),
                     _ => None,
                 }
             }
@@ -1583,6 +1587,7 @@ impl Function {
             Function::Gestep => functions.gestep.clone(),
             Function::Subtotal => functions.subtotal.clone(),
             Function::Aggregate => "AGGREGATE".to_string(), // MACRO
+            Function::Getpivotdata => "GETPIVOTDATA".to_string(), // MACRO
             Function::Daverage => functions.daverage.clone(),
             Function::Dcount => functions.dcount.clone(),
             Function::Dget => functions.dget.clone(),
@@ -1626,8 +1631,8 @@ impl Function {
         }
     }
 
-    pub fn into_iter() -> IntoIter<Function, 497> {
-        // MACRO: AGGREGATE
+    pub fn into_iter() -> IntoIter<Function, 498> {
+        // MACRO: AGGREGATE and GETPIVOTDATA
         [
             Function::And,
             Function::False,
@@ -1963,7 +1968,8 @@ impl Function {
             Function::Delta,
             Function::Gestep,
             Function::Subtotal,
-            Function::Aggregate, // MACRO
+            Function::Aggregate,    // MACRO
+            Function::Getpivotdata, // MACRO
             Function::Roman,
             Function::Arabic,
             Function::Combin,
@@ -2639,6 +2645,7 @@ impl<'a> Model<'a> {
             Function::Gestep => self.fn_gestep(args, cell),
             Function::Subtotal => self.fn_subtotal(args, cell),
             Function::Aggregate => self.fn_aggregate(args, cell), // MACRO
+            Function::Getpivotdata => self.fn_getpivotdata(args, cell), // MACRO
             Function::Acot => self.fn_acot(args, cell),
             Function::Acoth => self.fn_acoth(args, cell),
             Function::Cot => self.fn_cot(args, cell),

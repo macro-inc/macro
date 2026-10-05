@@ -1342,6 +1342,19 @@ impl Model {
         serde_wasm_bindgen::to_value(&overlay).map_err(|e| to_js_error(e.to_string()))
     }
 
+    /// MACRO: describes the workbook's pivot tables for GETPIVOTDATA, from
+    /// the next evaluation on.
+    #[wasm_bindgen(js_name = "setPivotTables")]
+    pub fn set_pivot_tables(
+        &mut self,
+        #[wasm_bindgen(unchecked_param_type = "PivotLayout[]")] pivot_tables: JsValue,
+    ) -> Result<(), JsError> {
+        let pivot_tables: Vec<ironcalc_base::PivotLayout> =
+            serde_wasm_bindgen::from_value(pivot_tables).map_err(|e| to_js_error(e.to_string()))?;
+        self.model.set_pivot_tables(pivot_tables);
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = "addConditionalFormatting")]
     pub fn add_conditional_formatting(
         &mut self,

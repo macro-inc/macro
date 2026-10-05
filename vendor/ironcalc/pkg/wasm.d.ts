@@ -607,6 +607,42 @@ export interface IronCalcTheme {
   fol_hlink: string;
 }
 
+/** MACRO: a pivot table as GETPIVOTDATA reads it, for setPivotTables.
+ *  Names and texts are trimmed and in lower case. */
+export interface PivotLayout {
+  /** The index of its sheet. */
+  sheet: number;
+  /** The cells it covers: [top, left, bottom, right], counted from 1. */
+  range: [number, number, number, number];
+  /** For each data field, the names it goes by. */
+  data: string[][];
+  /** Every field of its source, by index. */
+  fields: PivotLayoutField[];
+  /** Report filters: a field, and the one item it shows if it shows one. */
+  filters?: [number, number | null][];
+  /** The rows of values, top to bottom. */
+  rows: PivotLayoutLine[];
+  /** The columns of values, left to right. */
+  columns: PivotLayoutLine[];
+}
+
+export interface PivotLayoutField {
+  names: string[];
+  items: { text: string; number?: number }[];
+}
+
+/** A row or a column of values. */
+export interface PivotLayoutLine {
+  /** Its row or column number. */
+  at: number;
+  /** The items it is for, as [field, item] indexes. */
+  items: [number, number][];
+  /** The data field it shows, when data fields are listed along it. */
+  data?: number;
+  /** Whether it is a subtotal or a grand total. */
+  total?: boolean;
+}
+
 
 export class Model {
     free(): void;
@@ -784,6 +820,11 @@ export class Model {
     setLanguage(language: string): void;
     setLocale(locale: string): void;
     setName(name: string): void;
+    /**
+     * MACRO: describes the workbook's pivot tables for GETPIVOTDATA, from
+     * the next evaluation on.
+     */
+    setPivotTables(pivot_tables: PivotLayout[]): void;
     setRowsHeight(sheet: number, row_start: number, row_end: number, height: number): void;
     setRowsHidden(sheet: number, row_start: number, row_end: number, hidden: boolean): void;
     setSelectedCell(row: number, column: number): void;
@@ -980,6 +1021,7 @@ export interface InitOutput {
     readonly model_setLanguage: (a: number, b: number, c: number) => [number, number];
     readonly model_setLocale: (a: number, b: number, c: number) => [number, number];
     readonly model_setName: (a: number, b: number, c: number) => void;
+    readonly model_setPivotTables: (a: number, b: any) => [number, number];
     readonly model_setRowsHeight: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly model_setRowsHidden: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly model_setSelectedCell: (a: number, b: number, c: number) => [number, number];

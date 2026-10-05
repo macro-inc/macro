@@ -1,3 +1,4 @@
+import { sheetPivotLayouts } from '@macro-inc/spreadsheet/pivot-layout';
 import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
 import {
   type Accessor,
@@ -161,6 +162,7 @@ export function createCalculation(
       sentRevision = incremental.revision();
       let changed = false;
       const patches: CalculationSheetPatch[] = sheets.map((sheet) => {
+        const pivots = sheetPivotLayouts(sheet.metadata?.pivotTables);
         const descriptor = {
           id: sheet.id,
           name: sheet.name,
@@ -172,6 +174,9 @@ export function createCalculation(
             hiddenRows: sheet.metadata?.hiddenRows,
             conditionalFormats: sheet.metadata?.conditionalFormats,
           },
+          // Where pivot tables show their values, for GETPIVOTDATA; the
+          // tables themselves are too large to send with every edit.
+          ...(pivots.length && { pivots }),
         };
         const previous = sent.get(sheet.id);
         if (
@@ -213,11 +218,12 @@ export function createCalculation(
           clockCells.delete(id);
         }
       const layout = JSON.stringify(
-        patches.map(({ id, name, rowCount, metadata }) => [
+        patches.map(({ id, name, rowCount, metadata, pivots }) => [
           id,
           name,
           rowCount,
           metadata,
+          pivots,
         ])
       );
       if (layout !== sentSheets) changed = true;

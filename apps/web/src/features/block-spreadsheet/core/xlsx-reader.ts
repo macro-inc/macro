@@ -1,3 +1,4 @@
+import { pivotLayout } from '@macro-inc/spreadsheet/pivot-layout';
 import {
   MAX_NOTE_LENGTH,
   MAX_SHEET_NOTES,
@@ -37,6 +38,7 @@ import {
   importSingleFunction,
   markImplicitIntersections,
   normalizeReferences,
+  pivotTableArguments,
   resolveStructuredReferences,
   stripFunctionPrefixes,
   translateFormula,
@@ -343,6 +345,13 @@ type WorkbookContext = {
   warnings: Set<string>;
   unsupportedFunctions: Set<string>;
   supportedFunctions?: ReadonlySet<string>;
+  /** GETPIVOTDATA formulas, kept only if their pivot table is. */
+  pivotLookups: {
+    sheet: string;
+    address: string;
+    formula: string;
+    literal: string;
+  }[];
 };
 
 type PendingShared = {
@@ -629,12 +638,6 @@ function readWorksheet(
           'Formulas that reference other workbooks are imported as their last calculated values.'
         );
         value = literal();
-      } else if (formulaFunctionNames(source).includes('GETPIVOTDATA')) {
-        // Pivot tables are not imported, so these lookups could never calculate.
-        warnings.add(
-          'Pivot table lookups (GETPIVOTDATA) are imported as their last calculated values.'
-        );
-        value = literal();
       } else {
         const resolved = importFormula(
           source,
@@ -652,6 +655,16 @@ function readWorksheet(
         } else {
           value = `=${resolved}`;
           calculated = true;
+          if (
+            formula.t !== 'array' &&
+            formulaFunctionNames(resolved).includes('GETPIVOTDATA')
+          )
+            context.pivotLookups.push({
+              sheet: entry.name,
+              address,
+              formula: resolved,
+              literal: literal(),
+            });
         }
       }
     } else value = literal();
@@ -1126,6 +1139,53 @@ function readTables(
 }
 
 /** Decode a validated XLSX package into Macro sheets, without ExcelJS. */
+/**
+ * GETPIVOTDATA reads the cells of the pivot tables Macro keeps. A lookup of
+ * any other table, or of one it cannot tell, keeps its last value.
+ */
+function keepPivotLookups(
+  sheets: WorkbookFileSheet[],
+  context: WorkbookContext
+) {
+  for (const lookup of context.pivotLookups) {
+    const sheet = sheets.find((entry) => entry.name === lookup.sheet);
+    const cell = sheet?.cells[lookup.address];
+    if (!sheet || !cell) continue;
+    const targets = pivotTableArguments(lookup.formula);
+    const kept =
+      targets.length > 0 &&
+      targets.every((target) => {
+        if (!target) return false;
+        const holder =
+          target.sheet === undefined
+            ? sheet
+            : sheets.find(
+                (entry) =>
+                  entry.name.toLowerCase() === target.sheet?.toLowerCase()
+              );
+        return !!holder?.metadata?.pivotTables?.some((pivot) => {
+          const range = rangeBounds(pivot.location);
+          return (
+            !!range &&
+            target.row >= range.top &&
+            target.row <= range.bottom &&
+            target.column >= range.left &&
+            target.column <= range.right &&
+            pivotLayout(pivot) !== undefined
+          );
+        });
+      });
+    if (kept) continue;
+    context.warnings.add(
+      'Pivot table lookups (GETPIVOTDATA) of pivot tables Macro could not keep are imported as their last calculated values.'
+    );
+    const { value: _formula, ...style } = cell;
+    if (lookup.literal || Object.keys(style).length)
+      sheet.cells[lookup.address] = { ...style, value: lookup.literal };
+    else delete sheet.cells[lookup.address];
+  }
+}
+
 export function readXlsxWorkbook(
   archive: XlsxArchive,
   options: { supportedFunctions?: ReadonlySet<string> } = {}
@@ -1238,6 +1298,7 @@ export function readXlsxWorkbook(
     warnings,
     unsupportedFunctions: new Set(),
     supportedFunctions: options.supportedFunctions,
+    pivotLookups: [],
   };
   const result = worksheets.map((sheet) => readWorksheet(sheet, context));
   const total = result.reduce(
@@ -1280,6 +1341,7 @@ export function readXlsxWorkbook(
       ...(entry.sheet !== undefined && { local: true }),
     });
   }
+  keepPivotLookups(result, context);
   if (context.unsupportedFunctions.size)
     warnings.add(
       `Macro cannot calculate these Excel functions yet, so their formulas show errors: ${[...context.unsupportedFunctions].sort().join(', ')}.`

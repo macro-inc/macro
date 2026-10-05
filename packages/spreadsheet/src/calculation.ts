@@ -13,6 +13,7 @@ import {
   readConditionalAppearance,
 } from './conditional-formatting';
 import { displayNumber, numericLiteral } from './number-display';
+import { type SheetPivotLayout, sheetPivotLayouts } from './pivot-layout';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -47,6 +48,8 @@ export type CalculationSheet = {
   cells: SpreadsheetCells;
   rowCount: number;
   metadata?: WorkbookSheetMetadata;
+  /** The layouts of its pivot tables, when `metadata` leaves them out. */
+  pivots?: SheetPivotLayout[];
 };
 export type WorkbookCalculation = Record<string, SpreadsheetCalculation>;
 export type CalculationContext = { sheetNames: string[]; activeSheet: number };
@@ -1104,6 +1107,13 @@ function buildWorkbook(sheets: CalculationSheet[]): EngineWorkbook {
       conditionalCells += covered;
       workbook.entered[sheetIndex].conditionalRules = covered > 0;
     }
+    // GETPIVOTDATA reads the cells of pivot tables as Excel laid them out.
+    const pivots = bounded.flatMap((sheet, sheetIndex) =>
+      (sheet.pivots ?? sheetPivotLayouts(sheet.metadata?.pivotTables)).map(
+        (layout) => ({ ...layout, sheet: sheetIndex })
+      )
+    );
+    if (pivots.length) model.setPivotTables(pivots);
     model.resumeEvaluation();
     model.evaluate();
     return workbook;

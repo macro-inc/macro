@@ -702,6 +702,7 @@ impl<'a> Model<'a> {
             evaluation: crate::evaluation::Evaluation::default(),
             cf_cache: HashMap::new(),
             links: HashMap::new(),
+            pivot_tables: Vec::new(), // MACRO
         };
         model.parse_formulas();
         model.evaluate_conditional_formatting();

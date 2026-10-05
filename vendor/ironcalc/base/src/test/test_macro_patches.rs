@@ -300,3 +300,108 @@ fn lifted_calls_reuse_results_for_repeated_values() {
     assert_eq!(model._get_text("C1"), "7");
     assert_eq!(model._get_text("C2"), "7");
 }
+
+#[test]
+fn getpivotdata_reads_the_cells_of_a_described_pivot_table() {
+    let mut model = new_empty_model();
+    // Sales by region and city down, by quarter across, filtered to 2024.
+    let rows = [
+        ("A5", "East", ["10", "20", "30"]),
+        ("A6", "Boston", ["4", "5", "9"]),
+        ("A7", "NYC", ["6", "15", "21"]),
+        ("A8", "West", ["1", "2", "3"]),
+        ("A9", "Grand Total", ["11", "22", "33"]),
+    ];
+    for (label, text, values) in rows {
+        model._set(label, text);
+        let row = &label[1..];
+        for (column, value) in ["B", "C", "D"].iter().zip(values) {
+            model._set(&format!("{column}{row}"), value);
+        }
+    }
+    model._set("A3", "Sum of Sales");
+    let layout = r#"[{
+        "sheet": 0,
+        "range": [3, 1, 9, 4],
+        "data": [["sum of sales", "sales"]],
+        "fields": [
+            {"names": ["region"], "items": [{"text": "east"}, {"text": "west"}]},
+            {"names": ["city"], "items": [{"text": "boston"}, {"text": "nyc"}]},
+            {"names": ["quarter"], "items": [{"text": "q1"}, {"text": "q2"}]},
+            {"names": ["sales"], "items": []},
+            {"names": ["year"], "items": [{"text": "2023", "number": 2023}, {"text": "2024", "number": 2024}]}
+        ],
+        "filters": [[4, 1]],
+        "rows": [
+            {"at": 5, "items": [[0, 0]]},
+            {"at": 6, "items": [[0, 0], [1, 0]]},
+            {"at": 7, "items": [[0, 0], [1, 1]]},
+            {"at": 8, "items": [[0, 1]]},
+            {"at": 9, "items": [], "total": true}
+        ],
+        "columns": [
+            {"at": 2, "items": [[2, 0]]},
+            {"at": 3, "items": [[2, 1]]},
+            {"at": 4, "items": [], "total": true}
+        ]
+    }]"#;
+    model.set_pivot_tables(serde_json::from_str(layout).unwrap());
+    model._set("E1", "West");
+    model._set("F1", r#"=GETPIVOTDATA("Sales",A3)"#);
+    model._set(
+        "F2",
+        r#"=GETPIVOTDATA("Sum of Sales",$A$3,"Region","East")"#,
+    );
+    model._set(
+        "F3",
+        r#"=GETPIVOTDATA(" sales ",B5,"region","east","City","NYC","Quarter","Q2")"#,
+    );
+    model._set("F4", r#"=GETPIVOTDATA("Sales",A3,"Quarter","Q1")"#);
+    model._set("F5", r#"=GETPIVOTDATA("Sales",A3,"Region",E1)"#);
+    model._set("F6", r#"=GETPIVOTDATA("Sales",A3,"Year",2024)"#);
+    model._set(
+        "F7",
+        r#"=GETPIVOTDATA("Sales",A3,"Year","2024","Region","West")"#,
+    );
+    model._set(
+        "F8",
+        r#"=SUM(GETPIVOTDATA("Sales",$A$3,"Region",{"East","West"}))"#,
+    );
+    // What the table does not show.
+    model._set("G1", r#"=GETPIVOTDATA("Sales",A3,"Region","North")"#);
+    model._set("G2", r#"=GETPIVOTDATA("Sales",A3,"Year",2023)"#);
+    model._set("G3", r#"=GETPIVOTDATA("Profit",A3)"#);
+    model._set("G4", r#"=GETPIVOTDATA("Sales",E1)"#);
+    model._set("G5", r#"=GETPIVOTDATA("Sales",A3,"Country","US")"#);
+    model._set("G6", r#"=GETPIVOTDATA("Sales",A3,"Sales",1)"#);
+    model._set("G7", r#"=GETPIVOTDATA("Sales",A3,"Region")"#);
+    model._set("G8", r#"=GETPIVOTDATA("Sales",A3,"City","Boston")"#);
+    model.evaluate();
+    assert_eq!(model._get_text("F1"), "33");
+    assert_eq!(model._get_text("F2"), "30");
+    assert_eq!(model._get_text("F3"), "15");
+    assert_eq!(model._get_text("F4"), "11");
+    assert_eq!(model._get_text("F5"), "3");
+    assert_eq!(model._get_text("F6"), "33");
+    assert_eq!(model._get_text("F7"), "3");
+    assert_eq!(model._get_text("F8"), "33");
+    for cell in ["G1", "G2", "G3", "G4", "G5", "G6", "G8"] {
+        assert_eq!(model._get_text(cell), "#REF!", "{cell}");
+    }
+    assert_eq!(model._get_text("G7"), "#ERROR!");
+    assert_eq!(
+        model._get_formula("F2"),
+        r#"=GETPIVOTDATA("Sum of Sales",$A$3,"Region","East")"#
+    );
+
+    // It reads the cells as they are now; an empty one shows nothing.
+    model._set("C7", "16");
+    model._set("C8", "");
+    model._set(
+        "G9",
+        r#"=GETPIVOTDATA("Sales",A3,"Region","West","Quarter","Q2")"#,
+    );
+    model.evaluate();
+    assert_eq!(model._get_text("F3"), "16");
+    assert_eq!(model._get_text("G9"), "#REF!");
+}

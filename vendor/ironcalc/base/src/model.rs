@@ -257,6 +257,8 @@ pub struct Model<'a> {
     /// (`parse_formulas`), extended when a formula is added. See
     /// `shared_formula_index`.
     pub(crate) shared_formula_lookup: Vec<SharedFormulaLookup>,
+    /// MACRO: the pivot tables GETPIVOTDATA reads, as the host describes them.
+    pub(crate) pivot_tables: Vec<crate::functions::PivotLayout>,
 }
 
 /// Formula text to index in `Worksheet::shared_formulas`, for one sheet.
@@ -1785,6 +1787,7 @@ impl<'a> Model<'a> {
             evaluation: Evaluation::default(),
             cf_cache: HashMap::new(),
             links: HashMap::new(),
+            pivot_tables: Vec::new(), // MACRO
         };
 
         model.parse_formulas();

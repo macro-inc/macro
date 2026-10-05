@@ -613,6 +613,12 @@ impl<'a> UserModel<'a> {
         Ok(self.model.get_style_for_cell(sheet, row, column)?.num_fmt)
     }
 
+    /// MACRO: describes the workbook's pivot tables for GETPIVOTDATA, from
+    /// the next evaluation on.
+    pub fn set_pivot_tables(&mut self, pivot_tables: Vec<crate::PivotLayout>) {
+        self.model.set_pivot_tables(pivot_tables);
+    }
+
     /// Adds new sheet
     ///
     /// See also:

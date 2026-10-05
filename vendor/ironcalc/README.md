@@ -64,6 +64,11 @@ Calculation, to match Excel:
   (`index_reference`, `get_range` in `model.rs`).
 - AGGREGATE (`functions/aggregate.rs`), which upstream does not have. Its name
   is matched outside the language data, which does not list it yet.
+- GETPIVOTDATA (`functions/getpivotdata.rs`), likewise matched by name. The
+  engine has no pivot tables: the host describes where each one shows its
+  values (`Model::set_pivot_tables`, `PivotLayout`), and GETPIVOTDATA reads the
+  cell whose row and column are for the items it is given, or gives #REF!.
+  `dereference` in `cast.rs` is `pub(crate)` for it.
 - `"<>text"` criteria match numbers and blanks (`functions/util.rs`).
 - Approximate lookups (LOOKUP, VLOOKUP, HLOOKUP, MATCH) compare the lookup value
   only with values of its own type (`functions/binary_search.rs`):
@@ -81,6 +86,8 @@ Host hooks in the WebAssembly package:
 - `getIconSetIcons(name)` lists an Excel icon set's icons and colors, and
   `getConditionalFormattingOverlay(sheet)` returns every cell's evaluated
   conditional format in one call.
+- `setPivotTables(layouts)` describes the workbook's pivot tables for
+  GETPIVOTDATA (`PivotLayout` in `types.ts`).
 - `getCellNumber` reads a number result without formatting it, and
   `getCellNumberFormat` a cell's number format without serializing its whole
   style (`user_model/common.rs`): reading a large workbook's results no longer

@@ -252,7 +252,12 @@ impl<'a> Model<'a> {
     ///
     /// A 1x1 array (the result of arithmetic on such a reference, for instance
     /// `INDIRECT("C3")*1`) is a scalar wrapped in an array and unwraps likewise.
-    fn dereference(&mut self, result: CalcResult, cell: CellReferenceIndex) -> CalcResult {
+    // MACRO: GETPIVOTDATA reads items of any type.
+    pub(crate) fn dereference(
+        &mut self,
+        result: CalcResult,
+        cell: CellReferenceIndex,
+    ) -> CalcResult {
         match result {
             CalcResult::Range { .. } => self.implicit_intersection_to_value(result, cell),
             CalcResult::Array(ref array) if array.len() == 1 && array[0].len() == 1 => {

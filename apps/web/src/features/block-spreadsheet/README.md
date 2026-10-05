@@ -226,7 +226,8 @@ replace current help. The cell editor and formula bar share the same accessible
 listbox, keyboard insertion, and argument hints. The function catalog is adapted
 from IronCalc's `webapp/IronCalc/src/components/FormulaHelper/functions.json` at
 the vendored engine's upstream commit (`vendor/ironcalc/upstream.json`), without
-HYPERLINK (Macro shows its text) and with Macro's AGGREGATE entry. Its MIT notice
+HYPERLINK (Macro shows its text) and with Macro's AGGREGATE and GETPIVOTDATA
+entries. Its MIT notice
 is in `core/formula-functions.LICENSE`; refresh and verify the catalog when
 updating the engine.
 
@@ -414,7 +415,17 @@ Import keeps what Excel calculates and shows:
   and a pivot table whose source is deleted keeps only its values. Pivot tables
   over other workbooks or data connections keep only their values, and pivot
   charts linked to them become ordinary charts, while pivot charts keep the
-  series names their pivot table gives. Renaming a sheet updates the charts
+  series names their pivot table gives.
+  GETPIVOTDATA calculates: `packages/spreadsheet/src/pivot-layout.ts` reads a
+  kept table's row and column items (`rowItems`, `colItems`), its fields and
+  cache items, and tells the engine which cell shows each value
+  (`setPivotTables`); GETPIVOTDATA matches its data field and items to a row and
+  a column and reads the cell, so it follows edits to the pivot table's cells.
+  The incremental worker receives these layouts, not the tables. A lookup of a
+  pivot table Macro could not keep, or whose argument is not a plain reference,
+  keeps its last value. A table whose cells were reshaped by inserting or
+  deleting rows inside it gives #REF!, as its layout no longer holds; Excel
+  rebuilds it on open. Renaming a sheet updates the charts
   that read it. Deleting it keeps the values those charts showed as fixed
   values (`{1,2,3}` references, exported as `numLit`/`strLit`), as Excel keeps
   a chart's last values.

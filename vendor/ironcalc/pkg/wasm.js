@@ -1262,6 +1262,17 @@ export class Model {
         wasm.model_setName(this.__wbg_ptr, ptr0, len0);
     }
     /**
+     * MACRO: describes the workbook's pivot tables for GETPIVOTDATA, from
+     * the next evaluation on.
+     * @param {PivotLayout[]} pivot_tables
+     */
+    setPivotTables(pivot_tables) {
+        const ret = wasm.model_setPivotTables(this.__wbg_ptr, pivot_tables);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * @param {number} sheet
      * @param {number} row_start
      * @param {number} row_end

@@ -1,4 +1,5 @@
 import type { CompletionContext } from '@ironcalc/wasm';
+import type { SheetPivotLayout } from '@macro-inc/spreadsheet/pivot-layout';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
 import type {
@@ -26,6 +27,8 @@ export type CalculationSheetPatch = {
     WorkbookSheetMetadata,
     'definedNames' | 'arrayFormulas' | 'hiddenRows' | 'conditionalFormats'
   >;
+  /** Where its pivot tables show their values, for GETPIVOTDATA. */
+  pivots?: SheetPivotLayout[];
   /** Every input, replacing the worker's copy of the sheet. */
   cells?: CalculationCells;
   /** Changed inputs; null removes a cell. */

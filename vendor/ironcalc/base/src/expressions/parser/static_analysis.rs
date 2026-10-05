@@ -1466,6 +1466,14 @@ fn get_function_args_signature(kind: &Function, arg_count: usize) -> Vec<Signatu
                 .for_each(|s| *s = Signature::Scalar);
             result
         }
+        // MACRO: the pivot table is a reference; the names and items are values.
+        Function::Getpivotdata => {
+            let mut result = vec![Signature::Scalar; arg_count];
+            if arg_count > 1 {
+                result[1] = Signature::Vector;
+            }
+            result
+        }
         Function::Rand => args_signature_no_args(arg_count),
         Function::Randbetween => args_signature_scalars(arg_count, 2, 0),
         Function::Formulatext => args_signature_scalars(arg_count, 1, 0),
@@ -2147,6 +2155,7 @@ fn static_analysis_on_function(kind: &Function, args: &[Node]) -> StaticResult {
         Function::Gestep => not_implemented(args),
         Function::Subtotal => not_implemented(args),
         Function::Aggregate => StaticResult::Scalar, // MACRO
+        Function::Getpivotdata => StaticResult::Scalar, // MACRO
         Function::Rand => not_implemented(args),
         Function::Randbetween => scalar_arguments(args),
         Function::Eomonth => scalar_arguments(args),

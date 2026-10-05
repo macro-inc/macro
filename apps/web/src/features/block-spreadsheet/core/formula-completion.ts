@@ -3,7 +3,8 @@ import catalog from './formula-functions.json';
 
 // Adapted from IronCalc's function catalog at the vendored engine's upstream
 // commit (vendor/ironcalc/upstream.json). See the adjacent MIT license.
-// HYPERLINK is left out (Macro shows its text); AGGREGATE is Macro's addition.
+// HYPERLINK is left out (Macro shows its text); AGGREGATE and GETPIVOTDATA are
+// Macro's additions.
 export type FormulaFunction = {
   args: string[][];
   description: string;

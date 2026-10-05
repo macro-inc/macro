@@ -664,6 +664,74 @@ export function formulaFunctionNames(formula: string): string[] {
   return [...names];
 }
 
+/** A cell a formula names, with its sheet if the formula gives one. */
+export type NamedCell = { sheet?: string; row: number; column: number };
+
+/** The cell a reference argument starts at, if it is a plain reference. */
+function argumentCell(pieces: Piece[]): NamedCell | undefined {
+  let sheet: string | undefined;
+  let rest = pieces;
+  if (
+    pieces[1]?.text === '!' &&
+    (pieces[0].kind === 'word' || pieces[0].kind === 'quoted')
+  ) {
+    sheet =
+      pieces[0].kind === 'quoted'
+        ? pieces[0].text.slice(1, -1).replaceAll("''", "'")
+        : pieces[0].text;
+    rest = pieces.slice(2);
+  }
+  if (rest.length !== 1 && !(rest.length === 3 && rest[1].text === ':')) return;
+  const match = cellReference.exec(rest[0].text);
+  if (!match) return;
+  const column = parseColumnName(match[2].toUpperCase());
+  if (column === undefined) return;
+  return {
+    ...(sheet !== undefined && { sheet }),
+    row: Number(match[4]) - 1,
+    column,
+  };
+}
+
+/**
+ * The cell each GETPIVOTDATA call of a formula names as its pivot table, or
+ * undefined for a call whose pivot table is not a plain reference.
+ */
+export function pivotTableArguments(
+  formula: string
+): (NamedCell | undefined)[] {
+  const pieces = scan(formula).filter(
+    (piece) => !(piece.kind === 'other' && /\s/.test(piece.text))
+  );
+  const cells: (NamedCell | undefined)[] = [];
+  for (const [index, piece] of pieces.entries()) {
+    if (
+      piece.kind !== 'word' ||
+      piece.text.toUpperCase().replace(/^_XLFN\./, '') !== 'GETPIVOTDATA' ||
+      pieces[index + 1]?.text !== '('
+    )
+      continue;
+    // The pieces of its second argument.
+    const second: Piece[] = [];
+    let depth = 0;
+    let argument = 0;
+    for (let at = index + 2; at < pieces.length && argument < 2; at++) {
+      const { kind, text } = pieces[at];
+      if (kind === 'other' && (text === '(' || text === '{')) depth++;
+      else if (kind === 'other' && (text === ')' || text === '}')) {
+        if (depth === 0) break;
+        depth--;
+      } else if (kind === 'other' && text === ',' && depth === 0) {
+        argument++;
+        continue;
+      }
+      if (argument === 1) second.push(pieces[at]);
+    }
+    cells.push(argumentCell(second));
+  }
+  return cells;
+}
+
 /** References into another workbook, such as `[1]Sheet1!A1` or `'[2]Q1'!B2`. */
 export function hasExternalReference(formula: string): boolean {
   return scan(formula).some(

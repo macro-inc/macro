@@ -116,6 +116,7 @@ export const model_setFrozenRowsCount: (a: number, b: number, c: number) => [num
 export const model_setLanguage: (a: number, b: number, c: number) => [number, number];
 export const model_setLocale: (a: number, b: number, c: number) => [number, number];
 export const model_setName: (a: number, b: number, c: number) => void;
+export const model_setPivotTables: (a: number, b: any) => [number, number];
 export const model_setRowsHeight: (a: number, b: number, c: number, d: number, e: number) => [number, number];
 export const model_setRowsHidden: (a: number, b: number, c: number, d: number, e: number) => [number, number];
 export const model_setSelectedCell: (a: number, b: number, c: number) => [number, number];

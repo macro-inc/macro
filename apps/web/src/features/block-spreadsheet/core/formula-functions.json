@@ -3832,6 +3832,40 @@
       "=GESTEP(5, 3) returns 1; =GESTEP(2, 3) returns 0."
     ]
   },
+  "GETPIVOTDATA": {
+    "args": [
+      [
+        "data_field",
+        "text",
+        "The value field to read, such as \"Sales\" or \"Sum of Sales\""
+      ],
+      [
+        "pivot_table",
+        "reference",
+        "Any cell of the pivot table"
+      ],
+      [
+        "field1*",
+        "text",
+        "A row, column or filter field of the pivot table"
+      ],
+      [
+        "item1*",
+        "any",
+        "The item of field1 whose value to read"
+      ],
+      [
+        "...",
+        "any",
+        "Further fields and their items"
+      ]
+    ],
+    "description": "Returns a value a pivot table shows, by the names of its value field and items rather than by its cell. Use it to read a total from an Excel pivot table so the formula stays right when the table changes shape; it gives #REF! for any value the pivot table does not show.",
+    "examples": [
+      "=GETPIVOTDATA(\"Sales\", $A$3) returns the grand total of Sales.",
+      "=GETPIVOTDATA(\"Sales\", $A$3, \"Region\", \"East\", \"Quarter\", \"Q2\") returns East's Sales in Q2."
+    ]
+  },
   "GROWTH": {
     "args": [
       [
