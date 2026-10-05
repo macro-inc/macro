@@ -93,13 +93,18 @@ try {
       const requests = [];
       const pending = [];
       const finished = (request) => {
-        if (!/graphql|\/databases/.test(new URL(request.url()).pathname))
+        const path = new URL(request.url()).pathname;
+        if (
+          path !== '/dss/items/soup/graphql' &&
+          path !== '/dss/databases' &&
+          !path.startsWith('/dss/databases/')
+        )
           return;
         pending.push(
           (async () => {
             const response = await request.response();
             requests.push({
-              path: new URL(request.url()).pathname,
+              path,
               status: response?.status(),
               traceparent: request.headers().traceparent,
               timing: request.timing(),
