@@ -5,6 +5,7 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
+import DesktopIcon from '@phosphor/desktop.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import EmailIcon from '@phosphor/envelope-simple.svg';
 import GaugeIcon from '@phosphor/gauge.svg';
@@ -142,6 +143,12 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['payment', 'subscription', 'invoice', 'plan'],
       },
       {
+        tab: 'Desktop App',
+        label: 'Desktop App',
+        icon: DesktopIcon,
+        keywords: ['download', 'mac', 'macos', 'linux', 'version', 'update'],
+      },
+      {
         tab: 'Mobile App',
         label: 'Mobile App',
         icon: DeviceMobileIcon,
@@ -233,6 +240,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Inbox: 'inbox',
   Shortcuts: 'shortcuts',
   'Mobile App': 'mobile-app',
+  'Desktop App': 'desktop-app',
   Agent: 'mcp-server',
   Agents: 'agents',
   Harness: 'runtimes',
@@ -316,6 +324,7 @@ export const useSettingsTabAvailable = () => {
         return !isTouchDevice();
       case 'Mobile App':
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
+      case 'Desktop App':
       case 'Agent':
         return !isNativeMobilePlatform();
       // Configurable agents are still rolling out; keep both tabs behind the

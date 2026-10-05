@@ -1996,9 +1996,14 @@ uses the shared workspace width.
 Left nav (feature and platform gates still apply):
 
 - **Blocks**: Email, Calendar, Agents, CRM.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Mobile App.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Team, Tags, Integrations (personal Gmail/GitHub accounts).
 - **Developer**: Agent connections, Runtimes, MCP server, API Keys, Bots.
+
+**Desktop App** (`/app/settings/desktop-app`) shows a compact version and
+build-date card in the desktop app. The date is when the running app bundle was
+built, not when it was installed on the computer. In the browser it links to the
+latest desktop release on GitHub. This section is hidden in the native mobile app.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
