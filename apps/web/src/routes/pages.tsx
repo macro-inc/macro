@@ -9,11 +9,9 @@ import {
 } from '@app/features/scheduling/public-booking';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { Navigate, useLocation } from '@solidjs/router';
 import { Button } from '@ui';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 import {
   bookingReceiptRoute,
   EMAIL_SIGNUP_CALLBACK_PATH,
