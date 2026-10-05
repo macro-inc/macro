@@ -1,5 +1,4 @@
 import MacroLogo from '@icon/macro-logo.svg';
-import AppleLogo from '@phosphor/apple-logo.svg';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { FeaturePage } from '../../features/marketing/components/FeaturePage';
@@ -61,7 +60,7 @@ export function RouteDownload() {
 
         <div class="downloads-action">
           <a class="site-nav-start" href={downloads().macos}>
-            <AppleLogo aria-hidden="true" /> Download for macOS
+            Download for macOS
           </a>
           <p>Apple silicon · DMG</p>
         </div>
