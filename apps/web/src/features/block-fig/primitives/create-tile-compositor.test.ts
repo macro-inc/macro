@@ -60,10 +60,13 @@ describe('tile compositor', () => {
     await finishAll();
 
     compositor.invalidate({ x: 10, y: 10, w: 50, h: 50 });
+    // At once, only the changed tile in view (a drag's every step).
+    expect(queued.map((q) => q.tile.scale)).toEqual([1]);
+    await new Promise((r) => setTimeout(r, 400));
     const stale = queued.filter((q) => q.tile.scale < 0.9);
     const visible = queued.filter((q) => q.tile.scale > 0.9);
-    // One overview tile changed; the view's tiles (the changed one and the
-    // margin a settled view prefetches) all come before it.
+    // Once edits pause, the one overview tile that changed, after the view's
+    // tiles (the changed one and the margin a settled view prefetches).
     expect(stale.length).toBe(1);
     expect(visible.length).toBeGreaterThan(0);
     for (const v of visible) {

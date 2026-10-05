@@ -16,9 +16,10 @@
  *   settles.
  * - Requests that fall out of view before they start are cancelled.
  * - After an edit, tiles in the changed area are re-rendered while the old
- *   ones stay on screen, so editing never flashes. The overview's changed
- *   tiles wait behind the view's, so a drag does not re-render the whole
- *   page at every step.
+ *   ones stay on screen, so editing never flashes. Only the tiles in view
+ *   are re-rendered at once; the margin's and the overview's wait until
+ *   edits pause (and then behind the view's), so a drag does not re-render
+ *   the whole page at every step.
  */
 
 import type {
@@ -77,6 +78,8 @@ export interface PageState {
 const OVERVIEW_SIDE = 2048;
 /** Quiet time after which the view counts as settled. */
 const SETTLE_MS = 140;
+/** Quiet time after an edit before tiles out of view are re-rendered. */
+const EDIT_SETTLE_MS = 300;
 /** Priority of overview tiles changed by an edit: after every view tile. */
 const AFTER_VIEW = Number.MAX_SAFE_INTEGER;
 
@@ -88,6 +91,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
   let generation = 0;
   let clock = 0;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  let editTimer: ReturnType<typeof setTimeout> | undefined;
   let lastView: ViewState | undefined;
   let lastZoom = 0;
   let zoomChangedAt = 0;
@@ -237,6 +241,20 @@ export function createTileCompositor(options: TileCompositorOptions) {
     prune(wanted);
   };
 
+  /**
+   * After an edit: the view's tiles at once, the margin's and the
+   * overview's once edits pause (behind the view's).
+   */
+  const afterEdit = () => {
+    if (lastView) schedule(lastView, false);
+    clearTimeout(editTimer);
+    editTimer = setTimeout(() => {
+      if (disposed) return;
+      requestOverview(AFTER_VIEW);
+      if (lastView) schedule(lastView, true);
+    }, EDIT_SETTLE_MS);
+  };
+
   return {
     stats,
 
@@ -273,15 +291,13 @@ export function createTileCompositor(options: TileCompositorOptions) {
         // Edits can grow the page's content beyond its old bounds.
         page = { ...page, content: unionContent(page.content, rect) };
       }
-      requestOverview(AFTER_VIEW);
-      if (lastView) schedule(lastView, true);
+      afterEdit();
     },
 
     /** New content bounds for the same page (after edits). */
     setContent(content: Rect | undefined) {
       if (page) page = { ...page, content };
-      requestOverview(AFTER_VIEW);
-      if (lastView) schedule(lastView, true);
+      afterEdit();
     },
 
     /** Call on every view change; fetches what the view needs. */
@@ -392,6 +408,7 @@ export function createTileCompositor(options: TileCompositorOptions) {
     dispose() {
       disposed = true;
       clearTimeout(settleTimer);
+      clearTimeout(editTimer);
       for (const e of cache.values()) {
         e.bitmap?.close();
         if (e.pending) engine.cancel([e.pending.id]);
