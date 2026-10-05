@@ -1,6 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
+import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import {
   createPipedreamCatalogConnect,
@@ -39,9 +40,26 @@ import { onboardingCheckoutRequest } from './core/checkout';
 /** How often connected tools re-check while the user is on the tools step. */
 const CONNECTED_TOOLS_POLL_MS = 5_000;
 
-function toViewerState(data: UserInfoData | undefined): ViewerState {
-  if (!data) return { t: 'loading' };
-  if (!data.authenticated || !data.userId) return { t: 'signed-out' };
+type UserInfoResult = {
+  isLoading: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  error: Error | null;
+  data: UserInfoData | undefined;
+};
+
+function toViewerState(result: UserInfoResult): ViewerState {
+  // Guarded: an unguarded `data` read suspends while the query is pending.
+  const data = result.isSuccess ? result.data : undefined;
+  // A signed-out visitor's request 401s rather than answering unauthenticated.
+  const authenticated = deriveIsAuthenticated({
+    isLoading: result.isLoading,
+    isError: result.isError,
+    error: result.error,
+    data,
+  });
+  if (authenticated === false) return { t: 'signed-out' };
+  if (!data?.userId) return { t: 'loading' };
   return {
     t: 'signed-in',
     viewer: {
@@ -76,8 +94,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
 
-  const viewer = () =>
-    toViewerState(userInfo.isSuccess ? userInfo.data : undefined);
+  const viewer = () => toViewerState(userInfo);
   const needsOnboarding = () => {
     const state = viewer();
     return state.t === 'signed-in' && !state.viewer.tutorialComplete;
@@ -90,8 +107,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   return {
     viewer,
     refreshViewer: async () => {
-      const result = await userInfo.refetch();
-      return toViewerState(result.data);
+      return toViewerState(await userInfo.refetch());
     },
 
     createOnboardingRecord: () => {
