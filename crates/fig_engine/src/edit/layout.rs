@@ -203,11 +203,20 @@ impl Txn<'_> {
             return false;
         }
         let gaps = fixed_gaps(&al, items.len());
+        // The frame's own size limits apply to what it hugs before its
+        // children are placed in it.
+        let limits = self
+            .doc
+            .props(frame)
+            .layout_child
+            .clone()
+            .unwrap_or_default();
 
         // Main axis: fill children share what fixed ones leave.
         let main_of = |it: &Item| split(Vec2::new(it.bounds.w, it.bounds.h), h).0;
         if al.hugs_primary() {
             main_size = pad_start + pad_end + gaps + items.iter().map(main_of).sum::<f64>();
+            main_size = limits.clamp(main_size, h);
         } else {
             let grow: f64 = items
                 .iter()
@@ -260,7 +269,7 @@ impl Txn<'_> {
                 })
                 .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))));
             if let Some(t) = tallest {
-                cross_size = t + cross_start + cross_end;
+                cross_size = limits.clamp(t + cross_start + cross_end, !h);
             }
         }
         // Padding can leave less than nothing inside; children are still
@@ -324,12 +333,6 @@ impl Txn<'_> {
             at += slot + gap;
         }
 
-        let limits = self
-            .doc
-            .props(frame)
-            .layout_child
-            .clone()
-            .unwrap_or_default();
         let size = join(main_size, cross_size, h);
         let size = Vec2::new(
             limits.clamp(size.x, true).max(0.01),

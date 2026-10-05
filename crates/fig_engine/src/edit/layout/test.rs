@@ -1,6 +1,6 @@
 use super::super::{History, Op};
 use crate::document::{Document, NodeIdx};
-use crate::model::{Guid, Vec2};
+use crate::model::{Guid, LayoutChild, Vec2};
 use crate::save::{blank, save};
 
 fn apply(doc: &mut Document, h: &mut History, json: &str) -> Vec<String> {
@@ -377,6 +377,39 @@ fn the_auto_gap_centres_a_lone_child() {
         r#"{"layoutMode":"HORIZONTAL","primaryAlign":"SPACE_EVENLY","sizingHorizontal":"FIXED","sizingVertical":"FIXED"}"#,
     );
     assert_eq!(bounds(&doc, &kid).0, 80.0);
+}
+
+#[test]
+fn hugging_respects_the_frames_own_limits() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    // A badge: at least 16 wide, hugging a digit 8 wide with 2 each side.
+    let badge = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":16,"height":16}"#,
+    );
+    let digit = make(
+        &mut doc,
+        &mut h,
+        &badge,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":8,"height":16}"#,
+    );
+    let b = idx(&doc, &badge) as usize;
+    doc.nodes[b].props.layout_child = Some(LayoutChild {
+        min_size: Some(Vec2::new(16.0, 0.0)),
+        ..LayoutChild::default()
+    });
+    set(
+        &mut doc,
+        &mut h,
+        &badge,
+        r#"{"layoutMode":"HORIZONTAL","primaryAlign":"CENTER","paddingLeft":2,"paddingRight":2,"sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    // Centred in the 16 the frame keeps, not the 12 it would hug.
+    assert_eq!(bounds(&doc, &badge).2, 16.0);
+    assert_eq!(bounds(&doc, &digit).0, 4.0);
 }
 
 #[test]
