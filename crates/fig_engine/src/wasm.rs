@@ -665,3 +665,5 @@ impl Clipboard {
         self.images.clone()
     }
 }
+
+mod handoff;

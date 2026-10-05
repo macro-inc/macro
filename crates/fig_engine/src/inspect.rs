@@ -11,9 +11,11 @@ use serde::Serialize;
 
 mod colors;
 mod design;
+mod handoff;
 mod variables;
 pub use colors::page_colors;
 pub use design::{DesignInfo, StyleInfo, design_info, local_styles};
+pub use handoff::{FrameAids, GridInfo, GuideInfo, LayoutAids, grid_info, layout_aids};
 pub use variables::{CollectionInfo, variables};
 
 /// One row of the layers panel.
@@ -181,6 +183,7 @@ pub struct NodeInfo {
     pub constrained: bool,
     pub constraints: Option<(String, String)>,
     pub export_settings: Vec<crate::model::ExportSetting>,
+    pub layout_grids: Vec<GridInfo>,
     /// For instances: the main component's name.
     pub main_component: Option<String>,
     pub description: Option<String>,
@@ -460,6 +463,13 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
             .as_ref()
             .map(|(h, v)| (h.to_string(), v.to_string())),
         export_settings: props.export_settings.as_deref().unwrap_or(&[]).to_vec(),
+        layout_grids: props
+            .layout_grids
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .map(grid_info)
+            .collect(),
         main_component,
         description: props.description.as_deref().map(str::to_owned),
         component_properties: props.prop_defs.as_deref().unwrap_or(&[]).to_vec(),

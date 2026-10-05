@@ -76,13 +76,13 @@ pub mod flags {
     pub const COMPONENT: u64 = 1 << 30;
     /// Shared styles: the styles a layer uses, and a style node's kind.
     pub const STYLES: u64 = 1 << 31;
-    // Handoff and layout aids (see `edit::handoff`) take bits from 40 up.
+    // Handoff and layout aids (see `edit::handoff`).
     /// A layer's export presets.
-    pub const EXPORTS: u64 = 1 << 40;
+    pub const EXPORTS: u64 = 1 << 33;
     /// A frame's layout grids.
-    pub const LAYOUT_GRIDS: u64 = 1 << 41;
+    pub const LAYOUT_GRIDS: u64 = 1 << 34;
     /// A page's or frame's ruler guides.
-    pub const GUIDES: u64 = 1 << 42;
+    pub const GUIDES: u64 = 1 << 35;
 }
 
 /// A paint as the editor describes it.

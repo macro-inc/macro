@@ -22,8 +22,36 @@ use crate::scene::{Scene, SceneIdx};
 use std::fmt::Write;
 use tiny_skia::{Path, PathBuilder, PathSegment};
 
+/// Figma's SVG export options.
+#[derive(Clone, Copy, Debug)]
+pub struct SvgOptions {
+    /// Text as glyph outlines (Figma's default) rather than `<text>`.
+    pub outline_text: bool,
+    /// An `id` (the layer's name) on every layer.
+    pub include_ids: bool,
+}
+
+impl Default for SvgOptions {
+    fn default() -> Self {
+        SvgOptions {
+            outline_text: true,
+            include_ids: false,
+        }
+    }
+}
+
 /// The layer `node` as an SVG document; `None` when it draws nothing.
 pub fn export(doc: &Document, scene: &Scene, node: SceneIdx) -> Option<String> {
+    export_with(doc, scene, node, SvgOptions::default())
+}
+
+/// [`export`] with Figma's options.
+pub fn export_with(
+    doc: &Document,
+    scene: &Scene,
+    node: SceneIdx,
+    opts: SvgOptions,
+) -> Option<String> {
     let bounds = scene.node(node).bounds;
     if bounds.is_empty() {
         return None;
@@ -34,6 +62,8 @@ pub fn export(doc: &Document, scene: &Scene, node: SceneIdx) -> Option<String> {
         origin: Affine::translate(-bounds.x, -bounds.y),
         defs: String::new(),
         next_id: 0,
+        opts,
+        names: std::collections::HashMap::new(),
     };
     let mut body = String::new();
     w.node(node, &mut body);
@@ -56,6 +86,48 @@ struct Writer<'a> {
     origin: Affine,
     defs: String,
     next_id: u32,
+    opts: SvgOptions,
+    /// Layer ids given out, for making repeated names unique.
+    names: std::collections::HashMap<String, u32>,
+}
+
+/// Text escaped for XML content and attributes.
+fn escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            c if (c as u32) < 0x20 && c != '\t' => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// The CSS weight a Figma style name stands for.
+fn font_weight(style: &str) -> u16 {
+    let s = style.to_ascii_lowercase().replace([' ', '-'], "");
+    [
+        ("thin", 100),
+        ("hairline", 100),
+        ("extralight", 200),
+        ("ultralight", 200),
+        ("light", 300),
+        ("medium", 500),
+        ("semibold", 600),
+        ("demibold", 600),
+        ("extrabold", 800),
+        ("ultrabold", 800),
+        ("black", 900),
+        ("heavy", 900),
+        ("bold", 700),
+    ]
+    .into_iter()
+    .find(|(name, _)| s.contains(name))
+    .map_or(400, |(_, w)| w)
 }
 
 /// A number as SVG writes it: at most three decimals, no trailing zeros.
@@ -182,6 +254,42 @@ fn mean_color(stops: &[ColorStop]) -> Color {
     }
 }
 
+/// The node's fill shapes in its own space: its fill geometry, or the box
+/// its size draws (frames, rectangles, ellipses).
+pub(crate) fn fill_shapes(doc: &Document, scene: &Scene, i: SceneIdx) -> Vec<(Path, WindingRule)> {
+    let p = scene.props(doc, i);
+    let shapes: Vec<(Path, WindingRule)> = p
+        .fill_geometry()
+        .iter()
+        .filter_map(|g| Some((doc.blobs.path(g.blob)?.path.clone(), g.winding)))
+        .collect();
+    if !shapes.is_empty() {
+        return shapes;
+    }
+    let t = p.node_type();
+    let boxy = t.is_frame_like()
+        || matches!(
+            t,
+            NodeType::Rectangle | NodeType::RoundedRectangle | NodeType::Ellipse
+        );
+    if !boxy {
+        return Vec::new();
+    }
+    let size = p.size();
+    let path = if t == NodeType::Ellipse {
+        box_shape(p)
+    } else {
+        rounded_rect(
+            size.x as f32,
+            size.y as f32,
+            p.radii(),
+            p.corner_smoothing.unwrap_or(0.0),
+        )
+    };
+    path.map(|p| vec![(p, WindingRule::NonZero)])
+        .unwrap_or_default()
+}
+
 impl Writer<'_> {
     fn id(&mut self, prefix: &str) -> String {
         self.next_id += 1;
@@ -197,40 +305,8 @@ impl Writer<'_> {
         self.origin.mul(&self.scene.node(i).world)
     }
 
-    /// The node's fill shapes in its own space: its fill geometry, or the
-    /// box its size draws (frames, rectangles, ellipses).
     fn fill_shapes(&self, i: SceneIdx) -> Vec<(Path, WindingRule)> {
-        let p = self.props(i);
-        let shapes: Vec<(Path, WindingRule)> = p
-            .fill_geometry()
-            .iter()
-            .filter_map(|g| Some((self.doc.blobs.path(g.blob)?.path.clone(), g.winding)))
-            .collect();
-        if !shapes.is_empty() {
-            return shapes;
-        }
-        let t = p.node_type();
-        let boxy = t.is_frame_like()
-            || matches!(
-                t,
-                NodeType::Rectangle | NodeType::RoundedRectangle | NodeType::Ellipse
-            );
-        if !boxy {
-            return Vec::new();
-        }
-        let size = p.size();
-        let path = if t == NodeType::Ellipse {
-            box_shape(p)
-        } else {
-            rounded_rect(
-                size.x as f32,
-                size.y as f32,
-                p.radii(),
-                p.corner_smoothing.unwrap_or(0.0),
-            )
-        };
-        path.map(|p| vec![(p, WindingRule::NonZero)])
-            .unwrap_or_default()
+        fill_shapes(self.doc, self.scene, i)
     }
 
     fn node(&mut self, i: SceneIdx, out: &mut String) {
@@ -239,6 +315,12 @@ impl Writer<'_> {
             return;
         }
         let mut attrs = String::new();
+        if self.opts.include_ids {
+            let name = p.name().to_owned();
+            let id = self.layer_id(&name);
+            let _ = write!(attrs, " id=\"{}\"", escape(&id));
+        }
+        let p = self.props(i);
         if p.opacity() < 1.0 {
             let _ = write!(attrs, " opacity=\"{}\"", num(f64::from(p.opacity())));
         }
@@ -261,7 +343,9 @@ impl Writer<'_> {
     fn content(&mut self, i: SceneIdx, out: &mut String) {
         let p = self.props(i);
         let world = self.world(i);
-        if p.node_type() == NodeType::Text {
+        if p.node_type() == NodeType::Text && !self.opts.outline_text {
+            self.text_elements(i, out);
+        } else if p.node_type() == NodeType::Text {
             self.text(i, out);
         } else if p.has_visible_fills() {
             let shapes = self.fill_shapes(i);
@@ -881,6 +965,8 @@ impl Writer<'_> {
         Some(id)
     }
 }
+
+mod options;
 
 #[cfg(test)]
 mod test;
