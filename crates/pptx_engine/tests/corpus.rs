@@ -83,6 +83,12 @@ fn check(deck: &Deck, baseline: &Baseline, fonts: &FontDb) -> Result<Vec<String>
             ));
         }
     }
+    // Every slide outlines, animations included.
+    for index in 0..count {
+        if let Err(e) = pres.slide_outline(index) {
+            problems.push(format!("slide {} failed to outline: {e}", index + 1));
+        }
+    }
     Ok(problems)
 }
 

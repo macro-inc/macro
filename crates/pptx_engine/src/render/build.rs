@@ -33,6 +33,17 @@ pub enum Layer {
     Without(u32),
     /// Only one top-level slide shape (or the group containing it), over transparency.
     Only(u32),
+    /// The top-level slide shapes at z-order positions `start..end`, over
+    /// the background and the layout and master shapes when `backdrop`, else
+    /// over transparency. Slide shows draw animated shapes as layers this way.
+    Span {
+        /// First position (0 = backmost).
+        start: usize,
+        /// One past the last position.
+        end: usize,
+        /// Whether the background and inherited shapes are drawn beneath.
+        backdrop: bool,
+    },
 }
 
 /// Whether `s` is shape `id` or a group containing it.
@@ -65,7 +76,11 @@ impl Builder<'_> {
             ctx.size.1 as f32 / EMU_PER_PT as f32,
         );
         let mut out = Vec::new();
-        let backdrop = !matches!(layer, Layer::Only(_));
+        let backdrop = match layer {
+            Layer::Only(_) => false,
+            Layer::Span { backdrop, .. } => backdrop,
+            Layer::All | Layer::Without(_) => true,
+        };
         if backdrop {
             let page = Rect::from_xywh(0.0, 0.0, w, h);
             let bg = background_fill(ctx);
@@ -113,7 +128,7 @@ impl Builder<'_> {
         };
         let walk = WalkCtx { ctx, inherit };
         let shapes = resolve_tree(&walk, part, tree);
-        for s in &shapes {
+        for (i, s) in shapes.iter().enumerate() {
             if skip_placeholders && s.placeholder.is_some() {
                 continue;
             }
@@ -121,6 +136,7 @@ impl Builder<'_> {
                 Layer::All => true,
                 Layer::Without(id) => !contains_shape(s, id),
                 Layer::Only(id) => contains_shape(s, id),
+                Layer::Span { start, end, .. } => (start..end).contains(&i),
             };
             if selected {
                 self.shape(ctx, s, &Affine::IDENTITY, None, out);
@@ -492,8 +508,13 @@ pub fn text_layout_nodes(
             let Some(outline) = fonts.outline(run.face, g.id) else {
                 continue;
             };
-            let gt = t
-                .pre_concat(&Affine::translate(f64::from(g.x), f64::from(g.y)))
+            let origin = t.pre_concat(&Affine::translate(f64::from(g.x), f64::from(g.y)));
+            let origin = if g.upright {
+                origin.pre_concat(&Affine::rotate(-90.0))
+            } else {
+                origin
+            };
+            let gt = origin
                 .pre_concat(&Affine {
                     a: 1.0,
                     b: 0.0,
@@ -563,6 +584,15 @@ pub fn text_layout_nodes(
             });
         }
     }
+    for shape in &lay.paths {
+        if let Some(p) = fill_paint(&shape.fill, bbox, t, images) {
+            out.push(Node::Fill {
+                path: shape.path.transform(t),
+                paint: p,
+                even_odd: false,
+            });
+        }
+    }
 }
 
 /// Where a shape's text is laid out: its text rectangle at the size the
@@ -580,8 +610,25 @@ pub struct TextFrame {
 
 /// The text frame of `s` drawn through `parent` (the transform of its group).
 pub fn text_frame(s: &Shape, geom: &ShapeGeometry, text: &TextBody, parent: &Affine) -> TextFrame {
-    let rect = geom.text_rect;
-    let base = parent.pre_concat(&s.xfrm.text_to_parent());
+    // SmartArt drawings place text in their own upright box (`dsp:txXfrm`),
+    // which need not follow the shape's geometry; its rotation adds to the
+    // shape's (rotated shapes often carry upright text).
+    let doc = &s.part.doc;
+    let tx_xfrm = (doc.ns(s.node) == crate::xml::Ns::DSP)
+        .then(|| doc.child(s.node, crate::xml::Ns::DSP, "txXfrm"))
+        .flatten()
+        .map(|x| {
+            let mut tx = crate::model::shape::Xfrm::parse(doc, x);
+            tx.rot = (tx.rot + s.xfrm.rot).rem_euclid(360.0);
+            tx
+        });
+    let (rect, base) = match tx_xfrm {
+        Some(x) => (
+            Rect::from_xywh(0.0, 0.0, x.w, x.h),
+            parent.pre_concat(&x.text_to_parent()),
+        ),
+        None => (geom.text_rect, parent.pre_concat(&s.xfrm.text_to_parent())),
+    };
     let axis = |x: f64, y: f64| {
         let len = x.hypot(y);
         if len > 1e-9 { len } else { 1.0 }

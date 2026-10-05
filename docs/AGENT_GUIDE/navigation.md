@@ -304,8 +304,10 @@ The outer sidebar is an icon rail; labels appear in tooltips.
 - Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Reminders`, `Calendar`,
   `Agents`, `Customers`. Reminders, Calendar, and Customers appear only when
   their features are enabled.
-- Bottom: button named after the user (their name, or email when unset) — menu
-  with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
+- Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
+  photo as a badge in its corner. It opens Settings directly in the active
+  split (Shift-click for a new split); there is no account menu. Log out lives
+  at the bottom of the Settings sidebar, and the command menu is `Ctrl K`.
 
 Start a new AI chat from the Agents workspace; the rail has no separate
 new-chat-in-a-new-split button. Its tooltips

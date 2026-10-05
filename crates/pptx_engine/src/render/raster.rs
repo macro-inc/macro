@@ -298,7 +298,9 @@ impl Rasterizer {
                             * ((transform.a.abs().max(transform.d.abs()) as f32) - 1.0).max(0.0)
                 }
                 Effect::Glow { radius, .. } => radius * 2.0,
-                Effect::Reflection { dist, height, .. } => dist + height,
+                Effect::Reflection {
+                    dist, height, blur, ..
+                } => dist + height + blur * 2.0,
                 _ => 0.0,
             });
         }
@@ -328,8 +330,8 @@ impl Rasterizer {
         let lorigin = (lx0, ly0);
         self.draw_nodes(&mut layer, &g.children, lorigin);
 
-        for e in &g.effects {
-            layer = self.apply_effect(layer, e, lorigin);
+        if !g.effects.is_empty() {
+            layer = self.apply_effects(layer, &g.effects, lorigin);
         }
         if let Some(clip) = &g.clip
             && let (Some(p), Some(mut mask)) = (to_sk_path(clip), sk::Mask::new(lw, lh))
@@ -351,185 +353,263 @@ impl Rasterizer {
         );
     }
 
-    fn apply_effect(&self, layer: sk::Pixmap, e: &Effect, lorigin: (i32, i32)) -> sk::Pixmap {
-        let (w, h) = (layer.width(), layer.height());
-        match e {
+    /// Applies a group's effects the way PowerPoint composes them: soft
+    /// edges and inner shadows change the content itself; outer shadows and
+    /// glows are cast by that content and drawn beneath it (shadows lowest);
+    /// reflections mirror the result.
+    fn apply_effects(
+        &self,
+        mut layer: sk::Pixmap,
+        effects: &[Effect],
+        lorigin: (i32, i32),
+    ) -> sk::Pixmap {
+        for e in effects {
+            if let Effect::SoftEdge { radius } = e {
+                layer = self.soft_edge(layer, *radius);
+            }
+        }
+        for e in effects {
+            if let Effect::InnerShadow {
+                color,
+                blur,
+                offset,
+            } = e
+            {
+                layer = self.inner_shadow(layer, *color, *blur, *offset);
+            }
+        }
+        let shadows = effects.iter().filter_map(|e| match e {
             Effect::OuterShadow {
-                color: c,
+                color,
                 blur,
                 offset,
                 transform,
-            } => {
-                let Some(mut shadow) = sk::Pixmap::new(w, h) else {
-                    return layer;
-                };
-                // Shadow geometry: the layer, transformed about the anchor and offset.
-                let t = transform;
-                let shift = sk::Transform::from_translate(lorigin.0 as f32, lorigin.1 as f32);
-                let scene_t = sk::Transform::from_row(
-                    t.a as f32,
-                    t.b as f32,
-                    t.c as f32,
-                    t.d as f32,
-                    t.e as f32 * self.scale,
-                    t.f as f32 * self.scale,
-                );
-                let full = shift
-                    .post_concat(scene_t)
-                    .post_concat(sk::Transform::from_translate(
-                        offset.x * self.scale - lorigin.0 as f32,
-                        offset.y * self.scale - lorigin.1 as f32,
-                    ));
-                shadow.draw_pixmap(
-                    0,
-                    0,
-                    layer.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    full,
-                    None,
-                );
-                let mut alpha: Vec<u8> = shadow.data().chunks_exact(4).map(|p| p[3]).collect();
-                blur_alpha(&mut alpha, w as usize, h as usize, blur * self.scale);
-                let mut out = colorize(&alpha, w, h, *c);
-                out.draw_pixmap(
-                    0,
-                    0,
-                    layer.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    sk::Transform::identity(),
-                    None,
-                );
-                out
+            } => self.outer_shadow(&layer, *color, *blur, *offset, transform, lorigin),
+            _ => None,
+        });
+        let glows = effects.iter().filter_map(|e| match e {
+            Effect::Glow { color, radius } => Some(self.glow(&layer, *color, *radius)),
+            _ => None,
+        });
+        let beneath: Vec<sk::Pixmap> = shadows.chain(glows).collect();
+        if !beneath.is_empty() {
+            let mut out = beneath[0].clone();
+            for b in beneath.iter().skip(1).chain(std::iter::once(&layer)) {
+                draw_over(&mut out, b);
             }
-            Effect::Glow { color: c, radius } => {
-                let mut alpha: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
-                let r = radius * self.scale;
-                dilate_alpha(&mut alpha, w as usize, h as usize, r * 0.6);
-                blur_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
-                let mut out = colorize(&alpha, w, h, *c);
-                out.draw_pixmap(
-                    0,
-                    0,
-                    layer.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    sk::Transform::identity(),
-                    None,
-                );
-                out
-            }
-            Effect::SoftEdge { radius } => {
-                let mut layer = layer;
-                let mut alpha: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
-                let r = radius * self.scale;
-                erode_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
-                blur_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
-                for (px, a) in layer.data_mut().chunks_exact_mut(4).zip(alpha) {
-                    let k = u32::from(a);
-                    for v in px.iter_mut() {
-                        *v = ((u32::from(*v) * k + 127) / 255) as u8;
-                    }
-                }
-                layer
-            }
-            Effect::InnerShadow {
-                color: c,
-                blur,
-                offset,
-            } => {
-                let mut layer = layer;
-                let src: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
-                let (dx, dy) = (
-                    (offset.x * self.scale).round() as i32,
-                    (offset.y * self.scale).round() as i32,
-                );
-                let (wi, hi) = (w as i32, h as i32);
-                let mut inv = vec![0u8; src.len()];
-                for y in 0..hi {
-                    for x in 0..wi {
-                        let (sx, sy) = (x - dx, y - dy);
-                        let a = if sx >= 0 && sy >= 0 && sx < wi && sy < hi {
-                            src[(sy * wi + sx) as usize]
-                        } else {
-                            0
-                        };
-                        inv[(y * wi + x) as usize] = 255 - a;
-                    }
-                }
-                blur_alpha(&mut inv, w as usize, h as usize, blur * self.scale);
-                for (i, a) in inv.iter_mut().enumerate() {
-                    *a = ((u32::from(*a) * u32::from(src[i]) + 127) / 255) as u8;
-                }
-                let shade = colorize(&inv, w, h, *c);
-                layer.draw_pixmap(
-                    0,
-                    0,
-                    shade.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    sk::Transform::identity(),
-                    None,
-                );
-                layer
-            }
-            Effect::Reflection {
+            layer = out;
+        }
+        for e in effects {
+            if let Effect::Reflection {
                 axis,
                 dist,
                 start_alpha,
                 end_alpha,
                 end_pos,
                 height,
-                blur: _,
-            } => {
-                let Some(mut out) = sk::Pixmap::new(w, h) else {
-                    return layer;
+                blur,
+            } = e
+            {
+                let fade = Fade {
+                    start_alpha: *start_alpha,
+                    end_alpha: *end_alpha,
+                    end_pos: *end_pos,
+                    height: *height,
                 };
-                // Mirror about the axis, shifted down by `dist`.
-                let ay = (axis * self.scale) - lorigin.1 as f32;
-                let mirror =
-                    sk::Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 2.0 * ay + dist * self.scale);
-                let mut refl = sk::Pixmap::new(w, h).unwrap_or_else(|| layer.clone());
-                refl.draw_pixmap(
-                    0,
-                    0,
-                    layer.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    mirror,
-                    None,
-                );
-                // Fade.
-                let fade_len = (height * end_pos.max(0.01) * self.scale).max(1.0);
-                let start = ay + dist * self.scale;
-                for y in 0..h {
-                    let t = ((y as f32 - start) / fade_len).clamp(0.0, 1.0);
-                    let a = if (y as f32) < start {
-                        0.0
-                    } else {
-                        start_alpha + (end_alpha - start_alpha) * t
-                    };
-                    let k = (a.clamp(0.0, 1.0) * 255.0) as u32;
-                    let row =
-                        &mut refl.data_mut()[(y * w * 4) as usize..((y + 1) * w * 4) as usize];
-                    for v in row.iter_mut() {
-                        *v = ((u32::from(*v) * k + 127) / 255) as u8;
-                    }
-                }
-                out.draw_pixmap(
-                    0,
-                    0,
-                    refl.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    sk::Transform::identity(),
-                    None,
-                );
-                out.draw_pixmap(
-                    0,
-                    0,
-                    layer.as_ref(),
-                    &sk::PixmapPaint::default(),
-                    sk::Transform::identity(),
-                    None,
-                );
-                out
+                layer = self.reflection(layer, *axis, *dist, fade, *blur, lorigin);
             }
+        }
+        layer
+    }
+
+    /// The shadow `layer` casts: its shape, scaled and skewed about the
+    /// anchor (`transform`), offset, blurred, and colored.
+    fn outer_shadow(
+        &self,
+        layer: &sk::Pixmap,
+        c: Rgba,
+        blur: f32,
+        offset: Point,
+        transform: &Affine,
+        lorigin: (i32, i32),
+    ) -> Option<sk::Pixmap> {
+        let (w, h) = (layer.width(), layer.height());
+        let mut shadow = sk::Pixmap::new(w, h)?;
+        let t = transform;
+        let shift = sk::Transform::from_translate(lorigin.0 as f32, lorigin.1 as f32);
+        let scene_t = sk::Transform::from_row(
+            t.a as f32,
+            t.b as f32,
+            t.c as f32,
+            t.d as f32,
+            t.e as f32 * self.scale,
+            t.f as f32 * self.scale,
+        );
+        let full = shift
+            .post_concat(scene_t)
+            .post_concat(sk::Transform::from_translate(
+                offset.x * self.scale - lorigin.0 as f32,
+                offset.y * self.scale - lorigin.1 as f32,
+            ));
+        shadow.draw_pixmap(
+            0,
+            0,
+            layer.as_ref(),
+            &sk::PixmapPaint::default(),
+            full,
+            None,
+        );
+        let mut alpha: Vec<u8> = shadow.data().chunks_exact(4).map(|p| p[3]).collect();
+        blur_alpha(&mut alpha, w as usize, h as usize, blur * self.scale);
+        Some(colorize(&alpha, w, h, c))
+    }
+
+    /// A colored halo around `layer`'s opaque area.
+    fn glow(&self, layer: &sk::Pixmap, c: Rgba, radius: f32) -> sk::Pixmap {
+        let (w, h) = (layer.width(), layer.height());
+        let mut alpha: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
+        let r = radius * self.scale;
+        dilate_alpha(&mut alpha, w as usize, h as usize, r * 0.6);
+        blur_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
+        colorize(&alpha, w, h, c)
+    }
+
+    /// Feathers `layer`'s edges: its alpha, eroded and blurred, masks it.
+    fn soft_edge(&self, mut layer: sk::Pixmap, radius: f32) -> sk::Pixmap {
+        let (w, h) = (layer.width(), layer.height());
+        let mut alpha: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
+        let r = radius * self.scale;
+        erode_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
+        blur_alpha(&mut alpha, w as usize, h as usize, r * 0.5);
+        for (px, a) in layer.data_mut().chunks_exact_mut(4).zip(alpha) {
+            let k = u32::from(a);
+            for v in px.iter_mut() {
+                *v = ((u32::from(*v) * k + 127) / 255) as u8;
+            }
+        }
+        layer
+    }
+
+    /// Darkens the inside of `layer` along the edges facing away from `offset`.
+    fn inner_shadow(&self, mut layer: sk::Pixmap, c: Rgba, blur: f32, offset: Point) -> sk::Pixmap {
+        let (w, h) = (layer.width(), layer.height());
+        let src: Vec<u8> = layer.data().chunks_exact(4).map(|p| p[3]).collect();
+        let (dx, dy) = (
+            (offset.x * self.scale).round() as i32,
+            (offset.y * self.scale).round() as i32,
+        );
+        let (wi, hi) = (w as i32, h as i32);
+        let mut inv = vec![0u8; src.len()];
+        for y in 0..hi {
+            for x in 0..wi {
+                let (sx, sy) = (x - dx, y - dy);
+                let a = if sx >= 0 && sy >= 0 && sx < wi && sy < hi {
+                    src[(sy * wi + sx) as usize]
+                } else {
+                    0
+                };
+                inv[(y * wi + x) as usize] = 255 - a;
+            }
+        }
+        blur_alpha(&mut inv, w as usize, h as usize, blur * self.scale);
+        for (i, a) in inv.iter_mut().enumerate() {
+            *a = ((u32::from(*a) * u32::from(src[i]) + 127) / 255) as u8;
+        }
+        let shade = colorize(&inv, w, h, c);
+        draw_over(&mut layer, &shade);
+        layer
+    }
+
+    /// Adds a mirrored, blurred, fading copy of `layer` below the axis.
+    fn reflection(
+        &self,
+        layer: sk::Pixmap,
+        axis: f32,
+        dist: f32,
+        fade: Fade,
+        blur: f32,
+        lorigin: (i32, i32),
+    ) -> sk::Pixmap {
+        let (w, h) = (layer.width(), layer.height());
+        let Some(mut refl) = sk::Pixmap::new(w, h) else {
+            return layer;
+        };
+        // Mirror about the axis, shifted down by `dist`.
+        let ay = (axis * self.scale) - lorigin.1 as f32;
+        let mirror =
+            sk::Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, 2.0 * ay + dist * self.scale);
+        refl.draw_pixmap(
+            0,
+            0,
+            layer.as_ref(),
+            &sk::PixmapPaint::default(),
+            mirror,
+            None,
+        );
+        blur_rgba(refl.data_mut(), w as usize, h as usize, blur * self.scale);
+        let fade_len = (fade.height * fade.end_pos.max(0.01) * self.scale).max(1.0);
+        let start = ay + dist * self.scale;
+        for y in 0..h {
+            let t = ((y as f32 - start) / fade_len).clamp(0.0, 1.0);
+            let a = if (y as f32) < start {
+                0.0
+            } else {
+                fade.start_alpha + (fade.end_alpha - fade.start_alpha) * t
+            };
+            let k = (a.clamp(0.0, 1.0) * 255.0) as u32;
+            let row = &mut refl.data_mut()[(y * w * 4) as usize..((y + 1) * w * 4) as usize];
+            for v in row.iter_mut() {
+                *v = ((u32::from(*v) * k + 127) / 255) as u8;
+            }
+        }
+        draw_over(&mut refl, &layer);
+        refl
+    }
+}
+
+/// How a reflection fades: alpha from `start_alpha` at the axis to
+/// `end_alpha` after `end_pos` of `height` (points).
+#[derive(Clone, Copy)]
+struct Fade {
+    start_alpha: f32,
+    end_alpha: f32,
+    end_pos: f32,
+    height: f32,
+}
+
+/// Draws `top` over `base` (same size, source-over).
+fn draw_over(base: &mut sk::Pixmap, top: &sk::Pixmap) {
+    base.draw_pixmap(
+        0,
+        0,
+        top.as_ref(),
+        &sk::PixmapPaint::default(),
+        sk::Transform::identity(),
+        None,
+    );
+}
+
+/// Blurs premultiplied RGBA pixels, each channel like [`blur_alpha`].
+fn blur_rgba(px: &mut [u8], w: usize, h: usize, radius: f32) {
+    if radius < 0.5 || w == 0 || h == 0 {
+        return;
+    }
+    let mut channel = vec![0u8; w * h];
+    for c in 0..4 {
+        for (dst, p) in channel.iter_mut().zip(px.chunks_exact(4)) {
+            *dst = p[c];
+        }
+        blur_alpha(&mut channel, w, h, radius);
+        for (p, v) in px.chunks_exact_mut(4).zip(&channel) {
+            p[c] = *v;
+        }
+    }
+    // Rounding may leave a color channel above its alpha; premultiplied
+    // pixels must not.
+    for p in px.chunks_exact_mut(4) {
+        let a = p[3];
+        for v in &mut p[..3] {
+            *v = (*v).min(a);
         }
     }
 }

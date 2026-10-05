@@ -8,13 +8,23 @@
 
 import type { HistoryState, PptxRequest, PptxResponse } from './protocol';
 import type {
+  CellRef,
+  ClipboardPayload,
   CollabEntries,
   DeckOutline,
   EditOp,
   EditResult,
   EntryChange,
+  FindOptions,
+  LinkRegion,
+  PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
+  SmartArtPreviewSpec,
   TextLayoutInfo,
+  TextMatch,
 } from './types';
 
 export type { HistoryState } from './protocol';
@@ -197,15 +207,82 @@ export async function renderSlideLayer(
   return r.bitmap;
 }
 
-/** Caret stops and lines of a shape's text, or `null` when it holds none. */
+/**
+ * Renders the top-level shapes at z-order positions `start..end`, over the
+ * background and inherited shapes when `backdrop` (slide show layers).
+ */
+export async function renderSlideSpan(
+  docKey: string,
+  index: number,
+  width: number,
+  start: number,
+  end: number,
+  backdrop: boolean
+): Promise<ImageBitmap> {
+  const r = await request(
+    {
+      kind: 'renderSpan',
+      docKey,
+      index,
+      width: Math.round(width),
+      start,
+      end,
+      backdrop,
+    },
+    'render'
+  );
+  return r.bitmap;
+}
+
+/**
+ * Caret stops and lines of a shape's text, or with `cell` of that table
+ * cell's text (a merged cell's, for a cell it covers), placed where the
+ * renderer draws it. `null` when the shape holds no text.
+ */
 export async function getTextLayout(
   docKey: string,
   index: number,
-  shape: number
+  shape: number,
+  cell?: CellRef
 ): Promise<TextLayoutInfo | null> {
   return (
-    await request({ kind: 'textLayout', docKey, index, shape }, 'textLayout')
+    await request(
+      { kind: 'textLayout', docKey, index, shape, cell },
+      'textLayout'
+    )
   ).layout;
+}
+
+/** The bytes of a video or audio clip (`MediaOutline.part`). */
+export async function getMediaBytes(
+  docKey: string,
+  part: string
+): Promise<Uint8Array> {
+  return (await request({ kind: 'mediaBytes', docKey, part }, 'mediaBytes'))
+    .bytes;
+}
+
+/** A shape's outline as editable paths with its local → slide transform. */
+export async function getGeometryPaths(
+  docKey: string,
+  index: number,
+  shape: number
+): Promise<ShapeGeometryInfo | null> {
+  return (
+    await request(
+      { kind: 'geometryPaths', docKey, index, shape },
+      'geometryPaths'
+    )
+  ).geometry;
+}
+
+/** The clickable areas of a slide: linked text first, then linked shapes. */
+export async function getLinkRegions(
+  docKey: string,
+  index: number
+): Promise<LinkRegion[]> {
+  return (await request({ kind: 'linkRegions', docKey, index }, 'linkRegions'))
+    .regions;
 }
 
 export interface EditOutcome {
@@ -254,4 +331,88 @@ export async function redoEdit(docKey: string): Promise<EditOutcome> {
 export async function savePresentation(docKey: string): Promise<Uint8Array> {
   const r = await request({ kind: 'save', docKey }, 'save');
   return new Uint8Array(r.bytes);
+}
+
+/** Outlines of preset shapes at `width`×`height` points, for galleries. */
+export async function getPresetPaths(
+  names: string[],
+  width: number,
+  height: number
+): Promise<Record<string, PresetPath[]>> {
+  return (
+    await request(
+      { kind: 'presetPaths', docKey: '', names, width, height },
+      'presetPaths'
+    )
+  ).paths;
+}
+
+/** SmartArt gallery previews (SVG paths), one per spec (`null` when unknown). */
+export async function getSmartArtPreviews(
+  specs: SmartArtPreviewSpec[]
+): Promise<(SmartArtPreviewPath[] | null)[]> {
+  return (
+    await request(
+      { kind: 'smartArtPreviews', docKey: '', specs },
+      'smartArtPreviews'
+    )
+  ).previews;
+}
+
+/** The SmartArt layouts, color variations, and styles the galleries list. */
+export async function getSmartArtCatalog(): Promise<SmartArtCatalog> {
+  return (
+    await request({ kind: 'smartArtCatalog', docKey: '' }, 'smartArtCatalog')
+  ).catalog;
+}
+
+/**
+ * A PNG of an equation written in the linear format, `size` points tall
+ * text at `scale` pixels per point in `color` (`RRGGBB`), with empty slots
+ * as dotted boxes. Rejects with what is wrong with the text.
+ */
+export async function renderEquation(
+  latex: string,
+  options: { display: boolean; size: number; scale: number; color: string }
+): Promise<Uint8Array> {
+  return (
+    await request(
+      { kind: 'renderEquation', docKey: '', latex, ...options },
+      'png'
+    )
+  ).bytes;
+}
+
+/**
+ * Copies shapes of slide `index` (back to front, with every part they use)
+ * for a `pasteShapes` op, in this or another presentation.
+ */
+export async function copyShapes(
+  docKey: string,
+  index: number,
+  shapes: number[]
+): Promise<ClipboardPayload> {
+  return (
+    await request({ kind: 'copyShapes', docKey, index, shapes }, 'clipboard')
+  ).payload;
+}
+
+/** Copies slides (by id) with their notes for a `pasteSlides` op. */
+export async function copySlides(
+  docKey: string,
+  slides: number[]
+): Promise<ClipboardPayload> {
+  return (await request({ kind: 'copySlides', docKey, slides }, 'clipboard'))
+    .payload;
+}
+
+/** Every occurrence of `query` in slide text, in slide order. */
+export async function findText(
+  docKey: string,
+  query: string,
+  options?: FindOptions
+): Promise<TextMatch[]> {
+  return (
+    await request({ kind: 'findText', docKey, query, options }, 'matches')
+  ).matches;
 }

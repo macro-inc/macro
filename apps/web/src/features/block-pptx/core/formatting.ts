@@ -4,6 +4,7 @@
  */
 
 import type {
+  EffectsOutline,
   RunStyle,
   TextLayoutInfo,
   TextPos,
@@ -18,8 +19,15 @@ export interface TextFormatState {
   size?: number;
   color?: string;
   font?: string;
+  /** Baseline shift in percent (positive = superscript). */
+  baseline?: number;
+  highlight?: string;
+  /** Character spacing of the first character, in points. */
+  spacing?: number;
   align?: string;
   bullet: boolean;
+  /** Text shadow and glow of the first character. */
+  effects?: EffectsOutline;
 }
 
 const EMPTY: TextFormatState = {
@@ -80,6 +88,10 @@ export function formatState(
     size: runs[0].size,
     color: runs[0].color,
     font: runs[0].font,
+    baseline: runs[0].baseline,
+    highlight: runs[0].highlight,
+    spacing: runs[0].spacing,
+    effects: runs[0].effects,
     align: paras[0]?.align,
     bullet: paras.length > 0 && paras.every((p) => p.bullet),
   };
@@ -101,3 +113,12 @@ export function stepFontSize(size: number, direction: 1 | -1): number {
   const smaller = [...FONT_SIZES].reverse().find((s) => s < size - 0.01);
   return smaller ?? Math.max(1, Math.round(size * 0.9));
 }
+
+/** PowerPoint's Character Spacing choices (points). */
+export const CHARACTER_SPACINGS = [
+  { value: -3, label: 'Very Tight' },
+  { value: -1.5, label: 'Tight' },
+  { value: 0, label: 'Normal' },
+  { value: 3, label: 'Loose' },
+  { value: 6, label: 'Very Loose' },
+];

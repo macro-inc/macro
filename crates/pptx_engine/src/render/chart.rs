@@ -22,6 +22,7 @@ mod plot;
 mod radar;
 mod series;
 mod style;
+mod summary;
 mod table;
 #[cfg(test)]
 mod test;
@@ -41,6 +42,23 @@ use style::{Role, resolve_fill, resolve_line};
 const PAD: f32 = 5.0;
 /// Gap between the title or legend and the plot area (points).
 const GAP: f32 = 6.0;
+
+/// The outline of a chart part (type, title, legend, cached data), read with
+/// the slide's theme and the chart's theme override (`editable` is left
+/// `false`).
+pub(crate) fn chart_outline(
+    pres: &mut crate::model::presentation::Presentation,
+    ctx: &SlideContext,
+    chart: &PartRef,
+) -> Option<crate::inspect::ChartOutline> {
+    let theme_override = chart
+        .rels
+        .iter()
+        .find(|r| r.rel_type.ends_with("/themeOverride"))
+        .map(|r| chart.rels.resolve(r))
+        .and_then(|name| pres.xml(&name).ok());
+    summary::outline(chart, ctx, theme_override.as_ref())
+}
 
 /// Appends the nodes of a chart filling `bbox` (frame-local) under `world`.
 pub fn chart_nodes(

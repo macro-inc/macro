@@ -8,6 +8,9 @@
  * When the stored file changes elsewhere (an AI edit), the session loads it,
  * unless it holds unsaved edits of its own. A collaborative engine merges
  * such changes instead, and reports other people's edits as they arrive.
+ *
+ * In Slide Master view the outline's slides are the deck's masters and
+ * layouts (read by id), so the slide editor edits them as it edits slides.
  */
 
 import type {
@@ -22,8 +25,12 @@ import type {
   HistoryState,
   PresentationEngine,
 } from '../context/pptx-editor-context';
+import { masterDeck, masterPageIds } from '../core/master-view';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+
+/** Normal editing, or Slide Master view (masters and layouts as the slides). */
+export type SessionView = 'normal' | 'master';
 
 export interface PresentationSessionOptions {
   engine: PresentationEngine;
@@ -40,7 +47,21 @@ export interface PresentationSessionOptions {
 }
 
 export interface PresentationSession {
+  /**
+   * The outline the editor shows: the deck, or in Slide Master view the deck
+   * with its masters and layouts as the slides.
+   */
   outline: Accessor<DeckOutline | undefined>;
+  /** The deck itself (its slides), whatever the view. */
+  deck: Accessor<DeckOutline | undefined>;
+  view: Accessor<SessionView>;
+  /**
+   * Opens Slide Master view on the current slide's layout (PowerPoint's View
+   * ▸ Slide Master).
+   */
+  enterMasterView: () => Promise<void>;
+  /** Back to the slides (Close Master View), brought up to date. */
+  exitMasterView: () => Promise<void>;
   slideIndex: Accessor<number>;
   setSlideIndex: (index: number) => void;
   currentSlide: Accessor<SlideOutline | undefined>;
@@ -70,8 +91,20 @@ export function createPresentationSession(
   options: PresentationSessionOptions
 ): PresentationSession {
   const { engine } = options;
-  const [outline, setOutline] = createSignal<DeckOutline>();
-  const [slideIndex, setSlideIndexRaw] = createSignal(0);
+  const [deck, setOutline] = createSignal<DeckOutline>();
+  const [slideIndexRaw, setSlideIndexRaw] = createSignal(0);
+  const [view, setView] = createSignal<SessionView>('normal');
+  /** Slide Master view's outline: masters and layouts as slides. */
+  const [pages, setPages] = createSignal<DeckOutline>();
+  const [pageIndex, setPageIndex] = createSignal(0);
+  /**
+   * Slide outlines left stale in Slide Master view, where an edit can touch
+   * every slide; they are read again on leaving it.
+   */
+  let slidesStale = false;
+  const outline = () => (view() === 'master' ? pages() : deck());
+  const slideIndex = () =>
+    view() === 'master' ? pageIndex() : slideIndexRaw();
   const [history, setHistory] = createSignal<HistoryState>({
     canUndo: false,
     canRedo: false,
@@ -89,10 +122,22 @@ export function createPresentationSession(
   let disposed = false;
   const replacedListeners = new Set<() => void>();
 
-  const clampIndex = (index: number, deck = outline()) =>
-    Math.max(0, Math.min(index, (deck?.slides.length ?? 1) - 1));
+  const clampIndex = (index: number, shown = outline()) =>
+    Math.max(0, Math.min(index, (shown?.slides.length ?? 1) - 1));
 
-  const setSlideIndex = (index: number) => setSlideIndexRaw(clampIndex(index));
+  const setSlideIndex = (index: number) =>
+    view() === 'master'
+      ? setPageIndex(clampIndex(index, pages()))
+      : setSlideIndexRaw(clampIndex(index, deck()));
+
+  /** Slide Master view's outline for `base`: its masters' and layouts' outlines. */
+  async function loadPages(base: DeckOutline): Promise<DeckOutline> {
+    const ids = masterPageIds(base);
+    return masterDeck(
+      base,
+      await Promise.all(ids.map((id) => engine.slideOutline(id)))
+    );
+  }
 
   const bump = (ids: Iterable<number>) =>
     setVersions((previous) => {
@@ -102,43 +147,106 @@ export function createPresentationSession(
     });
 
   async function refresh() {
-    const deck = await engine.outline();
+    const fresh = await engine.outline();
+    const freshPages = view() === 'master' ? await loadPages(fresh) : undefined;
     batch(() => {
-      setOutline(deck);
-      setSlideIndexRaw((i) => clampIndex(i, deck));
+      setOutline(fresh);
+      setSlideIndexRaw((i) => clampIndex(i, fresh));
+      if (freshPages) {
+        setPages(freshPages);
+        setPageIndex((i) => clampIndex(i, freshPages));
+      }
     });
   }
 
-  /** Brings the outline up to date with an edit result. */
+  /** Brings the outlines up to date with an edit result. */
   async function absorb(result: EditResult) {
-    const deck = outline();
-    if (!deck) return;
+    const current = deck();
+    if (!current) return;
+    const inMaster = view() === 'master';
     if (result.structureChanged) {
       const fresh = await engine.outline();
+      const freshPages = inMaster ? await loadPages(fresh) : undefined;
       batch(() => {
         setOutline(fresh);
         // Slide numbers and thumbnails may all have moved.
         bump(fresh.slides.map((s) => s.id));
         setSlideIndexRaw((i) => clampIndex(i, fresh));
+        if (freshPages) {
+          setPages(freshPages);
+          bump(freshPages.slides.map((s) => s.id));
+          setPageIndex((i) => clampIndex(i, freshPages));
+        }
       });
       return;
     }
-    if (result.changedSlides.length === 0) return;
-    const updates = await Promise.all(
-      result.changedSlides
-        .map((id) => deck.slides.findIndex((s) => s.id === id))
-        .filter((i) => i >= 0)
-        .map((i) => engine.slideOutline(i))
-    );
+    const changedPages = result.changedLayouts ?? [];
+    if (result.changedSlides.length === 0 && changedPages.length === 0) return;
+    if (inMaster && result.changedSlides.length > 0) slidesStale = true;
+    const shownPages = pages();
+    const [updates, pageUpdates] = await Promise.all([
+      inMaster
+        ? []
+        : Promise.all(
+            result.changedSlides
+              .map((id) => current.slides.findIndex((s) => s.id === id))
+              .filter((i) => i >= 0)
+              .map((i) => engine.slideOutline(i))
+          ),
+      inMaster && shownPages
+        ? Promise.all(
+            changedPages
+              .filter((id) => shownPages.slides.some((s) => s.id === id))
+              .map((id) => engine.slideOutline(id))
+          )
+        : [],
+    ]);
     batch(() => {
-      setOutline((current) => {
-        if (!current) return current;
-        const slides = current.slides.map(
-          (s) => updates.find((u) => u.id === s.id) ?? s
-        );
-        return { ...current, slides };
-      });
-      bump(result.changedSlides);
+      if (updates.length > 0)
+        setOutline((d) => {
+          if (!d) return d;
+          const slides = d.slides.map(
+            (s) => updates.find((u) => u.id === s.id) ?? s
+          );
+          return { ...d, slides };
+        });
+      if (pageUpdates.length > 0)
+        setPages((d) => {
+          if (!d) return d;
+          const slides = d.slides.map((s) => {
+            const u = pageUpdates.find((p) => p.id === s.id);
+            return u ? { ...u, index: s.index } : s;
+          });
+          return { ...d, slides };
+        });
+      bump([...result.changedSlides, ...changedPages]);
+    });
+  }
+
+  async function enterMasterView() {
+    const base = deck();
+    if (!base || view() === 'master') return;
+    const shown = await loadPages(base);
+    const layoutId = base.slides[slideIndexRaw()]?.layoutId;
+    const at = shown.slides.findIndex((s) => s.id === layoutId);
+    batch(() => {
+      setPages(shown);
+      setPageIndex(Math.max(0, at));
+      setView('master');
+    });
+  }
+
+  async function exitMasterView() {
+    if (view() !== 'master') return;
+    const fresh = slidesStale ? await engine.outline() : undefined;
+    slidesStale = false;
+    batch(() => {
+      setView('normal');
+      setPages(undefined);
+      if (fresh) {
+        setOutline(fresh);
+        setSlideIndexRaw((i) => clampIndex(i, fresh));
+      }
     });
   }
 
@@ -223,12 +331,18 @@ export function createPresentationSession(
     // Edits made while downloading win: the next save keeps them.
     if (disposed || saving || changeCount !== savedCount) return false;
     await engine.reopen(bytes);
-    const deck = await engine.outline();
+    const fresh = await engine.outline();
+    const freshPages = view() === 'master' ? await loadPages(fresh) : undefined;
     batch(() => {
       setHistory({ canUndo: false, canRedo: false });
-      setOutline(deck);
-      bump(deck.slides.map((s) => s.id));
-      setSlideIndexRaw((i) => clampIndex(i, deck));
+      setOutline(fresh);
+      bump(fresh.slides.map((s) => s.id));
+      setSlideIndexRaw((i) => clampIndex(i, fresh));
+      if (freshPages) {
+        setPages(freshPages);
+        bump(freshPages.slides.map((s) => s.id));
+        setPageIndex((i) => clampIndex(i, freshPages));
+      }
     });
     for (const listener of replacedListeners) listener();
     return true;
@@ -280,6 +394,10 @@ export function createPresentationSession(
 
   return {
     outline,
+    deck,
+    view,
+    enterMasterView,
+    exitMasterView,
     slideIndex,
     setSlideIndex,
     currentSlide: () => outline()?.slides[slideIndex()],

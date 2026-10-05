@@ -1,34 +1,192 @@
 /**
- * The presentation editor: slide rail, toolbar, the slide stage with
- * selection and in-place text editing, and speaker notes.
+ * The presentation editor: ribbon, slide rail, the slide stage with
+ * selection, in-place text, table, and SmartArt editing, right-click menus,
+ * the format pane, speaker notes, find and replace, and the slide show.
+ * Slide Master view edits masters and layouts with the same stage.
  */
 
-import type { ShapeOutline, SlideOutline } from '@core/pptx-engine/types';
+import {
+  ContextMenuContent,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
+import type {
+  CellRef,
+  ShapeOutline,
+  SlideOutline,
+} from '@core/pptx-engine/types';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
+import ClipboardIcon from '@phosphor/clipboard.svg';
+import CloudCheck from '@phosphor/cloud-check.svg';
+import CopyIcon from '@phosphor/copy.svg';
+import CopySimple from '@phosphor/copy-simple.svg';
+import DownloadSimple from '@phosphor/download-simple.svg';
+import EyeSlash from '@phosphor/eye-slash.svg';
+import ImageSquare from '@phosphor/image-square.svg';
+import Layout from '@phosphor/layout.svg';
+import PaintBucket from '@phosphor/paint-bucket.svg';
+import PencilSimpleLine from '@phosphor/pencil-simple-line.svg';
+import Play from '@phosphor/play.svg';
+import Plus from '@phosphor/plus.svg';
+import Printer from '@phosphor/printer.svg';
+import Rectangle from '@phosphor/rectangle.svg';
+import Scissors from '@phosphor/scissors.svg';
+import SelectionAll from '@phosphor/selection-all.svg';
+import SquaresFour from '@phosphor/squares-four.svg';
+import Trash from '@phosphor/trash.svg';
+import WarningIcon from '@phosphor/warning.svg';
+import { Button } from '@ui/components/Button';
 import {
   createEffect,
   createMemo,
   createSignal,
+  For,
+  type JSX,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
-import { EditorToolbar } from '../components/editor-toolbar';
+import {
+  AnimationPane,
+  AnimationPreview,
+  AnimationTags,
+} from '../components/animation-pane';
+import {
+  ChartDataEditor,
+  ChartDesignTab,
+  ChartGallery,
+  sampleChartData,
+} from '../components/chart-controls';
+import { CommentMarkers } from '../components/comment-markers';
+import { CommentsPane } from '../components/comments-pane';
+import { CropOverlay } from '../components/crop-overlay';
+import { DeckSetupDialogs } from '../components/deck-setup-dialogs';
+import { EditPointsOverlay } from '../components/edit-points-overlay';
+import { EquationEditorPanel } from '../components/equation-editor';
+import { ExportDialog } from '../components/export-dialog';
+import { FindReplace } from '../components/find-replace';
+import { FormatPane, type PaneSection } from '../components/format-pane';
+import { GuidesOverlay } from '../components/guides';
+import { LinkDialog } from '../components/link-dialog';
+import { MasterRail } from '../components/master-rail';
+import { MediaPlayButton, MediaPlayer } from '../components/media-player';
 import { NotesPanel } from '../components/notes-panel';
 import { Collaborators, PeerSelections } from '../components/peer-presence';
+import { PlaceholderOutlines } from '../components/placeholder-outlines';
+import { PresenterView } from '../components/presenter-view';
+import { PrintDialog } from '../components/print-dialog';
+import { RenameLayoutDialog } from '../components/rename-layout-dialog';
+import { AnimationsTab } from '../components/ribbon/animations-tab';
+import { RibbonButton } from '../components/ribbon/controls';
+import { EquationTab } from '../components/ribbon/equation-tab';
+import { HomeTab } from '../components/ribbon/home-tab';
+import { InsertTab } from '../components/ribbon/insert-tab';
+import {
+  DesignTab,
+  ShapeFormatTab,
+  SlideShowTab,
+  TransitionsTab,
+  ViewTab,
+} from '../components/ribbon/other-tabs';
+import { PictureFormatTab } from '../components/ribbon/picture-format-tab';
+import { ReviewTab } from '../components/ribbon/review-tab';
+import {
+  Ribbon,
+  type RibbonEnv,
+  type RibbonTab,
+} from '../components/ribbon/ribbon';
+import { SlideMasterTab } from '../components/ribbon/slide-master-tab';
+import {
+  TableDesignTab,
+  TableLayoutTab,
+} from '../components/ribbon/table-tabs';
+import { Gridlines, Rulers } from '../components/rulers';
+import { SectionHeaders, SectionMenuItems } from '../components/section-header';
 import { SelectionOverlay } from '../components/selection-overlay';
+import { SelectionPane } from '../components/selection-pane';
 import { SlideRail } from '../components/slide-rail';
 import { SlideStage } from '../components/slide-stage';
+import { SlideShow } from '../components/slideshow';
+import { SmartArtDialog } from '../components/smartart/smartart-dialog';
+import { SmartArtMenuItems } from '../components/smartart/smartart-menu';
+import { SmartArtStage } from '../components/smartart/smartart-stage';
+import { SmartArtDesignTab } from '../components/smartart/smartart-tabs';
+import { SpellSquiggles } from '../components/spell-squiggles';
+import { SpellingPane } from '../components/spelling-pane';
+import {
+  type MenuTarget,
+  StageMenuItems,
+} from '../components/stage-context-menu';
 import { usePptxEditorContext } from '../context/pptx-editor-context';
-import { caretSegment, selectionQuads } from '../core/caret';
-import { formatState, stepFontSize } from '../core/formatting';
-import { boxOf, hitTest, type Point } from '../core/geometry';
-import { STANDARD_SWATCHES, themeSwatches } from '../core/palette';
-import { formatCommand, paragraphCommand } from '../core/text-commands';
+import { caretSegment, positionAt, selectionQuads } from '../core/caret';
+import {
+  equationAt,
+  equationOfSelection,
+  equationSelection,
+  insertedEquation,
+  newEquation,
+  sameEquation,
+} from '../core/equations';
+import { baseName } from '../core/export-images';
+import {
+  type Box,
+  boxContains,
+  boxOf,
+  hitTest,
+  type Point,
+} from '../core/geometry';
+import { linkAction, linkAt } from '../core/links';
+import { deleteBlocker, type MasterPage } from '../core/master-view';
+import { STANDARD_SWATCHES, themeGrid, themeSwatches } from '../core/palette';
+import { unionBounds } from '../core/selection';
+import { clickSlide, type SlideSelection } from '../core/slide-selection';
+import { nodeAt } from '../core/smartart';
+import {
+  anchorOf,
+  boundaryAt,
+  cellAt,
+  cellBox,
+  nextCell,
+  rangeBox,
+  tableGeometry,
+} from '../core/table';
+import { paragraphCommand } from '../core/text-commands';
+import { createClipboard } from '../primitives/create-clipboard';
+import { createComments } from '../primitives/create-comments';
+import { createCropMode } from '../primitives/create-crop-mode';
+import { createDeckSetup } from '../primitives/create-deck-setup';
+import {
+  canEditPoints,
+  createEditPoints,
+} from '../primitives/create-edit-points';
+import {
+  createEditorCommands,
+  type LinkTarget,
+} from '../primitives/create-editor-commands';
+import { createEquationEditor } from '../primitives/create-equation-editor';
+import { createFormatPainter } from '../primitives/create-format-painter';
+import { createGuides } from '../primitives/create-guides';
+import {
+  createMasterView,
+  pageAddressedEngine,
+} from '../primitives/create-master-view';
+import { createMediaUrls } from '../primitives/create-media-urls';
+import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
 import { createSlideEditor } from '../primitives/create-slide-editor';
+import { createSmartArt } from '../primitives/create-smart-art';
+import {
+  createSpellCheck,
+  type Squiggle,
+} from '../primitives/create-spell-check';
+import { createSpellingPane } from '../primitives/create-spelling-pane';
 import { createThumbnails } from '../primitives/create-thumbnails';
+import { createViewOptions } from '../primitives/create-view-options';
+import { shapePicture } from '../primitives/export-pictures';
 
 const STAGE_MARGIN = 32;
 
@@ -36,15 +194,10 @@ const STAGE_MARGIN = 32;
 const quantize = (px: number) =>
   Math.min(4096, Math.max(256, Math.ceil(px / 64) * 64));
 
-async function fileToBase64(file: Blob): Promise<string> {
-  const buffer = new Uint8Array(await file.arrayBuffer());
-  let binary = '';
-  for (let i = 0; i < buffer.length; i += 0x8000) {
-    binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
+/** CSS pixels per point at 100% zoom (96 dpi). */
+const PX_PER_PT = 96 / 72;
 
+/** A cell being edited in a plain text field (when the engine can't lay it out). */
 interface CellEdit {
   shape: ShapeOutline;
   row: number;
@@ -53,33 +206,29 @@ interface CellEdit {
   rect: { x: number; y: number; w: number; h: number };
 }
 
-/** The cell of a table frame under `p` (slide coordinates). */
-function tableCellAt(
-  shape: ShapeOutline,
-  p: Point
-): Omit<CellEdit, 'text' | 'shape'> | null {
-  const table = shape.table;
-  if (!table) return null;
-  const totalW = table.columnWidths.reduce((a, b) => a + b, 0) || shape.w;
-  const totalH = table.rowHeights.reduce((a, b) => a + b, 0) || shape.h;
-  // Rows grow with their text; spread the frame's height proportionally.
-  const sy = shape.h / totalH;
-  const sx = shape.w / totalW;
-  let y = shape.y;
-  for (let r = 0; r < table.rowHeights.length; r++) {
-    const h = table.rowHeights[r] * sy;
-    let x = shape.x;
-    for (let c = 0; c < table.columnWidths.length; c++) {
-      const w = table.columnWidths[c] * sx;
-      if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h) {
-        return { row: r, col: c, rect: { x, y, w, h } };
-      }
-      x += w;
-    }
-    y += h;
-  }
-  return null;
+/** A cell range selected in a table. */
+interface TableRange {
+  shape: number;
+  from: CellRef;
+  to: CellRef;
 }
+
+/** A pointer gesture inside a table. */
+type TableGesture =
+  | { kind: 'cells'; shape: number; from: CellRef; at: Point; moved: boolean }
+  | {
+      kind: 'border';
+      shape: number;
+      axis: 'col' | 'row';
+      index: number;
+      start: Point;
+      current: Point;
+    };
+
+/** The format painter's pointer: an arrow with a brush, hot spot at the tip. */
+const PAINT_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M2 2v15l4-4 3 6 2-1-3-6h5z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/><g transform="translate(12 10) scale(0.06)"><path d="M232,32a8,8,0,0,0-8-8c-44.08,0-89.31,49.71-114.43,82.63A60,60,0,0,0,32,164c0,30.88-19.54,44.73-20.47,45.37A8,8,0,0,0,16,224H92a60,60,0,0,0,57.37-77.57C182.3,121.31,232,76.08,232,32Z" fill="#fff" stroke="#000" stroke-width="18"/></g></svg>'
+)}") 2 2, copy`;
 
 export function PptxEditor() {
   const context = usePptxEditorContext();
@@ -105,7 +254,7 @@ export function PptxEditor() {
   const dpr = () =>
     typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
 
-  // ---- stage geometry --------------------------------------------------
+  // ---- stage geometry and zoom ---------------------------------------------
 
   let stageHost!: HTMLDivElement;
   const [hostSize, setHostSize] = createSignal({ w: 0, h: 0 });
@@ -120,8 +269,8 @@ export function PptxEditor() {
 
   const slideW = () => session.outline()?.width ?? 960;
   const slideH = () => session.outline()?.height ?? 540;
-  /** CSS pixels per point. */
-  const scale = () => {
+  const [zoom, setZoomRaw] = createSignal<number | 'fit'>('fit');
+  const fitScale = () => {
     const { w, h } = hostSize();
     if (w <= 0 || h <= 0) return 0;
     return Math.max(
@@ -132,18 +281,120 @@ export function PptxEditor() {
       )
     );
   };
+  /** CSS pixels per point. */
+  const scale = () => {
+    const z = zoom();
+    if (hostSize().w <= 0) return 0;
+    return z === 'fit' ? fitScale() : z * PX_PER_PT;
+  };
+  const setZoom = (z: number | 'fit') =>
+    setZoomRaw(z === 'fit' ? 'fit' : Math.min(4, Math.max(0.1, z)));
+  const zoomBy = (factor: number) => {
+    const current = scale() / PX_PER_PT || 1;
+    setZoom(current * factor);
+  };
   const renderWidth = createMemo(() =>
     scale() > 0 ? quantize(slideW() * scale() * dpr()) : 0
   );
+  const unit = () => 1 / Math.max(scale(), 0.01);
 
+  const view = createViewOptions();
+  /** View ▸ Guides: the deck's drawing guides over the slide. */
+  const guides = createGuides({
+    guides: () => session.outline()?.guides ?? [],
+    layoutGuides: () => session.currentSlide()?.layoutGuides ?? [],
+    slide: () => ({ w: slideW(), h: slideH() }),
+    visible: () => view.options().drawingGuides,
+    setVisible: (on) => view.set({ drawingGuides: on }),
+    canEdit: context.canEdit,
+    apply: (list) => session.apply([{ op: 'setGuides', guides: list }]),
+  });
+  /** Whether Slide Master view is open (masters and layouts on the stage). */
+  const masterActive = () => session.view() === 'master';
+  /**
+   * The engine the stage and its tools read through: in Slide Master view
+   * their slide indexes address the masters and layouts shown.
+   */
+  const viewEngine = pageAddressedEngine(engine, () =>
+    masterActive() ? session.outline()?.slides.map((s) => s.id) : undefined
+  );
   const editor = createSlideEditor({
-    engine,
+    engine: viewEngine,
     session,
     queue,
     canEdit: context.canEdit,
     renderWidth,
-    pointsPerPixel: () => 1 / Math.max(scale(), 0.01),
+    pointsPerPixel: unit,
+    snap: () => ({
+      guides: view.options().guides,
+      grid: view.options().snapToGrid ? view.options().gridSpacing : undefined,
+      drawingGuides: guides.snapLines(),
+    }),
   });
+
+  // ---- tables ----------------------------------------------------------------
+
+  const [tableRange, setTableRange] = createSignal<TableRange | null>(null);
+  let tableGesture: TableGesture | null = null;
+  const [borderGuide, setBorderGuide] = createSignal<TableGesture | null>(null);
+  /** The table the selection is in (one selected table shape). */
+  const selectedTable = () => {
+    const edit = editor.editing();
+    const shape = edit ? editor.findShape(edit.shape) : editor.selectedShape();
+    return shape?.kind === 'table' && shape.table ? shape : undefined;
+  };
+  /** The cells table commands act on: a range, the edited cell, or all. */
+  const tableTarget = () => {
+    const shape = selectedTable();
+    if (!shape) return undefined;
+    const range = tableRange();
+    if (range && range.shape === shape.id)
+      return { shape, from: range.from, to: range.to };
+    const cell = editor.editing()?.cell;
+    if (cell) return { shape, from: cell, to: cell };
+    const rows = shape.table?.rowHeights.length ?? 1;
+    const cols = shape.table?.columnWidths.length ?? 1;
+    return {
+      shape,
+      from: { row: 0, col: 0 },
+      to: { row: rows - 1, col: cols - 1 },
+    };
+  };
+  const selectWholeRows = () => {
+    const t = tableTarget();
+    if (!t) return;
+    const cols = t.shape.table?.columnWidths.length ?? 1;
+    editor.stopEditing();
+    setTableRange({
+      shape: t.shape.id,
+      from: { row: Math.min(t.from.row, t.to.row), col: 0 },
+      to: { row: Math.max(t.from.row, t.to.row), col: cols - 1 },
+    });
+  };
+  const selectWholeColumns = () => {
+    const t = tableTarget();
+    if (!t) return;
+    const rows = t.shape.table?.rowHeights.length ?? 1;
+    editor.stopEditing();
+    setTableRange({
+      shape: t.shape.id,
+      from: { row: 0, col: Math.min(t.from.col, t.to.col) },
+      to: { row: rows - 1, col: Math.max(t.from.col, t.to.col) },
+    });
+  };
+  const selectWholeTable = () => {
+    const shape = selectedTable();
+    if (!shape) return;
+    editor.stopEditing();
+    setTableRange({
+      shape: shape.id,
+      from: { row: 0, col: 0 },
+      to: {
+        row: (shape.table?.rowHeights.length ?? 1) - 1,
+        col: (shape.table?.columnWidths.length ?? 1) - 1,
+      },
+    });
+  };
 
   // ---- presence (collaborative presentations) -----------------------------
 
@@ -151,21 +402,21 @@ export function PptxEditor() {
   /** Where this person is, as a stable key (keystrokes do not change it). */
   const whereabouts = createMemo(() => {
     const slide = session.currentSlide();
-    const shape = editor.selectedShape();
+    const ids = editor.selectedIds();
     return slide
-      ? `${slide.id}:${shape?.id ?? ''}:${editor.editing() ? 1 : 0}`
+      ? `${slide.id}:${ids.join(',')}:${editor.editing() ? 1 : 0}`
       : '';
   });
   // Sharing it with the presence channel syncs an external system.
   createEffect(
     on(whereabouts, (key) => {
       if (!collaboration) return;
-      const [slide, shape, editing] = key.split(':');
+      const [slide, shapes, editing] = key.split(':');
       collaboration.setSelection(
         key
           ? {
               slide: Number(slide),
-              shapes: shape ? [Number(shape)] : [],
+              shapes: shapes ? shapes.split(',').map(Number) : [],
               editing: editing === '1',
             }
           : undefined
@@ -176,21 +427,25 @@ export function PptxEditor() {
   const peersOn = (slideId: number) =>
     collaboration?.peers().filter((p) => p.selection.slide === slideId) ?? [];
 
+  /** CSS width thumbnails are drawn at: wider in the slide sorter. */
+  const thumbnailWidth = () => (sorter() ? 280 : masterActive() ? 176 : 150);
   const thumbnails = createThumbnails({
-    engine,
+    engine: viewEngine,
     session,
     queue,
-    width: () => Math.round(150 * dpr()),
+    width: () => Math.round(thumbnailWidth() * dpr()),
   });
 
-  // ---- text input ------------------------------------------------------
+  // ---- focus ---------------------------------------------------------------
 
   let input!: HTMLTextAreaElement;
   let stage!: HTMLDivElement;
   const focusInput = () => input?.focus({ preventScroll: true });
   const focusStage = () => stage?.focus({ preventScroll: true });
+  const refocus = () => (editor.editing() ? focusInput() : focusStage());
 
   const startEditing = async (shape: number, at?: Point) => {
+    setTableRange(null);
     await editor.startEditing(shape, at);
     focusInput();
   };
@@ -205,7 +460,246 @@ export function PptxEditor() {
     return { x: (e.clientX - rect.left) / s, y: (e.clientY - rect.top) / s };
   };
 
-  // ---- table cells -----------------------------------------------------
+  // ---- equations -------------------------------------------------------------
+
+  /** Switches the ribbon to a tab (set once the ribbon is built). */
+  let showRibbonTab: (id: string) => void = () => {};
+  /** The equation the text selection covers, as laid out. */
+  const selectedEq = createMemo(
+    () => {
+      const slide = session.currentSlide();
+      return slide
+        ? equationOfSelection(slide.id, editor.editing())
+        : undefined;
+    },
+    undefined,
+    { equals: sameEquation }
+  );
+  const selectEquation = (e: { paragraph: number; index: number }) => {
+    const range = equationSelection(e);
+    editor.selectText(range.anchor, range.focus);
+  };
+  const equations = createEquationEditor({
+    engine,
+    selected: selectedEq,
+    apply: async (ops, group) => {
+      const result = await session.apply(ops, group);
+      if (editor.editing()) await editor.refreshEditing();
+      return result;
+    },
+    onInserted: async (where, result) => {
+      if (where.kind === 'box') {
+        const shape = result?.created.find((c) => c.shape !== undefined)?.shape;
+        if (shape === undefined) return;
+        await startEditing(shape);
+        selectEquation({ paragraph: 0, index: 0 });
+      } else {
+        const found = insertedEquation(editor.editing()?.layout, where.at);
+        if (found) selectEquation(found);
+      }
+      showRibbonTab('equation');
+    },
+    onClose: () => refocus(),
+  });
+  /** Where a new equation goes: the caret (taking selected text), or a new box. */
+  const equationPoint = () => {
+    const slide = session.currentSlide();
+    return slide && !readonly()
+      ? newEquation(slide.id, editor.editing(), editor.selectedText())
+      : undefined;
+  };
+  /** Insert ▸ Equation (Alt+=): a new equation, or the selected one's text. */
+  const startEquation = () => {
+    if (selectedEq()) {
+      equations.reveal(true);
+      showRibbonTab('equation');
+      return;
+    }
+    const point = equationPoint();
+    if (!point) return;
+    equations.openNew(point.where, point.text, point.display);
+    showRibbonTab('equation');
+  };
+  /** Inserts a built-in equation where a new one would go. */
+  const insertBuiltInEquation = (latex: string) => {
+    const point = equationPoint();
+    if (!point) return;
+    equations.openNew(point.where, latex, point.display);
+    void equations.commit();
+  };
+  /** Selects the equation under a point of the text being edited. */
+  const pickEquationAt = (at: Point, focusText = false): boolean => {
+    const layout = editor.editing()?.layout;
+    const found = layout && equationAt(layout, at);
+    if (!found) return false;
+    selectEquation(found);
+    equations.reveal(focusText);
+    return true;
+  };
+
+  // ---- slide selection (rail and sorter) -------------------------------------
+
+  const [slideSelection, setSlideSelection] = createSignal<SlideSelection>({
+    ids: [],
+    anchor: -1,
+  });
+  /** Selected slide ids in deck order; the current slide alone by default. */
+  const selectedSlideIds = createMemo(() => {
+    const current = session.currentSlide();
+    if (!current) return [];
+    const ids = new Set(slideSelection().ids);
+    const list = (session.outline()?.slides ?? [])
+      .map((s) => s.id)
+      .filter((id) => ids.has(id));
+    return list.includes(current.id) ? list : [current.id];
+  });
+  const selectSlide = (
+    index: number,
+    mods: { shift: boolean; toggle: boolean }
+  ) => {
+    const slides = session.outline()?.slides ?? [];
+    const id = slides[index]?.id;
+    const current = session.currentSlide()?.id;
+    if (id === undefined || current === undefined) return;
+    const ids = selectedSlideIds();
+    const anchor = ids.includes(slideSelection().anchor)
+      ? slideSelection().anchor
+      : current;
+    const next = clickSlide(
+      slides.map((s) => s.id),
+      { ids, anchor },
+      id,
+      mods
+    );
+    setSlideSelection(next);
+    const focus = next.ids.includes(id) ? id : next.ids[next.ids.length - 1];
+    const at = slides.findIndex((s) => s.id === focus);
+    if (at >= 0) editor.goToSlide(at);
+  };
+  const selectAllSlides = () => {
+    const slides = session.outline()?.slides ?? [];
+    setSlideSelection({
+      ids: slides.map((s) => s.id),
+      anchor: session.currentSlide()?.id ?? -1,
+    });
+  };
+  /** Selects these slides (a section's); the first becomes current. */
+  const selectSlides = (ids: number[]) => {
+    const slides = session.outline()?.slides ?? [];
+    const first = slides.findIndex((s) => ids.includes(s.id));
+    if (first < 0) return;
+    setSlideSelection({ ids, anchor: slides[first].id });
+    editor.goToSlide(first);
+  };
+
+  // ---- commands -------------------------------------------------------------
+
+  const commands = createEditorCommands({
+    session,
+    editor,
+    context,
+    slideSize: () => ({ w: slideW(), h: slideH() }),
+    refocus,
+    startEditing: (id) => void startEditing(id),
+    tableTarget,
+    slideSelection: selectedSlideIds,
+    collaborative: () => !!engine.collaborative,
+  });
+
+  const deckSetup = createDeckSetup({
+    session,
+    commands,
+    canEdit: context.canEdit,
+    // Header & Footer applies to the slides, whatever view is open.
+    selectedSlideIds: () =>
+      session.view() === 'master'
+        ? (session.deck()?.slides.map((s) => s.id) ?? [])
+        : selectedSlideIds(),
+    selectSlides,
+  });
+
+  // SmartArt: the selected graphic and node, the Text Pane, and its edits.
+  const smartArt = createSmartArt({
+    apply: (ops, group) => session.apply(ops, group),
+    slide: session.currentSlide,
+    selection: () => editor.selection(),
+    select: (id) => editor.select(id),
+    slideSize: () => ({ w: slideW(), h: slideH() }),
+    themeColors: () => session.outline()?.themeColors ?? [],
+    readonly,
+    previews: engine.smartArtPreviews,
+    catalog: engine.smartArtCatalog,
+  });
+
+  const [railFocused, setRailFocused] = createSignal(false);
+  const clipboard = createClipboard({
+    engine: viewEngine,
+    session,
+    editor,
+    commands,
+    notifyError: context.notifyError,
+    railSelection: () => (railFocused() ? selectedSlideIds() : undefined),
+  });
+
+  const painter = createFormatPainter({ engine: viewEngine, session, editor });
+
+  // Picture Format: the pictures' original images and crop mode.
+  const pictureImages = createPictureImages({ engine: viewEngine, session });
+  const crop = createCropMode({
+    engine: viewEngine,
+    session,
+    editor,
+    queue,
+    canEdit: context.canEdit,
+    renderWidth,
+    onExit: () => queueMicrotask(focusStage),
+  });
+  // Shape Format ▸ Edit Shape ▸ Edit Points.
+  const editPoints = createEditPoints({
+    engine,
+    session,
+    editor,
+    canEdit: context.canEdit,
+    onExit: () => queueMicrotask(focusStage),
+  });
+
+  // ---- Slide Master view ------------------------------------------------------
+
+  const master = createMasterView({
+    session,
+    editor,
+    slideSize: () => ({ w: slideW(), h: slideH() }),
+    notifyError: context.notifyError,
+  });
+  /** View ▸ Slide Master: the deck's masters and layouts on the stage. */
+  const openSlideMaster = async () => {
+    if (masterActive()) return;
+    painter.cancel();
+    setSorterRaw(false);
+    setFind(null);
+    setAnimationPane(false);
+    setPreviewing(false);
+    setCellEdit(null);
+    setTableRange(null);
+    setRibbonTab('slide-master');
+    await master.enter();
+    queueMicrotask(focusStage);
+  };
+  /** Close Master View: back to the slides, normal view state intact. */
+  const closeSlideMaster = async () => {
+    if (!masterActive()) return;
+    painter.cancel();
+    setCellEdit(null);
+    setTableRange(null);
+    await master.close();
+    setRibbonTab('home');
+    queueMicrotask(focusStage);
+  };
+  const masterView = { ...master, close: closeSlideMaster };
+  /** The slide position deck-wide tools start from (the first in Slide Master view). */
+  const slidePosition = () => (masterActive() ? 0 : session.slideIndex());
+
+  // ---- table cell editing ---------------------------------------------------
 
   const [cellEdit, setCellEdit] = createSignal<CellEdit | null>(null);
   const commitCell = async (value: string) => {
@@ -225,7 +719,104 @@ export function PptxEditor() {
     ]);
   };
 
-  // ---- pointer ---------------------------------------------------------
+  /** Puts the caret in a cell (in place when the engine lays cells out). */
+  const editCell = async (shape: ShapeOutline, ref: CellRef, at?: Point) => {
+    const g = tableGeometry(shape);
+    if (!g || readonly()) return;
+    const anchor = anchorOf(shape, ref);
+    const bounds = cellBox(shape, g, anchor);
+    setTableRange(null);
+    await editor.startEditing(shape.id, at, { ref: anchor, bounds });
+    if (editor.editing()?.layout) {
+      focusInput();
+      return;
+    }
+    // No cell layout from the engine: edit the cell's text in a field.
+    editor.stopEditing();
+    editor.select(shape.id);
+    setCellEdit({
+      shape,
+      row: anchor.row,
+      col: anchor.col,
+      text: shape.table?.rows[anchor.row]?.[anchor.col] ?? '',
+      rect: bounds,
+    });
+  };
+
+  /** Tab/Shift+Tab between cells; Tab past the last cell adds a row. */
+  const tabCell = async (direction: 1 | -1) => {
+    const edit = editor.editing();
+    const shape = edit && editor.findShape(edit.shape);
+    if (!edit?.cell || !shape) return;
+    const next = nextCell(shape, edit.cell, direction);
+    if (next) {
+      await editCell(shape, next);
+      editor.selectAllText();
+      return;
+    }
+    if (direction < 0) return;
+    const slide = session.currentSlide();
+    if (!slide) return;
+    const rows = shape.table?.rowHeights.length ?? 0;
+    editor.stopEditing();
+    await session.apply([
+      { op: 'insertTableRow', slide: slide.id, shape: shape.id, at: rows },
+    ]);
+    const updated = editor.findShape(shape.id);
+    if (updated) await editCell(updated, { row: rows, col: 0 });
+  };
+
+  /** The table (and cell) under a point, when a click should go to its cells. */
+  const tableHit = (at: Point) => {
+    const slide = session.currentSlide();
+    const hit = slide ? hitTest(slide.shapes, at) : undefined;
+    if (hit?.kind !== 'table' || !hit.table || hit.rotation) return undefined;
+    const g = tableGeometry(hit);
+    if (!g) return undefined;
+    // The frame's edge moves the table; inside, clicks go to cells.
+    const edge = 4 * unit();
+    const nearEdge =
+      at.x - g.xs[0] < edge ||
+      g.xs[g.xs.length - 1] - at.x < edge ||
+      at.y - g.ys[0] < edge ||
+      g.ys[g.ys.length - 1] - at.y < edge;
+    const cell = cellAt(g, at);
+    if (!cell || nearEdge) return undefined;
+    return { shape: hit, g, cell };
+  };
+
+  // ---- guides ----------------------------------------------------------------
+
+  /**
+   * The deck guide under the pointer (3 px), unless a selected shape or the
+   * text being edited is there: those keep the click.
+   */
+  const guideUnder = (at: Point): number | undefined => {
+    if (crop.active()) return undefined;
+    const index = guides.hit(at, 3 * unit());
+    if (index === undefined) return undefined;
+    const edit = editor.editing();
+    const shapeEdited = edit && editor.findShape(edit.shape);
+    const edited = edit?.bounds ?? (shapeEdited && boxOf(shapeEdited));
+    if (edited && boxContains(edited, at)) return undefined;
+    const shape = hitTest(session.currentSlide()?.shapes ?? [], at, 0);
+    if (shape && editor.selectedIds().includes(shape.id)) return undefined;
+    return index;
+  };
+  /** The orientation of the guide under the pointer (for its cursor). */
+  const [guideHover, setGuideHover] = createSignal<
+    'horizontal' | 'vertical' | undefined
+  >();
+  const guideCursor = () => {
+    const orient = guides.drag()?.orient ?? guideHover();
+    return orient === 'vertical'
+      ? 'col-resize'
+      : orient === 'horizontal'
+        ? 'row-resize'
+        : undefined;
+  };
+
+  // ---- pointer ---------------------------------------------------------------
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
@@ -234,25 +825,193 @@ export function PptxEditor() {
         (document.getElementById('pptx-cell-input') as HTMLTextAreaElement)
           ?.value ?? ''
       );
-    editor.pointerDown(toSlide(e), { shift: e.shiftKey, detail: e.detail });
+    const at = toSlide(e);
+    if (painter.active() && paintAt(at)) {
+      e.preventDefault();
+      return;
+    }
     stage.setPointerCapture(e.pointerId);
+    const toggle = e.metaKey || e.ctrlKey;
+    // A click on the slide stops a clip playing over it.
+    setPlaying(undefined);
+    const guide = guideUnder(at);
+    if (guide !== undefined) {
+      // A click outside the text being edited ends editing; Ctrl+drag
+      // copies the guide, as in PowerPoint.
+      if (editor.editing()) editor.stopEditing();
+      guides.begin(guide, at, toggle);
+      e.preventDefault();
+      focusStage();
+      return;
+    }
+    // Ctrl+click follows a link in the text being edited, as in PowerPoint.
+    const editLayout = editor.editing()?.layout;
+    if (toggle && editLayout) {
+      const pos = positionAt(editLayout, at);
+      const link = pos && linkAt(editLayout, pos);
+      if (link) {
+        e.preventDefault();
+        followLink(link);
+        return;
+      }
+    }
+    const t = !e.shiftKey && !toggle && !readonly() ? tableHit(at) : undefined;
+    if (t) {
+      const edit = editor.editing();
+      const sameCell =
+        edit?.shape === t.shape.id &&
+        edit.cell &&
+        anchorOf(t.shape, edit.cell).row === anchorOf(t.shape, t.cell).row &&
+        anchorOf(t.shape, edit.cell).col === anchorOf(t.shape, t.cell).col;
+      // A column or row border of the selected table resizes it.
+      const border =
+        editor.selectedShape()?.id === t.shape.id
+          ? boundaryAt(t.g, at, 3 * unit())
+          : undefined;
+      if (border) {
+        tableGesture = {
+          kind: 'border',
+          shape: t.shape.id,
+          axis: border.kind,
+          index: border.index,
+          start: at,
+          current: at,
+        };
+        setBorderGuide(tableGesture);
+        e.preventDefault();
+        return;
+      }
+      if (sameCell) {
+        editor.pointerDown(at, { shift: false, detail: e.detail });
+        e.preventDefault();
+        focusInput();
+        tableGesture = {
+          kind: 'cells',
+          shape: t.shape.id,
+          from: t.cell,
+          at,
+          moved: false,
+        };
+        return;
+      }
+      if (edit) editor.stopEditing();
+      editor.select(t.shape.id);
+      setTableRange(null);
+      tableGesture = {
+        kind: 'cells',
+        shape: t.shape.id,
+        from: t.cell,
+        at,
+        moved: false,
+      };
+      e.preventDefault();
+      focusStage();
+      return;
+    }
+    tableGesture = null;
+    setTableRange(null);
+    // A click on a selected SmartArt graphic picks the node under it.
+    if (!e.shiftKey && !toggle) {
+      const slide = session.currentSlide();
+      smartArt.pointerDown(slide ? hitTest(slide.shapes, at) : undefined, at);
+    }
+    editor.pointerDown(at, { shift: e.shiftKey, toggle, detail: e.detail });
     if (editor.editing()) {
       e.preventDefault();
       focusInput();
+      // A click on an equation selects it whole (double-click edits its text).
+      if (!e.shiftKey) pickEquationAt(at, e.detail >= 2);
     } else {
       focusStage();
     }
   };
 
+  /**
+   * A click while the format painter is armed paints the shape under it
+   * (text being edited is painted by selecting it instead). True when the
+   * click was taken.
+   */
+  const paintAt = (at: Point): boolean => {
+    const slide = session.currentSlide();
+    const hit = slide ? hitTest(slide.shapes, at) : undefined;
+    const edit = editor.editing();
+    if (edit && hit?.id === edit.shape) return false;
+    if (!hit) {
+      painter.cancel();
+      return false;
+    }
+    if (edit) editor.stopEditing();
+    editor.select(hit.id);
+    focusStage();
+    void painter.paintShapes([hit]);
+    return true;
+  };
+
   const onPointerMove = (e: PointerEvent) => {
-    if (!stage.hasPointerCapture(e.pointerId)) return;
-    editor.pointerMove(toSlide(e), { shift: e.shiftKey });
+    const at = toSlide(e);
+    if (!stage.hasPointerCapture(e.pointerId)) {
+      const index = painter.active() ? undefined : guideUnder(at);
+      setGuideHover(
+        index === undefined
+          ? undefined
+          : session.outline()?.guides?.[index]?.orient
+      );
+      return;
+    }
+    if (guides.drag()) {
+      guides.move(at, { copy: e.ctrlKey || e.metaKey, free: e.altKey });
+      return;
+    }
+    const g = tableGesture;
+    if (g?.kind === 'border') {
+      g.current = at;
+      setBorderGuide({ ...g });
+      return;
+    }
+    if (g?.kind === 'cells') {
+      const shape = editor.findShape(g.shape);
+      const geometry = shape && tableGeometry(shape);
+      const cell = geometry && cellAt(geometry, at);
+      if (!cell) return;
+      if (cell.row !== g.from.row || cell.col !== g.from.col || g.moved) {
+        if (!g.moved && editor.editing()) editor.stopEditing();
+        g.moved = true;
+        setTableRange({ shape: g.shape, from: g.from, to: cell });
+      } else if (editor.editing()) {
+        editor.pointerMove(at, { shift: e.shiftKey });
+      }
+      return;
+    }
+    editor.pointerMove(at, { shift: e.shiftKey, alt: e.altKey });
   };
 
   const onPointerUp = (e: PointerEvent) => {
     if (stage.hasPointerCapture(e.pointerId))
       stage.releasePointerCapture(e.pointerId);
+    if (guides.drag()) {
+      void guides.end();
+      return;
+    }
+    const g = tableGesture;
+    tableGesture = null;
+    if (g?.kind === 'border') {
+      setBorderGuide(null);
+      const delta =
+        g.axis === 'col' ? g.current.x - g.start.x : g.current.y - g.start.y;
+      if (Math.abs(delta) > 0.5)
+        void commands.resizeGrid?.(g.shape, g.axis, g.index, delta);
+      return;
+    }
+    if (g?.kind === 'cells') {
+      void editor.pointerUp();
+      if (!g.moved && !editor.editing()?.cell) {
+        const shape = editor.findShape(g.shape);
+        if (shape) void editCell(shape, g.from, g.at);
+      }
+      return;
+    }
     void editor.pointerUp();
+    if (painter.active() && editor.editing()) void painter.paintSelection();
   };
 
   const onDoubleClick = (e: MouseEvent) => {
@@ -261,20 +1020,97 @@ export function PptxEditor() {
     const slide = session.currentSlide();
     const hit = slide ? hitTest(slide.shapes, at) : undefined;
     if (!hit || editor.editing()) return;
-    if (hit.kind === 'table' && hit.table) {
-      const cell = tableCellAt(hit, at);
-      if (cell)
-        setCellEdit({
-          ...cell,
-          shape: hit,
-          text: hit.table.rows[cell.row]?.[cell.col] ?? '',
-        });
+    if (hit.kind === 'table') return;
+    if (hit.kind === 'chart') {
+      chartEditor(hit);
       return;
     }
-    if (hit.textEditable) void startEditing(hit.id, at);
+    if (hit.smartArt) {
+      const node = smartArt.frame()?.id === hit.id && nodeAt(hit, at);
+      if (node) smartArt.startEditing(node.id);
+      return;
+    }
+    if (hit.textEditable)
+      void startEditing(hit.id, at).then(() => pickEquationAt(at));
   };
 
-  // ---- keyboard --------------------------------------------------------
+  // ---- right-click -------------------------------------------------------
+
+  const [menuTarget, setMenuTarget] = createSignal<MenuTarget>({
+    kind: 'canvas',
+  });
+  /** Selects what was right-clicked (keeping a selection it is part of). */
+  const onContextMenu = (e: MouseEvent) => {
+    const at = toSlide(e);
+    const guide = guideUnder(at);
+    if (guide !== undefined) {
+      setSpellHit(undefined);
+      setMenuTarget({ kind: 'guide', index: guide });
+      return;
+    }
+    const misspelled = readonly() ? undefined : spell.at(at);
+    setSpellHit(misspelled);
+    // Right-clicking a misspelled word puts the caret in it, as in PowerPoint.
+    if (misspelled && !misspelled.cell && !editor.editing()) {
+      setTableRange(null);
+      void editor.startEditing(misspelled.shape, at);
+      setMenuTarget({ kind: 'text' });
+      return;
+    }
+    const edit = editor.editing();
+    if (edit) {
+      const shape = editor.findShape(edit.shape);
+      const box = edit.bounds ?? (shape && boxOf(shape));
+      if (
+        box &&
+        at.x >= box.x &&
+        at.x <= box.x + box.w &&
+        at.y >= box.y &&
+        at.y <= box.y + box.h
+      ) {
+        setMenuTarget({ kind: edit.cell ? 'table' : 'text' });
+        return;
+      }
+      editor.stopEditing();
+    }
+    const t = tableHit(at);
+    if (t) {
+      const range = tableRange();
+      const inRange =
+        range?.shape === t.shape.id &&
+        t.cell.row >= Math.min(range.from.row, range.to.row) &&
+        t.cell.row <= Math.max(range.from.row, range.to.row) &&
+        t.cell.col >= Math.min(range.from.col, range.to.col) &&
+        t.cell.col <= Math.max(range.from.col, range.to.col);
+      editor.select(t.shape.id);
+      if (!inRange)
+        setTableRange({ shape: t.shape.id, from: t.cell, to: t.cell });
+      setMenuTarget({ kind: 'table' });
+      return;
+    }
+    const slide = session.currentSlide();
+    const hit = slide ? hitTest(slide.shapes, at) : undefined;
+    if (!hit) {
+      editor.setSelection([]);
+      setMenuTarget({ kind: 'canvas' });
+      return;
+    }
+    smartArt.pointerDown(hit, at);
+    if (!editor.selectedIds().includes(hit.id)) editor.select(hit.id);
+    setTableRange(null);
+    setMenuTarget({
+      kind:
+        hit.smartArt && editor.selection().length === 1
+          ? 'smartArt'
+          : hit.kind === 'chart' && editor.selection().length === 1
+            ? 'chart'
+            : hit.kind === 'table' && editor.selection().length === 1
+              ? 'table'
+              : 'shapes',
+    });
+  };
+
+  // ---- keyboard ----------------------------------------------------------
 
   const isMod = (e: KeyboardEvent) => e.metaKey || e.ctrlKey;
 
@@ -287,22 +1123,109 @@ export function PptxEditor() {
     await session.redo();
   };
 
+  /** Shortcuts shared by the stage and the text being edited. */
+  const sharedShortcut = (e: KeyboardEvent): boolean => {
+    const key = e.key.toLowerCase();
+    const mod = isMod(e);
+    if (e.key === 'F5') {
+      present(e.shiftKey, e.altKey);
+      return true;
+    }
+    if (e.key === 'F9' && e.altKey) {
+      view.set({ drawingGuides: !view.options().drawingGuides });
+      return true;
+    }
+    if (e.key === 'F10' && e.altKey) {
+      toggleSelectionPane();
+      return true;
+    }
+    if (e.key === 'F7') {
+      openSpelling();
+      return true;
+    }
+    // Ctrl+Alt+M: New Comment (Alt changes the key, so match the key's code).
+    if (mod && e.altKey && e.code === 'KeyM') {
+      comments.newComment();
+      return true;
+    }
+    if (e.altKey && !mod && e.code === 'Equal' && !readonly()) {
+      startEquation();
+      return true;
+    }
+    if (!mod) return false;
+    if (key === 'c' && e.shiftKey) void painter.copy();
+    else if (key === 'v' && e.shiftKey && !readonly())
+      void painter.pasteToSelection();
+    else if (key === 'z') void (e.shiftKey ? redo() : undo());
+    else if (key === 'y') void redo();
+    else if (key === 's') void session.save().catch(() => {});
+    else if (key === 'p') setPrinting(true);
+    else if ((key === 'f' || key === 'h') && masterActive()) return true;
+    else if (key === 'f') setFind({ replace: false });
+    else if (key === 'h') setFind({ replace: true });
+    else if (key === 'k' && !readonly()) void openLinkDialog();
+    else if (key === 'm' && !readonly())
+      void (masterActive() ? master.insertLayout() : commands.addSlide());
+    else if (key === 'e' && !readonly()) void commands.align('center');
+    else if (key === 'l' && !readonly()) void commands.align('left');
+    else if (key === 'r' && !readonly()) void commands.align('right');
+    else if (key === 'j' && !readonly()) void commands.align('justify');
+    else if ((e.key === '>' || e.key === '.') && e.shiftKey && !readonly())
+      void commands.stepSize(1);
+    else if ((e.key === '<' || e.key === ',') && e.shiftKey && !readonly())
+      void commands.stepSize(-1);
+    else if ((e.key === '=' || e.key === '+') && e.shiftKey && !readonly())
+      void commands.toggleBaseline('super');
+    else if (e.key === '=' && !readonly()) void commands.toggleBaseline('sub');
+    else if (['b', 'i', 'u'].includes(key) && !readonly())
+      void commands.toggle(
+        ({ b: 'bold', i: 'italic', u: 'underline' } as const)[
+          key as 'b' | 'i' | 'u'
+        ]
+      );
+    else return false;
+    return true;
+  };
+
   const onStageKeyDown = (e: KeyboardEvent) => {
     if (e.target === input) return;
     const key = e.key;
-    if (isMod(e) && key.toLowerCase() === 'z') {
+    if (key === 'Escape' && painter.active()) {
       e.preventDefault();
-      void (e.shiftKey ? redo() : undo());
+      painter.cancel();
       return;
     }
-    if (isMod(e) && key.toLowerCase() === 'y') {
+    if (sharedShortcut(e)) {
       e.preventDefault();
-      void redo();
       return;
     }
-    if (isMod(e) && key.toLowerCase() === 's') {
-      e.preventDefault();
-      void session.save().catch(() => {});
+    if (isMod(e)) {
+      const lower = key.toLowerCase();
+      if (lower === 'a') {
+        e.preventDefault();
+        editor.selectAll();
+      } else if (lower === 'g' && !readonly()) {
+        e.preventDefault();
+        void (e.shiftKey ? commands.ungroup() : commands.group());
+      } else if (lower === 'd' && !readonly()) {
+        e.preventDefault();
+        void editor.duplicateSelected();
+      } else if ((key === ']' || key === '}') && !readonly()) {
+        e.preventDefault();
+        commands.arrange(e.shiftKey ? 'front' : 'forward');
+      } else if ((key === '[' || key === '{') && !readonly()) {
+        e.preventDefault();
+        commands.arrange(e.shiftKey ? 'back' : 'backward');
+      } else if (key === '=' || key === '+') {
+        e.preventDefault();
+        zoomBy(1.25);
+      } else if (key === '-') {
+        e.preventDefault();
+        zoomBy(1 / 1.25);
+      } else if (key === '0') {
+        e.preventDefault();
+        setZoom('fit');
+      }
       return;
     }
     if (key === 'PageDown' || key === 'PageUp') {
@@ -310,30 +1233,139 @@ export function PptxEditor() {
       editor.goToSlide(session.slideIndex() + (key === 'PageDown' ? 1 : -1));
       return;
     }
-    const shape = editor.selectedShape();
-    if (!shape) return;
+    if (key === 'Tab') {
+      // Tab walks through the shapes on the slide, as in PowerPoint.
+      const shapes = session.currentSlide()?.shapes ?? [];
+      if (shapes.length === 0) return;
+      e.preventDefault();
+      const at = shapes.findIndex((s) => s.id === editor.selected());
+      const next = (at + (e.shiftKey ? -1 : 1) + shapes.length) % shapes.length;
+      editor.select(shapes[at < 0 && e.shiftKey ? shapes.length - 1 : next].id);
+      return;
+    }
+    if (key === 'Escape' && find()) {
+      e.preventDefault();
+      setFind(null);
+      return;
+    }
+    const list = editor.selection();
+    if (list.length === 0 && !tableRange()) return;
+    if (smartArtKey(e)) return;
     if (key === 'Escape') {
       e.preventDefault();
-      editor.select(null);
+      if (tableRange()) setTableRange(null);
+      else editor.setSelection([]);
     } else if (readonly()) {
       return;
     } else if (key === 'Delete' || key === 'Backspace') {
       e.preventDefault();
-      void editor.deleteSelected();
+      const range = tableRange();
+      const t = tableTarget();
+      if (range && t) {
+        // Clears the selected cells' text, as PowerPoint does.
+        void commands.tableOp((slideId, target) =>
+          commands.cellsOf(target).map((cell) => ({
+            op: 'setText' as const,
+            slide: slideId,
+            shape: target.shape.id,
+            cell,
+            text: '',
+          }))
+        );
+      } else {
+        void editor.deleteSelected();
+      }
     } else if (key.startsWith('Arrow')) {
       e.preventDefault();
-      const step = e.shiftKey ? 10 : 1;
+      const step = e.shiftKey ? 10 : e.altKey ? 0.5 : 1;
       const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
       const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
       void editor.nudge(dx, dy);
-    } else if (isMod(e) && key.toLowerCase() === 'd') {
+    } else if (key === 'Enter' || key === 'F2') {
+      const shape = editor.selectedShape();
+      if (shape?.kind === 'table') {
+        e.preventDefault();
+        void editCell(shape, tableRange()?.from ?? { row: 0, col: 0 });
+      } else if (shape?.textEditable) {
+        e.preventDefault();
+        void startEditing(shape.id);
+      }
+    } else if (
+      key.length === 1 &&
+      !e.altKey &&
+      list.length === 1 &&
+      list[0].textEditable
+    ) {
+      // Typing on a selected shape replaces its text, as in PowerPoint.
       e.preventDefault();
-      void editor.duplicateSelected();
-    } else if ((key === 'Enter' || key === 'F2') && shape.textEditable) {
-      e.preventDefault();
-      void startEditing(shape.id);
+      const id = list[0].id;
+      void (async () => {
+        await startEditing(id);
+        await editor.typeText(key);
+      })();
     }
   };
+
+  /**
+   * Keys on a picked SmartArt node: typing replaces its text, Enter or F2
+   * edits it, Delete removes it, and Escape goes back to the graphic.
+   */
+  const smartArtKey = (e: KeyboardEvent): boolean => {
+    const node = smartArt.activeNode();
+    if (!node || !smartArt.frame()) return false;
+    const key = e.key;
+    if (key === 'Escape') {
+      e.preventDefault();
+      smartArt.setActiveNode(undefined);
+      return true;
+    }
+    if (readonly()) return false;
+    if (key === 'Enter' || key === 'F2') {
+      e.preventDefault();
+      smartArt.startEditing(node);
+      return true;
+    }
+    if (key === 'Delete' || key === 'Backspace') {
+      e.preventDefault();
+      // Layouts the engine can't lay out say so (the edit is refused).
+      void (async () => {
+        if (await smartArt.deleteNode(node)) smartArt.setActiveNode(undefined);
+      })();
+      return true;
+    }
+    if (key.length === 1 && !e.altKey) {
+      e.preventDefault();
+      smartArt.startEditing(node, key);
+      return true;
+    }
+    return false;
+  };
+
+  let root!: HTMLDivElement;
+  // Shortcuts work wherever focus is in the editor (a ribbon button, the
+  // page itself after a menu closed), not only on the slide.
+  onMount(() => {
+    const onDocumentKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || presenting() !== null) return;
+      const active = document.activeElement as HTMLElement | null;
+      const inField =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        !!active?.isContentEditable;
+      if (inField) return;
+      const inEditor =
+        !active || active === document.body || root.contains(active);
+      if (!inEditor || active === stage) return;
+      if (active?.closest('[role="menu"],[role="dialog"]')) return;
+      // Buttons keep their own Enter, Space, and Tab behavior.
+      const onControl = active && active !== document.body;
+      if (onControl && ['Enter', ' ', 'Tab'].includes(e.key)) return;
+      onStageKeyDown(e);
+    };
+    document.addEventListener('keydown', onDocumentKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', onDocumentKeyDown));
+  });
 
   const onInputKeyDown = (e: KeyboardEvent) => {
     if (e.isComposing) return;
@@ -343,9 +1375,17 @@ export function PptxEditor() {
       e.preventDefault();
       e.stopPropagation();
     };
-    if (key === 'Escape') {
+    if (key === 'Escape' && painter.active()) {
       handled();
+      painter.cancel();
+    } else if (key === 'Escape') {
+      handled();
+      const edit = editor.editing();
       stopEditing();
+      if (edit) editor.select(edit.shape);
+    } else if (key === 'Tab' && editor.editing()?.cell) {
+      handled();
+      void tabCell(e.shiftKey ? -1 : 1);
     } else if (key === 'Enter') {
       handled();
       void editor.typeText(e.shiftKey ? '\u000b' : '\n');
@@ -370,7 +1410,7 @@ export function PptxEditor() {
       });
     } else if (key === 'Tab') {
       handled();
-      const level = textFormatLevel();
+      const level = commands.paragraphStyle()?.level ?? 0;
       void editor.formatWith((t, range) =>
         paragraphCommand(t, range ?? null, {
           level: Math.max(0, Math.min(8, level + (e.shiftKey ? -1 : 1))),
@@ -379,22 +1419,8 @@ export function PptxEditor() {
     } else if (mod && key.toLowerCase() === 'a') {
       handled();
       editor.selectAllText();
-    } else if (mod && ['b', 'i', 'u'].includes(key.toLowerCase())) {
+    } else if (sharedShortcut(e)) {
       handled();
-      toggle(
-        ({ b: 'bold', i: 'italic', u: 'underline' } as const)[
-          key.toLowerCase() as 'b' | 'i' | 'u'
-        ]
-      );
-    } else if (mod && key.toLowerCase() === 'z') {
-      handled();
-      void (e.shiftKey ? redo() : undo());
-    } else if (mod && key.toLowerCase() === 'y') {
-      handled();
-      void redo();
-    } else if (mod && key.toLowerCase() === 's') {
-      handled();
-      void session.save().catch(() => {});
     }
   };
 
@@ -410,189 +1436,290 @@ export function PptxEditor() {
     input.value = '';
   };
 
-  const onCopy = (e: ClipboardEvent) => {
+  // Text clipboard while typing.
+  const onTextCopy = (e: ClipboardEvent) => {
     e.preventDefault();
     e.clipboardData?.setData('text/plain', editor.selectedText());
   };
-  const onCut = (e: ClipboardEvent) => {
-    onCopy(e);
+  const onTextCut = (e: ClipboardEvent) => {
+    onTextCopy(e);
     // A collapsed caret has nothing to cut; deleting would eat a character.
     if (editor.selectedText()) void editor.deleteText(-1);
   };
-  const onPaste = (e: ClipboardEvent) => {
+  const onTextPaste = (e: ClipboardEvent) => {
     e.preventDefault();
     const text = e.clipboardData?.getData('text/plain');
     if (text) void editor.typeText(text);
   };
 
-  // ---- formatting ------------------------------------------------------
+  // Shape and slide clipboard.
+  const onStageCopy = (e: ClipboardEvent) => {
+    if (e.target === input) return;
+    if (clipboard.copy(e.clipboardData)) e.preventDefault();
+  };
+  const onStageCut = (e: ClipboardEvent) => {
+    if (e.target === input || readonly()) return;
+    e.preventDefault();
+    void clipboard.cut(e.clipboardData);
+  };
+  const onStagePaste = (e: ClipboardEvent) => {
+    if (e.target === input || readonly()) return;
+    e.preventDefault();
+    void clipboard.pasteEvent(e.clipboardData);
+  };
+  const copyCommand = () => {
+    if (editor.editing()) {
+      document.execCommand('copy');
+      return;
+    }
+    clipboard.copy();
+  };
+  const cutCommand = () => {
+    if (editor.editing()) {
+      document.execCommand('cut');
+      return;
+    }
+    void clipboard.cut();
+  };
+  const pasteCommand = () => void clipboard.pasteCommand();
 
-  const format = () => {
-    const src = editor.formatSource();
-    return formatState(src.layout, src.range);
-  };
-  const textFormatLevel = () => {
-    const src = editor.formatSource();
-    const p = src.range?.[0].paragraph ?? 0;
-    return src.layout?.styles[p]?.level ?? 0;
-  };
-  const textActive = () =>
-    !!editor.editing() || !!editor.selectedShape()?.textEditable;
-  const afterFormat = () => {
-    if (editor.editing()) focusInput();
-  };
-  function toggle(key: 'bold' | 'italic' | 'underline') {
-    const current = format()[key];
-    void editor
-      .formatWith((t, range) => formatCommand(t, range, { [key]: !current }))
-      .then(afterFormat);
-  }
-  const fontSize = (dir: 1 | -1) => {
-    const size = stepFontSize(format().size ?? 18, dir);
-    void editor
-      .formatWith((t, range) => formatCommand(t, range, { size }))
-      .then(afterFormat);
-  };
-  const textColor = (color: string) =>
-    void editor
-      .formatWith((t, range) => formatCommand(t, range, { color }))
-      .then(afterFormat);
-  const align = (value: 'left' | 'center' | 'right') =>
-    void editor
-      .formatWith((t, range) => paragraphCommand(t, range, { align: value }))
-      .then(afterFormat);
-  const toggleBullets = () => {
-    const on = format().bullet;
-    void editor
-      .formatWith((t, range) =>
-        paragraphCommand(t, range, {
-          bullet: on ? { kind: 'none' } : { kind: 'char', char: '•' },
-        })
-      )
-      .then(afterFormat);
-  };
-  const fill = (color: string | null) => {
+  // ---- panes, find, slide show -----------------------------------------------
+
+  const [notesVisible, setNotesVisible] = createSignal(true);
+  const [pane, setPane] = createSignal<PaneSection | null>(null);
+  const [find, setFind] = createSignal<{ replace: boolean } | null>(null);
+  // ---- animations -----------------------------------------------------------
+
+  const [ribbonTab, setRibbonTab] = createSignal('home');
+  const [animationPane, setAnimationPane] = createSignal(false);
+  const [selectionPane, setSelectionPane] = createSignal(false);
+  // ---- video and audio ------------------------------------------------------
+  const mediaUrls = createMediaUrls(engine);
+  /** The media shape playing over the stage. */
+  const [playing, setPlaying] = createSignal<number>();
+  /** The one selected video or audio shape, outside text editing. */
+  const selectedMedia = () => {
     const shape = editor.selectedShape();
-    const slide = session.currentSlide();
-    if (!shape || !slide) return;
-    void session.apply([
-      {
-        op: 'setFill',
-        slide: slide.id,
-        shape: shape.id,
-        fill: color ? { kind: 'solid', color } : { kind: 'none' },
-      },
-    ]);
+    return shape?.media && !editor.editing() ? shape : undefined;
   };
-
-  // ---- insertion -------------------------------------------------------
-
-  const insert = async (shape: Parameters<typeof session.apply>[0][number]) => {
-    const result = await session.apply([shape]);
-    return result?.created[0]?.shape;
+  function toggleSelectionPane() {
+    const next = !selectionPane();
+    if (next) {
+      setAnimationPane(false);
+      setPane(null);
+    }
+    setSelectionPane(next);
+  }
+  const [previewing, setPreviewing] = createSignal(false);
+  /** The animation picked in the pane, on its slide. */
+  const [pickedAnimation, setPickedAnimation] = createSignal<{
+    slide: number;
+    index: number;
+  } | null>(null);
+  const slideAnimations = () => session.currentSlide()?.animations ?? [];
+  const picked = () => {
+    const p = pickedAnimation();
+    return p &&
+      p.slide === session.currentSlide()?.id &&
+      p.index < slideAnimations().length
+      ? p.index
+      : undefined;
   };
-  const centered = (w: number, h: number) => ({
-    x: (slideW() - w) / 2,
-    y: (slideH() - h) / 2,
-    w,
-    h,
-  });
-
-  const insertTextBox = async () => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    const id = await insert({
-      op: 'addShape',
-      slide: slide.id,
-      shape: { kind: 'textBox', text: '' },
-      ...centered(300, 40),
-    });
-    if (id !== undefined) void startEditing(id);
+  /** Animations of the selected shapes (a group's members count). */
+  const selectionAnimations = () => {
+    const ids = new Set<number>();
+    const add = (s: ShapeOutline) => {
+      ids.add(s.id);
+      for (const c of s.children ?? []) add(c);
+    };
+    for (const s of ribbonSelection()) add(s);
+    return slideAnimations()
+      .map((a, i) => (ids.has(a.shapeId) ? i : -1))
+      .filter((i) => i >= 0);
   };
-  const insertShape = async (preset: string) => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    const id = await insert({
-      op: 'addShape',
-      slide: slide.id,
-      shape: { kind: 'shape', preset },
-      ...centered(200, 120),
-    });
-    if (id !== undefined) editor.select(id);
-    focusStage();
-  };
-  const insertImage = async (file: File) => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    try {
-      const bitmap = await createImageBitmap(file);
-      const natural = { w: bitmap.width * 0.75, h: bitmap.height * 0.75 };
-      bitmap.close();
-      const fit = Math.min(
-        1,
-        (slideW() * 0.6) / natural.w,
-        (slideH() * 0.6) / natural.h
+  const animationEnv = {
+    pane: animationPane,
+    togglePane: () => setAnimationPane((v) => !v),
+    picked,
+    pick: (index?: number) => {
+      const slide = session.currentSlide();
+      setPickedAnimation(
+        index === undefined || !slide ? null : { slide: slide.id, index }
       );
-      const data = await fileToBase64(file);
-      const id = await insert({
-        op: 'addShape',
-        slide: slide.id,
-        shape: { kind: 'image', data, description: file.name },
-        ...centered(natural.w * fit, natural.h * fit),
-      });
-      if (id !== undefined) editor.select(id);
+    },
+    current: () => picked() ?? selectionAnimations()[0],
+    selected: () => {
+      const p = picked();
+      return p !== undefined ? [p] : selectionAnimations();
+    },
+    preview: () => {
+      editor.stopEditing();
+      setPreviewing(true);
+    },
+  };
+  const showAnimationTags = () =>
+    (ribbonTab() === 'animations' || animationPane()) &&
+    slideAnimations().length > 0;
+
+  const [printing, setPrinting] = createSignal(false);
+  const [exporting, setExporting] = createSignal(false);
+  /** Right-click ▸ Save as Picture: the selected shape alone, as a PNG. */
+  const saveShapePicture = async () => {
+    const shape = editor.selectedShape();
+    if (!shape) return;
+    try {
+      const bytes = await shapePicture(
+        viewEngine,
+        session.slideIndex(),
+        slideW(),
+        shape
+      );
+      context.download(bytes, `${baseName(shape.name)}.png`, 'image/png');
     } catch {
-      context.notifyError('That picture could not be inserted.');
+      context.notifyError('That shape could not be saved as a picture.');
     }
   };
-  const insertTable = async () => {
-    const slide = session.currentSlide();
-    if (!slide) return;
-    const cells = [
-      ['Item', 'Q1', 'Q2'],
-      ['', '', ''],
-      ['', '', ''],
-    ];
-    const id = await insert({
-      op: 'addShape',
-      slide: slide.id,
-      shape: { kind: 'table', cells },
-      ...centered(slideW() * 0.6, 90),
+  /** What the Insert/Edit Link dialog links, while it is open. */
+  const [linkEdit, setLinkEdit] = createSignal<LinkTarget>();
+  async function openLinkDialog() {
+    if (readonly()) return;
+    // The dialog starts from the text as it is once typing has landed.
+    await editor.textSettled();
+    const target = commands.linkTarget();
+    if (target) setLinkEdit(target);
+  }
+  /** Follows a link from the editor: a web page in a new tab, or a slide. */
+  const followLink = (link: string) => {
+    const deck = session.outline();
+    if (!deck) return;
+    const action = linkAction(link, deck, session.slideIndex());
+    if (action.kind === 'slide') editor.goToSlide(action.index);
+    else if (action.kind === 'open')
+      window.open(action.url, '_blank', 'noopener,noreferrer');
+  };
+  /** The link of what was right-clicked (the text at the caret, or the shape). */
+  const menuLink = () => {
+    const target = menuTarget();
+    if (target.kind === 'canvas') return undefined;
+    return commands.linkTarget()?.link;
+  };
+  const [sorter, setSorterRaw] = createSignal(false);
+  const setSorter = (on: boolean) => {
+    if (on) {
+      editor.stopEditing();
+      editor.setSelection([]);
+    }
+    setSorterRaw(on);
+    queueMicrotask(() =>
+      on
+        ? document
+            .querySelector<HTMLElement>(
+              '[data-testid="pptx-slide-sorter"] [data-testid="pptx-slide-list"]'
+            )
+            ?.focus()
+        : focusStage()
+    );
+  };
+  /** Double-click in the sorter: back to Normal view on that slide. */
+  const openFromSorter = (index: number) => {
+    setSorter(false);
+    editor.goToSlide(index);
+  };
+  const [presenting, setPresenting] = createSignal<{
+    start: number;
+    presenter: boolean;
+  } | null>(null);
+  const present = (fromCurrent: boolean, presenter = false) => {
+    editor.stopEditing();
+    setPresenting({
+      start: fromCurrent ? slidePosition() : 0,
+      presenter,
     });
-    if (id !== undefined) editor.select(id);
   };
 
-  // ---- slides ----------------------------------------------------------
+  // ---- review: comments and spelling ------------------------------------
 
-  const goToSlideId = (id: number) => {
-    const index = session.outline()?.slides.findIndex((s) => s.id === id) ?? -1;
-    if (index >= 0) editor.goToSlide(index);
+  /** Opening the Comments or Spelling pane closes the other task panes. */
+  const makeWayForReview = () => {
+    setPane(null);
+    setAnimationPane(false);
+    setSelectionPane(false);
   };
-  const addSlide = async () => {
-    const current = session.currentSlide();
-    const result = await session.apply([
-      { op: 'addSlide', after: current?.id },
-    ]);
-    const id = result?.created[0]?.slide;
-    if (id !== undefined) goToSlideId(id);
+  const comments = createComments({
+    session,
+    editor,
+    canEdit: context.canEdit,
+    author: () => context.currentUser?.() ?? { name: 'Author' },
+    onShowPane: () => {
+      makeWayForReview();
+      spellingPane.close();
+    },
+  });
+  const spell = createSpellCheck({
+    engine,
+    session,
+    editor,
+    canEdit: context.canEdit,
+    visible: () =>
+      context.canEdit() && !sorter() && presenting() === null && !previewing(),
+  });
+  const spellingPane = createSpellingPane({
+    session,
+    spell,
+    showWord: async (m) => {
+      if (session.slideIndex() !== m.slideIndex) editor.goToSlide(m.slideIndex);
+      const shape = editor.findShape(m.shape);
+      if (!shape) return;
+      if (m.cell) await editCell(shape, m.cell);
+      else await editor.startEditing(m.shape);
+      editor.selectText(
+        { paragraph: m.paragraph, offset: m.start },
+        { paragraph: m.paragraph, offset: m.end }
+      );
+    },
+  });
+  /** The comment being written on this slide, for its marker. */
+  const commentDraft = () => {
+    const d = comments.draft();
+    return d && d.slide === session.currentSlide()?.id ? d : undefined;
   };
-  const duplicateSlide = async (id: number) => {
-    const result = await session.apply([{ op: 'duplicateSlide', slide: id }]);
-    const created = result?.created[0]?.slide;
-    if (created !== undefined) goToSlideId(created);
+  /** Review ▸ Spelling (F7). */
+  const openSpelling = () => {
+    if (readonly()) return;
+    makeWayForReview();
+    comments.setPaneOpen(false);
+    void spellingPane.start();
   };
-  const deleteSlide = async (id: number) => {
-    editor.goToSlide(session.slideIndex());
-    await session.apply([{ op: 'deleteSlide', slide: id }]);
+  /** The misspelled word right-clicked, for the menu's corrections. */
+  const [spellHit, setSpellHit] = createSignal<Squiggle>();
+  const spellMenu = () => {
+    const hit = spellHit();
+    if (!hit) return undefined;
+    return {
+      word: hit.word,
+      suggestions: spell.suggest(hit.word),
+      readonly: readonly(),
+      replace: (suggestion: string) => void spell.replace([hit], suggestion),
+      ignoreAll: () => spell.ignoreAll(hit.word),
+      addToDictionary: () => spell.addToDictionary(hit.word),
+    };
   };
-  const toggleHidden = (slide: SlideOutline) =>
-    void session.apply([
-      { op: 'setSlideHidden', slide: slide.id, hidden: !slide.hidden },
-    ]);
-  const moveSlide = async (id: number, to: number) => {
-    await session.apply([{ op: 'moveSlide', slide: id, to }]);
-    goToSlideId(id);
+  const [recentFonts, setRecentFonts] = createSignal<string[]>([]);
+  const setFont = commands.setFont;
+  commands.setFont = (font: string) => {
+    if (!font.startsWith('+'))
+      setRecentFonts((list) =>
+        [font, ...list.filter((f) => f !== font)].slice(0, 5)
+      );
+    return setFont(font);
   };
+
+  /** The chart whose data editor is open. */
+  const [chartDataShape, setChartDataShape] = createSignal<number | null>(null);
+  const chartEditor = (shape: ShapeOutline) => setChartDataShape(shape.id);
+
+  let replacePictureInput!: HTMLInputElement;
+  const replacePicture = (file: File) => commands.replaceImage(file);
 
   const download = async () => {
     try {
@@ -607,15 +1734,64 @@ export function PptxEditor() {
   const overlay = () => {
     const edit = editor.editing();
     const d = editor.drag();
-    const shape = editor.selectedShape();
+    const list = editor.selection();
+    const multiple = list.length > 1;
+    const bounds = multiple ? unionBounds(list.map(boxOf)) : undefined;
+    const range = tableRange();
+    const rangeShape = range && editor.findShape(range.shape);
+    const g = rangeShape && tableGeometry(rangeShape);
+    const guide = borderGuide();
+    const guideShape = guide && editor.findShape(guide.shape);
+    const guideGeometry = guideShape && tableGeometry(guideShape);
     return {
-      selection: shape ? boxOf(shape) : undefined,
-      preview:
-        d?.active && d.kind !== 'move'
-          ? editor.dragPreview(d)
-          : d?.active && !editor.images().layer
-            ? editor.dragPreview(d)
+      selection: edit?.bounds
+        ? edit.bounds
+        : multiple && bounds
+          ? ({ ...bounds, rotation: 0 } as Box)
+          : list[0]
+            ? boxOf(list[0])
             : undefined,
+      outlines: multiple ? list.map(boxOf) : undefined,
+      rotatable: list.length === 1,
+      previews:
+        d?.active && d.kind !== 'marquee'
+          ? d.kind === 'move' && d.shape !== undefined && editor.images().layer
+            ? []
+            : editor.dragBoxes(d).map((b) => b.box)
+          : [],
+      marquee: editor.marquee(),
+      cellRange:
+        range && rangeShape && g
+          ? rangeBox(rangeShape, g, range.from, range.to)
+          : undefined,
+      guide:
+        guide?.kind === 'border' && guideGeometry
+          ? guide.axis === 'col'
+            ? {
+                x1:
+                  guideGeometry.xs[guide.index + 1] +
+                  guide.current.x -
+                  guide.start.x,
+                x2:
+                  guideGeometry.xs[guide.index + 1] +
+                  guide.current.x -
+                  guide.start.x,
+                y1: guideGeometry.ys[0],
+                y2: guideGeometry.ys[guideGeometry.ys.length - 1],
+              }
+            : {
+                x1: guideGeometry.xs[0],
+                x2: guideGeometry.xs[guideGeometry.xs.length - 1],
+                y1:
+                  guideGeometry.ys[guide.index + 1] +
+                  guide.current.y -
+                  guide.start.y,
+                y2:
+                  guideGeometry.ys[guide.index + 1] +
+                  guide.current.y -
+                  guide.start.y,
+              }
+          : undefined,
       caret:
         edit?.layout &&
         edit.selection.anchor.paragraph === edit.selection.focus.paragraph &&
@@ -641,182 +1817,1195 @@ export function PptxEditor() {
       : { left: '0px', top: '0px' };
   };
 
-  // Leaving a slide ends text editing and closes the cell editor.
+  // Leaving a slide ends text editing, cell ranges, and the cell editor.
   createEffect(
-    on(session.slideIndex, () => setCellEdit(null), { defer: true })
+    on(
+      session.slideIndex,
+      () => {
+        setCellEdit(null);
+        setTableRange(null);
+      },
+      { defer: true }
+    )
   );
 
+  const themeColors = () => session.outline()?.themeColors ?? [];
   const swatches = () => [
-    ...themeSwatches(session.outline()?.themeColors ?? []),
+    ...themeSwatches(themeColors()),
     ...STANDARD_SWATCHES,
   ];
 
+  // ---- ribbon --------------------------------------------------------------
+
+  const ribbonSelection = () => {
+    const edit = editor.editing();
+    const shape = edit && editor.findShape(edit.shape);
+    return shape ? [shape] : editor.selection();
+  };
+  const env: RibbonEnv = {
+    commands,
+    readonly,
+    deck: session.outline,
+    slide: session.currentSlide,
+    selection: ribbonSelection,
+    editingText: () => !!editor.editing(),
+    themeGrid: () => themeGrid(themeColors()),
+    standardColors: STANDARD_SWATCHES,
+    presetPaths: engine.presetPaths,
+    history: session.history,
+    undo: () => void undo(),
+    redo: () => void redo(),
+    copy: copyCommand,
+    cut: cutCommand,
+    paste: pasteCommand,
+    formatPainter: painter,
+    openFormatPane: (section) => setPane(section ?? 'shape'),
+    openLink: () => void openLinkDialog(),
+    selectionPane: { open: selectionPane, toggle: toggleSelectionPane },
+    view,
+    present,
+    find: (replace) => setFind({ replace }),
+    zoom,
+    setZoom,
+    sorter,
+    setSorter,
+    animation: animationEnv,
+    notesVisible,
+    toggleNotes: () => setNotesVisible((v) => !v),
+    download: () => void download(),
+    recentFonts,
+    deckSetup,
+    openSlideMaster: () => void openSlideMaster(),
+    review: { comments, spelling: openSpelling },
+    shapeGeometry: {
+      toggleEditPoints: () => void editPoints.toggle(),
+      editingPoints: editPoints.active,
+      merge: (mode) => void commands.mergeShapes(mode),
+    },
+    ...(engine.renderEquation
+      ? {
+          equation: {
+            editor: equations,
+            start: startEquation,
+            insertBuiltIn: insertBuiltInEquation,
+          },
+        }
+      : {}),
+  };
+
+  const tableTabProps = () => {
+    const table = selectedTable();
+    return table
+      ? {
+          table,
+          styles: session.outline()?.tableStyles ?? [],
+          selectRows: selectWholeRows,
+          selectColumns: selectWholeColumns,
+          selectTable: selectWholeTable,
+        }
+      : undefined;
+  };
+
+  const chartInsertMenu = (close: () => void) => (
+    <ChartGallery
+      onPick={(choice) => {
+        close();
+        void (async () => {
+          const id = await commands.insertChart(
+            choice.kind,
+            choice.grouping,
+            sampleChartData()
+          );
+          if (id !== undefined) setChartDataShape(id);
+        })();
+      }}
+    />
+  );
+  const chartTab: RibbonTab = {
+    id: 'chart-design',
+    label: 'Chart Design',
+    contextual: true,
+    content: () => (
+      <Show
+        when={
+          editor.selectedShape()?.kind === 'chart'
+            ? editor.selectedShape()
+            : undefined
+        }
+      >
+        {(shape) => (
+          <ChartDesignTab
+            shape={shape()}
+            onEditData={() => setChartDataShape(shape().id)}
+          />
+        )}
+      </Show>
+    ),
+  };
+  const equationTab: RibbonTab = {
+    id: 'equation',
+    label: 'Equation',
+    contextual: true,
+    content: () => <EquationTab editor={equations} readonly={readonly()} />,
+  };
+  const transitionsTab: RibbonTab = {
+    id: 'transitions',
+    label: 'Transitions',
+    content: () => <TransitionsTab />,
+  };
+
+  const tabs = createMemo((): RibbonTab[] => {
+    const list = ribbonSelection();
+    const table = !!selectedTable();
+    const drawable = list.some(
+      (s) => s.kind !== 'table' && s.kind !== 'chart' && s.kind !== 'picture'
+    );
+    const pictures = list.some((s) => s.kind === 'picture');
+    // Slide Master view has no slides to add or arrange (PowerPoint
+    // disables Home and Insert ▸ Slides there).
+    const slideTools = (tab: () => JSX.Element) => () => (
+      <div
+        class="contents"
+        classList={{
+          '[&_[role=group][aria-label=Slides]]:hidden': masterActive(),
+        }}
+      >
+        {tab()}
+      </div>
+    );
+    const home: RibbonTab = {
+      id: 'home',
+      label: 'Home',
+      content: slideTools(() => <HomeTab />),
+    };
+    const insert: RibbonTab = {
+      id: 'insert',
+      label: 'Insert',
+      content: slideTools(() => (
+        <InsertTab
+          chartMenu={chartInsertMenu}
+          onSmartArt={() => smartArt.dialog.setOpen(true)}
+        />
+      )),
+    };
+    const viewTab: RibbonTab = {
+      id: 'view',
+      label: 'View',
+      content: () => <ViewTab />,
+    };
+    // Slide Master view: its tab first, and no slide-only tabs.
+    const main: RibbonTab[] = masterActive()
+      ? [
+          {
+            id: 'slide-master',
+            label: 'Slide Master',
+            contextual: true,
+            content: () => <SlideMasterTab master={masterView} />,
+          },
+          home,
+          insert,
+          viewTab,
+        ]
+      : [
+          home,
+          insert,
+          { id: 'design', label: 'Design', content: () => <DesignTab /> },
+          transitionsTab,
+          {
+            id: 'animations',
+            label: 'Animations',
+            content: () => <AnimationsTab />,
+          },
+          {
+            id: 'slideshow',
+            label: 'Slide Show',
+            content: () => <SlideShowTab />,
+          },
+          { id: 'review', label: 'Review', content: () => <ReviewTab /> },
+          viewTab,
+        ];
+    return [
+      ...main,
+      ...(drawable && !readonly()
+        ? [
+            {
+              id: 'shape-format',
+              label: 'Shape Format',
+              contextual: true,
+              content: () => <ShapeFormatTab />,
+            },
+          ]
+        : []),
+      ...(pictures && !readonly()
+        ? [
+            {
+              id: 'picture-format',
+              label: 'Picture Format',
+              contextual: true,
+              content: () => (
+                <PictureFormatTab
+                  images={pictureImages}
+                  crop={crop}
+                  onChangePicture={() => replacePictureInput.click()}
+                />
+              ),
+            },
+          ]
+        : []),
+      ...(table && !readonly()
+        ? [
+            {
+              id: 'table-design',
+              label: 'Table Design',
+              contextual: true,
+              content: () => (
+                <Show when={tableTabProps()}>
+                  {(p) => <TableDesignTab {...p()} />}
+                </Show>
+              ),
+            },
+            {
+              id: 'table-layout',
+              label: 'Layout',
+              contextual: true,
+              content: () => (
+                <Show when={tableTabProps()}>
+                  {(p) => <TableLayoutTab {...p()} />}
+                </Show>
+              ),
+            },
+          ]
+        : []),
+      ...(list.length === 1 && list[0].kind === 'chart' && !readonly()
+        ? [chartTab]
+        : []),
+      ...((selectedEq() || equations.target()) && !readonly()
+        ? [equationTab]
+        : []),
+      ...(list.length === 1 && list[0].smartArt && !readonly()
+        ? [
+            {
+              id: 'smartart-design',
+              label: 'SmartArt Design',
+              contextual: true,
+              content: () => <SmartArtDesignTab smartArt={smartArt} />,
+            },
+          ]
+        : []),
+    ];
+  });
+
+  const saveLabel = () =>
+    ({
+      saved: 'Saved',
+      dirty: 'Unsaved changes',
+      saving: 'Saving…',
+      error: 'Save failed',
+    })[session.saveState()];
+
+  // ---- slide rail menu -----------------------------------------------------
+
+  /** The slide rail, or with `grid` the slide sorter. */
+  const Slides = (props: { grid?: boolean }) => (
+    <>
+      <Show when={session.outline()}>
+        {(deck) => (
+          <SlideRail
+            slides={deck().slides}
+            current={session.slideIndex()}
+            aspect={slideH() / slideW()}
+            thumbnail={thumbnails.thumbnail}
+            thumbnailPixels={Math.round(thumbnailWidth() * dpr())}
+            readonly={readonly()}
+            selectedIds={selectedSlideIds()}
+            grid={props.grid}
+            onSelect={selectSlide}
+            onSelectAll={selectAllSlides}
+            onOpen={props.grid ? openFromSorter : undefined}
+            onMove={(ids, at) => void commands.moveSlides(ids, at)}
+            onAdd={() => void commands.addSlide()}
+            onDuplicate={(id) => void commands.duplicateSlide(id)}
+            onDelete={(ids) => void commands.deleteSlides(ids)}
+            onToggleHidden={(s) => void commands.toggleHidden(s)}
+            peersOn={collaboration ? peersOn : undefined}
+            menu={railMenu}
+            onCopy={(e) => {
+              if (clipboard.copy(e.clipboardData)) e.preventDefault();
+            }}
+            onCut={(e) => {
+              if (readonly()) return;
+              e.preventDefault();
+              void clipboard.cut(e.clipboardData);
+            }}
+            onPaste={(e) => {
+              if (readonly()) return;
+              e.preventDefault();
+              void clipboard.pasteEvent(e.clipboardData);
+            }}
+            onFocusChange={setRailFocused}
+            sectionHeaders={(index) => (
+              <SectionHeaders
+                setup={deckSetup}
+                before={index()}
+                grid={props.grid}
+                readonly={readonly()}
+              />
+            )}
+            slideHidden={deckSetup.sections.hidden}
+            sectionMenu={(id) => (
+              <SectionMenuItems
+                setup={deckSetup}
+                id={id}
+                readonly={readonly()}
+              />
+            )}
+          />
+        )}
+      </Show>
+    </>
+  );
+
+  const many = () => selectedSlideIds().length > 1;
+  const railMenu = (slide: SlideOutline | undefined) => (
+    <>
+      <Show when={slide}>
+        <MenuItem
+          text="Cut"
+          icon={Scissors}
+          shortcut="cmd+x"
+          disabled={readonly() || (session.outline()?.slides.length ?? 0) <= 1}
+          onClick={() => {
+            setRailFocused(true);
+            cutCommand();
+          }}
+        />
+        <MenuItem
+          text="Copy"
+          icon={CopyIcon}
+          shortcut="cmd+c"
+          onClick={() => {
+            setRailFocused(true);
+            copyCommand();
+          }}
+        />
+      </Show>
+      <MenuItem
+        text="Paste"
+        icon={ClipboardIcon}
+        shortcut="cmd+v"
+        disabled={readonly()}
+        onClick={pasteCommand}
+      />
+      <MenuSeparator />
+      <MenuItem
+        text="New slide"
+        icon={Plus}
+        shortcut="cmd+m"
+        disabled={readonly()}
+        onClick={() => void commands.addSlide(undefined, slide?.id)}
+      />
+      <Show when={slide}>
+        {(s) => (
+          <>
+            <MenuItem
+              text={many() ? 'Duplicate slides' : 'Duplicate slide'}
+              icon={CopySimple}
+              disabled={readonly()}
+              onClick={() => void commands.duplicateSlide(s().id)}
+            />
+            <MenuItem
+              text={many() ? 'Delete slides' : 'Delete slide'}
+              icon={Trash}
+              disabled={
+                readonly() ||
+                selectedSlideIds().length >=
+                  (session.outline()?.slides.length ?? 0)
+              }
+              onClick={() => void commands.deleteSlides(selectedSlideIds())}
+            />
+            <MenuItem
+              text="Add Section"
+              disabled={readonly()}
+              onClick={() => void deckSetup.sections.add(s().id)}
+            />
+            <MenuSeparator />
+            <ContextMenu.Sub overlap gutter={2}>
+              <ContextMenu.SubTrigger class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-ink text-sm outline-none data-[highlighted]:bg-ink/5">
+                Layout
+              </ContextMenu.SubTrigger>
+              <ContextMenu.Portal>
+                <ContextMenuContent submenu class="w-56">
+                  <For each={session.outline()?.layouts ?? []}>
+                    {(layout) => (
+                      <MenuItem
+                        text={layout.name}
+                        disabled={readonly()}
+                        onClick={() => void commands.setLayout(layout.name)}
+                      />
+                    )}
+                  </For>
+                </ContextMenuContent>
+              </ContextMenu.Portal>
+            </ContextMenu.Sub>
+            <MenuItem
+              text="Format background…"
+              icon={PaintBucket}
+              disabled={readonly()}
+              onClick={() => setPane('background')}
+            />
+            <MenuItem
+              text={
+                (s().hidden ? 'Unhide slide' : 'Hide slide') +
+                (many() ? 's' : '')
+              }
+              icon={EyeSlash}
+              disabled={readonly()}
+              onClick={() => void commands.toggleHidden(s())}
+            />
+          </>
+        )}
+      </Show>
+    </>
+  );
+
+  /** Right-click menu of a master or layout in Slide Master view's pane. */
+  const masterMenu = (page: MasterPage | undefined) => {
+    const deck = session.deck();
+    const blocked = () => (page && deck ? deleteBlocker(deck, page) : 'none');
+    const what = () => (page?.layout ? 'Layout' : 'Master');
+    return (
+      <>
+        <MenuItem
+          text="Insert Layout"
+          icon={Layout}
+          disabled={readonly()}
+          onClick={() => void master.insertLayout(page)}
+        />
+        <Show when={page?.layout}>
+          <MenuItem
+            text="Duplicate Layout"
+            icon={CopySimple}
+            disabled={readonly()}
+            onClick={() => void master.duplicateLayout(page)}
+          />
+        </Show>
+        <Show when={page}>
+          <MenuItem
+            text={`Delete ${what()}`}
+            icon={Trash}
+            disabled={readonly() || !!blocked()}
+            onClick={() => void master.deletePage(page)}
+          />
+          <MenuItem
+            text={`Rename ${what()}`}
+            icon={PencilSimpleLine}
+            disabled={readonly()}
+            onClick={() => master.startRename(page)}
+          />
+        </Show>
+        <MenuSeparator />
+        <MenuItem
+          text="Format background…"
+          icon={PaintBucket}
+          disabled={readonly()}
+          onClick={() => setPane('background')}
+        />
+      </>
+    );
+  };
+
   return (
     <div
+      ref={root}
       class="flex size-full min-h-0 flex-col bg-page"
       data-testid="pptx-editor"
     >
-      <EditorToolbar
-        readonly={readonly()}
-        canUndo={session.history().canUndo}
-        canRedo={session.history().canRedo}
-        onUndo={() => void undo()}
-        onRedo={() => void redo()}
-        onInsertTextBox={() => void insertTextBox()}
-        onInsertShape={(p) => void insertShape(p)}
-        onInsertImage={(f) => void insertImage(f)}
-        onInsertTable={() => void insertTable()}
-        textActive={textActive()}
-        format={format()}
-        onToggle={toggle}
-        onFontSize={fontSize}
-        onTextColor={textColor}
-        onAlign={align}
-        onToggleBullets={toggleBullets}
-        shapeActive={!!editor.selectedShape() && !editor.editing()}
-        onFill={fill}
-        swatches={swatches()}
-        saveState={session.saveState()}
-        onSave={() => void session.save().catch(() => {})}
-        onDownload={() => void download()}
+      <Ribbon
+        env={env}
+        tabs={tabs()}
+        active={ribbonTab()}
         keepFocus={!!editor.editing()}
+        onTabChange={setRibbonTab}
+        controller={(set) => {
+          showRibbonTab = set;
+        }}
+        start={
+          <Show when={!readonly()}>
+            <RibbonButton
+              label="Undo"
+              tooltip="Undo (⌘Z)"
+              disabled={!session.history().canUndo}
+              onClick={() => void undo()}
+            >
+              <ArrowCounterClockwise />
+            </RibbonButton>
+            <RibbonButton
+              label="Redo"
+              tooltip="Redo (⇧⌘Z)"
+              disabled={!session.history().canRedo}
+              onClick={() => void redo()}
+            >
+              <ArrowClockwise />
+            </RibbonButton>
+            <div class="mx-1 h-4 w-px bg-edge-muted" />
+          </Show>
+        }
+        end={
+          <div class="flex items-center gap-1">
+            <Show when={!readonly()}>
+              <button
+                type="button"
+                class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-muted text-xs hover:bg-ink/5"
+                data-testid="pptx-save-state"
+                title="Save (⌘S)"
+                onClick={() => void session.save().catch(() => {})}
+              >
+                <Show
+                  when={session.saveState() === 'error'}
+                  fallback={<CloudCheck class="size-3.5" />}
+                >
+                  <WarningIcon class="size-3.5 text-failure" />
+                </Show>
+                {saveLabel()}
+              </button>
+            </Show>
+            <RibbonButton
+              label="Print"
+              tooltip="Print or save as PDF (⌘P)"
+              data-testid="pptx-print-open"
+              onClick={() => setPrinting(true)}
+            >
+              <Printer />
+            </RibbonButton>
+            <RibbonButton
+              label="Export"
+              tooltip="Export slides as pictures"
+              data-testid="pptx-export-open"
+              onClick={() => setExporting(true)}
+            >
+              <ImageSquare />
+            </RibbonButton>
+            <RibbonButton
+              label="Download"
+              tooltip="Download .pptx"
+              onClick={() => void download()}
+            >
+              <DownloadSimple />
+            </RibbonButton>
+            <Button
+              size="sm"
+              variant="accent"
+              class="h-6 gap-1 px-2 text-xs"
+              label="Present"
+              tooltip="Present from current slide (⇧F5)"
+              data-testid="pptx-present"
+              onClick={() => present(true)}
+            >
+              <Play class="size-3" />
+              Present
+            </Button>
+          </div>
+        }
       />
       <div class="flex min-h-0 flex-1">
-        <Show when={session.outline()}>
+        <Show
+          when={masterActive() && session.deck()}
+          fallback={
+            <Show when={!sorter()}>
+              <Slides />
+            </Show>
+          }
+        >
           {(deck) => (
-            <SlideRail
-              slides={deck().slides}
+            <MasterRail
+              deck={deck()}
+              pages={session.outline()?.slides ?? []}
               current={session.slideIndex()}
               aspect={slideH() / slideW()}
               thumbnail={thumbnails.thumbnail}
-              thumbnailPixels={Math.round(150 * dpr())}
+              thumbnailPixels={Math.round(thumbnailWidth() * dpr())}
               readonly={readonly()}
-              onSelect={(i) => editor.goToSlide(i)}
-              onMove={(id, to) => void moveSlide(id, to)}
-              onAdd={() => void addSlide()}
-              onDuplicate={(id) => void duplicateSlide(id)}
-              onDelete={(id) => void deleteSlide(id)}
-              onToggleHidden={toggleHidden}
-              peersOn={collaboration ? peersOn : undefined}
+              onSelect={(index) => editor.goToSlide(index)}
+              onDelete={(page) => void master.deletePage(page)}
+              menu={masterMenu}
             />
           )}
         </Show>
         <div class="flex min-w-0 flex-1 flex-col">
+          <Show when={sorter()}>
+            <Slides grid />
+          </Show>
           <div
-            ref={stageHost}
-            class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-inset"
+            class="relative flex min-h-0 flex-1"
+            classList={{ hidden: sorter() }}
           >
-            <Show when={collaboration}>
-              {(c) => (
-                <Collaborators peers={c().peers()} status={c().status()} />
+            <Show
+              when={previewing() && session.outline() && session.currentSlide()}
+            >
+              <AnimationPreview
+                engine={engine}
+                deck={session.outline()!}
+                index={session.slideIndex()}
+                width={hostSize().w - 2 * STAGE_MARGIN}
+                height={hostSize().h - 2 * STAGE_MARGIN}
+                onDone={() => setPreviewing(false)}
+              />
+            </Show>
+            <div
+              ref={stageHost}
+              class="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
+              onWheel={(e) => {
+                if (!e.ctrlKey && !e.metaKey) return;
+                e.preventDefault();
+                zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+              }}
+            >
+              <Show when={collaboration}>
+                {(c) => (
+                  <Collaborators peers={c().peers()} status={c().status()} />
+                )}
+              </Show>
+              <Show when={equations.target()}>
+                <EquationEditorPanel editor={equations} readonly={readonly()} />
+              </Show>
+              <Show when={find()}>
+                {(f) => (
+                  <FindReplace
+                    replace={f().replace}
+                    readonly={readonly()}
+                    session={session}
+                    editor={editor}
+                    commands={commands}
+                    onReplaceMode={(replace) => setFind({ replace })}
+                    onClose={() => {
+                      setFind(null);
+                      refocus();
+                    }}
+                  />
+                )}
+              </Show>
+              <div
+                class="flex min-h-full min-w-full items-center justify-center"
+                style={{
+                  width:
+                    zoom() === 'fit'
+                      ? undefined
+                      : `${slideW() * scale() + 2 * STAGE_MARGIN}px`,
+                  height:
+                    zoom() === 'fit'
+                      ? undefined
+                      : `${slideH() * scale() + 2 * STAGE_MARGIN}px`,
+                }}
+              >
+                <Show
+                  when={session.outline() && scale() > 0}
+                  fallback={
+                    <div
+                      class="text-ink-muted text-sm"
+                      data-testid="pptx-loading"
+                    >
+                      {loadError()
+                        ? `This presentation could not be opened: ${loadError()}`
+                        : 'Opening presentation…'}
+                    </div>
+                  }
+                >
+                  <SlideStage
+                    images={editor.images()}
+                    cssWidth={slideW() * scale()}
+                    cssHeight={slideH() * scale()}
+                    pixelWidth={renderWidth()}
+                    pixelsPerPoint={renderWidth() / slideW()}
+                  >
+                    <ContextMenu
+                      onOpenChange={(open) => {
+                        if (!open) queueMicrotask(refocus);
+                      }}
+                    >
+                      <ContextMenu.Trigger
+                        as="div"
+                        ref={stage}
+                        tabIndex={0}
+                        data-testid="pptx-stage"
+                        class="absolute inset-0 outline-none"
+                        classList={{
+                          'cursor-text':
+                            !!editor.editing() && !painter.active(),
+                        }}
+                        style={{
+                          cursor: painter.active()
+                            ? PAINT_CURSOR
+                            : guideCursor(),
+                        }}
+                        data-format-painter={painter.active() || undefined}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={() => {
+                          guides.cancel();
+                          tableGesture = null;
+                          setBorderGuide(null);
+                          editor.cancelDrag();
+                        }}
+                        onDblClick={onDoubleClick}
+                        onKeyDown={onStageKeyDown}
+                        // Kobalte's trigger does not call onContextMenu; capture runs first.
+                        oncapture:contextmenu={onContextMenu}
+                        onCopy={onStageCopy}
+                        onCut={onStageCut}
+                        onPaste={onStagePaste}
+                      >
+                        <Show when={collaboration && session.currentSlide()}>
+                          {(slide) => (
+                            <PeerSelections
+                              peers={collaboration?.peers() ?? []}
+                              slide={slide()}
+                              width={slideW()}
+                              height={slideH()}
+                              unit={unit()}
+                            />
+                          )}
+                        </Show>
+                        <Show when={masterActive() && session.currentSlide()}>
+                          {(page) => (
+                            <PlaceholderOutlines
+                              page={page()}
+                              width={slideW()}
+                              height={slideH()}
+                              unit={unit()}
+                            />
+                          )}
+                        </Show>
+                        <Show
+                          when={showAnimationTags() && session.currentSlide()}
+                        >
+                          {(slide) => (
+                            <AnimationTags
+                              slide={slide()}
+                              width={slideW()}
+                              height={slideH()}
+                              unit={unit()}
+                              picked={picked()}
+                            />
+                          )}
+                        </Show>
+                        <SpellSquiggles
+                          squiggles={spell.squiggles()}
+                          width={slideW()}
+                          height={slideH()}
+                          unit={unit()}
+                        />
+                        <SelectionOverlay
+                          width={slideW()}
+                          height={slideH()}
+                          unit={unit()}
+                          // Edit Points draws the outline instead.
+                          selection={
+                            editPoints.active()
+                              ? undefined
+                              : overlay().selection
+                          }
+                          outlines={overlay().outlines}
+                          showHandles={!readonly()}
+                          rotatable={overlay().rotatable}
+                          previews={overlay().previews}
+                          marquee={overlay().marquee}
+                          cellRange={overlay().cellRange}
+                          guide={overlay().guide}
+                          smartGuides={editor.guides() ?? undefined}
+                          caret={overlay().caret}
+                          textSelection={overlay().textSelection}
+                          editing={!!editor.editing()}
+                          onHandleDown={(kind, handle, e) => {
+                            e.stopPropagation();
+                            stage.setPointerCapture(e.pointerId);
+                            editor.handleDown(kind, handle, toSlide(e));
+                          }}
+                        />
+                        <textarea
+                          ref={input}
+                          data-testid="pptx-text-input"
+                          aria-label="Slide text"
+                          class="pointer-events-none absolute h-4 w-px resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent opacity-0 outline-none"
+                          style={inputPosition()}
+                          autocomplete="off"
+                          spellcheck={false}
+                          onKeyDown={onInputKeyDown}
+                          onBeforeInput={onBeforeInput}
+                          onCompositionEnd={onCompositionEnd}
+                          onCopy={onTextCopy}
+                          onCut={onTextCut}
+                          onPaste={onTextPaste}
+                        />
+                        <Show when={cellEdit()}>
+                          {(cell) => (
+                            <textarea
+                              id="pptx-cell-input"
+                              data-testid="pptx-cell-input"
+                              class="absolute z-10 resize-none rounded-sm border-2 border-accent bg-surface p-1 text-ink text-sm shadow-lg outline-none"
+                              style={{
+                                left: `${cell().rect.x * scale()}px`,
+                                top: `${cell().rect.y * scale()}px`,
+                                width: `${Math.max(80, cell().rect.w * scale())}px`,
+                                height: `${Math.max(32, cell().rect.h * scale())}px`,
+                              }}
+                              value={cell().text}
+                              ref={(el) => queueMicrotask(() => el.focus())}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  void commitCell(e.currentTarget.value);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setCellEdit(null);
+                                }
+                              }}
+                              onBlur={(e) =>
+                                void commitCell(e.currentTarget.value)
+                              }
+                            />
+                          )}
+                        </Show>
+                      </ContextMenu.Trigger>
+                      <ContextMenu.Portal>
+                        <ContextMenuContent class="w-64">
+                          <Show
+                            when={
+                              masterActive() && menuTarget().kind === 'canvas'
+                            }
+                          >
+                            <MenuItem
+                              text="Select all"
+                              icon={SelectionAll}
+                              shortcut="cmd+a"
+                              onClick={() => editor.selectAll()}
+                            />
+                            {masterMenu(master.page())}
+                          </Show>
+                          <Show
+                            when={
+                              !masterActive() || menuTarget().kind !== 'canvas'
+                            }
+                          >
+                            <StageMenuItems
+                              target={menuTarget()}
+                              a={{
+                                commands,
+                                readonly: readonly(),
+                                copy: copyCommand,
+                                cut: cutCommand,
+                                paste: pasteCommand,
+                                canPaste: true,
+                                editText: () => {
+                                  const s = editor.selectedShape();
+                                  if (s) void startEditing(s.id);
+                                },
+                                openFormatPane: (section) =>
+                                  setPane(section ?? 'shape'),
+                                replacePicture: () =>
+                                  replacePictureInput.click(),
+                                crop: () => void crop.enter(),
+                                editPoints: canEditPoints(
+                                  editor.selectedShape()
+                                )
+                                  ? () => void editPoints.enter()
+                                  : undefined,
+                                editChartData: () => {
+                                  const s = editor.selectedShape();
+                                  if (s) chartEditor(s);
+                                },
+                                changeChartType: () => {
+                                  const s = editor.selectedShape();
+                                  if (s) chartEditor(s);
+                                },
+                                smartArt: () => (
+                                  <SmartArtMenuItems
+                                    smartArt={smartArt}
+                                    readonly={readonly()}
+                                  />
+                                ),
+                                selectRows: selectWholeRows,
+                                selectColumns: selectWholeColumns,
+                                selectTable: selectWholeTable,
+                                layouts: (session.outline()?.layouts ?? []).map(
+                                  (l) => l.name
+                                ),
+                                currentLayout: session.currentSlide()?.layout,
+                                swatches: swatches(),
+                                newSlide: () => void commands.addSlide(),
+                                hideSlide: () => {
+                                  const s = session.currentSlide();
+                                  if (s) void commands.toggleHidden(s);
+                                },
+                                slideHidden: !!session.currentSlide()?.hidden,
+                                isPicture:
+                                  editor.selectedShape()?.kind === 'picture',
+                                isGroup: editor
+                                  .selection()
+                                  .some((s) => s.kind === 'group'),
+                                selectionCount: editor.selection().length,
+                                textShape:
+                                  !!editor.selectedShape()?.textEditable,
+                                savePicture: () => void saveShapePicture(),
+                                link: menuLink(),
+                                editLink: () => void openLinkDialog(),
+                                openLink: followLink,
+                                guides: {
+                                  shown: view.options().drawingGuides,
+                                  toggle: () =>
+                                    view.set({
+                                      drawingGuides:
+                                        !view.options().drawingGuides,
+                                    }),
+                                  gridlines: view.options().gridlines,
+                                  toggleGridlines: () =>
+                                    view.set({
+                                      gridlines: !view.options().gridlines,
+                                    }),
+                                  smartGuides: view.options().guides,
+                                  toggleSmartGuides: () =>
+                                    view.set({
+                                      guides: !view.options().guides,
+                                    }),
+                                  add: (orient) => void guides.add(orient),
+                                  remove: (index) => void guides.remove(index),
+                                  recolor: (index, color) =>
+                                    void guides.recolor(index, color),
+                                },
+                                removeLink: () => {
+                                  const target = commands.linkTarget();
+                                  if (target)
+                                    void commands.applyLink(target, '');
+                                },
+                                newComment: readonly()
+                                  ? undefined
+                                  : () => comments.newComment(),
+                                spelling: spellMenu(),
+                              }}
+                            />
+                          </Show>
+                        </ContextMenuContent>
+                      </ContextMenu.Portal>
+                    </ContextMenu>
+                    <SmartArtStage
+                      smartArt={smartArt}
+                      shapes={session.currentSlide()?.shapes ?? []}
+                      scale={scale()}
+                      slideWidth={slideW()}
+                      room={() => {
+                        hostSize();
+                        const host = stageHost.getBoundingClientRect();
+                        const slide = stage.getBoundingClientRect();
+                        return {
+                          left: slide.left - host.left,
+                          right: host.right - slide.right,
+                        };
+                      }}
+                      readonly={readonly()}
+                      onDone={focusStage}
+                    />
+                    <Show when={view.options().drawingGuides}>
+                      <GuidesOverlay
+                        width={slideW()}
+                        height={slideH()}
+                        scale={scale()}
+                        guides={session.outline()?.guides ?? []}
+                        layoutGuides={
+                          session.currentSlide()?.layoutGuides ?? []
+                        }
+                        drag={guides.drag()}
+                        themeColors={themeColors()}
+                      />
+                    </Show>
+                    <Show when={view.options().gridlines}>
+                      <Gridlines
+                        width={slideW()}
+                        height={slideH()}
+                        scale={scale()}
+                        spacing={view.options().gridSpacing}
+                      />
+                    </Show>
+                    <Show when={view.options().ruler}>
+                      <Rulers
+                        width={slideW()}
+                        height={slideH()}
+                        scale={scale()}
+                        selection={unionBounds(editor.selection().map(boxOf))}
+                      />
+                    </Show>
+                    <Show when={selectedMedia()}>
+                      {(shape) => {
+                        const box = () => ({
+                          x: shape().x * scale(),
+                          y: shape().y * scale(),
+                          w: shape().w * scale(),
+                          h: shape().h * scale(),
+                        });
+                        return (
+                          <Show
+                            when={playing() === shape().id && shape().media}
+                            fallback={
+                              <MediaPlayButton
+                                box={box()}
+                                kind={shape().media?.kind ?? 'video'}
+                                onPlay={() => setPlaying(shape().id)}
+                              />
+                            }
+                          >
+                            {(media) => (
+                              <MediaPlayer
+                                media={media()}
+                                box={box()}
+                                urls={mediaUrls}
+                                onEnded={() => setPlaying(undefined)}
+                              />
+                            )}
+                          </Show>
+                        );
+                      }}
+                    </Show>
+                    <Show when={editPoints.active()}>
+                      <EditPointsOverlay points={editPoints} scale={scale()} />
+                    </Show>
+                    <Show when={crop.active()}>
+                      <CropOverlay
+                        crop={crop}
+                        images={pictureImages}
+                        themeColors={themeColors()}
+                        scale={scale()}
+                      />
+                    </Show>
+                    <Show
+                      when={
+                        comments.markup() &&
+                        (comments.threads().length > 0 || commentDraft())
+                      }
+                    >
+                      <CommentMarkers
+                        threads={comments.threads()}
+                        draft={commentDraft()}
+                        scale={scale()}
+                        width={slideW() * scale()}
+                        height={slideH() * scale()}
+                        findShape={editor.findShape}
+                        selected={comments.selected()}
+                        onPick={(id) => comments.select(id)}
+                      />
+                    </Show>
+                  </SlideStage>
+                </Show>
+              </div>
+            </div>
+            <Show
+              when={
+                spellingPane.open() &&
+                !selectionPane() &&
+                !animationPane() &&
+                !pane()
+              }
+            >
+              <SpellingPane
+                pane={spellingPane}
+                readonly={readonly()}
+                onClose={() => {
+                  spellingPane.close();
+                  refocus();
+                }}
+              />
+            </Show>
+            <Show
+              when={
+                comments.paneOpen() &&
+                !spellingPane.open() &&
+                !selectionPane() &&
+                !animationPane() &&
+                !pane() &&
+                session.currentSlide()
+              }
+            >
+              {(slide) => (
+                <CommentsPane
+                  comments={comments}
+                  slideId={slide().id}
+                  readonly={readonly()}
+                  onClose={() => {
+                    comments.setPaneOpen(false);
+                    refocus();
+                  }}
+                />
               )}
             </Show>
             <Show
-              when={session.outline() && scale() > 0}
-              fallback={
-                <div class="text-ink-muted text-sm" data-testid="pptx-loading">
-                  {loadError()
-                    ? `This presentation could not be opened: ${loadError()}`
-                    : 'Opening presentation…'}
-                </div>
+              when={
+                selectionPane() &&
+                !animationPane() &&
+                !pane() &&
+                session.currentSlide()
               }
             >
-              <SlideStage
-                images={editor.images()}
-                cssWidth={slideW() * scale()}
-                cssHeight={slideH() * scale()}
-                pixelWidth={renderWidth()}
-                pixelsPerPoint={renderWidth() / slideW()}
-              >
-                <div
-                  ref={stage}
-                  tabIndex={0}
-                  data-testid="pptx-stage"
-                  class="absolute inset-0 outline-none"
-                  classList={{ 'cursor-text': !!editor.editing() }}
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={() => editor.cancelDrag()}
-                  onDblClick={onDoubleClick}
-                  onKeyDown={onStageKeyDown}
-                >
-                  <Show when={collaboration && session.currentSlide()}>
-                    {(slide) => (
-                      <PeerSelections
-                        peers={collaboration?.peers() ?? []}
-                        slide={slide()}
-                        width={slideW()}
-                        height={slideH()}
-                        unit={1 / Math.max(scale(), 0.01)}
-                      />
-                    )}
-                  </Show>
-                  <SelectionOverlay
-                    width={slideW()}
-                    height={slideH()}
-                    unit={1 / Math.max(scale(), 0.01)}
-                    selection={overlay().selection}
-                    showHandles={!readonly()}
-                    preview={overlay().preview}
-                    caret={overlay().caret}
-                    textSelection={overlay().textSelection}
-                    editing={!!editor.editing()}
-                    onHandleDown={(kind, handle, e) => {
-                      e.stopPropagation();
-                      stage.setPointerCapture(e.pointerId);
-                      editor.handleDown(kind, handle, toSlide(e));
-                    }}
-                  />
-                  <textarea
-                    ref={input}
-                    data-testid="pptx-text-input"
-                    aria-label="Slide text"
-                    class="pointer-events-none absolute h-4 w-px resize-none overflow-hidden border-0 bg-transparent p-0 text-transparent caret-transparent opacity-0 outline-none"
-                    style={inputPosition()}
-                    autocomplete="off"
-                    spellcheck={false}
-                    onKeyDown={onInputKeyDown}
-                    onBeforeInput={onBeforeInput}
-                    onCompositionEnd={onCompositionEnd}
-                    onCopy={onCopy}
-                    onCut={onCut}
-                    onPaste={onPaste}
-                  />
-                  <Show when={cellEdit()}>
-                    {(cell) => (
-                      <textarea
-                        id="pptx-cell-input"
-                        data-testid="pptx-cell-input"
-                        class="absolute z-10 resize-none rounded-sm border-2 border-accent bg-surface p-1 text-ink text-sm shadow-lg outline-none"
-                        style={{
-                          left: `${cell().rect.x * scale()}px`,
-                          top: `${cell().rect.y * scale()}px`,
-                          width: `${Math.max(80, cell().rect.w * scale())}px`,
-                          height: `${Math.max(32, cell().rect.h * scale())}px`,
-                        }}
-                        value={cell().text}
-                        ref={(el) => queueMicrotask(() => el.focus())}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            void commitCell(e.currentTarget.value);
-                          } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            setCellEdit(null);
-                          }
-                        }}
-                        onBlur={(e) => void commitCell(e.currentTarget.value)}
-                      />
-                    )}
-                  </Show>
-                </div>
-              </SlideStage>
+              {(slide) => (
+                <SelectionPane
+                  slide={slide()}
+                  selectedIds={editor.selectedIds()}
+                  readonly={readonly()}
+                  onSelect={(id, toggle) =>
+                    toggle ? editor.toggleSelected(id) : editor.select(id)
+                  }
+                  onRename={(id, name) => void commands.renameShape(id, name)}
+                  onHide={(ids, hidden) =>
+                    void commands.setShapesHidden(ids, hidden)
+                  }
+                  onMove={(id, steps) => void commands.moveInZOrder(id, steps)}
+                  onClose={() => {
+                    setSelectionPane(false);
+                    refocus();
+                  }}
+                />
+              )}
+            </Show>
+            <Show when={animationPane() && !pane()}>
+              <AnimationPane
+                env={env}
+                onSelectShape={(id) => {
+                  const top = session
+                    .currentSlide()
+                    ?.shapes.find(
+                      (s) =>
+                        s.id === id ||
+                        (s.children ?? []).some((c) => c.id === id)
+                    );
+                  if (top) editor.select(top.id);
+                }}
+                onClose={() => {
+                  setAnimationPane(false);
+                  refocus();
+                }}
+              />
+            </Show>
+            <Show when={pane()}>
+              {(section) => (
+                <FormatPane
+                  section={section()}
+                  onSection={setPane}
+                  onClose={() => {
+                    setPane(null);
+                    refocus();
+                  }}
+                  env={env}
+                />
+              )}
             </Show>
           </div>
-          <Show when={session.currentSlide()}>
+          <Show
+            when={
+              notesVisible() &&
+              !sorter() &&
+              !masterActive() &&
+              session.currentSlide()
+            }
+          >
             {(slide) => (
               <NotesPanel
                 slideId={slide().id}
@@ -834,8 +3023,246 @@ export function PptxEditor() {
               />
             )}
           </Show>
+          <div class="flex h-6 shrink-0 items-center gap-3 border-edge-muted border-t bg-panel px-3 text-ink-muted text-xs">
+            <span data-testid="pptx-status-slide">
+              <Show
+                when={!masterActive()}
+                fallback={
+                  <span data-testid="pptx-status-master">Slide Master</span>
+                }
+              >
+                Slide {session.slideIndex() + 1} of{' '}
+                {session.outline()?.slides.length ?? 0}
+              </Show>
+            </span>
+            <Show when={selectedSlideIds().length > 1}>
+              <span data-testid="pptx-status-selected">
+                {selectedSlideIds().length} slides selected
+              </span>
+            </Show>
+            <span class="flex-1" />
+            <button
+              type="button"
+              class="hover:text-ink"
+              onClick={() => setNotesVisible((v) => !v)}
+            >
+              Notes
+            </button>
+            <button
+              type="button"
+              class="hover:text-ink"
+              classList={{ 'text-ink': !sorter() && !masterActive() }}
+              aria-pressed={!sorter() && !masterActive()}
+              aria-label="Normal view"
+              title="Normal"
+              data-testid="pptx-view-normal"
+              onClick={() =>
+                masterActive() ? void closeSlideMaster() : setSorter(false)
+              }
+            >
+              <Rectangle class="size-3.5" />
+            </button>
+            <button
+              type="button"
+              class="hover:text-ink"
+              classList={{ 'text-ink': sorter() }}
+              aria-pressed={sorter()}
+              aria-label="Slide sorter"
+              title="Slide sorter"
+              data-testid="pptx-view-sorter"
+              onClick={() =>
+                masterActive()
+                  ? void closeSlideMaster().then(() => setSorter(true))
+                  : setSorter(true)
+              }
+            >
+              <SquaresFour class="size-3.5" />
+            </button>
+            <Show when={!sorter()}>
+              <button
+                type="button"
+                class="hover:text-ink"
+                aria-label="Zoom out"
+                onClick={() => zoomBy(1 / 1.25)}
+              >
+                −
+              </button>
+              <input
+                type="range"
+                aria-label="Zoom"
+                min={10}
+                max={400}
+                value={Math.round((scale() / PX_PER_PT) * 100)}
+                class="w-24 accent-accent"
+                onInput={(e) => setZoom(Number(e.currentTarget.value) / 100)}
+              />
+              <button
+                type="button"
+                class="hover:text-ink"
+                aria-label="Zoom in"
+                onClick={() => zoomBy(1.25)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                class="w-10 text-right tabular-nums hover:text-ink"
+                title="Fit slide to window"
+                data-testid="pptx-zoom"
+                onClick={() => setZoom('fit')}
+              >
+                {Math.round((scale() / PX_PER_PT) * 100)}%
+              </button>
+            </Show>
+          </div>
         </div>
       </div>
+      <input
+        ref={replacePictureInput}
+        type="file"
+        accept="image/png,image/jpeg,image/gif"
+        class="hidden"
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          if (file) void replacePicture(file);
+        }}
+      />
+      <Show
+        when={
+          chartDataShape() !== null
+            ? editor.findShape(chartDataShape()!)
+            : undefined
+        }
+      >
+        {(shape) => (
+          <ChartDataEditor
+            shape={shape()}
+            readonly={readonly()}
+            onApply={(data) => commands.setChartData(shape().id, data)}
+            onClose={() => {
+              setChartDataShape(null);
+              queueMicrotask(focusStage);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={smartArt.dialog.open()}>
+        <SmartArtDialog
+          catalog={smartArt.catalog()}
+          preview={smartArt.preview}
+          onInsert={(layout) => void smartArt.insert(layout)}
+          onClose={() => {
+            smartArt.dialog.setOpen(false);
+            queueMicrotask(refocus);
+          }}
+        />
+      </Show>
+      <Show when={linkEdit() && session.outline()}>
+        {(deck) => (
+          <LinkDialog
+            engine={engine}
+            deck={deck()}
+            current={session.slideIndex()}
+            target={linkEdit()!}
+            onApply={(link, tip, text) => {
+              const target = linkEdit();
+              if (target) void commands.applyLink(target, link, tip, text);
+            }}
+            onClose={() => {
+              setLinkEdit(undefined);
+              queueMicrotask(refocus);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={exporting() && session.deck()}>
+        {(deck) => (
+          <ExportDialog
+            engine={engine}
+            deck={deck()}
+            current={slidePosition()}
+            selected={deck()
+              .slides.map((s, i) =>
+                selectedSlideIds().includes(s.id) ? i : -1
+              )
+              .filter((i) => i >= 0)}
+            fileName={context.fileName()}
+            download={context.download}
+            notifyError={context.notifyError}
+            onClose={() => {
+              setExporting(false);
+              queueMicrotask(refocus);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={printing() && session.deck()}>
+        {(deck) => (
+          <PrintDialog
+            engine={engine}
+            deck={deck()}
+            current={slidePosition()}
+            fileName={context.fileName()}
+            download={context.download}
+            notifyError={context.notifyError}
+            onClose={() => {
+              setPrinting(false);
+              queueMicrotask(refocus);
+            }}
+          />
+        )}
+      </Show>
+      <Show when={master.renaming()}>
+        {(page) => (
+          <RenameLayoutDialog
+            master={!page().layout}
+            name={page().layout?.name ?? page().master.name}
+            onRename={(name) => void master.rename(page(), name)}
+            onClose={() => {
+              master.stopRename();
+              queueMicrotask(refocus);
+            }}
+          />
+        )}
+      </Show>
+      <DeckSetupDialogs
+        setup={deckSetup}
+        deck={session.outline()}
+        slide={session.currentSlide()}
+        selectedCount={selectedSlideIds().length}
+        readonly={readonly()}
+        onClosed={() => queueMicrotask(refocus)}
+      />
+      <Show when={presenting() && session.deck()}>
+        {(deck) => {
+          const onExit = (index: number) => {
+            setPresenting(null);
+            if (!masterActive()) editor.goToSlide(index);
+            queueMicrotask(focusStage);
+          };
+          return (
+            <Show
+              when={presenting()?.presenter}
+              fallback={
+                <SlideShow
+                  engine={engine}
+                  deck={deck()}
+                  start={presenting()?.start ?? 0}
+                  onExit={onExit}
+                />
+              }
+            >
+              <PresenterView
+                engine={engine}
+                deck={deck()}
+                start={presenting()?.start ?? 0}
+                onExit={onExit}
+              />
+            </Show>
+          );
+        }}
+      </Show>
     </div>
   );
 }

@@ -935,3 +935,163 @@ fn edits_land_on_the_rendered_alternate_content_branch() {
     assert_eq!(text_of("Fallback"), "Fallback");
     assert_integrity(&mut pres);
 }
+
+#[test]
+fn alt_text_names_and_visibility_are_set() {
+    let mut pres = open(&[&text_box(2, 0, 0, 3_000_000, 1_000_000, &para("A"))]);
+    apply(
+        &mut pres,
+        vec![
+            EditOp::SetAltText {
+                slide: 256,
+                shape: 2,
+                text: "Revenue by quarter".into(),
+            },
+            EditOp::SetShapeName {
+                slide: 256,
+                shape: 2,
+                name: "Revenue".into(),
+            },
+            EditOp::SetShapeHidden {
+                slide: 256,
+                shape: 2,
+                hidden: true,
+            },
+        ],
+    );
+    let s = pres.slide_outline(0).unwrap().shapes[0].clone();
+    assert_eq!(
+        (s.alt_text.as_str(), s.name.as_str(), s.hidden),
+        ("Revenue by quarter", "Revenue", true)
+    );
+    apply(
+        &mut pres,
+        vec![
+            EditOp::SetAltText {
+                slide: 256,
+                shape: 2,
+                text: String::new(),
+            },
+            EditOp::SetShapeHidden {
+                slide: 256,
+                shape: 2,
+                hidden: false,
+            },
+        ],
+    );
+    let xml = String::from_utf8(
+        pres.pkg
+            .read("/ppt/slides/slide1.xml")
+            .unwrap()
+            .into_owned(),
+    )
+    .unwrap();
+    assert!(!xml.contains("descr=") && !xml.contains("hidden="), "{xml}");
+    assert!(matches!(
+        pres.apply(
+            &[EditOp::SetShapeName {
+                slide: 256,
+                shape: 9,
+                name: "x".into()
+            }],
+            fonts()
+        ),
+        Err(Error::NotFound(_))
+    ));
+    assert_integrity(&mut pres);
+}
+
+#[test]
+fn group_clipboard_layout_transition_and_find_ops_read_camel_case_json() {
+    let json = r#"[{"op":"groupShapes","slide":256,"shapes":[2,3]},
+        {"op":"ungroupShape","slide":256,"shape":4},
+        {"op":"pasteShapes","slide":256,"payload":"{}","dx":null},
+        {"op":"pasteSlides","payload":"{}","after":null},
+        {"op":"setSlideLayout","slide":256,"layout":"Blank"},
+        {"op":"setTransition","slide":256,"kind":"fade","durationMs":500,"direction":"smooth","advanceOnClick":true,"advanceAfterMs":0,"applyToAll":null},
+        {"op":"setTransition","slide":256,"kind":"push"},
+        {"op":"replaceText","find":"a","replace":"b","matchCase":true,"wholeWord":null,"slide":null},
+        {"op":"setAltText","slide":256,"shape":2,"text":"x"},
+        {"op":"setShapeName","slide":256,"shape":2,"name":"x"},
+        {"op":"setShapeHidden","slide":256,"shape":2,"hidden":true}]"#;
+    let ops: Vec<EditOp> = serde_json::from_str(json).unwrap();
+    assert_eq!(ops.len(), 11);
+    assert!(matches!(
+        &ops[5],
+        EditOp::SetTransition {
+            advance_after_ms: Some(0),
+            apply_to_all: false,
+            ..
+        }
+    ));
+    assert!(matches!(
+        &ops[6],
+        EditOp::SetTransition {
+            advance_after_ms: None,
+            ..
+        }
+    ));
+    assert_eq!(ops[7].slide(), None);
+    let older: EditResult =
+        serde_json::from_str(r#"{"created":[],"changedSlides":[],"structureChanged":false}"#)
+            .unwrap();
+    assert_eq!(older.replaced, 0);
+}
+
+#[test]
+fn character_spacing_is_set_reported_and_cleared() {
+    let mut pres = open(&[&text_box(2, 0, 0, 5_000_000, 1_000_000, &para("Spread"))]);
+    let width = |pres: &mut Presentation| {
+        let layout = pres.text_layout(0, 2, None, fonts()).unwrap().unwrap();
+        let stops = &layout.lines[0].stops;
+        stops.last().unwrap().x - stops[0].x
+    };
+    let normal = width(&mut pres);
+    let spacing = |pres: &mut Presentation, pt: f32| {
+        apply(
+            pres,
+            vec![EditOp::FormatText {
+                slide: 256,
+                shape: 2,
+                cell: None,
+                start: None,
+                end: None,
+                props: RunPatch {
+                    spacing: Some(pt),
+                    ..RunPatch::default()
+                },
+            }],
+        );
+    };
+    spacing(&mut pres, 3.0);
+    let layout = pres.text_layout(0, 2, None, fonts()).unwrap().unwrap();
+    assert_eq!(layout.styles[0].runs[0].spacing, 3.0);
+    // Six letters, each 3 pt further apart.
+    assert!((width(&mut pres) - normal - 18.0).abs() < 0.5);
+    let part = pres.slide_part(256).unwrap();
+    let doc = pres.xml(&part).unwrap();
+    assert!(
+        doc.descendants(doc.root())
+            .into_iter()
+            .any(|n| doc.local(n) == "rPr" && doc.attr(n, "spc") == Some("300"))
+    );
+    spacing(&mut pres, 0.0);
+    assert!((width(&mut pres) - normal).abs() < 0.01);
+    assert!(
+        pres.apply(
+            &[EditOp::FormatText {
+                slide: 256,
+                shape: 2,
+                cell: None,
+                start: None,
+                end: None,
+                props: RunPatch {
+                    spacing: Some(900.0),
+                    ..RunPatch::default()
+                },
+            }],
+            fonts()
+        )
+        .is_err()
+    );
+}

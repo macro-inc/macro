@@ -102,6 +102,82 @@ const STYLES: &[(&str, Family, u8)] = &[
 #[cfg(test)]
 pub(crate) const STYLES_FOR_TEST: &[(&str, Family, u8)] = STYLES;
 
+impl Family {
+    /// PowerPoint's name for the family's plain variant.
+    fn name(self) -> &'static str {
+        match self {
+            Family::Themed1 => "Themed Style 1",
+            Family::Themed2 => "Themed Style 2",
+            Family::Light1 => "Light Style 1",
+            Family::Light2 => "Light Style 2",
+            Family::Light3 => "Light Style 3",
+            Family::Medium1 => "Medium Style 1",
+            Family::Medium2 => "Medium Style 2",
+            Family::Medium3 => "Medium Style 3",
+            Family::Medium4 => "Medium Style 4",
+            Family::Dark1 => "Dark Style 1",
+            Family::Dark2 => "Dark Style 2",
+        }
+    }
+
+    /// The group PowerPoint's table style gallery lists the family under.
+    fn category(self) -> &'static str {
+        match self {
+            Family::Themed1
+            | Family::Themed2
+            | Family::Light1
+            | Family::Light2
+            | Family::Light3 => "light",
+            Family::Medium1 | Family::Medium2 | Family::Medium3 | Family::Medium4 => "medium",
+            Family::Dark1 | Family::Dark2 => "dark",
+        }
+    }
+}
+
+/// PowerPoint's display name of a built-in style variant.
+fn display_name(family: Family, accent: u8) -> String {
+    match (family, accent) {
+        (Family::Themed1, 0) => "No Style, No Grid".to_owned(),
+        (Family::Themed2, 0) => "No Style, Table Grid".to_owned(),
+        (_, 0) => family.name().to_owned(),
+        // Dark Style 2 pairs each accent with the next one for its header row.
+        (Family::Dark2, a) => format!("{} - Accent {a}/Accent {}", family.name(), a + 1),
+        (_, a) => format!("{} - Accent {a}", family.name()),
+    }
+}
+
+/// A built-in table style as PowerPoint's gallery offers it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuiltinStyle {
+    /// The style GUID (`a:tableStyleId`).
+    pub id: &'static str,
+    /// PowerPoint's display name ("Medium Style 2 - Accent 1").
+    pub name: String,
+    /// Gallery group: `light`, `medium`, or `dark`.
+    pub category: &'static str,
+}
+
+fn builtin(&(id, family, accent): &(&'static str, Family, u8)) -> BuiltinStyle {
+    BuiltinStyle {
+        id,
+        name: display_name(family, accent),
+        category: family.category(),
+    }
+}
+
+/// Every built-in style, in the order of PowerPoint's gallery.
+pub fn builtin_styles() -> Vec<BuiltinStyle> {
+    STYLES.iter().map(builtin).collect()
+}
+
+/// The built-in style with GUID `id` (case-insensitive).
+pub fn builtin_style(id: &str) -> Option<BuiltinStyle> {
+    STYLES
+        .iter()
+        .find(|(g, _, _)| g.eq_ignore_ascii_case(id))
+        .map(builtin)
+}
+
 /// The table style PowerPoint applies to new tables.
 pub const DEFAULT_TABLE_STYLE: &str = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
 
@@ -152,9 +228,12 @@ impl Part {
     }
 }
 
-/// Generates the `a:tblStyle` XML of a built-in style, if `id` is one.
+/// Generates the `a:tblStyle` XML of a built-in style, if `id` is one, under
+/// PowerPoint's name for it: the definition PowerPoint writes into
+/// `tableStyles.xml` for the styles a deck uses.
 pub fn builtin_style_xml(id: &str) -> Option<String> {
-    let &(_, family, accent) = STYLES.iter().find(|(g, _, _)| g.eq_ignore_ascii_case(id))?;
+    let &(id, family, accent) = STYLES.iter().find(|(g, _, _)| g.eq_ignore_ascii_case(id))?;
+    let name = display_name(family, accent);
     let a = if accent == 0 {
         None
     } else {
@@ -369,7 +448,7 @@ pub fn builtin_style_xml(id: &str) -> Option<String> {
         }
     }
     let mut s = format!(
-        "<a:tblStyle xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" styleId=\"{id}\" styleName=\"builtin\">"
+        "<a:tblStyle xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" styleId=\"{id}\" styleName=\"{name}\">"
     );
     if let Some(bg) = tbl_bg {
         s.push_str(&format!("<a:tblBg>{}</a:tblBg>", solid(&bg)));
