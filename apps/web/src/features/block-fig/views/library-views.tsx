@@ -32,14 +32,19 @@ export function LibrariesButton(props: {
   const [publishing, setPublishing] = createSignal<'open' | 'busy'>();
   const openDialog = () => {
     setOpen(true);
+    libs.watchStatus(true);
     void libs.refresh();
+  };
+  const closeDialog = () => {
+    setOpen(false);
+    libs.watchStatus(false);
   };
   const publish = async (note: string) => {
     setPublishing('busy');
     const done = await libs.publish(note);
     setPublishing(undefined);
     // Published, both dialogs close (as Figma's do); a failure goes back.
-    if (done) setOpen(false);
+    if (done) closeDialog();
   };
   return (
     <>
@@ -76,7 +81,7 @@ export function LibrariesButton(props: {
           onToggle={(library, on) => void libs.setEnabled(library, on)}
           onPublish={() => setPublishing('open')}
           detached={detachedCopies(libs.uses(), libs.published())}
-          onClose={() => setOpen(false)}
+          onClose={closeDialog}
         />
       </Show>
       <Show when={publishing() && libs.status()}>

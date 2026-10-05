@@ -64,22 +64,33 @@ export function createFigLibraries(options: {
   const [reviewing, setReviewing] = createSignal(false);
   const [updating, setUpdating] = createSignal(false);
 
+  /**
+   * The publishing state (which hashes every asset) is read only while
+   * something shows it: the Libraries dialog.
+   */
+  const [watchingStatus, setWatchingStatus] = createSignal(false);
   let request = 0;
   const loadState = async () => {
     const mine = ++request;
     try {
       const [u, s] = await Promise.all([
         engine.libraryUses(),
-        engine.libraryStatus(),
+        watchingStatus() ? engine.libraryStatus() : Promise.resolve(undefined),
       ]);
       if (mine !== request) return;
       setUses(u);
-      setStatus(s);
+      if (s) setStatus(s);
     } catch {
       // A file that fails to answer keeps the last state.
     }
   };
   createEffect(on(viewer.editVersion, () => void loadState()));
+
+  /** Starts (or stops) keeping the publishing state current. */
+  const watchStatus = (on: boolean) => {
+    setWatchingStatus(on);
+    if (on) void loadState();
+  };
 
   const setOne = (id: string, value: LoadedLibrary) =>
     setLoaded((m) => new Map(m).set(id, value));
@@ -356,6 +367,7 @@ export function createFigLibraries(options: {
   return {
     uses,
     status,
+    watchStatus,
     loaded,
     published,
     updates,
