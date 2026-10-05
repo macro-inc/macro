@@ -94,7 +94,10 @@ New desktop users enter the same flow from
 open `/app/signup`. Existing members and native mobile keep their existing routes.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
-interests and security. No account is required for these slides. Below the color
+interests and security. No account is required for these slides. The signed-out
+page should remain stable after the session check returns
+401; it must not alternate with the loading screen or reset a selected color.
+Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
 step, Connect work email uses Google sign-up to create the Macro account and link
 the primary inbox. This step offers Google sign-up only, with no alternate email
@@ -115,6 +118,18 @@ Tools use the same Pipedream catalog and connection UI as Settings. Search, load
 more, cancel/retry connection, and confirm connected checks persist on return.
 Team setup retains existing membership, invite acceptance, domain suggestions,
 and editable invite recipients; submitting the form sends real invitations.
+
+Members with an active or trialing license, including a license from their team,
+finish directly from the team step without visiting the plan page. The Continue
+button reads "Opening your workspace…" while saving; a failed save leaves the
+team step available to retry. Checkout returns still use the plan step to confirm
+payment. Session refreshes must preserve the mounted onboarding flow so
+completion finishes instead of repeatedly flashing or restarting.
+
+Finishing setup saves the onboarding record before marking the tutorial complete.
+The confirmed tutorial save updates the session cache before leaving. A successful
+finish must not show "Couldn't finish setup — please try again", including when
+a background session refresh overlaps it.
 
 The trial offer contains no card fields or wallet buttons. Its primary button
 requests an automatic 30-day Premium trial through Stripe Checkout; no coupon

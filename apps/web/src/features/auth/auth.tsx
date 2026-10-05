@@ -52,7 +52,7 @@ export function Login(props: { signupMode?: boolean }) {
         onSignIn={() => navigate('/login')}
         // Desktop sign-up resolves into onboarding's frame either way.
         pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
-        signedIn={(user) => <PostAuthGate user={user} />}
+        signedIn={(user) => <PostAuthGate user={user()} />}
       />
     </AuthProvider>
   );

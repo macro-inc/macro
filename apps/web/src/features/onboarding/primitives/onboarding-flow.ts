@@ -117,6 +117,7 @@ export function createOnboardingFlow(
     const record = options.record();
     if (
       repairing ||
+      options.finishing() ||
       !needsOnboarding() ||
       record.t !== 'ready' ||
       record.value.status !== 'completed'

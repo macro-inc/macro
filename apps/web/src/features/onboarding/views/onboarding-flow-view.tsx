@@ -95,11 +95,32 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
-  const advance = (outcome: StepOutcome = 'completed') =>
-    goTo(flow.leave(outcome));
+  const advance = (outcome: StepOutcome = 'completed') => {
+    if (finish.finishing()) return;
+    const next = flow.leave(outcome);
+    const viewer = context.viewer();
+    if (
+      step() === 'team' &&
+      viewer.t === 'signed-in' &&
+      viewer.viewer.licensed
+    ) {
+      void finish.finishPremium();
+      return;
+    }
+    goTo(next);
+  };
   const viewerEmail = () => {
     const viewer = context.viewer();
     return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
+  };
+  const showPlanOffer = () => {
+    const viewer = context.viewer();
+    return (
+      step() === 'plan' &&
+      props.checkoutReturn?.t !== 'success' &&
+      viewer.t === 'signed-in' &&
+      !viewer.viewer.licensed
+    );
   };
   const back = () => {
     const current = step();
@@ -121,9 +142,9 @@ export function OnboardingFlowView(props: {
           )}
         </Show>
       }
-      explainerLabel={step() === 'plan' ? 'Continue as Guest' : undefined}
+      explainerLabel={showPlanOffer() ? 'Continue as Guest' : undefined}
       explainer={
-        step() === 'plan' ? (
+        showPlanOffer() ? (
           <PlanComparison
             disabled={finish.finishing()}
             onContinueGuest={() => void finish.finishFree()}
@@ -165,6 +186,7 @@ export function OnboardingFlowView(props: {
           </Match>
           <Match when={step() === 'team'}>
             <TeamStep
+              finishing={finish.finishing()}
               onContinue={() => advance()}
               onSkip={() => advance('skipped')}
             />

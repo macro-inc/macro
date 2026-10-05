@@ -180,7 +180,7 @@ function Fixture() {
             pending={
               page === 'signup' ? () => <OnboardingPendingView /> : undefined
             }
-            signedIn={(user) => <SignedIn user={user} />}
+            signedIn={(user) => <SignedIn user={user()} />}
           />
         </Match>
       </Switch>

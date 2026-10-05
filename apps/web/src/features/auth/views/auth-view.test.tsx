@@ -36,7 +36,7 @@ function setup(
         signupJourney={options.signupJourney}
         signedIn={(user) => (
           <p data-testid="signed-in">
-            {user.email} {user.tutorialComplete ? 'returning' : 'new'}
+            {user().email} {user().tutorialComplete ? 'returning' : 'new'}
           </p>
         )}
       />
@@ -59,6 +59,38 @@ const typeCode = async (value: string) =>
   });
 
 describe('email sign-in', () => {
+  it('updates a signed-in viewer without remounting their workspace on session refresh', () => {
+    const { fake } = setup({
+      world: {
+        user: {
+          id: 'macro|member@acme.com',
+          email: 'member@acme.com',
+          tutorialComplete: false,
+        },
+      },
+    });
+    const workspace = screen.getByTestId('signed-in');
+
+    fake.update((draft) => {
+      if (draft.user) draft.user.tutorialComplete = true;
+    });
+
+    expect(screen.getByTestId('signed-in')).toBe(workspace);
+    expect(workspace.textContent).toBe('member@acme.com returning');
+
+    fake.update((draft) => {
+      draft.user = {
+        id: 'macro|another@acme.com',
+        email: 'another@acme.com',
+        tutorialComplete: false,
+      };
+    });
+    expect(screen.getByTestId('signed-in')).not.toBe(workspace);
+    expect(screen.getByTestId('signed-in').textContent).toBe(
+      'another@acme.com new'
+    );
+  });
+
   it('sends a code, verifies it, and hands off to the signed-in view', async () => {
     const { fake, verified } = setup();
     click('Continue with email');

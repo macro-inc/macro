@@ -93,6 +93,12 @@ describe('live trial checkout', () => {
         licensed: true,
       },
     });
+    expect(
+      screen.queryByRole('heading', { name: 'Free Claude & GPT for 30 days.' })
+    ).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Your workspace is ready.' })
+    ).toBeTruthy();
     await waitFor(() => expect(finish).toHaveBeenCalledWith('premium'));
     expect(checkout).not.toHaveBeenCalled();
   });

@@ -9,10 +9,8 @@ import {
 } from '@core/pipedream/catalog';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { useCreateCheckoutSessionMutation } from '@queries/auth';
-import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
 import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { useGithubStarsQuery } from '@queries/github-stars';
@@ -100,11 +98,6 @@ export function createAppOnboardingContext(): OnboardingContext {
     const state = viewer();
     return state.t === 'signed-in' && !state.viewer.tutorialComplete;
   };
-  const refetchViewer = () =>
-    queryClient
-      .refetchQueries({ queryKey: authKeys.userInfo.queryKey })
-      .catch(() => {});
-
   return {
     viewer,
     refreshViewer: async () => {
@@ -214,27 +207,15 @@ export function createAppOnboardingContext(): OnboardingContext {
         )
       ),
     completeOnboarding: async ({ skipped }) => {
-      const [onboardingResult] = await Promise.allSettled([
-        completeOnboarding.mutateAsync({ skipped }),
-        completeTutorial.mutateAsync(),
-      ]);
-      // Exiting with the row still active would leave staged candidates
-      // undiscarded and the flow resumable after the user thinks it's done.
-      if (onboardingResult.status === 'rejected') return { t: 'failed' };
-      // The Layout redirect keys off tutorialComplete, so leaving before the
-      // cache reflects the PATCH would bounce straight back. Read the cache,
-      // not the observer: its store flushes on a later task.
-      await refetchViewer();
-      const data = queryClient.getQueryData<UserInfoData>(
-        authKeys.userInfo.queryKey
-      );
-      return data?.tutorialComplete === true
-        ? { t: 'completed' }
-        : { t: 'failed' };
+      // Finish the row before publishing tutorialComplete, which lets the
+      // auth gate unmount onboarding. The tutorial mutation updates its cache
+      // from the successful PATCH; a racing refetch isn't a completion check.
+      await completeOnboarding.mutateAsync({ skipped });
+      await completeTutorial.mutateAsync();
+      return { t: 'completed' };
     },
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
-      await refetchViewer();
     },
 
     applyAccent: applyWorkspaceAccent,
