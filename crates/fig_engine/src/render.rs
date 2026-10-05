@@ -937,8 +937,9 @@ impl AreaMask {
     }
 }
 
-/// Masks kept for reuse by one render.
+/// Masks (and their total bytes) kept for reuse by one render.
 const MASK_POOL: usize = 8;
+const MASK_POOL_BYTES: usize = 48 << 20;
 
 impl Painter<'_> {
     /// A cleared mask the size of `surface`, which will be read within
@@ -950,7 +951,7 @@ impl Painter<'_> {
             .iter()
             .position(|m| m.width() == w && m.height() == h)
         {
-            Some(at) => self.masks.swap_remove(at),
+            Some(at) => self.masks.remove(at),
             None => Mask::new(w, h)?,
         };
         let mut m = AreaMask { mask, area: [0; 4] };
@@ -963,11 +964,14 @@ impl Painter<'_> {
         Some(m)
     }
 
-    /// Clears a mask and keeps it for reuse.
+    /// Clears a mask and keeps it for reuse, in place of the one unused
+    /// longest when the pool is full.
     pub(crate) fn recycle(&mut self, mut m: AreaMask) {
-        if self.masks.len() < MASK_POOL {
-            m.clear();
-            self.masks.push(m.mask);
+        m.clear();
+        self.masks.push(m.mask);
+        let bytes = |masks: &[Mask]| masks.iter().map(|m| m.data().len()).sum::<usize>();
+        while self.masks.len() > MASK_POOL || bytes(&self.masks) > MASK_POOL_BYTES {
+            self.masks.remove(0);
         }
     }
 }
