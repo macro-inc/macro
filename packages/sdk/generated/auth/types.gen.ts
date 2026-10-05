@@ -1147,6 +1147,10 @@ export type PlanCatalogEntry = {
      */
     monthly_price_cents: number;
     /**
+     * Whether a new purchase or plan move may pick this plan today.
+     */
+    purchasable: boolean;
+    /**
      * The tier.
      */
     tier: PlanTier;
@@ -1169,7 +1173,8 @@ export type PlanCatalogResponse = {
      */
     overage_limit_min_cents: number;
     /**
-     * Free and every purchasable paid plan, cheapest first.
+     * Every plan, cheapest first. Clients read allowances from here rather
+     * than hard-coding them; `purchasable` marks the plans a user can buy.
      */
     plans: Array<PlanCatalogEntry>;
 };

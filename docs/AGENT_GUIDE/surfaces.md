@@ -1083,7 +1083,10 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider sync and errors still show their own states. Verify delayed occurrence
+pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+grid, explaining that events will appear automatically and Macro remains usable.
+The banner stays visible as partial results arrive and disappears when sync finishes.
+Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
@@ -1128,15 +1131,35 @@ public booking and receipt links show an unavailable page without fetching
 scheduling data. When enabling a production rollout, include anonymous visitors
 so invitees can open those links.
 
-When enabled, calendar scheduling lives in **Settings → Calendar** (`/app/settings/calendar`).
-The scheduling sidebar opens Event types, Bookings, Availability, Teams, Insights,
-and Booking page. Event editors have a grouped settings sidebar; booking status
-filters use the same segmented control as the CRM sidebar.
+Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
+Scheduling lives in the separate **Settings → Booking links** item
+(`/app/settings/booking-links`), with Booking links, Availability, Booking pages,
+Teams, Bookings, and Insights in one scrolling page. The calendar toolbar’s
+booking actions open Booking links; email and integration connection shortcuts
+continue to open Calendar.
+There is no second sidebar or global owner switch. Personal and team booking links
+appear together with ownership badges. New booking link and New schedule ask which
+owner to create for when multiple editable owners are available, then open inline editors;
+event options are stacked sections. Save changes or Cancel returns to the list.
+Connected calendars offers Connect account (the existing Google consent flow),
+Connect calendar for accounts missing calendar permission, and Disconnect with
+confirmation. Disconnect removes calendar access/data, not the Gmail connection.
+Account checkboxes show/hide all child calendars; partial selection is shown as
+mixed. Individual calendars can also be shown/hidden. The account color is the
+default for its calendars; a child color overrides it. Click a color dot to open
+the theme-matched picker: drag the color field and hue slider, choose a named
+swatch, or enter a three- or six-digit hex value. Arrow keys adjust the focused
+color field (Shift makes larger steps). **Reset to default** clears the override.
+Visibility and colors share the calendar sidebar's browser-local preferences,
+survive reload, and do not change the Google calendar or booking conflict checks.
+Booking status filters use the same segmented control as the CRM sidebar.
 In Availability, each weekday has an enable switch, time ranges, an add button,
 and a copy-hours menu; select target days and Apply before saving the schedule.
 Date overrides and the searchable timezone picker sit below the weekly hours.
-Choose Personal or your Macro team in `Calendar owner`. Team owners/admins can
-edit team links; ordinary members can view them. `Event types` creates, edits,
+Ownership badges identify Personal or Team · team name on links and availability.
+Public booking pages, bookings, and insights are grouped by owner and remain visible
+together; editing one owner does not switch the rest of the page. Search booking
+links by title, slug, or owner. Team owners/admins can edit team links; ordinary members can view them. `Event types` creates, edits,
 pauses, duplicates, previews, and copies booking links. Event settings include
 weekly availability, collective/all-host or round-robin/one-host assignment,
 notice, buffers, booking horizon, daily limits, and custom questions. New event
@@ -1145,7 +1168,8 @@ types stay paused until `Accept bookings` is selected and changes are saved.
 zone. Set a default schedule for new event types; a schedule cannot be deleted
 until its event types use another one. Collective and round-robin team meetings
 respect each host’s personal default hours when configured, plus busy calendars.
-`Teams` uses existing Macro team membership and links to team settings.
+`Teams` summarizes connected teams and links to team settings; the member roster
+lives in team settings. Choose hosts for a team booking link inside its editor.
 `Booking page` edits the public name and description. `Bookings` shows
 upcoming, unconfirmed, past, and cancelled meetings; admins can confirm requests,
 reschedule, or cancel them. Choose From/Through dates to load bookings (initially 30 days before and after today), then search by guest/title/email and filter by event type. Dates use your browser time zone; shorten the range if more than 5,000 bookings match.
@@ -1294,9 +1318,25 @@ Working locations (such as `Office` or `Home`) stay on the calendar grid but are
 excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
-section listing each connected account with a per-account `Enable` (grant calendar) or
-`Turn off` action, plus `Connect another account` to connect a new Google account
+section listing each connected account with a per-account `Enable` (grant calendar),
+`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Connect another account` to connect a new Google account
 (email + calendar).
+
+`Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
+re-enabling is not offered while the old calendar is still being deleted. Reconnecting
+an inbox that used calendar requests email and calendar together, while an explicit
+calendar opt-out remains off during an email-only reconnect. Per-inbox actions
+preselect that Google account. The consent callback explains that it is finishing
+the connection, provides `Back to app`, and restores the previous layout on completion.
+It applies the grant even if the old inbox list is still loading.
+
+An AI event draft defaults to the primary inbox's primary calendar. If that calendar
+is disconnected or still syncing, the draft offers reconnection or an explicit
+calendar choice and disables submission until a usable calendar is selected. It
+does not silently send the invitation from another connected inbox.
+Failed calendar or account queries show `Could not load your calendars.` with
+`Try again`, rather than offering consent or presenting the failure as backfill.
 
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
@@ -1851,14 +1891,15 @@ live-backend release gates and documents staging retention and recovery.
 
 ### Email signatures
 
-In Integrations, **Edit signature** beside an owned inbox expands its editor.
-The editor uses the app's background and text colors, including in dark mode;
-explicit colors in signature content are preserved. **Close signature editor**
-(the X) or Escape while focused in that inbox row collapses it and returns focus
-to **Edit signature**. Unsaved edits remain when reopened; closing does not save
-or remove the signature.
-The inbox row's trash icon removes the inbox through the existing confirmation;
-it is separate from the signature editor's close control.
+Open **Settings → Email → Signatures**. Each owned inbox has a visible editor;
+there is no expand/collapse control. Format the text, add links or images, and
+choose **Save signature**. **Clear signature** removes only the signature, while
+**Remove inbox** in Accounts uses the existing inbox removal confirmation.
+**Add to replies & forwards** saves that preference immediately. Unsaved drafts
+survive switching settings pages. On phones, signature editing remains desktop-only;
+the replies/forwards toggle and clear action are available.
+Email accounts can also be managed from **Integrations**. Its **Email settings**
+link opens the dedicated page, and Email links to Notifications and Calendar.
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
 offline and confirm it uses the saved settings.
@@ -1922,8 +1963,9 @@ same-domain signup is not added automatically.
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
-page. The main page has a profile shortcut and grouped Account, Preferences,
-Workspace, and enabled agent/admin sections. Tap a row to open that settings
+page. The main page has a profile shortcut and the same grouped Blocks, Personal, Workspace,
+and Developer sections as desktop, plus enabled admin settings. Search finds
+individual settings; selecting a result opens its page and reveals the section. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
 previous scroll position. `API Keys` is desktop-only and has no row here.
 **Close settings** at the top right, Escape, an
@@ -1945,9 +1987,35 @@ settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.
 
-Left nav: General → `Account` (profile, delete account), `API Keys` (create /
-list / delete personal keys; the secret is shown only once and is sent as
-`x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
+Settings pages use the email composer’s raised surfaces on the page background.
+Section headings and controls share a white surface in light mode and the
+composer border in dark mode, with subtle row separators. The compact sidebar
+uses the shared workspace width.
+
+Left nav (feature and platform gates still apply):
+
+- **Blocks**: Email, Calendar, Agents, CRM.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Billing, Mobile App.
+- **Workspace**: Team, Tags, Integrations (personal Gmail/GitHub accounts).
+- **Developer**: Agent connections, Runtimes, MCP server, API Keys, Bots.
+
+Search checks individual setting titles and keywords, tolerates common typos,
+and shows the parent page below each control result. Selecting a result opens
+that page, scrolls to its section or row, and briefly highlights it. Try
+`singature`, `email digest`, `calendar color`, or `cursor`. Arrow Down from search
+focuses the first result; Tab moves through controls normally. Escape in the
+search field clears the query. Clearing search restores the grouped navigation. Keyboard shortcuts are listed
+by category with the action on the left and keys on the right; expand **Keyboard
+preview** for the visual key map.
+Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
+The previews use the saved themes; System follows the device and exposes both
+per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
+retains theme search, editing, copying, and custom theme creation.
+
+Existing settings URLs remain valid; `connections` still opens Integrations,
+`agent-connections` opens Agent connections, and `harness` aliases Runtimes.
+
+`Billing` (current plan card with
 `Manage`; only in dev (`dev.macro.com/app` or a local frontend using the dev
 backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
@@ -1955,18 +2023,15 @@ Checkout, and a `Usage billing` toggle with per-period limit pills; these
 controls and usage-billing promotional copy are hidden outside dev; an `Upgrade`
 card for Free users to buy Premium, no Max purchase or upgrade control, and a
 `Switch to Premium` link on Max; on a team the downgrade moves only the viewer's
-own seat),
-`Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
+own seat)
+
+`Team` (members list; on a paid team each row shows the seat's plan,
 and admins/owners can move an existing Max seat to Premium with the `Seat plan`
-menu; Premium seats have no Max option; moves are prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+menu; Premium seats have no Max option; moves are prorated at once). CRM (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
-checkboxes, editable by the role set as `edit_stages_role`),
-`Integrations` (personal Gmail/GitHub accounts), `Connections` (agent tool
-connections; the same page as Agents → Connections, URL slug `agent-connections`), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`;
-`Log out`.
+checkboxes, editable by the role set as `edit_stages_role`)
+
 `Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` / `Edit <name>` open full-page forms grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
 `Use my connected apps` (default; the agent gets whatever the person running it has
@@ -1977,7 +2042,7 @@ that opens the Pipedream Connect flow inside the page. Unconnected picks never b
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
-is also available as Settings → Connections.
+is also available as Settings → Agent connections.
 
 To change an agent's picture, open `Edit <name>`, choose an image with `Upload`,
 wait for `Uploading…` to finish, then click `Save changes`. Images up to 16 MB
@@ -1998,6 +2063,14 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
+Codex, macrod, in-memory) alongside connected apps, through the same session
+egress path: the sandbox sees the server under its name and a URL key, never the
+server's address or token. A disabled server is not offered. If a server's
+connection has expired, its tool calls return a message telling the agent to
+have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
+custom servers. Agents configured with a fixed app selection do not receive the
+owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
 Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
 featured or offered in the Connections catalog. Personal Gmail and GitHub account

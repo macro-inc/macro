@@ -512,6 +512,12 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         .unwrap()
         .unwrap();
     assert_eq!(frozen.seats, seats);
+    // Both columns carry the cost amounts; the legacy one keeps a pre-cutover binary working.
+    let raw = raw_allowance(&pool, payer.as_ref(), open.start())
+        .await
+        .unwrap();
+    assert_eq!(raw.included_cents_by_user, vec![2_000, 1_000]);
+    assert_eq!(raw.included_cost_cents_by_user, Some(vec![2_000, 1_000]));
 
     // A later observation of the same open period refreshes.
     let max_payer = vec![SeatAllowance {
@@ -534,9 +540,10 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     sqlx::query!(
         r#"
         INSERT INTO ai_billing_period_allowance (
-            user_id, period_start, billed_users, included_cents_by_user
+            user_id, period_start, billed_users, included_cents_by_user,
+            included_cost_cents_by_user
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $4)
         "#,
         payer.as_ref(),
         earlier,
@@ -567,6 +574,7 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
 struct RawAllowance {
     billed_users: Vec<String>,
     included_cents_by_user: Vec<i64>,
+    included_cost_cents_by_user: Option<Vec<i64>>,
     updated_at: chrono::DateTime<Utc>,
 }
 
@@ -579,6 +587,7 @@ async fn raw_allowance(
         r#"
         SELECT billed_users AS "billed_users!",
                included_cents_by_user AS "included_cents_by_user!",
+               included_cost_cents_by_user,
                updated_at
         FROM ai_billing_period_allowance
         WHERE user_id = $1 AND period_start = $2
@@ -592,6 +601,7 @@ async fn raw_allowance(
     .map(|row| RawAllowance {
         billed_users: row.billed_users,
         included_cents_by_user: row.included_cents_by_user,
+        included_cost_cents_by_user: row.included_cost_cents_by_user,
         updated_at: row.updated_at,
     })
 }
@@ -631,12 +641,15 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
     let open_cents = vec![100_i64, 100, 300];
     let closed_cents = vec![2_000_i64, 1_000, 2_000];
     let seeded_at = open_start - chrono::Duration::days(2);
+    // The open row was frozen by this binary (cost column present); the closed
+    // row below predates the cost column.
     sqlx::query!(
         r#"
         INSERT INTO ai_billing_period_allowance (
-            user_id, period_start, billed_users, included_cents_by_user, updated_at
+            user_id, period_start, billed_users, included_cents_by_user, updated_at,
+            included_cost_cents_by_user
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, $4)
         "#,
         payer.as_ref(),
         open.start(),
@@ -674,12 +687,14 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
         vec![payer.as_ref().to_string(), bob.as_ref().to_string()]
     );
     assert_eq!(open_row.included_cents_by_user, vec![100, 300]);
+    assert_eq!(open_row.included_cost_cents_by_user, Some(vec![100, 300]));
     assert_ne!(open_row.updated_at, seeded_at);
     let closed_row = raw_allowance(&pool, payer.as_ref(), closed_start)
         .await
         .unwrap();
     assert_eq!(closed_row.billed_users, users);
     assert_eq!(closed_row.included_cents_by_user, closed_cents);
+    assert_eq!(closed_row.included_cost_cents_by_user, None);
     assert_eq!(closed_row.updated_at, seeded_at);
     assert_eq!(seat_generation(&pool, payer.as_ref()).await, Some(1));
 
@@ -842,4 +857,86 @@ async fn release_open_seat_without_an_allowance_row_bumps_generation(pool: PgPoo
             .unwrap()
             .is_none()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rows_frozen_before_the_cost_column_read_as_the_current_allowance(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let payer = payer();
+    let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
+    let users = vec![payer.as_ref().to_string(), member.as_ref().to_string()];
+    let legacy_start = Utc::now() - chrono::Duration::days(40);
+    let stale_start = legacy_start - chrono::Duration::days(30);
+    // A pre-cutover binary wrote list-rate amounts and no cost column.
+    sqlx::query!(
+        r#"
+        INSERT INTO ai_billing_period_allowance (
+            user_id, period_start, billed_users, included_cents_by_user
+        )
+        VALUES ($1, $2, $3, $4)
+        "#,
+        payer.as_ref(),
+        legacy_start,
+        &users,
+        &vec![4_000_i64, 20_000],
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // An older binary refreshed the roster, leaving the cost column out of step.
+    sqlx::query!(
+        r#"
+        INSERT INTO ai_billing_period_allowance (
+            user_id, period_start, billed_users, included_cents_by_user,
+            included_cost_cents_by_user
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        payer.as_ref(),
+        stale_start,
+        &users,
+        &vec![4_000_i64, 4_000],
+        &vec![2_000_i64],
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    for start in [legacy_start, stale_start] {
+        let seats = repo
+            .period_allowance(&payer, start)
+            .await
+            .unwrap()
+            .unwrap()
+            .seats;
+        assert_eq!(
+            seats,
+            vec![
+                SeatAllowance {
+                    user: payer.clone(),
+                    included_cents: INCLUDED_ALLOWANCE_CENTS,
+                },
+                SeatAllowance {
+                    user: member.clone(),
+                    included_cents: INCLUDED_ALLOWANCE_CENTS,
+                },
+            ]
+        );
+    }
+
+    // Releasing a seat from a pre-cutover row keeps the cost column empty rather
+    // than excising a stale array positionally.
+    let open = BillingPeriod {
+        start: legacy_start,
+        end: Utc::now() + chrono::Duration::days(20),
+    }
+    .open_start(Utc::now())
+    .unwrap();
+    repo.release_open_seat(&payer, open, &member).await.unwrap();
+    let raw = raw_allowance(&pool, payer.as_ref(), legacy_start)
+        .await
+        .unwrap();
+    assert_eq!(raw.billed_users, vec![payer.as_ref().to_string()]);
+    assert_eq!(raw.included_cents_by_user, vec![4_000]);
+    assert_eq!(raw.included_cost_cents_by_user, None);
 }

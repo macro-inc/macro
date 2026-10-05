@@ -1159,6 +1159,17 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         actor: Option<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Run a queued action next. Moves it to the front of the queue and, when
+    /// a turn is in flight, cancels that turn so this entry dispatches ahead
+    /// of anything queued before it. [`AgentSessionError::QueuedControlNotFound`]
+    /// once it has dispatched. `actor` as on [`Self::edit_queued_control`].
+    fn steer_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Resize this session's sandbox and remember `size` as the owner's default.
     fn set_sandbox_size(
         &self,

@@ -10,6 +10,7 @@ pub mod agent_identity;
 pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
+pub mod coding_agents;
 pub mod connected_toolsets;
 pub mod databases;
 pub mod do_not;
@@ -216,13 +217,17 @@ mod tests {
         assert!(session.contains("quoted verbatim"));
         assert!(session.contains("`userConfirmation`"));
         assert!(session.contains("`AskUser`"));
-        assert!(session.contains("`SendConfirmedEmail` is never right here"));
+        assert!(session.contains(
+            "`SendConfirmedEmail` and `CreateConfirmedCalendarEvent` are never right here"
+        ));
 
         // The thread rule is to restate what the tool would have done, whole,
         // so the user can approve it without opening the session - and it
-        // covers every user tool, not just email.
+        // covers every user tool, not just email: an approved event goes
+        // through the calendar twin of the confirmed send.
         assert!(session.contains("written out verbatim"));
         assert!(session.contains("the whole calendar event"));
+        assert!(session.contains("`CreateConfirmedCalendarEvent` for the event"));
 
         // Which prompt is being answered decides it, not the session.
         assert!(session.contains("decided per"));
@@ -243,18 +248,17 @@ mod tests {
     }
 
     #[test]
-    fn chat_prompt_names_the_confirmed_send_only_to_rule_it_out() {
+    fn chat_prompt_names_the_confirmed_tools_only_to_rule_them_out() {
         // The chat host has the same toolset and a composer, so the direct
-        // tool is visible there and must be steered away from; the direct
-        // prompt's hosts do not register it and say nothing about it.
+        // tools are visible there and must be steered away from; the direct
+        // prompt's hosts do not register them and say nothing about them.
         let chat = TOOL_USE_PROMPT.to_string();
         assert!(chat.contains("`SendConfirmedEmail`"));
-        assert!(chat.contains("never use it here"));
-        assert!(
-            !DIRECT_TOOL_USE_PROMPT
-                .to_string()
-                .contains("SendConfirmedEmail")
-        );
+        assert!(chat.contains("`CreateConfirmedCalendarEvent`"));
+        assert!(chat.contains("never use them here"));
+        let direct = DIRECT_TOOL_USE_PROMPT.to_string();
+        assert!(!direct.contains("SendConfirmedEmail"));
+        assert!(!direct.contains("CreateConfirmedCalendarEvent"));
     }
 
     #[test]

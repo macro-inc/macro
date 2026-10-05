@@ -46,6 +46,7 @@ export interface AiPlanCatalogEntry {
   tier: AiPlanTier;
   monthly_price_cents: number;
   included_ai_cents_per_seat: number;
+  purchasable: boolean;
 }
 
 export interface AiPlanCatalog {

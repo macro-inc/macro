@@ -22,16 +22,16 @@ impl crate::domain::ports::HistoricalMessageReader for PgMessageRepository {
         }
         sqlx::query_as!(
             HistoricalMessageTarget,
-            r#"SELECT m.id AS message_id, m.channel_id AS "channel_id!", t.root_id
+            r#"SELECT m.id AS message_id, m.parent_entity_id::uuid AS "channel_id!", t.root_id
                FROM comms_messages m
                JOIN comms_message_threads t ON t.root_id = coalesce(m.thread_id, m.id)
                JOIN comms_messages root ON root.id = t.root_id
                WHERE m.id = ANY($1) AND m.deleted_at IS NULL AND t.deleted_at IS NULL
                  AND root.deleted_at IS NULL AND root.thread_id IS NULL
-                 AND m.parent_entity_type = 'channel' AND m.parent_entity_id = m.channel_id::text
-                 AND t.parent_entity_type = 'channel' AND t.parent_entity_id = m.channel_id::text
-                 AND root.channel_id = m.channel_id AND root.parent_entity_type = 'channel'
-                 AND root.parent_entity_id = m.channel_id::text"#,
+                 AND m.parent_entity_type = 'channel'
+                 AND t.parent_entity_type = 'channel' AND t.parent_entity_id = m.parent_entity_id
+                 AND root.parent_entity_type = 'channel'
+                 AND root.parent_entity_id = m.parent_entity_id"#,
             ids,
         )
         .fetch_all(&self.pool)
@@ -67,7 +67,7 @@ impl PgMessageRepository {
         });
         Ok(sqlx::query!(
             r#"UPDATE comms_messages SET content = $5
-               WHERE id = $1 AND channel_id = $2
+               WHERE id = $1
                  AND parent_entity_type = 'channel' AND parent_entity_id = $2::text
                  AND content = $3 AND content <> $5 AND import_metadata @> $4
                  AND deleted_at IS NULL AND edited_at IS NULL AND updated_at = created_at
@@ -75,7 +75,7 @@ impl PgMessageRepository {
                      WHERE t.root_id = coalesce(comms_messages.thread_id, comms_messages.id)
                        AND t.deleted_at IS NOT NULL)"#,
             patch.message_id,
-            patch.channel_id,
+            patch.channel_id.to_string(),
             patch.expected_body,
             guard,
             patch.body,
@@ -135,12 +135,12 @@ async fn insert_batch(
             r#"SELECT t.root_id FROM comms_message_threads t
                JOIN comms_messages m ON m.id = t.root_id
                WHERE t.root_id = ANY($1) AND t.parent_entity_type = 'channel'
-                   AND t.parent_entity_id = $2 AND m.channel_id = $3
+                   AND t.parent_entity_id = $2
+                   AND m.parent_entity_type = 'channel' AND m.parent_entity_id = $2
                    AND m.thread_id IS NULL AND m.deleted_at IS NULL AND t.deleted_at IS NULL
                ORDER BY t.root_id FOR UPDATE OF t, m"#,
             &root_ids,
             batch.channel_id.to_string(),
-            batch.channel_id,
         )
         .fetch_all(&mut **tx)
         .await
@@ -196,18 +196,17 @@ async fn insert_messages(
     // Its created_at/updated_at values come from these backdated message columns.
     let result = sqlx::query!(
         r#"INSERT INTO comms_messages
-               (id, channel_id, parent_entity_type, parent_entity_id, thread_id,
+               (id, parent_entity_type, parent_entity_id, thread_id,
                 sender_id, imported_author, content, created_at, updated_at, edited_at,
                 import_metadata, import_order)
-           SELECT input.id, $1, 'channel', $2, input.thread_id, input.sender_id,
+           SELECT input.id, 'channel', $1, input.thread_id, input.sender_id,
                input.imported_author, input.content, input.created_at, input.updated_at,
                input.edited_at, input.import_metadata, input.import_order
-           FROM UNNEST($3::uuid[], $4::uuid[], $5::text[], $6::text[], $7::text[],
-               $8::timestamptz[], $9::timestamptz[], $10::timestamp[], $11::jsonb[], $12::bigint[])
+           FROM UNNEST($2::uuid[], $3::uuid[], $4::text[], $5::text[], $6::text[],
+               $7::timestamptz[], $8::timestamptz[], $9::timestamp[], $10::jsonb[], $11::bigint[])
                AS input(id, thread_id, sender_id, imported_author, content, created_at,
                         updated_at, edited_at, import_metadata, import_order)
            ON CONFLICT (id) DO NOTHING"#,
-        channel_id,
         channel_id.to_string(),
         &ids,
         &threads as _,

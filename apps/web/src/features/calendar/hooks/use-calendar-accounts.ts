@@ -1,25 +1,29 @@
 import { useUserId } from '@core/context/user';
+import { calendarConsentScopes } from '@core/email-link/consent';
 import { useEmailLinksQuery } from '@queries/email/link';
+import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { createMemo } from 'solid-js';
 
 /** The one calendar action a connected account offers from the calendar view. */
-type CalendarAccountAction = 'enable' | 'turnOff';
+type CalendarAccountAction = 'enable' | 'reconnect' | 'turnOff';
 
 /** A viewer-owned inbox rendered as a manageable calendar account. */
 export interface CalendarAccount {
   linkId: string;
   emailAddress: string;
   action: CalendarAccountAction;
+  consentScopes: ConsentScopes;
 }
 
 /**
  * Classifies the viewer's own inboxes into one calendar action each. An inbox
- * whose Google grant is missing calendar access — never granted, declined, or
- * turned off — offers `enable`; one that already has it offers `turnOff`. A
- * legacy inbox that still has data but no longer satisfies the capability check
- * also reads as `enable`: re-granting resumes it, and removing the stale data
- * stays available from connection settings.
+ * whose enabled calendar grant has expired offers `reconnect`. Missing calendar
+ * access — never granted, declined, or turned off — offers `enable`, including
+ * when the mailbox also needs reconnection; one that already
+ * has it offers `turnOff`. A legacy inbox that still has data but no longer
+ * satisfies the capability check also reads as `enable`: re-granting resumes
+ * it, and removing the stale data stays available from connection settings.
  *
  * Delegated inboxes are dropped: the viewer reads the owner's calendar but must
  * not enable or delete the owner's calendar from here. The viewer's primary
@@ -35,7 +39,12 @@ export function toCalendarAccounts(
     .map((link) => ({
       linkId: link.id,
       emailAddress: link.email_address,
-      action: link.needs_calendar_permission ? 'enable' : 'turnOff',
+      consentScopes: calendarConsentScopes(link),
+      action: link.needs_calendar_permission
+        ? 'enable'
+        : link.needs_reauth
+          ? 'reconnect'
+          : 'turnOff',
     }));
 }
 

@@ -244,10 +244,9 @@ async fn roots_replies_attribution_and_order_across_batches(pool: PgPool) {
         vec![earlier.id, later.id]
     );
     let stored = sqlx::query!(
-        "SELECT channel_id, parent_entity_type, parent_entity_id, import_metadata, import_order FROM comms_messages WHERE id = $1",
+        "SELECT parent_entity_type, parent_entity_id, import_metadata, import_order FROM comms_messages WHERE id = $1",
         root.id,
     ).fetch_one(&pool).await.unwrap();
-    assert_eq!(stored.channel_id, Some(channel_id));
     assert_eq!(stored.parent_entity_type, "channel");
     assert_eq!(stored.parent_entity_id, channel_id.to_string());
     assert_eq!(stored.import_metadata, Some(root.import_metadata));

@@ -51,10 +51,11 @@ legacy list and flag-gated composer flows remain available.
 
 While an agent works, a draft can be sent to its queue. Above the queue,
 **Send next** explicitly interrupts the current turn and sends the oldest queued
-message. The empty composer offers the same action when messages are queued;
-with a draft it offers **Send**. With no draft or queue, the busy composer offers
-**Stop**. Send-next actions disable during stopping/starting and for read-only
-sessions.
+message. The empty composer offers the same action as **Flush queued messages**
+with a ringed send arrow; with a draft it offers **Send**. Each queued row offers
+**Steer** while a turn is running, to interrupt it and send that row next. With no
+draft or queue, the busy composer offers **Stop**. Send-next actions disable and
+Steer is hidden during stopping/starting and for read-only sessions.
 
 Phone verification: check portrait and landscape with touch emulation. In the
 Home composer, enter multiple lines and tap Send, attach, or the model control;
@@ -128,6 +129,22 @@ in the composer as an unsent draft. Spreadsheet mentions retain the current shee
 and selected range; channel-message actions retain the referenced message.
 Add a question and press Send to submit that context. These actions do not create
 legacy cognition chats, regardless of the Agents workspace feature flag.
+
+## Dispatching coding agents from chat
+
+Ask a chat agent to delegate a coding task, including the repository and branch
+when relevant. The agent uses `ListCodingAgents` to discover your available coding
+agents, chooses one using its description and runtime defaults, and calls
+`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
+The available-agents tool row expands to show the returned names and descriptions.
+
+A successful dispatch starts a separate coding session and displays its live
+Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
+the dispatched turn, including progress, output, permission requests, and a linked
+pull request. **Open session** opens the coding conversation in another split so
+you can follow up there. Reloading the chat restores the same session card.
+Failed dispatches do not show a successful session card. If no coding agents are
+available, configure one in Agents before retrying.
 
 ## Where chats live
 
@@ -457,7 +474,8 @@ than treating it as approval or repeatedly sending the prompt.
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
 Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
-are hidden outside frontend development mode. Normal paid-model access rules
+are shown only when the `enable-ai-usage-billing` PostHog flag is on (default on
+in frontend development builds). Normal paid-model access rules
 still apply everywhere. Backend enforcement does not depend on those frontend
 controls, and enabling it does not enable credit collection; that needs
 `ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
@@ -1113,18 +1131,22 @@ must stay hidden; subsequent live messages must still appear.
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse
   it, retaining edits and editor state. Each row shows a `Queued` label (with `by
   {user}` when someone else queued it —
-  several users can stack prompts in one session's queue) and an always-visible remove
-  (`X`) button. Type in the expanded editor — changes
+  several users can stack prompts in one session's queue), an always-visible remove
+  (`X`) button, and, while a turn is in flight, a `Steer` button. Steering moves
+  that message to the front of the queue and cancels the current turn, so it runs
+  next, ahead of anything queued before it. Type in the expanded editor — changes
   autosave (debounced, and on blur) with no save button. Editing and removal are
   possible only until the entry dispatches; after that the row simply becomes the next
   user message in the transcript.
 - Keyboard: Up at the very start of the composer input moves focus into the
   bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
   walks back and past the bottom row returns to the input. When the composer is empty
-  and a prompt is queued, its action becomes `Send next queued message` (an Enter
-  symbol); pressing Enter or clicking that button cancels the current turn so the next
-  queued prompt starts immediately. The advance is held — the control reads `Stop` and
-  Enter is inert — while a stop is already in flight or while the prompt the last
+  and a prompt is queued, its action becomes `Flush queued messages` (the send arrow,
+  with a ring so it reads as flushing the queue rather than sending a new message);
+  pressing Enter or clicking that button cancels the current turn so the queue drains
+  in order, oldest first. Steer on a queued row is the interrupt for that one message;
+  flush sends whatever is already next. The advance is held — the flush control is
+  disabled and Enter is inert — while a stop is already in flight or while the prompt the last
   advance sent is still unconfirmed (it shows as a pending bubble); once the server
   confirms that prompt as the running turn, Enter advances the queue again. Two rapid
   Enters therefore advance one entry, not two: each advance ends the turn the server is

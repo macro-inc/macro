@@ -2,13 +2,16 @@ import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
 import {
   type PaidPlanTier,
   PLAN_BY_TIER,
-  PLAN_FEATURES,
   PLANS,
   type PlanTier,
+  planFeatures,
 } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
+import { useIncludedAiCentsByTier } from '@queries/auth';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { useSearchParams } from '@solidjs/router';
@@ -146,6 +149,8 @@ function PlanPicker(props: {
   onDecideLater: () => void;
 }) {
   const selected = () => props.selected;
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const includedAi = useIncludedAiCentsByTier();
   return (
     <div class="flex flex-col gap-6">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -187,7 +192,9 @@ function PlanPicker(props: {
                 </span>
               </div>
               <ul class="flex flex-col gap-2">
-                <Index each={PLAN_FEATURES}>
+                <Index
+                  each={planFeatures(aiUsageBilling().enabled, includedAi())}
+                >
                   {(feature) => (
                     <li class="flex items-center justify-between gap-2 text-xs">
                       <span class="text-ink-muted">{feature().label}</span>

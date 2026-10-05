@@ -193,6 +193,45 @@ test('edits table cells in place and merges a range', async ({ page }) => {
     .toEqual([2, 2]);
 });
 
+test('drags an unselected table to move it', async ({ page }) => {
+  await open(page);
+  await goToSlide(page, 5);
+  const table = (await outline(page)).slides[5].shapes.find(
+    (s) => s.kind === 'table'
+  );
+  if (!table?.table) throw new Error('No table on slide 6.');
+  const inside = await screen(
+    page,
+    table.x + table.table.columnWidths[0] / 2,
+    table.y + table.table.laidOutRowHeights[0] / 2
+  );
+  const target = await screen(
+    page,
+    table.x + table.table.columnWidths[0] / 2 + 40,
+    table.y + table.table.laidOutRowHeights[0] / 2 + 30
+  );
+  // A press inside a cell of a table that isn't selected grabs the table.
+  await page.mouse.move(inside.x, inside.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => {
+      const moved = (await outline(page)).slides[5].shapes.find(
+        (s) => s.id === table.id
+      );
+      // Smart guides may snap the drop by a few points.
+      return !!moved && moved.x - table.x > 30 && moved.y - table.y > 20;
+    })
+    .toBe(true);
+  await expect(page.getByTestId('pptx-caret')).not.toBeAttached();
+  // A click without dragging still types in the cell.
+  await page.keyboard.press('Escape');
+  await page.mouse.click(10, 10);
+  await page.mouse.click(target.x, target.y);
+  await expect(page.getByTestId('pptx-caret')).toBeAttached();
+});
+
 test('inserts a chart and edits its data', async ({ page }) => {
   await open(page);
   await page.getByTestId('pptx-tab-insert').click();

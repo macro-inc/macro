@@ -45,6 +45,10 @@ type ToolParserMap = {
     call: types.CreateChannel;
     response: types.CreateChannelResponse;
   };
+  CreateConfirmedCalendarEvent: {
+    call: types.CreateConfirmedCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -89,6 +93,10 @@ type ToolParserMap = {
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
+  };
+  DispatchCodingAgent: {
+    call: types.DispatchCodingAgent;
+    response: types.DispatchedCodingAgent;
   };
   DisplayResults: {
     call: types.DisplayResults;
@@ -142,6 +150,10 @@ type ToolParserMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCodingAgents: {
+    call: types.ListCodingAgents;
+    response: types.ListCodingAgentsResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;
@@ -372,6 +384,10 @@ const toolParserMap = {
     call: schemas.CreateChannel,
     response: schemas.CreateChannelResponse,
   },
+  CreateConfirmedCalendarEvent: {
+    call: schemas.CreateConfirmedCalendarEvent,
+    response: schemas.ToolCalendarEvent,
+  },
   CreateDocument: {
     call: schemas.CreateDocument,
     response: schemas.CreateDocumentResponse,
@@ -419,6 +435,10 @@ const toolParserMap = {
   DescribeDatabase: {
     call: schemas.DescribeDatabase,
     response: schemas.ToolDatabaseSchema,
+  },
+  DispatchCodingAgent: {
+    call: schemas.DispatchCodingAgent,
+    response: schemas.DispatchedCodingAgent,
   },
   DisplayResults: {
     call: schemas.DisplayResults,
@@ -478,6 +498,10 @@ const toolParserMap = {
   ListCalendars: {
     call: schemas.ListCalendars,
     response: schemas.ListCalendarsToolResponse,
+  },
+  ListCodingAgents: {
+    call: schemas.ListCodingAgents,
+    response: schemas.ListCodingAgentsResponse,
   },
   ListCompanies: {
     call: schemas.ListCompanies,
@@ -746,6 +770,10 @@ type ToolDataMap = {
     call: types.CreateChannel;
     response: types.CreateChannelResponse;
   };
+  CreateConfirmedCalendarEvent: {
+    call: types.CreateConfirmedCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -790,6 +818,10 @@ type ToolDataMap = {
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
+  };
+  DispatchCodingAgent: {
+    call: types.DispatchCodingAgent;
+    response: types.DispatchedCodingAgent;
   };
   DisplayResults: {
     call: types.DisplayResults;
@@ -843,6 +875,10 @@ type ToolDataMap = {
   ListCalendars: {
     call: types.ListCalendars;
     response: types.ListCalendarsToolResponse;
+  };
+  ListCodingAgents: {
+    call: types.ListCodingAgents;
+    response: types.ListCodingAgentsResponse;
   };
   ListCompanies: {
     call: types.ListCompanies;

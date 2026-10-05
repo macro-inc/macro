@@ -574,7 +574,7 @@ export function SpreadsheetEditor(props: {
   return (
     <section
       ref={editorElement}
-      class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface text-ink"
+      class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-panel text-ink"
       aria-label={`${props.name} spreadsheet`}
       onKeyDown={(event) => {
         if (

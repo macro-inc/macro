@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notification(id, notification_event_type, event_item_type, event_item_id, service_sender, metadata) VALUES ($1, 'test', $2, $3, 'test', $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da3817408f1d38bf8ed5eda805e205068b651e3f93655552fd942ad5b2e19aef"
+}

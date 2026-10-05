@@ -1,5 +1,5 @@
 use super::{ReturnUrlError, get_plans_handler, validate_return_url};
-use crate::domain::PlanTier;
+use crate::domain::{INCLUDED_ALLOWANCE_CENTS, PlanTier};
 
 #[test]
 fn return_urls_must_be_https_on_the_calling_origin() {
@@ -48,14 +48,20 @@ fn return_urls_must_be_https_on_the_calling_origin() {
 }
 
 #[tokio::test]
-async fn plan_catalog_contains_only_free_and_purchasable_paid_plans() {
-    let tiers = get_plans_handler()
-        .await
-        .0
-        .plans
-        .into_iter()
-        .map(|plan| plan.tier)
+async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
+    let plans = get_plans_handler().await.0.plans;
+    let summary = plans
+        .iter()
+        .map(|plan| (plan.tier, plan.purchasable, plan.included_ai_cents_per_seat))
         .collect::<Vec<_>>();
 
-    assert_eq!(tiers, vec![PlanTier::Free, PlanTier::Premium]);
+    // The frontend reads allowances from here, so every tier it can display is listed.
+    assert_eq!(
+        summary,
+        vec![
+            (PlanTier::Free, false, 0),
+            (PlanTier::Premium, true, INCLUDED_ALLOWANCE_CENTS),
+            (PlanTier::Max, false, INCLUDED_ALLOWANCE_CENTS),
+        ]
+    );
 }

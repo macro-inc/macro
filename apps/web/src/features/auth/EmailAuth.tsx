@@ -13,12 +13,14 @@ import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { whenSettled } from '@core/util/whenSettled';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { createSignal, onMount, Show, Suspense } from 'solid-js';
+import { Button } from '@ui';
+import { createSignal, onCleanup, onMount, Show, Suspense } from 'solid-js';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -121,6 +123,10 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const [conflict, setConflict] = createSignal<{
     linkId: string;
     emailAddress: string;
@@ -150,6 +156,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   // form-factor default — the list view on mobile, where the desktop settings
   // split doesn't exist and the toast is the confirmation.
   const navigateAfterLink = (linkId: string) => {
+    if (disposed) return;
     // A first-run user connected this inbox from the onboarding flow:
     // return straight to it. Landing in mail settings would mount the app
     // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
@@ -171,65 +178,101 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   };
 
   const runInit = async (linkId: string, forceShare: boolean) => {
-    await initEmailLink({ linkId, forceShare }).match(
-      async () => {
-        // Pull the newly-provisioned link into the cache before leaving the
-        // callback so the inbox panel shows it immediately on return rather
-        // than flashing a stale list until its own refetch lands.
-        await query.refetch();
-        toast.success('Account connected');
-        navigateAfterLink(linkId);
-      },
-      async (err) => {
-        if (err.tag === 'AlreadyInitialized') {
+    try {
+      await initEmailLink({ linkId, forceShare }).match(
+        async () => {
+          // Pull the newly-provisioned link into the cache before leaving the
+          // callback so the inbox panel shows it immediately on return rather
+          // than flashing a stale list until its own refetch lands.
           await query.refetch();
+          toast.success('Account connected');
           navigateAfterLink(linkId);
-          return;
-        }
-        // The mailbox is already connected by someone else. Hold the callback open
-        // and let the user confirm sharing it before retrying with forceShare.
-        if (err.tag === 'SharedInboxConflict' && !forceShare) {
-          setConflict({
-            linkId,
-            emailAddress: err.emailAddress,
-            ownerEmail: err.ownerEmail,
-          });
-          return;
-        }
-        if (err.tag === 'NoGmailGrant') {
-          toast.failure(
-            'Gmail access was not granted. Please allow all requested permissions and try again.'
-          );
+        },
+        async (err) => {
+          if (err.tag === 'AlreadyInitialized') {
+            await query.refetch();
+            navigateAfterLink(linkId);
+            return;
+          }
+          // The mailbox is already connected by someone else. Hold the callback open
+          // and let the user confirm sharing it before retrying with forceShare.
+          if (err.tag === 'SharedInboxConflict' && !forceShare) {
+            setConflict({
+              linkId,
+              emailAddress: err.emailAddress,
+              ownerEmail: err.ownerEmail,
+            });
+            return;
+          }
+          if (err.tag === 'NoGmailGrant') {
+            toast.failure(
+              'Gmail access was not granted. Please allow all requested permissions and try again.'
+            );
+            navigateAfterLink(linkId);
+            return;
+          }
+          toast.failure('Failed to add inbox');
           navigateAfterLink(linkId);
-          return;
         }
-        toast.failure('Failed to add inbox');
-        navigateAfterLink(linkId);
-      }
-    );
+      );
+    } catch {
+      if (disposed) return;
+      toast.failure(
+        'Failed to finish connecting your account. Please try again from Settings.'
+      );
+      navigateAfterLink(linkId);
+    }
   };
 
-  whenSettled(
-    query,
-    async () => {
-      const linkId =
-        typeof searchParams.link_id === 'string' ? searchParams.link_id : null;
-      if (!linkId) {
-        toast.failure('Missing link id in callback URL');
-        navigateToSuccess();
-        return;
-      }
-
-      await runInit(linkId, false);
-    },
-    (error) => {
-      toast.failure(error.message);
+  // Completing consent does not depend on the old inbox list loading first.
+  // A paused or slow query must not prevent the new grant from being applied.
+  onMount(() => {
+    const linkId =
+      typeof searchParams.link_id === 'string' ? searchParams.link_id : null;
+    if (!linkId) {
+      toast.failure('Missing link id in callback URL');
       navigateToSuccess();
+      return;
     }
-  );
+
+    void runInit(linkId, false);
+  });
 
   return (
-    <Show when={conflict()} fallback={<LoadingBlock />}>
+    <Show
+      when={conflict()}
+      fallback={
+        <div class="flex size-full items-center justify-center p-6">
+          <div
+            role="status"
+            class="flex max-w-sm flex-col items-center gap-3 text-center"
+          >
+            <SpinnerIcon class="size-6 animate-spin motion-reduce:animate-none text-accent" />
+            <h1 class="text-sm font-semibold text-ink">
+              Finishing account connection…
+            </h1>
+            <p class="text-sm text-ink-muted">
+              We’re applying your Google permissions. Calendar events may take a
+              few minutes to sync after you return.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const linkId =
+                  typeof searchParams.link_id === 'string'
+                    ? searchParams.link_id
+                    : undefined;
+                if (linkId) navigateAfterLink(linkId);
+                else navigateToSuccess();
+              }}
+            >
+              Back to app
+            </Button>
+          </div>
+        </div>
+      }
+    >
       {(c) => (
         <ShareInboxConflictDialog
           open

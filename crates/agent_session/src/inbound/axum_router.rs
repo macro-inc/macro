@@ -242,6 +242,10 @@ where
                 .delete(remove_queued_action_handler::<R, Access, Auth>),
         )
         .route(
+            "/{session_id}/queue/{action_id}/steer",
+            post(steer_queued_action_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/sandbox-size",
             put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
         )
@@ -1172,6 +1176,55 @@ pub async fn remove_queued_action_handler<
     state
         .recipient
         .remove_queued_control(session_id, AgentActionId::from_uuid(action_id), actor)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions/{session_id}/queue/{action_id}/steer",
+    tag = "agent-sessions",
+    operation_id = "steer_queued_action",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("action_id" = Uuid, Path, description = "ID the action was accepted under"),
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String, description = "Already dispatched or never queued"),
+        (status = 500, body = String),
+    )
+)]
+/// Run a queued action next. Moves it ahead of the rest of the queue and
+/// cancels the turn in flight, so this entry dispatches when that turn ends.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
+pub async fn steer_queued_action_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path((session_id, action_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
+    state
+        .recipient
+        .steer_queued_control(session_id, AgentActionId::from_uuid(action_id), actor)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

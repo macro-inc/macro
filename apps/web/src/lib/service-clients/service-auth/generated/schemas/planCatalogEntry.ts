@@ -14,6 +14,8 @@ export interface PlanCatalogEntry {
   included_ai_cents_per_seat: number;
   /** Monthly subscription price per seat, cents. */
   monthly_price_cents: number;
+  /** Whether a new purchase or plan move may pick this plan today. */
+  purchasable: boolean;
   /** The tier. */
   tier: PlanTier;
 }

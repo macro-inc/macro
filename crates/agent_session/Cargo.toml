@@ -33,9 +33,12 @@ outbound = [
   "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:model-entity",
+  "dep:reqwest",
+  "dep:macro_authorization",
   "dep:sqlx",
   "dep:share_permission_db_utils",
   "macro_user_id/sqlx",
+  "macro_authorization/axum",
 ]
 # OpenAPI schemas for the vocabulary that reaches an HTTP boundary: the
 # router's DTOs, and the lifecycle events the webhook union carries.
@@ -83,6 +86,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
+reqwest = { workspace = true, optional = true }
 uuid = { workspace = true }
 sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }
@@ -117,7 +121,7 @@ opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time", "test-util"] }
 tokio-tungstenite = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 

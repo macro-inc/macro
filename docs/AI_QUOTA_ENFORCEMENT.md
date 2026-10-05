@@ -75,7 +75,12 @@ Pricing is two constants in
 usage beyond that is converted to customer money at `OVERAGE_MARKUP_PERCENT` (5%)
 over cost before credits are consumed or overage is charged. The markup is applied
 to the period's cumulative chargeable cost, so settling in chunks books the same
-money as settling once. Change a constant and redeploy to change pricing.
+money as settling once. Change a constant and redeploy to change pricing. The
+plan catalog (`GET /ai-billing/plans`) publishes `included_ai_cents_per_seat`
+for every tier, and the frontend reads allowances from it
+(`useIncludedAiCentsByTier`) rather than hard-coding them. Frozen per-period
+rosters keep their cost amounts in `ai_billing_period_allowance.included_cost_cents_by_user`;
+rows written before that column existed are priced at the current allowance.
 
 Only two hosts participate:
 
@@ -94,9 +99,12 @@ together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
 The frontend is not tied to this flag. The usage meter, credit packs,
-usage-billing controls, the out-of-credits dialog, and model usage multipliers
-keep their existing development-mode gate (`DEV_MODE_ENV`), so they show on
-`dev.macro.com` and local dev builds regardless of backend settlement.
+usage-billing controls, the out-of-credits dialog, the "$N of AI usage" plan
+copy, and model usage multipliers are gated by the frontend's
+`enable-ai-usage-billing` PostHog flag (`enableAiUsageBilling` in
+`apps/web/src/lib/core/constant/featureFlags.ts`). It defaults on in
+development builds and follows PostHog elsewhere, independent of backend
+settlement; `VITE_ENABLE_AI_USAGE_BILLING` overrides it locally.
 
 ## Public failure contracts
 

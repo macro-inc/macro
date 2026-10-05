@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   DEFAULT_MODEL,
@@ -8,7 +9,7 @@ import {
   PAID_MODELS,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CheckIcon from '@phosphor/check.svg';
@@ -50,6 +51,7 @@ const MODEL_DESCRIPTION: Record<TModel, string> = {
 
 export function ModelSelector(props: ModelSelectorProps) {
   const [open, setOpen] = createSignal(false);
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const model = () => props.selectedModel ?? DEFAULT_MODEL;
   const options = () =>
     props.models && props.models.length > 0 ? props.models : ALL_AVAILABLE;
@@ -102,7 +104,11 @@ export function ModelSelector(props: ModelSelectorProps) {
                       {MODEL_PRETTYNAME[option.id]}
                     </span>
                     {/* Decorative: the item's accessible name stays the model. */}
-                    <Show when={DEV_MODE_ENV && modelUsageHint(option.id)}>
+                    <Show
+                      when={
+                        aiUsageBilling().enabled && modelUsageHint(option.id)
+                      }
+                    >
                       {(hint) => (
                         <span
                           aria-hidden="true"
@@ -193,7 +199,10 @@ export function ModelSelector(props: ModelSelectorProps) {
                             {MODEL_PRETTYNAME[option.id]}
                           </span>
                           <Show
-                            when={DEV_MODE_ENV && modelUsageHint(option.id)}
+                            when={
+                              aiUsageBilling().enabled &&
+                              modelUsageHint(option.id)
+                            }
                           >
                             {(hint) => (
                               <span class="text-xs text-ink-extra-muted">

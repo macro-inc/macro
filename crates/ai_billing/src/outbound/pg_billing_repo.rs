@@ -1,5 +1,12 @@
 //! Postgres adapter for the billing tables (`ai_billing_account`,
 //! `ai_credit_ledger`, `ai_overage_charge`, `ai_billing_period_allowance`).
+//!
+//! Frozen allowances live in `ai_billing_period_allowance.included_cost_cents_by_user`
+//! (cost cents). The legacy `included_cents_by_user` column predates the at-cost
+//! model and is still written, with the same values, so a pre-cutover binary keeps
+//! working during a deploy; it is never read here. A row whose cost column is
+//! missing or does not match its roster was frozen by that older binary, and
+//! every seat in it is priced at the current allowance.
 
 #[cfg(test)]
 mod test;
@@ -7,9 +14,10 @@ mod test;
 use super::pg_funding_repo::{credit_commitments, lock_payer, postpaid_commitments};
 use crate::domain::financial::legacy_cap_remaining;
 use crate::domain::{
-    AllowanceStore, BillingError, BillingRepo, BillingSettings, OpenPeriodStart,
-    OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
-    SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState, plan_settlement,
+    AllowanceStore, BillingError, BillingRepo, BillingSettings, INCLUDED_ALLOWANCE_CENTS,
+    OpenPeriodStart, OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result,
+    SeatAllowance, SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState,
+    plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -210,7 +218,7 @@ impl BillingRepo for PgBillingRepo {
         let row = sqlx::query!(
             r#"
             SELECT billed_users as "billed_users!",
-                   included_cents_by_user as "included_cents_by_user!"
+                   included_cost_cents_by_user
             FROM ai_billing_period_allowance
             WHERE user_id = $1 AND period_start = $2
             "#,
@@ -222,7 +230,7 @@ impl BillingRepo for PgBillingRepo {
         .map_err(storage)?;
         row.map(|r| {
             Ok(PeriodAllowance {
-                seats: parse_seat_allowances(r.billed_users, r.included_cents_by_user)?,
+                seats: parse_seat_allowances(r.billed_users, r.included_cost_cents_by_user)?,
             })
         })
         .transpose()
@@ -273,20 +281,24 @@ impl BillingRepo for PgBillingRepo {
             return Ok(AllowanceStore::Conflict);
         }
 
+        // The legacy column receives the same values so an older binary can
+        // still read the row during a deploy; see the module docs.
         sqlx::query!(
             r#"
             INSERT INTO ai_billing_period_allowance (
-                user_id, period_start, billed_users, included_cents_by_user
+                user_id, period_start, billed_users, included_cents_by_user,
+                included_cost_cents_by_user
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3, $4, $4)
             ON CONFLICT (user_id, period_start) DO UPDATE
             SET billed_users = EXCLUDED.billed_users,
                 included_cents_by_user = EXCLUDED.included_cents_by_user,
+                included_cost_cents_by_user = EXCLUDED.included_cost_cents_by_user,
                 updated_at = NOW()
             WHERE ai_billing_period_allowance.billed_users
                   IS DISTINCT FROM EXCLUDED.billed_users
-               OR ai_billing_period_allowance.included_cents_by_user
-                  IS DISTINCT FROM EXCLUDED.included_cents_by_user
+               OR ai_billing_period_allowance.included_cost_cents_by_user
+                  IS DISTINCT FROM EXCLUDED.included_cost_cents_by_user
             "#,
             payer,
             period.start(),
@@ -324,11 +336,18 @@ impl BillingRepo for PgBillingRepo {
         .await
         .map_err(storage)?;
 
+        // A cost array that is missing or out of step with the roster (an older
+        // binary refreshed the row) is dropped rather than excised positionally.
         sqlx::query!(
             r#"
             UPDATE ai_billing_period_allowance AS allowance
             SET billed_users = excised.users,
                 included_cents_by_user = excised.cents,
+                included_cost_cents_by_user = CASE
+                    WHEN cardinality(allowance.included_cost_cents_by_user)
+                         = cardinality(allowance.billed_users)
+                    THEN excised.cost_cents
+                END,
                 updated_at = NOW()
             FROM (
                 SELECT
@@ -341,10 +360,16 @@ impl BillingRepo for PgBillingRepo {
                         array_agg(seat.included_cents ORDER BY seat.ordinality)
                             FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),
                         ARRAY[]::bigint[]
-                    )::bigint[] AS cents
+                    )::bigint[] AS cents,
+                    COALESCE(
+                        array_agg(seat.cost_cents ORDER BY seat.ordinality)
+                            FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),
+                        ARRAY[]::bigint[]
+                    )::bigint[] AS cost_cents
                 FROM ai_billing_period_allowance AS src
-                CROSS JOIN LATERAL unnest(src.billed_users, src.included_cents_by_user)
-                    WITH ORDINALITY AS seat(billed_user, included_cents, ordinality)
+                CROSS JOIN LATERAL unnest(
+                    src.billed_users, src.included_cents_by_user, src.included_cost_cents_by_user
+                ) WITH ORDINALITY AS seat(billed_user, included_cents, cost_cents, ordinality)
                 WHERE src.user_id = $1
                   AND src.period_start = $2
             ) AS excised
@@ -700,15 +725,17 @@ async fn read_period_ledger(
     })
 }
 
+/// Pair a frozen roster with its cost-cent allowances. A missing or mismatched
+/// cost array means an older binary wrote the row; every seat then gets the
+/// current allowance, which is what that binary's seats are entitled to now.
 fn parse_seat_allowances(
     billed_users: Vec<String>,
-    included_cents_by_user: Vec<i64>,
+    included_cost_cents_by_user: Option<Vec<i64>>,
 ) -> Result<Vec<SeatAllowance>> {
-    if billed_users.len() != included_cents_by_user.len() {
-        return Err(BillingError::Storage(anyhow::anyhow!(
-            "billed users and per-user allowances have different lengths"
-        )));
-    }
+    let included_cents_by_user = match included_cost_cents_by_user {
+        Some(cents) if cents.len() == billed_users.len() => cents,
+        _ => vec![INCLUDED_ALLOWANCE_CENTS; billed_users.len()],
+    };
     billed_users
         .into_iter()
         .zip(included_cents_by_user)

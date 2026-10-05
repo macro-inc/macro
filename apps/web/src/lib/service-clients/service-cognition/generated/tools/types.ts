@@ -5236,7 +5236,7 @@ export interface BotWebhook {
   webhookUrl: string;
 }
 /**
- * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
+ * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the event out in your reply, ask whether to create it, and use CreateConfirmedCalendarEvent once the user approves.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
  *
@@ -5466,6 +5466,53 @@ export interface CreateChannelResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, Google Meet, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view or in chat: use CreateCalendarEvent there, whose review card or composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to Google Calendar at once and any attendees receive invitations.
+ */
+export interface CreateConfirmedCalendarEvent {
+  /**
+   * The event title.
+   */
+  title: string;
+  time: EventTimeInput;
+  /**
+   * Optional event body/description.
+   */
+  description?: string | null;
+  /**
+   * Optional physical or virtual location label.
+   */
+  location?: string | null;
+  /**
+   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   */
+  attendees?: AttendeeInput[];
+  /**
+   * Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event.
+   */
+  recurrenceLines?: string[];
+  /**
+   * Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar.
+   */
+  calendarId?: string | null;
+  /**
+   * Reminder configuration for the event. Omit to use the selected calendar's defaults.
+   */
+  reminders?: EventRemindersInput | null;
+  /**
+   * Attach a freshly generated Google Meet video conference to the event.
+   */
+  addGoogleMeet?: boolean;
+  eventType?: CalendarEventTypeInput;
+  /**
+   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have Google decline conflicting meetings, optionally with a `declineMessage`.
+   */
+  outOfOffice?: OutOfOfficeInput | null;
+  /**
+   * The user's own message approving this specific event, quoted verbatim - for example their "yes, go ahead" in reply to the event you wrote out for them. It is a reply to your draft, never the earlier request that asked you to schedule something: if the user has not yet seen this event, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself.
+   */
+  userConfirmation: string;
 }
 /**
  * Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor.
@@ -6200,6 +6247,36 @@ export interface ToolRelation {
    * Table whose row ids this relation stores.
    */
   tableId: string;
+}
+/**
+ * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
+ */
+export interface DispatchCodingAgent {
+  /**
+   * The id of the best-suited coding agent from ListCodingAgents
+   */
+  agent_id: string;
+  /**
+   * Self-contained coding task, including the repository, relevant context, requirements, and desired outcome
+   */
+  prompt: string;
+}
+/**
+ * A newly opened session whose first prompt has been accepted.
+ */
+export interface DispatchedCodingAgent {
+  /**
+   * Session to show in a magic chip.
+   */
+  agent_session_id: string;
+  /**
+   * Persona that owns the session's identity.
+   */
+  agent_id: string;
+  /**
+   * Persona display name.
+   */
+  agent_name: string;
 }
 /**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
@@ -7622,6 +7699,48 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+}
+/**
+ * Find the coding agents available to the current user. Call this before delegating coding work. Choose an agent using its name, description, instructions, runtime, and model, preferring the user's requested agent or the persona best suited to the repository and task. Returns only available coding agents. If none are available, explain that the user needs to connect or configure a coding agent.
+ */
+export type ListCodingAgents = {};
+/**
+ * Available coding personas and their task-selection context.
+ */
+export interface ListCodingAgentsResponse {
+  /**
+   * Personas the user can currently dispatch.
+   */
+  agents: CodingAgent[];
+}
+/**
+ * Information used to choose a coding persona for a task.
+ */
+export interface CodingAgent {
+  /**
+   * Persona id to pass to dispatch.
+   */
+  id: string;
+  /**
+   * User-facing persona name.
+   */
+  name: string;
+  /**
+   * What the persona is intended to do.
+   */
+  description?: string | null;
+  /**
+   * Saved guidance describing the persona's repositories and specialties.
+   */
+  instructions: string;
+  /**
+   * Runtime configured for the persona.
+   */
+  harness: string;
+  /**
+   * Persona's configured default model, absent when the provider chooses it.
+   */
+  model?: string | null;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties.

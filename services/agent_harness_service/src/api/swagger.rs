@@ -72,6 +72,7 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_session_queue_handler,
         axum_router::edit_queued_action_handler,
         axum_router::remove_queued_action_handler,
+        axum_router::steer_queued_action_handler,
         axum_router::delete_agent_session_handler,
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
