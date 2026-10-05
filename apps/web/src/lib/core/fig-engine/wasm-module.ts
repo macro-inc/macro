@@ -62,6 +62,12 @@ export interface WasmFigFile {
   isEdited: () => boolean;
   /** `[width, height]` JSON. */
   addImage: (hash: string, bytes: Uint8Array) => string;
+  /** `EntryChange[]` JSON to write. */
+  enableCollab: (session: number, baseBlobs?: number | null) => string;
+  /** `EntryChange[]` JSON of this person's changes since the last call. */
+  collabChanges: () => string;
+  /** Other people's `EntryChange[]` JSON; returns `EditResult` JSON. */
+  applyCollab: (page: number, changes: string) => string;
   free: () => void;
 }
 
