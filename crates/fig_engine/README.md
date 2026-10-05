@@ -141,6 +141,11 @@ geometry, gradients and image patterns (with embedded PNGs), masks, clips,
 shadows and layer blur as filters, and text as outlines. `fig_render svg`
 writes SVGs (with matching PNGs) for the first page's top-level layers.
 
+Pattern paints repeat another layer as a transparent tile, including
+rectangular and horizontal hexagonal layouts, spacing, alignment, and
+opacity. SVG embeds the same rendered tile; PDF rasterizes patterned layers.
+Pattern values and source references survive saving and collaboration.
+
 Text the editor changes is laid out again in its own fonts when they are
 registered at run time (`FigFile.registerFont`: TTF, OTF, collections, WOFF,
 or WOFF2, optionally under a family name), else in Inter (`fonts/`, SIL Open

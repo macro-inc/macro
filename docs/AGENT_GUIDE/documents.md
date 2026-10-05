@@ -1379,6 +1379,17 @@ stored design, and `window.figFixture.libraries` has `open(id)`,
 installed). The sections above were verified on this fixture; the `/app/fig`
 route itself needs a backend with an uploaded `.fig`.
 
+For import fidelity checks, save a local copy from Figma and open that same
+file in the fixture. Check the page names before switching pages, then use
+**Find layers** and **⇧2** to compare the same frame at a useful zoom in both
+apps. Include nested component logos, colors inherited from the page's
+variable mode, effects supplied by library styles, repeated pattern fills,
+and text that extends beyond a group's stored bounds. Compare exports as
+well as the canvas; an overview thumbnail can hide missing letters, wrong
+colors, or absent glows. Wait for the tiles to sharpen after zooming. The
+fixture preserves imported text outlines, but
+its substitute fonts do not verify the appearance of newly edited text.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts

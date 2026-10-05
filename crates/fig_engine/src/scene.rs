@@ -14,6 +14,8 @@ use crate::model::{Affine, EffectKind, Guid, NodeType, PropField, PropValue, Pro
 use std::collections::HashMap;
 use std::sync::Arc;
 
+mod variables;
+
 pub type SceneIdx = u32;
 
 /// Where a scene node's properties live.
@@ -44,6 +46,8 @@ pub struct SceneNode {
     /// For instances: what their sublayers were built from (see
     /// [`instance_feed`]), to tell a move from a change in what they show.
     feed: u64,
+    /// Collection modes at build time, including an explicit empty selection.
+    modes: Option<Arc<[(Guid, Guid)]>>,
 }
 
 impl SceneNode {
@@ -112,6 +116,7 @@ impl Scene {
             nodes: b.nodes,
             by_guid: b.by_guid,
         };
+        variables::resolve(doc, &mut scene);
         scene.compute_world(doc);
         scene.compute_bounds(doc);
         scene
@@ -134,7 +139,9 @@ impl Scene {
             nodes: b.nodes,
             by_guid: b.by_guid,
         };
+        variables::resolve(doc, &mut scene);
         scene.compute_world(doc);
+        scene.compute_bounds(doc);
         scene
     }
 
@@ -298,10 +305,16 @@ impl Scene {
         let mut starts = Vec::new();
         for &t in touched {
             let node = doc.node(t);
+            if node.props.variable.is_some() || node.props.variable_modes.is_some() {
+                return false;
+            }
             if node.removed || node.props.node_type() == NodeType::Canvas && t != self.page {
                 return false;
             }
             if t == self.page {
+                if self.nodes[0].modes != node.props.mode_by_set {
+                    return false;
+                }
                 continue;
             }
             let Some(&i) = node.props.guid.and_then(|g| self.by_guid.get(&g)) else {
@@ -316,7 +329,8 @@ impl Scene {
             // component itself does not: instances keep their own root
             // properties); an instance whose sources changed shows other
             // layers.
-            if !matches!(sn.props, PropSource::Doc(_))
+            if sn.modes != node.props.mode_by_set
+                || !matches!(sn.props, PropSource::Doc(_))
                 || sn.path.is_some()
                 || (node.props.node_type() == NodeType::Instance
                     && sn.feed != instance_feed(&node.props))
@@ -556,7 +570,11 @@ fn effect_outset(props: &Props, world: &Affine) -> f64 {
         let reach = match e.kind {
             EffectKind::DropShadow => {
                 f64::from(e.radius) * 1.5
-                    + f64::from(e.spread.max(0.0))
+                    + if props.supports_shadow_spread() {
+                        f64::from(e.spread.max(0.0))
+                    } else {
+                        0.0
+                    }
                     + e.offset.x.abs().max(e.offset.y.abs())
             }
             EffectKind::LayerBlur => f64::from(e.radius) * 1.5,
@@ -595,6 +613,7 @@ impl<'a> Builder<'a> {
             bounds: Rect::EMPTY,
             path,
             feed: 0,
+            modes: self.doc.props(src).mode_by_set.clone(),
         });
         if let Some(p) = parent {
             self.nodes[p as usize].children.push(i);
@@ -631,6 +650,7 @@ impl<'a> Builder<'a> {
                 bounds: Rect::EMPTY,
                 path: Some((root, path.into())),
                 feed: 0,
+                modes: self.doc.props(src).mode_by_set.clone(),
             });
             self.nodes[at as usize].generated.push(i);
         }
@@ -654,25 +674,68 @@ impl<'a> Builder<'a> {
         }
     }
 
-    fn normalize(&self, path: &[Guid]) -> Vec<Guid> {
+    fn normalize(&self, path: &[Guid], mut symbol: NodeIdx) -> Vec<Guid> {
         path.iter()
             .map(|g| {
-                if self.doc.by_guid.contains_key(g) {
-                    *g
-                } else {
-                    self.doc.by_override_key.get(g).copied().unwrap_or(*g)
+                // Imported components keep their original ids as override
+                // keys. Those ids can also name unrelated nodes in this file;
+                // resolve each segment inside its component first.
+                let direct = self.doc.find(*g);
+                let imported = self
+                    .doc
+                    .by_override_key
+                    .get(g)
+                    .and_then(|g| self.doc.find(*g));
+                let within = |mut node| loop {
+                    if node == symbol {
+                        return true;
+                    }
+                    let Some(parent) = self.doc.node(node).parent else {
+                        return false;
+                    };
+                    node = parent;
+                };
+                let node = direct.filter(|&n| within(n)).or_else(|| {
+                    imported.filter(|&n| within(n)).or_else(|| {
+                        // More than one imported component can reuse a key,
+                        // so the document-wide index need not hold this copy.
+                        let mut pending = vec![symbol];
+                        while let Some(n) = pending.pop() {
+                            if self.doc.props(n).override_key == Some(*g) {
+                                return Some(n);
+                            }
+                            pending.extend(&self.doc.node(n).children);
+                        }
+                        None
+                    })
+                });
+                // A swapped nested instance can reference another component's
+                // nodes. Keep accepting those globally unique paths too.
+                let Some(node) = node.or(direct).or(imported) else {
+                    return *g;
+                };
+                let props = self.doc.props(node);
+                if let Some(next) = props
+                    .swapped_symbol
+                    .or_else(|| props.symbol.as_ref().and_then(|s| s.symbol_id))
+                    .and_then(|g| self.doc.find(g))
+                {
+                    symbol = next;
                 }
+                props.guid.unwrap_or(*g)
             })
             .collect()
     }
 
-    fn override_map(&self, list: &[Props]) -> OverrideMap {
+    fn override_map(&self, list: &[Props], symbol: NodeIdx) -> OverrideMap {
         let mut map: OverrideMap = HashMap::new();
         for (i, p) in list.iter().enumerate() {
             if let Some(path) = &p.guid_path
                 && !path.is_empty()
             {
-                map.entry(self.normalize(path)).or_default().push(i as u32);
+                map.entry(self.normalize(path, symbol))
+                    .or_default()
+                    .push(i as u32);
             }
         }
         map
@@ -708,9 +771,9 @@ impl<'a> Builder<'a> {
         let derived = props.derived.clone().unwrap_or_else(empty);
         levels.push(Level {
             prefix_len: path.len(),
-            override_map: self.override_map(&overrides),
+            override_map: self.override_map(&overrides, symbol),
             overrides,
-            derived_map: self.override_map(&derived),
+            derived_map: self.override_map(&derived, symbol),
             derived,
             assignments: props.prop_assignments.clone(),
             symbol,

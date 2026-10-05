@@ -226,6 +226,10 @@ fn write_design_system_fixture() {
 /// rectangle in it bound to them, and an instance of a component whose
 /// layer is bound to `Surface`.
 pub fn variables_file() -> Vec<u8> {
+    variables_file_with_remote(false)
+}
+
+pub(crate) fn variables_file_with_remote(remote: bool) -> Vec<u8> {
     use crate::kiwi::{Schema, schema_from_text};
     use crate::testing::{V, color, encode, guid, node, size, translate};
     let text = crate::save::MACRO_SCHEMA
@@ -240,6 +244,16 @@ pub fn variables_file() -> Vec<u8> {
         );
     let schema_bytes = schema_from_text(&text);
     let schema = Schema::decode(&schema_bytes).unwrap();
+    let reference = |id: u32| {
+        if remote {
+            V::Msg(vec![(
+                "assetRef",
+                V::Msg(vec![("key", V::Str(format!("asset-{id}")))]),
+            )])
+        } else {
+            V::Msg(vec![("guid", guid(id))])
+        }
+    };
     let c = |r: f32, g: f32, b: f32| color(r, g, b, 1.0);
     let bound = |rgb: V, var: u32| {
         V::List(vec![V::Msg(vec![
@@ -250,10 +264,7 @@ pub fn variables_file() -> Vec<u8> {
             (
                 "colorVar",
                 V::Msg(vec![
-                    (
-                        "value",
-                        V::Msg(vec![("alias", V::Msg(vec![("guid", guid(var))]))]),
-                    ),
+                    ("value", V::Msg(vec![("alias", reference(var))])),
                     ("dataType", V::Enum("ALIAS")),
                     ("resolvedDataType", V::Enum("COLOR")),
                 ]),
@@ -270,10 +281,7 @@ pub fn variables_file() -> Vec<u8> {
     };
     let alias = |var: u32| {
         V::Msg(vec![
-            (
-                "value",
-                V::Msg(vec![("alias", V::Msg(vec![("guid", guid(var))]))]),
-            ),
+            ("value", V::Msg(vec![("alias", reference(var))])),
             ("dataType", V::Enum("ALIAS")),
             ("resolvedDataType", V::Enum("COLOR")),
         ])
@@ -285,7 +293,7 @@ pub fn variables_file() -> Vec<u8> {
             "VARIABLE",
             name,
             vec![
-                ("variableSetID", V::Msg(vec![("guid", guid(50))])),
+                ("variableSetID", reference(50)),
                 ("variableResolvedType", V::Enum("COLOR")),
                 (
                     "variableDataValues",
@@ -294,7 +302,7 @@ pub fn variables_file() -> Vec<u8> {
             ],
         )
     };
-    let nodes = vec![
+    let mut nodes = vec![
         node(0, None, "DOCUMENT", "Document", vec![]),
         node(
             1,
@@ -394,6 +402,42 @@ pub fn variables_file() -> Vec<u8> {
             ],
         ),
     ];
+    if remote {
+        for node in &mut nodes {
+            let V::Msg(fields) = node else {
+                continue;
+            };
+            let id = fields
+                .iter()
+                .find(|(name, _)| *name == "guid")
+                .map(|(_, v)| v);
+            let Some(V::Msg(id)) = id else {
+                continue;
+            };
+            let id = id
+                .iter()
+                .find_map(|(name, v)| match (*name, v) {
+                    ("localID", V::Uint(id)) => Some(*id),
+                    _ => None,
+                })
+                .unwrap();
+            if [50, 51, 52].contains(&id) {
+                fields.push(("key", V::Str(format!("asset-{id}"))));
+            }
+            if id == 10 {
+                fields.push((
+                    "variableModeBySetMap",
+                    V::Msg(vec![(
+                        "entries",
+                        V::List(vec![V::Msg(vec![
+                            ("variableSetID", reference(50)),
+                            ("variableModeID", guid(61)),
+                        ])]),
+                    )]),
+                ));
+            }
+        }
+    }
     let message = encode(
         &schema,
         "Message",

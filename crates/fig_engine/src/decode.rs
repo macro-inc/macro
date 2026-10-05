@@ -9,12 +9,14 @@ use crate::model::text::{StyleRun, TextContent};
 use crate::model::*;
 use std::sync::Arc;
 
+pub(crate) mod assets;
 mod handoff;
 mod prototype;
 
 /// The `NodeChange` fields the engine reads. Everything else is skipped while
 /// decoding, which keeps memory proportional to what is drawn.
 const NODE_FIELDS: &[&str] = &[
+    "arcData",
     "guid",
     "phase",
     "parentIndex",
@@ -47,6 +49,7 @@ const NODE_FIELDS: &[&str] = &[
     "rectangleCornerRadiiIndependent",
     "cornerSmoothing",
     "frameMaskDisabled",
+    "resizeToFit",
     "backgroundColor",
     "internalOnly",
     "textData",
@@ -157,6 +160,12 @@ const PAINT_FIELDS: &[&str] = &[
     "originalImageWidth",
     "originalImageHeight",
     "colorVar",
+    "sourceNodeId",
+    "patternSpacing",
+    "spacing",
+    "patternTileType",
+    "horizontalAlignment",
+    "verticalAlignment",
 ];
 
 const EFFECT_FIELDS: &[&str] = &[
@@ -329,6 +338,10 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 pub fn paint(m: MsgRef) -> Paint {
+    paint_with_assets(m, &assets::AssetIds::default())
+}
+
+fn paint_with_assets(m: MsgRef, assets: &assets::AssetIds) -> Paint {
     let kind_name = m.enum_name("type").unwrap_or("SOLID");
     let gradient = |kind| PaintKind::Gradient {
         kind,
@@ -386,6 +399,34 @@ pub fn paint(m: MsgRef) -> Paint {
         }
         "EMOJI" => PaintKind::Unsupported("emoji"),
         "VIDEO" => PaintKind::Unsupported("video"),
+        "PATTERN"
+            if m.enum_name("patternTileType")
+                .is_none_or(|t| matches!(t, "RECTANGULAR" | "HORIZONTAL_HEXAGONAL"))
+                && (m.has("patternSpacing") || m.f32("spacing").is_none_or(|s| s == 0.0)) =>
+        {
+            match m.msg("sourceNodeId").and_then(guid) {
+                Some(source) => PaintKind::Pattern(PatternPaint {
+                    layout: if m.enum_name("patternTileType") == Some("HORIZONTAL_HEXAGONAL") {
+                        PatternLayout::HorizontalHexagonal
+                    } else {
+                        PatternLayout::Rectangular
+                    },
+                    source,
+                    scale: m.f32("scale").unwrap_or(1.0),
+                    spacing: m.msg("patternSpacing").map(vec2).unwrap_or_else(|| {
+                        let spacing = f64::from(m.f32("spacing").unwrap_or(0.0));
+                        Vec2::new(spacing, spacing)
+                    }),
+                    horizontal: PatternAlign::parse(
+                        m.enum_name("horizontalAlignment").unwrap_or("START"),
+                    ),
+                    vertical: PatternAlign::parse(
+                        m.enum_name("verticalAlignment").unwrap_or("START"),
+                    ),
+                }),
+                None => PaintKind::Unsupported("pattern"),
+            }
+        }
         "PATTERN" => PaintKind::Unsupported("pattern"),
         "NOISE" => PaintKind::Unsupported("noise"),
         _ => PaintKind::Unsupported("paint"),
@@ -398,22 +439,19 @@ pub fn paint(m: MsgRef) -> Paint {
             .enum_name("blendMode")
             .map(BlendMode::parse)
             .unwrap_or(BlendMode::Normal),
-        color_var: m.msg("colorVar").and_then(variable_alias),
+        color_var: m.msg("colorVar").and_then(|v| variable_alias(v, assets)),
     }
 }
 
 /// The variable a `VariableData` aliases.
-fn variable_alias(v: MsgRef) -> Option<Guid> {
-    v.msg("value")?.msg("alias")?.msg("guid").and_then(guid)
+fn variable_alias(v: MsgRef, assets: &assets::AssetIds) -> Option<Guid> {
+    assets.resolve(v.msg("value")?.msg("alias")?)
 }
 
-fn variable(m: &MsgRef) -> Option<Variable> {
+fn variable(m: &MsgRef, assets: &assets::AssetIds) -> Option<Variable> {
     let values = m.msg("variableDataValues")?;
     Some(Variable {
-        set: m
-            .msg("variableSetID")
-            .and_then(|s| s.msg("guid"))
-            .and_then(guid),
+        set: m.msg("variableSetID").and_then(|s| assets.resolve(s)),
         resolved_type: m
             .enum_name("variableResolvedType")
             .map(VariableType::parse)
@@ -426,8 +464,7 @@ fn variable(m: &MsgRef) -> Option<Variable> {
                 let value = match data.msg("value") {
                     Some(v) if data.enum_name("dataType") == Some("ALIAS") => v
                         .msg("alias")
-                        .and_then(|a| a.msg("guid"))
-                        .and_then(guid)
+                        .and_then(|a| assets.resolve(a))
                         .map_or(VariableValue::Other, VariableValue::Alias),
                     Some(v) => {
                         if let Some(c) = v.msg("colorValue") {
@@ -490,7 +527,7 @@ fn path_refs<'a>(items: impl Iterator<Item = MsgRef<'a>>) -> Arc<[PathRef]> {
         .collect()
 }
 
-fn text_content(m: MsgRef) -> TextContent {
+fn text_content(m: MsgRef, assets: &assets::AssetIds) -> TextContent {
     let styles = m
         .msgs("styleOverrideTable")
         .filter_map(|s| {
@@ -500,7 +537,7 @@ fn text_content(m: MsgRef) -> TextContent {
                 id,
                 fills: s
                     .has("fillPaints")
-                    .then(|| s.collect_msgs("fillPaints", paint)),
+                    .then(|| s.collect_msgs("fillPaints", |m| paint_with_assets(m, assets))),
                 font_family: font.and_then(|f| f.str("family")).map(Into::into),
                 font_style: font.and_then(|f| f.str("style")).map(Into::into),
                 font_size: s.f32("fontSize"),
@@ -694,7 +731,21 @@ pub const SKELETON_FIELDS: &[&str] = &[
     "phase",
     "internalOnly",
     "overrideKey",
+    "resizeToFit",
 ];
+
+fn node_type(m: &MsgRef) -> Option<NodeType> {
+    let kind = NodeType::parse(m.enum_name("type").or_else(|| m.str("type"))?);
+    // Figma stores groups as frames that resize to fit their children. Their
+    // saved frameMaskDisabled value does not make them clipping frames.
+    Some(
+        if kind == NodeType::Frame && m.bool("resizeToFit") == Some(true) {
+            NodeType::Group
+        } else {
+            kind
+        },
+    )
+}
 
 /// The [`SKELETON_FIELDS`] of a node change, read as [`props`] reads them.
 pub fn skeleton(m: MsgRef) -> Props {
@@ -709,10 +760,7 @@ pub fn skeleton(m: MsgRef) -> Props {
             .map(Into::into)
             .or_else(|| parent.u32("position").map(|n| format!("{n:010}").into()));
     }
-    p.node_type = m
-        .enum_name("type")
-        .or_else(|| m.str("type"))
-        .map(NodeType::parse);
+    p.node_type = node_type(&m);
     p.internal_only = m.bool("internalOnly");
     p.override_key = m.msg("overrideKey").and_then(guid);
     p
@@ -720,6 +768,10 @@ pub fn skeleton(m: MsgRef) -> Props {
 
 /// Reads one `NodeChange` (a node, an override, or derived layout).
 pub fn props(m: MsgRef) -> Props {
+    props_with_assets(m, &assets::AssetIds::default())
+}
+
+pub(crate) fn props_with_assets(m: MsgRef, assets: &assets::AssetIds) -> Props {
     let mut p = Props {
         guid: m.msg("guid").and_then(guid),
         ..Props::default()
@@ -731,10 +783,7 @@ pub fn props(m: MsgRef) -> Props {
             .map(Into::into)
             .or_else(|| parent.u32("position").map(|n| format!("{n:010}").into()));
     }
-    p.node_type = m
-        .enum_name("type")
-        .or_else(|| m.str("type"))
-        .map(NodeType::parse);
+    p.node_type = node_type(&m);
     p.name = m
         .shared("name", || m.str("name").map(Arc::<str>::from))
         .flatten();
@@ -758,15 +807,19 @@ pub fn props(m: MsgRef) -> Props {
         }),
     };
     if m.has("fillPaints") {
-        p.fills = m.shared("fillPaints", || m.collect_msgs("fillPaints", paint));
+        p.fills = m.shared("fillPaints", || {
+            m.collect_msgs("fillPaints", |m| paint_with_assets(m, assets))
+        });
     } else if m.has("backgroundPaints") && m.bool("backgroundEnabled") != Some(false) {
         // Frames in older files keep their fill as a background.
         p.fills = m.shared("backgroundPaints", || {
-            m.collect_msgs("backgroundPaints", paint)
+            m.collect_msgs("backgroundPaints", |m| paint_with_assets(m, assets))
         });
     }
     if m.has("strokePaints") {
-        p.strokes = m.shared("strokePaints", || m.collect_msgs("strokePaints", paint));
+        p.strokes = m.shared("strokePaints", || {
+            m.collect_msgs("strokePaints", |m| paint_with_assets(m, assets))
+        });
     }
     p.stroke_weight = m.f32("strokeWeight");
     if m.bool("borderStrokeWeightsIndependent") == Some(true) {
@@ -796,6 +849,13 @@ pub fn props(m: MsgRef) -> Props {
         p.effects = m.shared("effects", || m.collect_msgs("effects", effect));
     }
     p.corner_radius = m.f32("cornerRadius");
+    p.arc_data = m.msg("arcData").map(|arc| {
+        [
+            arc.f32("startingAngle").unwrap_or(0.0),
+            arc.f32("endingAngle").unwrap_or(std::f32::consts::TAU),
+            arc.f32("innerRadius").unwrap_or(0.0),
+        ]
+    });
     if m.bool("rectangleCornerRadiiIndependent") == Some(true)
         || m.has("rectangleTopLeftCornerRadius")
     {
@@ -820,7 +880,7 @@ pub fn props(m: MsgRef) -> Props {
         .shared("textData", || {
             let text = m.msg("textData")?;
             Some((
-                Arc::new(text_content(text)),
+                Arc::new(text_content(text, assets)),
                 text_layout(text).map(Arc::new),
             ))
         })
@@ -847,13 +907,13 @@ pub fn props(m: MsgRef) -> Props {
             let symbol = m.msg("symbolData")?;
             Some(Arc::new(SymbolData {
                 symbol_id: symbol.msg("symbolID").and_then(guid),
-                overrides: symbol.collect_msgs("symbolOverrides", props),
+                overrides: symbol.collect_msgs("symbolOverrides", |m| props_with_assets(m, assets)),
                 uniform_scale: symbol.f32("uniformScaleFactor"),
             }))
         })
         .flatten();
     p.derived = m.shared("derivedSymbolData", || {
-        m.collect_msgs("derivedSymbolData", props)
+        m.collect_msgs("derivedSymbolData", |m| props_with_assets(m, assets))
     });
     p.swapped_symbol = m.msg("overriddenSymbolID").and_then(guid);
     if m.has("componentPropAssignments") {
@@ -929,8 +989,7 @@ pub fn props(m: MsgRef) -> Props {
     p.is_state_group = m.bool("isStateGroup");
     let style = |new: &'static str, legacy: &'static str| {
         m.msg(new)
-            .and_then(|s| s.msg("guid"))
-            .and_then(guid)
+            .and_then(|s| assets.resolve(s))
             .or_else(|| m.msg(legacy).and_then(guid))
             .filter(|g| *g != Guid::default() && g.session != u32::MAX)
     };
@@ -977,7 +1036,7 @@ pub fn props(m: MsgRef) -> Props {
         );
     }
     p.props_bubbled = m.bool("propsAreBubbled");
-    p.variable = variable(&m).map(Arc::new);
+    p.variable = variable(&m, assets).map(Arc::new);
     if m.has("variableSetModes") {
         p.variable_modes = Some(
             m.msgs("variableSetModes")
@@ -995,7 +1054,7 @@ pub fn props(m: MsgRef) -> Props {
             .msgs("entries")
             .filter_map(|e| {
                 Some((
-                    e.msg("variableSetID")?.msg("guid").and_then(guid)?,
+                    assets.resolve(e.msg("variableSetID")?)?,
                     e.msg("variableModeID").and_then(guid)?,
                 ))
             })
@@ -1004,7 +1063,7 @@ pub fn props(m: MsgRef) -> Props {
             p.mode_by_set = Some(entries);
         }
     }
-    p.generated = generated_layers(&m);
+    p.generated = generated_layers(&m, assets);
     p.vector_styles = m.msg("vectorData").and_then(|v| {
         let styles: Arc<[StyleRun]> = v
             .msgs("styleOverrideTable")
@@ -1012,7 +1071,7 @@ pub fn props(m: MsgRef) -> Props {
             .filter_map(|s| {
                 Some(StyleRun {
                     id: s.u32("styleID")?,
-                    fills: Some(s.collect_msgs("fillPaints", paint)),
+                    fills: Some(s.collect_msgs("fillPaints", |m| paint_with_assets(m, assets))),
                     ..StyleRun::default()
                 })
             })
@@ -1056,15 +1115,19 @@ fn macro_data(m: &MsgRef) -> Option<library::MacroData> {
 /// guid path. Layers with text are text layers, drawn above the others
 /// (shapes drawn from their geometry: a connector's label background goes
 /// under its label).
-fn generated_layers(m: &MsgRef) -> Option<Arc<[Props]>> {
+fn generated_layers(m: &MsgRef, assets: &assets::AssetIds) -> Option<Arc<[Props]>> {
     let layout = m.msg("derivedImmutableFrameData")?;
     let generation: Vec<Props> = m
         .msg("nodeGenerationData")
-        .map(|g| g.msgs("overrides").map(props).collect())
+        .map(|g| {
+            g.msgs("overrides")
+                .map(|m| props_with_assets(m, assets))
+                .collect()
+        })
         .unwrap_or_default();
     let mut layers: Vec<Props> = layout
         .msgs("overrides")
-        .map(props)
+        .map(|m| props_with_assets(m, assets))
         .filter_map(|derived| {
             let path = derived.guid_path.clone().filter(|p| !p.is_empty())?;
             let mut layer = generation

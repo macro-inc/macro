@@ -12,6 +12,7 @@
 
 mod effects;
 pub(crate) mod paint;
+pub(crate) mod pattern;
 mod text;
 
 use crate::document::Document;
@@ -92,6 +93,8 @@ pub(crate) struct Painter<'a> {
     reach: f64,
     /// Cleared masks to reuse (see [`AreaMask`]).
     masks: Vec<Mask>,
+    /// Sources currently being rendered, to stop cyclic patterns.
+    active_patterns: Vec<crate::model::Guid>,
 }
 
 /// Renders a viewport of a scene into a premultiplied RGBA pixmap.
@@ -115,6 +118,7 @@ pub fn render(
         margin: 0.0,
         reach: 0.0,
         masks: Vec::new(),
+        active_patterns: Vec::new(),
     };
     // Effects sample beyond what they cover: render with a margin so blurs
     // and shadows from just outside the region are complete inside it.
@@ -169,6 +173,7 @@ pub fn render_node(
         margin: 0.0,
         reach: 0.0,
         masks: Vec::new(),
+        active_patterns: Vec::new(),
     };
     let mut surface = Surface::new(0, 0, vp.width, vp.height)?;
     if let Some(bg) = opts.background {
@@ -231,7 +236,11 @@ impl<'a> Painter<'a> {
             let r = match e.kind {
                 EffectKind::DropShadow => {
                     f64::from(e.radius) * 1.5
-                        + f64::from(e.spread.abs())
+                        + if self.props(i).supports_shadow_spread() {
+                            f64::from(e.spread.abs())
+                        } else {
+                            0.0
+                        }
                         + e.offset.x.abs().max(e.offset.y.abs())
                 }
                 EffectKind::LayerBlur if e.radius > 0.0 => f64::from(e.radius) * 1.5,
@@ -262,7 +271,11 @@ impl<'a> Painter<'a> {
                 let reach = match e.kind {
                     EffectKind::InnerShadow => {
                         f64::from(e.radius) * 1.5
-                            + f64::from(e.spread.abs())
+                            + if props.supports_shadow_spread() {
+                                f64::from(e.spread.abs())
+                            } else {
+                                0.0
+                            }
                             + e.offset.x.abs().max(e.offset.y.abs())
                     }
                     EffectKind::BackgroundBlur => f64::from(e.radius) * 1.5,
@@ -463,8 +476,12 @@ impl<'a> Painter<'a> {
                 .iter()
                 .filter(|e| e.is_visible() && e.kind == EffectKind::DropShadow)
             {
+                let mut e = e.clone();
+                if !props.supports_shadow_spread() {
+                    e.spread = 0.0;
+                }
                 let offset = self.device_vector(i, e.offset);
-                effects::drop_shadow(&mut with_shadows.pixmap, &layer.pixmap, e, offset, scale);
+                effects::drop_shadow(&mut with_shadows.pixmap, &layer.pixmap, &e, offset, scale);
             }
             with_shadows.pixmap.draw_pixmap(
                 0,
@@ -527,7 +544,7 @@ impl<'a> Painter<'a> {
         self.draw_node_content_with_opacity(i, surface, clip, as_mask, 1.0);
     }
 
-    /// Fills, inner shadows, children, strokes.
+    /// Fills, inner shadows, container strokes, children, shape strokes.
     fn draw_node_content_with_opacity(
         &mut self,
         i: SceneIdx,
@@ -564,6 +581,13 @@ impl<'a> Painter<'a> {
             self.inner_shadows(i, &inner, surface, clip);
         }
 
+        // A nonclipping container's border belongs below its contents: a tab can
+        // cover a parent's border with its own underline or background.
+        let container_stroke = node_type.is_frame_like() && !props.clips_content();
+        if container_stroke && props.has_visible_strokes() {
+            self.draw_strokes(i, props, &ts, surface, clip, opacity);
+        }
+
         let generated = &self.scene.node(i).generated;
         if !generated.is_empty() {
             for g in generated.clone() {
@@ -592,7 +616,7 @@ impl<'a> Painter<'a> {
         }
 
         // Text draws its own strokes, clipped to its glyphs.
-        if props.has_visible_strokes() && !node_type.is_text() {
+        if props.has_visible_strokes() && !node_type.is_text() && !container_stroke {
             self.draw_strokes(i, props, &ts, surface, clip, opacity);
         }
     }

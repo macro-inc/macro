@@ -339,7 +339,7 @@ impl Writer<'_> {
         }
     }
 
-    /// Fills, children, and strokes.
+    /// Fills, container strokes, children, and shape strokes.
     fn content(&mut self, i: SceneIdx, out: &mut String) {
         let p = self.props(i);
         let world = self.world(i);
@@ -362,6 +362,11 @@ impl Writer<'_> {
                 }
             }
         }
+        let container_stroke =
+            self.props(i).node_type().is_frame_like() && !self.props(i).clips_content();
+        if container_stroke && self.props(i).has_visible_strokes() {
+            self.strokes(i, out);
+        }
         let p = self.props(i);
         if p.node_type().draws_children() && !self.scene.node(i).children.is_empty() {
             let mut inner = String::new();
@@ -379,7 +384,7 @@ impl Writer<'_> {
                 out.push_str(&inner);
             }
         }
-        if self.props(i).has_visible_strokes() {
+        if self.props(i).has_visible_strokes() && !container_stroke {
             self.strokes(i, out);
         }
     }
@@ -526,6 +531,28 @@ impl Writer<'_> {
                     "</radialGradient>\n"
                 });
                 let _ = write!(s, " {attr}=\"url(#{id})\"");
+            }
+            PaintKind::Pattern(pattern) => {
+                let tile = crate::render::pattern::render_tile(
+                    self.doc,
+                    &mut crate::images::ImageStore::default(),
+                    pattern,
+                    4.0,
+                    &[],
+                )?;
+                let id = self.id("pattern");
+                let data = base64(&crate::images::encode_png(&tile.pixmap));
+                let (w, h) = (tile.pixmap.width(), tile.pixmap.height());
+                let _ = writeln!(
+                    self.defs,
+                    "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" width=\"{w}\" height=\"{h}\" patternTransform=\"{}\"><image width=\"{w}\" height=\"{h}\" href=\"data:image/png;base64,{data}\"/></pattern>",
+                    matrix(&tile.transform(pattern, size))
+                );
+                let _ = write!(
+                    s,
+                    " {attr}=\"url(#{id})\" {attr}-opacity=\"{}\"",
+                    num(f64::from(paint.opacity))
+                );
             }
             PaintKind::Image(_) | PaintKind::Unsupported(_) => return None,
         }
@@ -898,7 +925,7 @@ impl Writer<'_> {
         for e in effects.iter().filter(|e| e.kind == EffectKind::DropShadow) {
             k += 1;
             f.push_str(HARD_ALPHA);
-            if e.spread != 0.0 {
+            if e.spread != 0.0 && self.scene.props(self.doc, i).supports_shadow_spread() {
                 let _ = writeln!(
                     f,
                     "<feMorphology radius=\"{}\" operator=\"{}\" in=\"SourceAlpha\" result=\"spread{k}\"/>",

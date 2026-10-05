@@ -12,7 +12,7 @@ use tiny_skia::Pixmap;
 
 /// The common test schema plus FigJam's generated layers and derived text.
 const SCHEMA: &str = "
-enum NodeType DOCUMENT CANVAS GROUP FRAME RECTANGLE ROUNDED_RECTANGLE ELLIPSE VECTOR TEXT SYMBOL INSTANCE SECTION STICKY SHAPE_WITH_TEXT CONNECTOR TEXT_PATH
+enum NodeType DOCUMENT CANVAS GROUP FRAME RECTANGLE ROUNDED_RECTANGLE ELLIPSE VECTOR TEXT SYMBOL INSTANCE SECTION STICKY SHAPE_WITH_TEXT CONNECTOR TEXT_PATH LINE
 enum NodePhase CREATED REMOVED
 enum PaintType SOLID GRADIENT_LINEAR GRADIENT_RADIAL GRADIENT_ANGULAR GRADIENT_DIAMOND IMAGE
 enum BlendMode PASS_THROUGH NORMAL MULTIPLY SCREEN
@@ -39,7 +39,8 @@ message VectorData styleOverrideTable:NodeChange[]
 message DerivedTextData layoutSize:Vector glyphs:Glyph[] truncationStartIndex:int
 message NodeGenerationData overrides:NodeChange[]
 message DerivedImmutableFrameData overrides:NodeChange[]
-message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float size:Vector transform:Matrix fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float backgroundColor:Color symbolData:SymbolData guidPath:GUIDPath overrideKey:GUID internalOnly:bool derivedTextData:DerivedTextData nodeGenerationData:NodeGenerationData derivedImmutableFrameData:DerivedImmutableFrameData vectorData:VectorData styleID:uint styleIdForFill:StyleId
+message ArcData startingAngle:float endingAngle:float innerRadius:float
+message NodeChange guid:GUID phase:NodePhase parentIndex:ParentIndex type:NodeType name:string visible:bool locked:bool opacity:float size:Vector transform:Matrix fillPaints:Paint[] strokePaints:Paint[] strokeWeight:float strokeAlign:StrokeAlign fillGeometry:Path[] strokeGeometry:Path[] effects:Effect[] cornerRadius:float backgroundColor:Color symbolData:SymbolData guidPath:GUIDPath overrideKey:GUID internalOnly:bool derivedTextData:DerivedTextData nodeGenerationData:NodeGenerationData derivedImmutableFrameData:DerivedImmutableFrameData vectorData:VectorData styleID:uint styleIdForFill:StyleId arcData:ArcData
 message Blob bytes:byte[]
 message Message nodeChanges:NodeChange[] blobs:Blob[]
 ";
@@ -529,4 +530,63 @@ fn overrides_take_their_shared_styles() {
     );
     let p = draw(&bytes, viewport(0.0, 0.0, 1.0, 40, 20));
     assert_eq!(rgba(&p, 10, 10), [0, 255, 0, 255]);
+}
+
+#[test]
+fn shadow_spread_respects_the_shape_that_figma_supports() {
+    fn sample(kind: &'static str, arc: Option<[f32; 3]>, spread: f32) -> Vec<u8> {
+        let mut fields = vec![
+            ("size", size(40.0, 40.0)),
+            ("transform", translate(40.0, 40.0)),
+            ("fillPaints", V::List(vec![solid(0.4, 0.4, 0.4)])),
+            (
+                "effects",
+                V::List(vec![V::Msg(vec![
+                    ("type", V::Enum("DROP_SHADOW")),
+                    ("color", color(0.0, 0.0, 0.0, 1.0)),
+                    ("radius", V::Float(4.0)),
+                    ("spread", V::Float(spread)),
+                ])]),
+            ),
+        ];
+        if let Some([start, end, inner]) = arc {
+            fields.push((
+                "arcData",
+                V::Msg(vec![
+                    ("startingAngle", V::Float(start)),
+                    ("endingAngle", V::Float(end)),
+                    ("innerRadius", V::Float(inner)),
+                ]),
+            ));
+        }
+        file(vec![node(2, Some((1, "!")), kind, "Shape", fields)], vec![])
+    }
+    let tau = std::f32::consts::TAU;
+    for (kind, arc, supported) in [
+        ("RECTANGLE", None, true),
+        ("ELLIPSE", None, true),
+        ("ELLIPSE", Some([0.0, tau, 0.0]), true),
+        ("ELLIPSE", Some([0.0, tau / 2.0, 0.0]), false),
+        ("ELLIPSE", Some([0.0, tau, 1.0]), false),
+        ("LINE", None, false),
+        ("VECTOR", None, false),
+    ] {
+        let base = sample(kind, arc, 0.0);
+        let expanded = sample(kind, arc, 20.0);
+        let a = draw(&base, viewport(0.0, 0.0, 1.0, 120, 120));
+        let b = draw(&expanded, viewport(0.0, 0.0, 1.0, 120, 120));
+        assert_eq!(a.data() != b.data(), supported, "{kind} {arc:?}");
+        let doc = Document::open(&expanded).unwrap();
+        let scene = Scene::build(&doc, doc.pages[0]);
+        let shape = scene.find(&doc, "1:2").unwrap();
+        let svg = crate::svg::export(&doc, &scene, shape).unwrap();
+        assert_eq!(
+            svg.contains("feMorphology"),
+            supported,
+            "SVG {kind} {arc:?}"
+        );
+        let props = scene.props(&doc, shape);
+        assert_eq!(props.arc_data, arc);
+        assert_eq!(props.effects()[0].spread, 20.0, "retain the authored value");
+    }
 }

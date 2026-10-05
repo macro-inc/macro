@@ -186,6 +186,61 @@ pub struct ImagePaint {
     pub original_size: Option<Vec2>,
 }
 
+/// Alignment of a repeated source tile within its painted layer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PatternAlign {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
+impl PatternAlign {
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "CENTER" => Self::Center,
+            "END" => Self::End,
+            _ => Self::Start,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Start => "START",
+            Self::Center => "CENTER",
+            Self::End => "END",
+        }
+    }
+}
+
+/// Supported layouts for repeating a pattern source.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PatternLayout {
+    #[default]
+    Rectangular,
+    HorizontalHexagonal,
+}
+
+impl PatternLayout {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rectangular => "RECTANGULAR",
+            Self::HorizontalHexagonal => "HORIZONTAL_HEXAGONAL",
+        }
+    }
+}
+
+/// A rectangular pattern whose tile is another node in the same document.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PatternPaint {
+    pub layout: PatternLayout,
+    pub source: super::Guid,
+    pub scale: f32,
+    /// Gaps as fractions of the source width/height; negative values overlap.
+    pub spacing: Vec2,
+    pub horizontal: PatternAlign,
+    pub vertical: PatternAlign,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PaintKind {
     Solid(Color),
@@ -196,7 +251,8 @@ pub enum PaintKind {
         transform: Affine,
     },
     Image(ImagePaint),
-    /// Emoji, video, pattern, noise: drawn as nothing.
+    Pattern(PatternPaint),
+    /// Emoji, video, unsupported pattern layouts, noise: drawn as nothing.
     Unsupported(&'static str),
 }
 

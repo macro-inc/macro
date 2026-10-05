@@ -46,6 +46,23 @@ fn saves_edits_and_reopens() {
 }
 
 #[test]
+fn saves_arc_metadata_for_new_ellipses() {
+    let original = blank("Arc");
+    let mut doc = Document::open(&original).unwrap();
+    let created = apply(
+        &mut doc,
+        r#"[{"op":"create","parent":"0:1","node":{"type":"ELLIPSE","name":"Arc","x":0,"y":0,"width":40,"height":40}}]"#,
+    );
+    let id = doc.find(Guid::parse(&created[0]).unwrap()).unwrap();
+    let arc = [0.25, 4.5, 1.0];
+    doc.nodes[id as usize].props.arc_data = Some(arc);
+    let reopened = Document::open(&save(&doc, &original).unwrap()).unwrap();
+    let props = find(&reopened, &created[0]);
+    assert_eq!(props.arc_data, Some(arc));
+    assert!(!props.supports_shadow_spread());
+}
+
+#[test]
 fn drops_deleted_nodes() {
     let original = simple_file();
     let mut doc = Document::open(&original).unwrap();

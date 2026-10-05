@@ -245,6 +245,32 @@ fn opens_lazily_with_what_the_first_page_shows() {
 }
 
 #[test]
+fn lazy_open_keeps_unvisited_page_metadata() {
+    let bytes = Arc::new(fig_file(
+        vec![
+            node(0, None, "DOCUMENT", "Document", vec![]),
+            node(1, Some((0, "a")), "CANVAS", "Cover", vec![]),
+            node(
+                2,
+                Some((0, "b")),
+                "CANVAS",
+                "Screens",
+                vec![("backgroundColor", crate::testing::color(0.1, 0.2, 0.3, 1.0))],
+            ),
+            node(3, Some((2, "a")), "RECTANGLE", "Deferred", vec![]),
+        ],
+        vec![],
+    ));
+    let lazy = Document::open_lazy(&bytes).unwrap();
+    let page = lazy.pages[1];
+    assert_eq!(lazy.props(page).name(), "Screens");
+    assert_eq!(lazy.page_background(page).hex(), "1A334D");
+    assert!(lazy.is_decoded(lazy.root));
+    assert!(lazy.is_decoded(page));
+    assert!(!lazy.is_decoded(lazy.node(page).children[0]));
+}
+
+#[test]
 fn completes_a_lazy_open_as_a_full_one() {
     for bytes in [
         crate::testing::showcase_file(),
