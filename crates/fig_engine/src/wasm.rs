@@ -387,6 +387,14 @@ impl FigFile {
         to_json(&inspect::layer_rows(&self.doc, scene, index))
     }
 
+    /// The page's flows, screens, and layers with interactions
+    /// (`PrototypeInfo` JSON).
+    pub fn prototype(&mut self, page: usize) -> Result<String, JsError> {
+        self.scene(page)?;
+        let (_, scene) = self.scene.as_ref().expect("scene built above");
+        to_json(&inspect::prototype::prototype(&self.doc, scene))
+    }
+
     /// One layer's properties (`NodeInfo` JSON).
     #[wasm_bindgen(js_name = nodeInfo)]
     pub fn node_info(&mut self, page: usize, id: &str) -> Result<String, JsError> {

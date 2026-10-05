@@ -6,10 +6,10 @@ use super::{
     dec_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
-    Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
-    PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Vec2, VectorData,
+    Action, Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
+    FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild, OverlaySettings,
+    Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props, StyleRun,
+    SymbolData, TextContent, TextLayout, TextStyle, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -342,6 +342,27 @@ impl<'a> Reader<'a> {
         })
     }
 
+    fn interaction(&mut self) -> Decoded<Interaction> {
+        Ok(Interaction {
+            id: self.opt(Self::guid)?,
+            trigger: self.arc_str()?,
+            timeout: self.opt(Self::f32)?,
+            actions: self.arc_list(|r| {
+                Ok(Action {
+                    connection: r.arc_str()?,
+                    navigation: r.arc_str()?,
+                    destination: r.opt(Self::guid)?,
+                    transition: r.arc_str()?,
+                    duration: r.f32()?,
+                    easing: r.opt_arc_str()?,
+                    url: r.opt_arc_str()?,
+                    open_in_new_tab: r.opt(Self::bool)?,
+                    overlay_offset: r.opt(Self::vec2)?,
+                })
+            })?,
+        })
+    }
+
     pub fn props(&mut self) -> Decoded<Props> {
         Ok(Props {
             guid: self.opt(Self::guid)?,
@@ -450,6 +471,22 @@ impl<'a> Reader<'a> {
             fill_style: self.opt(Self::guid)?,
             stroke_style: self.opt(Self::guid)?,
             effect_style: self.opt(Self::guid)?,
+            interactions: self.opt(|r| r.arc_list(Self::interaction))?,
+            flow_start: self.opt(|r| {
+                Ok(Arc::new(FlowStart {
+                    name: r.arc_str()?,
+                    description: r.arc_str()?,
+                    position: r.arc_str()?,
+                }))
+            })?,
+            overlay: self.opt(|r| {
+                Ok(Arc::new(OverlaySettings {
+                    position: r.arc_str()?,
+                    close_on_click_outside: r.bool()?,
+                    background: r.opt(Self::color)?,
+                }))
+            })?,
+            prototype_start: self.opt(Self::guid)?,
             recomputed: self.bool()?,
         })
     }

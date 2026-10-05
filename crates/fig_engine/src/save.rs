@@ -695,6 +695,9 @@ impl<'s> Build<'s> {
                 self.set_enum(m, "stackPositioning", if a { "ABSOLUTE" } else { "AUTO" });
             }
         }
+        if edits & flags::PROTOTYPE != 0 {
+            self.prototype(m, p);
+        }
         if edits & flags::PARENT != 0 {
             let parent_guid = node.parent.and_then(|pi| doc.props(pi).guid);
             if let (Some(g), Some(def)) = (parent_guid, self.sub(m.def, "parentIndex")) {
@@ -1187,6 +1190,15 @@ pub fn save(doc: &Document, original: &[u8]) -> Result<Vec<u8>> {
     if wants_shapes && let Some(extended) = with_shape_fields(&container.schema)? {
         container.schema = extended;
     }
+    let wants_prototype = doc.nodes.iter().any(|n| {
+        !n.removed
+            && n.edits & flags::PROTOTYPE != 0
+            && (n.props.flow_start.is_some()
+                || n.props.interactions.as_deref().is_some_and(|i| !i.is_empty()))
+    });
+    if wants_prototype && let Some(extended) = prototype::with_prototype_fields(&container.schema)? {
+        container.schema = extended;
+    }
     let schema = Schema::decode(&container.schema)?;
     let b = Build { schema: &schema };
     let message_def = b
@@ -1579,6 +1591,7 @@ pub fn blank(name: &str) -> Vec<u8> {
 }
 
 mod clipboard;
+mod prototype;
 pub(crate) use clipboard::remap_blobs;
 pub use clipboard::{Copied, copy};
 

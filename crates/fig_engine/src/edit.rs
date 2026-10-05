@@ -70,6 +70,8 @@ pub mod flags {
     pub const BOOLEAN: u32 = 1 << 28;
     /// A vector layer's network.
     pub const VECTOR: u32 = 1 << 29;
+    /// Prototype interactions and a frame's flow starting point.
+    pub const PROTOTYPE: u32 = 1 << 30;
 }
 
 /// A paint as the editor describes it.
@@ -441,6 +443,14 @@ pub enum Op {
         id: String,
         network: crate::vector::Network,
     },
+    /// Replaces a layer's prototype interactions.
+    SetInteractions {
+        id: String,
+        interactions: Vec<InteractionSpec>,
+    },
+    /// Makes a top-level frame a flow starting point named `name`, or
+    /// (`null`) no longer one.
+    SetFlowStart { id: String, name: Option<String> },
 }
 
 /// What an applied step changed.
@@ -485,9 +495,11 @@ mod instance_layout;
 mod overrides;
 mod paint;
 mod paste;
+mod prototype;
 pub mod shapes;
 pub(crate) use overrides::guid_of;
 pub use paste::{At, PasteSpec, View};
+pub use prototype::{ActionSpec, InteractionSpec};
 pub(crate) mod layout;
 
 impl<'a> Txn<'a> {
@@ -1228,6 +1240,14 @@ impl<'a> Txn<'a> {
                 for i in self.layers(ids)? {
                     self.detach_instance(i)?;
                 }
+            }
+            Op::SetInteractions { id, interactions } => {
+                let i = self.resolve(id)?;
+                self.set_interactions(i, interactions)?;
+            }
+            Op::SetFlowStart { id, name } => {
+                let i = self.resolve(id)?;
+                self.set_flow_start(i, name.as_deref())?;
             }
             Op::Flip { ids, vertical } => {
                 let all = self.layers(ids)?;

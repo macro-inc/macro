@@ -6,6 +6,9 @@
 
 use crate::kiwi::{Kind, Schema, Ty};
 
+mod prototype;
+pub use prototype::prototype_file;
+
 /// A Figma-shaped schema covering what the tests use.
 pub const SCHEMA: &str = "
 enum NodeType DOCUMENT CANVAS GROUP FRAME RECTANGLE ROUNDED_RECTANGLE ELLIPSE VECTOR TEXT SYMBOL INSTANCE SECTION
@@ -216,7 +219,12 @@ pub fn node(
 /// Builds a legacy-layout `.fig` (bare `fig-kiwi` document) from node
 /// changes and blobs. The schema is deflated and the message deflated too.
 pub fn fig_file(nodes: Vec<V>, blobs: Vec<Vec<u8>>) -> Vec<u8> {
-    let schema_bytes = encode_schema(SCHEMA);
+    fig_file_in(SCHEMA, nodes, blobs)
+}
+
+/// [`fig_file`] with another schema (in the same text form).
+pub fn fig_file_in(schema: &str, nodes: Vec<V>, blobs: Vec<Vec<u8>>) -> Vec<u8> {
+    let schema_bytes = encode_schema(schema);
     let schema = Schema::decode(&schema_bytes).expect("test schema decodes");
     let message = encode(
         &schema,

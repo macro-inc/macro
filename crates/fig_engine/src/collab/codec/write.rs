@@ -5,10 +5,10 @@ use super::{
     enc_node_type, enc_prop_field, enc_scale_mode, enc_winding,
 };
 use crate::model::{
-    Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting, Glyph,
-    Guid, ImageFilters, ImagePaint, LayoutChild, Paint, PaintKind, PathRef, PropAssignment,
-    PropDef, PropRef, PropValue, Props, StyleRun, SymbolData, TextContent, TextLayout, TextStyle,
-    Vec2, VectorData,
+    Action, Affine, AutoLayout, Color, ColorStop, CornerRadii, Decoration, Effect, ExportSetting,
+    FlowStart, Glyph, Guid, ImageFilters, ImagePaint, Interaction, LayoutChild, OverlaySettings,
+    Paint, PaintKind, PathRef, PropAssignment, PropDef, PropRef, PropValue, Props, StyleRun,
+    SymbolData, TextContent, TextLayout, TextStyle, Vec2, VectorData,
 };
 use std::sync::Arc;
 
@@ -395,6 +395,40 @@ impl<'a> Writer<'a> {
         self.opt(max_size, |w, v| w.vec2(v));
     }
 
+    fn interaction(&mut self, i: &Interaction) {
+        let Interaction {
+            id,
+            trigger,
+            timeout,
+            actions,
+        } = i;
+        self.opt(id, |w, g| w.guid(g));
+        self.str(trigger);
+        self.opt(timeout, |w, v| w.f32(*v));
+        self.list(actions, |w, a| {
+            let Action {
+                connection,
+                navigation,
+                destination,
+                transition,
+                duration,
+                easing,
+                url,
+                open_in_new_tab,
+                overlay_offset,
+            } = a;
+            w.str(connection);
+            w.str(navigation);
+            w.opt(destination, |w, g| w.guid(g));
+            w.str(transition);
+            w.f32(*duration);
+            w.opt_str(easing);
+            w.opt_str(url);
+            w.opt(open_in_new_tab, |w, v| w.bool(*v));
+            w.opt(overlay_offset, |w, v| w.vec2(v));
+        });
+    }
+
     fn props_list(&mut self, list: &[Props]) {
         self.list(list, |w, p| w.props(p));
     }
@@ -454,6 +488,10 @@ impl<'a> Writer<'a> {
             fill_style,
             stroke_style,
             effect_style,
+            interactions,
+            flow_start,
+            overlay,
+            prototype_start,
             recomputed,
         } = p;
         self.opt(guid, |w, g| w.guid(g));
@@ -588,6 +626,28 @@ impl<'a> Writer<'a> {
         for g in [fill_style, stroke_style, effect_style] {
             self.opt(g, |w, g| w.guid(g));
         }
+        self.opt(interactions, |w, list| w.list(list, |w, i| w.interaction(i)));
+        self.opt(flow_start, |w, f| {
+            let FlowStart {
+                name,
+                description,
+                position,
+            } = &**f;
+            w.str(name);
+            w.str(description);
+            w.str(position);
+        });
+        self.opt(overlay, |w, o| {
+            let OverlaySettings {
+                position,
+                close_on_click_outside,
+                background,
+            } = &**o;
+            w.str(position);
+            w.bool(*close_on_click_outside);
+            w.opt(background, |w, c| w.color(c));
+        });
+        self.opt(prototype_start, |w, g| w.guid(g));
         self.bool(*recomputed);
     }
 

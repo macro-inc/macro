@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 pub mod geom;
 pub mod paint;
+pub mod prototype;
 pub mod text;
 
 pub use geom::{Affine, Rect, Vec2};
@@ -19,6 +20,7 @@ pub use paint::{
     BlendMode, Color, ColorStop, Effect, EffectKind, GradientKind, ImageFilters, ImagePaint,
     ImageScaleMode, Paint, PaintKind,
 };
+pub use prototype::{Action, FlowStart, Interaction, OverlaySettings};
 pub use text::{Decoration, Glyph, StyleRun, TextContent, TextLayout, TextStyle};
 
 /// A node id, written `session:local` (Figma's node ids).
@@ -458,6 +460,14 @@ pub struct Props {
     pub fill_style: Option<Guid>,
     pub stroke_style: Option<Guid>,
     pub effect_style: Option<Guid>,
+    /// Prototype interactions on the layer.
+    pub interactions: Option<Arc<[Interaction]>>,
+    /// A flow starting point on a top-level frame.
+    pub flow_start: Option<Arc<FlowStart>>,
+    /// How the frame shows as an overlay.
+    pub overlay: Option<Arc<OverlaySettings>>,
+    /// A page's prototype start frame, in files from before flows.
+    pub prototype_start: Option<Guid>,
     /// On an instance's override or derived layout entry: made by the
     /// editor (and written when saving); the file's own are kept as they
     /// are.
@@ -488,6 +498,7 @@ impl Props {
             symbol, derived, swapped_symbol, prop_assignments, prop_refs, prop_defs,
             override_key, auto_layout, layout_child, export_settings, boolean_operation, vector_data, constraints,
             description, is_state_group, fill_style, stroke_style, effect_style,
+            interactions, flow_start, overlay, prototype_start,
         );
     }
 

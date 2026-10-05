@@ -9,6 +9,8 @@ use crate::model::text::{StyleRun, TextContent};
 use crate::model::*;
 use std::sync::Arc;
 
+mod prototype;
+
 /// The `NodeChange` fields the engine reads. Everything else is skipped while
 /// decoding, which keeps memory proportional to what is drawn.
 const NODE_FIELDS: &[&str] = &[
@@ -153,7 +155,31 @@ const DERIVED_TEXT_FIELDS: &[&str] = &["layoutSize", "baselines", "glyphs", "dec
 
 /// Narrows the schema to the fields read here.
 pub fn restrict_schema(schema: &mut Schema) {
-    schema.keep_only("NodeChange", NODE_FIELDS);
+    let node_fields: Vec<&str> = NODE_FIELDS
+        .iter()
+        .chain(prototype::FIELDS)
+        .copied()
+        .collect();
+    schema.keep_only("NodeChange", &node_fields);
+    schema.keep_only(
+        "PrototypeInteraction",
+        &["id", "event", "actions", "isDeleted"],
+    );
+    schema.keep_only("PrototypeEvent", &["interactionType", "transitionTimeout"]);
+    schema.keep_only(
+        "PrototypeAction",
+        &[
+            "transitionNodeID",
+            "transitionType",
+            "transitionDuration",
+            "easingType",
+            "connectionType",
+            "connectionURL",
+            "navigationType",
+            "openUrlInNewTab",
+            "overlayRelativePosition",
+        ],
+    );
     schema.keep_only("Paint", PAINT_FIELDS);
     schema.keep_only("Effect", EFFECT_FIELDS);
     schema.keep_only("TextData", TEXT_FIELDS);
@@ -723,6 +749,7 @@ pub fn props(m: MsgRef) -> Props {
     p.fill_style = style("styleIdForFill", "inheritFillStyleID");
     p.stroke_style = style("styleIdForStrokeFill", "inheritFillStyleIDForStroke");
     p.effect_style = style("styleIdForEffect", "inheritEffectStyleID");
+    prototype::read(&m, &mut p);
     p
 }
 

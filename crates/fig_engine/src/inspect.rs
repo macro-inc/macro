@@ -10,6 +10,7 @@ use crate::scene::{Scene, SceneIdx};
 use serde::Serialize;
 
 mod colors;
+pub mod prototype;
 pub use colors::page_colors;
 
 /// One row of the layers panel.
