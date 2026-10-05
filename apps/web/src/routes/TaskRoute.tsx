@@ -4,20 +4,15 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { useTeamTaskQuery } from '@queries/storage/team-task';
-import { Navigate, useNavigate, useParams } from '@solidjs/router';
+import { Navigate, useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { createEffect, createMemo, Match, on, Show, Switch } from 'solid-js';
 
-type TaskRouteParams = {
-  taskSlug: string;
-};
-
 /** Resolves a team-scoped task slug to the existing canonical task route. */
-export function TaskRoute() {
-  const params = useParams<TaskRouteParams>();
+export function TaskRoute(props: { taskSlug: string }) {
   const navigate = useNavigate();
   const isAuthenticated = useIsAuthenticated();
-  const taskSlug = () => params.taskSlug;
+  const taskSlug = () => props.taskSlug;
   const isValidSlug = () => isValidTeamTaskSlug(taskSlug());
   const slugToResolve = createMemo(() =>
     isAuthenticated() === true && isValidSlug() ? taskSlug() : undefined

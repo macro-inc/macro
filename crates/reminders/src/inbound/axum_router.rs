@@ -1,5 +1,7 @@
 //! Axum router for reminders endpoints.
 
+pub mod email_collection;
+
 #[cfg(test)]
 mod test;
 
@@ -99,6 +101,10 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
+        .route(
+            "/email/collection",
+            get(email_collection::list_email_reminders_handler::<S, Eas, Auth>),
+        )
         .route(
             "/email/{thread_id}",
             get(get_email_followup_handler::<S, Eas, Auth>)

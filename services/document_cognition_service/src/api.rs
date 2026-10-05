@@ -25,6 +25,7 @@ pub mod utils;
 mod attachments;
 mod chats;
 pub mod structured_completion;
+pub(crate) mod tool_selection;
 
 #[cfg(test)]
 mod test;

@@ -5,7 +5,18 @@ import type { GithubLinkStatus } from '@queries/auth/github-link';
 import { EmptyStatePanel } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { ReviewsScope } from '../reviews-types';
+import {
+  type ReviewsScope,
+  scopeMatchesViewerGithubId,
+} from '../reviews-types';
+
+const IDENTITY_SUBJECTS: Record<ReviewsScope, string> = {
+  all: 'pull requests',
+  authored: 'pull requests you authored',
+  assigned: 'pull requests assigned to you',
+  involving: 'pull requests involving you',
+  review_requests: 'pull requests awaiting your review',
+};
 
 export function ReviewsEmptyState(props: {
   scope: ReviewsScope;
@@ -17,10 +28,7 @@ export function ReviewsEmptyState(props: {
   onClearFilters: () => void;
 }) {
   const identityCopy = () => {
-    const subject =
-      props.scope === 'involving'
-        ? 'pull requests involving you'
-        : 'pull requests you authored';
+    const subject = IDENTITY_SUBJECTS[props.scope];
     return match(props.githubAccountStatus)
       .with('linked', () => ({
         title: 'GitHub account details unavailable',
@@ -42,7 +50,11 @@ export function ReviewsEmptyState(props: {
 
   return (
     <Switch>
-      <Match when={props.scope === 'authored' && !props.hasAuthorIdentity}>
+      <Match
+        when={
+          scopeMatchesViewerGithubId(props.scope) && !props.hasAuthorIdentity
+        }
+      >
         <EmptyStatePanel
           centered
           graphic={GitPullRequestIcon}
@@ -81,7 +93,7 @@ export function ReviewsEmptyState(props: {
           centered
           graphic={EmptyStateNoFilterMatchGraphic}
           title="No pull requests match these filters"
-          description="Try another repository or author, or clear your filters."
+          description="Try other filters, or clear them."
           primaryAction={{
             label: 'Clear filters',
             onClick: props.onClearFilters,
@@ -102,6 +114,22 @@ export function ReviewsEmptyState(props: {
           graphic={GitPullRequestIcon}
           title="No pull requests authored by you"
           description="Pull requests you authored and can access in Macro will appear here."
+        />
+      </Match>
+      <Match when={props.scope === 'assigned'}>
+        <EmptyStatePanel
+          centered
+          graphic={GitPullRequestIcon}
+          title="No pull requests assigned to you"
+          description="Pull requests assigned to you and accessible in Macro will appear here."
+        />
+      </Match>
+      <Match when={props.scope === 'review_requests'}>
+        <EmptyStatePanel
+          centered
+          graphic={GitPullRequestIcon}
+          title="No review requests"
+          description="Pull requests waiting on your review will appear here."
         />
       </Match>
       <Match when={true}>

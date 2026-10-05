@@ -1,346 +1,470 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import Hash from '@phosphor/hash.svg';
+import Phone from '@phosphor/phone.svg';
+import Sparkle from '@phosphor/sparkle.svg';
+import UserPlus from '@phosphor/user-plus.svg';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
-import type { DemoAgentMessage } from '../../core/deploy-agent-demo';
-import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import type { WorkspaceComment } from '../../core/dummy-workspace';
+import { homepagePeople } from '../../core/homepage-demo-people';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
-import { AgentMessage } from '../DemoAgentMessage';
-import DemoDeployDiff from '../DemoDeployDiff';
-import { DemoMarkdown } from '../DemoMarkdown';
+import { DemoCursor } from '../DemoCursor';
+import { DemoMentionText } from '../DemoMention';
 import { ViewShell } from '../DemoWorkspaceChrome';
-import { SearchBar } from '../email/frozen/SearchBar';
+import { ChannelComposer } from '../email/frozen/ChannelComposer';
 import { ProductDemo } from '../product/ProductPage';
+import { Segments } from '../workspace/frozen/DetailPanel';
 import { MessageRow } from '../workspace/frozen/MessageRow';
-import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
-import { PersonIcon } from '../workspace/frozen/TaskProperties';
+import {
+  arrivalGroups,
+  createHomeInbox,
+  DoneToast,
+  HomeDetail,
+  HomeRail,
+  HomeSidebar,
+  heroGroups,
+  markDoneOnE,
+  reviewRequestRow,
+} from './ReviewHome';
+import { PrMention, PrPreviewCard } from './ReviewPrMention';
+import { PullRequestView } from './ReviewPullRequest';
+import { invitePr, type PrStatus } from './review-fixtures';
 import '../workspace/dummy-workspace.css';
+import './review-stories.css';
 
-const title = 'Retry transient deploy failures';
-const description =
-  '## Summary\n\nRetry temporary registry failures with a bounded delay. Permanent failures still stop immediately.\n\n## Review focus\n\nCheck the attempt limit and the permanent-error path in `deploy/retry.ts`. The linked task contains the original deployment report.';
+type Point = { x: number; y: number };
 
-/** PR metadata and read-only GitHub discussion, ported from block-pr. */
-function PullRequest(props: {
-  onBack?: () => void;
-  discussion?: boolean;
-  name?: string;
-  number?: number;
+/**
+ * Keeps an overlay on a target inside `frame`, re-measured whenever the
+ * target selector changes or the frame resizes (the TaskCreationFlow model).
+ */
+function trackTarget(options: {
+  frame: () => HTMLElement;
+  selector: Accessor<string | undefined>;
+  measure: (target: DOMRect, frame: DOMRect) => Point;
 }) {
-  const [expanded, setExpanded] = createSignal(true);
-  const [hideBots, setHideBots] = createSignal(false);
+  const [point, setPoint] = createSignal<Point>();
+  onMount(() => {
+    const position = () => {
+      const selector = options.selector();
+      const target = selector
+        ? options.frame().querySelector<HTMLElement>(selector)
+        : null;
+      const bounds = target?.getBoundingClientRect();
+      // A target hidden by the narrow layout has no box to point at.
+      if (!bounds || (bounds.width === 0 && bounds.height === 0)) {
+        setPoint(undefined);
+        return;
+      }
+      setPoint(
+        options.measure(bounds, options.frame().getBoundingClientRect())
+      );
+    };
+    createEffect(() => {
+      options.selector();
+      const timer = requestAnimationFrame(position);
+      onCleanup(() => cancelAnimationFrame(timer));
+    });
+    const resize = new ResizeObserver(position);
+    resize.observe(options.frame());
+    options.frame().addEventListener('scroll', position, true);
+    onCleanup(() => {
+      resize.disconnect();
+      options.frame().removeEventListener('scroll', position, true);
+    });
+  });
+  return point;
+}
+
+const pointAt = (target: DOMRect, frame: DOMRect): Point => ({
+  x: target.left - frame.left + Math.min(target.width / 2, 72),
+  y: target.top - frame.top + target.height / 2,
+});
+
+/** Hero: Home with a review request open, every row clickable. */
+export function GithubHomeHero() {
+  const inbox = createHomeInbox({ groups: heroGroups, initial: 'pr-491' });
   return (
-    <>
-      <ViewShell.TopBar>
-        <Show when={props.onBack}>
-          <Button
-            variant="plain"
-            size="icon-sm"
-            label="Back to reviews"
-            onClick={props.onBack}
-          >
-            <ArrowLeft />
-          </Button>
-        </Show>
-        <GitPullRequest class="size-4 text-success" />
-        <span class="truncate text-sm font-medium">{props.name ?? title}</span>
-      </ViewShell.TopBar>
-      <div class="dummy-scroll product-pr-body">
-        <h1>{props.name ?? title}</h1>
-        <div class="product-pr-meta">
-          <span class="text-success">
-            <GitPullRequest class="size-3" />
-            Open
-          </span>
-          <span>
-            <PersonIcon person={props.number === 483 ? 'julia' : 'teo'} />
-            {props.number === 483 ? 'Julia' : 'Teo'}
-          </span>
-          <span>launch-team/website#{props.number ?? 482}</span>
-          <span>
-            <b class="text-success">+{props.number === 483 ? 4 : 8}</b>
-            <b class="text-failure">−{props.number === 483 ? 2 : 1}</b>
-          </span>
+    <ProductDemo label="Explore pull requests in Home">
+      <div
+        class="review-home"
+        data-pane={inbox.pane()}
+        onKeyDown={markDoneOnE(inbox)}
+      >
+        <HomeRail />
+        <HomeSidebar inbox={inbox} />
+        <div class="dummy-main review-home-main">
+          <HomeDetail inbox={inbox} />
         </div>
-        <DemoMarkdown
-          markdown={
-            props.number === 483
-              ? '## Summary\n\nUpdate the announcement with Thursday’s launch time and a link to the team workspace.\n\n## Review focus\n\nConfirm the wording with Julia before publishing.'
-              : description
-          }
-        />
-        <Show when={props.discussion}>
-          <div class="product-pr-discussion-heading">
-            <button
-              type="button"
-              aria-expanded={expanded()}
-              onClick={() => setExpanded(!expanded())}
-            >
-              <CaretDown class="size-3" />
-              Discussion
-            </button>
-            <label>
-              <input
-                type="checkbox"
-                checked={hideBots()}
-                onChange={(e) => setHideBots(e.currentTarget.checked)}
-              />
-              Hide bots (1)
-            </label>
-          </div>
-          <Show when={expanded()}>
-            <div class="product-pr-discussion">
-              <MessageRow
-                message={{
-                  id: 'review-1',
-                  person: 'julia',
-                  time: '10:14 AM',
-                  body: 'Can we confirm that authentication failures still stop on the first attempt?',
-                }}
-              >
-                <span class="product-pr-file">deploy/retry.ts · L6</span>
-              </MessageRow>
-              <MessageRow
-                message={{
-                  id: 'review-reply',
-                  person: 'teo',
-                  time: '10:18 AM',
-                  replyTo: 'review-1',
-                  body: 'Yes. Only temporary registry failures take the retry path; the permanent-error branch still throws.',
-                }}
-              />
-              <Show when={!hideBots()}>
-                <MessageRow
-                  message={{
-                    id: 'bot',
-                    person: 'cursor',
-                    time: '10:20 AM',
-                    body: 'Preview available for this branch.',
-                  }}
-                />
-              </Show>
-            </div>
-          </Show>
-        </Show>
+        <DoneToast inbox={inbox} />
       </div>
-    </>
+    </ProductDemo>
   );
 }
 
-export function ReviewQueueDemo(props: { animate?: boolean }) {
+/**
+ * A review request arrives at the top of Home. Jacob opens it, reads the PR,
+ * and marks it done (E), which removes it and opens the next item.
+ * Phases: 0 Home, 1 request arrives, 2 point at it, 3 open, 4 done.
+ */
+export function ReviewInboxDemo() {
   let root!: HTMLDivElement;
-  const [opened, setOpened] = createSignal<number>();
-  const [query, setQuery] = createSignal('');
-  const [filter, setFilter] = createSignal('involving');
+  let frame!: HTMLDivElement;
+  const inbox = createHomeInbox({
+    groups: arrivalGroups,
+    initial: 'channel-engineers',
+    pending: ['pr-491'],
+  });
+  const [phase, setPhase] = createSignal(0);
+  const [automatic, setAutomatic] = createSignal(true);
+  const arrive = () => inbox.reveal(reviewRequestRow.id);
+  const openRequest = () => {
+    arrive();
+    inbox.open(reviewRequestRow);
+  };
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 3,
+    steps: 4,
+    reset: () => {},
+    // A still frame is most useful with the pull request open.
+    reduced: openRequest,
+    delay: (step) => [0, 900, 1200, 800, 2600][step] ?? 1400,
+    advance: (step) => {
+      if (step === 1) arrive();
+      if (step === 3) openRequest();
+      if (step === 4) {
+        inbox.markDone(reviewRequestRow.id);
+        setAutomatic(false);
+      }
+      setPhase(step);
+    },
+  });
+  const pause = () => {
+    setAutomatic(false);
+    arrive();
+    playback.pause();
+  };
+  const pointer = trackTarget({
+    frame: () => frame,
+    selector: () =>
+      automatic()
+        ? [
+            undefined,
+            '[data-home-row="channel-engineers"]',
+            '[data-home-row="pr-491"]',
+            '[data-home-row="pr-491"]',
+          ][phase()]
+        : undefined,
+    measure: pointAt,
+  });
+  return (
+    <div ref={root} class="review-flow">
+      <div ref={frame} class="review-flow-frame" onFocusIn={pause}>
+        <ProductDemo
+          label="A review request arrives in Home and opens the pull request"
+          onInteract={pause}
+          height={520}
+          mobileHeight={500}
+        >
+          <div
+            class="review-home review-home-zoomed"
+            data-pane={inbox.pane()}
+            onKeyDown={markDoneOnE(inbox)}
+          >
+            <HomeSidebar
+              inbox={inbox}
+              arriving={phase() >= 1 ? reviewRequestRow.id : undefined}
+            />
+            <div class="dummy-main review-home-main">
+              <HomeDetail inbox={inbox} />
+            </div>
+            <DoneToast inbox={inbox} />
+          </div>
+        </ProductDemo>
+        <Show when={pointer()}>
+          {(p) => (
+            <DemoCursor
+              label="Jacob"
+              class="review-flow-pointer"
+              clicking={phase() === 3}
+              style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
+            />
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+const CHANNEL_TABS = ['Messages', 'Attachments', 'Calls', 'Participants'];
+
+/**
+ * A pull request link in a channel renders as a mention; hovering it shows
+ * the preview card, and the mention follows the PR when it merges.
+ * Phases: 0 channel, 1 cursor in, 2 hover the link, 3 card, 4 merged.
+ */
+export function PrLinkDemo() {
+  let root!: HTMLDivElement;
+  let frame!: HTMLDivElement;
+  const [phase, setPhase] = createSignal(0);
+  const [automatic, setAutomatic] = createSignal(true);
+  const [status, setStatus] = createSignal<PrStatus>('open');
+  const [hovered, setHovered] = createSignal(false);
+  const [opened, setOpened] = createSignal(false);
+  const [tab, setTab] = createSignal('Messages');
+  const [reacted, setReacted] = createSignal<string[]>([]);
+  const [sent, setSent] = createSignal<WorkspaceComment[]>([]);
+  const playback = createProductWalkthrough({
+    root: () => root,
+    steps: 4,
     reset: () => {},
     reduced: () => {
-      if (props.animate) setOpened(482);
+      setHovered(true);
+      setStatus('merged');
     },
-    advance: (s) => {
-      if (props.animate && s === 2) setOpened(482);
+    delay: (step) => [0, 700, 900, 600, 2200][step] ?? 1400,
+    advance: (step) => {
+      setPhase(step);
+      if (step === 3) setHovered(true);
+      if (step === 4) setStatus('merged');
     },
   });
-  const rows = [
-    { name: title, author: 'teo' as const, number: 482, involving: true },
-    {
-      name: 'Update the launch announcement',
-      author: 'julia' as const,
-      number: 483,
-      involving: false,
-    },
-  ];
+  const pause = () => {
+    setAutomatic(false);
+    playback.pause();
+  };
+  // Hover moves between the link and its card without closing it.
+  const hover = (next: boolean, event: MouseEvent | FocusEvent) => {
+    pause();
+    const related = event.relatedTarget as Node | null;
+    if (!next && related && frame.contains(related)) {
+      const element = related instanceof Element ? related : null;
+      if (element?.closest('[data-pr-mention], .review-pr-card')) return;
+    }
+    setHovered(next);
+  };
+  const pointer = trackTarget({
+    frame: () => frame,
+    selector: () =>
+      automatic() && phase() >= 1
+        ? phase() === 1
+          ? '[data-message="staging"] p'
+          : '[data-pr-mention]'
+        : undefined,
+    measure: pointAt,
+  });
+  const cardOpen = () => hovered() && !opened() && tab() === 'Messages';
+  const card = trackTarget({
+    frame: () => frame,
+    selector: () => (cardOpen() ? '[data-pr-mention]' : undefined),
+    measure: (target, bounds) => ({
+      x: Math.max(
+        8,
+        Math.min(target.left - bounds.left, bounds.width - CARD_WIDTH - 8)
+      ),
+      y: target.bottom - bounds.top + 8,
+    }),
+  });
+  const react = (id: string) =>
+    setReacted((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    );
+  const message = (
+    id: string,
+    person: WorkspaceComment['person'],
+    time: string,
+    body = ''
+  ) => ({
+    id,
+    person,
+    time,
+    body,
+    reactions: reacted().includes(id) ? ['jacob' as const] : undefined,
+  });
   return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Find and open a pull request in Reviews"
-      onInteract={playback.pause}
-    >
-      <Show
-        when={opened()}
-        fallback={
-          <>
-            <ViewShell.TopBar>
-              <span class="text-sm font-medium">Reviews</span>
-            </ViewShell.TopBar>
-            <nav class="product-task-filters" aria-label="Review views">
-              <button
-                type="button"
-                aria-pressed={filter() === 'involving'}
-                onClick={() => setFilter('involving')}
-              >
-                Involving me
-              </button>
-              <button
-                type="button"
-                aria-pressed={filter() === 'all'}
-                onClick={() => setFilter('all')}
-              >
-                All reviews
-              </button>
-            </nav>
-            <div class="product-review-queue">
-              <SearchBar
-                label="Search sample reviews"
-                placeholder="Search reviews"
-                value={query()}
-                onValueChange={setQuery}
+    <div ref={root} class="review-flow">
+      <div ref={frame} class="review-flow-frame" onFocusIn={pause}>
+        <ProductDemo
+          label="Hover a pull request link in a channel to see its status"
+          onInteract={pause}
+          height={470}
+          mobileHeight={560}
+        >
+          <Show
+            when={!opened()}
+            fallback={
+              <PullRequestView
+                pr={invitePr}
+                status={status()}
+                crumb={{ label: '#launch', onClick: () => setOpened(false) }}
               />
-              <For
-                each={rows.filter(
-                  (r) =>
-                    (filter() === 'all' || r.involving) &&
-                    r.name.toLowerCase().includes(query().toLowerCase())
-                )}
+            }
+          >
+            <ViewShell.TopBar>
+              <Hash class="size-4" />
+              <span class="text-sm font-medium">launch</span>
+              <Segments
+                label="Conversation view"
+                items={CHANNEL_TABS}
+                value={tab()}
+                onChange={setTab}
+              />
+              <div class="ml-auto flex items-center gap-1">
+                <Button size="sm" variant="plain" class="review-channel-invite">
+                  <UserPlus class="size-3" />
+                  Invite
+                </Button>
+                <Button size="sm" variant="plain">
+                  <Phone class="size-3" />
+                  Call
+                </Button>
+                <Button size="sm" variant="plain">
+                  <Sparkle class="size-3" />
+                  Ask Macro
+                </Button>
+              </div>
+            </ViewShell.TopBar>
+            <div
+              class="dummy-scroll sample-chat-log review-channel-log"
+              role="log"
+              aria-label="Channel launch"
+            >
+              <Switch
+                fallback={
+                  <p class="py-12 text-center text-sm text-ink-muted">
+                    {tab() === 'Calls'
+                      ? 'No calls in this channel'
+                      : 'No documents in this channel yet.'}
+                  </p>
+                }
               >
-                {(r) => (
-                  <button
-                    class="product-review-row"
-                    type="button"
-                    onClick={() => setOpened(r.number)}
-                    aria-label={`Open review: ${r.name}`}
-                  >
-                    <GitPullRequest class="size-4 text-success" />
-                    <span>
-                      {r.name}
-                      <small>launch-team/website · #{r.number}</small>
-                    </span>
-                    <span>
-                      <PersonIcon person={r.author} />
-                      {r.author === 'teo' ? 'Teo' : 'Julia'}
-                    </span>
-                  </button>
-                )}
-              </For>
+                <Match when={tab() === 'Participants'}>
+                  <For each={['jacob', 'julia', 'teo', 'gabriel'] as const}>
+                    {(person) => (
+                      <div class="flex items-center gap-3 py-3">
+                        <img
+                          class="size-8 rounded-full"
+                          alt=""
+                          src={homepagePeople[person].photo}
+                        />
+                        {homepagePeople[person].name}
+                      </div>
+                    )}
+                  </For>
+                </Match>
+                <Match when={tab() === 'Messages'}>
+                  <div class="sample-date-divider">
+                    <span>Today</span>
+                  </div>
+                  <div class="sample-channel-thread" data-message="staging">
+                    <MessageRow
+                      message={message(
+                        'staging',
+                        'gabriel',
+                        '9:58 AM',
+                        'staging still drops new people into their personal workspace after they accept an invite'
+                      )}
+                      onReact={() => react('staging')}
+                    />
+                  </div>
+                  <div class="sample-channel-thread" data-message="fix">
+                    <MessageRow
+                      message={message('fix', 'teo', '10:14 AM')}
+                      onReact={() => react('fix')}
+                    >
+                      <p class="review-message-body">
+                        fix is up:{' '}
+                        <PrMention
+                          pr={invitePr}
+                          status={status()}
+                          hovered={hovered() || (automatic() && phase() >= 2)}
+                          onHover={hover}
+                          onOpen={() => {
+                            pause();
+                            setHovered(false);
+                            setOpened(true);
+                          }}
+                        />
+                        <DemoMentionText text=" @[Jacob](demo-mention:jacob) can you review before Thursday?" />
+                      </p>
+                    </MessageRow>
+                  </div>
+                  <div class="sample-channel-thread" data-message="announce">
+                    <MessageRow
+                      message={message(
+                        'announce',
+                        'julia',
+                        '10:16 AM',
+                        'if it lands today I’ll send the announcement tomorrow morning'
+                      )}
+                      onReact={() => react('announce')}
+                    />
+                  </div>
+                  <For each={sent()}>
+                    {(item) => (
+                      <div class="sample-channel-thread">
+                        <MessageRow message={item} />
+                      </div>
+                    )}
+                  </For>
+                </Match>
+              </Switch>
             </div>
-          </>
-        }
-      >
-        <PullRequest
-          name={rows.find((r) => r.number === opened())?.name}
-          number={opened()}
-          onBack={() => setOpened(undefined)}
-        />
-      </Show>
-    </ProductDemo>
-  );
-}
-
-export function ReviewDiffDemo() {
-  return (
-    <ProductDemo label="Inspect an agent’s proposed code change">
-      <ViewShell.TopBar>
-        <span class="text-sm font-medium">Changes · deploy/retry.ts</span>
-        <span class="ml-auto text-xs">
-          <span class="text-success">+8</span>{' '}
-          <span class="text-failure">−1</span>
-        </span>
-      </ViewShell.TopBar>
-      <div class="dummy-scroll product-pr-body">
-        <DemoDeployDiff />
-      </div>
-    </ProductDemo>
-  );
-}
-
-export function ReviewDiscussionDemo() {
-  return (
-    <ProductDemo label="Read the GitHub review discussion and filter bot messages">
-      <PullRequest discussion />
-    </ProductDemo>
-  );
-}
-
-export function ReviewAgentDemo() {
-  let root!: HTMLDivElement;
-  const [finished, setFinished] = createSignal(false);
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 3,
-    reset: () => {},
-    reduced: () => setFinished(true),
-    advance: (s) => {
-      if (s === 2) setFinished(true);
-    },
-  });
-  const message = (text: string, user = false): DemoAgentMessage => ({
-    agentSessionId: 'review-example',
-    turn: 0,
-    requestId: null,
-    pending: false,
-    author: user ? { kind: 'user', userId: 'jacob' } : { kind: 'agent' },
-    stop: { kind: 'end_turn' },
-    parts: [{ kind: 'text', text }],
-  });
-  return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Ask an agent to inspect the retry change"
-      onInteract={playback.pause}
-    >
-      <ViewShell.TopBar>
-        <span class="text-sm font-medium">Review deploy retry</span>
-      </ViewShell.TopBar>
-      <div class="dummy-scroll product-agent-log">
-        <AgentMessage
-          message={message(
-            'Review this retry change. What stops a permanent failure from being retried?',
-            true
-          )}
-          inFlight={false}
-        />
-        <Show when={finished()}>
-          <AgentMessage
-            message={message(
-              'The catch branch throws when the error is not transient. Only temporary failures continue through the bounded retry loop. Inspect that branch before approving the change.'
-            )}
-            inFlight={false}
+            <Show when={tab() === 'Messages'}>
+              <div class="dummy-composer sample-chat-composer">
+                <ChannelComposer
+                  richMentions
+                  label="Message #launch"
+                  placeholder="Type @ to share with #launch"
+                  onSend={(body) =>
+                    setSent((items) => [
+                      ...items,
+                      {
+                        id: `sent-${items.length}`,
+                        person: 'jacob',
+                        time: '10:20 AM',
+                        body,
+                      },
+                    ])
+                  }
+                />
+              </div>
+            </Show>
+          </Show>
+        </ProductDemo>
+        <Show when={cardOpen()}>
+          <PrPreviewCard
+            pr={invitePr}
+            status={status()}
+            class="review-flow-card"
+            style={{
+              transform: `translate(${card()?.x ?? 0}px, ${card()?.y ?? 0}px)`,
+              visibility: card() ? undefined : 'hidden',
+            }}
+            onHover={hover}
           />
-          <div class="mt-6">
-            <DemoDeployDiff />
-          </div>
+        </Show>
+        <Show when={pointer()}>
+          {(p) => (
+            <DemoCursor
+              label="Jacob"
+              class="review-flow-pointer"
+              style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
+            />
+          )}
         </Show>
       </div>
-    </ProductDemo>
+    </div>
   );
 }
 
-export function ReviewLinkedTaskDemo() {
-  const w = createDummyWorkspace('tasks');
-  w.open('tasks', 'deploy');
-  w.updateTask('deploy', {
-    status: 'In Review',
-    owner: 'teo',
-    description:
-      'Temporary registry failures interrupt deployment. Review the bounded retry change in PR #482 before completing this task.',
-  });
-  const [opened, setOpened] = createSignal(false);
-  return (
-    <ProductDemo label="Open a linked pull request from its task">
-      <Show
-        when={opened()}
-        fallback={
-          <TaskNotebook
-            workspace={w}
-            task={w.data.tasks.find((t) => t.id === 'deploy')!}
-            relatedContent={
-              <button
-                type="button"
-                class="dummy-entity-link"
-                onClick={() => setOpened(true)}
-              >
-                <GitPullRequest class="size-4 text-success" />
-                Retry transient deploy failures · #482
-              </button>
-            }
-          />
-        }
-      >
-        <PullRequest onBack={() => setOpened(false)} />
-      </Show>
-    </ProductDemo>
-  );
-}
+const CARD_WIDTH = 320;

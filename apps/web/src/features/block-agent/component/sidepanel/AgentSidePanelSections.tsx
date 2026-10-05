@@ -10,11 +10,11 @@
  */
 
 import { DiffCounts } from '@app/components/diff-view';
-import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { SidePanel } from '@components/app/side-panel';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { References } from '@core/component/References';
-import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
@@ -35,14 +35,21 @@ export function AgentSidePanelSections() {
   const { sessionId, session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
-  const changes = useOptionalAgentChanges();
+  const changes = useOptionalChanges();
   const files = () => changes?.model.files() ?? [];
   const activity = createMemo(() => activityCounts(messages()));
   const totals = () => changes?.changeCounts();
 
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
+      <SidePanel.Footer>
+        <EntityMetadata
+          ownerId={session()?.ownerId}
+          createdAt={session()?.createdAt}
+          updatedAt={session()?.modifiedAt}
+        />
+      </SidePanel.Footer>
+      <SidePanel.Section id="session" title="Session" defaultOpen order={10}>
         <SidePanel.Grid>
           <SidePanel.Row label="Status">
             <SessionStatusPill status={sessionStatus(metadata())} />
@@ -98,28 +105,6 @@ export function AgentSidePanelSections() {
             {(url) => (
               <SidePanel.Row label="Pull request">
                 <AgentPullRequestChip url={url()} />
-              </SidePanel.Row>
-            )}
-          </Show>
-          <Show when={session()?.createdAt}>
-            {(created) => (
-              <SidePanel.Row label="Created">
-                <SidePanel.Pill>
-                  <span class="truncate">
-                    {formatDate(created(), { showTime: true })}
-                  </span>
-                </SidePanel.Pill>
-              </SidePanel.Row>
-            )}
-          </Show>
-          <Show when={session()?.modifiedAt}>
-            {(modified) => (
-              <SidePanel.Row label="Last updated">
-                <SidePanel.Pill>
-                  <span class="truncate">
-                    {formatDate(modified(), { showTime: true })}
-                  </span>
-                </SidePanel.Pill>
               </SidePanel.Row>
             )}
           </Show>

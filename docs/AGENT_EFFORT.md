@@ -24,10 +24,10 @@ provider serialization tests when adding support.
 
 | Routed model | Explicit effort values |
 | --- | --- |
-| anthropic/claude-sonnet-5, anthropic/claude-opus-5 | low, medium, high, xhigh, max |
+| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
 | openai/gpt-5.5 | none, low, medium, high, xhigh |
 | openai/gpt-5-mini | minimal, low, medium, high |
-| Haiku and unknown models | No effort control |
+| Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
 
 Every supported profile also offers **Default**, meaning no session override.
 It preserves Macro's existing adapter defaults (including low for GPT-5 mini).

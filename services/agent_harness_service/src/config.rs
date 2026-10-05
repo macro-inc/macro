@@ -38,6 +38,11 @@ macro_env_var::env_vars!(
     pub struct PipedreamClientSecret;
     /// The Pipedream Connect project ID (`proj_...`).
     pub struct PipedreamProjectId;
+    /// AES key the `mcp_servers` rows' OAuth credentials are encrypted with -
+    /// the same one `document_cognition_service` writes them with, so the
+    /// custom MCP servers a person added in Macro are the ones the egress
+    /// proxy can refresh and stamp for their sandboxes.
+    pub struct McpCredentialsKeySecretName;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -65,6 +70,12 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// In-plan AI allowance per paid seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// Markup on AI usage past the allowance, as a whole percent of provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
     /// OAuth encryption key; deployments without a key do not advertise sign-in.
     pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
@@ -143,7 +154,7 @@ pub struct Config {
     pub harness_repo_url: String,
     /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
     /// fall back to the agent loop's default model.
-    #[macro_config_default(String::from("claude-sonnet-5"))]
+    #[macro_config_default(String::from("claude-sonnet-5-5"))]
     pub inmem_model: String,
     /// Harness slug stamped onto sessions the in-memory bot opens.
     #[macro_config_default(String::from("macro-inmem"))]
@@ -180,6 +191,8 @@ pub struct Config {
     pub pipedream_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
+    /// AES key the custom MCP servers' stored OAuth credentials are encrypted with.
+    pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
     /// S3 bucket the Changes pane's patches are stored in, one object per
@@ -187,6 +200,10 @@ pub struct Config {
     /// harness that cannot store a patch cannot show a session's changes,
     /// and that is worth failing at boot rather than on the first capture.
     pub agent_session_changes_bucket: String,
+    /// S3 bucket of pull request patches, owned by document-storage-service and
+    /// shared with it, so a session capture reuses the patch a pull request
+    /// viewer stored for the same base and head.
+    pub github_pull_request_patch_bucket: String,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.
@@ -196,6 +213,15 @@ pub struct Config {
 }
 
 impl Config {
+    /// The AI pricing every billing component is composed with. Both values
+    /// are validated when the configuration loads.
+    pub fn ai_pricing(&self) -> ai_billing::AiPricing {
+        ai_billing::AiPricing::new(
+            self.ai_usage_included_allowance_cents,
+            self.ai_usage_overage_markup_percent,
+        )
+    }
+
     /// Resolve the deployment-injected encryption key. Local stacks use their
     /// existing LocalStack key with a separate Claude encryption context.
     pub fn claude_oauth_kms_key_id(&self) -> Option<String> {

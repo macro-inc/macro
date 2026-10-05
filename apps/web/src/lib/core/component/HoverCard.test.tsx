@@ -10,7 +10,10 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => false,
 }));
 
-async function renderOpenCard(keepOpenOnTriggerPress?: boolean) {
+async function renderOpenCard(
+  keepOpenOnTriggerPress?: boolean,
+  closeOnScroll?: boolean
+) {
   const onOpenChange = vi.fn();
   render(() => (
     <>
@@ -18,6 +21,7 @@ async function renderOpenCard(keepOpenOnTriggerPress?: boolean) {
         open
         onOpenChange={onOpenChange}
         keepOpenOnTriggerPress={keepOpenOnTriggerPress}
+        closeOnScroll={closeOnScroll}
         trigger={<span>Standup</span>}
         content={<div>Card</div>}
       />
@@ -52,6 +56,26 @@ describe('HoverCard', () => {
 
     fireEvent.pointerDown(screen.getByText('Elsewhere'));
 
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('dismisses on outside scrolling by default', async () => {
+    const onOpenChange = await renderOpenCard();
+
+    fireEvent.scroll(window);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps stationary previews open through trigger presses and scrolling', async () => {
+    const onOpenChange = await renderOpenCard(true, false);
+
+    fireEvent.pointerDown(screen.getByText('Standup'));
+    fireEvent.scroll(window);
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    fireEvent.pointerDown(screen.getByText('Elsewhere'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

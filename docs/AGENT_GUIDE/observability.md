@@ -137,3 +137,37 @@ prompt passes them:
 | `action queued behind the turn in flight` | the managing replica | Why the prompt is waiting: the in-flight turn, its action id, and `in_flight_age_secs`. |
 | `recovering a run started elsewhere` | the Cursor service | A mirror or a pre-prompt backfill is about to follow a cursor.com run; `cursor.run.still_running=true` means it will hold the turn gate until that run ends. `finished recovering …` closes it with `elapsed_ms`. |
 | `waiting for the turn gate behind a mirror …` / `acquired the turn gate` / `stopped while waiting …` / `gave up waiting for the turn gate` | the Cursor service, inside `agent.turn` | The prompt is parked behind that mirror, and how the wait ended. |
+
+## Tauri desktop memory recordings
+
+The web frontend keeps `service.name=web-app`; distinguish native windows with
+`resource.app.runtime = "tauri"` (`"browser"` for regular tabs). Tauri events carry
+`service.instance.id`, a UUID for the native launch. Explicit macOS recordings add
+`macro.recording.id`; this remains stable across webview reloads and is shared by
+frontend traces, logs, and `app.memory.sample` spans.
+
+Launch instructions and memory field definitions are in the
+[Tauri recording guide](../../apps/web/tauri/src-tauri/README.md#desktop-memory-recording-macos).
+Quit any existing instance before launching with the recording arguments.
+The native title bar shows a shortened recording ID; find the full ID in the
+`Desktop memory recording enabled` startup log or any recording span's resources.
+
+TraceQL examples:
+
+```traceql
+{ resource.app.runtime = "tauri" && resource.macro.recording.id = "<recording UUID>" }
+{ resource.macro.recording.id = "<recording UUID>" && name = "app.memory.sample" }
+```
+
+Each action span has its latest memory sample at start and end (`.end` suffix).
+Use `macro.memory.web_content.footprint_bytes` for the frontend renderer and
+`macro.memory.frontend.footprint_bytes` for the measured WebKit helpers together.
+Check `macro.memory.frontend.status` and sample age before interpreting readings.
+Missing/unavailable values are not zero. The Rust host is reported separately as
+`macro.memory.native.*`. Sample spans retain native timestamps after a webview
+pause; sessionStorage avoids duplicate draining on ordinary reloads.
+
+Backend spans join through the existing `traceparent` trace ID; recording resource
+attributes belong to the frontend, and are not automatically copied onto backend
+services. Correlate complete traces by finding their frontend span. Always-on
+client sampling does not override downstream sampling or prevent transport loss.

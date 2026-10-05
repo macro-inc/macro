@@ -114,6 +114,8 @@ export type AppEvents = {
     emails_connected: number;
     connectors_connected: string[];
   };
+  /** A @macro.com account used the staff Bypass button; `step` is where. */
+  onboarding_v4_bypassed: { step: string };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;

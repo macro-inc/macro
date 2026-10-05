@@ -236,6 +236,13 @@ impl DocumentService for FakeDocumentService {
         })
     }
 
+    async fn internal_get_user_display_name(
+        &self,
+        _user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        unimplemented!()
+    }
+
     async fn get_document_by_team_slug(
         &self,
         team_receipt: EntityAccessReceipt<MemberTeamRole>,

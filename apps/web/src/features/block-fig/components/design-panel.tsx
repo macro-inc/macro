@@ -1,0 +1,960 @@
+/**
+ * The right panel: the selected layer's properties as Figma's design panel
+ * shows them (editable when `onPatch` is given), CSS as Dev Mode writes
+ * it, and export. Presentational: data and actions come in as props.
+ */
+
+import type {
+  EffectInfo,
+  NodeInfo,
+  PageSummary,
+  PaintInfo,
+  TextInfo,
+} from '@core/fig-engine/types';
+import AlignBottom from '@phosphor/align-bottom.svg';
+import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
+import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
+import AlignLeft from '@phosphor/align-left.svg';
+import AlignRight from '@phosphor/align-right.svg';
+import AlignTop from '@phosphor/align-top.svg';
+import Copy from '@phosphor/copy.svg';
+import { createSignal, For, type JSX, Show } from 'solid-js';
+import type { Alignment } from '../core/align';
+import type { BooleanOperation } from '../core/boolean';
+import { cssFor } from '../core/css';
+import type { StyleKind } from '../core/design-system';
+import { formatMeasure } from '../core/measure';
+import type { MixedInfo } from '../core/mixed';
+import { formatDashes, parseDashes } from '../core/paint';
+import type { MixedTextField } from '../core/rich-text';
+import { formatLetterSpacing, formatLineHeight } from '../core/type';
+import type { Patch } from '../primitives/create-fig-editor';
+import {
+  AutoLayoutControls,
+  ConstraintControls,
+  SizingControls,
+} from './auto-layout-controls';
+import { BooleanButtons } from './boolean-controls';
+import { ColorPicker } from './color-picker';
+import { NumberField, ParsedField, TextField } from './design-fields';
+import { EffectList } from './effect-controls';
+import { MixedFields } from './mixed-fields';
+import { PaintList, paintLabel, paintSwatch } from './paint-controls';
+import { Section } from './panel-section';
+import { SwatchPopover } from './swatch-popover';
+import { TypeControls } from './type-controls';
+
+function Field(props: { label: string; value: string | number }) {
+  return (
+    <div class="flex min-w-0 items-center gap-2 rounded-md bg-inset px-2 py-1">
+      <span class="shrink-0 text-ink-muted">{props.label}</span>
+      <span
+        class="min-w-0 truncate text-ink tabular-nums"
+        title={String(props.value)}
+      >
+        {props.value}
+      </span>
+    </div>
+  );
+}
+
+const fmt = (v: number) => formatMeasure(v);
+
+const hasCorners = (type: string) =>
+  ['FRAME', 'RECTANGLE', 'ROUNDED_RECTANGLE', 'SYMBOL', 'INSTANCE'].includes(
+    type
+  );
+
+function radiusLabel(r: {
+  top_left: number;
+  top_right: number;
+  bottom_right: number;
+  bottom_left: number;
+}): string {
+  return r.top_left === r.top_right &&
+    r.top_left === r.bottom_left &&
+    r.top_left === r.bottom_right
+    ? fmt(r.top_left)
+    : [r.top_left, r.top_right, r.bottom_right, r.bottom_left]
+        .map(fmt)
+        .join(', ');
+}
+const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+/** A page's canvas color as `RRGGBB`. */
+const pageHex = (page: PageSummary) =>
+  page.background
+    .slice(0, 3)
+    .map((v) =>
+      Math.round(v * 255)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')
+    .toUpperCase();
+const title = (s: string) =>
+  s
+    .toLowerCase()
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+function PaintRow(props: { paint: PaintInfo }) {
+  const p = () => props.paint;
+  return (
+    <div
+      class="flex items-center gap-2 rounded-md bg-inset px-2 py-1"
+      classList={{ 'opacity-50': !p().visible }}
+    >
+      <span
+        class="size-4 shrink-0 rounded-sm border border-edge-muted"
+        style={{ background: paintSwatch(p()) }}
+      />
+      <span class="min-w-0 flex-1 truncate font-mono text-ink">
+        {paintLabel(p())}
+      </span>
+      <Show when={p().type === 'SOLID' && (p().alpha ?? 1) < 1}>
+        <span class="text-ink-muted tabular-nums">
+          {percent(p().alpha ?? 1)}
+        </span>
+      </Show>
+      <Show when={p().opacity < 1}>
+        <span class="text-ink-muted tabular-nums">{percent(p().opacity)}</span>
+      </Show>
+    </div>
+  );
+}
+
+function EffectRow(props: { effect: EffectInfo }) {
+  const e = () => props.effect;
+  const shadow = () =>
+    e().type === 'DROP_SHADOW' || e().type === 'INNER_SHADOW';
+  return (
+    <div
+      class="flex flex-col gap-1 rounded-md bg-inset px-2 py-1"
+      classList={{ 'opacity-50': !e().visible }}
+    >
+      <span class="text-ink">{title(e().type)}</span>
+      <Show
+        when={shadow()}
+        fallback={<span class="text-ink-muted">Blur {fmt(e().radius)}</span>}
+      >
+        <span class="text-ink-muted tabular-nums">
+          X {fmt(e().x)} · Y {fmt(e().y)} · Blur {fmt(e().radius)} · Spread{' '}
+          {fmt(e().spread)} · #{e().color} {percent(e().alpha)}
+        </span>
+      </Show>
+    </div>
+  );
+}
+
+const canHaveAutoLayout = (type: string) => ['FRAME', 'SYMBOL'].includes(type);
+
+function AutoLayoutFields(props: { info: NodeInfo }) {
+  return (
+    <Show when={props.info.autoLayout}>
+      {(al) => (
+        <Section title="Auto layout">
+          <div class="grid grid-cols-2 gap-1.5">
+            <Field label="Direction" value={title(al().mode)} />
+            <Field label="Gap" value={fmt(al().spacing)} />
+            <Field
+              label="Padding"
+              value={[
+                al().paddingTop,
+                al().paddingRight,
+                al().paddingBottom,
+                al().paddingLeft,
+              ]
+                .map(fmt)
+                .join(' ')}
+            />
+            <Show when={al().primaryAlign}>
+              {(a) => <Field label="Align" value={title(a())} />}
+            </Show>
+          </div>
+        </Section>
+      )}
+    </Show>
+  );
+}
+
+function TextFields(props: { text: TextInfo }) {
+  const t = () => props.text;
+  return (
+    <>
+      <Field
+        label="Font"
+        value={[t().fontFamily, t().fontStyle].filter(Boolean).join(' ')}
+      />
+      <div class="grid grid-cols-2 gap-1.5">
+        <Show when={t().fontSize}>
+          {(size) => <Field label="Size" value={fmt(size())} />}
+        </Show>
+        <Field label="Line" value={formatLineHeight(t().lineHeight)} />
+        <Show when={t().letterSpacing}>
+          <Field
+            label="Letter"
+            value={formatLetterSpacing(t().letterSpacing)}
+          />
+        </Show>
+        <Show when={t().alignHorizontal}>
+          {(a) => <Field label="Align" value={title(a())} />}
+        </Show>
+      </div>
+    </>
+  );
+}
+
+export type PanelTab = 'design' | 'prototype' | 'code';
+
+const PANEL_TAB_LABELS: Record<PanelTab, string> = {
+  design: 'Design',
+  prototype: 'Prototype',
+  code: 'Code',
+};
+/** What the Type section offers beyond the layer's own values. */
+export interface TypeOptions {
+  /** Fields the characters selected in the text editor differ in. */
+  mixed?: ReadonlySet<MixedTextField>;
+  googleFamilies?: readonly string[];
+  /** Weights of the shown family, when known. */
+  weights?: readonly number[];
+  preview?: (family: string) => Promise<string | undefined>;
+  onFontsOpen?: () => void;
+}
+
+export function DesignPanel(props: {
+  info: NodeInfo | undefined;
+  selectionCount: number;
+  /** Edits the selection; absent when the file is read-only. */
+  onPatch?: (patch: Patch, live: boolean) => void;
+  /** Aligns the selection; absent when the file is read-only. */
+  onAlign?: (how: Alignment) => void;
+  page: PageSummary | undefined;
+  /** The Export section of the selected layer. */
+  exportSection?: JSX.Element;
+  /** The Layout grid section of the selected frame. */
+  layoutGrids?: JSX.Element;
+  /** The Code tab's content (Dev Mode inspect); CSS when absent. */
+  code?: JSX.Element;
+  /** Boolean operations on the selection; absent when read-only. */
+  onBoolean?: (operation: BooleanOperation) => void;
+  onFlatten?: () => void;
+  onCopyText: (text: string) => void;
+  /** Font families the document uses. */
+  fontFamilies?: readonly string[];
+  /** The Type section's font picker and "Mixed" values. */
+  type?: TypeOptions;
+  /** Adds auto layout to the selection (⇧A); absent when read-only. */
+  onAddAutoLayout?: () => void;
+  /** Colors the color pickers offer (the page's). */
+  swatches?: readonly string[];
+  /** A color picker opened (to load the page's colors). */
+  onPickerOpen?: () => void;
+  /** Adds an image file for an image fill; resolves to its hash. */
+  onAddImage?: (file: File) => Promise<string | undefined>;
+  /** Sets the page's canvas color; absent when read-only. */
+  onPageColor?: (hex: string, live: boolean) => void;
+  /** Several selected layers' shared and mixed values. */
+  mixed?: MixedInfo;
+  /** The Prototype tab's content; the tab shows when it is given. */
+  prototype?: JSX.Element;
+  onTabChange?: (tab: PanelTab) => void;
+  /** Component, variant, and property sections for the selected layer. */
+  designSections?: JSX.Element;
+  /** Shown with the page when nothing is selected (local styles). */
+  pageExtra?: JSX.Element;
+  /** The shared style control of a fill, stroke, text, or effect section. */
+  styleControl?: (kind: StyleKind) => JSX.Element;
+}) {
+  const [tab, setTabSignal] = createSignal<PanelTab>('design');
+  const setTab = (t: PanelTab) => {
+    setTabSignal(t);
+    props.onTabChange?.(t);
+  };
+  const tabs = (): PanelTab[] =>
+    props.prototype === undefined
+      ? ['design', 'code']
+      : ['design', 'prototype', 'code'];
+  return (
+    <div
+      class="flex size-full min-h-0 flex-col text-ink text-xs"
+      data-testid="fig-design-panel"
+    >
+      <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2">
+        <For each={tabs()}>
+          {(t) => (
+            <button
+              type="button"
+              class="rounded-md px-2 py-1 font-medium"
+              classList={{
+                'bg-hover text-ink': tab() === t,
+                'text-ink-muted': tab() !== t,
+              }}
+              data-testid={`fig-panel-tab-${t}`}
+              onClick={() => setTab(t)}
+            >
+              {PANEL_TAB_LABELS[t]}
+            </button>
+          )}
+        </For>
+      </div>
+      <Show when={tab() === 'prototype'}>
+        <div class="min-h-0 flex-1 overflow-y-auto">{props.prototype}</div>
+      </Show>
+      <div
+        class="min-h-0 flex-1 overflow-y-auto"
+        classList={{ hidden: tab() === 'prototype' }}
+      >
+        <Show
+          when={props.onAlign && props.selectionCount > 0 && tab() === 'design'}
+        >
+          <AlignRow onAlign={(how) => props.onAlign?.(how)} />
+        </Show>
+        <Show
+          when={
+            props.onBoolean &&
+            tab() === 'design' &&
+            (props.selectionCount > 1 ||
+              props.info?.type === 'BOOLEAN_OPERATION')
+          }
+        >
+          <BooleanButtons
+            current={
+              props.info?.type === 'BOOLEAN_OPERATION'
+                ? ((props.info.booleanOperation ?? 'UNION') as BooleanOperation)
+                : undefined
+            }
+            onBoolean={(op) => props.onBoolean?.(op)}
+            onFlatten={() => props.onFlatten?.()}
+          />
+        </Show>
+        <Show
+          when={props.info}
+          fallback={
+            <Show
+              when={props.selectionCount > 1 && props.mixed}
+              fallback={
+                <Show when={props.page}>
+                  {(page) => (
+                    <Section title="Page">
+                      <Field label="Name" value={page().name} />
+                      <div class="flex items-center gap-2 rounded-md bg-inset px-2 py-1">
+                        <Show
+                          when={props.onPageColor}
+                          fallback={
+                            <span
+                              class="size-4 rounded-sm border border-edge-muted"
+                              style={{ background: `#${pageHex(page())}` }}
+                            />
+                          }
+                        >
+                          {(onColor) => (
+                            <SwatchPopover
+                              swatch={`#${pageHex(page())}`}
+                              label="Canvas color"
+                              testId="fig-page-color"
+                              onOpenChange={(open) => {
+                                if (open) props.onPickerOpen?.();
+                              }}
+                            >
+                              <ColorPicker
+                                value={pageHex(page())}
+                                opaque
+                                swatches={props.swatches}
+                                onChange={(hex, live) => onColor()(hex, live)}
+                              />
+                            </SwatchPopover>
+                          )}
+                        </Show>
+                        <span class="text-ink-muted">Canvas color</span>
+                        <span class="ml-auto font-mono text-ink-muted">
+                          {pageHex(page())}
+                        </span>
+                      </div>
+                      <Show when={props.selectionCount > 1}>
+                        <span class="text-ink-muted">
+                          {props.selectionCount} layers selected
+                        </span>
+                      </Show>
+                    </Section>
+                  )}
+                </Show>
+              }
+            >
+              {(mixed) => (
+                <MixedFields
+                  mixed={mixed()}
+                  onPatch={props.onPatch}
+                  swatches={props.swatches}
+                  onPickerOpen={props.onPickerOpen}
+                  onAddImage={props.onAddImage}
+                />
+              )}
+            </Show>
+          }
+        >
+          {(info) => (
+            <Show
+              when={tab() === 'design'}
+              fallback={
+                props.code ?? (
+                  <CodeTab info={info()} onCopy={props.onCopyText} />
+                )
+              }
+            >
+              <div class="border-edge-muted border-b px-3 py-3">
+                <Show
+                  when={props.onPatch}
+                  fallback={
+                    <div
+                      class="truncate font-semibold text-sm"
+                      title={info().name}
+                    >
+                      {info().name}
+                    </div>
+                  }
+                >
+                  {(patch) => (
+                    <TextField
+                      value={info().name}
+                      class="-mx-1 font-semibold text-sm"
+                      testId="fig-name"
+                      onChange={(name) => patch()({ name }, false)}
+                    />
+                  )}
+                </Show>
+                <div class="text-ink-muted">
+                  {info().typeLabel}
+                  <Show when={info().mainComponent}>
+                    {(main) => <> of {main()}</>}
+                  </Show>
+                </div>
+                <Show when={info().description}>
+                  {(d) => <p class="mt-1 text-ink-muted">{d()}</p>}
+                </Show>
+              </div>
+              {props.designSections}
+              <Section title="Layout">
+                <Show
+                  when={props.onPatch && !info().id.startsWith('I')}
+                  fallback={
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <Field label="X" value={fmt(info().x)} />
+                      <Field label="Y" value={fmt(info().y)} />
+                      <Field label="W" value={fmt(info().width)} />
+                      <Field label="H" value={fmt(info().height)} />
+                      <Show when={Math.abs(info().rotation) > 0.01}>
+                        <Field label="↻" value={`${fmt(info().rotation)}°`} />
+                      </Show>
+                      <Show when={info().cornerRadius}>
+                        {(r) => (
+                          <Field label="Radius" value={radiusLabel(r())} />
+                        )}
+                      </Show>
+                    </div>
+                  }
+                >
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <NumberField
+                      label="X"
+                      value={info().x}
+                      testId="fig-field-x"
+                      onChange={(x, live) => props.onPatch?.({ x }, live)}
+                    />
+                    <NumberField
+                      label="Y"
+                      value={info().y}
+                      testId="fig-field-y"
+                      onChange={(y, live) => props.onPatch?.({ y }, live)}
+                    />
+                    <NumberField
+                      label="W"
+                      value={info().width}
+                      min={0.01}
+                      testId="fig-field-w"
+                      onChange={(width, live) =>
+                        props.onPatch?.({ width }, live)
+                      }
+                    />
+                    <NumberField
+                      label="H"
+                      value={info().height}
+                      min={0.01}
+                      testId="fig-field-h"
+                      onChange={(height, live) =>
+                        props.onPatch?.({ height }, live)
+                      }
+                    />
+                    <NumberField
+                      label="↻"
+                      value={info().rotation}
+                      testId="fig-field-rotation"
+                      onChange={(rotation, live) =>
+                        props.onPatch?.({ rotation }, live)
+                      }
+                    />
+                    <Show when={info().cornerRadius || hasCorners(info().type)}>
+                      <NumberField
+                        label="◜"
+                        value={info().cornerRadius?.top_left ?? 0}
+                        min={0}
+                        testId="fig-field-radius"
+                        onChange={(cornerRadius, live) =>
+                          props.onPatch?.({ cornerRadius }, live)
+                        }
+                      />
+                    </Show>
+                  </div>
+                  <SizingControls
+                    info={info()}
+                    onPatch={(patch, live) => props.onPatch?.(patch, live)}
+                  />
+                  <Show when={info().layoutParent}>
+                    {(positioning) => (
+                      <label class="flex items-center gap-2 text-ink-muted">
+                        <input
+                          type="checkbox"
+                          checked={positioning() === 'ABSOLUTE'}
+                          data-testid="fig-absolute"
+                          onChange={(e) =>
+                            props.onPatch?.(
+                              {
+                                layoutPositioning: e.currentTarget.checked
+                                  ? 'ABSOLUTE'
+                                  : 'AUTO',
+                              },
+                              false
+                            )
+                          }
+                        />
+                        Absolute position
+                      </label>
+                    )}
+                  </Show>
+                  <Show when={info().type === 'FRAME'}>
+                    <label class="flex items-center gap-2 text-ink-muted">
+                      <input
+                        type="checkbox"
+                        checked={info().clipsContent}
+                        data-testid="fig-clip-content"
+                        onChange={(e) =>
+                          props.onPatch?.(
+                            { clipContent: e.currentTarget.checked },
+                            false
+                          )
+                        }
+                      />
+                      Clip content
+                    </label>
+                  </Show>
+                </Show>
+                <Show
+                  when={props.onPatch && info().constrained}
+                  fallback={
+                    <>
+                      <Show
+                        when={
+                          !props.onPatch &&
+                          info().clipsContent &&
+                          info().childCount > 0
+                        }
+                      >
+                        <span class="text-ink-muted">Clips content</span>
+                      </Show>
+                      <Show when={info().constraints}>
+                        {(c) => (
+                          <span class="text-ink-muted">
+                            Constraints: {title(c()[0])} · {title(c()[1])}
+                          </span>
+                        )}
+                      </Show>
+                    </>
+                  }
+                >
+                  <ConstraintControls
+                    constraints={info().constraints}
+                    onPatch={(patch) => props.onPatch?.(patch, false)}
+                  />
+                </Show>
+              </Section>
+              <Show
+                when={props.onPatch && !info().id.startsWith('I')}
+                fallback={<AutoLayoutFields info={info()} />}
+              >
+                <Show
+                  when={info().autoLayout}
+                  fallback={
+                    <Show when={canHaveAutoLayout(info().type)}>
+                      <Section
+                        title="Auto layout"
+                        testId="fig-auto-layout-section"
+                        onAdd={props.onAddAutoLayout}
+                      >
+                        <span class="text-ink-muted">⇧A adds auto layout</span>
+                      </Section>
+                    </Show>
+                  }
+                >
+                  {(al) => (
+                    <Section
+                      title="Auto layout"
+                      testId="fig-auto-layout-section"
+                      onRemove={() =>
+                        props.onPatch?.({ layoutMode: 'NONE' }, false)
+                      }
+                    >
+                      <Show
+                        when={
+                          (al().mode === 'HORIZONTAL' ||
+                            al().mode === 'VERTICAL') &&
+                          !al().wrap
+                        }
+                        fallback={
+                          <span class="text-ink-muted">
+                            {title(al().mode)}
+                            {al().wrap ? ' (wrap)' : ''}: kept as laid out in
+                            Figma
+                          </span>
+                        }
+                      >
+                        <AutoLayoutControls
+                          layout={al()}
+                          onPatch={(patch, live) =>
+                            props.onPatch?.(patch, live)
+                          }
+                        />
+                      </Show>
+                    </Section>
+                  )}
+                </Show>
+              </Show>
+              {props.layoutGrids}
+              <Section title="Appearance">
+                <div class="grid grid-cols-2 gap-1.5">
+                  <Show
+                    when={props.onPatch}
+                    fallback={
+                      <Field label="Opacity" value={percent(info().opacity)} />
+                    }
+                  >
+                    <NumberField
+                      label="◐"
+                      value={info().opacity}
+                      percent
+                      min={0}
+                      max={1}
+                      testId="fig-field-opacity"
+                      onChange={(opacity, live) =>
+                        props.onPatch?.({ opacity }, live)
+                      }
+                    />
+                  </Show>
+                  <Field label="Blend" value={title(info().blendMode)} />
+                </div>
+              </Section>
+              <Show when={info().text}>
+                {(t) => (
+                  <Section title="Text" actions={props.styleControl?.('TEXT')}>
+                    <Show
+                      when={props.onPatch}
+                      fallback={<TextFields text={t()} />}
+                    >
+                      <TypeControls
+                        text={t()}
+                        families={props.fontFamilies ?? ['Inter']}
+                        mixed={props.type?.mixed}
+                        googleFamilies={props.type?.googleFamilies}
+                        weights={props.type?.weights}
+                        preview={props.type?.preview}
+                        onFontsOpen={props.type?.onFontsOpen}
+                        onPatch={(patch, live) => props.onPatch?.(patch, live)}
+                      />
+                    </Show>
+                    <Show when={t().fonts.length > 0}>
+                      <span class="text-ink-muted">
+                        Also uses {t().fonts.join(', ')}
+                      </span>
+                    </Show>
+                    <div class="relative">
+                      <p
+                        class="max-h-40 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-inset px-2 py-1.5 text-ink"
+                        data-testid="fig-text-content"
+                      >
+                        {t().characters}
+                        {t().truncated ? '…' : ''}
+                      </p>
+                      <button
+                        type="button"
+                        aria-label="Copy text"
+                        class="absolute top-1 right-1 rounded p-0.5 text-ink-muted hover:text-ink"
+                        onClick={() => props.onCopyText(t().characters)}
+                      >
+                        <Copy class="size-3" />
+                      </button>
+                    </div>
+                  </Section>
+                )}
+              </Show>
+              <Show
+                when={props.onPatch}
+                fallback={
+                  <Show when={info().fills.length > 0}>
+                    <Section title="Fill">
+                      <For each={[...info().fills].reverse()}>
+                        {(p) => <PaintRow paint={p} />}
+                      </For>
+                    </Section>
+                  </Show>
+                }
+              >
+                <Section
+                  title="Fill"
+                  testId="fig-fills"
+                  actions={props.styleControl?.('FILL')}
+                  onAdd={() =>
+                    props.onPatch?.(
+                      {
+                        fills: [
+                          ...info().fills.map((_, keep) => ({ keep })),
+                          {
+                            color:
+                              info().type === 'FRAME' ? 'FFFFFF' : 'D9D9D9',
+                          },
+                        ],
+                      },
+                      false
+                    )
+                  }
+                >
+                  <PaintList
+                    paints={info().fills}
+                    kind="fill"
+                    swatches={props.swatches}
+                    onPickerOpen={props.onPickerOpen}
+                    onAddImage={props.onAddImage}
+                    onChange={(fills, live) => props.onPatch?.({ fills }, live)}
+                  />
+                </Section>
+              </Show>
+              <Show when={props.onPatch}>
+                <Section
+                  title="Stroke"
+                  testId="fig-strokes"
+                  actions={props.styleControl?.('STROKE')}
+                  onAdd={() =>
+                    props.onPatch?.(
+                      {
+                        strokes: [
+                          ...info().strokes.map((_, keep) => ({ keep })),
+                          { color: '000000' },
+                        ],
+                        ...(info().strokes.length === 0
+                          ? { strokeWeight: 1 }
+                          : {}),
+                      },
+                      false
+                    )
+                  }
+                >
+                  <PaintList
+                    paints={info().strokes}
+                    kind="stroke"
+                    swatches={props.swatches}
+                    onPickerOpen={props.onPickerOpen}
+                    onAddImage={props.onAddImage}
+                    onChange={(strokes, live) =>
+                      props.onPatch?.({ strokes }, live)
+                    }
+                  />
+                  <Show when={info().strokes.length > 0}>
+                    <div class="grid grid-cols-2 gap-1.5">
+                      <NumberField
+                        label="≡"
+                        value={info().strokeWeight ?? 1}
+                        min={0}
+                        testId="fig-field-stroke-weight"
+                        onChange={(strokeWeight, live) =>
+                          props.onPatch?.({ strokeWeight }, live)
+                        }
+                      />
+                      <select
+                        class="rounded-md bg-inset px-2 py-1 text-ink outline-none"
+                        value={info().strokeAlign ?? 'CENTER'}
+                        onChange={(e) =>
+                          props.onPatch?.(
+                            {
+                              strokeAlign: e.currentTarget
+                                .value as Patch['strokeAlign'],
+                            },
+                            false
+                          )
+                        }
+                      >
+                        <option value="INSIDE">Inside</option>
+                        <option value="CENTER">Center</option>
+                        <option value="OUTSIDE">Outside</option>
+                      </select>
+                      <div class="col-span-2">
+                        <ParsedField
+                          label="Dash"
+                          shown={formatDashes(info().dashPattern) || 'None'}
+                          testId="fig-field-dash"
+                          parse={(text) =>
+                            text.trim().toLowerCase() === 'none'
+                              ? []
+                              : parseDashes(text)
+                          }
+                          onChange={(dashPattern) =>
+                            props.onPatch?.({ dashPattern }, false)
+                          }
+                        />
+                      </div>
+                    </div>
+                  </Show>
+                </Section>
+              </Show>
+              <Show when={info().strokes.length > 0 && !props.onPatch}>
+                <Section title="Stroke">
+                  <For each={[...info().strokes].reverse()}>
+                    {(p) => <PaintRow paint={p} />}
+                  </For>
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <Show when={info().strokeWeight !== null}>
+                      <Field
+                        label="Weight"
+                        value={fmt(info().strokeWeight ?? 0)}
+                      />
+                    </Show>
+                    <Show when={info().strokeAlign}>
+                      {(a) => <Field label="Position" value={title(a())} />}
+                    </Show>
+                    <Show when={info().dashPattern}>
+                      {(d) => (
+                        <Field label="Dash" value={d().map(fmt).join(', ')} />
+                      )}
+                    </Show>
+                  </div>
+                </Section>
+              </Show>
+              <Show
+                when={props.onPatch}
+                fallback={
+                  <Show when={info().effects.length > 0}>
+                    <Section title="Effects">
+                      <For each={info().effects}>
+                        {(e) => <EffectRow effect={e} />}
+                      </For>
+                    </Section>
+                  </Show>
+                }
+              >
+                <Section
+                  title="Effects"
+                  testId="fig-effects"
+                  actions={props.styleControl?.('EFFECT')}
+                  onAdd={() =>
+                    props.onPatch?.(
+                      {
+                        effects: [
+                          ...info().effects.map((_, keep) => ({ keep })),
+                          {},
+                        ],
+                      },
+                      false
+                    )
+                  }
+                >
+                  <EffectList
+                    effects={info().effects}
+                    swatches={props.swatches}
+                    onPickerOpen={props.onPickerOpen}
+                    onChange={(effects, live) =>
+                      props.onPatch?.({ effects }, live)
+                    }
+                  />
+                </Section>
+              </Show>
+              <Show when={info().componentProperties.length > 0}>
+                <Section title="Properties">
+                  <For each={info().componentProperties}>
+                    {(p) => <Field label={title(p.kind)} value={p.name} />}
+                  </For>
+                </Section>
+              </Show>
+              {props.exportSection}
+            </Show>
+          )}
+        </Show>
+        <Show
+          when={!props.info && props.selectionCount === 0 && tab() === 'design'}
+        >
+          {props.pageExtra}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+const ALIGN_BUTTONS: {
+  how: Alignment;
+  label: string;
+  icon: (props: { class?: string }) => JSX.Element;
+}[] = [
+  { how: 'left', label: 'Align left', icon: AlignLeft },
+  {
+    how: 'center',
+    label: 'Align horizontal centers',
+    icon: AlignCenterHorizontal,
+  },
+  { how: 'right', label: 'Align right', icon: AlignRight },
+  { how: 'top', label: 'Align top', icon: AlignTop },
+  { how: 'middle', label: 'Align vertical centers', icon: AlignCenterVertical },
+  { how: 'bottom', label: 'Align bottom', icon: AlignBottom },
+];
+
+function AlignRow(props: { onAlign: (how: Alignment) => void }) {
+  return (
+    <div class="flex items-center justify-between border-edge-muted border-b px-2 py-1.5">
+      <For each={ALIGN_BUTTONS}>
+        {(b) => (
+          <button
+            type="button"
+            aria-label={b.label}
+            title={b.label}
+            data-testid={`fig-align-${b.how}`}
+            class="rounded p-1 text-ink-muted hover:bg-hover hover:text-ink"
+            onClick={() => props.onAlign(b.how)}
+          >
+            {b.icon({ class: 'size-4' })}
+          </button>
+        )}
+      </For>
+    </div>
+  );
+}
+
+function CodeTab(props: { info: NodeInfo; onCopy: (text: string) => void }) {
+  const css = () => cssFor(props.info).join('\n');
+  return (
+    <Section title="CSS">
+      <div class="relative">
+        <pre
+          class="select-text overflow-x-auto whitespace-pre rounded-md bg-inset p-2 font-mono text-ink"
+          data-testid="fig-css"
+        >
+          {css()}
+        </pre>
+        <button
+          type="button"
+          aria-label="Copy CSS"
+          class="absolute top-1 right-1 rounded p-0.5 text-ink-muted hover:text-ink"
+          onClick={() => props.onCopy(css())}
+        >
+          <Copy class="size-3" />
+        </button>
+      </div>
+    </Section>
+  );
+}

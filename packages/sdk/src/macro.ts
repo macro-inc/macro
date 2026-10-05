@@ -6,6 +6,7 @@ import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
+import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
 import { EmailNamespace } from './entities/email/namespace';
 import { FavoritesNamespace } from './entities/favorites/namespace';
@@ -24,6 +25,15 @@ import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
 export type { CallMessage } from './entities/calls/message';
+export {
+  type AddColumnOptions,
+  type ApplyOpsOptions,
+  type ChangeColumnTypeOptions,
+  type ColumnType,
+  type ConvertIntoNewColumnOptions,
+  MacroOpRefusedError,
+  type OpResultOf,
+} from './entities/databases/database';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -45,6 +55,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly channels: ChannelNamespace;
   readonly chats: ChatNamespace;
   readonly crm: CrmNamespace;
+  readonly databases: DatabaseNamespace;
   readonly documents: DocumentNamespace;
   readonly email: EmailNamespace;
   readonly favorites: FavoritesNamespace;
@@ -75,6 +86,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.channels = new ChannelNamespace(client);
     this.chats = new ChatNamespace(client);
     this.crm = new CrmNamespace(client);
+    this.databases = new DatabaseNamespace(client);
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
     this.favorites = new FavoritesNamespace(client);

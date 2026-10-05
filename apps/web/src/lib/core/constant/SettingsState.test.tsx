@@ -3,10 +3,11 @@ import {
   useMobileSettings,
 } from '@app/features/settings/context/mobile-settings';
 import {
+  createMemoryHistory,
+  createMemoryPaneStore,
   createSplitRouter,
-  type SplitRouterLayoutSnapshot,
 } from '@app/lib/split-router';
-import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
+import { paneRoute } from '@app/routes/app-route';
 import {
   setActiveTabId as setSplitActiveTabId,
   activeTabId as splitActiveTabId,
@@ -19,8 +20,10 @@ const mocks = vi.hoisted(() => ({
   mobile: true,
   hasSettingsSplit: false,
   otherSplit: false,
-  solo: false,
+  canGoBack: false,
   updateCurrentEntry: vi.fn(),
+  goBack: vi.fn(),
+  activateSplit: vi.fn(),
   removeSplit: vi.fn(),
   openWithSplit: vi.fn(),
   managerOpenWithSplit: vi.fn(),
@@ -45,18 +48,15 @@ vi.mock('@app/signal/splitLayout', () => ({
           ]
         : []),
     ],
-    getVisibleSplits: () =>
-      mocks.solo
-        ? [
-            {
-              id: 'settings-split',
-              content: { type: 'component', id: 'settings' },
-            },
-          ]
-        : [],
     removeSplit: mocks.removeSplit,
     openWithSplit: mocks.managerOpenWithSplit,
-    getSplit: () => ({ updateCurrentEntry: mocks.updateCurrentEntry }),
+    activateSplit: mocks.activateSplit,
+    activeSplitId: () => undefined,
+    getSplit: () => ({
+      updateCurrentEntry: mocks.updateCurrentEntry,
+      canGoBack: () => mocks.canGoBack,
+      goBack: mocks.goBack,
+    }),
   }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -64,11 +64,6 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
-  useLocation: () => ({
-    pathname: '/app/home',
-    search: '?keep=1',
-    hash: '#position',
-  }),
 }));
 vi.mock('./settingsTabsConfig', () => ({
   settingsTabToSlug: (tab: string) => tab.toLowerCase(),
@@ -100,7 +95,7 @@ beforeEach(() => {
   mocks.mobile = true;
   mocks.hasSettingsSplit = false;
   mocks.otherSplit = false;
-  mocks.solo = false;
+  mocks.canGoBack = false;
   setSplitActiveTabId('Account');
 });
 afterEach(cleanup);
@@ -110,43 +105,35 @@ describe('settings entry points', () => {
     mocks.mobile = false;
     mocks.hasSettingsSplit = true;
     const { state } = mountSettings();
-    let entries: SplitRouterLayoutSnapshot<string>['entries'] = [];
     const router = createSplitRouter({
-      routes: { definitions: [{ id: 'settings', path: 'settings/:tab' }] },
-      location: createMemorySplitRouterLocation('/settings/account'),
-      layout: {
-        snapshot: () => ({ entries }),
-        reconcile: (next) => {
-          entries = next.map((location) => ({
-            location,
-            splitId: 'settings-split',
-          }));
-        },
-        open: ({ location }) => {
-          entries = [{ splitId: 'settings-split', location }];
-          return { status: 'applied', splitId: 'settings-split' };
-        },
-        updateCurrentLocation: (id, update) => {
-          entries = entries.map((entry) => {
-            if (entry.splitId !== id) return entry;
-            return { location: update(entry), splitId: id };
-          });
-        },
+      routes: {
+        definitions: [{ id: 'settings', path: 'settings/:tab' }],
+        defaultRoute: () => ({
+          matches: [{ id: 'settings', params: { tab: 'account' } }],
+        }),
+      },
+      history: createMemoryHistory('/settings/account'),
+      paneStore: createMemoryPaneStore(),
+      policy: {
+        placeNewPane: () => ({ insertAt: 0 }),
+        closeAction: () => ({ type: 'keep' }),
         activate: () => {},
-        subscribe: () => () => {},
       },
     });
+    const pane = router.panes()[0]!;
+    const currentTab = () =>
+      router.entry(pane)?.location.route.matches[0]?.params.tab;
     const navigateTab = (tab: string) => {
       expect(mocks.updateCurrentEntry).not.toHaveBeenCalled();
-      router.navigate('settings-split', `/settings/${tab.toLowerCase()}`);
+      router.navigatePane(pane, `/settings/${tab.toLowerCase()}`);
     };
     state.selectTab('Appearance', navigateTab);
     state.selectTab('Account', navigateTab);
-    expect(router.history('settings-split')?.entries).toHaveLength(3);
-    router.navigate('settings-split', -1);
-    expect(entries[0].location.route.matches[0].params.tab).toBe('appearance');
-    router.navigate('settings-split', -1);
-    expect(entries[0].location.route.matches[0].params.tab).toBe('account');
+    expect(router.history(pane)?.entries).toHaveLength(3);
+    router.navigatePane(pane, -1);
+    expect(currentTab()).toBe('appearance');
+    router.navigatePane(pane, -1);
+    expect(currentTab()).toBe('account');
     router.dispose();
   });
 
@@ -254,26 +241,45 @@ describe('settings entry points', () => {
     expect(mobile.page()).toBe('Billing');
   });
 
-  it('keeps desktop fullscreen and explicit split entry points', () => {
+  it('opens desktop settings in the active split like any other view', () => {
     mocks.mobile = false;
     const { state, mobile } = mountSettings();
     state.openSettings('Billing');
     expect(mobile.open()).toBe(false);
     expect(state.activeTabId()).toBe('Billing');
-    expect(mocks.navigate).toHaveBeenCalledWith('/settings/billing');
-    state.openSettingsInSplit('Appearance');
+    expect(mocks.navigate).not.toHaveBeenCalled();
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
       {
         type: 'component',
         id: 'settings',
         entryMetadata: {
-          route: {
-            matches: [{ id: 'settings', params: { tab: 'appearance' } }],
-          },
+          route: paneRoute({ id: 'settings', params: { tab: 'billing' } }),
+        },
+      },
+      { allowDuplicate: false, mergeHistory: false }
+    );
+    state.openSettingsInSplit('Appearance');
+    expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
+      {
+        type: 'component',
+        id: 'settings',
+        entryMetadata: {
+          route: paneRoute({ id: 'settings', params: { tab: 'appearance' } }),
         },
       },
       expect.objectContaining({ allowDuplicate: false, preferNewSplit: true })
     );
+  });
+
+  it('retargets and activates an already-open desktop settings split', () => {
+    mocks.mobile = false;
+    mocks.hasSettingsSplit = true;
+    const { state } = mountSettings();
+    state.openSettings('Billing');
+    expect(state.activeTabId()).toBe('Billing');
+    expect(mocks.updateCurrentEntry).toHaveBeenCalledTimes(1);
+    expect(mocks.activateSplit).toHaveBeenCalledWith('settings-split');
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
   });
 
   it('cancels pending panel focus when the settings owner unmounts', () => {
@@ -297,38 +303,25 @@ describe('settings entry points', () => {
     }
   });
 
-  it('restores the previous split URL when closing fullscreen settings', () => {
+  it('closes desktop settings by going back, or removing a shared split', () => {
     mocks.mobile = false;
-    const { state } = mountSettings();
-    state.openSettings('Billing');
     mocks.hasSettingsSplit = true;
-    mocks.solo = true;
-    state.closeSettings();
-    expect(mocks.navigate).toHaveBeenLastCalledWith('/home?keep=1#position', {
-      replace: true,
-    });
-  });
+    const { state } = mountSettings();
 
-  it('restores the app and docks the selected page without constructing a split URL', async () => {
-    mocks.mobile = false;
-    const { state } = mountSettings();
-    state.openSettingsInSplit('Account');
-    mocks.hasSettingsSplit = true;
-    state.moveSettingsToSolo('Connected');
-    expect(mocks.navigate).toHaveBeenCalledWith('/settings/connected');
-    mocks.solo = true;
-    await state.moveSettingsToSplit('Billing');
-    expect(mocks.navigate).toHaveBeenLastCalledWith('/home?keep=1#position', {
+    mocks.canGoBack = true;
+    state.closeSettings();
+    expect(mocks.goBack).toHaveBeenCalledTimes(1);
+
+    mocks.canGoBack = false;
+    state.closeSettings();
+    expect(mocks.navigate).toHaveBeenLastCalledWith('/home', {
       replace: true,
     });
-    expect(mocks.managerOpenWithSplit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entryMetadata: {
-          route: { matches: [{ id: 'settings', params: { tab: 'billing' } }] },
-        },
-      }),
-      expect.objectContaining({ allowDuplicate: false, preferNewSplit: true })
-    );
+
+    mocks.otherSplit = true;
+    state.closeSettings();
+    expect(mocks.removeSplit).toHaveBeenCalledWith('settings-split');
+    expect(mocks.goBack).toHaveBeenCalledTimes(1);
   });
 
   it('restores mobile deep links by closing the pane or using Inbox alone', () => {

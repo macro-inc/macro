@@ -142,6 +142,130 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Databases
+
+Databases are collections of tables. Tables, columns, and views are parts of
+a database, not entities of their own, so they come back as handles that
+resolve through the database's schema.
+
+Every write to a database's schema or rows is an op sent to one endpoint,
+`POST /databases/{id}/ops`. The methods below each send a one-op batch: the
+SDK mints the new table, column, and option ids (UUIDv7) itself and builds the
+handle it returns from the op's result.
+
+```ts
+const database = await macro.databases.create({ name: 'Events' });
+const guests = await database.createTable({ name: 'Guests' });
+const email = await guests.addColumn({ name: 'Email', type: { type: 'text' } });
+
+// A select column only accepts labels you give it, at creation or later.
+const rsvp = await guests.addColumn({
+  name: 'RSVP',
+  type: { type: 'select', multi: false },
+  options: ['Yes', 'No'],
+  after: email,
+});
+await rsvp.addOptions(['Maybe']); // labels it already has are skipped
+
+await guests.rename('Attendees');
+await rsvp.rename('Response');
+
+// A relation column holds rows of another table, named by handle.
+const hosts = await database.createTable({ name: 'Hosts' });
+await guests.addColumn({
+  name: 'Host',
+  type: { type: 'relation', table: hosts },
+});
+
+// See what each type change would do to the existing values first.
+const casts = await rsvp.casts();
+await rsvp.changeType({ to: { type: 'select', multi: true } });
+
+// A type change converts every value or refuses, naming the misfits. To keep
+// the original, add a column of the new type after it, filled with the values
+// that convert ("Response (Text)" unless you pass a name).
+await rsvp.convertIntoNewColumn({ to: { type: 'text' } });
+
+// Tabs: a new database starts with a "Table 1". Reorder by naming every
+// table once, or delete one; a database keeps at least one.
+const tables = await database.tables();
+await database.reorderTables(tables.toReversed());
+await (await database.table('Table 1'))?.delete();
+```
+
+Changing a column's type, reordering columns, and deleting a column send the
+table version last read as the batch's base version: if the table changed
+since, the server refuses with a 409 and nothing is written.
+`convertIntoNewColumn` is the exception to one op per call: it reads the
+conversion (`POST …/columns/{c}/conversion`, which changes nothing), then sends
+one batch that creates the column and fills it, at the version that read saw.
+
+To do several things at once, send the ops yourself. They apply in order in
+one transaction, later ops see what earlier ones did, and a refused op leaves
+the whole batch unwritten. Each op names the resource it changes (a `table`,
+`column`, `rows`, or `view`) and what `change` it makes; each result answers
+with the same `kind` and what happened as its own `change`. Ids for new
+tables, columns, options, and views are yours to mint, so a later op of the
+batch can name them:
+
+```ts
+import { v7 as uuidv7 } from 'uuid';
+
+const notes = uuidv7();
+const results = await database.applyOps(
+  [
+    {
+      kind: 'column',
+      table: guests.id,
+      column: notes,
+      change: {
+        kind: 'create',
+        definition: { source: 'new', name: 'Notes', type: { type: 'text' } },
+      },
+    },
+    {
+      kind: 'rows',
+      table: guests.id,
+      change: {
+        kind: 'insert',
+        rows: [
+          [
+            { column: email.id, value: { type: 'text', value: 'ada@example.com' } },
+            { column: notes, value: { type: 'text', value: 'Vegetarian' } },
+          ],
+        ],
+      },
+    },
+  ],
+  { baseVersions: [{ table: guests, version: await guests.version() }] },
+);
+// results[1] is { kind: 'rows', table, tableVersion, change: { kind: 'inserted', rows: [rowId] } }
+```
+
+A refusal throws `MacroOpRefusedError`, naming the op at fault (`op`, and
+`row` / `column` when one is) and, when the batch minted an id that already
+names something, that id as `taken` (`{ kind: 'table' | 'column' | 'option' |
+'view', id }`). A retried batch whose first attempt committed refuses this way.
+
+```ts
+import { MacroOpRefusedError } from '@macro-inc/sdk';
+
+try {
+  await database.createTable({ name: 'Guests' });
+} catch (error) {
+  if (error instanceof MacroOpRefusedError) console.log(error.op, error.taken);
+}
+```
+
+A table's views are handles too. A board view reads where its cards sit:
+
+```ts
+for (const view of await guests.views()) {
+  const layout = await view.layout();
+  if (layout.kind === 'board') console.log(await view.positions());
+}
+```
+
 ### Rich message helper
 
 Use the `msg` tagged template to build rich message bodies for channel messages

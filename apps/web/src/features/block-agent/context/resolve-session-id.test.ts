@@ -21,6 +21,7 @@ const create = vi.hoisted(() => ({
   autoConfirm: true,
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
+  attribution: vi.fn(),
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
@@ -29,7 +30,10 @@ vi.mock('@service-agent-harness/client', () => ({
       (request: { id: string }) =>
         new Promise((resolve) => {
           create.resolve = (id: string = request.id) =>
-            resolve({ isErr: () => false, value: { session: { id } } });
+            resolve({
+              isErr: () => false,
+              value: { session: { id, ownerId: 'session-owner' } },
+            });
           create.reject = () =>
             resolve({
               isErr: () => true,
@@ -60,7 +64,8 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       };
       return {
         load: async () => {},
-        issue: async (action: AgentAction) => {
+        issue: async (action: AgentAction, options: unknown) => {
+          create.attribution(options);
           const result = await create.control(id, action);
           if (!result.isErr()) {
             requestId = result.value.actionId;
@@ -246,6 +251,38 @@ describe('an id whose create is in flight', () => {
     });
   });
 
+  // Context a surface supplies for the agent rides on the session as its
+  // instructions, so the composer and the sent bubble hold only the user's text.
+  it('creates the session with hidden instructions and its model, leaving the draft visible', async () => {
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'action-1', status: 'accepted' },
+    });
+    const placeholder = startPendingSession({
+      initialInput: 'Ask about Offsite ',
+      modelOverride: 'model-2',
+      instructions: 'Use the Offsite database by default.',
+    });
+    expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
+      id: placeholder,
+      model: 'model-2',
+      instructions: 'Use the Offsite database by default.',
+    });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      create.resolve?.();
+      await flush();
+      await flush();
+
+      expect(create.control.mock.calls).toEqual([
+        [placeholder, { type: 'setModel', model: 'model-2' }],
+      ]);
+      expect(resolved.initialInput()).toBe('Ask about Offsite ');
+      expect(resolved.sessionId()).toBe(placeholder);
+      dispose();
+    });
+  });
+
   // The prompt shows as sent from the block's own speculation the moment the
   // session exists; the block must not wait for the harness to accept it.
   it('has the session as soon as the create lands, prompt still on the wire', async () => {
@@ -408,6 +445,23 @@ it.each(['Describe this', ''])(
       type: 'prompt',
       prompt,
       attachments,
+    });
+  }
+);
+
+it.each([undefined, 'explicit-user'])(
+  'attributes the first prompt when userId is %s',
+  async (userId) => {
+    create.attribution.mockClear();
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'prompt-id' },
+    });
+    startPendingSession({ prompt: 'Hello', userId });
+    create.resolve?.();
+    await flush();
+    expect(create.attribution).toHaveBeenCalledWith({
+      userId: userId ?? 'session-owner',
     });
   }
 );

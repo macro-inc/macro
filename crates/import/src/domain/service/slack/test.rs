@@ -14,6 +14,7 @@ struct State {
     channels: HashSet<Uuid>,
     live_creations: usize,
     creator_calls: usize,
+    participant_emails: Vec<String>,
     fail_before_creation: bool,
     fail_after_creation: bool,
     fail_completion: bool,
@@ -113,11 +114,12 @@ impl EntityCreator for Harness {
         _: &MacroUserIdStr<'static>,
         _: &str,
         target: &ImportTargetReservation,
-        _: &[String],
+        participant_emails: &[String],
     ) -> anyhow::Result<Uuid> {
         tokio::task::yield_now().await;
         let mut state = self.0.lock().unwrap();
         state.creator_calls += 1;
+        state.participant_emails = participant_emails.to_vec();
         anyhow::ensure!(
             !std::mem::take(&mut state.fail_before_creation),
             "interrupted after reservation"
@@ -191,7 +193,7 @@ async fn archive_first_onboarding_reuses_without_invites_or_events() {
     let (user, row, key) = fixture();
     let archive = h.archive(&key).await;
     assert_eq!(
-        ensure_channel(&h, &h, &user, &row, key.team_id)
+        ensure_channel(&h, &h, &user, &row, key.team_id, &[])
             .await
             .unwrap(),
         archive
@@ -204,7 +206,7 @@ async fn archive_first_onboarding_reuses_without_invites_or_events() {
 async fn onboarding_first_archive_reuses_target() {
     let h = Harness::default();
     let (user, row, key) = fixture();
-    let onboarding = ensure_channel(&h, &h, &user, &row, key.team_id)
+    let onboarding = ensure_channel(&h, &h, &user, &row, key.team_id, &[])
         .await
         .unwrap();
     assert_eq!(h.archive(&key).await, onboarding);
@@ -216,7 +218,7 @@ async fn concurrent_onboarding_and_archive_reservations_converge() {
     let h = Harness::default();
     let (user, row, key) = fixture();
     let (onboarding, archive) = tokio::join!(
-        ensure_channel(&h, &h, &user, &row, key.team_id),
+        ensure_channel(&h, &h, &user, &row, key.team_id, &[]),
         h.archive(&key),
     );
     assert_eq!(onboarding.unwrap(), archive);
@@ -237,13 +239,13 @@ async fn crash_retry_at_each_boundary_keeps_one_channel_and_mapping() {
             state.fail_completion = boundary == 2;
         }
         assert!(
-            ensure_channel(&h, &h, &user, &row, key.team_id)
+            ensure_channel(&h, &h, &user, &row, key.team_id, &[])
                 .await
                 .is_err()
         );
         let reserved = h.0.lock().unwrap().target.as_ref().unwrap().channel_id;
         assert_eq!(
-            ensure_channel(&h, &h, &user, &row, key.team_id)
+            ensure_channel(&h, &h, &user, &row, key.team_id, &[])
                 .await
                 .unwrap(),
             reserved
@@ -252,7 +254,7 @@ async fn crash_retry_at_each_boundary_keeps_one_channel_and_mapping() {
         // importing-row CAS: retry returns the ready target without creating.
         let calls = h.0.lock().unwrap().creator_calls;
         assert_eq!(
-            ensure_channel(&h, &h, &user, &row, key.team_id)
+            ensure_channel(&h, &h, &user, &row, key.team_id, &[])
                 .await
                 .unwrap(),
             reserved
@@ -268,11 +270,25 @@ async fn completion_uses_returned_persisted_id_not_candidate() {
     h.0.lock().unwrap().wrong_result = true;
     let (user, row, key) = fixture();
     assert!(
-        ensure_channel(&h, &h, &user, &row, key.team_id)
+        ensure_channel(&h, &h, &user, &row, key.team_id, &[])
             .await
             .is_err()
     );
     assert!(!h.0.lock().unwrap().target.as_ref().unwrap().ready);
+}
+
+#[tokio::test]
+async fn creation_uses_supplied_emails_instead_of_staged_participants() {
+    let h = Harness::default();
+    let (user, mut row, key) = fixture();
+    row.metadata["participants"] = serde_json::json!([
+        {"name": "Staged", "email": "staged@example.com"}
+    ]);
+    let emails = vec!["live@example.com".to_string()];
+    ensure_channel(&h, &h, &user, &row, key.team_id, &emails)
+        .await
+        .unwrap();
+    assert_eq!(h.0.lock().unwrap().participant_emails, emails);
 }
 
 #[tokio::test]
@@ -281,13 +297,13 @@ async fn ambiguous_or_missing_source_identity_fails_before_reservation() {
     let (user, mut row, key) = fixture();
     row.metadata["channel_id"] = serde_json::json!("COTHER");
     assert!(
-        ensure_channel(&h, &h, &user, &row, key.team_id)
+        ensure_channel(&h, &h, &user, &row, key.team_id, &[])
             .await
             .is_err()
     );
     row.foreign_id = "#engineering".to_string();
     assert!(
-        ensure_channel(&h, &h, &user, &row, key.team_id)
+        ensure_channel(&h, &h, &user, &row, key.team_id, &[])
             .await
             .is_err()
     );

@@ -722,6 +722,7 @@ generate_file_types!(
     (Ps, "ps", "application/postscript", Vector),
     (Dxf, "dxf", "image/vnd.dxf", Vector),
     (Dwg, "dwg", "image/vnd.dwg", Vector),
+    (Fig, "fig", "application/x-figma", Vector),
     // 3D files
     (Stl, "stl", "model/stl", ThreeD),
     (Obj, "obj", "model/obj", ThreeD),

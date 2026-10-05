@@ -1,5 +1,5 @@
 import { LoroDoc } from 'loro-crdt';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   readSpreadsheetCells,
   resizeSpreadsheetColumn,
@@ -166,6 +166,64 @@ describe('structural spreadsheet history', () => {
     renameSpreadsheetSheet(left, id, 'After');
     expect(history.undo()).toBeUndefined();
     expect(readSpreadsheetSheets(left)).toContainEqual({ id, name: 'BEFORE' });
+    dispose();
+  });
+
+  it('keeps the name a rename replaced when a peer import commits the rename', () => {
+    const { left, right, id, history, dispose } = pair();
+    right.import(left.export({ mode: 'update' }));
+    left.getMap('spreadsheetSheetNames').set(id, 'After');
+    // The peer names the new title before it has seen the rename.
+    writeSpreadsheetCells(right, { A1: { value: '=After!A1' } });
+    left.import(right.export({ mode: 'update' }));
+    expect(readSpreadsheetSheets(left)).toContainEqual({ id, name: 'After' });
+    expect(history.undo()).toContain('a formula references');
+    dispose();
+  });
+
+  it('previews the cell values a structural change replaced', () => {
+    const { left, id, history, dispose } = pair();
+    writeSpreadsheetCells(left, { A1: { value: '=After!A1' } });
+    left.getMap('spreadsheetSheetNames').set(id, 'After');
+    writeSpreadsheetCells(left, { A1: { value: '5' } }, 'sheet1', false);
+    left.commit();
+    // Undo would bring back a formula naming the title it removes.
+    expect(history.undo()).toContain('a formula references');
+    dispose();
+  });
+
+  it('records an imported workbook without forking or diffing the document', () => {
+    const { left, history, dispose } = pair();
+    const sheets = readSpreadsheetSheets(left);
+    const fork = vi.spyOn(LoroDoc.prototype, 'forkAt');
+    const diff = vi.spyOn(LoroDoc.prototype, 'diff');
+    try {
+      importSpreadsheetSheets(
+        left,
+        [
+          {
+            name: 'Data',
+            rowCount: 5_000,
+            columnCount: 40,
+            columnWidths: { 0: 120 },
+            cells: { A1: { value: '1', bold: true }, B2: { value: '=A1*2' } },
+            metadata: { definedNames: [{ name: 'Rate', formula: '0.25' }] },
+          },
+        ],
+        true
+      );
+      expect(fork).not.toHaveBeenCalled();
+      expect(diff).not.toHaveBeenCalled();
+    } finally {
+      fork.mockRestore();
+      diff.mockRestore();
+    }
+    expect(history.undo()).toBeUndefined();
+    expect(readSpreadsheetSheets(left)).toEqual(sheets);
+    expect(history.redo()).toBeUndefined();
+    expect(readSpreadsheetSheets(left).map((sheet) => sheet.name)).toEqual([
+      'Data',
+    ]);
     dispose();
   });
 

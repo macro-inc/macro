@@ -339,6 +339,31 @@ pub trait ImportProgressAccess: Send + Sync + 'static {
     ) -> impl Future<Output = PortResult<Vec<Uuid>>> + Send;
 }
 
+/// Members of a conversation that just bound, offered for the "x joined Macro" email.
+/// Built by the importer after `ImportTargets::bind` succeeded; may include `joined`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JoinAnnouncement {
+    /// Importing team.
+    pub team_id: TeamId,
+    /// The importing admin, "x".
+    pub joined: MacroUserIdStr<'static>,
+    /// x's archive display name when the export has one; untrusted.
+    pub joined_name: Option<String>,
+    /// `TargetPlan.members`, sorted for determinism.
+    pub members: Vec<MacroUserIdStr<'static>>,
+}
+
+/// Best-effort colleague email. Called on every attempt and re-import; implementations
+/// must be idempotent per (team, recipient) forever. The importer logs errors and never
+/// lets them change the import result.
+pub trait JoinAnnouncer: Send + Sync + 'static {
+    /// Offer this conversation's resolved members. Idempotent for the life of the team.
+    fn announce(
+        &self,
+        announcement: JoinAnnouncement,
+    ) -> impl Future<Output = PortResult<()>> + Send;
+}
+
 /// Best-effort invalidation only; persisted polling is the source of truth.
 pub trait ImportNotifier: Send + Sync + 'static {
     /// Notify the requesting administrator's gateway entity of a job revision using

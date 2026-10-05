@@ -16,6 +16,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { HydrationSearchChanges } from '@graphql-cache/protocol';
 import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
+import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
 import {
   QueryClient,
@@ -57,6 +58,7 @@ const mocks = vi.hoisted(() => ({
   companies: [] as CrmCompanyEntity[],
   crmContacts: [] as CrmContactEntity[],
   initiatives: [] as InitiativeEntity[],
+  databases: [] as ListedDatabase[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
@@ -68,6 +70,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
+  enableDatabases: {},
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -168,6 +171,9 @@ vi.mock('@queries/soup/recently-viewed', () => ({
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
 }));
+vi.mock('@queries/storage/databases', () => ({
+  useDatabasesQuery: () => ({ data: mocks.databases, isSuccess: true }),
+}));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
 }));
@@ -219,6 +225,7 @@ beforeEach(() => {
   mocks.companies = [];
   mocks.crmContacts = [];
   mocks.initiatives = [];
+  mocks.databases = [];
   mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
@@ -1077,7 +1084,6 @@ describe('Quick Access source integration', () => {
         id: 'initiative-1',
         name: 'Roadmap',
         ownerId: 'owner',
-        descriptionDocumentId: 'description-1',
         updatedAt: '2025-01-02T00:00:00.000Z',
       },
     ];
@@ -1293,5 +1299,35 @@ describe('CRM contacts', () => {
     mocks.crmContacts = [contact];
     const list = setup((source) => source.useList('crm_contact'));
     expect(list.items()).toEqual([]);
+  });
+});
+
+describe('database command discovery', () => {
+  it('merges Book Organizer into command search without any Soup history or cache hits', async () => {
+    mocks.databases = [
+      {
+        database: {
+          id: 'book-organizer',
+          name: 'Book Organizer',
+          owner_id: 'me',
+          created_at: '2026-09-01T00:00:00Z',
+          trashed_at: null,
+        },
+        grant: 'owner',
+        tables: [],
+      },
+    ];
+    const list = setup((source) =>
+      source.useList({
+        buckets: ['note', 'document', 'database'],
+        searchTerm: () => 'Book Organizer',
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    expect(list.items()[0]).toMatchObject({
+      bucket: 'database',
+      data: { type: 'database', name: 'Book Organizer' },
+    });
+    expect(mocks.history).toEqual([]);
   });
 });

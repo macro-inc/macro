@@ -1,7 +1,9 @@
 //! Commands and values used by the harness domain.
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
-use agent_egress::domain::model::{McpServerSlug, RepoSlug};
+use agent_egress::domain::model::{
+    CUSTOM_MCP_PATH_PREFIX, CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, RepoSlug,
+};
 use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
@@ -517,6 +519,14 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
+    /// Run a queued action next: move it to the front and, when a turn is in
+    /// flight, cancel that turn so this entry flushes ahead of the rest.
+    SteerQueued {
+        /// The queue entry to run next.
+        action_id: AgentActionId,
+        /// The user responsible, as on [`Self::EditQueued`].
+        actor: Option<MacroUserIdStr<'static>>,
+    },
     /// The session's fold reported a turn fact: an ended turn clears the
     /// busy mark and dispatches the next queued action; a raised or cleared
     /// question is published as is. Internal - enqueued by the turn observer
@@ -796,6 +806,10 @@ pub struct SandboxEgress {
     /// the owner has connected them. Macro's own server is not listed: every
     /// session has it, on its own route.
     pub mcp_servers: Vec<McpServerSlug>,
+    /// The owner's own MCP servers - the ones added by URL under "Custom
+    /// MCP" - by the key the proxy resolves. The sandbox never sees a
+    /// server's URL or credential; both stay behind the key.
+    pub custom_servers: Vec<CustomMcpServerListing>,
 }
 
 /// Where the sandbox finds the egress proxy.
@@ -832,6 +846,11 @@ impl SandboxEgress {
         format!("{}/mcp-macro", self.base_url)
     }
 
+    /// Where the proxy serves the owner's custom server behind `key`.
+    pub fn custom_mcp_url(&self, key: &CustomMcpServerKey) -> String {
+        format!("{}{CUSTOM_MCP_PATH_PREFIX}{key}", self.base_url)
+    }
+
     /// The `Authorization` value presented on every proxied call.
     pub fn authorization_header(&self) -> String {
         format!("Bearer {}", self.session_token)
@@ -851,13 +870,19 @@ impl SandboxEgress {
         ]
     }
 
-    /// The workspace and internal MCP servers, followed by the owner's apps,
-    /// as `(name, url)` pairs.
+    /// The workspace and internal MCP servers, followed by the owner's apps
+    /// and then the owner's custom servers, as `(name, url)` pairs.
     ///
     /// The one enumeration behind both renderings - [`Self::acp_servers`] and
     /// the Cursor API's - so the two can never advertise different sets.
+    ///
+    /// Every name is unique and non-empty, because the runtimes key servers
+    /// by name and refuse a list that repeats one. App slugs already are; a
+    /// custom server's name is whatever the owner typed, so it is reduced to
+    /// the characters tool namespaces tolerate and, if that still collides
+    /// with an earlier entry, suffixed with a piece of its key.
     pub fn server_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
-        [
+        let mut entries: Vec<(String, String)> = vec![
             (MACRO_MCP_NAME.to_owned(), self.macro_mcp_url()),
             (
                 INTERNAL_MCP_NAME.to_owned(),
@@ -867,13 +892,17 @@ impl SandboxEgress {
                 "macro-preview".to_owned(),
                 format!("{}/mcp-preview", self.base_url),
             ),
-        ]
-        .into_iter()
-        .chain(
+        ];
+        entries.extend(
             self.mcp_servers
                 .iter()
                 .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
-        )
+        );
+        for listing in &self.custom_servers {
+            let name = unique_server_name(&listing.name, &listing.key, &entries);
+            entries.push((name, self.custom_mcp_url(&listing.key)));
+        }
+        entries.into_iter()
     }
 
     /// Session-scoped internal tools, also supplied to external runtimes.
@@ -933,6 +962,42 @@ pub struct ProvisionedEgress {
     pub sandbox: SandboxEgress,
 }
 
+/// The name a custom server is advertised under among `taken` entries.
+///
+/// Owner-typed names are reduced to `[A-Za-z0-9_-]`, which is what agents
+/// accept in a tool namespace, and an empty result reads as `custom`. A name
+/// that then matches an earlier entry gets a key suffix, so two servers the
+/// owner named alike stay distinguishable and neither can shadow Macro's own.
+fn unique_server_name(name: &str, key: &CustomMcpServerKey, taken: &[(String, String)]) -> String {
+    const DEFAULT_NAME: &str = "custom";
+    const KEY_SUFFIX_LEN: usize = 8;
+
+    let mut sanitized: String = name
+        .trim()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '_' | '-') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if sanitized.is_empty() {
+        sanitized = DEFAULT_NAME.to_owned();
+    }
+    let is_taken = |candidate: &str| taken.iter().any(|(existing, _)| existing == candidate);
+    if !is_taken(&sanitized) {
+        return sanitized;
+    }
+    let key = key.as_str();
+    let suffixed = format!("{sanitized}_{}", &key[..KEY_SUFFIX_LEN.min(key.len())]);
+    if !is_taken(&suffixed) {
+        return suffixed;
+    }
+    format!("{sanitized}_{key}")
+}
+
 impl std::fmt::Debug for SandboxEgress {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -940,6 +1005,7 @@ impl std::fmt::Debug for SandboxEgress {
             .field("base_url", &self.base_url)
             .field("session_token", &"[REDACTED]")
             .field("mcp_servers", &self.mcp_servers)
+            .field("custom_servers", &self.custom_servers)
             .finish()
     }
 }

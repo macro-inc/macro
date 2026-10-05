@@ -4,7 +4,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const sessions = vi.hoisted(() => ({
-  create: vi.fn((_documentId: string) => ({
+  create: vi.fn((_projectId: string) => ({
     connectionError: () => 'offline',
     dispose: () => {},
   })),
@@ -30,17 +30,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('opens one session per document and retry, not per project refresh', () => {
-  const [project, setProject] = createSignal({ descriptionDocumentId: 'a' });
+it('opens one session per project and retry, not per project refresh', () => {
+  const [project, setProject] = createSignal({ id: 'a', name: 'Plan' });
   const view = render(() => (
-    <ProjectDescription
-      documentId={project().descriptionDocumentId}
-      canEdit={true}
-    />
+    <ProjectDescription projectId={project().id} canEdit={true} />
   ));
-  setProject({ descriptionDocumentId: 'a' });
+  setProject({ id: 'a', name: 'Renamed' });
   expect(sessions.create.mock.calls).toEqual([['a']]);
-  setProject({ descriptionDocumentId: 'b' });
+  setProject({ id: 'b', name: 'Other' });
   expect(sessions.create.mock.calls).toEqual([['a'], ['b']]);
   fireEvent.click(view.getByText('Retry description'));
   expect(sessions.create.mock.calls).toEqual([['a'], ['b'], ['b']]);

@@ -2,7 +2,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { DiffStatus } from '@macro-inc/lexical-core';
 import type { SerializedEditorState } from 'lexical';
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { diffAuthorColorPlugin } from './diffAuthorColorPlugin';
 import { useHistory } from './HistoryContext';
 import { UserHoverTag } from './UserHoverTag';
@@ -12,25 +12,10 @@ export function HistoryOverlay(props: {
   currentState: () => SerializedEditorState | undefined;
   selectedAt: Date | null;
   isLive: boolean;
-  visible: boolean;
-  onExit: () => void;
 }) {
   const history = useHistory();
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (!props.visible || e.key !== 'Escape' || e.defaultPrevented) return;
-    e.preventDefault();
-    props.onExit();
-  };
-  onMount(() => {
-    document.addEventListener('keydown', onKeyDown);
-    onCleanup(() => document.removeEventListener('keydown', onKeyDown));
-  });
-
-  const currentEditorState = createMemo(() => {
-    if (!props.visible) return undefined;
-    return props.currentState();
-  });
+  const currentEditorState = createMemo(() => props.currentState());
 
   const targetMs = createMemo<number | undefined>(() => {
     if (props.isLive) return undefined;
@@ -91,15 +76,13 @@ export function HistoryOverlay(props: {
   return (
     <div
       ref={rootRef}
-      class="absolute inset-0 z-20"
+      class="relative min-w-0"
       style={{
-        display: props.visible ? undefined : 'none',
         '--diff-author-color': diffAuthorColor(),
       }}
       onPointerMove={onDiffPointerMove}
       onPointerLeave={() => setHoverAuthor(null)}
     >
-      <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
       <Show keyed when={previewState()}>
         {(state) => {
           const config = buildConfig('markdown')

@@ -3,12 +3,7 @@ import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { ProjectAssignmentResult } from '../core/assignment';
-import type {
-  Project,
-  ProjectDetail,
-  ProjectFilters,
-  TaskProjectReference,
-} from '../core/project';
+import type { Project, ProjectDetail, ProjectFilters } from '../core/project';
 
 export type ProjectRow = {
   project: Project;
@@ -57,12 +52,8 @@ export type ProjectsContext = {
     loading: Accessor<boolean>;
     error: Accessor<Error | undefined>;
   };
-  createReferencesSource(ids: Accessor<readonly string[]>): {
-    references: Accessor<ReadonlyMap<string, TaskProjectReference>>;
-    loading: Accessor<boolean>;
-    error: Accessor<Error | undefined>;
-  };
   createCommands(): {
+    /** One request creates the task with its Project property set. */
     createTask(
       projectId: string,
       ...args: Parameters<typeof createTaskWithProperties>
@@ -72,6 +63,7 @@ export type ProjectsContext = {
     create(input: ProjectCreationInput): Promise<ProjectDetail>;
     rename(id: string, name: string): Promise<void>;
     setMembers(id: string, memberIds: string[]): Promise<void>;
+    /** Sets or, without a project, clears each task's Project property. */
     assignTasks(
       projectId: string | undefined,
       taskIds: readonly string[]

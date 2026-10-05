@@ -190,6 +190,30 @@ where
                 description: "unable to serialize spreadsheet overview".to_string(),
                 internal_error: e.into(),
             })?)
+        } else if file_type == Some(FileType::Pptx) {
+            // Slides, shape ids, and text as ReadPresentation describes them.
+            Content::Text(
+                service_context
+                    .presentations
+                    .read(entity_access_receipt.clone(), None)
+                    .await
+                    .map_err(|e| ToolCallError {
+                        description: format!("unable to read the presentation: {e:#}"),
+                        internal_error: e,
+                    })?,
+            )
+        } else if file_type == Some(FileType::Fig) {
+            // Pages, frames, text, and components as ReadDesign describes them.
+            Content::Text(
+                service_context
+                    .designs
+                    .read(entity_access_receipt.clone(), None)
+                    .await
+                    .map_err(|e| ToolCallError {
+                        description: format!("unable to read the design: {e:#}"),
+                        internal_error: e,
+                    })?,
+            )
         } else {
             match file_type.map(|file_type| file_type.macro_app_path()) {
                 Some(FileAssociation::Pdf(_)) | Some(FileAssociation::Write(_)) => Content::Text(

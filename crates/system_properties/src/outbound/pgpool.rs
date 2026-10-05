@@ -158,15 +158,18 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             SystemPropertyKey::RelevantDocuments.uuid(),
         ];
 
-        // Step 1: Fetch all properties from source task
+        // Step 1: Fetch all properties from source task. A copy doesn't join
+        // the source's project: that needs edit access to the project.
         let source_properties = sqlx::query!(
             r#"
             SELECT property_definition_id, values
             FROM entity_properties
             WHERE entity_id = $1
               AND entity_type = 'TASK'
+              AND property_definition_id <> $2
             "#,
-            from_task_id
+            from_task_id,
+            SystemPropertyKey::PROJECT_UUID
         )
         .fetch_all(&self.pool)
         .await?;
@@ -278,6 +281,53 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         .await?;
 
         Ok(())
+    }
+
+    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+        // Whole-value containment uses the `values` GIN index.
+        let rows = sqlx::query_scalar!(
+            r#"
+            SELECT entity_id
+            FROM entity_properties
+            WHERE property_definition_id = $1
+              AND entity_type = 'TASK'
+              AND values @> jsonb_build_object(
+                  'value', jsonb_build_array(jsonb_build_object(
+                      'entity_id', $2::text, 'entity_type', 'INITIATIVE'
+                  ))
+              )
+            ORDER BY entity_id
+            "#,
+            SystemPropertyKey::PROJECT_UUID,
+            project_id.to_string(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn task_projects(
+        &self,
+        task_ids: &[String],
+    ) -> Result<Vec<(String, String)>, SystemPropertyError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT entity_id, values->'value'->0->>'entity_id' AS "project_id!"
+            FROM entity_properties
+            WHERE property_definition_id = $1
+              AND entity_type = 'TASK'
+              AND entity_id = ANY($2)
+              AND values->'value'->0->>'entity_type' = 'INITIATIVE'
+            "#,
+            SystemPropertyKey::PROJECT_UUID,
+            task_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.entity_id, row.project_id))
+            .collect())
     }
 }
 

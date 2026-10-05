@@ -28,7 +28,6 @@ use entity_access::domain::{ports::EntityAccessService, service::EntityAccessSer
 use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use initiative::{domain::ports::InitiativeRepo, outbound::PgInitiativeRepo};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
@@ -48,6 +47,9 @@ use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
+use system_properties::{
+    PgSystemPropertiesRepository, SystemPropertiesService, SystemPropertiesServiceImpl,
+};
 use tracing::Instrument as _;
 
 struct AgentTriggerConsumerGroup;
@@ -139,6 +141,7 @@ async fn run() -> anyhow::Result<()> {
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
         config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
     );
     let task_context = ProjectTaskAssignmentContext::new(
         DssTaskAssignmentContext::new(
@@ -148,7 +151,7 @@ async fn run() -> anyhow::Result<()> {
             ),
             lexical.clone(),
         ),
-        PgInitiativeRepo::new(pool.clone()),
+        SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
         EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
     );
     let images = VisionImageCaptioner::new(
@@ -197,7 +200,7 @@ async fn run() -> anyhow::Result<()> {
             None::<SilentAssignmentNotifications>,
         )
         .with_event_broker(publisher.clone()),
-        PgInitiativeRepo::new(pool.clone()),
+        SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
         EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
     );
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
@@ -249,7 +252,7 @@ async fn consume<Events: TriggerEvents>(
     task_context: &impl TaskAssignmentContext,
     project_assignments: &ProjectAssignmentService<
         impl PropertiesService,
-        impl InitiativeRepo,
+        impl SystemPropertiesService,
         impl EntityAccessService,
     >,
 ) -> anyhow::Result<()> {
@@ -306,8 +309,8 @@ async fn consume<Events: TriggerEvents>(
                     if let Some(assignment) = &decoded.assignment {
                         process_task_assignment(trigger, publisher, messages, task_context, assignment).await?;
                     }
-                    if let Some(changes) = &decoded.project_tasks {
-                        project_assignments.process(changes).await?;
+                    if let Some(added) = &decoded.project_task {
+                        project_assignments.process(added).await?;
                     }
                     commit_message(&consumer, kafka_message)?;
                     Ok(())

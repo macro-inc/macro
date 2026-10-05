@@ -8,7 +8,6 @@ import { createProjectComposer, failedProjectDraft } from './create-project';
 const project: ProjectDetail = {
   id: 'project-id',
   name: 'Release',
-  descriptionDocumentId: 'description',
   updatedAt: '',
   createdAt: '',
   ownerId: 'owner',

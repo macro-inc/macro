@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"PdfHighlightAnchor\"\n        (uuid, \"documentId\", owner, page, red, green, blue, alpha, type, text, \"pageViewportWidth\", \"pageViewportHeight\")\n        VALUES ($1, 'message-doc-a', $2, 1, 255, 255, 0, 0.5, 1, 'selected text', 600, 800)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2d33e673b47de4353142b3169c7aa72261006f750423b9bee516c130face1ee"
+}

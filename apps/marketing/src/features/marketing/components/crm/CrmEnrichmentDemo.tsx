@@ -1,101 +1,152 @@
-import Buildings from '@phosphor/buildings.svg';
-import Check from '@phosphor/check.svg';
-import Globe from '@phosphor/globe.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import Users from '@phosphor/users-three.svg';
-import { createSignal, For, Show } from 'solid-js';
-import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import type { WorkspaceComment } from '../../core/dummy-workspace';
+import type { SampleCompany } from '../../core/workspace-fixtures';
+import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
+import { DemoCursor } from '../DemoCursor';
+import { ProductDemo } from '../product/ProductPage';
+import { CrmRecordWorkspace } from './CrmRecordWorkspace';
 
-const companyFacts = [
-  { label: 'Website', value: 'meadow.example', icon: Globe },
-  { label: 'Industry', value: 'Design services', icon: Buildings },
-  { label: 'Headquarters', value: 'Brooklyn, New York', icon: MapPin },
-  { label: 'Company size', value: '24 employees', icon: Users },
-];
+const kestrel: SampleCompany = {
+  id: 'kestrel',
+  name: 'Kestrel Robotics',
+  domain: 'kestrel.example',
+  description:
+    'Kestrel Robotics designs autonomous inventory robots for mid-size warehouses and third-party logistics providers. The company is based in Pittsburgh and sells to operators across the US and Canada.',
+  stage: 'No stage',
+  owner: '',
+  revenue: '',
+  updated: '10:08 AM',
+  lastInteracted: '2 minutes ago',
+  unread: true,
+  contacts: [{ name: 'Priya Shah', email: 'priya@kestrel.example' }],
+  comments: [],
+  emailIds: [],
+  emails: [
+    {
+      id: 'kestrel-pricing',
+      sender: 'Jacob Beckerman',
+      subject: 'Re: Pricing for a 30-person team',
+      snippet: 'Happy to walk you through it. Does Friday at 2 work?',
+      time: '10:08 AM',
+      signal: true,
+      mine: true,
+    },
+  ],
+};
+const note: WorkspaceComment = {
+  id: 'kestrel-note',
+  person: 'jacob',
+  body: 'Priya runs ops. They want 30 seats and need to be off HubSpot before January.',
+  time: '10:11 AM',
+};
 
-/** Fictional enrichment values arrive on the record, without a live lookup. */
+/**
+ * Jacob replies to someone new and the company appears in the list, already
+ * described from public sources. He opens it and adds what only he knows.
+ * Phases: 0 list, 1 new row, 2 pointer, 3 click, 4 record, 5 composer, 6 note.
+ */
 export function CrmEnrichmentDemo() {
-  let root!: HTMLDivElement;
-  const [revealed, setRevealed] = createSignal(0);
-  createEmailWalkthrough({
-    root: () => root,
-    steps: companyFacts.length,
-    advance: setRevealed,
-    reset: () => setRevealed(0),
-    reduced: () => setRevealed(companyFacts.length),
+  let frame!: HTMLDivElement;
+  const w = createDummyWorkspace('crm');
+  w.setCompanyLayout('List');
+  const [phase, setPhase] = createSignal(0);
+  const [automatic, setAutomatic] = createSignal(true);
+  const [pointer, setPointer] = createSignal<{ x: number; y: number }>();
+  const arrive = () => {
+    if (!w.data.companies.some((company) => company.id === 'kestrel'))
+      w.setData('companies', (companies) => [...companies, { ...kestrel }]);
+  };
+  const open = () => {
+    arrive();
+    w.setData('companies', (company) => company.id === 'kestrel', {
+      unread: false,
+    });
+    w.open('crm', 'kestrel');
+  };
+  const finish = () => {
+    open();
+    w.setData('companies', (company) => company.id === 'kestrel', {
+      comments: [note],
+    });
+  };
+  const playback = createProductWalkthrough({
+    root: () => frame,
+    steps: 6,
+    reset: () => {},
+    reduced: () => {
+      setAutomatic(false);
+      finish();
+    },
+    delay: (step) => [0, 800, 1000, 400, 300, 1300, 800][step] ?? 1000,
+    advance: (step) => {
+      setPhase(step);
+      if (step === 1) arrive();
+      if (step === 4) open();
+      if (step === 6) {
+        finish();
+        setAutomatic(false);
+      }
+    },
+  });
+  const pause = () => {
+    setAutomatic(false);
+    playback.pause();
+  };
+  onMount(() => {
+    const position = () => {
+      const selector = [
+        undefined,
+        undefined,
+        '[data-company-row="kestrel"] .truncate',
+        '[data-company-row="kestrel"] .truncate',
+        undefined,
+        '[data-discussion-composer]',
+      ][phase()];
+      const target = selector
+        ? frame.querySelector<HTMLElement>(selector)
+        : undefined;
+      if (!automatic() || !target) {
+        setPointer(undefined);
+        return;
+      }
+      const bounds = target.getBoundingClientRect();
+      const parent = frame.getBoundingClientRect();
+      setPointer({
+        x: bounds.left - parent.left + Math.min(bounds.width * 0.6, 160),
+        y: bounds.top - parent.top + bounds.height / 2,
+      });
+    };
+    createEffect(() => {
+      phase();
+      automatic();
+      const timer = requestAnimationFrame(position);
+      onCleanup(() => cancelAnimationFrame(timer));
+    });
+    const resize = new ResizeObserver(position);
+    resize.observe(frame);
+    onCleanup(() => resize.disconnect());
   });
   return (
-    <div
-      ref={root}
-      class="crm-enrichment-demo crm-editorial-window glass-input"
-      role="group"
-      aria-label="Company information added from an email domain"
-    >
-      <div class="crm-editorial-toolbar">
-        <Buildings />
-        <span>Customers</span>
-        <span class="crm-toolbar-divider">/</span>
-        <span>The Meadow</span>
-      </div>
-      <div class="crm-enrichment-body">
-        <div class="crm-enrichment-profile">
-          <div class="crm-enrichment-mark" aria-hidden="true">
-            m.
-          </div>
-          <h3>The Meadow</h3>
-          <span class="crm-enrichment-domain">
-            <Globe />
-            meadow.example
-          </span>
-          <p>
-            A Brooklyn design studio building brands and digital experiences for
-            growing teams.
-          </p>
-          <div class="crm-enrichment-people">
-            <span class="crm-contact-avatar">DW</span>
-            <span class="crm-contact-avatar">AC</span>
-            <span>Dana and Alex</span>
-          </div>
-        </div>
-        <div class="crm-enrichment-details">
-          <h4>Company information</h4>
-          <dl>
-            <For each={companyFacts}>
-              {(fact, index) => (
-                <div
-                  class="crm-enrichment-fact"
-                  data-revealed={revealed() > index()}
-                >
-                  <dt>
-                    <fact.icon />
-                    {fact.label}
-                  </dt>
-                  <dd>
-                    <Show
-                      when={revealed() > index()}
-                      fallback={
-                        <span
-                          class="crm-enrichment-placeholder"
-                          aria-label="Looking up company information"
-                        />
-                      }
-                    >
-                      <span>{fact.value}</span>
-                      <Check aria-hidden="true" />
-                    </Show>
-                  </dd>
-                </div>
-              )}
-            </For>
-          </dl>
-          <p class="crm-enrichment-status" role="status">
-            <span class="crm-sync-dot" />
-            {revealed() === companyFacts.length
-              ? 'Company information added'
-              : 'Finding company information…'}
-          </p>
-        </div>
-      </div>
+    <div ref={frame} class="crm-demo-frame" onFocusIn={pause}>
+      <ProductDemo
+        label="A company created from email, already described from public sources"
+        onInteract={pause}
+        height={450}
+        mobileHeight={520}
+      >
+        <CrmRecordWorkspace workspace={w} />
+      </ProductDemo>
+      <Show when={automatic() && pointer()}>
+        {(p) => (
+          <DemoCursor
+            label="Jacob"
+            class="crm-demo-pointer"
+            clicking={phase() === 3}
+            style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
+          />
+        )}
+      </Show>
     </div>
   );
 }

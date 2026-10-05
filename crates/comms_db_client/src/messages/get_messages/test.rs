@@ -9,8 +9,8 @@ async fn seed(pool: &Pool<Postgres>) -> Result<Vec<Uuid>> {
     ids.sort_unstable();
     sqlx::query!(
         r#"
-        INSERT INTO comms_messages (id, channel_id, sender_id, content, created_at, deleted_at)
-        SELECT id, channel_id, 'macro|user1@test.com', 'history',
+        INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, created_at, deleted_at)
+        SELECT id, 'channel', channel_id::text, 'macro|user1@test.com', 'history',
                '2020-01-01T00:00:00.123456Z'::timestamptz, deleted_at
         FROM UNNEST($1::uuid[], $2::uuid[], $3::timestamptz[]) AS rows(id, channel_id, deleted_at)
         "#,

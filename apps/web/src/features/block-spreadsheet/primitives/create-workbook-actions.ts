@@ -1,5 +1,6 @@
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { WorkbookCalculation } from '../core/calculation';
+import { createChartReader } from '../core/chart-data';
 import {
   type WorkbookFileData,
   XLSX_MAX_BYTES,
@@ -25,6 +26,8 @@ export function createWorkbookActions(options: {
     'append'
   );
   const [importError, setImportError] = createSignal('');
+  const [importing, setImporting] = createSignal(false);
+  const [importProgress, setImportProgress] = createSignal(0);
   const [sheetDialog, setSheetDialog] = createSignal<{
     kind: 'rename' | 'delete';
     id: string;
@@ -60,7 +63,12 @@ export function createWorkbookActions(options: {
     try {
       if (dialog.kind === 'rename')
         options.store.renameSheet(dialog.id, sheetName());
-      else options.store.deleteSheet(dialog.id);
+      // Charts reading the sheet keep the values they show.
+      else
+        options.store.deleteSheet(
+          dialog.id,
+          createChartReader(options.store.workbook, options.values)
+        );
       setSheetDialog(undefined);
     } catch (error) {
       setSheetError(
@@ -77,7 +85,9 @@ export function createWorkbookActions(options: {
       return;
     }
     if (file.size > XLSX_MAX_BYTES) {
-      setNotice('Choose an Excel workbook up to 5 MB.');
+      setNotice(
+        `Choose an Excel workbook up to ${XLSX_MAX_BYTES / 1024 / 1024} MB.`
+      );
       return;
     }
     pending?.abort();
@@ -110,10 +120,19 @@ export function createWorkbookActions(options: {
       }
     }
   }
-  function confirmImport() {
+  async function confirmImport() {
     const current = preview();
-    if (!current || !options.store.canEdit()) return;
+    if (!current || importing() || !options.store.canEdit()) return;
+    // Show the pending dialog before writing begins. Hidden tabs never
+    // paint; the timeout covers them.
+    setImportProgress(0);
+    setImporting(true);
+    await new Promise((resolve) => {
+      globalThis.requestAnimationFrame?.(() => setTimeout(resolve));
+      setTimeout(resolve, 50);
+    });
     try {
+      if (preview() !== current || !options.store.canEdit()) return;
       if (importMode() === 'replace') {
         if (current.revision !== options.store.workbook()) {
           setImportError(
@@ -121,8 +140,15 @@ export function createWorkbookActions(options: {
           );
           return;
         }
-        options.store.replaceWorkbook(current.data.sheets);
-      } else options.store.appendSheets(current.data.sheets);
+        await options.store.replaceWorkbook(current.data.sheets, {
+          onProgress: setImportProgress,
+          images: current.data.images,
+        });
+      } else
+        await options.store.appendSheets(current.data.sheets, {
+          onProgress: setImportProgress,
+          images: current.data.images,
+        });
       setNotice(
         `Imported ${current.data.sheets.length} ${current.data.sheets.length === 1 ? 'sheet' : 'sheets'} from ${current.name}`
       );
@@ -133,6 +159,8 @@ export function createWorkbookActions(options: {
           ? error.message
           : 'Unable to import this workbook.'
       );
+    } finally {
+      setImporting(false);
     }
   }
   async function exportExcel() {
@@ -143,9 +171,16 @@ export function createWorkbookActions(options: {
     setBusy('Preparing download…');
     setNotice('');
     try {
+      const workbook = options.store.workbook();
+      const keys = workbook.flatMap((sheet) =>
+        (sheet.metadata?.drawings ?? []).flatMap((drawing) =>
+          drawing.type === 'image' ? [drawing.image] : []
+        )
+      );
       const result = await exportWorkbookFile(
         {
-          sheets: options.store.workbook().map((sheet) => ({
+          ...(keys.length && { images: options.store.images(keys) }),
+          sheets: workbook.map((sheet) => ({
             name: sheet.name,
             metadata: sheet.metadata,
             cells: sheet.cells,
@@ -182,6 +217,8 @@ export function createWorkbookActions(options: {
     setImportMode,
     importError,
     confirmImport,
+    importing,
+    importProgress,
     closePreview: () => setPreview(undefined),
     importExcel,
     exportExcel,

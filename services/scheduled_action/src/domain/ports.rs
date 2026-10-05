@@ -71,11 +71,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     fn delete_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
     /// Claim only while the stored configuration is still `revision`, so a
-    /// snapshot read before a pause or update can never start a run.
+    /// snapshot read before a pause or update can never start a run. The stored
+    /// firing must also match, fencing candidates fetched before a completed run.
     fn claim_action(
         &self,
         id: &Uuid,
         revision: ConfigurationRevision,
+        expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> impl Future<Output = Result<ClaimToken>> + Send;
 
     /// Release only this execution's claim; stale tokens must not mutate a newer run.
@@ -117,6 +119,12 @@ pub trait ScheduledActionReadService: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionService: Send + Sync + 'static {
+    /// Read a routine only when the caller is its owner.
+    fn get_action(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// Delete all of a user's actions before account deletion, including disabled
     /// and claimed actions. Repeating a completed cleanup succeeds.
     fn delete_user_actions(

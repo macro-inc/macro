@@ -1,6 +1,7 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import {
   type ChatAttachmentMention,
@@ -10,7 +11,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import AgentIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import { Button } from '@ui';
 import { createSignal } from 'solid-js';
 
 export { AgentIcon as ChatWithAgentIcon };
@@ -50,6 +50,10 @@ async function createAndOpenAgent(seed: {
   input?: string;
   /** Sent immediately once the agent session is ready. */
   message?: string;
+  /** The model the session runs on; the caller checks the plan allows it. */
+  model?: string;
+  /** Context for the agent alone, kept out of the composer and the transcript. */
+  instructions?: string;
   /** Replaces this split's content instead of opening a new split. */
   replaceSplit?: SplitHandle;
 }) {
@@ -62,18 +66,27 @@ async function createAndOpenAgent(seed: {
   const id = startPendingSession({
     prompt: seed.message,
     initialInput: seed.message ? undefined : seed.input,
+    ...(seed.model ? { modelOverride: seed.model } : {}),
+    ...(seed.instructions ? { instructions: seed.instructions } : {}),
   });
-  const next = {
-    type: 'component' as const,
-    id: agentsRouteId({
-      mode: 'chat',
-      conversation: { type: 'agent_session', id },
-    }),
-  };
   if (seed.replaceSplit) {
-    seed.replaceSplit.replace({ next });
+    // In-place handoffs (search "Ask AI") land in the full Agents workspace.
+    seed.replaceSplit.replace({
+      next: {
+        type: 'component',
+        id: agentsRouteId({
+          mode: 'chat',
+          conversation: { type: 'agent_session', id },
+        }),
+      },
+    });
   } else {
-    manager?.openWithSplit(next, { activate: true, preferNewSplit: true });
+    // A new split beside the source opens the bare session, without the
+    // Agents workspace's conversation sidebar.
+    manager?.openWithSplit(
+      { type: 'agent', id },
+      { activate: true, preferNewSplit: true }
+    );
   }
   return true;
 }
@@ -83,8 +96,16 @@ export async function openChatWithAgent(entity: ChatWithAgentEntity) {
   return createAndOpenAgent({ input });
 }
 
-export async function openChatWithInput(initialInput: string) {
-  await createAndOpenAgent({ input: initialInput });
+/** Open a new agent session with `initialInput` unsent, on `model`, told `instructions` privately. */
+export async function openChatWithInput(
+  initialInput: string,
+  options?: { model?: string; instructions?: string }
+) {
+  await createAndOpenAgent({
+    input: initialInput,
+    model: options?.model,
+    instructions: options?.instructions,
+  });
 }
 
 /**
@@ -131,33 +152,24 @@ export function ChatWithAgentButton(props: {
     }
   }
   return (
-    <Button
+    <HeaderActionButton
       tooltip={props.label ?? 'Chat with Agent'}
-      variant="outline"
-      size="sm"
+      label={props.label ?? 'Chat'}
+      icon={<AgentIcon />}
       onClick={() => void open()}
       disabled={props.disabled || opening()}
-      aria-busy={opening()}
-      depth={2}
-      class="bg-surface"
-    >
-      <AgentIcon />
-      <span class="text-xs">{props.label ?? 'Chat'}</span>
-    </Button>
+      busy={opening()}
+    />
   );
 }
 
 export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
   return (
-    <Button
+    <HeaderActionButton
       onClick={() => openChatWithAgent(props.entity)}
-      variant="ghost"
-      size="sm"
-      depth={2}
-      class="gap-1.5 border border-edge-muted px-2"
-    >
-      <AgentIcon />
-      <span class="text-xs font-medium">Ask Macro</span>
-    </Button>
+      tooltip="Ask Macro"
+      label="Ask Macro"
+      icon={<AgentIcon />}
+    />
   );
 }

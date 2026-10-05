@@ -93,6 +93,8 @@ pub enum GraphqlPropertyEntityType {
     Chat,
     /// Company entity.
     Company,
+    /// Database row entity.
+    DatabaseRow,
     /// CRM contact entity.
     Contact,
     /// Document entity.
@@ -118,6 +120,7 @@ impl GraphqlPropertyEntityType {
             models_properties::EntityType::Channel => Self::Channel,
             models_properties::EntityType::Chat => Self::Chat,
             models_properties::EntityType::Company => Self::Company,
+            models_properties::EntityType::DatabaseRow => Self::DatabaseRow,
             models_properties::EntityType::Contact => Self::Contact,
             models_properties::EntityType::Document => Self::Document,
             models_properties::EntityType::Initiative => Self::Initiative,
@@ -136,6 +139,7 @@ impl GraphqlPropertyEntityType {
             Self::Channel => models_properties::EntityType::Channel,
             Self::Chat => models_properties::EntityType::Chat,
             Self::Company => models_properties::EntityType::Company,
+            Self::DatabaseRow => models_properties::EntityType::DatabaseRow,
             Self::Contact => models_properties::EntityType::Contact,
             Self::Document => models_properties::EntityType::Document,
             Self::Initiative => models_properties::EntityType::Initiative,
@@ -156,6 +160,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
+            GraphqlPropertyEntityType::DatabaseRow => Self::DatabaseRow,
             GraphqlPropertyEntityType::Document => Self::Document,
             GraphqlPropertyEntityType::Project => Self::Project,
             GraphqlPropertyEntityType::Task => Self::Task,

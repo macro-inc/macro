@@ -35,8 +35,8 @@ impl SourceId {
         Self::new(id.to_string(), "team")
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn validate(&self) -> Result<(), ForeignEntityError> {
+    /// Reject blank ids and auth entities.
+    pub fn validate(&self) -> Result<(), ForeignEntityError> {
         validate_non_blank("sourceId.id", &self.id)?;
         validate_non_blank("sourceId.authEntity", &self.auth_entity)
     }

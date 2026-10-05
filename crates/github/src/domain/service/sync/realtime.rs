@@ -1,7 +1,8 @@
 //! Live updates after a PR mapping has been persisted.
 
 use documents::domain::ports::DocumentService;
-use foreign_entity::domain::{models::ForeignEntity, ports::ForeignEntityService};
+use foreign_entity::domain::models::ForeignEntity;
+use github_pull_requests::domain::ports::GithubPullRequestService;
 use notification::domain::service::NotificationIngress;
 
 use super::GithubSyncServiceImpl;
@@ -14,10 +15,10 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
-> GithubSyncServiceImpl<D, R, C, F, N, P>
+> GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     pub(super) async fn publish_pull_request(
         &self,

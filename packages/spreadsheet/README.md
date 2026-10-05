@@ -1,8 +1,8 @@
 # Shared spreadsheet model and AI interface
 
 The browser editor and the deterministic spreadsheet worker use this package's
-Loro model, sheet identity/reference rules, formula copying and IronCalc 0.8.4
-calculation. Browser feature paths re-export the model for compatibility. WASM
+Loro model, sheet identity/reference rules, formula copying and IronCalc
+calculation (vendored in `vendor/ironcalc`). Browser feature paths re-export the model for compatibility. WASM
 loading stays at the boundary: Vite loads a URL in the browser; Cloudflare imports
 a precompiled module and calls `initSync`.
 

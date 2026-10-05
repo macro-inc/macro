@@ -29,6 +29,8 @@ import type {
   GmailLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
+  MergeGithubPullRequestRequest,
+  MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
   UserQuota,
@@ -207,6 +209,61 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
     return {
       code: 'CURSOR_API_KEY_ERROR',
       message: message ?? `HTTP error! status: ${response.status}`,
+    };
+  };
+
+/**
+ * Errors a merge can end in beyond the shared GitHub ones: the user has no
+ * GitHub account linked, or GitHub declined the merge and said why.
+ */
+export type GithubMergeErrorCode =
+  | GithubReauthenticationErrorCode
+  | 'NO_GITHUB_LINK'
+  | 'MERGE_REJECTED';
+
+/** The body the merge route answers with when the user has not linked GitHub. */
+const NO_GITHUB_LINK_MESSAGE = 'no github link found';
+
+/** The `message` of an error body, or nothing when the body is not that shape. */
+async function readErrorMessage(
+  response: Response
+): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.json();
+    return typeof body === 'object' && body !== null && 'message' in body
+      ? String((body as { message: unknown }).message)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Keeps GitHub's own words on a declined merge. GitHub names the failing
+ * check, the missing review, or the disallowed method; the status alone
+ * ("409") tells the user nothing they can act on.
+ */
+const githubMergeErrorResponseHandler: ErrorResponseHandler<GithubMergeErrorCode> =
+  async function handleGithubMergeErrorResponse(response) {
+    if (response.status === 428) {
+      return {
+        code: 'REAUTHENTICATION_REQUIRED',
+        message: 'GitHub reauthentication required',
+      };
+    }
+    if (![403, 404, 409, 422].includes(response.status)) {
+      return githubErrorResponseHandler(response);
+    }
+    const message = await readErrorMessage(response);
+    if (response.status === 404 && message === NO_GITHUB_LINK_MESSAGE) {
+      return {
+        code: 'NO_GITHUB_LINK',
+        message: 'Connect GitHub in Settings to merge pull requests',
+      };
+    }
+    return {
+      code: 'MERGE_REJECTED',
+      message: message ?? 'GitHub declined to merge the pull request',
     };
   };
 
@@ -443,6 +500,18 @@ export const authServiceClient = {
         body: JSON.stringify(args),
         errorResponseHandler: githubErrorResponseHandler,
       })
+    ).map((result) => result);
+  },
+  async mergeGithubPullRequest(args: MergeGithubPullRequestRequest) {
+    return (
+      await fetchWithAuth<MergeGithubPullRequestResponse, GithubMergeErrorCode>(
+        `${authHost}/github_pull_requests/merge`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+          errorResponseHandler: githubMergeErrorResponseHandler,
+        }
+      )
     ).map((result) => result);
   },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
@@ -831,10 +900,9 @@ export const authServiceClient = {
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
    *
-   * `scopes` selects which permissions the consent screen asks for. Only
-   * calendar entry points may request calendar access, and an inbox that is
-   * already connected should ask for `calendar` alone so the user isn't
-   * re-consenting to mailbox access they have already granted.
+   * `scopes` selects which permissions the consent screen asks for. A healthy
+   * mailbox adding calendar requests `calendar`; reconnecting an account that
+   * used calendar requests `gmail_and_calendar` to repair both capabilities.
    */
   async initGmailLink(
     originalUrl?: string,

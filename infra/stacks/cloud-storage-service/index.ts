@@ -200,6 +200,7 @@ const bulkUploadBucketName = bulkUploadStack
 
 const slackImportQueue = new SlackImportQueue(`slack-import-${stack}`, {
   stagingBucketArn: pulumi.interpolate`arn:aws:s3:::${bulkUploadBucketName}`,
+  notificationIngressQueueArn,
   tags,
 });
 
@@ -237,6 +238,29 @@ export const slackImportWorkerSgId = slackImportWorker?.serviceSg.id;
 
 export const docxUploadBucketArn = docxUploadBucket.arn;
 export const docxUploadBucketName = docxUploadBucket.id;
+
+// ── GitHub pull request patches ──────────────────────────────────────────────
+// One patch per pull request base and head, under `pull-requests/`, shared by
+// every user, team, and agent session that reads those changes. A patch can be
+// read again from GitHub, so expiring it only costs a re-read.
+const githubPullRequestPatchBucket = createBucket({
+  id: `macro-github-pull-request-patches-${stack}`,
+  bucketName: `macro-github-pull-request-patches-${stack}`,
+  transferAcceleration: false,
+  enableVersioning: false,
+  lifecycleRules: [
+    {
+      id: 'expire-patches',
+      enabled: true,
+      expiration: { days: 90 },
+    },
+  ],
+  tags,
+});
+
+export const githubPullRequestPatchBucketArn = githubPullRequestPatchBucket.arn;
+export const githubPullRequestPatchBucketName =
+  githubPullRequestPatchBucket.bucket;
 
 const deleteDocumentHandler = new DeleteDocumentHandler(
   `delete-document-handler-${stack}`,
@@ -342,6 +366,7 @@ const cloudStorageService = new CloudStorageService(
     },
     documentStorageBucketArn,
     docxUploadBucketArn,
+    githubPullRequestPatchBucketArn: githubPullRequestPatchBucket.arn,
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
     secretKeyArns: [
@@ -359,6 +384,10 @@ const cloudStorageService = new CloudStorageService(
     callRecordingCrudPolicyArn,
     snsPlatformArns: [snsApnsVoipPlatformArn],
     containerEnvVars: [
+      {
+        name: 'GITHUB_PULL_REQUEST_PATCH_BUCKET',
+        value: githubPullRequestPatchBucket.bucket,
+      },
       // OpenTelemetry / Datadog tracing configuration
       {
         name: 'DD_SERVICE',

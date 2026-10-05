@@ -89,6 +89,21 @@ const cloudStorageClusterName = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((value) => value as string);
 
+// Pull request patches are shared with cloud-storage-service, which owns the
+// bucket; a session capture reuses the patch a pull request viewer stored.
+const cloudStorageServiceStack = new pulumi.StackReference(
+  'cloud-storage-service-stack',
+  { name: `macro-inc/cloud-storage-service/${stack}` }
+);
+
+const githubPullRequestPatchBucketArn = cloudStorageServiceStack
+  .getOutput('githubPullRequestPatchBucketArn')
+  .apply((value) => value as string);
+
+const githubPullRequestPatchBucketName = cloudStorageServiceStack
+  .getOutput('githubPullRequestPatchBucketName')
+  .apply((value) => value as string);
+
 // ── Service ──────────────────────────────────────────────────────────────────
 
 const vpc = get_coparse_api_vpc();
@@ -110,7 +125,11 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
     ...aiTools.secretArns,
   ],
   queueArns: [...aiTools.queueArns],
-  bucketArns: [...aiTools.bucketArns, sessionChangesBucket.arn],
+  bucketArns: [
+    ...aiTools.bucketArns,
+    sessionChangesBucket.arn,
+    githubPullRequestPatchBucketArn,
+  ],
   containerEnvVars: [
     {
       name: 'CODEX_OAUTH_KMS_KEY_ID',
@@ -123,6 +142,10 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
     {
       name: 'AGENT_SESSION_CHANGES_BUCKET',
       value: sessionChangesBucket.bucket,
+    },
+    {
+      name: 'GITHUB_PULL_REQUEST_PATCH_BUCKET',
+      value: githubPullRequestPatchBucketName,
     },
     // Datadog
     {

@@ -3,30 +3,38 @@ import ClaudeIcon from '@icon/wide-claude.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import GitPull from '@phosphor/git-pull-request.svg';
 import Plus from '@phosphor/plus.svg';
-import Terminal from '@phosphor/terminal.svg';
+import Terminal from '@phosphor/terminal-window.svg';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import { DEPLOY_PROMPT, DEPLOY_TRACE } from '../../core/deploy-agent-demo';
 import { sampleAgentSessions } from '../../core/workspace-parity-fixtures';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { AgentAnswer, AgentPrompt, AgentTurn } from '../agents/AgentTranscript';
+import { AGENT_MODELS, AGENT_PLACEHOLDER } from '../agents/agentDemoData';
+import { LaunchConversation } from '../agents/LaunchConversation';
 import { AgentMessage } from '../DemoAgentMessage';
 import { ViewShell } from '../DemoWorkspaceChrome';
 import { InputActionButton } from '../email/frozen/ActionButton';
 import { ChannelComposer } from '../email/frozen/ChannelComposer';
 import { ModelCatalogPicker } from './frozen/model-picker/ModelCatalogPicker';
 
-const SAMPLE_MODELS = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'claude-opus-5', label: 'Opus 5' },
-  { id: 'gpt-5', label: 'GPT-5' },
-];
-
 export function WorkspaceAgents(props: {
   workspace: DummyWorkspace;
   home?: boolean;
 }) {
   const w = props.workspace;
-  const [model, setModel] = createSignal('auto');
+  const [model, setModel] = createSignal(AGENT_MODELS[0].id);
+  let log: HTMLDivElement | undefined;
+  // A new reply lands below the cited answer; keep it in view.
+  createEffect(
+    on(
+      () => [w.agentReplies().length, w.busy()],
+      () => {
+        if (log) log.scrollTop = log.scrollHeight;
+      },
+      { defer: true }
+    )
+  );
   const session = () =>
     sampleAgentSessions.find((item) => item.id === w.selected());
   const conversation = () => !props.home && !!session();
@@ -46,8 +54,12 @@ export function WorkspaceAgents(props: {
     <ChannelComposer
       richMentions
       agent
-      label="Ask sample agent"
-      placeholder={w.busy() ? 'Working…' : 'Ask about your workspace…'}
+      label="Message the agent"
+      placeholder={
+        conversation()
+          ? AGENT_PLACEHOLDER
+          : 'Type @ to mention docs, people, or channels'
+      }
       leadingAction={
         <InputActionButton
           label="Add workspace context"
@@ -59,9 +71,9 @@ export function WorkspaceAgents(props: {
       accessory={
         <ModelCatalogPicker
           value={model()}
-          options={SAMPLE_MODELS}
+          options={AGENT_MODELS}
           onSelect={setModel}
-          ariaLabel="Choose sample model"
+          ariaLabel="Model"
           placement="top-end"
           triggerClass="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full border-0 bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted [&_svg]:size-[15px]"
         />
@@ -75,7 +87,7 @@ export function WorkspaceAgents(props: {
   return (
     <>
       <ViewShell.TopBar>
-        <span class="text-sm font-medium">
+        <span class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
           {props.home
             ? ''
             : w.selected() === 'connections'
@@ -93,16 +105,6 @@ export function WorkspaceAgents(props: {
             <span>Open</span>
           </span>
         </Show>
-        <span
-          class="text-xs text-ink-extra-muted"
-          classList={{
-            'ml-auto': !conversation() || !pullRequest(),
-            'ml-4': !!pullRequest(),
-          }}
-          title="Agent responses use scripted sample data"
-        >
-          Sample workspace
-        </span>
       </ViewShell.TopBar>
       <Show
         when={
@@ -140,46 +142,83 @@ export function WorkspaceAgents(props: {
               </div>
             }
           >
-            <div class="dummy-scroll sample-agent-log">
-              <Show when={w.selected() === 'deploy'}>
-                <div class="mb-8">
-                  <AgentMessage message={message(DEPLOY_PROMPT, true)} />
-                </div>
-                <AgentMessage message={DEPLOY_TRACE} inFlight={false} />
-              </Show>
-              <Show when={w.selected() !== 'deploy' && session()}>
-                {(current) => (
-                  <>
+            <Show
+              when={w.selected() === 'launch-status'}
+              fallback={
+                <div class="dummy-scroll sample-agent-log">
+                  <Show when={w.selected() === 'deploy'}>
                     <div class="mb-8">
-                      <AgentMessage message={message(current().prompt, true)} />
+                      <AgentMessage message={message(DEPLOY_PROMPT, true)} />
                     </div>
-                    <AgentMessage
-                      message={message(current().answer)}
-                      inFlight={false}
-                    />
-                  </>
-                )}
-              </Show>
-              <For each={w.agentReplies()}>
-                {(reply) => (
-                  <div class="mb-8">
-                    <div class="mb-6">
-                      <AgentMessage message={message(reply.prompt, true)} />
-                    </div>
-                    <AgentMessage
-                      message={message(reply.answer)}
-                      inFlight={false}
-                    />
-                  </div>
-                )}
-              </For>
-              <Show when={w.busy()}>
-                <p class="text-sm text-ink-muted">
-                  Reviewing sample workspace…
-                </p>
-              </Show>
+                    <AgentMessage message={DEPLOY_TRACE} inFlight={false} />
+                  </Show>
+                  <Show when={w.selected() !== 'deploy' && session()}>
+                    {(current) => (
+                      <>
+                        <div class="mb-8">
+                          <AgentMessage
+                            message={message(current().prompt, true)}
+                          />
+                        </div>
+                        <AgentMessage
+                          message={message(current().answer)}
+                          inFlight={false}
+                        />
+                      </>
+                    )}
+                  </Show>
+                  <For each={w.agentReplies()}>
+                    {(reply) => (
+                      <div class="mb-8">
+                        <div class="mb-6">
+                          <AgentMessage message={message(reply.prompt, true)} />
+                        </div>
+                        <AgentMessage
+                          message={message(reply.answer)}
+                          inFlight={false}
+                        />
+                      </div>
+                    )}
+                  </For>
+                  <Show when={w.busy()}>
+                    <p class="text-sm magic-chip-shimmer" role="status">
+                      Working
+                    </p>
+                  </Show>
+                </div>
+              }
+            >
+              <div
+                ref={(element) => (log = element)}
+                class="dummy-scroll agent-transcript"
+                role="log"
+                aria-label={session()?.title}
+              >
+                <LaunchConversation workspace={w} />
+                <For each={w.agentReplies()}>
+                  {(reply) => (
+                    <>
+                      <AgentTurn>
+                        <AgentPrompt text={reply.prompt} />
+                      </AgentTurn>
+                      <AgentTurn>
+                        <AgentAnswer text={reply.answer} mentions={{}} />
+                      </AgentTurn>
+                    </>
+                  )}
+                </For>
+                <Show when={w.busy()}>
+                  <AgentTurn>
+                    <span class="magic-chip-shimmer text-sm" role="status">
+                      Working
+                    </span>
+                  </AgentTurn>
+                </Show>
+              </div>
+            </Show>
+            <div class="dummy-composer sample-chat-composer agent-composer">
+              {composer()}
             </div>
-            <div class="dummy-composer sample-chat-composer">{composer()}</div>
           </Show>
         }
       >
@@ -188,15 +227,14 @@ export function WorkspaceAgents(props: {
           fallback={
             <div class="mx-auto max-w-3xl p-8">
               <h1 class="text-2xl font-semibold mb-6">Connections</h1>
-              <p class="text-sm text-ink-muted mb-6">
-                This sample workspace uses local data. Your accounts are not
-                connected.
-              </p>
+              <div class="text-sm text-ink-muted mb-6">
+                Connect the tools your team already uses so Macro's agent can
+                work in them.
+              </div>
               <For each={['Gmail', 'Google Calendar', 'GitHub', 'Slack']}>
                 {(name) => (
                   <div class="border-b border-edge-muted py-4 flex justify-between gap-12">
                     <span>{name}</span>
-                    <span class="text-xs text-ink-muted">Sample data</span>
                   </div>
                 )}
               </For>
@@ -206,16 +244,22 @@ export function WorkspaceAgents(props: {
           <div class="dummy-scroll">
             <div class="sample-agent-catalog">
               <h1 class="text-2xl font-semibold mb-2">Agents</h1>
-              <p class="text-sm text-ink-muted leading-6 mb-6">
-                Bring your conversations and coding agents into one workspace.
-                Choose a sample agent to explore its work.
-              </p>
-              <div class="rounded-xl bg-surface-2 p-6 mb-8">
-                <Terminal class="size-5 mb-4 text-ink-muted" />
-                <h2 class="text-xl mb-2">Bring your own agent to Macro.</h2>
-                <p class="text-sm text-ink-muted leading-6">
-                  Your agent, your workspace. Coding sessions, pull requests,
-                  and conversations stay together.
+              <div class="text-sm text-ink-muted leading-6 mb-6">
+                Agents let you customize your Macro AI experience by combining a
+                unique name, specific instructions, default model, and harness.
+              </div>
+              <div class="rounded-xl border border-edge-muted bg-surface-2 p-6 mb-8">
+                <div class="mb-5 flex items-center gap-2 text-xs font-medium text-ink-muted">
+                  <Terminal class="size-4" />
+                  Bring your own agent
+                </div>
+                <h2 class="text-xl font-medium tracking-tight mb-3">
+                  Bring <span class="text-accent">Claude Code</span> to Macro.
+                </h2>
+                <p class="text-sm text-ink-muted leading-relaxed">
+                  Your agent, on your machine. Connect a runtime with macrod,
+                  then give your agent instructions and a place in your
+                  workspace.
                 </p>
               </div>
               <h2 class="text-sm font-medium mb-3">Team agents</h2>

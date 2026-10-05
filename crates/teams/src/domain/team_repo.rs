@@ -9,11 +9,11 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-    PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
-    SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
-    TeamMembers, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
-    TryJoinTeamByDomainError,
+    PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
+    RemoveUserFromAllTeamsError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+    RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
+    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
 };
 
 /// The TeamRepository defines a set of actions to perform on teams data
@@ -399,6 +399,20 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
     ) -> impl Future<Output = Result<(), DeleteTeamError>> + Send;
+
+    /// Detaches the user from every team ahead of account deletion.
+    ///
+    /// A team the user owns is deleted the way [`TeamService::delete_team`]
+    /// does it: the subscription is cancelled, the team and its memberships
+    /// are removed, `team.deleted` is published, and members on no other
+    /// team lose the team subscriber role. A team the user merely belongs to
+    /// is left the way [`TeamService::remove_user_from_team`] does it, with
+    /// the user recorded as the actor.
+    /// NOTE: this is not exposed via axum and is meant for account deletion only.
+    fn remove_user_from_all_teams(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), RemoveUserFromAllTeamsError>> + Send;
 
     /// Accepts a team invite for a user
     fn join_team(

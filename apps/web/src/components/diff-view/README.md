@@ -5,10 +5,33 @@ host's `files` with the `patch`, and holds the diff style, collapse state, and
 the file to scroll to (`active`). A list renderer draws the files:
 `DiffView.Stack` gives each file its own card and Pierre instance.
 
+Patch parsing runs through the shared render queue after the pane shell mounts.
+Unchanged patch invalidations keep parsed entries and Pierre instances intact,
+including when a host switches between split and full-width layouts.
+`Stack` keeps lightweight file headers and defers expanded diff bodies until their
+cards approach the scroll viewport. The render queue yields between file bodies;
+selecting a file also schedules its body, even outside the viewport. Once a body
+loads, it stays mounted until collapsed or the stack closes.
+Selecting a file keeps its header aligned while queued diffs or asynchronous
+highlighting change earlier card heights. Wheel, pointer, and keyboard interaction
+release the anchor so manual scrolling and review-note editing remain unrestricted.
+Refreshing files or patch text does not reselect an unchanged active file after
+that release; an initial pending selection still waits for its file card.
+
+`Root` keeps patch parsing separate from the stack's body-reveal queue.
+`create-diff-reveal.ts` owns viewport observation and file-card registration;
+scroll anchoring stays in `Stack` and also reacts to later highlighting.
+Both queues are scoped to their respective Solid owners. A host that animates
+an exit retains those owners until the visual exit completes.
+
 Each file is an outlined `@ui` `Card` with a 40px sticky header: a ghost
 disclosure button, the status letter and `text-xs` path (directory in
-`text-ink-subtle`), and `text-xs` counts. Toolbar parts use standard `Button`
-and `SegmentedControl` sizes, and backgrounds come from the card's depth.
+`text-ink-subtle`), and `text-xs` counts. Both default and custom headers use
+an opaque `bg-surface` with `hover:overlay-hover`, so diff text never shows through
+the sticky row on hover. Hovering the header highlights the row but does not toggle
+it; only the disclosure and path controls toggle collapse. Toolbar parts use
+standard `Button` and `SegmentedControl` sizes, and backgrounds come from the
+card's depth.
 
 The host composes the rest:
 
@@ -21,6 +44,10 @@ The host composes the rest:
 - Toolbar parts, `DiffView.CollapseAll` and `DiffView.StyleToggle`, anywhere
   inside `Root`.
 - Collapse state that persists, by passing `collapse`; the default lives in memory.
+- `DiffCounts` for compact numeric totals, or `DiffStats` for those same totals
+  beside five green/red squares showing the addition/deletion proportion. A static
+  diagonal hatch and inset edge give the squares texture without changing their size.
+  Exact totals remain accessible without relying on color. Zero totals show neutral squares.
 
 ```tsx
 <DiffView.Root files={files()} patch={patch()} diffStyle={style()} active={active()}>

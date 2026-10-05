@@ -56,8 +56,8 @@ fn next_renewal(mut observation: SeatPeriodObservation) -> SeatPeriodObservation
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn verified_renewal_freezes_history_and_preserves_shared_money(pool: PgPool) {
-    let repo = PgFundingRepo::new(pool.clone());
-    let billing = PgBillingRepo::new(pool);
+    let repo = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool, AiPricing::testing());
     let (rollout, baseline) = rollout_observation();
     billing
         .update_overage(&user("payer"), true, 5000)
@@ -141,8 +141,8 @@ async fn verified_renewal_freezes_history_and_preserves_shared_money(pool: PgPoo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn cancellation_departure_and_rejoin_cannot_replenish_allowance(pool: PgPool) {
-    let repo = PgFundingRepo::new(pool.clone());
-    let billing = PgBillingRepo::new(pool);
+    let repo = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool, AiPricing::testing());
     let (rollout, baseline) = rollout_observation();
     repo.observe(&rollout, baseline.clone(), true)
         .await
@@ -195,8 +195,8 @@ async fn cancellation_departure_and_rejoin_cannot_replenish_allowance(pool: PgPo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn activation_exceptions_are_durable_and_mixed_policy_seats_stay_separate(pool: PgPool) {
-    let repo = PgFundingRepo::new(pool.clone());
-    let billing = PgBillingRepo::new(pool.clone());
+    let repo = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let (rollout, baseline) = rollout_observation();
     let mut delayed = baseline.clone();
     delayed.subscription.event_id = "evt_pre_rollout".parse().unwrap();
@@ -261,7 +261,7 @@ async fn activation_exceptions_are_durable_and_mixed_policy_seats_stay_separate(
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn late_seat_uses_existing_item_proof_but_cannot_renew_it(pool: PgPool) {
-    let repo = PgFundingRepo::new(pool);
+    let repo = PgFundingRepo::new(pool, AiPricing::testing());
     let (rollout, baseline) = rollout_observation();
     repo.observe(&rollout, baseline.clone(), true)
         .await
@@ -297,8 +297,8 @@ async fn late_seat_uses_existing_item_proof_but_cannot_renew_it(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delayed_renewal_does_not_convert_a_legacy_period_already_in_use(pool: PgPool) {
-    let repo = PgFundingRepo::new(pool.clone());
-    let billing = PgBillingRepo::new(pool);
+    let repo = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool, AiPricing::testing());
     let (rollout, baseline) = rollout_observation();
     repo.observe(&rollout, baseline.clone(), true)
         .await
@@ -432,8 +432,8 @@ async fn setup(
     enabled: bool,
     cap: i64,
 ) -> (PgFundingRepo, PgBillingRepo) {
-    let funding = PgFundingRepo::new(pool.clone());
-    let billing = PgBillingRepo::new(pool.clone());
+    let funding = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     funding.record_period(period()).await.unwrap();
     billing
         .update_overage(&user("payer"), enabled, cap)
@@ -704,7 +704,7 @@ async fn bounded_reconciliation_resumes_after_restart(pool: PgPool) {
         repo.finalize(completed(admission, 1)).await.unwrap();
     }
     assert!(repo.allocation(last).await.unwrap().is_none());
-    let restarted = PgFundingRepo::new(pool);
+    let restarted = PgFundingRepo::new(pool, AiPricing::testing());
     let pending = restarted
         .pending(PendingInvocations {
             after: None,

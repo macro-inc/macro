@@ -190,6 +190,43 @@ fn initiative_property_filters_preserve_entity_scope() {
 }
 
 #[test]
+fn a_database_row_filter_names_a_table_or_a_row() {
+    use item_filters::ast::database_row::DatabaseRowLiteral;
+
+    let ast = materialize_graphql_filter(json!({
+        "databaseRowFilter": { "or": {
+            "left": { "literal": { "tableId": "7ab00000-0000-0000-0000-000000000001" } },
+            "right": { "literal": { "id": "70000000-0000-0000-0000-000000000001" } }
+        } }
+    }))
+    .unwrap();
+
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::or(
+            Expr::val(DatabaseRowLiteral::TableId(Uuid::from_u128(
+                0x7ab00000_0000_0000_0000_000000000001
+            ))),
+            Expr::val(DatabaseRowLiteral::Id(Uuid::from_u128(
+                0x70000000_0000_0000_0000_000000000001
+            ))),
+        ))
+    );
+    assert!(
+        materialize_graphql_filter(json!({
+            "databaseRowFilter": { "literal": { "tableId": "not-a-uuid" } }
+        }))
+        .is_err()
+    );
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .database_row_filter
+            .is_none()
+    );
+}
+
+#[test]
 fn channel_thread_has_replies_materializes_for_browser_and_server() {
     for has_replies in [true, false] {
         let value = json!({

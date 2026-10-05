@@ -45,6 +45,24 @@ fn typecheck_runs_lexical_service_check_and_tests() {
 }
 
 #[test]
+fn typecheck_checks_both_specta_exports_when_rust_changes() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let step = yaml
+        .split("name: Check Specta Types")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("specta types step");
+    assert!(
+        step.contains("just gen-agent-fold-types") && step.contains("just gen-database-sql-types"),
+        "both wasm crates' TypeScript must be regenerated: {step}"
+    );
+    assert!(
+        step.contains("api_changed == 'true'"),
+        "the exporters compile Rust, so only a Rust change runs them: {step}"
+    );
+}
+
+#[test]
 fn should_run_includes_fold_wasm_inputs() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let filters = yaml
@@ -57,12 +75,16 @@ fn should_run_includes_fold_wasm_inputs() {
         .next()
         .expect("should_run block");
     assert!(
-        should_run.contains("crates/agent_fold/**"),
+        should_run.contains("crates/folds/agent_fold/**"),
         "fold wasm source must rebuild the web artifact: {should_run}"
     );
     assert!(
         should_run.contains("crates/agent_runtime_protocol/**"),
         "fold wasm path dep must rebuild the web artifact: {should_run}"
+    );
+    assert!(
+        should_run.contains("crates/database_sql/**"),
+        "SQL engine wasm source must rebuild the web artifact: {should_run}"
     );
 }
 

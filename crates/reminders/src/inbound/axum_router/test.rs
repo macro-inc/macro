@@ -22,6 +22,9 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{ReminderCursor, ReminderForSoup, ReminderPage, SoupReminderQuery};
 
+#[cfg(feature = "postgres")]
+mod email_collection;
+
 const USER_ID: &str = "macro|reminders-user@macro.com";
 const VALID_JWT: &str = "valid";
 /// The one entity the fake access service grants view access to.
@@ -70,6 +73,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 #[derive(Clone, Default)]
 struct FakeEntityAccessService {
     receipts_minted: Arc<Mutex<Vec<(String, EntityType)>>>,
+    allowed_emails: Option<Arc<Mutex<std::collections::HashSet<Uuid>>>>,
     /// Error returned for anything other than [`ACCESSIBLE_DOC`]. `None` means
     /// [`AccessError::Unauthorized`], which is the common case.
     denial: Option<fn() -> AccessError>,
@@ -119,7 +123,13 @@ impl EntityAccessService for FakeEntityAccessService {
             .expect("mint log poisoned")
             .push((entity_id.to_string(), entity_type));
 
-        if entity_id != ACCESSIBLE_DOC {
+        let allowed_email = entity_type == EntityType::EmailThread
+            && self.allowed_emails.as_ref().is_some_and(|ids| {
+                entity_id
+                    .parse()
+                    .is_ok_and(|id| ids.lock().unwrap().contains(&id))
+            });
+        if entity_id != ACCESSIBLE_DOC && !allowed_email {
             return Err(self.denial.map_or(AccessError::Unauthorized, |make| make()));
         }
 

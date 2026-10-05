@@ -13,6 +13,8 @@ note: |-
   untyped wire JSON for property-changed rows. In block-agent, `ui/` is
   the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/routines/components/**
+  - apps/web/src/features/scheduling/components/**
   - apps/web/src/features/crm/components/**
   - apps/web/src/features/slack-import/components/**
   - apps/web/src/features/channels-view/components/ChannelDetailView*
@@ -29,7 +31,8 @@ files:
   - apps/web/src/features/email-message/components/**
   - apps/web/src/features/email-thread/components/**
   - apps/web/src/features/email-compose/components/**
-  - apps/web/src/features/agent-changes/components/**
+  - apps/web/src/features/changes/components/**
+  - apps/web/src/features/block-write/components/**
 rule:
   any:
     - kind: string

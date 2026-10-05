@@ -2,12 +2,10 @@ import { EntityActivitySectionConditional } from '@app/features/activity/views/e
 import { EntityPropertiesSection } from '@app/features/property/side-panel/properties';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
+import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { References } from '@core/component/References';
-import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
-import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import ClockIcon from '@phosphor/clock.svg';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
@@ -27,9 +25,9 @@ interface CallSidePanelSectionsProps {
 export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
   return (
     <>
-      <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
+      <SidePanel.Footer>
         <DetailsSectionContent record={props.record} />
-      </SidePanel.Section>
+      </SidePanel.Footer>
       <SidePanel.Section
         id="properties"
         title="Properties"
@@ -63,46 +61,20 @@ function DetailsSectionContent(props: { record: CallRecord }) {
   const durationMs = () => record().durationMs ?? undefined;
 
   return (
-    <SidePanel.Grid>
-      <SidePanel.Row label="Owner">
-        <OwnerValue ownerId={record().createdBy} />
-      </SidePanel.Row>
+    <EntityMetadata ownerId={record().createdBy}>
       <Show when={startedAt()}>
         {(value) => (
-          <SidePanel.Row label="Started">
-            <DateValueDisplay value={value()} />
-          </SidePanel.Row>
+          <div>Started {formatDate(value(), { showTime: true })}</div>
         )}
       </Show>
       <Show when={endedAt()}>
-        {(value) => (
-          <SidePanel.Row label="Ended">
-            <DateValueDisplay value={value()} />
-          </SidePanel.Row>
-        )}
+        {(value) => <div>Ended {formatDate(value(), { showTime: true })}</div>}
       </Show>
       <Show when={durationMs()}>
-        {(ms) => (
-          <SidePanel.Row label="Duration">
-            <SidePanel.Pill>
-              <ClockIcon class="size-3 shrink-0" />
-              <span class="truncate">{formatCallDuration(ms())}</span>
-            </SidePanel.Pill>
-          </SidePanel.Row>
-        )}
+        {(ms) => <div>{formatCallDuration(ms())}</div>}
       </Show>
-      <SidePanel.Row label="Status">
-        <SidePanel.Pill>
-          <Show
-            when={record().isActive}
-            fallback={<span class="truncate text-ink-muted">Ended</span>}
-          >
-            <span class="size-2 rounded-full bg-success shrink-0" />
-            <span class="truncate text-success font-medium">In progress</span>
-          </Show>
-        </SidePanel.Pill>
-      </SidePanel.Row>
-    </SidePanel.Grid>
+      <div>{record().isActive ? 'In progress' : 'Ended'}</div>
+    </EntityMetadata>
   );
 }
 
@@ -119,27 +91,6 @@ function PropertiesSectionContent(props: { record: CallRecord }) {
         props.record.customName ?? props.record.channelName ?? undefined
       }
     />
-  );
-}
-
-function OwnerValue(props: { ownerId: string }) {
-  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
-  return (
-    <SidePanel.Pill>
-      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      <span class="truncate">{displayName()}</span>
-    </SidePanel.Pill>
-  );
-}
-
-function DateValueDisplay(props: { value: DateValue }) {
-  return (
-    <SidePanel.Pill>
-      <ClockIcon class="size-3 shrink-0" />
-      <span class="truncate">
-        {formatDate(props.value, { showTime: true })}
-      </span>
-    </SidePanel.Pill>
   );
 }
 

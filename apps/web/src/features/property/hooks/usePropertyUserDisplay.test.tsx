@@ -76,6 +76,7 @@ describe('property user identity', () => {
     const display = renderHook(() =>
       usePropertyUserDisplay(() => 'macro|alice@example.com')
     );
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(display.name()).toBe('Alice Example');
     expect(display.shortName()).toBe('Alice');
     expect(storageServiceClient.getBotOwnerProfiles).not.toHaveBeenCalled();

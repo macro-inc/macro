@@ -295,6 +295,19 @@ fn auth_service_internal_key_matches_dss_auth_key() {
     );
 }
 
+/// The auth service also presents `SERVICE_INTERNAL_AUTH_KEY` to the connection
+/// gateway, the agent harness, and the scheduled-action service (account
+/// deletion), which validate `INTERNAL_API_KEY`. Deployed environments point
+/// both at one secret; locally they must match too.
+#[test]
+fn auth_service_internal_key_matches_the_shared_internal_key() {
+    let env = local_env();
+    assert_eq!(
+        env.get("SERVICE_INTERNAL_AUTH_KEY"),
+        env.get("INTERNAL_API_KEY"),
+    );
+}
+
 #[test]
 fn aws_creds_are_dummy() {
     let env = local_env();
@@ -322,8 +335,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
         .to_env();
 
     assert_ne!(
-        a.get("SERVICE_INTERNAL_AUTH_KEY"),
-        b.get("SERVICE_INTERNAL_AUTH_KEY"),
+        a.get("INTERNAL_CALL_SECRET"),
+        b.get("INTERNAL_CALL_SECRET"),
         "per-instance secrets should differ between instances"
     );
     assert_eq!(

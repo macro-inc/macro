@@ -14,9 +14,14 @@ import {
   type ImportSource,
   type ImportState,
   importClient,
+  type SlackChannelMeta,
 } from '@service-cognition/import';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  type UseMutationResult,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 
 export type {
   ImportEntity,
@@ -110,6 +115,19 @@ export function useRunImportMutation() {
   }));
 }
 
+/** Discover candidates for manual selection. */
+export function useDiscoverMutation(): UseMutationResult<
+  void,
+  Error,
+  ImportSource
+> {
+  return useMutation(() => ({
+    mutationFn: (source: ImportSource) =>
+      throwOnErr(() => importClient.discover(source)),
+    onSuccess: () => void invalidateImportState(),
+  }));
+}
+
 /** Restart a failed gather run. */
 export function useRetryGatherMutation() {
   return useMutation(() => ({
@@ -126,6 +144,14 @@ export function useDismissRunMutation() {
       throwOnErr(() => importClient.dismissRun(source)),
     onSuccess: () => void invalidateImportState(),
   }));
+}
+
+/** Slack channel metadata, only for Slack ledger rows. */
+export function slackChannelMeta(
+  entity: ImportEntity
+): SlackChannelMeta | null {
+  if (entity.source !== 'slack') return null;
+  return entity.metadata as SlackChannelMeta;
 }
 
 /** A human label for a ledger row, from its per-source metadata. */

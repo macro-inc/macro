@@ -139,6 +139,13 @@ impl DocumentService for FakeDocumentService {
         Ok(document_with_file_type(self.file_type.as_deref()))
     }
 
+    async fn internal_get_user_display_name(
+        &self,
+        _user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        Ok(None)
+    }
+
     // The guard reads the file type, which the basic document already carries.
     // Resolving the content location would be a second read of the same row --
     // and a racy one while an upload is still being finalized into sync-service.
@@ -524,6 +531,15 @@ impl EditingWorkerService for FakeEditingWorker {
         _request: &crate::domain::spreadsheet::SpreadsheetRequest,
     ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
         panic!("unexpected spreadsheet call")
+    }
+
+    async fn word_document(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::word_document::WordDocumentRequest,
+    ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
+        panic!("unexpected word document call")
     }
 
     async fn add_comment_mark(
@@ -916,4 +932,10 @@ fn only_markdown_is_editable() {
         ensure_markdown(&document_with_file_type(None)).is_err(),
         "a document with no file type must be rejected"
     );
+}
+
+#[test]
+fn word_documents_are_pointed_at_the_word_tools() {
+    let error = ensure_markdown(&document_with_file_type(Some("docx"))).unwrap_err();
+    assert!(error.description.contains("EditWordDocument"));
 }

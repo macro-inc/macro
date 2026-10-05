@@ -6,27 +6,27 @@ import {
   type Container,
   type ContainerID,
   type ContainerType,
+  isContainer,
   type LoroDoc,
   type LoroEventBatch,
   LoroList,
   LoroMap,
   LoroMovableList,
   LoroText,
-  isContainer,
 } from 'loro-crdt';
 import {
   type ContainerSchemaType,
-  type InferType,
-  type LoroListSchema,
-  type LoroMapSchema,
-  type RootSchemaType,
-  type SchemaType,
   getDefaultValue,
+  type InferType,
   isContainerSchema,
   isListLikeSchema,
   isLoroListSchema,
   isLoroMapSchema,
   isLoroMovableListSchema,
+  type LoroListSchema,
+  type LoroMapSchema,
+  type RootSchemaType,
+  type SchemaType,
   validateSchema,
 } from '../schema';
 import { diffContainer } from './diff';
@@ -178,8 +178,6 @@ export class Mirror<S extends SchemaType> {
   private syncing: boolean = false;
   private options: MirrorOptions<S>;
 
-  // Unsubscribe functions for container subscriptions
-  private containerSubscriptions: Map<ContainerID, () => void> = new Map();
   /** Root `doc.subscribe` listener. Must be dropped before `doc.free()`. */
   private docUnsubscribe?: () => void;
   private disposed = false;
@@ -214,10 +212,12 @@ export class Mirror<S extends SchemaType> {
       ...this.options.initialState,
     } as InferType<S>;
 
-    // Initialize Loro containers and setup subscriptions
+    // Initialize Loro containers
     this.initializeContainers();
 
-    // Subscribe to the root doc for global updates
+    // The root subscription covers nested containers too. Subscribing to each
+    // container would rebuild the full document and notify once per changed
+    // container during undo/redo instead of once per batch.
     this.docUnsubscribe = this.doc.subscribe(this.handleLoroEvent);
   }
 
@@ -241,7 +241,9 @@ export class Mirror<S extends SchemaType> {
 
     // Register root containers
     if (this.schema && this.schema.type === 'schema') {
-      const rootSchema = this.schema as RootSchemaType<Record<string, ContainerSchemaType>>;
+      const rootSchema = this.schema as RootSchemaType<
+        Record<string, ContainerSchemaType>
+      >;
       for (const key in rootSchema.definition) {
         if (Object.prototype.hasOwnProperty.call(rootSchema.definition, key)) {
           const fieldSchema = rootSchema.definition[key];
@@ -281,10 +283,6 @@ export class Mirror<S extends SchemaType> {
       const containerId = container.id;
 
       this.registerContainerWithRegistry(containerId, schemaType);
-
-      // Subscribe to container events
-      const unsubscribe = container.subscribe(this.handleContainerEvent);
-      this.containerSubscriptions.set(containerId, unsubscribe);
 
       // Register nested containers
       this.registerNestedContainers(container);
@@ -454,37 +452,6 @@ export class Mirror<S extends SchemaType> {
       }
     }
   }
-
-  /**
-   * Handle events from individual containers
-   */
-  private handleContainerEvent = (event: LoroEventBatch) => {
-    if (this.disposed || this.syncing) return;
-    if (event.origin === 'to-loro') return;
-
-    this.syncing = true;
-    try {
-      // Build a complete new state from the document
-      let start = performance.now();
-      const currentDocState = this.doc.toJSON();
-
-      // Update the app state to match
-      const newState = produce<InferType<S>>((draft) => {
-        Object.assign(draft, currentDocState);
-      })(this.state);
-
-      this.state = newState;
-
-      // If the event was from an import, [handleLoroEvent]
-      // will handle notifying subscribers
-      if (event.by !== 'import') {
-        // Notify subscribers
-        this.notifySubscribers(SyncDirection.FROM_LORO);
-      }
-    } finally {
-      this.syncing = false;
-    }
-  };
 
   /**
    * Update Loro based on state changes
@@ -770,7 +737,11 @@ export class Mirror<S extends SchemaType> {
       }
 
       // Get the idSelector function from the schema
-      const listSchema = (schema != null && (isLoroListSchema(schema) || isLoroMovableListSchema(schema))) ? schema : undefined;
+      const listSchema =
+        schema != null &&
+        (isLoroListSchema(schema) || isLoroMovableListSchema(schema))
+          ? schema
+          : undefined;
       const idSelector = listSchema?.idSelector;
       const itemSchema = listSchema?.itemSchema;
 
@@ -1087,12 +1058,6 @@ export class Mirror<S extends SchemaType> {
     this.docUnsubscribe?.();
     this.docUnsubscribe = undefined;
 
-    // Unsubscribe from all container subscriptions
-    for (const [_, unsubscribe] of this.containerSubscriptions) {
-      unsubscribe();
-    }
-
-    this.containerSubscriptions.clear();
     this.subscribers.clear();
   }
 

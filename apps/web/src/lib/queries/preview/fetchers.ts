@@ -417,6 +417,38 @@ async function fetchCalendarEventPreviews(
   });
 }
 
+/**
+ * A database previews as the viewer's own read of it: an owner or anyone it
+ * is shared with gets its name; one deleted or trashed is gone.
+ */
+async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'database', loading: false } as const;
+      const detail = await storageServiceClient.databases.get({ id });
+      if (detail.isErr())
+        return {
+          ...base,
+          access: detail.error.some(
+            (error) => error.code === 'NOT_FOUND' || error.code === 'GONE'
+          )
+            ? 'does_not_exist'
+            : 'no_access',
+        };
+      const { database } = detail.value;
+      if (database.trashed_at !== null)
+        return { ...base, access: 'does_not_exist' };
+      return {
+        ...base,
+        access: 'access',
+        rawName: database.name,
+        name: database.name,
+        owner: database.owner_id,
+      };
+    })
+  );
+}
+
 function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
@@ -444,6 +476,7 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
     doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
+    doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {

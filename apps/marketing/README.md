@@ -34,6 +34,18 @@ channel-based sharing. Verify claims against the implementation. Avoid vague
 “context,” “move work forward,” and “all in one place” headlines, demo narration
 as feature prose, and unqualified superiority claims. Explain technical terms
 once in plain language; keep demo disclosures in captions and relevant FAQs.
+Write it the way the founder talks to another founder: plain words, “we,” the
+competitor by name when the comparison is specific, and why we built it.
+
+Demos are faithful to the signed-in app: its labels, layout, icons, and
+hover-only controls (the message toolbar appears on hover, as in the app).
+Don't invent chrome such as step chips or explanatory labels inside a mock, and
+don't show features the app doesn't have. Every animated cursor is
+`DemoCursor`, the homepage CRM pipeline's pointer and name tag: label it
+“Claude” when an agent acts and with the person's first name otherwise. Size
+each `ProductDemo` to its scene with `height`/`mobileHeight` so a window is
+never mostly empty, and seed enough content that the first frame already
+reads as a real workspace.
 
 Product stories live in their feature's `components/*/*Stories.tsx` files.
 They reuse frozen product presentation and local workspace data. Call records
@@ -88,8 +100,16 @@ bun run build
 
 Install workspace dependencies from the repository root first. The public dev
 server runs independently of the authenticated app. It serves the homepage,
-public feature and blog routes, and `/start`; `/onboarding-preview.html` remains
-a development review entry. It does not host the authenticated `/app/*` routes.
+public feature and blog routes, `/download`, and `/start`;
+`/onboarding-preview.html` remains a development review entry. It does not host
+the authenticated `/app/*` routes.
+
+`/download` has a single “Download for macOS” button for Apple silicon Macs.
+It resolves the current DMG from the latest GitHub release in the browser,
+with the latest release page as a fallback, and shows the current release tag.
+The page hides the header's Open app action, has no web-app download option,
+and has no header/footer navigation entry.
+Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
 Before the first prerender build, install Chromium with
 `bunx playwright install chromium --only-shell` (add `--with-deps` on Linux CI).

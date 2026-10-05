@@ -1,0 +1,20 @@
+---
+title: EditWordDocument
+description: >-
+  Edit an uploaded Word (.docx) document in place: an ordered batch of
+  operations applied atomically to its live copy, so everyone with it open sees
+  the change at once, and nothing changes if any operation fails.
+---
+
+# EditWordDocument
+
+Edit an uploaded Word (.docx) document in place: an ordered batch of operations applied atomically to its live copy, so everyone with it open sees the change at once, and nothing changes if any operation fails. ReadWordDocument first and address paragraphs, tables and blocks by the ids it reports (they are not numbers). Use replaceText for wording changes (exact text within one paragraph; formatting is kept), setText to rewrite a whole paragraph, formatText for bold, italic, underline or strikethrough, insertParagraph to add paragraphs (each line of text becomes one; a style is optional), setStyle to change a paragraph style such as Heading1, delete to remove a paragraph, table or block, and addComment to add a Word comment on text. Only insertParagraph and addComment text may contain line breaks. Paragraphs inside table cells are edited the same way. Tracked changes (a redline): with trackChanges true, or when the document already tracks changes and trackChanges is omitted, edits are recorded as real Word revisions (insertions, deletions, formatting and style changes) that the counterparty can accept or reject in Word; pass trackChanges true whenever the user asks for a redline, tracked changes or a markup. Revisions and addComment comments are attributed to the requesting user by name, not to you; pass author only when the user names someone else (a firm or another person). addComment comments are saved in the file and travel with it to Word; use them for comments meant for whoever receives the document, and CommentOnDocument for discussion inside Macro. Returns the changed blocks as they now read, with the ids of new paragraphs; check them. At most 50 operations.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `documentId` | string | Yes | Word document ID. |
+| `operations` | WordDocumentOperation[] | Yes | Ordered operations applied together. |
+| `trackChanges` | boolean | No | Record the edits as tracked changes (true) or apply them directly (false). Omit to follow the document's own Track Changes setting. |
+| `author` | string | No | Name the tracked changes and comments are attributed to. Omit to use the requesting user's name. |

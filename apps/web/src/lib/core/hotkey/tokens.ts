@@ -237,6 +237,12 @@ export const TOKENS = {
     },
   },
 
+  database: {
+    search: 'database.search',
+    undo: 'database.undo',
+    redo: 'database.redo',
+  },
+
   // markdown editor
   md: {
     find: 'md.find',
@@ -280,6 +286,8 @@ export const TOKENS = {
     chatNewSplit: 'create.chatNewSplit',
     canvas: 'create.canvas',
     canvasNewSplit: 'create.canvasNewSplit',
+    design: 'create.design',
+    designNewSplit: 'create.designNewSplit',
     spreadsheet: 'create.spreadsheet',
     spreadsheetNewSplit: 'create.spreadsheetNewSplit',
     project: 'create.project',
@@ -291,11 +299,13 @@ export const TOKENS = {
     initiative: 'create.initiative',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
-    automation: 'create.automation',
+    routine: 'create.routine',
     skill: 'create.skill',
     reminder: 'create.reminder',
     agent: 'create.agent',
     agentNewSplit: 'create.agentNewSplit',
+    database: 'create.database',
+    databaseNewSplit: 'create.databaseNewSplit',
     close_menu: 'create.close_menu',
   },
 

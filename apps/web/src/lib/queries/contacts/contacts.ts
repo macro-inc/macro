@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactsKeys } from './keys';
 
-function contactsQueryOptions() {
+export function contactsQueryOptions() {
   return {
     queryKey: contactsKeys.all.queryKey,
     queryFn: () => throwOnErr(() => contactsClient.getContacts()),

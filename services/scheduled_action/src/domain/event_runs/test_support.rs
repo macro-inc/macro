@@ -60,6 +60,7 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
         entity_type: match event.entity_type() {
             EventEntityType::Document => EntityType::Document,
             EventEntityType::Channel => EntityType::Channel,
+            EventEntityType::EmailThread => EntityType::EmailThread,
         },
     };
     match event.entity_type() {
@@ -78,6 +79,16 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
                 owner,
                 entity,
                 EntityPermission::ChannelViewOnly,
+            )
+            .unwrap(),
+        ),
+        EventEntityType::EmailThread => EventAccessCapability::EmailThread(
+            EntityAccessReceipt::try_new_authenticated_user(
+                owner,
+                entity,
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                },
             )
             .unwrap(),
         ),

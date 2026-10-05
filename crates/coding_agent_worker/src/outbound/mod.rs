@@ -12,3 +12,6 @@ pub mod agent_session;
 pub mod link;
 pub mod pairing;
 pub mod stream;
+
+/// Git repository discovery and remote refresh.
+pub mod git;

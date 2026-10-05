@@ -112,9 +112,11 @@ vi.mock('@core/component/TopBar/shareModal', () => ({
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
 }));
-vi.mock('@app/features/agent-changes/agent-changes', () => ({
+vi.mock('@app/features/changes/agent-session-changes', () => ({
   AgentChangesProvider: (props: { children: JSX.Element }) => props.children,
-  AgentChangesSplit: (props: { children: JSX.Element }) => props.children,
+}));
+vi.mock('@app/features/changes/changes', () => ({
+  ChangesSplit: (props: { children: JSX.Element }) => props.children,
   ChangesHandoff: () => null,
   ChangesToggle: () => null,
   ReviewNotesDock: () => null,

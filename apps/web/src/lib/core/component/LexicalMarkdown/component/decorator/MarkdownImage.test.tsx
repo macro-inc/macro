@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 
 const mediaPlugin = vi.hoisted(() => ({
@@ -49,6 +49,38 @@ describe('markdown media loading', () => {
     });
     expect(card.getAttribute('data-media-loading')).toBe('image');
     expect(card.className).toContain('aspect-video');
+  });
+
+  it('keeps known dimensions on load and failure, including short images', () => {
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="known-image"
+        url="https://files.macro.com/banner.png"
+        alt="banner"
+        width={2048}
+        height={512}
+        constrainedWidth={400}
+        constrainedHeight={400}
+      />
+    ));
+    const image = view.container.querySelector('img')!;
+    const frame = image.parentElement!;
+    expect(frame.style.aspectRatio).toBe('4');
+    expect(frame.style.width).toBe('100%');
+    expect(frame.style.maxWidth).toBe('400px');
+    expect(image.classList.contains('absolute')).toBe(true);
+    const initialStyle = frame.getAttribute('style');
+    Object.defineProperties(image, {
+      naturalWidth: { value: 2048 },
+      naturalHeight: { value: 512 },
+    });
+    fireEvent.load(image);
+    expect(frame.getAttribute('style')).toBe(initialStyle);
+    fireEvent.error(image);
+    expect(frame.getAttribute('style')).toBe(initialStyle);
+    expect(frame.classList.contains('min-h-44')).toBe(false);
+    expect(view.getByText('This image could not be found.')).toBeTruthy();
   });
 
   it('shows a reserved video card named from the url', () => {

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_change_columns (change_id, column_id, kind)\n                   SELECT $1, column_id, kind\n                   FROM UNNEST($2::uuid[], $3::text[]) AS data(column_id, kind)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "33bad1cfa276540b94a8f7e4d6cc8d0a93e313f68ac64cc0b6750b1d6242c555"
+}

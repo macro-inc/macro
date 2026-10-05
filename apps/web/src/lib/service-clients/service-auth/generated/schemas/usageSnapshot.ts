@@ -16,17 +16,17 @@ export interface UsageSnapshot {
   blocked_reason?: UsageSnapshotBlockedReason;
   /** Whether the requesting user is the payer. */
   can_manage_billing: boolean;
-  /** Shared prepaid credit balance. */
+  /** Shared prepaid credit balance, in customer cents. */
   credit_balance_cents: number;
-  /** Shared payer credits already applied to this period. */
+  /** Shared payer credits already applied to this period, in customer cents. */
   credits_consumed_cents: number;
-  /** Included AI for this user's seat this period, in list-rate cents. */
+  /** Included AI for this user's seat this period, in cents at provider cost. */
   included_cents: number;
-  /** Shared overage charged so far this period. */
+  /** Shared overage charged so far this period, in customer cents. */
   overage_charged_cents: number;
   /** Whether overage billing is on. */
   overage_enabled: boolean;
-  /** Per-period overage cap. */
+  /** Per-period overage cap, in customer cents. */
   overage_limit_cents: number;
   /** Whether overage is paused after a failed charge. */
   overage_suspended: boolean;
@@ -36,8 +36,9 @@ export interface UsageSnapshot {
   period_end: string;
   /** Period start. */
   period_start: string;
-  /** This seat's remaining allowance plus shared credit/overage headroom; 0
-when blocked. */
+  /** Cost cents of usage this seat may still consume: its remaining allowance
+plus whatever shared credit and overage headroom pays for at the markup.
+0 when blocked. */
   remaining_cents: number;
   /**
    * Seats billed to the payer.
@@ -46,11 +47,12 @@ when blocked. */
   seats: number;
   /** The plan. */
   tier: PlanTier;
-  /** Team-wide usage beyond per-seat allowances that is not yet covered by
-shared credits or charges (awaiting settlement). */
+  /** Team-wide usage beyond per-seat allowances, at the overage markup, that
+is not yet covered by shared credits or charges (awaiting settlement).
+Customer cents. */
   uncovered_cents: number;
   /** Enterprise: never metered. */
   unlimited: boolean;
-  /** AI used by this user this period, in list-rate cents. */
+  /** AI used by this user this period, in cents at provider cost. */
   used_cents: number;
 }

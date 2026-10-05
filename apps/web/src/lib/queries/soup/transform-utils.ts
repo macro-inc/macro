@@ -32,7 +32,7 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
-import { toSubType } from '@entity/types/entity';
+import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
@@ -42,6 +42,7 @@ import type {
   DocumentSearchResult,
   EmailSearchResult,
   ProjectSearchResult,
+  SoupProperty as SearchSoupProperty,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
@@ -49,6 +50,7 @@ import type {
   SoupApiItem,
   SoupCalendarEventTime,
   SoupPage,
+  SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -57,6 +59,19 @@ import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
 import { reminderEntityFromData } from '../reminders/entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
+
+/** Search sends a property's entity type only when it has one. */
+function soupProperties(
+  properties: SearchSoupProperty[] | null | undefined
+): SoupProperty[] | undefined {
+  return properties?.map((property) => ({
+    ...property,
+    definition: {
+      ...property.definition,
+      specific_entity_type: property.definition.specific_entity_type ?? null,
+    },
+  }));
+}
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -393,7 +408,7 @@ export const useSearchResponseItemMapper = () => {
             ),
           };
         }
-        const properties = result.properties ?? undefined;
+        const properties = soupProperties(result.properties);
         return [
           {
             type: 'document',
@@ -451,7 +466,7 @@ export const useSearchResponseItemMapper = () => {
             participants,
             search,
             snippet: result.snippet ?? undefined,
-            properties: result.properties ?? undefined,
+            properties: soupProperties(result.properties),
           },
         ];
       }
@@ -469,7 +484,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
             projectId: result.metadata?.project_id ?? undefined,
-            properties: result.properties ?? undefined,
+            properties: soupProperties(result.properties),
             search,
           },
         ];
@@ -551,7 +566,7 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             projectId: result.metadata?.parent_project_id ?? undefined,
-            properties: result.properties ?? undefined,
+            properties: soupProperties(result.properties),
             search,
           },
         ];
@@ -593,7 +608,7 @@ export const useSearchResponseItemMapper = () => {
             isReadOnly: metadata.isReadOnly,
             createdAt: metadata.createdAt,
             updatedAt: metadata.updatedAt,
-            properties: result.properties ?? undefined,
+            properties: soupProperties(result.properties),
             search,
           },
         ];
@@ -629,7 +644,7 @@ export const useSearchResponseItemMapper = () => {
             attended: status === 'ATTENDED',
             durationMs: result.metadata.duration_ms,
             participantIds: result.participant_ids,
-            properties: result.properties ?? undefined,
+            properties: soupProperties(result.properties),
             search,
           },
         ];
@@ -653,6 +668,7 @@ export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
 ): item is DisplayableSoupItem =>
   Boolean(item) &&
+  item.tag !== 'databaseRow' &&
   (item.tag !== 'document' ||
     item.data.subType?.type !== 'initiative_description');
 
@@ -710,6 +726,11 @@ export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
   const entity = match(item)
+    // Rows are read by the database SQL engine; isDisplayableSoupItem keeps
+    // them out of every list.
+    .with({ tag: 'databaseRow' }, () => {
+      throw new Error('Database rows are not rendered as Soup entities');
+    })
     .with({ tag: 'agentSession' }, (item) => ({
       ...item.data,
       type: 'agent_session' as const,
@@ -729,7 +750,6 @@ export const mapApiSoupItemToEntity = (
     .with({ tag: 'initiative' }, (item) => ({
       ...item.data,
       type: 'initiative' as const,
-      descriptionDocumentId: item.data.descriptionDocumentId ?? '',
       name: item.data.name || 'Untitled project',
       frecencyScore: item.frecency_score,
     }))
@@ -887,11 +907,12 @@ export const mapApiSoupItemToEntity = (
       return out;
     })
     .with({ tag: 'foreignEntity' }, (item) => {
-      // `authorLogin`/`authorId` are enrichment-only fields the backend now
-      // returns but that aren't on the base generated schema yet.
+      // `authorLogin`/`authorId`/`labels` are enrichment-only fields the
+      // backend now returns but that aren't on the base generated schema yet.
       const metadata = item.data.metadata as unknown as GithubPullRequest & {
         authorLogin?: string | null;
         authorId?: number | null;
+        labels?: GithubPullRequestLabel[] | null;
       };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
@@ -924,6 +945,7 @@ export const mapApiSoupItemToEntity = (
           deletions: metadata.deletions ?? 0,
           comments: metadata.comments ?? [],
           checks: metadata.checks?.filter(Boolean) ?? [],
+          labels: metadata.labels ?? [],
           authorLogin: metadata.authorLogin ?? undefined,
           authorId: metadata.authorId ?? undefined,
         },

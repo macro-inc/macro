@@ -12,7 +12,6 @@ describe('plan catalogs', () => {
       name: 'Max',
       price: 200,
       highlighted: false,
-      aiIncluded: 200,
     });
   });
 });

@@ -16,6 +16,8 @@ env_vars! {
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
+    /// S3 bucket holding pull request patches, shared with agent-harness-service.
+    pub struct GithubPullRequestPatchBucket;
     /// Shared CloudFront distribution URL for document content and call recording GET URLs.
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     /// Shared CloudFront signer public key ID for document content and call recordings.
@@ -88,10 +90,17 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// In-plan AI allowance per paid seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// Markup on AI usage past the allowance, as a whole percent of provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
     pub database_url: DatabaseUrl,
     pub database_url_readonly: DatabaseUrlReadonly,
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
+    pub github_pull_request_patch_bucket: GithubPullRequestPatchBucket,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:
@@ -195,6 +204,15 @@ pub struct Config {
 }
 
 impl Config {
+    /// The AI pricing every billing component is composed with. Both values
+    /// are validated when the configuration loads.
+    pub fn ai_pricing(&self) -> ai_billing::AiPricing {
+        ai_billing::AiPricing::new(
+            self.ai_usage_included_allowance_cents,
+            self.ai_usage_overage_markup_percent,
+        )
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;

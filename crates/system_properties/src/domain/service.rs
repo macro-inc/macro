@@ -1,6 +1,9 @@
 //! Service layer for system properties.
 
+use std::collections::HashMap;
+
 use models_properties::EntityType;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -71,6 +74,21 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         task_id: &str,
         status: StatusOption,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Tasks whose Project property names `project_id`, in id order. Callers
+    /// authorize each task before showing it.
+    fn project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
+    /// The project each listed task belongs to, from its Project property.
+    /// Tasks without a project are absent. Callers authorize both ends before
+    /// showing it.
+    fn task_projects(
+        &self,
+        task_ids: Vec<String>,
+    ) -> impl Future<Output = Result<HashMap<String, Uuid>, SystemPropertyError>> + Send;
 }
 
 /// Implementation of SystemPropertiesService using a repository.
@@ -160,6 +178,29 @@ where
         status: StatusOption,
     ) -> Result<(), SystemPropertyError> {
         self.repository.update_task_status(task_id, status).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
+        self.repository.project_task_ids(project_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, task_ids))]
+    async fn task_projects(
+        &self,
+        task_ids: Vec<String>,
+    ) -> Result<HashMap<String, Uuid>, SystemPropertyError> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        Ok(self
+            .repository
+            .task_projects(&task_ids)
+            .await?
+            .into_iter()
+            // Writes store canonical ids; anything else names no project.
+            .filter_map(|(task_id, project_id)| Some((task_id, project_id.parse().ok()?)))
+            .collect())
     }
 }
 

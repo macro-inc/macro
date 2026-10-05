@@ -8,7 +8,6 @@ import {
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
-import EmptyStateAutomationsGraphic from '@design/empty-state-automations.svg';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
@@ -18,6 +17,7 @@ import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateInboxZeroGraphic from '@design/empty-state-inbox-zero.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
+import EmptyStateRoutinesGraphic from '@design/empty-state-routines.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
@@ -266,16 +266,16 @@ export function EmptyState(props: {
       </Match>
 
       <Match
-        when={props.listView === 'agents' && soup.activeTab() === 'automations'}
+        when={props.listView === 'agents' && soup.activeTab() === 'routines'}
       >
         <EmptyStatePanel
-          graphic={EmptyStateAutomationsGraphic}
-          title="No automations to show"
-          description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
+          graphic={EmptyStateRoutinesGraphic}
+          title="No routines to show"
+          description="Routines run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
-            label: 'New automation',
+            label: 'New routine',
             icon: PlusIcon,
-            onClick: () => runCreateAction('automation'),
+            onClick: () => runCreateAction('routine'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />

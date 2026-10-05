@@ -1,0 +1,8 @@
+# A vendored fork of IronCalc (https://github.com/ironcalc/IronCalc), kept
+# outside the repository's root Cargo workspace. See README.md.
+[workspace]
+resolver = "2"
+members = ["base", "bindings/wasm"]
+
+[profile.release]
+lto = true

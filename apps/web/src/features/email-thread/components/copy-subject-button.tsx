@@ -1,9 +1,8 @@
 import { isPlaceholderSubject } from '@app/features/email-compose/core/subject-text';
-import IconCheck from '@phosphor/check.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import { debounce } from '@solid-primitives/scheduled';
+import { CopyButton } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 function copyableSubject(title: string): string | undefined {
   const subject = title.trim();
@@ -14,35 +13,27 @@ function copyableSubject(title: string): string | undefined {
 export function CopySubjectButton(props: {
   subject: string;
   class?: string;
-  onCopy?: (subject: string) => void;
+  onCopy?: (subject: string) => void | boolean | Promise<void | boolean>;
 }) {
-  const [copied, setCopied] = createSignal(false);
-  const resetCopied = debounce(() => setCopied(false), 800);
-
   function handleCopy(e: MouseEvent) {
     e.stopPropagation();
     const subject = copyableSubject(props.subject);
-    if (!subject) return;
-    props.onCopy?.(subject);
-    setCopied(true);
-    resetCopied();
+    if (!subject) return false;
+    return props.onCopy?.(subject);
   }
 
   return (
     <Show when={props.onCopy && copyableSubject(props.subject)}>
-      <button
-        type="button"
+      <CopyButton
+        variant="ghost"
+        size="icon-sm"
+        noTouchResize
         aria-label="Copy subject"
-        class={cn(
-          'inline-flex align-middle size-6 items-center justify-center rounded-md select-none text-inherit hover:bg-ink/10',
-          props.class
-        )}
+        class={cn('align-middle text-inherit', props.class)}
         onClick={handleCopy}
       >
-        <Show when={copied()} fallback={<CopyIcon class="size-3.5" />}>
-          <IconCheck class="size-3.5" />
-        </Show>
-      </button>
+        <CopyIcon class="size-3.5" />
+      </CopyButton>
     </Show>
   );
 }

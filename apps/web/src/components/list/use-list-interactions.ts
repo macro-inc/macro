@@ -59,6 +59,8 @@ export type ListInteractionNavigationEvent<TItem> =
 export type ListInteractionActivationIntent = 'primary' | 'alternate';
 
 export type ListInteractionActivation<TMetadata> = {
+  /** Let a native control own its key event before document capture consumes it. */
+  shouldHandleKeyEvent?: (event: KeyboardEvent | undefined) => boolean;
   createMetadata?: (intent: ListInteractionActivationIntent) => TMetadata;
   alternateDescription?: string;
 };
@@ -359,7 +361,10 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     scopeId: options.scopeId,
     description: 'Open item',
     condition: canOpen,
-    keyDownHandler: () => open('primary'),
+    keyDownHandler: (event) =>
+      options.activation?.shouldHandleKeyEvent?.(event) === false
+        ? false
+        : open('primary'),
   }).withGroup(group);
 
   registerHotkey({
@@ -369,7 +374,10 @@ export function useListInteractions<TItem, TMetadata = unknown>(
       options.activation?.alternateDescription ?? 'Open item alternatively',
     condition: canOpen,
     hide: true,
-    keyDownHandler: () => open('alternate'),
+    keyDownHandler: (event) =>
+      options.activation?.shouldHandleKeyEvent?.(event) === false
+        ? false
+        : open('alternate'),
   }).withGroup(group);
 
   const canToggleSelection = () => {

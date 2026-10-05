@@ -30,6 +30,7 @@ describe('spreadsheet document', () => {
     synchronize(alice, bob);
     expect(readSpreadsheetLayout(alice)).toEqual({
       rowCount: 400,
+      columnCount: 26,
       columnWidths: { 2: 240 },
     });
     writeSpreadsheetCells(bob, { A400: { value: 'collaborator' } });
@@ -41,8 +42,8 @@ describe('spreadsheet document', () => {
     expect(readSpreadsheetLayout(reopened)).toEqual(
       readSpreadsheetLayout(alice)
     );
-    appendSpreadsheetRows(reopened, 10_000);
-    expect(readSpreadsheetLayout(reopened).rowCount).toBe(1000);
+    appendSpreadsheetRows(reopened, 1_000_000);
+    expect(readSpreadsheetLayout(reopened).rowCount).toBe(100_000);
     history.free();
     alice.free();
     bob.free();
@@ -272,7 +273,19 @@ describe('spreadsheet document', () => {
   it('validates the bounded A1 addressing contract', () => {
     expect(parseCellAddress('A1')).toEqual({ row: 0, column: 0 });
     expect(parseCellAddress('Z200')).toEqual({ row: 199, column: 25 });
-    for (const address of ['A0', 'A1001', 'AA1', '__proto__', 'a1']) {
+    expect(parseCellAddress('AA1')).toEqual({ row: 0, column: 26 });
+    expect(parseCellAddress('XFD100000')).toEqual({
+      row: 99_999,
+      column: 16_383,
+    });
+    for (const address of [
+      'A0',
+      'A100001',
+      'XFE1',
+      'AAAA1',
+      '__proto__',
+      'a1',
+    ]) {
       expect(parseCellAddress(address)).toBeUndefined();
     }
   });

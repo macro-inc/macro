@@ -5,7 +5,7 @@ export const EntityType = {
   ...BaseEntityType,
   email: 'email',
   channel_message: 'channel_message',
-  automation: 'automation',
+  routine: 'routine',
   channel_thread: 'channel_thread',
 } as const;
 

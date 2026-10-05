@@ -7,7 +7,7 @@
  * guaranteed to be in {@link MODEL_PRETTYNAME}. Harnesses that keep no
  * display name for a model (the in-memory Macro Agent among them) echo the
  * slug back as the name, so anything that renders the reported name verbatim
- * shows `claude-sonnet-5` where the rest of the app says "Sonnet 5". Route
+ * shows `claude-sonnet-5-5` where the rest of the app says "Sonnet 5.5". Route
  * those through {@link modelLabel} instead.
  */
 

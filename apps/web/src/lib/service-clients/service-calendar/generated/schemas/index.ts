@@ -37,6 +37,7 @@ export * from './createCalendarEventRequestCalendarId';
 export * from './createCalendarEventRequestConference';
 export * from './createCalendarEventRequestDescription';
 export * from './createCalendarEventRequestEmailLinkId';
+export * from './createCalendarEventRequestIdempotencyKey';
 export * from './createCalendarEventRequestLocation';
 export * from './createCalendarEventRequestOutOfOffice';
 export * from './createCalendarEventRequestReminders';

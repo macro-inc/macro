@@ -161,24 +161,24 @@ describe('buildEntityData', () => {
     });
   });
 
-  describe('automation', () => {
+  describe('routine', () => {
     it('returns undefined without cron', () => {
       expect(
-        buildEntityData({ ...base, blockName: 'automation' })
+        buildEntityData({ ...base, blockName: 'routine' })
       ).toBeUndefined();
     });
 
-    it('builds an automation with cron', () => {
+    it('builds an routine with cron', () => {
       expect(
         buildEntityData({
           ...base,
-          blockName: 'automation',
+          blockName: 'routine',
           cron: '* * * * *',
           enabled: true,
         })
       ).toEqual({
         ...base,
-        type: 'automation',
+        type: 'routine',
         cron: '* * * * *',
         status: { kind: 'unscheduled' },
       });

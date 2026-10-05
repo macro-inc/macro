@@ -161,7 +161,12 @@ struct Repo {
 }
 
 impl ScheduledActionRepo for Repo {
-    async fn claim_action(&self, _: &Uuid, revision: ConfigurationRevision) -> Result<ClaimToken> {
+    async fn claim_action(
+        &self,
+        _: &Uuid,
+        revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<ClaimToken> {
         self.claims.fetch_add(1, Ordering::SeqCst);
         self.claimed_revisions.lock().unwrap().push(revision.get());
         let mut claim = self.claim.lock().unwrap();

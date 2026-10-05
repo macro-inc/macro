@@ -7,15 +7,18 @@ import {
   createSignal,
   For,
   onCleanup,
+  Show,
 } from 'solid-js';
 
 type OutlineHeading = {
   key: string;
   level: number;
   text: string;
+  preview: string;
 };
 
-const ACTIVE_HEADING_OFFSET = 80;
+const HEADING_SCROLL_OFFSET = 80;
+const SECTION_PREVIEW_LENGTH = 240;
 const MIN_OUTLINE_HEADINGS = 3;
 export const MARKDOWN_OUTLINE_WIDTH = 40;
 
@@ -26,18 +29,21 @@ export function shouldShowOutline(
   return enabled && headingCount >= MIN_OUTLINE_HEADINGS;
 }
 
-export function getActiveHeadingIndex(
+/** A section runs from its heading to the next heading (or the editor end). */
+export function getVisibleHeadingIndexes(
   headingTops: number[],
-  activeLine: number
-): number {
-  if (headingTops.length === 0) return -1;
+  documentBottom: number,
+  viewportTop: number,
+  viewportBottom: number
+): number[] {
+  if (viewportBottom <= viewportTop) return [];
 
-  let activeIndex = 0;
-  for (const [index, top] of headingTops.entries()) {
-    if (top > activeLine) break;
-    activeIndex = index;
-  }
-  return activeIndex;
+  return headingTops.flatMap((top, index) => {
+    const bottom = headingTops[index + 1] ?? documentBottom;
+    return top < viewportBottom && bottom > viewportTop && bottom > top
+      ? [index]
+      : [];
+  });
 }
 
 function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
@@ -47,7 +53,8 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
       (heading, index) =>
         heading.key === b[index]?.key &&
         heading.level === b[index]?.level &&
-        heading.text === b[index]?.text
+        heading.text === b[index]?.text &&
+        heading.preview === b[index]?.preview
     )
   );
 }
@@ -66,17 +73,29 @@ export function useMarkdownOutline(props: {
     }
 
     const refreshHeadings = () => {
-      const nextHeadings = editor.getEditorState().read(() =>
-        $getRoot()
-          .getChildren()
-          .filter($isHeadingNode)
-          .map((node) => ({
-            key: node.getKey(),
-            level: Number(node.getTag().slice(1)),
-            text: node.getTextContent().trim(),
-          }))
-          .filter((heading) => heading.text.length > 0)
-      );
+      const nextHeadings = editor.getEditorState().read(() => {
+        const sections: OutlineHeading[] = [];
+        for (const node of $getRoot().getChildren()) {
+          const text = node.getTextContent().trim();
+          if ($isHeadingNode(node) && text) {
+            sections.push({
+              key: node.getKey(),
+              level: Number(node.getTag().slice(1)),
+              text,
+              preview: '',
+            });
+          } else {
+            const section = sections.at(-1);
+            if (section && section.preview.length < SECTION_PREVIEW_LENGTH) {
+              section.preview = `${section.preview} ${text}`
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, SECTION_PREVIEW_LENGTH);
+            }
+          }
+        }
+        return sections;
+      });
 
       setHeadings((current) =>
         headingsEqual(current, nextHeadings) ? current : nextHeadings
@@ -95,44 +114,16 @@ export function useMarkdownOutline(props: {
 
 type MarkdownOutlineState = ReturnType<typeof useMarkdownOutline>;
 
-function OutlineDash(props: { active: boolean }) {
-  return (
-    <span
-      class={
-        props.active
-          ? 'h-px w-3 rounded-full bg-accent'
-          : 'h-px w-2 rounded-full bg-ink/20'
-      }
-    />
-  );
-}
-
-function OutlineItem(props: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={props.label}
-      aria-current={props.active ? 'location' : undefined}
-      class="h-7 w-full truncate rounded-md px-2 text-left text-xs text-ink-muted hover:bg-hover hover:text-ink"
-      classList={{ 'font-semibold text-accent': props.active }}
-      onClick={props.onClick}
-    >
-      {props.label}
-    </button>
-  );
-}
-
 export function MarkdownOutline(props: {
   editor: Accessor<LexicalEditor | undefined>;
   outline: MarkdownOutlineState;
   portalMount: Accessor<HTMLElement>;
   scrollContainer: Accessor<HTMLElement | undefined>;
 }) {
-  const [activeHeadingKey, setActiveHeadingKey] = createSignal<string>();
+  const [visibleHeadingKeys, setVisibleHeadingKeys] = createSignal<Set<string>>(
+    new Set()
+  );
+  const [hoveredIndex, setHoveredIndex] = createSignal<number>();
   const [viewportCenter, setViewportCenter] = createSignal(0);
 
   createEffect(() => {
@@ -156,30 +147,65 @@ export function MarkdownOutline(props: {
 
     let frame: number | undefined;
 
-    const syncActiveHeading = () => {
-      const containerTop = scrollContainer.getBoundingClientRect().top;
-      const activeLine = containerTop + ACTIVE_HEADING_OFFSET;
-      const headingTops = currentHeadings.map(
-        (heading) =>
-          editor.getElementByKey(heading.key)?.getBoundingClientRect().top ??
-          Number.POSITIVE_INFINITY
+    const syncVisibleHeadings = () => {
+      const root = editor.getRootElement();
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const viewportTop = Math.max(
+        0,
+        containerRect.top + scrollContainer.clientTop
       );
-      const activeIndex = getActiveHeadingIndex(headingTops, activeLine);
-      setActiveHeadingKey(currentHeadings[activeIndex]?.key);
+      const viewportBottom = Math.min(
+        window.innerHeight,
+        containerRect.top +
+          scrollContainer.clientTop +
+          scrollContainer.clientHeight
+      );
+      const renderedHeadings = currentHeadings.flatMap((heading) => {
+        const element = editor.getElementByKey(heading.key);
+        return element
+          ? [{ key: heading.key, top: element.getBoundingClientRect().top }]
+          : [];
+      });
+      const indexes = getVisibleHeadingIndexes(
+        renderedHeadings.map((heading) => heading.top),
+        root?.getBoundingClientRect().bottom ?? viewportTop,
+        viewportTop,
+        viewportBottom
+      );
+      setVisibleHeadingKeys(
+        new Set(indexes.map((index) => renderedHeadings[index].key))
+      );
     };
 
     const queueViewportSync = () => {
-      if (frame !== undefined) cancelAnimationFrame(frame);
+      if (frame !== undefined) return;
       frame = requestAnimationFrame(() => {
-        syncActiveHeading();
+        frame = undefined;
+        syncVisibleHeadings();
       });
     };
+    const resizeObserver = new ResizeObserver(queueViewportSync);
+    resizeObserver.observe(scrollContainer);
+    const unregisterRootListener = editor.registerRootListener(
+      (root, previousRoot) => {
+        if (previousRoot) resizeObserver.unobserve(previousRoot);
+        if (root) resizeObserver.observe(root);
+        queueViewportSync();
+      }
+    );
+    const unregisterUpdateListener =
+      editor.registerUpdateListener(queueViewportSync);
     queueViewportSync();
     scrollContainer.addEventListener('scroll', queueViewportSync, {
       passive: true,
     });
+    window.addEventListener('resize', queueViewportSync);
     onCleanup(() => {
+      unregisterRootListener();
+      unregisterUpdateListener();
+      resizeObserver.disconnect();
       scrollContainer.removeEventListener('scroll', queueViewportSync);
+      window.removeEventListener('resize', queueViewportSync);
       if (frame !== undefined) cancelAnimationFrame(frame);
     });
   });
@@ -195,8 +221,8 @@ export function MarkdownOutline(props: {
         scrollContainer.scrollTop +
         elementTop -
         containerTop -
-        ACTIVE_HEADING_OFFSET,
-      behavior: 'smooth',
+        HEADING_SCROLL_OFFSET,
+      behavior: 'instant',
     });
   };
 
@@ -205,51 +231,87 @@ export function MarkdownOutline(props: {
     if (!headingElement) return;
 
     scrollToElement(headingElement);
-    setActiveHeadingKey(heading.key);
   };
 
   return (
-    <div
-      class="pointer-events-auto sticky z-1 w-3 -translate-y-1/2"
+    <nav
+      aria-label="Document outline"
+      class="pointer-events-auto sticky z-1 w-7 -translate-y-1/2"
       style={{ top: `${viewportCenter()}px` }}
     >
-      <HoverCard
-        closeDelay={0}
-        content={
-          <div class="max-h-[calc(100vh-6rem)] w-52 overflow-y-auto rounded-xl border border-edge bg-surface p-2 shadow-menu">
-            <For each={props.outline.headings()}>
-              {(heading) => (
-                <OutlineItem
-                  active={activeHeadingKey() === heading.key}
-                  label={heading.text}
-                  onClick={() => scrollToHeading(heading)}
-                />
-              )}
-            </For>
-          </div>
-        }
-        contentZIndexClass="z-item-options-menu"
-        gutter={-12}
-        openDelay={0}
-        placement="right"
-        portalMount={props.portalMount()}
-        trigger={
-          <div
-            aria-hidden="true"
-            class="flex w-3 flex-col items-start gap-2 py-1"
-          >
-            <For each={props.outline.headings()}>
-              {(heading) => (
-                <OutlineDash active={activeHeadingKey() === heading.key} />
-              )}
-            </For>
-          </div>
-        }
-        triggerAriaLabel="Document outline"
-        triggerAs="nav"
-        triggerClass="w-3 outline-none"
-        triggerTabIndex={0}
-      />
-    </div>
+      <div
+        class="flex w-7 flex-col items-start overflow-y-auto py-1"
+        style={{ 'max-height': `${Math.max(0, viewportCenter() * 2 - 32)}px` }}
+      >
+        <For each={props.outline.headings()}>
+          {(heading, index) => {
+            const active = () => visibleHeadingKeys().has(heading.key);
+            const distance = () =>
+              Math.abs(index() - (hoveredIndex() ?? Number.POSITIVE_INFINITY));
+            const width = () => [26, 20, 14, 10][distance()] ?? 6;
+            const emphasized = () =>
+              hoveredIndex() === undefined ? active() : distance() === 0;
+
+            return (
+              <HoverCard
+                closeDelay={80}
+                closeOnScroll={false}
+                keepOpenOnTriggerPress
+                openDelay={0}
+                open={hoveredIndex() === index()}
+                onOpenChange={(open) => {
+                  setHoveredIndex((current) =>
+                    open ? index() : current === index() ? undefined : current
+                  );
+                }}
+                content={
+                  <div class="w-80 max-w-[calc(100vw-3rem)] rounded-xl border border-edge bg-surface px-3 py-2 shadow-menu">
+                    <div class="truncate text-sm font-medium text-ink">
+                      {heading.text}
+                    </div>
+                    <Show when={heading.preview}>
+                      <p class="mt-1 line-clamp-3 text-sm leading-relaxed text-ink-muted">
+                        {heading.preview}
+                      </p>
+                    </Show>
+                  </div>
+                }
+                contentZIndexClass="z-item-options-menu"
+                gutter={10}
+                placement="right"
+                portalMount={props.portalMount()}
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={heading.text}
+                    aria-current={active() ? 'location' : undefined}
+                    class="flex h-2.5 w-7 items-center outline-none focus-visible:rounded-sm focus-visible:ring-1 focus-visible:ring-ink"
+                    onFocus={() => setHoveredIndex(index())}
+                    onBlur={() =>
+                      setHoveredIndex((current) =>
+                        current === index() ? undefined : current
+                      )
+                    }
+                    onClick={() => scrollToHeading(heading)}
+                  >
+                    <span
+                      aria-hidden="true"
+                      class="h-0.5 shrink-0 transition-[width,background-color] duration-150 ease-out motion-reduce:transition-none"
+                      classList={{
+                        'bg-ink': emphasized(),
+                        'bg-ink/20': !emphasized(),
+                      }}
+                      style={{ width: `${width()}px` }}
+                    />
+                  </button>
+                }
+                triggerClass="block w-7"
+                triggerTabIndex={-1}
+              />
+            );
+          }}
+        </For>
+      </div>
+    </nav>
   );
 }

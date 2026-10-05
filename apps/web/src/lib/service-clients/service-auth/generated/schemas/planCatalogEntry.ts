@@ -10,10 +10,12 @@ import type { PlanTier } from './planTier';
  * One plan in the catalog.
  */
 export interface PlanCatalogEntry {
-  /** Included AI per seat per period, list-rate cents. */
+  /** Included AI per seat per period, in cents at provider cost. */
   included_ai_cents_per_seat: number;
-  /** Monthly list price per seat, cents. */
+  /** Monthly subscription price per seat, cents. */
   monthly_price_cents: number;
+  /** Whether a new purchase or plan move may pick this plan today. */
+  purchasable: boolean;
   /** The tier. */
   tier: PlanTier;
 }

@@ -9,14 +9,16 @@
 mod test;
 
 use ::activity::{
-    Activity, ActivitySource, Actor, Attribution, CommonAction, EntityType, Ingest, PropertyChange,
-    event_time,
+    Action, Activity, ActivitySource, Actor, Attribution, CommonAction, DomainActivity, EntityType,
+    Ingest, InitiativeTaskChange, PropertyChange, event_time,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType as PropertyEntityType;
+use models_properties::service::property_value::PropertyValue;
+use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
-use super::events::PropertyTopicEvent;
+use super::events::{EntityPropertyUpdatedMetadata, PropertyTopicEvent};
 
 /// Maps the properties-domain entity vocabulary onto the soup item-type
 /// vocabulary activities use. `None` drops the activity (no soup surface).
@@ -33,7 +35,8 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
         PropertyEntityType::Company => Some(EntityType::CrmCompany),
         PropertyEntityType::CalendarEvent
         | PropertyEntityType::Contact
-        | PropertyEntityType::User => None,
+        | PropertyEntityType::User
+        | PropertyEntityType::DatabaseRow => None,
     }
 }
 
@@ -75,6 +78,101 @@ fn attributed(
     )])
 }
 
+/// A task joining or leaving a project, recorded on the project.
+enum ProjectMembership<'a> {
+    Added {
+        project_id: &'a str,
+        task_id: &'a str,
+    },
+    Removed {
+        project_id: &'a str,
+        task_id: &'a str,
+    },
+}
+
+impl DomainActivity for ProjectMembership<'_> {
+    const ENTITY_TYPE: EntityType = EntityType::Initiative;
+    fn entity_id(&self) -> &str {
+        match self {
+            Self::Added { project_id, .. } | Self::Removed { project_id, .. } => project_id,
+        }
+    }
+    fn into_action(self) -> Action {
+        match self {
+            Self::Added { task_id, .. } => Action::TaskAdded(InitiativeTaskChange {
+                task_id: task_id.to_owned(),
+            }),
+            Self::Removed { task_id, .. } => Action::TaskRemoved(InitiativeTaskChange {
+                task_id: task_id.to_owned(),
+            }),
+        }
+    }
+}
+
+fn project_id(value: Option<&PropertyValue>) -> Option<&str> {
+    match value {
+        Some(PropertyValue::EntityRef(references)) => references
+            .iter()
+            .find(|reference| reference.entity_type == PropertyEntityType::Initiative)
+            .map(|reference| reference.entity_id.as_str()),
+        _ => None,
+    }
+}
+
+/// A task's Project change is also activity on the project it left
+/// (ordinal 1) and the one it joined (ordinal 2).
+fn project_membership_rows(
+    event_id: Uuid,
+    attribution: &Attribution,
+    m: &EntityPropertyUpdatedMetadata,
+) -> Vec<Activity> {
+    if m.entity_type != PropertyEntityType::Task
+        || m.property_definition_id != SystemPropertyKey::PROJECT_UUID
+    {
+        return Vec::new();
+    }
+    let from = project_id(m.previous_value.as_ref());
+    let to = project_id(m.value.as_ref());
+    if from == to {
+        return Vec::new();
+    }
+    let task_id = m.entity_id.as_str();
+    let memberships = [
+        from.map(|project_id| {
+            (
+                1,
+                ProjectMembership::Removed {
+                    project_id,
+                    task_id,
+                },
+            )
+        }),
+        to.map(|project_id| {
+            (
+                2,
+                ProjectMembership::Added {
+                    project_id,
+                    task_id,
+                },
+            )
+        }),
+    ];
+    memberships
+        .into_iter()
+        .flatten()
+        .map(|(ordinal, membership)| {
+            Activity::from_domain(
+                event_id,
+                ordinal,
+                attribution.actor(),
+                attribution.on_behalf_of(),
+                membership,
+                m.updated_at,
+            )
+        })
+        .collect()
+}
+
 impl ActivitySource for PropertyTopicEvent {
     /// Maps one `macro.properties` event to its ingest outcome.
     ///
@@ -82,32 +180,43 @@ impl ActivitySource for PropertyTopicEvent {
     /// until someone classifies it or explicitly drops it.
     fn ingest(&self, event_id: Uuid) -> Ingest {
         match self {
-            PropertyTopicEvent::EntityPropertyUpdated(m) => attributed(
-                event_id,
-                event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),
-                &m.entity_type,
-                &m.entity_id,
-                CommonAction::PropertyChanged(PropertyChange {
-                    property: m.property_definition_id.to_string(),
-                    // None means unknown/newly-attached for `from` and
-                    // cleared for `to`; a serialization failure must not
-                    // masquerade as either, so it stores an explicit JSON
-                    // null.
-                    from: m.previous_value.as_ref().map(|value| {
-                        serde_json::to_value(value).unwrap_or_else(|e| {
-                            tracing::error!(error=?e, "unserializable property value");
-                            serde_json::Value::Null
-                        })
+            PropertyTopicEvent::EntityPropertyUpdated(m) => {
+                let attribution = event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id);
+                let memberships = attribution
+                    .as_ref()
+                    .map(|attribution| project_membership_rows(event_id, attribution, m))
+                    .unwrap_or_default();
+                let mut ingest = attributed(
+                    event_id,
+                    attribution,
+                    &m.entity_type,
+                    &m.entity_id,
+                    CommonAction::PropertyChanged(PropertyChange {
+                        property: m.property_definition_id.to_string(),
+                        // None means unknown/newly-attached for `from` and
+                        // cleared for `to`; a serialization failure must not
+                        // masquerade as either, so it stores an explicit JSON
+                        // null.
+                        from: m.previous_value.as_ref().map(|value| {
+                            serde_json::to_value(value).unwrap_or_else(|e| {
+                                tracing::error!(error=?e, "unserializable property value");
+                                serde_json::Value::Null
+                            })
+                        }),
+                        to: m.value.as_ref().map(|value| {
+                            serde_json::to_value(value).unwrap_or_else(|e| {
+                                tracing::error!(error=?e, "unserializable property value");
+                                serde_json::Value::Null
+                            })
+                        }),
                     }),
-                    to: m.value.as_ref().map(|value| {
-                        serde_json::to_value(value).unwrap_or_else(|e| {
-                            tracing::error!(error=?e, "unserializable property value");
-                            serde_json::Value::Null
-                        })
-                    }),
-                }),
-                m.updated_at,
-            ),
+                    m.updated_at,
+                );
+                if let Ingest::Insert(rows) = &mut ingest {
+                    rows.extend(memberships);
+                }
+                ingest
+            }
             PropertyTopicEvent::EntityPropertyDeleted(m) => attributed(
                 event_id,
                 event_attribution(&m.actor, &m.on_behalf_of, &m.actor_user_id),

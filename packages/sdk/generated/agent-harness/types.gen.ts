@@ -581,7 +581,7 @@ export type ChangedFileDto = {
 };
 
 /**
- * One capture of a session's changes.
+ * One changeset: the files a patch touches and what happened to each.
  *
  * Clients deserialize this, so both derives are used.
  */
@@ -611,11 +611,11 @@ export type ChangesetDto = {
      */
     head: GitRefDto;
     /**
-     * The capture's id; changes with every capture.
+     * The changeset's id; a different id means different changes.
      */
     id: string;
     /**
-     * Size of the patch `GET .../changes/patch` serves; zero when nothing
+     * Size of the patch the matching patch route serves; zero when nothing
      * changed.
      */
     patchBytes: number;
@@ -634,7 +634,7 @@ export type ChangesetDto = {
 };
 
 /**
- * The source of the captured diff, on the wire.
+ * The source of a changeset's diff, on the wire.
  */
 export type ChangesetSourceDto = 'github_pull_request';
 
@@ -1145,6 +1145,31 @@ export type PromptAttachment = {
 };
 
 /**
+ * Who associated a pull request with a session.
+ */
+export type PullRequestLinkSource = 'agent' | 'user';
+
+/**
+ * The sessions associated with a pull request.
+ */
+export type PullRequestSessionsResponse = {
+    /**
+     * Sessions associated with the pull request that the caller can view.
+     */
+    sessionIds: Array<string>;
+};
+
+/**
+ * A GitHub pull request, by URL.
+ */
+export type PullRequestUrl = {
+    /**
+     * The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`.
+     */
+    url: string;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -1227,6 +1252,42 @@ export type SessionBot = {
      * Display name.
      */
     name: string;
+};
+
+/**
+ * A pull request associated with a session.
+ */
+export type SessionPullRequestLink = {
+    /**
+     * When the pull request was associated with the session.
+     */
+    createdAt: string;
+    /**
+     * The pull request's `owner/repo/pull/number` key.
+     */
+    githubKey: string;
+    /**
+     * The Macro user who linked it, for links a person made.
+     */
+    linkedBy?: string | null;
+    /**
+     * Who associated the pull request with the session.
+     */
+    source: PullRequestLinkSource;
+    /**
+     * The pull request's GitHub URL.
+     */
+    url: string;
+};
+
+/**
+ * The pull requests associated with a session.
+ */
+export type SessionPullRequestsResponse = {
+    /**
+     * Pull requests, oldest link first.
+     */
+    pullRequests: Array<SessionPullRequestLink>;
 };
 
 /**
@@ -1570,6 +1631,27 @@ export type CreateAgentSessionResponses = {
 
 export type CreateAgentSessionResponse2 = CreateAgentSessionResponses[keyof CreateAgentSessionResponses];
 
+export type AgentSessionsForPullRequestData = {
+    body: PullRequestUrl;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/by-pull-request';
+};
+
+export type AgentSessionsForPullRequestErrors = {
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type AgentSessionsForPullRequestError = AgentSessionsForPullRequestErrors[keyof AgentSessionsForPullRequestErrors];
+
+export type AgentSessionsForPullRequestResponses = {
+    200: PullRequestSessionsResponse;
+};
+
+export type AgentSessionsForPullRequestResponse = AgentSessionsForPullRequestResponses[keyof AgentSessionsForPullRequestResponses];
+
 export type PreviewAgentSessionsData = {
     body: PreviewAgentSessionsRequest;
     path?: never;
@@ -1896,6 +1978,91 @@ export type UpdateAgentSessionPermissionsResponses = {
 
 export type UpdateAgentSessionPermissionsResponse = UpdateAgentSessionPermissionsResponses[keyof UpdateAgentSessionPermissionsResponses];
 
+export type UnlinkAgentSessionPullRequestData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query: {
+        /**
+         * The pull request's GitHub URL
+         */
+        url: string;
+    };
+    url: '/agent-sessions/{session_id}/pull-requests';
+};
+
+export type UnlinkAgentSessionPullRequestErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type UnlinkAgentSessionPullRequestError = UnlinkAgentSessionPullRequestErrors[keyof UnlinkAgentSessionPullRequestErrors];
+
+export type UnlinkAgentSessionPullRequestResponses = {
+    204: void;
+};
+
+export type UnlinkAgentSessionPullRequestResponse = UnlinkAgentSessionPullRequestResponses[keyof UnlinkAgentSessionPullRequestResponses];
+
+export type ListAgentSessionPullRequestsData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/pull-requests';
+};
+
+export type ListAgentSessionPullRequestsErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type ListAgentSessionPullRequestsError = ListAgentSessionPullRequestsErrors[keyof ListAgentSessionPullRequestsErrors];
+
+export type ListAgentSessionPullRequestsResponses = {
+    200: SessionPullRequestsResponse;
+};
+
+export type ListAgentSessionPullRequestsResponse = ListAgentSessionPullRequestsResponses[keyof ListAgentSessionPullRequestsResponses];
+
+export type LinkAgentSessionPullRequestData = {
+    body: PullRequestUrl;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/pull-requests';
+};
+
+export type LinkAgentSessionPullRequestErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type LinkAgentSessionPullRequestError = LinkAgentSessionPullRequestErrors[keyof LinkAgentSessionPullRequestErrors];
+
+export type LinkAgentSessionPullRequestResponses = {
+    204: void;
+};
+
+export type LinkAgentSessionPullRequestResponse = LinkAgentSessionPullRequestResponses[keyof LinkAgentSessionPullRequestResponses];
+
 export type GetAgentSessionQueueData = {
     body?: never;
     path: {
@@ -1993,6 +2160,40 @@ export type EditQueuedActionResponses = {
 };
 
 export type EditQueuedActionResponse = EditQueuedActionResponses[keyof EditQueuedActionResponses];
+
+export type SteerQueuedActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID the action was accepted under
+         */
+        action_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/queue/{action_id}/steer';
+};
+
+export type SteerQueuedActionErrors = {
+    401: string;
+    403: string;
+    /**
+     * Already dispatched or never queued
+     */
+    404: string;
+    500: string;
+};
+
+export type SteerQueuedActionError = SteerQueuedActionErrors[keyof SteerQueuedActionErrors];
+
+export type SteerQueuedActionResponses = {
+    204: void;
+};
+
+export type SteerQueuedActionResponse = SteerQueuedActionResponses[keyof SteerQueuedActionResponses];
 
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;
