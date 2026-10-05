@@ -1,3 +1,7 @@
+/**
+ * Existing tab ids match the legacy mail view (`important` is Signal).
+ * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
+ */
 export const EMAIL_TAB_IDS = [
   'important',
   'noise',

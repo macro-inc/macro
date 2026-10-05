@@ -60,7 +60,7 @@ export type UseEmailDataSourceOptions = {
 /**
  * The server owns importance, calendar, sent and inbox scoping, so — as with
  * the legacy presets' client filters — only the shapes a cached entity can
- * contradict are re-checked here, including archive state.
+ * contradict are re-checked here.
  */
 function emailMatchesTab(
   entity: EmailEntity,
