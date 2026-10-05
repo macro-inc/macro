@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{OVERAGE_CHARGE_THRESHOLD_CENTS, PayerScope};
-use crate::domain::pricing::extra_customer_cents;
+use crate::domain::pricing::AiPricing;
 use chrono::{TimeZone, Utc};
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
@@ -19,7 +19,8 @@ fn policy(active: bool, limit: i64, ended: bool) -> SettlementPolicy {
 /// `used` and `included` are cost cents; the rest is customer money.
 fn state(used: i64, included: i64, consumed: i64, charged: i64, balance: i64) -> SettlementState {
     SettlementState {
-        chargeable_customer_cents: extra_customer_cents((used - included).max(0)),
+        chargeable_customer_cents: AiPricing::testing()
+            .extra_customer_cents((used - included).max(0)),
         credits_consumed_cents: consumed,
         overage_charged_cents: charged,
         credit_balance_cents: balance,
@@ -28,9 +29,18 @@ fn state(used: i64, included: i64, consumed: i64, charged: i64, balance: i64) ->
 
 #[test]
 fn included_allowance_is_the_same_at_cost_for_every_paid_seat() {
-    assert_eq!(PlanTier::Premium.included_ai_cents_per_seat(), 2_000);
-    assert_eq!(PlanTier::Max.included_ai_cents_per_seat(), 2_000);
-    assert_eq!(PlanTier::Free.included_ai_cents_per_seat(), 0);
+    assert_eq!(
+        PlanTier::Premium.included_ai_cents_per_seat(AiPricing::testing()),
+        2_000
+    );
+    assert_eq!(
+        PlanTier::Max.included_ai_cents_per_seat(AiPricing::testing()),
+        2_000
+    );
+    assert_eq!(
+        PlanTier::Free.included_ai_cents_per_seat(AiPricing::testing()),
+        0
+    );
 
     let mut team = Entitlement::personal(user("owner@x.com"), PlanTier::Premium);
     team.billed_users.push(user("a@x.com"));
@@ -41,9 +51,9 @@ fn included_allowance_is_the_same_at_cost_for_every_paid_seat() {
         team_id: macro_uuid::generate_uuid_v7(),
     };
     assert_eq!(team.seats(), 3);
-    assert_eq!(team.included_ai_cents(), 2_000);
+    assert_eq!(team.included_ai_cents(AiPricing::testing()), 2_000);
     assert_eq!(
-        team.seat_allowances()
+        team.seat_allowances(AiPricing::testing())
             .into_iter()
             .map(|seat| seat.included_cents)
             .collect::<Vec<_>>(),
@@ -62,8 +72,8 @@ fn mixed_seat_plans_keep_one_allowance_per_seat() {
         team_id: macro_uuid::generate_uuid_v7(),
     };
     assert_eq!(team.seats(), 3);
-    assert_eq!(team.included_ai_cents(), 2_000);
-    let allowances = team.seat_allowances();
+    assert_eq!(team.included_ai_cents(AiPricing::testing()), 2_000);
+    let allowances = team.seat_allowances(AiPricing::testing());
     assert_eq!(
         allowances
             .iter()
@@ -159,7 +169,7 @@ fn settling_in_chunks_books_the_same_money_as_settling_once() {
     assert_eq!(second.consume_credits_cents, 525);
     assert_eq!(
         first.consume_credits_cents + second.consume_credits_cents,
-        extra_customer_cents(1_500)
+        AiPricing::testing().extra_customer_cents(1_500)
     );
 }
 
@@ -173,9 +183,18 @@ fn snapshot_for(
     let u = user("me@x.com");
     let ent = Entitlement::personal(u.clone(), tier);
     let period = BillingPeriod::calendar_month(Utc::now());
-    let chargeable = extra_customer_cents((used - ent.included_ai_cents()).max(0));
+    let chargeable = AiPricing::testing()
+        .extra_customer_cents((used - ent.included_ai_cents(AiPricing::testing())).max(0));
     build_snapshot(
-        &u, &ent, &settings, period, used, chargeable, ledger, balance,
+        &u,
+        &ent,
+        &settings,
+        period,
+        used,
+        chargeable,
+        ledger,
+        balance,
+        AiPricing::testing(),
     )
 }
 
@@ -331,9 +350,10 @@ fn free_and_unlimited_are_never_blocked() {
         &BillingSettings::default(),
         BillingPeriod::calendar_month(Utc::now()),
         99_999,
-        extra_customer_cents(97_999),
+        AiPricing::testing().extra_customer_cents(97_999),
         PeriodLedger::default(),
         0,
+        AiPricing::testing(),
     );
     assert_eq!(decide(&s), AllowanceDecision::Allow);
     assert_eq!(s.remaining_cents, i64::MAX);
@@ -362,6 +382,7 @@ fn team_member_is_not_the_payer() {
         0,
         PeriodLedger::default(),
         0,
+        AiPricing::testing(),
     );
     assert!(!s.can_manage_billing);
     assert_eq!(s.seats, 2);

@@ -484,6 +484,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         admission: ai_billing::composition::pg_admission_service(
             db.clone(),
             config.enable_ai_usage_enforcement,
+            config.ai_pricing(),
         ),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),

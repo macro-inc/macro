@@ -1850,9 +1850,15 @@ updates live and shows each collaborator's caret with their name
   changed`, above the `Discussion` composer.
 - AI `CommentOnDocument` works on DOCX by quote. The editor pins each quote to
   the first matching text the next time someone opens the file.
+- AI `EditWordDocument` can record its edits as tracked changes
+  (`trackChanges`, or by default when the document tracks changes) and add
+  Word comments (`addComment`), both attributed to the requesting user by
+  name rather than to the agent. Its comments are written into the file, so
+  they appear as `In the document` cards and travel with the download.
 - `Download .docx` exports the current collaborative state with every edit,
-  including headers, footers and tracked changes. Comments stay in Macro
-  threads and are not written into the file.
+  including headers, footers and tracked changes. Macro comment threads are
+  not written into the file; Word comments (including the agent's
+  `addComment` ones) are.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
 - **Ask Macro**, in the header beside **Share**, opens a new agent session in

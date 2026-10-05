@@ -646,9 +646,15 @@ fn premium_service_with(
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
     (
-        BillingServiceImpl::new(ents, usage.clone(), repo.clone(), payments.clone())
-            .with_enforcement(AiUsageEnforcement::Enabled)
-            .with_billing(billing),
+        BillingServiceImpl::new(
+            ents,
+            usage.clone(),
+            repo.clone(),
+            payments.clone(),
+            AiPricing::testing(),
+        )
+        .with_enforcement(AiUsageEnforcement::Enabled)
+        .with_billing(billing),
         repo,
         payments,
         usage,
@@ -694,9 +700,15 @@ async fn unlimited_payers_are_never_charged_overage_or_gated() {
         state.settings.overage_enabled = true;
         state.settings.overage_limit_cents = 10_000;
     }
-    let svc = BillingServiceImpl::new(entitlements, usage, repo.clone(), payments.clone())
-        .with_enforcement(AiUsageEnforcement::Enabled)
-        .with_billing(AiUsageBilling::Enabled);
+    let svc = BillingServiceImpl::new(
+        entitlements,
+        usage,
+        repo.clone(),
+        payments.clone(),
+        AiPricing::testing(),
+    )
+    .with_enforcement(AiUsageEnforcement::Enabled)
+    .with_billing(AiUsageBilling::Enabled);
 
     assert_eq!(
         svc.check_allowance(&payer).await.unwrap(),
@@ -736,6 +748,7 @@ async fn policy_activation_during_analytics_read_cannot_double_bill() {
         ActivatingUsage(repo.clone()),
         repo.clone(),
         payments.clone(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
     svc.settle(&user("payer@x.com")).await.unwrap();
@@ -842,6 +855,7 @@ async fn default_disabled_gate_and_disabled_settlement_do_not_read_entitlements(
         FakeUsage::default(),
         FakeRepo::default(),
         FakePayments::default(),
+        AiPricing::testing(),
     );
     assert_eq!(
         svc.check_allowance(&user("payer@x.com")).await.unwrap(),
@@ -1162,6 +1176,7 @@ async fn only_the_payer_manages_billing_and_needs_a_paid_plan() {
         FakeUsage::default(),
         FakeRepo::default(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -1223,10 +1238,15 @@ async fn team_seats_keep_allowances_separate_and_share_credits() {
     let usage = FakeUsage::default();
     usage.add(&member, Utc::now(), 3_000);
     let repo = FakeRepo::default();
-    let service =
-        BillingServiceImpl::new(entitlements, usage, repo.clone(), FakePayments::default())
-            .with_billing(AiUsageBilling::Enabled)
-            .with_enforcement(AiUsageEnforcement::Enabled);
+    let service = BillingServiceImpl::new(
+        entitlements,
+        usage,
+        repo.clone(),
+        FakePayments::default(),
+        AiPricing::testing(),
+    )
+    .with_billing(AiUsageBilling::Enabled)
+    .with_enforcement(AiUsageEnforcement::Enabled);
 
     let owner_snapshot = service.snapshot(&owner).await.unwrap();
     assert_eq!(owner_snapshot.used_cents, 0);
@@ -1383,8 +1403,14 @@ fn anchored_premium(
     };
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
-    let svc = BillingServiceImpl::new(ents.clone(), usage.clone(), repo.clone(), payments.clone())
-        .with_billing(AiUsageBilling::Enabled);
+    let svc = BillingServiceImpl::new(
+        ents.clone(),
+        usage.clone(),
+        repo.clone(),
+        payments.clone(),
+        AiPricing::testing(),
+    )
+    .with_billing(AiUsageBilling::Enabled);
     let current_start = Utc::now() - chrono::Duration::days(3);
     let current_end = current_start + chrono::Duration::days(30);
     let current = BillingPeriod {
@@ -1529,8 +1555,14 @@ async fn previous_period_usage_uses_the_frozen_billed_users() {
     let usage = FakeUsage::default();
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
-    let svc = BillingServiceImpl::new(ents.clone(), usage.clone(), repo.clone(), payments.clone())
-        .with_billing(AiUsageBilling::Enabled);
+    let svc = BillingServiceImpl::new(
+        ents.clone(),
+        usage.clone(),
+        repo.clone(),
+        payments.clone(),
+        AiPricing::testing(),
+    )
+    .with_billing(AiUsageBilling::Enabled);
     let current_start = Utc::now() - chrono::Duration::days(3);
     let current_end = current_start + chrono::Duration::days(30);
     let current = BillingPeriod {
@@ -1632,6 +1664,7 @@ async fn release_targets_the_payer_open_period() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -1667,6 +1700,7 @@ async fn release_missing_team_leaves_allowances_unchanged() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -1705,6 +1739,7 @@ async fn release_refuses_to_remove_the_payer() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -1759,6 +1794,7 @@ async fn position_keeps_matching_pairs_in_their_stored_order() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -1822,6 +1858,7 @@ async fn position_does_not_restore_a_member_released_between_entitlement_reads()
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -2169,6 +2206,7 @@ async fn free_and_unlimited_payers_never_read_the_provider() {
         FakeUsage::default(),
         FakeRepo::default(),
         payments.clone(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -2199,6 +2237,7 @@ async fn payer_without_a_stripe_customer_never_reads_the_provider() {
         FakeUsage::default(),
         FakeRepo::default(),
         payments.clone(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -2232,6 +2271,7 @@ async fn team_member_reads_the_owner_subscription_in_team_scope() {
         FakeUsage::default(),
         repo.clone(),
         payments.clone(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -2282,6 +2322,7 @@ async fn release_uses_the_subscription_period() {
         FakeUsage::default(),
         repo.clone(),
         payments,
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -2319,6 +2360,7 @@ async fn release_with_a_covering_anchor_never_reads_the_entitlement() {
         FakeUsage::default(),
         repo.clone(),
         payments.clone(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 
@@ -2356,6 +2398,7 @@ async fn release_rolls_an_ended_anchor_when_the_entitlement_read_fails() {
         FakeUsage::default(),
         repo.clone(),
         FakePayments::default(),
+        AiPricing::testing(),
     )
     .with_billing(AiUsageBilling::Enabled);
 

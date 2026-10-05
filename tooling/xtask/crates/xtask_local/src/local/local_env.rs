@@ -718,6 +718,11 @@ impl BootStubEnv {
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
+        // ai_billing's mandatory pricing (crates/ai_billing/src/config.rs). Every
+        // host that composes billing refuses to boot without both; these are
+        // the same values Doppler's shared_ai configs carry.
+        env.insert("AI_USAGE_INCLUDED_ALLOWANCE_CENTS".into(), "2000".into());
+        env.insert("AI_USAGE_OVERAGE_MARKUP_PERCENT".into(), "5".into());
         // macro_auth's `JwtValidationArgs` (used by every service that mounts
         // the auth middleware) reads these at boot. The keys are only parsed
         // when a Macro API token is actually validated — normal local auth

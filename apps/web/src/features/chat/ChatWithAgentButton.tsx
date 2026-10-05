@@ -69,17 +69,24 @@ async function createAndOpenAgent(seed: {
     ...(seed.model ? { modelOverride: seed.model } : {}),
     ...(seed.instructions ? { instructions: seed.instructions } : {}),
   });
-  const next = {
-    type: 'component' as const,
-    id: agentsRouteId({
-      mode: 'chat',
-      conversation: { type: 'agent_session', id },
-    }),
-  };
   if (seed.replaceSplit) {
-    seed.replaceSplit.replace({ next });
+    // In-place handoffs (search "Ask AI") land in the full Agents workspace.
+    seed.replaceSplit.replace({
+      next: {
+        type: 'component',
+        id: agentsRouteId({
+          mode: 'chat',
+          conversation: { type: 'agent_session', id },
+        }),
+      },
+    });
   } else {
-    manager?.openWithSplit(next, { activate: true, preferNewSplit: true });
+    // A new split beside the source opens the bare session, without the
+    // Agents workspace's conversation sidebar.
+    manager?.openWithSplit(
+      { type: 'agent', id },
+      { activate: true, preferNewSplit: true }
+    );
   }
   return true;
 }

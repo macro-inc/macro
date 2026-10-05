@@ -799,7 +799,7 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * Where an import entity was first staged from. Provenance only — never a
  * visibility filter.
  */
-export type Initiator = 'onboarding' | 'chat' | 'archive';
+export type Initiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type JwtPayload = {
     token: string;
@@ -1333,15 +1333,27 @@ export type SharePermissionV2 = {
  */
 export type SlackChannelMeta = {
     /**
+     * Whether Slack has archived this channel.
+     */
+    archived?: boolean;
+    /**
      * Slack's channel id (e.g. `C0123456789`), stable across renames.
      */
     channel_id?: string | null;
+    /**
+     * Total human members in the Slack channel.
+     */
+    member_count?: number | null;
+    /**
+     * Whether `participants` reflects a live membership read.
+     */
+    members_resolved?: boolean;
     /**
      * Channel name without the leading `#`.
      */
     name: string;
     /**
-     * The channel's most relevant members, when discoverable.
+     * Slack members matched to the Macro team roster when discovery resolved membership.
      */
     participants?: Array<SlackParticipant>;
     /**
@@ -2297,6 +2309,38 @@ export type RunImportHandlerResponses = {
 };
 
 export type RunImportHandlerResponse = RunImportHandlerResponses[keyof RunImportHandlerResponses];
+
+export type DiscoverHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Import source
+         */
+        source: string;
+    };
+    query?: never;
+    url: '/import/runs/{source}/discover';
+};
+
+export type DiscoverHandlerErrors = {
+    /**
+     * Unknown import source or discovery not supported
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DiscoverHandlerResponses = {
+    /**
+     * Discovery accepted (idempotent)
+     */
+    204: void;
+};
+
+export type DiscoverHandlerResponse = DiscoverHandlerResponses[keyof DiscoverHandlerResponses];
 
 export type DismissRunHandlerData = {
     body?: never;

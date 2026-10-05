@@ -1532,6 +1532,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
     ToolMcpSelector,
     ToolEntityCreator,
+    import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
 >;
 
 /// Type alias for the import tool context. Built `unwired` by the shared

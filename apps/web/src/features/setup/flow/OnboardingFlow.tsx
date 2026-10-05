@@ -15,7 +15,7 @@ import { useOnboardingQuery } from '@queries/onboarding';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { useNavigate } from '@solidjs/router';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { Stepper } from '@ui/components/Stepper';
 import {
   createEffect,
@@ -45,6 +45,7 @@ import { PlanStep } from './PlanStep';
 import { connectorLogo, StepModule } from './StepModule';
 import { SummaryStep } from './SummaryStep';
 import {
+  canBypassOnboarding,
   FLOW_NEXT_STORAGE_KEY,
   FLOW_STEP_STORAGE_KEY,
   NoiseBackground,
@@ -457,6 +458,14 @@ function FlowContent() {
     inviteOffer,
   };
 
+  // Gated read: `data` suspends while the user-info query is pending.
+  const staffEmail = () => {
+    if (!userInfoQuery.isSuccess) return undefined;
+    const info = userInfoQuery.data;
+    if (info?.authenticated !== true) return undefined;
+    return info.email;
+  };
+
   // Heal a half-landed finish: NewOnboardingRedirect keys off
   // tutorialComplete while this flow keys off the onboarding row, and the
   // two are not completed atomically — row completed + flag stuck false
@@ -516,6 +525,20 @@ function FlowContent() {
       }</style>
 
       <NoiseBackground />
+
+      <Show when={canBypassOnboarding(staffEmail())}>
+        <div class="absolute top-4 right-4 z-30">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-ink-muted"
+            disabled={finish.finishing()}
+            onClick={() => void finish.bypass(currentStepKey())}
+          >
+            Bypass
+          </Button>
+        </div>
+      </Show>
 
       {/* The backdrop layers are viewport-sized absolutes, so scrolling has
           to happen inside them — a tall step (the summary's pill cloud)

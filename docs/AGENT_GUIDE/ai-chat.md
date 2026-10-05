@@ -121,10 +121,13 @@ or stop.
 **Ask AI** in search (including Tab), the command menu, and mobile search opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split, while command-menu and mobile actions open a new split.
+its current split into the Agents workspace, while command-menu and mobile
+actions open a new split.
 
-**Ask Macro** and **Chat with Agent** on documents, PDFs, spreadsheets, email,
-channels, calls, and projects also open agent sessions. Their entity mention stays
+**Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
+code files, images, canvases, spreadsheets, email, channels, calls, and projects
+also open agent sessions. Like command-menu Ask AI, they open the bare session in
+a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
 in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
 and selected range; channel-message actions retain the referenced message.
 Add a question and press Send to submit that context. These actions do not create
@@ -169,6 +172,30 @@ the shimmer.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Connections page. Personal Gmail/GitHub account links remain under Settings →
   Integrations.
+
+  To recreate Slack channels, open **Settings → Connections → Slack → Import
+  channels** (or **Connections → Slack** from the Agents workspace). The card
+  appears only for a connected, enabled Pipedream Slack account. Click **Find
+  channels** (or **Refresh** on subsequent visits), then wait for discovery and
+  member checks to update live. Search by name, purpose, or Slack channel id;
+  archived channels stay hidden until **Show archived** is checked. Select
+  individual channels or **Select all visible**, then click **Import 1 channel**
+  or **Import N channels**.
+  Filtering does not clear selections. Rows progress from **Importing…** to an
+  **Imported** link; channels already imported by another team member show
+  **by a teammate** and cannot be selected again. Imported channels appear under
+  **Channels**, with the Slack name and matched Macro teammates. Member counts
+  show how many Slack members are on your team; unchecked membership is labeled
+  separately. Unmatched members are not invited. Messages, files, private
+  channels, and direct messages are not imported, and there is no ongoing sync.
+  A failed discovery shows its error and **Retry**; an empty completed discovery
+  shows **No public channels found**. If member checks reach their time budget,
+  discovered channels remain available with unchecked membership rather than a
+  discovery failure. Conversations with unknown visibility are not listed.
+  If both Slack connector aliases are connected, the Slack page manages `slack`
+  first; `slack_v2` remains a separate row in Connections where it can be disabled
+  or disconnected.
+
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
@@ -498,9 +525,10 @@ must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
 quota, but Macro-funded tools and helpers still check independently.
 
-In dev, paid plans include a monthly AI allowance of $20 per seat, measured at
-provider cost; usage beyond it is billed at a small markup (both are constants in
-`crates/ai_billing/src/domain/pricing.rs`). When it is used up and no credits or usage billing cover the
+Paid plans include a monthly AI allowance per seat, measured at provider cost;
+usage beyond it is billed at a markup. Both numbers come from Doppler
+(`AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`; $20 and
+5% in dev), never from code. When the allowance is used up and no credits or usage billing cover the
 request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
 spending-limit / failed-charge variants). It shows the same meter and controls

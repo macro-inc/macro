@@ -72,9 +72,9 @@ export function createFlowFinish(options?: {
    * off tutorialComplete, so navigating before the cache reflects the PATCH
    * would bounce straight back here.
    */
-  const completeFlow = async (): Promise<boolean> => {
+  const completeFlow = async (skipped = false): Promise<boolean> => {
     const [onboardingResult] = await Promise.allSettled([
-      completeOnboarding.mutateAsync({ skipped: false }),
+      completeOnboarding.mutateAsync({ skipped }),
       completeTutorial.mutateAsync(),
     ]);
     // Exiting with the row still active would leave staged candidates
@@ -153,11 +153,35 @@ export function createFlowFinish(options?: {
     }
   };
 
+  /**
+   * Staff escape hatch: close the flow without touching any step, recorded
+   * server-side as skipped. Lands on the preserved deep link or straight in
+   * the app — the Getting Started checklist is onboarding too.
+   */
+  const bypass = async (stepKey: string) => {
+    if (finishing()) return;
+    setFinishing(true);
+    // Resolved up front: completing the flow clears the persisted deep link.
+    const target =
+      sanitizeNext(searchParams.next) ??
+      sanitizeNext(sessionStorage.getItem(FLOW_NEXT_STORAGE_KEY)) ??
+      DEFAULT_ROUTE;
+    try {
+      if (await completeFlow(true)) {
+        analytics.track('onboarding_v4_bypassed', { step: stepKey });
+        navigate(target, { replace: true });
+      }
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   return {
     finishing,
     finishFree,
     startPremiumCheckout,
     finishPremium,
+    bypass,
     afterTarget,
   };
 }

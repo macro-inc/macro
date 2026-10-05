@@ -166,7 +166,9 @@ impl StreamRepo for MockStreamRepo {
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     let config = Config::new_empty_for_test();
     let enforcement = config.enable_ai_usage_enforcement;
-    let admission = ai_billing::composition::pg_admission_service(pool.clone(), enforcement);
+    let pricing = config.ai_pricing();
+    let admission =
+        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
     use channels::{
@@ -559,6 +561,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 Arc::new(creator),
                 recorder.clone(),
             )
+            .with_slack_source(Arc::new(
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+            ))
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
@@ -644,13 +649,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
                 ),
                 ai_billing::outbound::PgUsageReader::new(pool.clone()),
-                ai_billing::outbound::PgBillingRepo::new(pool.clone()),
+                ai_billing::outbound::PgBillingRepo::new(pool.clone(), pricing),
                 ai_billing::outbound::HttpPaymentGateway::new(Arc::new(
                     authentication_service_client::AuthServiceClient::new(
                         "testing".to_string(),
                         "http://127.0.0.1:9".to_string(),
                     ),
                 )),
+                pricing,
             )
             .with_enforcement(enforcement),
         ),

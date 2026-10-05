@@ -16,7 +16,7 @@ use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
     PaymentGateway, PendingCharge, UsageReader,
 };
-use super::pricing::extra_customer_cents;
+use super::pricing::AiPricing;
 use ai_usage::AiUsageEnforcement;
 use chrono::{DateTime, Utc};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -31,24 +31,32 @@ pub struct BillingServiceImpl<E, U, R, P> {
     usage: U,
     repo: R,
     payments: P,
+    pricing: AiPricing,
     enforcement: AiUsageEnforcement,
     billing: AiUsageBilling,
     period_sync: Option<Arc<dyn PeriodSync>>,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
-    /// Construct with quota enforcement and settlement both disabled. Production
-    /// composition must explicitly install each configured policy.
-    pub fn new(entitlements: E, usage: U, repo: R, payments: P) -> Self {
+    /// Construct over the four ports with the configured pricing, and with quota
+    /// enforcement and settlement both disabled. Production composition must
+    /// explicitly install each configured policy.
+    pub fn new(entitlements: E, usage: U, repo: R, payments: P, pricing: AiPricing) -> Self {
         Self {
             entitlements,
             usage,
             repo,
             payments,
+            pricing,
             enforcement: AiUsageEnforcement::Disabled,
             billing: AiUsageBilling::Disabled,
             period_sync: None,
         }
+    }
+
+    /// The pricing this service was composed with.
+    pub const fn pricing(&self) -> AiPricing {
+        self.pricing
     }
 
     /// Configure quota enforcement independently of settlement.
@@ -141,10 +149,9 @@ where
             .repo
             .period_allowance(&first.payer, open.start())
             .await?;
-        if stored
-            .as_ref()
-            .is_some_and(|allowance| same_seat_pairs(&allowance.seats, &first.seat_allowances()))
-        {
+        if stored.as_ref().is_some_and(|allowance| {
+            same_seat_pairs(&allowance.seats, &first.seat_allowances(self.pricing))
+        }) {
             return Ok(Position {
                 entitlement: first,
                 settings,
@@ -184,7 +191,7 @@ where
             .store_open_allowance(
                 &entitlement.payer,
                 open,
-                &entitlement.seat_allowances(),
+                &entitlement.seat_allowances(self.pricing),
                 settings.seat_generation,
             )
             .await?
@@ -297,7 +304,7 @@ where
         } = position;
         let (used_cents, chargeable_customer_cents, ledger, credit_balance_cents) =
             if entitlement.tier.is_paid() {
-                let seats = entitlement.seat_allowances();
+                let seats = entitlement.seat_allowances(self.pricing);
                 let users: Vec<_> = seats.iter().map(|seat| seat.user.clone()).collect();
                 let usage = self.usage.usage_cost_cents_by_user(&users, *period).await?;
                 let seats = self
@@ -309,7 +316,9 @@ where
                 } else {
                     0
                 };
-                let chargeable = extra_customer_cents(chargeable_cost_cents(&seats, &usage));
+                let chargeable = self
+                    .pricing
+                    .extra_customer_cents(chargeable_cost_cents(&seats, &usage));
                 let ledger = self
                     .repo
                     .period_ledger(&entitlement.payer, period.start)
@@ -329,6 +338,7 @@ where
             chargeable_customer_cents,
             ledger,
             credit_balance_cents,
+            self.pricing,
         ))
     }
 
@@ -358,7 +368,7 @@ where
                 }
             }
         }
-        Ok(entitlement.seat_allowances())
+        Ok(entitlement.seat_allowances(self.pricing))
     }
 
     /// Settle one period for a payer: book uncovered usage from credits, then
@@ -386,7 +396,7 @@ where
         }
         // Mark up the cumulative total, never an increment: the repository
         // books the difference from what earlier settlements already covered.
-        let chargeable_customer_cents = extra_customer_cents(chargeable_cost);
+        let chargeable_customer_cents = self.pricing.extra_customer_cents(chargeable_cost);
 
         let outcome = self
             .repo

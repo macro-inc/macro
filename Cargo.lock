@@ -9848,6 +9848,7 @@ dependencies = [
  "macro_user_id",
  "mcp_select",
  "model-entity",
+ "model_user",
  "models_properties",
  "properties",
  "regex",
@@ -9859,6 +9860,7 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -11722,6 +11724,7 @@ dependencies = [
  "mcp_client",
  "pipedream_mcp",
  "serde_json",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -11865,6 +11868,7 @@ name = "memory"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -17503,6 +17507,7 @@ dependencies = [
  "macro_user_id",
  "mention_utils",
  "messages",
+ "notification",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
@@ -17510,8 +17515,10 @@ dependencies = [
  "sha2 0.10.9",
  "slack_integration",
  "sqlx",
+ "teams",
  "tokio",
  "tokio-util",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

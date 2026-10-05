@@ -1,7 +1,7 @@
 //! Composition helpers for quota admission without payment collection.
 
 use crate::{
-    AiAdmissionService, AiUsageEnforcement, BillingAdmissionService,
+    AiAdmissionService, AiPricing, AiUsageEnforcement, BillingAdmissionService,
     domain::BillingServiceImpl,
     outbound::{NoOpPaymentGateway, PgBillingRepo, PgUsageReader, RolesTeamsEntitlementSource},
 };
@@ -14,11 +14,13 @@ use teams::domain::team_repo::TeamRepository;
 mod test;
 
 /// Compose quota admission for hosts without an existing billing service.
-/// Adapter construction stays in this owning-domain composition root.
+/// Adapter construction stays in this owning-domain composition root. `pricing`
+/// is the host's mandatory startup configuration.
 #[cfg(feature = "pg-admission")]
 pub fn pg_admission_service(
     pool: PgPool,
     enforcement: AiUsageEnforcement,
+    pricing: AiPricing,
 ) -> Arc<dyn AiAdmissionService> {
     admission_service(
         pool.clone(),
@@ -28,6 +30,7 @@ pub fn pg_admission_service(
         ),
         teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
         enforcement,
+        pricing,
     )
 }
 
@@ -42,6 +45,7 @@ pub fn admission_service<P, T>(
     permissions: P,
     teams: T,
     enforcement: AiUsageEnforcement,
+    pricing: AiPricing,
 ) -> Arc<dyn AiAdmissionService>
 where
     P: UserRolesAndPermissionsService,
@@ -50,8 +54,9 @@ where
     let billing = BillingServiceImpl::new(
         RolesTeamsEntitlementSource::new(permissions, teams),
         PgUsageReader::new(pool.clone()),
-        PgBillingRepo::new(pool),
+        PgBillingRepo::new(pool, pricing),
         NoOpPaymentGateway,
+        pricing,
     )
     .with_enforcement(enforcement);
     Arc::new(BillingAdmissionService::new(Arc::new(billing), enforcement))

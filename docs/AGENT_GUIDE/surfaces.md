@@ -1834,6 +1834,12 @@ use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
 
+## Onboarding bypass — `/app/onboarding`
+
+All `@macro.com` accounts see a **Bypass** button on every onboarding step. It
+skips the rest of the flow and leaves onboarding. Accounts on other domains
+do not see it.
+
 ## Setup plan step — `/app/onboarding`
 
 The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.

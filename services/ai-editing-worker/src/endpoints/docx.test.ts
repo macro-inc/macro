@@ -95,6 +95,35 @@ describe('POST /docx', () => {
     });
   });
 
+  it('passes tracking, the author and comments through', async () => {
+    state.run.mockResolvedValue({ content: 'ok' });
+    const response = await post(
+      body({
+        action: 'edit',
+        operations: [
+          { type: 'addComment', paragraph: 'p1', find: null, text: 'Why?' },
+        ],
+        trackChanges: true,
+        author: ' Jacob Beckerman ',
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(state.run.mock.calls[0][1]).toEqual({
+      action: 'edit',
+      operations: [
+        {
+          type: 'addComment',
+          paragraph: 'p1',
+          find: undefined,
+          occurrence: undefined,
+          text: 'Why?',
+        },
+      ],
+      trackChanges: true,
+      author: 'Jacob Beckerman',
+    });
+  });
+
   it('returns what the agent did wrong as a 422', async () => {
     state.run.mockRejectedValue(new DocxAgentError('No paragraph has id x.'));
     const response = await post(

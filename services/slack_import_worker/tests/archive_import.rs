@@ -20,10 +20,11 @@ use entity_access::{
 use import::outbound::pg_import_repo::PgImportRepo;
 use macro_queues::{SlackImportDlq, SlackImportQueue};
 use macro_user_id::user_id::MacroUserIdStr;
+use notification::{domain::service::SqsNotificationIngress, outbound::queue::SqsQueue};
 use sha2::{Digest, Sha256};
 use slack_import_worker::composition::{
     authorizer::WorkerAuthorizer, channel_sink::ChannelImportSink,
-    reference_reconciliation::WorkerReferenceReconciler,
+    join_announcer::WorkerJoinAnnouncer, reference_reconciliation::WorkerReferenceReconciler,
 };
 use slack_integration::{
     domain::{
@@ -40,6 +41,10 @@ use slack_integration::{
     },
 };
 use sqlx::PgPool;
+use teams::{
+    domain::join_announcement::JoinAnnouncementServiceImpl,
+    outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,
+};
 use tokio::time::{sleep, timeout};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -111,17 +116,20 @@ fn docker(args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().trim().to_owned()
 }
 
-async fn resources(
-    endpoint: &str,
-) -> (
-    S3ImportStorage,
-    SqsImportQueue,
-    process_recovery::ProcessConfig,
-) {
+struct Resources {
+    storage: S3ImportStorage,
+    queue: SqsImportQueue,
+    process: process_recovery::ProcessConfig,
+    sqs: aws_sdk_sqs::Client,
+    ingress_url: String,
+}
+
+async fn resources(endpoint: &str) -> Resources {
     let suffix = Uuid::now_v7().simple().to_string();
     let bucket = format!("archive-test-{suffix}");
     let main = format!("archive-main-{suffix}");
     let dlq = format!("archive-dlq-{suffix}");
+    let ingress = format!("archive-ingress-{suffix}");
     let s3 = aws_sdk_s3::Client::from_conf(
         aws_sdk_s3::Config::builder()
             .behavior_version(BehaviorVersion::latest())
@@ -152,7 +160,7 @@ async fn resources(
             .endpoint_url(endpoint)
             .build(),
     );
-    for name in [&main, &dlq] {
+    for name in [&main, &dlq, &ingress] {
         sqs.create_queue().queue_name(name).send().await.unwrap();
     }
     use aws_sdk_sqs::types::QueueAttributeName;
@@ -167,6 +175,14 @@ async fn resources(
     let dlq_url = sqs
         .get_queue_url()
         .queue_name(&dlq)
+        .send()
+        .await
+        .unwrap()
+        .queue_url
+        .unwrap();
+    let ingress_url = sqs
+        .get_queue_url()
+        .queue_name(&ingress)
         .send()
         .await
         .unwrap()
@@ -190,7 +206,7 @@ async fn resources(
         .await
         .unwrap();
     let queue = SqsImportQueue::new(
-        sqs,
+        sqs.clone(),
         &SlackImportQueue::from_owned(main.clone()),
         &SlackImportDlq::from_owned(dlq.clone()),
     )
@@ -203,7 +219,13 @@ async fn resources(
         dlq,
     };
     let storage = S3ImportStorage::new(s3, bucket, ImportLimits::default()).unwrap();
-    (storage, queue, process)
+    Resources {
+        storage,
+        queue,
+        process,
+        sqs,
+        ingress_url,
+    }
 }
 
 fn user() -> MacroUserIdStr<'static> {
@@ -215,7 +237,7 @@ async fn team(pool: &PgPool) -> TeamId {
     let team = Uuid::now_v7();
     sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 't17', 't17@example.com', 't17-customer')", account).execute(pool).await.unwrap();
     sqlx::query!(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ('macro|t17@example.com', 't17@example.com', $1)"#, account).execute(pool).await.unwrap();
-    sqlx::query!("INSERT INTO team (id, name, owner_id) VALUES ($1, 'Atomic history', 'macro|t17@example.com')", team).execute(pool).await.unwrap();
+    sqlx::query!("INSERT INTO team (id, name, owner_id, auto_join_domain) VALUES ($1, 'Atomic history', 'macro|t17@example.com', 'example.com')", team).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, 'macro|t17@example.com', 'owner')", team).execute(pool).await.unwrap();
     team.try_into().unwrap()
 }
@@ -529,10 +551,7 @@ async fn progress(repo: &PgSlackImportRepo, team: TeamId, job: JobId) -> ImportP
     repo.progress(team, job).await.unwrap().unwrap()
 }
 
-/// The historical composition has no live notification/event publisher. Check its
-/// real database effects too: mentions, reactions, external members and replies
-/// must not produce notifications, invitation emails or unread activity.
-async fn assert_backfill_is_silent(pool: &PgPool) {
+async fn assert_no_notification_or_activity_rows(pool: &PgPool) {
     let counts = sqlx::query!(
         r#"
         SELECT
@@ -570,11 +589,77 @@ async fn assert_backfill_is_silent(pool: &PgPool) {
     );
 }
 
+async fn assert_one_external_colleague(pool: &PgPool, team: TeamId) {
+    let count = sqlx::query_scalar!(r#"SELECT count(*) FROM team_joined_macro_email"#)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    assert_eq!(count, Some(1));
+    let rows = sqlx::query!(r#"SELECT team_id, email FROM team_joined_macro_email"#)
+        .fetch_all(pool)
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].team_id, Uuid::from(team));
+    assert_eq!(rows[0].email, "external@example.com");
+}
+
+async fn ingress_bodies(sqs: &aws_sdk_sqs::Client, url: &str) -> Vec<serde_json::Value> {
+    let mut bodies = Vec::new();
+    loop {
+        let page = sqs
+            .receive_message()
+            .queue_url(url)
+            .max_number_of_messages(10)
+            .wait_time_seconds(1)
+            .send()
+            .await
+            .unwrap();
+        let Some(messages) = page.messages.filter(|messages| !messages.is_empty()) else {
+            break;
+        };
+        for message in messages {
+            bodies.push(serde_json::from_str(message.body.as_deref().unwrap()).unwrap());
+            sqs.delete_message()
+                .queue_url(url)
+                .receipt_handle(message.receipt_handle.unwrap())
+                .send()
+                .await
+                .unwrap();
+        }
+    }
+    bodies
+}
+
+fn assert_colleague_joined(body: &serde_json::Value, team: Uuid) {
+    let request = &body["request"];
+    assert_eq!(
+        request["req"]["notification"]["tag"],
+        "colleague_joined_macro"
+    );
+    assert_eq!(request["req"]["sender_id"], "macro|t17@example.com");
+    assert_eq!(
+        request["req"]["recipient_ids"],
+        serde_json::json!(["macro|external@example.com"])
+    );
+    let id = Uuid::new_v5(
+        &Uuid::from_u128(0x7465_616d_2d6a_6f69_6e65_642d_6d61_6372),
+        format!("{team}:external@example.com").as_bytes(),
+    );
+    assert_eq!(request["uuid_to_write"], id.to_string());
+}
+
 #[ignore = "requires Docker with localstack/localstack:4 and a local PostgreSQL test role"]
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
 async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool) {
     let (_container, endpoint) = LocalStack::start().await;
-    let (storage, queue, _) = resources(&endpoint).await;
+    let Resources {
+        storage,
+        queue,
+        sqs,
+        ingress_url,
+        ..
+    } = resources(&endpoint).await;
     let team = team(&pool).await;
     let limits = ImportLimits::default();
     let repo = PgSlackImportRepo::new(pool.clone(), limits);
@@ -610,14 +695,23 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
             sink.clone(),
             sink.clone(),
             authorizer,
+            WorkerJoinAnnouncer::new(
+                JoinAnnouncementServiceImpl::new(
+                    JoinAnnouncementRepositoryImpl::new(pool.clone()),
+                    SqsNotificationIngress {
+                        queue: SqsQueue::new(sqs.clone(), ingress_url.clone()),
+                    },
+                ),
+                true,
+            ),
             ImporterConfig { limits },
         )
         .unwrap(),
     );
-    assert_backfill_is_silent(&pool).await;
+    assert_no_notification_or_activity_rows(&pool).await;
     // Shape creation followed by history and an exact repeat reuse the same IDs.
     let mut canonical = None;
-    for history in [false, true, true] {
+    for (attempt, history) in [false, true, true].into_iter().enumerate() {
         search.0.store(false, Ordering::SeqCst);
         let job = upload_job(&service, team, history).await;
         let events = repo.pending_events(50).await.unwrap();
@@ -672,6 +766,14 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
             .await
             .unwrap()
             .unwrap();
+        assert_one_external_colleague(&pool, team).await;
+        let messages = ingress_bodies(&sqs, &ingress_url).await;
+        if attempt == 0 {
+            assert_eq!(messages.len(), 1);
+            assert_colleague_joined(&messages[0], Uuid::from(team));
+        } else {
+            assert!(messages.is_empty());
+        }
         // Reconcile links and publish search without a competing maintenance loop.
         maintenance.reconcile().await.unwrap();
         let receipt = progress(&repo, team, job).await;
@@ -742,7 +844,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
             progress(&repo, team, job).await.status,
             JobStatus::Completed
         );
-        assert_backfill_is_silent(&pool).await;
+        assert_no_notification_or_activity_rows(&pool).await;
     }
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM comms_messages")
@@ -756,7 +858,7 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
     // DLQ. Disabling admission must still run the production DLQ driver.
     // Cancelled HTTP long polls can still reserve messages server-side until
     // their timeout. A fresh queue keeps this redrive scenario independent.
-    let (storage, queue, _) = resources(&endpoint).await;
+    let Resources { storage, queue, .. } = resources(&endpoint).await;
     let authorizer = WorkerAuthorizer::new(
         pool.clone(),
         Access::new(PgAccessRepository::new(pool.clone())),
@@ -844,7 +946,9 @@ async fn sealed_uploads_queue_replay_and_search_completion_barrier(pool: PgPool)
     })
     .await
     .expect("disabled worker did not persist exhausted work as Failed");
-    assert_backfill_is_silent(&pool).await;
+    assert_no_notification_or_activity_rows(&pool).await;
+    assert_one_external_colleague(&pool, team).await;
+    assert!(ingress_bodies(&sqs, &ingress_url).await.is_empty());
     stop.cancel();
     timeout(Duration::from_secs(35), driver)
         .await

@@ -159,6 +159,8 @@ export const cognitionExcluded = [
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'rejectToolCall',
+  // Channel discovery shares the app-only import workflow below.
+  'discoverHandler',
   'runImportHandler',
   'dismissRunHandler',
   'retryGatherHandler',

@@ -18,10 +18,26 @@ fn edit_input_parses_every_operation() {
             { "type": "insertParagraph", "after": "p1", "text": "A\nB", "style": "Heading2" },
             { "type": "setStyle", "paragraph": "p1", "style": "Title" },
             { "type": "delete", "id": "t1" },
+            { "type": "addComment", "paragraph": "p1", "find": "New", "text": "Why?" },
         ],
     }))
     .unwrap();
-    assert_eq!(tool.operations.len(), 6);
+    assert_eq!(tool.operations.len(), 7);
+    assert_eq!(tool.track_changes, None);
+    assert_eq!(tool.author, None);
+}
+
+#[test]
+fn edit_input_takes_tracking_and_an_author() {
+    let tool: EditWordDocument = serde_json::from_value(serde_json::json!({
+        "documentId": "doc",
+        "operations": [{ "type": "delete", "id": "p1" }],
+        "trackChanges": true,
+        "author": "Acme Legal",
+    }))
+    .unwrap();
+    assert_eq!(tool.track_changes, Some(true));
+    assert_eq!(tool.author.as_deref(), Some("Acme Legal"));
 }
 
 #[tokio::test]

@@ -158,6 +158,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             ai_billing::inbound::AiBillingRouterState {
                 service: state.ai_billing_service.clone(),
                 payments: state.ai_payment_gateway.clone(),
+                pricing: state.ai_billing_service.pricing(),
                 authorization_state: state.authorization_state.clone(),
             },
         ))

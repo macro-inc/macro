@@ -3,7 +3,7 @@
 //! hooks.
 
 use crate::domain::{
-    BillingError, BillingService, CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS,
+    AiPricing, BillingError, BillingService, CREDIT_PACKS_CENTS, OVERAGE_LIMIT_MAX_CENTS,
     OVERAGE_LIMIT_MIN_CENTS, PaymentGateway, PlanTier, SubscriptionScope, UsageSnapshot,
 };
 use axum::{
@@ -199,13 +199,15 @@ fn scope_from_query(team_id: Option<Uuid>) -> SubscriptionScope {
 }
 
 /// Router state: the billing service, the payment gateway the internal
-/// subscription-period read uses, and the authorization state the extractors
-/// need.
+/// subscription-period read uses, the configured pricing the catalog
+/// publishes, and the authorization state the extractors need.
 pub struct AiBillingRouterState<B, P, Auth> {
     /// The billing service.
     pub service: Arc<B>,
     /// The payment gateway that answers subscription-period reads.
     pub payments: Arc<P>,
+    /// The pricing the host composed the billing service with.
+    pub pricing: AiPricing,
     /// Authorization state for the request extractors.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
@@ -215,8 +217,15 @@ impl<B, P, Auth> Clone for AiBillingRouterState<B, P, Auth> {
         Self {
             service: self.service.clone(),
             payments: self.payments.clone(),
+            pricing: self.pricing,
             authorization_state: self.authorization_state.clone(),
         }
+    }
+}
+
+impl<B, P, Auth> FromRef<AiBillingRouterState<B, P, Auth>> for AiPricing {
+    fn from_ref(state: &AiBillingRouterState<B, P, Auth>) -> Self {
+        state.pricing
     }
 }
 
@@ -323,14 +332,14 @@ pub async fn get_summary_handler<B: BillingService, Auth: MacroAuthorizationServ
     ),
     tag = "ai_billing"
 )]
-pub async fn get_plans_handler() -> Json<PlanCatalogResponse> {
+pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCatalogResponse> {
     Json(PlanCatalogResponse {
         plans: [PlanTier::Free, PlanTier::Premium, PlanTier::Max]
             .into_iter()
             .map(|tier| PlanCatalogEntry {
                 tier,
                 monthly_price_cents: tier.monthly_price_cents(),
-                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(),
+                included_ai_cents_per_seat: tier.included_ai_cents_per_seat(pricing),
                 purchasable: SeatPlan::PURCHASABLE
                     .into_iter()
                     .any(|plan| PlanTier::from(plan) == tier),
