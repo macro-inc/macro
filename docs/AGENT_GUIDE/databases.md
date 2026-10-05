@@ -1,16 +1,22 @@
 # Databases
 
 Choose **Create → Database** (or press **C → L**) to open the **New database**
-picker. Focus starts on **Blank**; arrow keys move, Enter chooses, Escape or
-**Cancel** closes it without creating anything. **Blank** creates a database and
-its first table with a Name column, and opens it with its title selected and
-ready to type. Enter saves the title and focuses A1, ready to type without
-another click. Below Blank, each template shows its icon, name and description:
+gallery. **No template** is selected and focused by default. Each card shows a
+small visual preview, its icon, name and description. Clicking a card or using
+the arrow keys only changes the selection; nothing is created until **Create
+database** / **Use template**, or Enter, confirms it. Escape or **Cancel** closes
+the gallery without creating anything, and reopening always starts with **No
+template** again. The grid adapts to the available width and scrolls as more
+templates are added, with the create action kept below it.
+On mobile, open it from **New → More → Database**.
+**No template** creates an empty database and its first table with a Name column,
+and opens it with its title selected and ready to type. Enter saves the title
+and focuses A1, ready to type without another click. Available templates are
 **Project tracker**, **Event planner**, **Content calendar**, **Reading
-list** and **Getting started**. Choosing one creates a database under the
+list** and **Getting started**. Confirming one creates a database under the
 template's name with its tables, columns, views and a few sample records (person
 cells are left empty), all in one request, and opens it. While the templates
-load, or if they fail to, Blank still works.
+load, or if they fail to, **Create database** still works without a template.
 Opening **Ctrl-K** refreshes database discovery so a database created by AI or
 another client appears without reloading. **All** and **Documents** categories
 match its name, including databases with no view history.
