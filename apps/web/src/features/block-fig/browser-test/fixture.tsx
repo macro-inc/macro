@@ -18,7 +18,7 @@ import { FigOpening } from '../components/fig-opening';
 import { FigViewerProvider } from '../context/fig-viewer-context';
 import type { FigCommentAnchor, FigPerson } from '../core/comments';
 import { FigViewer } from '../views/fig-viewer';
-import { CollabFixture, type FixturePerson } from './collab-fixture';
+import { CollabFixture, type FixtureCollab } from './collab-fixture';
 import { fixtureFontSource } from './font-source';
 import { createMemoryComments, FIXTURE_PEOPLE } from './memory-comments';
 import {
@@ -40,7 +40,7 @@ declare global {
       /** Font stylesheets and files the viewer asked for. */
       fontRequests: () => string[];
       /** With `?collab`: the people editing together. */
-      collab?: { people: () => FixturePerson[] };
+      collab?: FixtureCollab;
       /** With `?libraries`: the designs in memory, and opening one. */
       libraries?: {
         open: (id: string) => Promise<void>;

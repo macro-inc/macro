@@ -979,7 +979,16 @@ person, `data-peer="<name>"`). Clicking an avatar follows that person: their
 page and view, inside a colored frame (`fig-following`) until you click,
 scroll, or press **Stop**. A viewer who opens a design nobody has shared yet,
 or anyone when the sync service is unreachable, gets the stored file
-read-only.
+read-only; for editors a bar above the design (`fig-session-notice`) says
+why, with **Retry** (`fig-session-action`). Editing offline is not offered:
+without the sync service's changes, storing would overwrite other people's.
+The shared changes apply only to files the session produced (each stored
+file is listed in the shared metadata before it is stored, and only once
+the sync service has that record; offline, storing waits). Whoever opens a
+file stored outside the session (a new upload, an AI edit, a restored
+version from before such a replacement) starts the shared design over on
+it, dropping the changes made on the file it replaced; people still in the
+design get a **Reload** bar and their copy turns read-only.
 
 Macro AI reads designs with `ReadDesign` (`ReadContent` returns the same
 description; attaching a design points the agent at it): the pages, numbered
@@ -1040,9 +1049,10 @@ Layout and test hooks:
   the Figma node id such as `12:34`, or `I12:34;56:78` inside instances).
   Rows list top-most first, as Figma does; instance and component rows are
   purple. A click selects a row, Shift-click the rows between it and the
-  selection, ⌘/Ctrl-click toggles a row; after a click the arrow keys move
-  through the tree (`fig-layer-tree`; Left and Right collapse and expand),
-  ⌥L collapses everything, and the list scrolls to the selection. Editors
+  selection, ⌘/Ctrl-click toggles a row. After a click, editors' arrow keys
+  nudge the selection as in Figma (Tab, Enter, and ⇧Enter move through the
+  layers); read-only, they move through the tree (`fig-layer-tree`; Left
+  and Right collapse and expand). ⌥L collapses everything, and the list scrolls to the selection. Editors
   can double-click a row (or ⌘R) to rename it (`fig-layer-rename`), toggle
   visibility and lock on hover (`fig-layer-visibility`), and drag rows to
   reorder or move them into frames and groups. Right-click a row for the
@@ -1075,7 +1085,10 @@ Layout and test hooks:
   layers paste into other designs and tabs, and layers copied in Figma paste
   here (their images arrive as gray placeholders, since Figma's clipboard
   does not carry them). Pasted instances whose component is not in the file
-  are detached. Paste places layers by Figma's rules: into a selected frame
+  are detached. In a live design, the others receive pasted layers as the
+  properties Macro models, so fields it does not model (prototype links,
+  plugin data, and the like) survive only while the person who pasted is
+  the one storing the file. Paste places layers by Figma's rules: into a selected frame
   (where they were if that is inside it, else centered), beside a selected
   layer, or on the page where they were when that is in view and in the
   middle of the view otherwise. Layers inside instances
@@ -1115,7 +1128,10 @@ Layout and test hooks:
   (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
   position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|
   radius|opacity|font-size|stroke-weight>`; type a value or arithmetic, or
-  drag the label to scrub), fills and strokes (`fig-fills`, `fig-strokes`,
+  drag the label to scrub; a flip is kept apart from rotation: after ⇧H
+  the angle and X/Y read as before, a vertical flip reads as 180°, and
+  typing a rotation or position keeps the flip), fills and strokes
+  (`fig-fills`, `fig-strokes`,
   rows `fig-fill-<n>` / `fig-stroke-<n>`, top paint first, with a hex
   input `fig-fill-<n>-hex`, opacity `-opacity`, `-visibility`, and
   `-remove`; "+" adds; drag a row's grip to reorder), stroke weight,
@@ -1316,10 +1332,13 @@ Layout and test hooks:
 - **Keyboard**, as in Figma: ⇧0 100%, ⇧1 fit, ⇧2 selection, ⌘/Ctrl +/−, N and
   ⇧N next/previous frame, PageDown/PageUp pages, Enter children, ⇧Enter and
   Esc parent, Tab/⇧Tab siblings, ⌘/Ctrl+A select all, ⇧R rulers, ⇧' pixel
-  grid, ⌃G (Ctrl+⇧4 off macOS) layout grids, ⌘/Ctrl+Y outline view, ⌘/Ctrl+\\ hide UI, ⌘/Ctrl+⇧C copy as PNG,
-  ⌘/Ctrl+⇧E export. Editing: ⌘Z/⇧⌘Z undo and redo, ⌘D duplicate, ⌘C/⌘X/⌘V,
-  Delete, arrows nudge (⇧ by 10), ⌘G group, ⇧⌘G ungroup, ⌥⌘G frame
-  selection, ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[ front/back, ⇧⌘H hide,
+  grid, ⌃G (Ctrl+⇧4 off macOS) layout grids, ⌘/Ctrl+Y outline view,
+  ⌘/Ctrl+\\ hide UI, ⌘/Ctrl+⇧C copy as PNG, ⌘/Ctrl+⇧E export. Editing:
+  ⌘Z/⇧⌘Z undo and redo (each brings back what was selected around the
+  step), ⌘D duplicate, ⌘C/⌘X/⌘V, Delete, arrows nudge (⇧ by 10), ⌘G
+  group, ⇧⌘G ungroup, ⌥⌘G frame selection (like ⇧A's wrapping frame, it
+  does not clip its layers), ⌘] / ⌘[ forward/backward, ⌥⌘] / ⌥⌘[
+  front/back, ⇧⌘H hide,
   ⇧⌘L lock, ⇧H / ⇧V flip, ⌘R rename, ⌥⇧U union, ⌥⇧S subtract (the top layers from the
   bottom one), ⌥⇧I intersect, ⌥⇧X exclude, and ⌘E flatten (booleans and
   shapes into one vector layer). A boolean keeps its layers as children and

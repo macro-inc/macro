@@ -10,12 +10,18 @@ import type { EntryChange } from '@core/fig-engine/types';
 import type { LoroDoc } from 'loro-crdt';
 import type { FigSharing } from '../context/fig-viewer-context';
 import {
+  BASE_KEY,
   baseBlobs,
   changedKeys,
+  designBase,
   type EntryKey,
+  entriesApplyTo,
+  fileFingerprint,
   LOCAL_EDIT_ORIGIN,
   readEntries,
   readValues,
+  recordStoredFile,
+  restartOnFile,
   writeEntryChanges,
 } from '../core/collab-entries';
 import { newGuidSession, type Version, versionCovers } from '../core/presence';
@@ -26,15 +32,34 @@ const STORED_ORIGIN = 'fig-stored';
 const versionOf = (doc: LoroDoc): Version =>
   Object.fromEntries(doc.version().toJSON()) as Version;
 
+export interface ShareOptions {
+  /** `fileFingerprint` of the stored file the engine opened. */
+  fingerprint: string;
+  /**
+   * Resolves once this person's changes so far reached the sync service,
+   * or `false` when they could not (offline). Without it, they are taken
+   * to have.
+   */
+  delivered?: () => Promise<boolean>;
+}
+
 /**
  * Starts sharing an open engine through `doc`: new layers get ids in a
  * session of this visit, and everything other people changed so far is
- * applied before the design is shown.
+ * applied before the design is shown. When the stored file was replaced
+ * outside the shared design (see `entriesApplyTo`), the design starts over
+ * on it instead.
  */
 export async function shareFigEngine(
   engine: FigEngine,
-  doc: LoroDoc
+  doc: LoroDoc,
+  options: ShareOptions
 ): Promise<FigSharing> {
+  if (entriesApplyTo(doc, options.fingerprint))
+    recordStoredFile(doc, options.fingerprint);
+  else restartOnFile(doc, options.fingerprint);
+  /** The file the entries this engine holds began on. */
+  const base = designBase(doc);
   const meta = await engine.enableCollab(newGuidSession(), baseBlobs(doc));
   writeEntryChanges(doc, meta);
 
@@ -46,6 +71,8 @@ export async function shareFigEngine(
   let lastChange: Version = applied;
   const incoming = new Set<() => void>();
   const storedElsewhere = new Set<() => void>();
+  const replacedListeners = new Set<() => void>();
+  let replaced = false;
   let closed = false;
 
   const isEntry = (k: EntryKey) => k.container !== 'figMeta';
@@ -53,6 +80,17 @@ export async function shareFigEngine(
   const unsubscribe = doc.subscribe((batch) => {
     if (batch.by === 'local' && batch.origin === LOCAL_EDIT_ORIGIN) return;
     const keys = changedKeys(doc, batch);
+    if (
+      !replaced &&
+      batch.by !== 'local' &&
+      keys.some((k) => k.container === 'figMeta' && k.key === BASE_KEY) &&
+      designBase(doc) !== base
+    ) {
+      // Someone opened a file stored outside the design and started over
+      // on it: what this engine holds no longer matches anyone's.
+      replaced = true;
+      for (const listener of replacedListeners) listener();
+    }
     if (keys.some(isEntry)) lastChange = versionOf(doc);
     const stored = keys.some(
       (k) => k.container === 'figMeta' && k.key === 'saved'
@@ -98,6 +136,13 @@ export async function shareFigEngine(
       return () => incoming.delete(listener);
     },
     appliedVersion: () => applied,
+    willStore: async (bytes) => {
+      if (closed || replaced) return false;
+      // Listed before it is stored, and known to the sync service, so
+      // whoever opens the stored file finds it is the design's own.
+      recordStoredFile(doc, await fileFingerprint(bytes));
+      return (await options.delivered?.()) ?? true;
+    },
     markStored: (version) => {
       // The last save can finish after the design closed.
       if (closed) return;
@@ -108,11 +153,16 @@ export async function shareFigEngine(
       storedElsewhere.add(listener);
       return () => storedElsewhere.delete(listener);
     },
+    onReplaced: (listener) => {
+      replacedListeners.add(listener);
+      return () => replacedListeners.delete(listener);
+    },
     close: () => {
       closed = true;
       unsubscribe();
       incoming.clear();
       storedElsewhere.clear();
+      replacedListeners.clear();
     },
   };
 }

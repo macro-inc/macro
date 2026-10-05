@@ -37,6 +37,7 @@ import type { HandoffOp } from '../core/handoff-ops';
 import type { LibraryOp } from '../core/libraries';
 import type { PaintType, StopSpec } from '../core/paint';
 import type { InteractionSpec } from '../core/prototype';
+import { resizedOrigin } from '../core/rotation';
 import type { Measure } from '../core/type';
 import { type PenPoint, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
@@ -219,7 +220,15 @@ export interface FigEditorOptions {
    * editing does). Defaults to always.
    */
   stores?: () => boolean;
+  /**
+   * Whether the sync service of a shared design is reachable; storing
+   * waits for it (see `FigSharing.willStore`). Defaults to always.
+   */
+  online?: () => boolean;
 }
+
+/** Undo steps whose selections are remembered (the engine keeps 200). */
+const MAX_REMEMBERED_STEPS = 256;
 
 /** Quiet time after the last edit before saving. */
 const SAVE_DELAY_MS = 1500;
@@ -289,7 +298,13 @@ export function createFigEditor(options: FigEditorOptions) {
   const saveNow = async (): Promise<void> => {
     clearTimeout(saveTimer);
     saveTimer = undefined;
-    if (!options.save || !dirtySinceSave || !stores()) return;
+    if (!options.save || !dirtySinceSave || !stores() || !enabled()) return;
+    if (options.online?.() === false) {
+      // The changes wait in the sync log, and are stored once it is
+      // reachable (see `takeOver`).
+      setSaveState('unsaved');
+      return;
+    }
     if (saving) {
       await saving;
       if (!dirtySinceSave) return;
@@ -300,6 +315,11 @@ export function createFigEditor(options: FigEditorOptions) {
       try {
         const version = sharing?.appliedVersion();
         const bytes = await engine.save();
+        if (sharing && !(await sharing.willStore(bytes))) {
+          dirtySinceSave = true;
+          setSaveState('unsaved');
+          return;
+        }
         await options.save?.(bytes);
         if (version) sharing?.markStored(version);
         setSaveState(dirtySinceSave ? 'unsaved' : 'saved');
@@ -355,9 +375,34 @@ export function createFigEditor(options: FigEditorOptions) {
 
   let queue: Promise<unknown> = Promise.resolve();
 
+  // What was selected around each undo step, so undo and redo bring the
+  // selection back as Figma does (undoing a duplicate selects the original).
+  const stepSelections = new Map<
+    number,
+    { page: number; before: Selected[]; after?: Selected[] }
+  >();
+  let undoStep: number | null = null;
+  let redoStep: number | null = null;
+
+  /** Selects what was selected, as far as those layers still exist. */
+  const restoreSelection = async (page: number, wanted: Selected[]) => {
+    if (viewer.page() !== page) return;
+    const rows =
+      wanted.length > 0
+        ? await engine.rows(
+            page,
+            wanted.map((s) => s.id)
+          )
+        : [];
+    const alive = new Set(rows.map((r) => r.id));
+    viewer.select(wanted.filter((s) => alive.has(s.id)));
+  };
+
   const settle = async (result: EditResult) => {
     setCanUndo(result.canUndo);
     setCanRedo(result.canRedo);
+    undoStep = result.undoStep;
+    redoStep = result.redoStep;
     if (result.dirty) options.onDirty(result.dirty);
     scheduleSave();
     await viewer.afterEdit();
@@ -419,7 +464,18 @@ export function createFigEditor(options: FigEditorOptions) {
       try {
         // Other people's changes that arrived first apply first.
         await pullShared();
-        const result = await engine.apply(viewer.page(), ops, coalesce);
+        const page = viewer.page();
+        const before = viewer.selected();
+        const result = await engine.apply(page, ops, coalesce);
+        // A drag's later steps coalesce into its first: keep that one's.
+        if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
+          stepSelections.set(result.undoStep, { page, before });
+          // The engine keeps 200 steps; forget the oldest beyond that.
+          for (const id of stepSelections.keys()) {
+            if (stepSelections.size <= MAX_REMEMBERED_STEPS) break;
+            stepSelections.delete(id);
+          }
+        }
         if (coalesce) pushSoon();
         else await pushNow();
         await settle(result);
@@ -438,6 +494,10 @@ export function createFigEditor(options: FigEditorOptions) {
     queue = queue.then(async () => {
       try {
         await pullShared();
+        const step = action === 'undo' ? undoStep : redoStep;
+        const remembered = step === null ? undefined : stepSelections.get(step);
+        if (remembered && action === 'undo')
+          remembered.after = viewer.selected();
         const result =
           action === 'undo'
             ? await engine.undo(viewer.page())
@@ -445,7 +505,11 @@ export function createFigEditor(options: FigEditorOptions) {
         // Undo is local: what it restores is shared as a new change.
         await pushNow();
         await settle(result);
-        await viewer.pruneSelection();
+        const wanted =
+          action === 'undo' ? remembered?.before : remembered?.after;
+        if (remembered && wanted)
+          await restoreSelection(remembered.page, wanted);
+        else await viewer.pruneSelection();
       } catch (e) {
         options.notifyError(e instanceof Error ? e.message : String(e));
       }
@@ -943,12 +1007,18 @@ export function createFigEditor(options: FigEditorOptions) {
             const b = info.bounds;
             const nx = r.x + (b.x - start.x) * sx;
             const ny = r.y + (b.y - start.y) * sy;
+            const origin = resizedOrigin(info, b, {
+              x: nx,
+              y: ny,
+              w: b.w * sx,
+              h: b.h * sy,
+            });
             return {
               op: 'set' as const,
               ids: [info.id],
               props: {
-                x: round(info.x + (nx - b.x)),
-                y: round(info.y + (ny - b.y)),
+                x: round(origin.x),
+                y: round(origin.y),
                 width: Math.max(1, round(info.width * sx)),
                 height: Math.max(1, round(info.height * sy)),
               },

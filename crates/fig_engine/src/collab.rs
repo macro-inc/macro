@@ -6,6 +6,7 @@
 //! | container | key | value |
 //! | --- | --- | --- |
 //! | `figMeta` | `format`, `baseBlobs` | entry layout version; blobs every peer's file starts with |
+//! | `figMeta` | `base`, `file:<fingerprint>` | the stored files the entries apply to (written by the web app's `core/collab-entries.ts`) |
 //! | `figNodes` | node id (`12:34`) | the node's whole state ([`codec::NodeState`], base64) |
 //! | `figBlobs` | content key | geometry or glyph blob (base64) |
 //! | `figImages` | SHA-1 | image file (base64) |

@@ -77,6 +77,9 @@ struct EditResult {
     dirty: Option<Rect>,
     can_undo: bool,
     can_redo: bool,
+    /// The steps undo and redo would act on next (`History::undo_step`).
+    undo_step: Option<u64>,
+    redo_step: Option<u64>,
     /// The page's layer count changed or layers moved between parents.
     structure: bool,
 }
@@ -194,6 +197,8 @@ impl FigFile {
             dirty: (!dirty.is_empty()).then_some(dirty),
             can_undo: self.history.can_undo(),
             can_redo: self.history.can_redo(),
+            undo_step: self.history.undo_step(),
+            redo_step: self.history.redo_step(),
             structure,
         })
     }

@@ -148,3 +148,65 @@ test('both people’s layers appear on both sides, and following shows the other
   await bob.click({ position: { x: 10, y: 10 } });
   await expect(person(page, 'Bob').getByTestId('fig-following')).toHaveCount(0);
 });
+
+test('a file stored outside the design starts it over, and the others reload', async ({
+  page,
+}) => {
+  await open(page);
+  const alice = person(page, 'Alice').getByTestId('fig-canvas');
+  await drawRectangle(page, alice, [0.1, 0.72], [0.4, 0.8]);
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(1);
+  // The merged file is stored, and reopening it keeps the rectangle once.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.figFixture.collab?.people().some((p) => p.saves() > 0)
+      )
+    )
+    .toBe(true);
+  await page.evaluate(() => window.figFixture.collab?.reopen('Bob'));
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(1);
+
+  // A new upload replaces the stored file; whoever opens it next gets it
+  // without the changes made on the old one.
+  await page.evaluate(() => window.figFixture.collab?.storeOutside());
+  await page.evaluate(() => window.figFixture.collab?.reopen('Bob'));
+  await expect(person(page, 'Bob').getByTestId('fig-page')).toHaveText([
+    'Page 1',
+  ]);
+  await expect.poll(() => layersNamed(page, 1, 'Rectangle 1')).toBe(0);
+  // Alice's copy is out of date: read-only, with a way to reload.
+  const notice = person(page, 'Alice').getByTestId('fig-session-notice');
+  await expect(notice).toContainText('replaced');
+  await expect(
+    person(page, 'Alice').getByTestId('fig-tool-rectangle')
+  ).toBeHidden();
+  await notice.getByTestId('fig-session-action').click();
+  await expect(person(page, 'Alice').getByTestId('fig-page')).toHaveText([
+    'Page 1',
+  ]);
+  await expect(
+    person(page, 'Alice').getByTestId('fig-tool-rectangle')
+  ).toBeVisible();
+  await expect.poll(() => layersNamed(page, 0, 'Rectangle 1')).toBe(0);
+});
+
+test('an unreachable sync service opens the design read-only, with retry', async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    window.figFixture.collab?.setReachable(false);
+    window.figFixture.collab?.reopen('Bob');
+  });
+  const bob = person(page, 'Bob');
+  await expect(bob.getByTestId('fig-session-notice')).toContainText(
+    'read-only'
+  );
+  await expect(bob.getByTestId('fig-layer-row').first()).toBeVisible();
+  await expect(bob.getByTestId('fig-tool-rectangle')).toBeHidden();
+  await page.evaluate(() => window.figFixture.collab?.setReachable(true));
+  await bob.getByTestId('fig-session-action').click();
+  await expect(bob.getByTestId('fig-tool-rectangle')).toBeVisible();
+  await expect(bob.getByTestId('fig-session-notice')).toHaveCount(0);
+});

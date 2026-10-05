@@ -152,6 +152,32 @@ fn exports_one_node_on_transparency() {
 }
 
 #[test]
+fn exports_children_with_their_shadows() {
+    // Showcase: "Home" holds a white "Card" (24, 260, 312 × 120) with a drop
+    // shadow (y 4, blur 12) on the frame's white.
+    let bytes = crate::testing::showcase_file();
+    let doc = Document::open(&bytes).unwrap();
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let home = (0..scene.nodes.len() as SceneIdx)
+        .find(|&i| scene.props(&doc, i).name() == "Home")
+        .unwrap();
+    for scale in [1.0, 2.0] {
+        let p = render_node(
+            &doc,
+            &scene,
+            &mut ImageStore::default(),
+            home,
+            scale,
+            RenderOptions::default(),
+        )
+        .unwrap();
+        let at = |v: f64| (v * scale) as u32;
+        let [r, ..] = rgba(&p, at(180.0), at(384.0));
+        assert!(r < 250, "the shadow shows below the card at {scale}× ({r})");
+    }
+}
+
+#[test]
 fn draws_outlines() {
     let doc = Document::open(&simple_file()).unwrap();
     let scene = Scene::build(&doc, doc.pages[0]);

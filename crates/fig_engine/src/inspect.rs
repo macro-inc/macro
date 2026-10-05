@@ -297,7 +297,7 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
     let props = scene.props(doc, i);
     let node = scene.node(i);
     let size = props.size();
-    let origin = node.world.apply(Vec2::default());
+    let origin = node.world.panel_origin(size);
     let (x, y) = match coordinate_parent(scene, doc, i) {
         Some(p) => {
             let inv = scene.node(p).world.invert().unwrap_or_default();
@@ -402,7 +402,7 @@ pub fn node_info(doc: &Document, scene: &Scene, i: SceneIdx) -> NodeInfo {
         y,
         width: size.x,
         height: size.y,
-        rotation: node.world.rotation_degrees(),
+        rotation: node.world.panel_rotation_degrees(),
         bounds: scene.frame_bounds(doc, i),
         opacity: props.opacity(),
         blend_mode: enum_name(&props.blend_mode()),

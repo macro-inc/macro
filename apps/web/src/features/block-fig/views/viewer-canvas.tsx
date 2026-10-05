@@ -31,7 +31,7 @@ import { type Point, screenToPage } from '../core/camera';
 import { type SnapLines, snapResize } from '../core/layout-grid';
 import { measure } from '../core/measure';
 import type { PeerOverlay } from '../core/presence';
-import { rotationFor } from '../core/rotation';
+import { isAxisAligned, rotationFor } from '../core/rotation';
 import { type Guide, snapMove } from '../core/snap';
 import {
   closesPath,
@@ -524,7 +524,7 @@ export function ViewerCanvas(props: {
   const handleAt = (p: Point): Handle | undefined => {
     if (!transformable()) return undefined;
     const info = props.info?.();
-    if (viewer.selected().length === 1 && Math.abs(info?.rotation ?? 0) > 0.01)
+    if (viewer.selected().length === 1 && !isAxisAligned(info?.rotation ?? 0))
       return undefined;
     const box = screenBox();
     if (!box) return undefined;

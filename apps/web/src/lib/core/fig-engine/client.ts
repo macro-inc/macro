@@ -70,6 +70,12 @@ export interface EditResult {
   dirty: Rect | null;
   canUndo: boolean;
   canRedo: boolean;
+  /**
+   * The steps undo and redo would act on next; a step keeps its id while
+   * it coalesces and across undo and redo.
+   */
+  undoStep: number | null;
+  redoStep: number | null;
   /** Layers were added, removed, or moved between parents. */
   structure: boolean;
 }

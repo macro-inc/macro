@@ -54,12 +54,14 @@ import {
   Switch,
 } from 'solid-js';
 import { FigOpening } from './components/fig-opening';
+import { SessionNotice } from './components/session-notice';
 import type { FigCommentStore } from './context/fig-comments';
 import {
   type FigCollaboration,
   type FigSharing,
   FigViewerProvider,
 } from './context/fig-viewer-context';
+import { fileFingerprint } from './core/collab-entries';
 import type { FigData } from './definition';
 import { createDesignCollabSession } from './queries/fig-collab';
 import { useFigComments } from './queries/fig-comments';
@@ -86,6 +88,10 @@ function FigHost(props: {
   /** The shared document, when the design is edited live. */
   shared?: LoroDoc;
   collaboration?: FigCollaboration;
+  /** Whether every change made here reached the sync service. */
+  delivered?: () => Promise<boolean>;
+  /** Why the design is read-only, with the action that helps. */
+  notice?: { message: string; action: string; onAction: () => void };
   comments?: FigCommentStore;
   /** A frame to present on opening (from a frame link). */
   present?: string;
@@ -94,20 +100,41 @@ function FigHost(props: {
   const [sharing, setSharing] = createSignal<FigSharing>();
   const libraries = useFigLibrarySource(props.documentId);
   const [failure, setFailure] = createSignal<string>();
+  // Someone opened a file stored outside the shared design and started over
+  // on it: this copy is out of date.
+  const [replaced, setReplaced] = createSignal(false);
+  const canEdit = () => props.canEdit() && !replaced();
+  const notice = () =>
+    replaced()
+      ? {
+          message:
+            'This design was replaced by a newer file (an upload or an AI edit). Reload to edit the latest version.',
+          action: 'Reload',
+          onAction: () => window.location.reload(),
+        }
+      : props.notice;
   onMount(() => {
     let disposed = false;
     let opened: FigEngine | undefined;
     let shared: FigSharing | undefined;
     const open = async () => {
       try {
+        // Before the engine takes the bytes.
+        const fingerprint = props.shared
+          ? await fileFingerprint(props.bytes)
+          : undefined;
         const e = await FigEngine.open(props.bytes, {
           onFailure: (error) => setFailure(error.message),
         });
         opened = e;
         if (disposed) return;
-        if (props.shared) {
-          shared = await shareFigEngine(e, props.shared);
+        if (props.shared && fingerprint) {
+          shared = await shareFigEngine(e, props.shared, {
+            fingerprint,
+            delivered: props.delivered,
+          });
           if (disposed) return;
+          shared.onReplaced(() => setReplaced(true));
           setSharing(shared);
         }
         setEngine(e);
@@ -134,31 +161,36 @@ function FigHost(props: {
       </Match>
       <Match when={engine()}>
         {(e) => (
-          <FigViewerProvider
-            context={{
-              engine: e(),
-              fileName: props.fileName,
-              download: (blob, name) => void downloadFile(blob, name),
-              notifyError: (message) => toast.failure(message),
-              notifyInfo: (message) => toast.success(message),
-              canEdit: props.canEdit,
-              save: (bytes) => saveFigFile(props.documentId, bytes),
-              fileKey: props.documentId,
-              collaboration: props.collaboration,
-              sharing: sharing(),
-              comments: props.comments,
-              frameLink: (frame) =>
-                buildSimpleEntityUrl(
-                  { type: 'fig', id: props.documentId },
-                  { present: frame }
-                ),
-              presentAt: props.present,
-              fonts: createFontSource(),
-              libraries,
-            }}
-          >
-            <FigViewer />
-          </FigViewerProvider>
+          <div class="flex size-full min-h-0 flex-col">
+            <Show when={notice()}>{(n) => <SessionNotice {...n()} />}</Show>
+            <div class="min-h-0 flex-1">
+              <FigViewerProvider
+                context={{
+                  engine: e(),
+                  fileName: props.fileName,
+                  download: (blob, name) => void downloadFile(blob, name),
+                  notifyError: (message) => toast.failure(message),
+                  notifyInfo: (message) => toast.success(message),
+                  canEdit,
+                  save: (bytes) => saveFigFile(props.documentId, bytes),
+                  fileKey: props.documentId,
+                  collaboration: props.collaboration,
+                  sharing: sharing(),
+                  comments: props.comments,
+                  frameLink: (frame) =>
+                    buildSimpleEntityUrl(
+                      { type: 'fig', id: props.documentId },
+                      { present: frame }
+                    ),
+                  presentAt: props.present,
+                  fonts: createFontSource(),
+                  libraries,
+                }}
+              >
+                <FigViewer />
+              </FigViewerProvider>
+            </div>
+          </div>
         )}
       </Match>
     </Switch>
@@ -183,6 +215,31 @@ function CollaborativeFigHost(props: {
   comments?: FigCommentStore;
   present?: string;
 }) {
+  // Retrying starts a new session (and opens the file again). The child's
+  // parameter makes Show call it again for each attempt.
+  const [attempt, setAttempt] = createSignal(0);
+  return (
+    <Show when={attempt() + 1} keyed>
+      {(_attempt) => (
+        <DesignSession {...props} retry={() => setAttempt((n) => n + 1)} />
+      )}
+    </Show>
+  );
+}
+
+/** Why a session that failed leaves the design read-only. */
+const unavailable = (message: string) =>
+  `${message} Live editing is unavailable, so the design is open read-only; editing offline could overwrite other people's changes.`;
+
+function DesignSession(props: {
+  bytes: ArrayBuffer;
+  fileName: () => string;
+  documentId: string;
+  canEdit: () => boolean;
+  comments?: FigCommentStore;
+  present?: string;
+  retry: () => void;
+}) {
   const userId = useUserId();
   const session = createDesignCollabSession({
     documentId: props.documentId,
@@ -197,6 +254,10 @@ function CollaborativeFigHost(props: {
     const state = session.state();
     return state.t === 'ready' ? state.doc : undefined;
   };
+  const failed = () => {
+    const state = session.state();
+    return state.t === 'error' ? state.message : undefined;
+  };
   return (
     <Switch
       fallback={
@@ -205,10 +266,25 @@ function CollaborativeFigHost(props: {
         </div>
       }
     >
-      <Match
-        when={session.state().t === 'unshared' || session.state().t === 'error'}
-      >
+      <Match when={session.state().t === 'unshared'}>
         <FigHost {...props} canEdit={() => false} />
+      </Match>
+      <Match when={failed()}>
+        {(message) => (
+          <FigHost
+            {...props}
+            canEdit={() => false}
+            notice={
+              props.canEdit()
+                ? {
+                    message: unavailable(message()),
+                    action: 'Retry',
+                    onAction: props.retry,
+                  }
+                : undefined
+            }
+          />
+        )}
       </Match>
       <Match when={ready()} keyed>
         {(doc) => (
@@ -216,6 +292,7 @@ function CollaborativeFigHost(props: {
             {...props}
             shared={doc}
             collaboration={session.collaboration}
+            delivered={session.delivered}
           />
         )}
       </Match>
