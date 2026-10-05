@@ -49,12 +49,12 @@ mod test;
 pub const KEEPALIVE_EVERY: Duration = Duration::from_secs(15);
 
 /// How long a call is held for a client that resets its timeout on
-/// progress.
+/// progress, and in-process, where the turn counts the hold as waiting on a
+/// person rather than as silence.
 pub const HOLD_LIMIT_WITH_PROGRESS: Duration = Duration::from_secs(30 * 60);
 
-/// How long a call is held for a client that sent no progress token. Under
-/// the in-memory runtime's five-minute idle limit, which counts a held call
-/// as silence.
+/// How long a call is held for an MCP client that sent no progress token:
+/// nothing says it will wait longer than a transport usually does.
 pub const HOLD_LIMIT: Duration = Duration::from_secs(4 * 60);
 
 /// The server slug Macro's own tools are held under.
@@ -629,7 +629,7 @@ where
         events: Option<&mpsc::Sender<Bytes>>,
     ) -> Result<ToolApproval, EgressError> {
         let mut subscription = self.signals.subscribe(approval.id);
-        let limit = if progress_token.is_some() {
+        let limit = if progress_token.is_some() || events.is_none() {
             self.timing.limit_with_progress
         } else {
             self.timing.limit

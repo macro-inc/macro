@@ -354,7 +354,7 @@ impl FoldState {
                         None => Vec::new(),
                     }
                 }
-                // The agent reporting that a URL interaction finished.
+                // A tool call held for the owner, or how it was resolved.
                 RawJsonRpcMessage::Notification(notification)
                     if notification.method.as_ref() == TOOL_APPROVAL_METHOD =>
                 {
@@ -363,6 +363,7 @@ impl FoldState {
                             Self::message_and_metadata(message, metadata)
                         })
                 }
+                // The agent reporting that a URL interaction finished.
                 RawJsonRpcMessage::Notification(notification)
                     if CompleteElicitationNotification::matches_method(&notification.method) =>
                 {

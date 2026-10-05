@@ -44,7 +44,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::admission::admit_turn;
-use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
@@ -263,33 +263,6 @@ impl AgentState {
         {
             cancel.cancel();
         }
-    }
-}
-
-/// How many questions a turn currently has out to the user. Shared between
-/// the turn's requester, which counts each question it is waiting on, and the
-/// turn loop, which reads it to tell "waiting on the user" from "hung".
-#[derive(Default)]
-struct AwaitingUser(AtomicUsize);
-
-impl AwaitingUser {
-    fn is_waiting(&self) -> bool {
-        self.0.load(Ordering::Acquire) > 0
-    }
-
-    /// Count one outstanding question until the guard drops - on an answer,
-    /// an error, or the asking future being cancelled.
-    fn begin(&self) -> AwaitingGuard<'_> {
-        self.0.fetch_add(1, Ordering::AcqRel);
-        AwaitingGuard(self)
-    }
-}
-
-struct AwaitingGuard<'a>(&'a AwaitingUser);
-
-impl Drop for AwaitingGuard<'_> {
-    fn drop(&mut self) {
-        self.0.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -764,6 +737,7 @@ async fn run_turn(
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         session_id: state.session_id,
+        awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
         model,
         reasoning_effort,

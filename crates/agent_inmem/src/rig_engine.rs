@@ -89,6 +89,7 @@ struct GatedToolSet<Context> {
     tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
     gate: Arc<dyn NativeToolGate>,
     session: agent_session::domain::model::AgentSessionId,
+    awaiting: Arc<crate::domain::engine::AwaitingUser>,
 }
 
 impl<Context> AiToolSet<Context> for GatedToolSet<Context>
@@ -105,8 +106,12 @@ where
         Box::pin(async move {
             if !UNGATED_NATIVE_TOOLS.contains(&tool_name)
                 && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
-                && let NativeToolVerdict::Refuse(reason) =
+                && let NativeToolVerdict::Refuse(reason) = {
+                    // A call held for the owner is the turn waiting on a
+                    // person, not hanging: the idle timeout leaves it be.
+                    let _waiting = self.awaiting.begin();
                     self.gate.check(self.session, tool_name, json).await
+                }
             {
                 return Ok(Err(ai_toolset::ToolCallError {
                     internal_error: anyhow::anyhow!("{tool_name} was not approved"),
@@ -198,6 +203,7 @@ async fn drive_turn(
 ) -> Result<(), AgentError> {
     let TurnRequest {
         session_id,
+        awaiting,
         owner,
         model,
         reasoning_effort,
@@ -292,6 +298,7 @@ async fn drive_turn(
         tools: toolset,
         gate,
         session: session_id,
+        awaiting,
     });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
