@@ -29666,6 +29666,35 @@
                 "enum": ["spreadsheet"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.",
+            "required": ["pageId", "x", "y", "type"],
+            "properties": {
+              "nodeId": {
+                "type": ["string", "null"],
+                "description": "Layer the pin follows; absent or null for a pin on the bare canvas."
+              },
+              "pageId": {
+                "type": "string",
+                "description": "Page (canvas) the pin is on."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["fig"]
+              },
+              "x": {
+                "type": "number",
+                "format": "double",
+                "description": "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+              },
+              "y": {
+                "type": "number",
+                "format": "double",
+                "description": "Vertical offset, measured like `x`."
+              }
+            }
           }
         ],
         "description": "Location supplied when creating a document discussion."
@@ -35801,6 +35830,35 @@
               "type": {
                 "type": "string",
                 "enum": ["spreadsheet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.",
+            "required": ["pageId", "x", "y", "type"],
+            "properties": {
+              "nodeId": {
+                "type": ["string", "null"],
+                "description": "Layer the pin follows; absent for a pin on the bare canvas."
+              },
+              "pageId": {
+                "type": "string",
+                "description": "Page (canvas) the pin is on."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["fig"]
+              },
+              "x": {
+                "type": "number",
+                "format": "double",
+                "description": "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+              },
+              "y": {
+                "type": "number",
+                "format": "double",
+                "description": "Vertical offset, measured like `x`."
               }
             }
           }
