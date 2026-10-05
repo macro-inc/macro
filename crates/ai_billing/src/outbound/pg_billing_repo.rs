@@ -396,7 +396,7 @@ impl BillingRepo for PgBillingRepo {
         &self,
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
-        chargeable_cents: i64,
+        chargeable_customer_cents: i64,
         policy: SettlementPolicy,
     ) -> Result<SettlementOutcome> {
         let payer = payer.as_ref();
@@ -454,7 +454,7 @@ impl BillingRepo for PgBillingRepo {
 
         let plan = plan_settlement(
             SettlementState {
-                chargeable_cents,
+                chargeable_customer_cents,
                 credits_consumed_cents: ledger.credits_consumed_cents,
                 overage_charged_cents: ledger.overage_charged_cents,
                 credit_balance_cents: balance,

@@ -7,8 +7,9 @@ export type Plan = {
   price: number;
   highlighted: boolean;
   /**
-   * AI usage included each month, in dollars at Macro's list rate. Equal to the
-   * plan price: the plan's AI allowance is worth what the plan costs.
+   * AI usage included each month, in dollars at provider cost. Mirrors the
+   * backend's `INCLUDED_ALLOWANCE_CENTS` (crates/ai_billing/src/domain/pricing.rs);
+   * every paid plan gets the same amount until GTM defines a Max allowance.
    */
   aiIncluded: number;
 };
@@ -28,7 +29,7 @@ const PREMIUM_PLAN = {
   name: 'Premium',
   price: 40,
   highlighted: true,
-  aiIncluded: 40,
+  aiIncluded: 20,
 } as const satisfies Plan;
 
 const MAX_PLAN = {
@@ -36,7 +37,7 @@ const MAX_PLAN = {
   name: 'Max',
   price: 200,
   highlighted: false,
-  aiIncluded: 200,
+  aiIncluded: 20,
 } as const satisfies Plan;
 
 export const PLANS = [
@@ -63,8 +64,8 @@ const planFeatures: PlanFeature[] = [
     devOnly: true,
     values: {
       free: 'Limited',
-      premium: '$40 / mo',
-      max: '$200 / mo',
+      premium: '$20 / mo at cost',
+      max: '$20 / mo at cost',
     },
   },
   {

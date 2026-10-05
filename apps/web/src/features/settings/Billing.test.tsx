@@ -58,7 +58,7 @@ vi.mock('@queries/auth', () => ({
         can_manage_billing: true,
         unlimited: state.unlimited,
         used_cents: 1_000_000,
-        included_cents: 4_000,
+        included_cents: 2_000,
         credit_balance_cents: 0,
         blocked_reason: 'ai_allowance_exhausted',
       };

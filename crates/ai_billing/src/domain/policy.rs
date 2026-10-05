@@ -26,6 +26,7 @@ use super::models::{
     BillingPeriod, BillingSettings, Entitlement, MIN_STRIPE_CHARGE_CENTS, NON_BILLABLE_AI_FEATURES,
     OVERAGE_CHARGE_THRESHOLD_CENTS, PlanTier, UsagePolicy,
 };
+use super::pricing::{INCLUDED_ALLOWANCE_CENTS, OVERAGE_MARKUP_PERCENT};
 
 #[cfg(test)]
 mod test;
@@ -33,12 +34,15 @@ mod test;
 const ZERO_PUBLIC: PublicUsage = PublicUsage::from_units(0);
 const ZERO_MONEY: CustomerMoney = CustomerMoney::from_units(0);
 const PUBLIC_UNITS_PER_CENT: u64 = CustomerMoney::UNITS_PER_CENT / 100;
-const EXTRA_RATE_NUMERATOR: u64 = 105;
+// Both figures come from `pricing`, so this policy and the ledger never disagree.
+// A whole-percent markup over 100 prices every public unit exactly.
+const EXTRA_RATE_NUMERATOR: u64 = 100 + OVERAGE_MARKUP_PERCENT as u64;
 const EXTRA_RATE_DENOMINATOR: u64 = 100;
 
-/// Non-rolling $20 public-provider-price allowance for each activated seat and period.
+/// Non-rolling public-provider-price allowance for each activated seat and
+/// period: [`INCLUDED_ALLOWANCE_CENTS`] of public usage.
 pub const INCLUDED_PUBLIC_USAGE: PublicUsage =
-    PublicUsage::from_units(2_000 * PUBLIC_UNITS_PER_CENT);
+    PublicUsage::from_units(INCLUDED_ALLOWANCE_CENTS as u64 * PUBLIC_UNITS_PER_CENT);
 
 /// Accounting path after a trusted caller resolves the recorded policy and entitlement.
 /// This is not eligibility detection: a Premium role alone must never activate V1.
@@ -75,9 +79,10 @@ pub fn accounting_route(
 /// Pricing is independent of which source funds the usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PricingCategory {
-    /// First $20 public usage: zero additional customer money, no markup.
+    /// Public usage within the allowance: zero additional customer money, no markup.
     Included,
-    /// Beyond $20: public usage multiplied by exactly 1.05 (not divided by 0.95).
+    /// Beyond the allowance: public usage multiplied by exactly
+    /// `(100 + OVERAGE_MARKUP_PERCENT) / 100` (never divided by the complement).
     Extra,
 }
 

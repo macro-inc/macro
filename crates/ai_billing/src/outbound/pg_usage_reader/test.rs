@@ -97,7 +97,7 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
 
     let reader = PgUsageReader::new(pool);
     let mut usage = reader
-        .list_rate_usage_cents_by_user(&[first.clone(), second.clone(), empty], current_period())
+        .usage_cost_cents_by_user(&[first.clone(), second.clone(), empty], current_period())
         .await
         .unwrap();
     usage.sort_by(|a, b| a.user.as_ref().cmp(b.user.as_ref()));
@@ -106,29 +106,29 @@ async fn aggregates_only_persisted_counted_rows_for_requested_seats(pool: PgPool
         vec![
             SeatUsage {
                 user: first.clone(),
-                used_cents: 1_000
+                used_cents: 400
             },
             SeatUsage {
                 user: second,
-                used_cents: 8_250
+                used_cents: 3_300
             },
         ]
     );
     assert!(
         reader
-            .list_rate_usage_cents_by_user(&[], current_period())
+            .usage_cost_cents_by_user(&[], current_period())
             .await
             .unwrap()
             .is_empty()
     );
     assert_eq!(
         reader
-            .list_rate_usage_cents_by_user(std::slice::from_ref(&first), current_period())
+            .usage_cost_cents_by_user(std::slice::from_ref(&first), current_period())
             .await
             .unwrap(),
         vec![SeatUsage {
             user: first,
-            used_cents: 1_000
+            used_cents: 400
         }]
     );
 }
@@ -160,14 +160,14 @@ async fn billing_period_includes_start_and_excludes_end(pool: PgPool) {
         .unwrap();
     }
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(std::slice::from_ref(&user), BillingPeriod { start, end })
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), BillingPeriod { start, end })
         .await
         .unwrap();
     assert_eq!(
         usage,
         vec![SeatUsage {
             user,
-            used_cents: 500
+            used_cents: 200
         }]
     );
 }
@@ -222,7 +222,7 @@ async fn free_features_are_recorded_but_only_chat_and_editing_are_metered(pool: 
     assert_eq!(stored_features, expected_features);
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(std::slice::from_ref(&user), current_period())
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
         .await
         .unwrap();
 
@@ -230,7 +230,7 @@ async fn free_features_are_recorded_but_only_chat_and_editing_are_metered(pool: 
         usage,
         vec![SeatUsage {
             user,
-            used_cents: 1_500,
+            used_cents: 600,
         }]
     );
 }
@@ -244,7 +244,7 @@ async fn free_features_alone_do_not_produce_billable_usage(pool: PgPool) {
     }
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(&[user], current_period())
+        .usage_cost_cents_by_user(&[user], current_period())
         .await
         .unwrap();
     assert!(usage.is_empty());
@@ -267,17 +267,17 @@ async fn unpriced_free_features_are_excluded_from_fallback_billing(pool: PgPool)
     }
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(std::slice::from_ref(&user), current_period())
+        .usage_cost_cents_by_user(std::slice::from_ref(&user), current_period())
         .await
         .unwrap();
 
-    // Chat and editing each fall back to $5 per million input tokens, with
-    // the 2.5x list-rate markup. Unpriced free features add nothing.
+    // Chat and editing each fall back to $5 per million input tokens, counted
+    // at cost. Unpriced free features add nothing.
     assert_eq!(
         usage,
         vec![SeatUsage {
             user,
-            used_cents: 2_500,
+            used_cents: 1_000,
         }]
     );
 }

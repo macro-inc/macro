@@ -1139,11 +1139,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
-     * Included AI per seat per period, list-rate cents.
+     * Included AI per seat per period, in cents at provider cost.
      */
     included_ai_cents_per_seat: number;
     /**
-     * Monthly list price per seat, cents.
+     * Monthly subscription price per seat, cents.
      */
     monthly_price_cents: number;
     /**
@@ -1476,19 +1476,19 @@ export type UsageSnapshot = {
      */
     can_manage_billing: boolean;
     /**
-     * Shared prepaid credit balance.
+     * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
     /**
-     * Shared payer credits already applied to this period.
+     * Shared payer credits already applied to this period, in customer cents.
      */
     credits_consumed_cents: number;
     /**
-     * Included AI for this user's seat this period, in list-rate cents.
+     * Included AI for this user's seat this period, in cents at provider cost.
      */
     included_cents: number;
     /**
-     * Shared overage charged so far this period.
+     * Shared overage charged so far this period, in customer cents.
      */
     overage_charged_cents: number;
     /**
@@ -1496,7 +1496,7 @@ export type UsageSnapshot = {
      */
     overage_enabled: boolean;
     /**
-     * Per-period overage cap.
+     * Per-period overage cap, in customer cents.
      */
     overage_limit_cents: number;
     /**
@@ -1516,8 +1516,9 @@ export type UsageSnapshot = {
      */
     period_start: string;
     /**
-     * This seat's remaining allowance plus shared credit/overage headroom; 0
-     * when blocked.
+     * Cost cents of usage this seat may still consume: its remaining allowance
+     * plus whatever shared credit and overage headroom pays for at the markup.
+     * 0 when blocked.
      */
     remaining_cents: number;
     /**
@@ -1529,8 +1530,9 @@ export type UsageSnapshot = {
      */
     tier: PlanTier;
     /**
-     * Team-wide usage beyond per-seat allowances that is not yet covered by
-     * shared credits or charges (awaiting settlement).
+     * Team-wide usage beyond per-seat allowances, at the overage markup, that
+     * is not yet covered by shared credits or charges (awaiting settlement).
+     * Customer cents.
      */
     uncovered_cents: number;
     /**
@@ -1538,7 +1540,7 @@ export type UsageSnapshot = {
      */
     unlimited: boolean;
     /**
-     * AI used by this user this period, in list-rate cents.
+     * AI used by this user this period, in cents at provider cost.
      */
     used_cents: number;
 };

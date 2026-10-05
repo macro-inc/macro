@@ -485,11 +485,11 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     let seats = vec![
         SeatAllowance {
             user: payer.clone(),
-            included_cents: 4_000,
+            included_cents: 2_000,
         },
         SeatAllowance {
             user: member.clone(),
-            included_cents: 20_000,
+            included_cents: 1_000,
         },
     ];
 
@@ -516,7 +516,7 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     // A later observation of the same open period refreshes.
     let max_payer = vec![SeatAllowance {
         user: payer.clone(),
-        included_cents: 20_000,
+        included_cents: 2_500,
     }];
     assert_eq!(
         repo.store_open_allowance(&payer, open, &max_payer, SeatGeneration::from_raw(0))
@@ -541,7 +541,7 @@ async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
         payer.as_ref(),
         earlier,
         &vec![payer.as_ref().to_string(), member.as_ref().to_string()],
-        &vec![4_000_i64, 20_000_i64],
+        &vec![2_000_i64, 1_000_i64],
     )
     .execute(&pool)
     .await
@@ -629,7 +629,7 @@ async fn release_open_seat_removes_the_middle_pair_and_leaves_the_closed_row(poo
         bob.as_ref().to_string(),
     ];
     let open_cents = vec![100_i64, 100, 300];
-    let closed_cents = vec![4_000_i64, 20_000, 4_000];
+    let closed_cents = vec![2_000_i64, 1_000, 2_000];
     let seeded_at = open_start - chrono::Duration::days(2);
     sqlx::query!(
         r#"
@@ -828,7 +828,7 @@ async fn release_open_seat_without_an_allowance_row_bumps_generation(pool: PgPoo
             open,
             &[SeatAllowance {
                 user: member.clone(),
-                included_cents: 4_000,
+                included_cents: 2_000,
             }],
             SeatGeneration::from_raw(0),
         )

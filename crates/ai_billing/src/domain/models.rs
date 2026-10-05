@@ -1,5 +1,6 @@
-//! Plans, the margin math, billing periods, and the API-facing snapshot.
+//! Plans, billing periods, settings, and the API-facing snapshot.
 
+use super::pricing::INCLUDED_ALLOWANCE_CENTS;
 pub use ai_usage::NON_BILLABLE_AI_FEATURES;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -36,29 +37,15 @@ impl AiUsageBilling {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UsagePolicy {
-    /// Original 2.5x list-rate arithmetic and plan allowances.
+    /// Aggregate per-period settlement in [`super::ledger`]: the at-cost
+    /// allowance, then credits and overage at the markup.
     Legacy,
-    /// Existing $40 offer: $20 public usage per seat, then public usage times 1.05.
+    /// Per-attempt exact-money policy in [`super::policy`]: the same allowance
+    /// at public price, then public usage at the same markup.
     PublicAllowanceV1,
 }
 
-/// Legacy target gross margin on AI, in basis points. The list rate is provider cost
-/// divided by `(1 - margin)`; at 60% that is a 2.5x markup.
-pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
-
-const BPS_PER_UNIT: i64 = 10_000;
-
-/// Legacy only: convert a provider cost in USD to Macro's list rate in whole cents,
-/// rounding up so fractional cents never accrue in the customer's favour.
-pub fn list_rate_cents(provider_cost_usd: f64) -> i64 {
-    if !provider_cost_usd.is_finite() || provider_cost_usd <= 0.0 {
-        return 0;
-    }
-    let markup = BPS_PER_UNIT as f64 / (BPS_PER_UNIT - TARGET_GROSS_MARGIN_BPS) as f64;
-    (provider_cost_usd * 100.0 * markup).ceil() as i64
-}
-
-/// One-off credit packs a payer may buy, in list-rate cents.
+/// One-off credit packs a payer may buy, in customer cents.
 pub const CREDIT_PACKS_CENTS: [i64; 4] = [1_000, 2_500, 5_000, 10_000];
 
 /// Smallest per-period overage cap a payer may set.
@@ -96,12 +83,13 @@ pub enum PlanTier {
     Free,
     /// The $40/seat/month plan (recorded as the legacy `sub_opus` role).
     Premium,
-    /// The $200/seat/month plan with a 5x AI allowance.
+    /// The $200/seat/month plan. Its AI allowance equals Premium's until GTM
+    /// defines a Max allowance.
     Max,
 }
 
 impl PlanTier {
-    /// Monthly list price per seat, in cents.
+    /// Monthly subscription price per seat, in cents.
     pub const fn monthly_price_cents(self) -> i64 {
         match self {
             PlanTier::Free => 0,
@@ -110,11 +98,14 @@ impl PlanTier {
         }
     }
 
-    /// Legacy AI usage included per seat per period, in list-rate cents. Equal to the
-    /// plan price by construction: spending it all costs Macro
-    /// `price x (1 - margin)`, which is exactly the target margin.
+    /// AI usage included per seat per period, in cents at provider cost
+    /// ([`INCLUDED_ALLOWANCE_CENTS`] for every paid plan, nothing for Free).
     pub const fn included_ai_cents_per_seat(self) -> i64 {
-        self.monthly_price_cents()
+        if self.is_paid() {
+            INCLUDED_ALLOWANCE_CENTS
+        } else {
+            0
+        }
     }
 
     /// Whether this tier pays for AI at all (credits and overage need a plan).
@@ -314,7 +305,7 @@ pub enum PayerScope {
 pub struct SeatAllowance {
     /// The user occupying the seat.
     pub user: MacroUserIdStr<'static>,
-    /// Included AI for this seat, in list-rate cents.
+    /// Included AI for this seat, in cents at provider cost.
     pub included_cents: i64,
 }
 
@@ -323,7 +314,7 @@ pub struct SeatAllowance {
 pub struct SeatUsage {
     /// The user occupying the seat.
     pub user: MacroUserIdStr<'static>,
-    /// Usage at Macro's list rate, in cents.
+    /// Usage in cents at provider cost.
     pub used_cents: i64,
 }
 
@@ -365,7 +356,7 @@ impl Entitlement {
         self.billed_users.len().max(1) as u32
     }
 
-    /// Included AI for this user's seat, in list-rate cents.
+    /// Included AI for this user's seat, in cents at provider cost.
     pub fn included_ai_cents(&self) -> i64 {
         self.tier.included_ai_cents_per_seat()
     }
@@ -397,7 +388,7 @@ impl Entitlement {
 pub struct BillingSettings {
     /// Whether usage past allowance and credits is billed as overage.
     pub overage_enabled: bool,
-    /// Per-period cap on overage, in list-rate cents.
+    /// Per-period cap on overage, in customer cents.
     pub overage_limit_cents: i64,
     /// Set when an overage charge failed to collect.
     pub overage_suspended_at: Option<DateTime<Utc>>,
@@ -518,27 +509,29 @@ pub struct UsageSnapshot {
     pub period_start: DateTime<Utc>,
     /// Period end (exclusive).
     pub period_end: DateTime<Utc>,
-    /// Included AI for this user's seat this period, in list-rate cents.
+    /// Included AI for this user's seat this period, in cents at provider cost.
     pub included_cents: i64,
-    /// AI used by this user this period, in list-rate cents.
+    /// AI used by this user this period, in cents at provider cost.
     pub used_cents: i64,
-    /// Shared payer credits already applied to this period.
+    /// Shared payer credits already applied to this period, in customer cents.
     pub credits_consumed_cents: i64,
-    /// Shared prepaid credit balance.
+    /// Shared prepaid credit balance, in customer cents.
     pub credit_balance_cents: i64,
     /// Whether overage billing is on.
     pub overage_enabled: bool,
-    /// Per-period overage cap.
+    /// Per-period overage cap, in customer cents.
     pub overage_limit_cents: i64,
-    /// Shared overage charged so far this period.
+    /// Shared overage charged so far this period, in customer cents.
     pub overage_charged_cents: i64,
     /// Whether overage is paused after a failed charge.
     pub overage_suspended: bool,
-    /// Team-wide usage beyond per-seat allowances that is not yet covered by
-    /// shared credits or charges (awaiting settlement).
+    /// Team-wide usage beyond per-seat allowances, at the overage markup, that
+    /// is not yet covered by shared credits or charges (awaiting settlement).
+    /// Customer cents.
     pub uncovered_cents: i64,
-    /// This seat's remaining allowance plus shared credit/overage headroom; 0
-    /// when blocked.
+    /// Cost cents of usage this seat may still consume: its remaining allowance
+    /// plus whatever shared credit and overage headroom pays for at the markup.
+    /// 0 when blocked.
     pub remaining_cents: i64,
     /// Why requests are refused right now, if they are.
     #[serde(skip_serializing_if = "Option::is_none")]

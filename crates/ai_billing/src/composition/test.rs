@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 async fn configured_recorders_preserve_analytics_and_count_only_enabled_billable_usage(
     pool: PgPool,
 ) {
-    use crate::domain::{BillingPeriod, UsageReader, list_rate_cents};
+    use crate::domain::{BillingPeriod, UsageReader, cost_cents};
     use ai_usage::{UsageApiParams, UsageContext, UsageRepo};
     use std::time::Duration;
 
@@ -53,7 +53,7 @@ async fn configured_recorders_preserve_analytics_and_count_only_enabled_billable
     .expect("all analytics writes must finish, including uncounted usage");
 
     let usage = PgUsageReader::new(pool)
-        .list_rate_usage_cents_by_user(
+        .usage_cost_cents_by_user(
             &[user.clone(), ai_usage::SYSTEM_USER_ID.clone()],
             BillingPeriod::current(None, chrono::Utc::now()),
         )
@@ -61,7 +61,7 @@ async fn configured_recorders_preserve_analytics_and_count_only_enabled_billable
         .unwrap();
     assert_eq!(usage.len(), 1);
     assert_eq!(usage[0].user, user);
-    assert_eq!(usage[0].used_cents, list_rate_cents(5.0));
+    assert_eq!(usage[0].used_cents, cost_cents(5.0));
 }
 
 #[tokio::test]

@@ -47,7 +47,7 @@ for both `record()` and `record_now()`, before the
 [repository insert](../crates/ai_usage/src/outbound/pg_usage_repo.rs). Clients cannot
 supply it. The [billing reader](../crates/ai_billing/src/outbound/pg_usage_reader.rs)
 uses the persisted literal `count_usage = TRUE`, not a mutable feature exclusion
-list. User/team-seat scoping, `[start, end)` periods, list-rate arithmetic, and
+list. User/team-seat scoping, `[start, end)` periods, at-cost arithmetic, and
 fallback pricing for null totals are retained. Admin analytics still includes
 uncounted rows; repricing can change totals, never eligibility.
 
@@ -68,6 +68,14 @@ or `false`; malformed present values fail startup) and hosts load it once. It is
 independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
+
+Pricing is two constants in
+[`pricing.rs`](../crates/ai_billing/src/domain/pricing.rs): each paid seat includes
+`INCLUDED_ALLOWANCE_CENTS` ($20) of usage per period measured at provider cost, and
+usage beyond that is converted to customer money at `OVERAGE_MARKUP_PERCENT` (5%)
+over cost before credits are consumed or overage is charged. The markup is applied
+to the period's cumulative chargeable cost, so settling in chunks books the same
+money as settling once. Change a constant and redeploy to change pricing.
 
 Only two hosts participate:
 

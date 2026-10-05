@@ -27,7 +27,9 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   premium: [
     'All agents',
     'All models',
-    ...(DEV_MODE_ENV ? ['$40 of AI usage each month'] : []),
+    ...(DEV_MODE_ENV
+      ? [`$${PLAN_BY_TIER.premium.aiIncluded} of AI usage at cost each month`]
+      : []),
     'No watermark',
     'AI projections',
     'Multiple email inboxes',
@@ -37,7 +39,9 @@ const BILLING_PLAN_FEATURES: Record<PlanTier, string[]> = {
   ],
   max: [
     'Everything in Premium',
-    ...(DEV_MODE_ENV ? ['$200 of AI usage each month'] : []),
+    ...(DEV_MODE_ENV
+      ? [`$${PLAN_BY_TIER.max.aiIncluded} of AI usage at cost each month`]
+      : []),
     'Priority support',
   ],
 };
@@ -74,7 +78,7 @@ const PlanPrice = (props: { tier: PaidPlan }) => (
     ${PLAN_BY_TIER[props.tier].price} per seat / month
     <Show when={DEV_MODE_ENV}>
       {' '}
-      · includes ${PLAN_BY_TIER[props.tier].aiIncluded} of AI usage
+      · includes ${PLAN_BY_TIER[props.tier].aiIncluded} of AI usage at cost
     </Show>
   </p>
 );
@@ -259,7 +263,7 @@ export const Billing = () => {
         {(snapshot) => (
           <SettingsSection
             title="AI usage"
-            description="Your plan includes AI each month at Macro's usage rates. Beyond that, prepaid credits and usage billing keep you going."
+            description="Your plan includes AI each month, measured at provider cost. Beyond that, prepaid credits and usage billing keep you going."
           >
             <SettingsCard>
               <section class="flex flex-col gap-5 p-4">
@@ -384,7 +388,11 @@ export const Billing = () => {
                   Switch to Premium
                 </button>{' '}
                 ($40 per seat / month
-                <Show when={DEV_MODE_ENV}> with $40 of AI usage</Show>).
+                <Show when={DEV_MODE_ENV}>
+                  {' '}
+                  with ${PLAN_BY_TIER.premium.aiIncluded} of AI usage at cost
+                </Show>
+                ).
               </p>
             </SettingsSection>
           </Match>

@@ -34,9 +34,9 @@ pub struct AiBillingErrorBody {
 pub struct PlanCatalogEntry {
     /// The tier.
     pub tier: PlanTier,
-    /// Monthly list price per seat, cents.
+    /// Monthly subscription price per seat, cents.
     pub monthly_price_cents: i64,
-    /// Included AI per seat per period, list-rate cents.
+    /// Included AI per seat per period, in cents at provider cost.
     pub included_ai_cents_per_seat: i64,
 }
 
