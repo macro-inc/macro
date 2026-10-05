@@ -6,7 +6,7 @@ export function ParticipantsSearchInput(props: {
   onInput: (value: string) => void;
 }) {
   return (
-    <InputGroup>
+    <InputGroup class="rounded-full">
       <InputGroup.Input
         type="search"
         aria-label="Search participants"

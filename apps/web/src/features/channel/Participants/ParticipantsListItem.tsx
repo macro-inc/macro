@@ -1,9 +1,9 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { idToEmail } from '@core/user';
+import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import IconX from '@phosphor/x.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { Button, Item } from '@ui';
+import { Badge, Button, Item } from '@ui';
 import { Show } from 'solid-js';
 
 export function ParticipantsListItem(props: {
@@ -18,7 +18,12 @@ export function ParticipantsListItem(props: {
     props.currentUserId !== props.participant.user_id &&
     props.participant.role !== 'owner';
 
-  const navigationHandlers = useSplitNavigationHandler<HTMLButtonElement>(
+  const displayName = () =>
+    getDisplayName(tryMacroId(props.participant.user_id), {
+      emailFallback: 'local-part',
+    }) || idToEmail(props.participant.user_id);
+
+  const navigationHandlers = useSplitNavigationHandler<HTMLAnchorElement>(
     async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -27,21 +32,46 @@ export function ParticipantsListItem(props: {
   );
 
   return (
-    <Item>
-      <UserIcon id={props.participant.user_id} size="lg" isDeleted={false} />
-      <Item.Content>
-        <Item.Title>
-          <Button
-            {...navigationHandlers}
-            label={idToEmail(props.participant.user_id)}
-          >
-            {idToEmail(props.participant.user_id)}
-          </Button>
-        </Item.Title>
-        <Item.Description>{props.participant.role}</Item.Description>
-      </Item.Content>
+    <div class="relative">
+      <a
+        {...navigationHandlers}
+        role="link"
+        tabIndex={0}
+        aria-label={`Message ${displayName()}`}
+        class="block rounded-xl hover:bg-hover focus-visible:outline-2 focus-visible:outline-edge"
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          event.currentTarget.click();
+        }}
+      >
+        <Item class={props.editable ? 'pr-12' : undefined}>
+          <UserIcon
+            id={props.participant.user_id}
+            size="lg"
+            isDeleted={false}
+            suppressClick
+            showTooltip={false}
+          />
+          <Item.Content>
+            <Item.Title class="truncate">{displayName()}</Item.Title>
+            <Item.Description class="truncate">
+              {idToEmail(props.participant.user_id)}
+            </Item.Description>
+          </Item.Content>
+          <Item.Actions>
+            <Badge variant="outline" size="sm">
+              {
+                { owner: 'Owner', admin: 'Admin', member: 'Member' }[
+                  props.participant.role
+                ]
+              }
+            </Badge>
+          </Item.Actions>
+        </Item>
+      </a>
       <Show when={props.editable}>
-        <Item.Actions>
+        <div class="absolute right-3 top-1/2 -translate-y-1/2">
           <Button
             label={
               canRemove() ? 'Remove participant' : 'Cannot remove participant'
@@ -57,8 +87,8 @@ export function ParticipantsListItem(props: {
           >
             <IconX />
           </Button>
-        </Item.Actions>
+        </div>
       </Show>
-    </Item>
+    </div>
   );
 }

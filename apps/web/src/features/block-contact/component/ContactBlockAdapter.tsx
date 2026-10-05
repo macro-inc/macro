@@ -35,12 +35,11 @@ export function ContactBlockAdapter() {
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <ContactTabs value={section()} onChange={setSection} />
-          <div class="relative min-h-0 min-w-0 flex-1">
-            <Contact contactId={contactId} section={section()} />
-          </div>
-        </div>
+        <Contact
+          contactId={contactId}
+          section={section()}
+          navigation={<ContactTabs value={section()} onChange={setSection} />}
+        />
       </ParamsProvider>
     </>
   );

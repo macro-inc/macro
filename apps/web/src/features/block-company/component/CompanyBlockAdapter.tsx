@@ -35,12 +35,11 @@ export function CompanyBlockAdapter() {
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
-        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <CompanyTabs value={section()} onChange={setSection} />
-          <div class="relative min-h-0 min-w-0 flex-1">
-            <Company companyId={companyId} section={section()} />
-          </div>
-        </div>
+        <Company
+          companyId={companyId}
+          section={section()}
+          navigation={<CompanyTabs value={section()} onChange={setSection} />}
+        />
       </ParamsProvider>
     </>
   );

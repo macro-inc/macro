@@ -917,21 +917,29 @@ Leaving from the channel's call controls switches to `Messages` immediately.
 Disconnect and server cleanup continue after that switch; slow or failed RTC
 teardown must not leave the channel showing the join screen.
 
-`Participants` tab uses content-sized cards for people, team access (when
-available), and bots, with one scrollbar for the page. Search uses the shared
+`Participants` tab keeps people and bots within the available page height, with
+separate scrolling lists and fixed search/invite controls. Team access appears
+between them when available. Search uses the shared
 input group; add, invite, and new-bot actions use neutral outline buttons.
-A short member list and an empty bots section should stay compact at any
-viewport height. Search by email or role and clear the search to restore the
-list; scrolling a long list must also reach the team settings and bots.
+The bots section stays compact with few or no bots. Search by display name,
+email, or role and clear the search to restore the list; scrolling a long member
+list must leave the bots section and participant controls visible.
 
 `Participants` tab:
 - `Copy invite link`, participant search box.
-- Add: combobox `name@company.com` + `Add Participant` button.
-- Each row: `<name> Member|Owner` with a `Remove participant` button (owner shows
-  `Cannot remove participant`, disabled).
+- Add: combobox `Add participants by name or email` + `Add Participant` button.
+- Dividers frame the Add Participant controls, not the scrolling list. Each row shows the display name above the
+  email, both on a single truncated line without text tooltips, and a
+  title-cased role badge on the right. Click anywhere on the row or focus it and
+  press Enter to open the DM; Shift-click opens it in a new split.
+- The separate `Remove participant` button never opens the DM (owner and current
+  user show `Cannot remove participant`, disabled).
 - Team access: `Team channel` switch (disabled until you belong to a team).
-- Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
+- Bots: `New bot`, `Search bots by name or handle` combobox, `Invite bot` — webhook-powered channel
   participants.
+- Bot rows match participant rows: name above a truncated handle/description,
+  a `Bot` badge, and a row link that opens the bot. Copy webhook and Remove are
+  separate actions that do not open the bot.
 
 ## Incoming call ringing
 

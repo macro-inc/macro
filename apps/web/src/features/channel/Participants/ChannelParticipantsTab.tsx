@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { idToEmail } from '@core/user';
+import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { usePatchChannelMutation } from '@queries/channel/channels';
@@ -83,6 +83,9 @@ export function ChannelParticipantsTab(props: {
       const email = idToEmail(participant.user_id).toLowerCase();
       return (
         participant.user_id.toLowerCase().includes(query) ||
+        getDisplayName(tryMacroId(participant.user_id))
+          .toLowerCase()
+          .includes(query) ||
         email.includes(query) ||
         participant.role.toLowerCase().includes(query)
       );
@@ -142,30 +145,34 @@ export function ChannelParticipantsTab(props: {
   };
 
   return (
-    <div class="min-h-0 flex-1">
-      <Scroll>
-        <div class="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">
-          <Card>
-            <Card.Header>
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <Card.Title>Participants</Card.Title>
-                <Show when={channelType() === ChannelType.private}>
-                  <ChannelJoinLinkButton channelId={props.channelId} />
-                </Show>
-              </div>
-            </Card.Header>
-            <Card.Body>
-              <div class="flex flex-col gap-3">
-                <ParticipantsSearchInput
-                  value={searchQuery()}
-                  onInput={setSearchQuery}
-                />
-                <Show when={isEditable()}>
+    <div class="min-h-0 flex-1 overflow-hidden">
+      <div class="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">
+        <Card class="min-h-0 flex-1">
+          <Card.Header class="shrink-0">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <Card.Title>Participants</Card.Title>
+              <Show when={channelType() === ChannelType.private}>
+                <ChannelJoinLinkButton channelId={props.channelId} />
+              </Show>
+            </div>
+          </Card.Header>
+          <Card.Body class="flex min-h-0 flex-1 flex-col gap-3">
+            <div class="flex shrink-0 flex-col gap-3">
+              <ParticipantsSearchInput
+                value={searchQuery()}
+                onInput={setSearchQuery}
+              />
+              <Show when={isEditable()}>
+                <div class="-mx-3 border-y border-edge-muted px-3 py-4">
                   <ParticipantsAddPanel
                     participants={participants}
                     onAddParticipants={addParticipants}
                   />
-                </Show>
+                </div>
+              </Show>
+            </div>
+            <div class="min-h-0 flex-1">
+              <Scroll aria-label="Participants list">
                 <ParticipantsList
                   participants={filteredParticipants}
                   searchQuery={searchQuery}
@@ -174,31 +181,31 @@ export function ChannelParticipantsTab(props: {
                   onParticipantClick={openDirectMessage}
                   onRemoveParticipant={removeParticipant}
                 />
-              </div>
-            </Card.Body>
-          </Card>
-          <Show when={canManageChannel() && supportsTeamSettings()}>
-            <ChannelTeamSettingsPanel
-              isTeamChannel={isTeamChannel()}
-              autoJoinTeam={autoJoinTeam()}
-              canConvertToTeam={canConvertToTeam()}
-              conversionUnavailableReason={conversionUnavailableReason()}
-              disabled={patchChannelMutation.isPending}
-              onConvertToTeam={convertToTeamChannel}
-              onAutoJoinTeamChange={updateAutoJoinTeam}
-            />
-          </Show>
-          <Show when={props.botManagementEnabled}>
-            <ChannelBotsPanel
-              channelId={props.channelId}
-              editable={isEditable()}
-              inviteFocusRequest={props.inviteBotFocusRequest}
-              onCreateBot={props.onCreateBot}
-              onOpenBot={props.onOpenBot}
-            />
-          </Show>
-        </div>
-      </Scroll>
+              </Scroll>
+            </div>
+          </Card.Body>
+        </Card>
+        <Show when={canManageChannel() && supportsTeamSettings()}>
+          <ChannelTeamSettingsPanel
+            isTeamChannel={isTeamChannel()}
+            autoJoinTeam={autoJoinTeam()}
+            canConvertToTeam={canConvertToTeam()}
+            conversionUnavailableReason={conversionUnavailableReason()}
+            disabled={patchChannelMutation.isPending}
+            onConvertToTeam={convertToTeamChannel}
+            onAutoJoinTeamChange={updateAutoJoinTeam}
+          />
+        </Show>
+        <Show when={props.botManagementEnabled}>
+          <ChannelBotsPanel
+            channelId={props.channelId}
+            editable={isEditable()}
+            inviteFocusRequest={props.inviteBotFocusRequest}
+            onCreateBot={props.onCreateBot}
+            onOpenBot={props.onOpenBot}
+          />
+        </Show>
+      </div>
     </div>
   );
 }

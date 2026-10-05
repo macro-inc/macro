@@ -3,11 +3,10 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { useBotsQuery } from '@queries/bots/bots';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Button, InputGroup, Surface } from '@ui';
+import { Button, inputClasses, Surface } from '@ui';
 import {
   type Component,
   createEffect,
@@ -111,7 +110,9 @@ export function BotInviteSelect(props: {
           }
           onChange={(bot) => setSelectedBot(bot ?? undefined)}
           placeholder={
-            botsQuery.isLoading ? 'Loading bots…' : 'Search existing bots…'
+            botsQuery.isLoading
+              ? 'Loading bots…'
+              : 'Search bots by name or handle'
           }
           itemComponent={BotInviteItem}
           placement="bottom-start"
@@ -119,18 +120,14 @@ export function BotInviteSelect(props: {
           disabled={botsQuery.isLoading || addBotMutation.isPending}
         >
           <Combobox.Control<Bot> class="block w-full">
-            <InputGroup>
-              <Combobox.Input
-                as={InputGroup.Input}
-                ref={inputRef}
-                aria-label="Search existing bots"
-              />
-              <InputGroup.Addon align="inline-end">
-                <Combobox.Trigger as={InputGroup.Button} aria-label="Show bots">
-                  <CaretDownIcon />
-                </Combobox.Trigger>
-              </InputGroup.Addon>
-            </InputGroup>
+            <Combobox.Input
+              ref={inputRef}
+              aria-label="Search existing bots"
+              class={inputClasses({
+                size: 'lg',
+                class: 'rounded-full px-4',
+              })}
+            />
           </Combobox.Control>
           <Combobox.Portal>
             <Combobox.Content
@@ -138,16 +135,12 @@ export function BotInviteSelect(props: {
               depth={3}
               class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 glass bg-menu-glass"
             >
-              <Show
-                when={availableBots().length > 0}
-                fallback={
-                  <div class="px-3 py-5 text-center text-xs text-ink-muted">
-                    No bots available to invite
-                  </div>
-                }
-              >
-                <Combobox.Listbox class="max-h-64 overflow-y-auto" />
-              </Show>
+              <Combobox.Listbox class="peer max-h-64 overflow-y-auto empty:hidden" />
+              <div class="hidden px-3 py-5 text-center text-xs text-ink-muted peer-empty:block">
+                {availableBots().length > 0
+                  ? 'No matching bots'
+                  : 'No bots available to invite'}
+              </div>
             </Combobox.Content>
           </Combobox.Portal>
         </Combobox>

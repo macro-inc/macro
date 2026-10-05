@@ -72,7 +72,6 @@ export function ChannelJoinLinkButton(props: { channelId: string }) {
   return (
     <Button
       variant="outline"
-      size="sm"
       disabled={getJoinLinkMutation.isPending}
       onClick={() => void copyJoinLink()}
     >

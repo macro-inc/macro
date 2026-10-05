@@ -19,7 +19,7 @@ export function ParticipantsList(props: {
       when={props.participants().length > 0}
       fallback={<ParticipantsEmptyState searchQuery={props.searchQuery()} />}
     >
-      <div>
+      <div class="py-1">
         <For each={props.participants()}>
           {(participant) => (
             <ParticipantsListItem

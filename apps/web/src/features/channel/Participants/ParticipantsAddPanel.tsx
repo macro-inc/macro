@@ -6,7 +6,7 @@ import {
 } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { Button } from '@ui';
+import { Button, inputClasses } from '@ui';
 import { type Accessor, createSignal } from 'solid-js';
 
 export function ParticipantsAddPanel(props: {
@@ -42,8 +42,13 @@ export function ParticipantsAddPanel(props: {
         <RecipientSelector<'user'>
           setSelectedOptions={setSelectedUsers}
           selectedOptions={selectedUsers()}
-          placeholder="name@company.com"
+          placeholder="Add participants by name or email"
           options={options}
+          noPadding
+          class={inputClasses({
+            class:
+              'h-auto min-h-9 rounded-full py-0.5 focus-within:ring-2 focus-within:ring-edge-muted',
+          })}
         />
       </div>
       <Button

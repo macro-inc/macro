@@ -7,7 +7,7 @@ import {
   useChannelBotsQuery,
   useRemoveBotFromChannelMutation,
 } from '@queries/channel/channel-bots';
-import { Button, Card, Item } from '@ui';
+import { Button, Card, Item, Scroll } from '@ui';
 import { For, Show } from 'solid-js';
 import { BotInviteSelect } from '../Bots/BotInviteSelect';
 import { ChannelBotRow } from './ChannelBotRow';
@@ -43,8 +43,8 @@ export function ChannelBotsPanel(props: {
   };
 
   return (
-    <Card>
-      <Card.Header>
+    <Card class="min-h-0 max-h-[40%] shrink-0">
+      <Card.Header class="shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <Card.Title>Bots</Card.Title>
           <Show when={props.editable}>
@@ -58,50 +58,54 @@ export function ChannelBotsPanel(props: {
           Webhook-powered channel participants
         </Card.Description>
       </Card.Header>
-      <Card.Body>
-        <div class="flex flex-col gap-3">
-          <Show when={props.editable}>
+      <Card.Body class="flex min-h-0 flex-col gap-3">
+        <Show when={props.editable}>
+          <div class="shrink-0">
             <BotInviteSelect
               channelId={props.channelId}
               channelBotIds={bots().map((bot) => bot.id)}
               focusRequest={props.inviteFocusRequest}
             />
-          </Show>
-          <Show when={!botsQuery.isLoading} fallback={<LoadingSpinner />}>
-            <Show
-              when={bots().length > 0}
-              fallback={
-                <Item role="status">
-                  <Item.Media>
-                    <RobotIcon />
-                  </Item.Media>
-                  <Item.Content>
-                    <Item.Title>No bots in this channel</Item.Title>
-                    <Show when={props.editable}>
-                      <Item.Description>
-                        Select an existing bot above or create a new one.
-                      </Item.Description>
-                    </Show>
-                  </Item.Content>
-                </Item>
-              }
-            >
-              <div>
-                <For each={bots()}>
-                  {(bot) => (
-                    <ChannelBotRow
-                      bot={bot}
-                      editable={props.editable}
-                      removing={removeBotMutation.isPending}
-                      onOpen={() => props.onOpenBot(bot.id)}
-                      onCopyWebhook={() => void copyWebhook()}
-                      onRemove={() => removeBot(bot.id, bot.name)}
-                    />
-                  )}
-                </For>
-              </div>
+          </div>
+        </Show>
+        <div class="min-h-0 flex-1">
+          <Scroll aria-label="Bots list">
+            <Show when={!botsQuery.isLoading} fallback={<LoadingSpinner />}>
+              <Show
+                when={bots().length > 0}
+                fallback={
+                  <Item role="status">
+                    <Item.Media>
+                      <RobotIcon />
+                    </Item.Media>
+                    <Item.Content>
+                      <Item.Title>No bots in this channel</Item.Title>
+                      <Show when={props.editable}>
+                        <Item.Description>
+                          Select an existing bot above or create a new one.
+                        </Item.Description>
+                      </Show>
+                    </Item.Content>
+                  </Item>
+                }
+              >
+                <div>
+                  <For each={bots()}>
+                    {(bot) => (
+                      <ChannelBotRow
+                        bot={bot}
+                        editable={props.editable}
+                        removing={removeBotMutation.isPending}
+                        onOpen={() => props.onOpenBot(bot.id)}
+                        onCopyWebhook={() => void copyWebhook()}
+                        onRemove={() => removeBot(bot.id, bot.name)}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
             </Show>
-          </Show>
+          </Scroll>
         </div>
       </Card.Body>
     </Card>
