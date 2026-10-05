@@ -4,7 +4,6 @@ use crate::util::process_pre_insert::sfs_map::fetch_and_upload_to_sfs;
 use anyhow::{Context, anyhow};
 use aws_sdk_sqs::types::Message;
 use models_email::api::refresh::RefreshEmailEvent;
-use models_email::service::link::Link;
 use models_email::service::pubsub::SFSUploaderMessage;
 use sqs_worker::cleanup_message;
 use std::collections::HashMap;
@@ -35,29 +34,14 @@ pub async fn process_message(ctx: SFSUploaderContext, message: &Message) -> anyh
         }
     };
 
-    let self_link =
-        fetch_self_contact_link(&ctx, contact.link_id, contact.email_address.as_deref()).await;
-
-    // The primary inbox's photo is also the user's profile picture. Read the
-    // photo it replaces before the upsert overwrites it, so the import can tell
-    // a picture it set earlier apart from one the user chose.
-    let previous_photo = match &self_link {
-        Some(link) if link.is_primary => fetch_previous_photo(&ctx, link).await,
-        _ => None,
-    };
-
     // update contact's photo url to new SFS url and upsert entry in database
-    contact.sfs_photo_url = Some(sfs_url.clone());
+    contact.sfs_photo_url = Some(sfs_url);
+
+    let link_id = contact.link_id;
+    let contact_email = contact.email_address.clone();
 
     match email_db_client::contacts::upsert_sync::upsert_contacts(&ctx.db, &[contact]).await {
-        Ok(_) => {
-            if let Some(link) = self_link {
-                if link.is_primary {
-                    import_profile_picture(&ctx, &link, &sfs_url, previous_photo.as_deref()).await;
-                }
-                notify_photo_synced(&ctx, &link).await;
-            }
-        }
+        Ok(_) => notify_if_self_contact(&ctx, link_id, contact_email.as_deref()).await,
         Err(err) => tracing::error!(error = ?err, "Unable to upsert contact"),
     }
 
@@ -66,72 +50,36 @@ pub async fn process_message(ctx: SFSUploaderContext, message: &Message) -> anyh
     Ok(())
 }
 
-/// The link whose own self-contact this is, i.e. the contact's email matches
-/// the link's inbox address. The worker also uploads correspondent and
-/// attachment images, which share no email with the inbox and must not be
-/// treated as the inbox's own photo.
-async fn fetch_self_contact_link(
+/// Emit `PhotoSynced` only when the uploaded contact is the inbox's own
+/// self-contact, i.e. its email matches the link's inbox address. The worker
+/// also uploads correspondent and attachment images, which share no email with
+/// the inbox and must not signal that the inbox's own photo changed.
+async fn notify_if_self_contact(
     ctx: &SFSUploaderContext,
     link_id: Uuid,
     contact_email: Option<&str>,
-) -> Option<Link> {
-    let contact_email = contact_email?;
-
-    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id)
-        .await
-        .inspect_err(
-            |e| tracing::error!(error = ?e, link_id = %link_id, "Failed to fetch link for photo sync"),
-        )
-        .ok()
-        .flatten()?;
-
-    contact_email
-        .eq_ignore_ascii_case(link.email_address.0.as_ref())
-        .then_some(link)
-}
-
-/// The inbox's current self-contact photo, before this upload replaces it.
-async fn fetch_previous_photo(ctx: &SFSUploaderContext, link: &Link) -> Option<String> {
-    email_db_client::contacts::get::fetch_contact_by_email(
-        &ctx.db,
-        link.id,
-        link.email_address.0.as_ref(),
-    )
-    .await
-    .inspect_err(
-        |e| tracing::error!(error = ?e, link_id = %link.id, "Failed to fetch previous inbox photo"),
-    )
-    .ok()
-    .flatten()
-    .and_then(|contact| contact.photo_url)
-}
-
-/// Make the primary inbox's photo the user's profile picture, unless they
-/// have chosen their own.
-async fn import_profile_picture(
-    ctx: &SFSUploaderContext,
-    link: &Link,
-    photo_url: &str,
-    previous_photo: Option<&str>,
 ) {
-    let _ = macro_db_client::user::update_profile_picture::import_profile_picture(
-        &ctx.db,
-        &link.fusionauth_user_id,
-        photo_url,
-        previous_photo,
-    )
-    .await
-    .inspect_err(
-        |e| tracing::error!(error = ?e, link_id = %link.id, "Failed to import inbox photo as profile picture"),
-    );
-}
+    let Some(contact_email) = contact_email else {
+        return;
+    };
 
-/// Tell the inbox owner's clients that the inbox's own photo changed.
-async fn notify_photo_synced(ctx: &SFSUploaderContext, link: &Link) {
+    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
+        Ok(Some(link)) => link,
+        Ok(None) => return,
+        Err(e) => {
+            tracing::error!(error = ?e, link_id = %link_id, "Failed to fetch link for photo sync");
+            return;
+        }
+    };
+
+    if !contact_email.eq_ignore_ascii_case(link.email_address.0.as_ref()) {
+        return;
+    }
+
     cg_refresh_email(
         &ctx.connection_gateway_client,
         link.macro_id.as_ref(),
-        RefreshEmailEvent::PhotoSynced { link_id: link.id },
+        RefreshEmailEvent::PhotoSynced { link_id },
     )
     .await;
 }

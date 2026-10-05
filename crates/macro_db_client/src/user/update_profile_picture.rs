@@ -30,46 +30,6 @@ pub async fn update_profile_picture(
     Ok(())
 }
 
-/// Sets the user's profile picture to a photo imported from their Google
-/// account, unless they have chosen their own. Returns whether it changed.
-///
-/// The picture is only written while the user has never set one (`NULL`) or
-/// still shows `previous_import`, the photo imported last time, so a changed
-/// Google photo follows through but a custom upload is never replaced. Removing
-/// a picture stores an empty string, which never matches, so a removal sticks.
-#[tracing::instrument(skip(db), err)]
-pub async fn import_profile_picture(
-    db: &sqlx::PgPool,
-    macro_user_id: &str,
-    picture: &str,
-    previous_import: Option<&str>,
-) -> anyhow::Result<bool> {
-    let macro_user_id = macro_uuid::string_to_uuid(macro_user_id)?;
-
-    let result = sqlx::query!(
-        r#"
-        INSERT INTO macro_user_info (macro_user_id, profile_picture)
-        VALUES ($1, $2)
-        ON CONFLICT (macro_user_id)
-        DO UPDATE SET
-            profile_picture = EXCLUDED.profile_picture,
-            profile_picture_hash = NULL
-        WHERE macro_user_info.profile_picture IS DISTINCT FROM EXCLUDED.profile_picture
-            AND (
-                macro_user_info.profile_picture IS NULL
-                OR (macro_user_info.profile_picture <> '' AND macro_user_info.profile_picture = $3)
-            )
-    "#,
-        macro_user_id,
-        picture,
-        previous_import
-    )
-    .execute(db)
-    .await?;
-
-    Ok(result.rows_affected() > 0)
-}
-
 /// Given a list of user profile ids (from "Users" table), return a list of profile pictures
 #[tracing::instrument(skip(db))]
 pub async fn get_profile_pictures(
@@ -132,6 +92,3 @@ pub async fn get_profile_pictures(
 
     Ok(ProfilePictures { pictures: result })
 }
-
-#[cfg(test)]
-mod test;

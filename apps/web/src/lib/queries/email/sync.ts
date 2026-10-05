@@ -1,7 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_INBOX_SYNC_STATUS } from '@core/constant/featureFlags';
-import { refetchProfilePicture } from '@core/signal/profilePicture';
-import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
@@ -79,14 +77,9 @@ export function handleRefreshEmail(payload: unknown): void {
   }
 
   // The inbox's own photo finished uploading; refetch links to pick up the
-  // newly-derived `photo_url`. The primary inbox's photo also fills the
-  // user's profile picture until they choose their own, so refetch that too.
+  // newly-derived `photo_url`.
   if (event.event === RefreshEmailEventOneOfOneoneEvent.photo_synced) {
     invalidateEmailLinks();
-    const userId = queryClient.getQueryData<UserInfoData>(
-      authKeys.userInfo.queryKey
-    )?.id;
-    if (userId) refetchProfilePicture(userId);
     return;
   }
 
