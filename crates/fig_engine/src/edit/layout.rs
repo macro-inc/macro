@@ -47,6 +47,20 @@ fn join(main: f64, cross: f64, horizontal: bool) -> Vec2 {
     }
 }
 
+/// The fixed gaps between `n` children: none with Figma's automatic gap,
+/// which spreads the free space instead of the stored spacing.
+fn fixed_gaps(al: &AutoLayout, n: usize) -> f64 {
+    let auto_gap = matches!(
+        al.primary_align.as_deref(),
+        Some("SPACE_BETWEEN" | "SPACE_EVENLY")
+    );
+    if auto_gap || n == 0 {
+        0.0
+    } else {
+        f64::from(al.spacing) * (n - 1) as f64
+    }
+}
+
 impl Txn<'_> {
     /// The node's box in its parent's space.
     fn local_bounds(&self, i: NodeIdx) -> Rect {
@@ -188,16 +202,7 @@ impl Txn<'_> {
         if items.is_empty() {
             return false;
         }
-        // With an automatic gap the stored spacing does not apply.
-        let auto_gap = matches!(
-            al.primary_align.as_deref(),
-            Some("SPACE_BETWEEN" | "SPACE_EVENLY")
-        );
-        let gaps = if auto_gap {
-            0.0
-        } else {
-            spacing * (items.len() - 1) as f64
-        };
+        let gaps = fixed_gaps(&al, items.len());
 
         // Main axis: fill children share what fixed ones leave.
         let main_of = |it: &Item| split(Vec2::new(it.bounds.w, it.bounds.h), h).0;
@@ -240,13 +245,19 @@ impl Txn<'_> {
         }
 
         // Cross axis: the frame hugs its tallest (or widest) child unless
-        // fixed; stretched children take the inner size.
+        // fixed; a stretched stack counts with what its own content needs.
+        // Stretched children then take the inner size.
         let cross_of = |it: &Item| split(Vec2::new(it.bounds.w, it.bounds.h), h).1;
         if al.hugs_counter() {
             let tallest = items
                 .iter()
-                .filter(|it| !it.child.stretches())
-                .map(cross_of)
+                .filter_map(|it| {
+                    if it.child.stretches() {
+                        self.content_size(it.i, !h).map(|v| it.child.clamp(v, !h))
+                    } else {
+                        Some(cross_of(it))
+                    }
+                })
                 .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))));
             if let Some(t) = tallest {
                 cross_size = t + cross_start + cross_end;
@@ -338,6 +349,37 @@ impl Txn<'_> {
     fn is_thin(&self, i: NodeIdx, extent: f64) -> bool {
         let t = self.doc.props(i).node_type();
         extent.abs() < EPS && !t.is_frame_like() && t != NodeType::Text
+    }
+
+    /// What a stack's content needs along one axis (`x` or not), padding
+    /// included: the size it would hug. `None` for other layers.
+    fn content_size(&self, i: NodeIdx, x: bool) -> Option<f64> {
+        if !self.is_stack(i) {
+            return None;
+        }
+        let al = self.doc.props(i).auto_layout.clone()?;
+        let items = self.flow_children(i);
+        let size = |it: &Item| if x { it.bounds.w } else { it.bounds.h };
+        let pad = if x {
+            al.padding_left + al.padding_right
+        } else {
+            al.padding_top + al.padding_bottom
+        };
+        let content = if al.horizontal() == x {
+            fixed_gaps(&al, items.len()) + items.iter().map(size).sum::<f64>()
+        } else {
+            items
+                .iter()
+                .filter_map(|it| {
+                    if it.child.stretches() {
+                        self.content_size(it.i, x).map(|v| it.child.clamp(v, x))
+                    } else {
+                        Some(size(it))
+                    }
+                })
+                .fold(0.0, f64::max)
+        };
+        Some(f64::from(pad) + content)
     }
 
     /// Resizes a child the layout sized: text re-wraps, and a child that is

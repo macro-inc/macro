@@ -469,3 +469,52 @@ fn lines_keep_no_thickness_when_filling() {
     set(&mut doc, &mut h, &rule, r#"{"sizingVertical":"FILL"}"#);
     assert_eq!(bounds(&doc, &rule), (0.0, 15.5, 200.0, 0.0));
 }
+
+#[test]
+fn stretched_stacks_count_their_content_when_hugging() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let list = make(
+        &mut doc,
+        &mut h,
+        "0:1",
+        r#"{"type":"FRAME","x":0,"y":0,"width":100,"height":100}"#,
+    );
+    let title = make(
+        &mut doc,
+        &mut h,
+        &list,
+        r#"{"type":"RECTANGLE","x":0,"y":0,"width":73,"height":30}"#,
+    );
+    let row = make(
+        &mut doc,
+        &mut h,
+        &list,
+        r#"{"type":"FRAME","x":0,"y":40,"width":50,"height":20}"#,
+    );
+    for (x, w) in [(0, 256), (256, 157)] {
+        make(
+            &mut doc,
+            &mut h,
+            &row,
+            &format!(r#"{{"type":"RECTANGLE","x":{x},"y":40,"width":{w},"height":20}}"#),
+        );
+    }
+    set(
+        &mut doc,
+        &mut h,
+        &row,
+        r#"{"layoutMode":"HORIZONTAL","sizingHorizontal":"FIXED","width":50}"#,
+    );
+    set(
+        &mut doc,
+        &mut h,
+        &list,
+        r#"{"layoutMode":"VERTICAL","sizingHorizontal":"HUG","sizingVertical":"HUG"}"#,
+    );
+    set(&mut doc, &mut h, &row, r#"{"sizingHorizontal":"FILL"}"#);
+    // The list is as wide as the row's content, 256 + 157, not its title.
+    assert_eq!(bounds(&doc, &list).2, 413.0);
+    assert_eq!(bounds(&doc, &row).2, 413.0);
+    assert_eq!(bounds(&doc, &title).2, 73.0);
+}
