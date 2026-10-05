@@ -45,7 +45,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
               AI billing changes take effect on October 8, 2026.
             </p>
             <p class="text-sm text-ink-muted">
-              Usage controls are unavailable until these changes take effect.
+              Usage is not metered until these changes take effect.
             </p>
           </div>
         </SettingsCard>
@@ -230,76 +230,86 @@ export function UsageSettingsView(props: { context: UsageContext }) {
             </>
           )}
         </Show>
-        <Show when={props.context.developer}>
-          {(developer) => (
-            <SettingsSection
-              title="Developer tools"
-              description="Preview usage states without changing account billing."
-            >
-              <SettingsCard>
-                <div class="flex flex-col gap-3 p-4">
-                  <div class="flex flex-wrap gap-2">
-                    <Button
-                      variant={
-                        developer().plan() === 'free' ? 'accent' : 'outline'
-                      }
-                      depth={3}
-                      size="sm"
-                      aria-pressed={developer().plan() === 'free'}
-                      onClick={() => developer().previewPlan('free')}
-                    >
-                      Preview Free plan
-                    </Button>
-                    <Button
-                      variant={
-                        developer().plan() === 'paid' ? 'accent' : 'outline'
-                      }
-                      depth={3}
-                      size="sm"
-                      aria-pressed={developer().plan() === 'paid'}
-                      onClick={() => developer().previewPlan('paid')}
-                    >
-                      Preview paid plan
-                    </Button>
-                    <Button
-                      variant="outline"
-                      depth={3}
-                      size="sm"
-                      onClick={() => developer().openLimitDialog('free')}
-                    >
-                      Open Free usage-limit dialog
-                    </Button>
-                    <Button
-                      variant="outline"
-                      depth={3}
-                      size="sm"
-                      onClick={() => developer().openLimitDialog('paid')}
-                    >
-                      Open paid usage-limit dialog
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      depth={3}
-                      size="sm"
-                      disabled={!developer().active()}
-                      onClick={developer().reset}
-                    >
-                      Reset preview
-                    </Button>
-                  </div>
-                  <Show when={developer().active()}>
-                    <p class="text-xs text-ink-muted" role="status">
-                      Developer preview active. No purchases or automatic
-                      charges can be made. Reset the preview to restore real
-                      usage.
-                    </p>
-                  </Show>
-                </div>
-              </SettingsCard>
-            </SettingsSection>
-          )}
-        </Show>
       </fieldset>
+      <Show when={props.context.developer}>
+        {(developer) => (
+          <SettingsSection
+            title="Developer tools"
+            description="Preview usage states without changing account billing."
+          >
+            <SettingsCard>
+              <div class="flex flex-col gap-3 p-4">
+                <div class="flex flex-wrap gap-2">
+                  <Button
+                    variant={
+                      developer().plan() === 'free' ? 'accent' : 'outline'
+                    }
+                    depth={3}
+                    size="sm"
+                    aria-pressed={developer().plan() === 'free'}
+                    onClick={() => developer().previewPlan('free')}
+                  >
+                    Preview Free plan
+                  </Button>
+                  <Button
+                    variant={
+                      developer().plan() === 'paid' ? 'accent' : 'outline'
+                    }
+                    depth={3}
+                    size="sm"
+                    aria-pressed={developer().plan() === 'paid'}
+                    onClick={() => developer().previewPlan('paid')}
+                  >
+                    Preview paid plan
+                  </Button>
+                  <Button
+                    variant="outline"
+                    depth={3}
+                    size="sm"
+                    disabled={developer().beforeLaunch()}
+                    onClick={() => developer().openLimitDialog('free')}
+                  >
+                    Open Free usage-limit dialog
+                  </Button>
+                  <Button
+                    variant="outline"
+                    depth={3}
+                    size="sm"
+                    disabled={developer().beforeLaunch()}
+                    onClick={() => developer().openLimitDialog('paid')}
+                  >
+                    Open paid usage-limit dialog
+                  </Button>
+                  <Button
+                    variant={developer().beforeLaunch() ? 'accent' : 'outline'}
+                    depth={3}
+                    size="sm"
+                    aria-pressed={developer().beforeLaunch()}
+                    onClick={developer().previewBeforeLaunch}
+                  >
+                    Preview production before Oct 8
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    depth={3}
+                    size="sm"
+                    disabled={!developer().active()}
+                    onClick={developer().reset}
+                  >
+                    Reset preview
+                  </Button>
+                </div>
+                <Show when={developer().active()}>
+                  <p class="text-xs text-ink-muted" role="status">
+                    Developer preview active. No purchases or automatic charges
+                    can be made. Reset the preview to restore real usage.
+                  </p>
+                </Show>
+              </div>
+            </SettingsCard>
+          </SettingsSection>
+        )}
+      </Show>
       <Show when={props.context.available() && infoOpen()}>
         <UsageInfoDialog
           open={infoOpen()}

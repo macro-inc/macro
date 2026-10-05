@@ -37,8 +37,10 @@ export type UsageContext = {
   developer?: {
     active: Accessor<boolean>;
     plan: Accessor<UsagePreviewPlan | undefined>;
+    beforeLaunch: Accessor<boolean>;
     previewPlan: (plan: UsagePreviewPlan) => void;
     openLimitDialog: (plan: UsagePreviewPlan) => void;
+    previewBeforeLaunch: () => void;
     reset: () => void;
   };
 };

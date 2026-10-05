@@ -7,8 +7,9 @@ import { createSignal } from 'solid-js';
 import type { UsagePreviewPlan } from '../usage/core/usage';
 
 const [preview, setPreview] = createSignal<{
-  plan: UsagePreviewPlan;
+  plan?: UsagePreviewPlan;
   exhausted: boolean;
+  beforeLaunch: boolean;
 }>();
 
 function previewPeriod(
@@ -37,11 +38,28 @@ export function useAiUsagePreview() {
   const state = () => (DEV_MODE_ENV ? preview() : undefined);
   const active = () => !!state();
   const plan = () => state()?.plan;
+  const beforeLaunch = () => state()?.beforeLaunch === true;
   const previewPlan = (plan: UsagePreviewPlan) => {
-    if (DEV_MODE_ENV) setPreview({ plan, exhausted: false });
+    if (DEV_MODE_ENV) {
+      setPreview((current) => ({
+        plan,
+        exhausted: false,
+        beforeLaunch: current?.beforeLaunch ?? false,
+      }));
+    }
   };
   const previewLimit = (plan: UsagePreviewPlan) => {
-    if (DEV_MODE_ENV) setPreview({ plan, exhausted: true });
+    if (DEV_MODE_ENV)
+      setPreview({ plan, exhausted: true, beforeLaunch: false });
+  };
+  const previewBeforeLaunch = () => {
+    if (DEV_MODE_ENV) {
+      setPreview((current) => ({
+        plan: current?.plan,
+        exhausted: false,
+        beforeLaunch: true,
+      }));
+    }
   };
   const reset = () => setPreview(undefined);
 
@@ -50,7 +68,7 @@ export function useAiUsagePreview() {
     plans?: readonly AiPlanCatalogEntry[]
   ): AiUsageSnapshot | undefined => {
     const selected = state();
-    if (!selected) return snapshot;
+    if (!selected?.plan) return snapshot;
     const tier = selected.plan === 'free' ? 'free' : 'premium';
     const allowance = plans?.find(
       (entry) => entry.tier === tier
@@ -90,5 +108,14 @@ export function useAiUsagePreview() {
     };
   };
 
-  return { active, plan, previewPlan, previewLimit, reset, withPreview };
+  return {
+    active,
+    plan,
+    beforeLaunch,
+    previewPlan,
+    previewLimit,
+    previewBeforeLaunch,
+    reset,
+    withPreview,
+  };
 }

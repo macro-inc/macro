@@ -70,7 +70,28 @@ describe('AI usage preview', () => {
   it('cannot override billing data outside development', () => {
     state.dev = false;
     useAiUsagePreview().previewLimit('paid');
+    useAiUsagePreview().previewBeforeLaunch();
     expect(useAiUsagePreview().active()).toBe(false);
+    expect(useAiUsagePreview().beforeLaunch()).toBe(false);
     expect(useAiUsagePreview().withPreview(snapshot)).toBe(snapshot);
+  });
+
+  it('previews the rollout announcement with real usage or either plan and resets it', () => {
+    const preview = useAiUsagePreview();
+    preview.previewBeforeLaunch();
+    expect(preview.active()).toBe(true);
+    expect(preview.beforeLaunch()).toBe(true);
+    expect(preview.withPreview(snapshot)).toBe(snapshot);
+    for (const plan of ['free', 'paid'] as const) {
+      preview.previewPlan(plan);
+      expect(preview.beforeLaunch()).toBe(true);
+      expect(preview.withPreview(snapshot)?.tier).toBe(
+        plan === 'free' ? 'free' : 'premium'
+      );
+    }
+    preview.reset();
+    expect(preview.active()).toBe(false);
+    expect(preview.beforeLaunch()).toBe(false);
+    expect(preview.withPreview(snapshot)).toBe(snapshot);
   });
 });

@@ -40,6 +40,7 @@ export function Usage() {
     createSignal<AutoReloadSettings>({ ...DEFAULT_AUTO_RELOAD });
   const previewing = usagePreview.active;
   const available = () =>
+    !usagePreview.beforeLaunch() &&
     isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const returnUrl = `${window.location.origin}/app/settings/usage`;
   const context: UsageContext = {
@@ -134,12 +135,14 @@ export function Usage() {
       ? {
           active: usagePreview.active,
           plan: usagePreview.plan,
+          beforeLaunch: usagePreview.beforeLaunch,
           previewPlan: (plan) => {
             hideUsageLimit();
             setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
             usagePreview.previewPlan(plan);
           },
           openLimitDialog: (plan) => {
+            if (!available()) return;
             setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
             usagePreview.previewLimit(plan);
             showUsageLimit(
@@ -147,6 +150,11 @@ export function Usage() {
                 ? 'ai_free_allowance_exhausted'
                 : 'ai_allowance_exhausted'
             );
+          },
+          previewBeforeLaunch: () => {
+            hideUsageLimit();
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            usagePreview.previewBeforeLaunch();
           },
           reset: () => {
             usagePreview.reset();

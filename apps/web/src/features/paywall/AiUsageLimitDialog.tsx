@@ -32,9 +32,10 @@ export function AiUsageLimitDialog() {
   const { openSettings } = useSettingsState();
   const summary = useAiBillingSummaryQuery({ enabled: usageLimitOpen });
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const available = () =>
-    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const usagePreview = useAiUsagePreview();
+  const available = () =>
+    !usagePreview.beforeLaunch() &&
+    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
   const usageSnapshot = () =>
     usagePreview.withPreview(summary.isSuccess ? summary.data : undefined);
   const freePlan = () =>
