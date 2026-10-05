@@ -1,7 +1,7 @@
 //! ACP-to-vocabulary conversions and params access shared by the handlers.
 
 use agent_client_protocol::RawJsonRpcParams;
-use agent_client_protocol::schema::v1::{ContentBlock, ToolKind};
+use agent_client_protocol::schema::v1::{ContentBlock, ImageContent, ToolKind};
 use agent_runtime_protocol::domain::action::PromptAttachment;
 
 use crate::domain::model::MessagePart;
@@ -10,16 +10,15 @@ use crate::domain::model::MessagePart;
 pub(super) fn content_block_text(block: ContentBlock) -> Option<String> {
     match block {
         ContentBlock::Text(text) => Some(text.text),
-        // Images, audio, resource links and embedded resources have no text
-        // to fold. Resource links fold to attachment parts instead - see
-        // [`user_content_part`]; the rest are not rendered yet.
+        // Images fold to attachment parts — see [`user_content_part`]. Audio
+        // and embedded resources have nothing this side renders.
         _ => None,
     }
 }
 
-/// What a user's content block folds to: prose, or an attachment for the
-/// `resource_link` blocks a prompt's files travel as. `None` for the block
-/// kinds this side never sends in a prompt.
+/// What a user's content block folds to: prose, an attachment for a
+/// `resource_link`, or an attachment for an image frame. `None` for the
+/// block kinds this side does not render.
 pub(super) fn user_content_part(block: ContentBlock) -> Option<MessagePart> {
     if let Some(attachment) = PromptAttachment::from_content_block(&block) {
         return Some(MessagePart::Attachment {
@@ -29,7 +28,51 @@ pub(super) fn user_content_part(block: ContentBlock) -> Option<MessagePart> {
             size: attachment.size,
         });
     }
+    if let ContentBlock::Image(image) = block {
+        return image_attachment(image);
+    }
     content_block_text(block).map(|text| MessagePart::Text { text })
+}
+
+/// An image frame as an attachment. The source URL is the picture; the bytes
+/// stay on the frame and are not copied into the folded message.
+fn image_attachment(image: ImageContent) -> Option<MessagePart> {
+    let mime_type = if image.mime_type.is_empty() {
+        None
+    } else {
+        Some(image.mime_type.clone())
+    };
+    let source = image.uri.filter(|uri| !uri.is_empty());
+    let uri = if let Some(uri) = source.clone() {
+        uri
+    } else if image.data.is_empty() {
+        return None;
+    } else {
+        let mime = mime_type.as_deref().unwrap_or("application/octet-stream");
+        format!("data:{mime};base64,{}", image.data)
+    };
+    let name = image_name(source.as_deref().unwrap_or(&uri), mime_type.as_deref());
+    Some(MessagePart::Attachment {
+        uri,
+        name,
+        mime_type,
+        size: None,
+    })
+}
+
+fn image_name(uri: &str, mime: Option<&str>) -> String {
+    let path = uri.split(['?', '#']).next().unwrap_or(uri);
+    if let Some(name) = path.rsplit('/').next().filter(|name| name.contains('.')) {
+        return name.to_owned();
+    }
+    let ext = match mime {
+        Some("image/png") => "png",
+        Some("image/jpeg") | Some("image/jpg") => "jpg",
+        Some("image/gif") => "gif",
+        Some("image/webp") => "webp",
+        _ => "img",
+    };
+    format!("image.{ext}")
 }
 
 pub(super) fn tool_kind_name(kind: ToolKind) -> &'static str {

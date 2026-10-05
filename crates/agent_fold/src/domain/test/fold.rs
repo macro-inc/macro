@@ -879,3 +879,52 @@ fn replayed_user_chunks_keep_attached_files() {
         }]
     );
 }
+
+/// An ACP image frame folds to the picture's URL, not its bytes.
+#[test]
+fn an_image_frame_folds_to_an_attachment() {
+    let log = parse_log(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"look"},{"type":"image","data":"aW1n","mimeType":"image/png","uri":"https://cdn.example/cat.png"}]}}}"#,
+    );
+    let messages = fold(log);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "look".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://cdn.example/cat.png".to_owned(),
+                name: "cat.png".to_owned(),
+                mime_type: Some("image/png".to_owned()),
+                size: None,
+            },
+        ]
+    );
+}
+
+/// A link fetched after the prompt was sent still lands on that prompt.
+#[test]
+fn an_image_chunk_after_the_prompt_is_part_of_the_prompt() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"https://cdn.example/cat.png"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"image","data":"aW1n","mimeType":"image/jpeg","uri":"https://cdn.example/cat.png"}}}}}"#,
+    ));
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "https://cdn.example/cat.png".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://cdn.example/cat.png".to_owned(),
+                name: "cat.png".to_owned(),
+                mime_type: Some("image/jpeg".to_owned()),
+                size: None,
+            },
+        ]
+    );
+}

@@ -15,6 +15,8 @@ test-utils = []
 name = "cursor_cloud_agents"
 
 [dependencies]
+base64 = { workspace = true }
+url = { workspace = true }
 urlencoding = { workspace = true }
 agent_session = { path = "../agent_session", optional = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
@@ -39,7 +41,7 @@ thiserror = { workspace = true }
 # `compat` bridges tokio streams to the futures traits the ACP SDK's
 # `ByteStreams` transport takes.
 tokio-util = { workspace = true, features = ["compat"] }
-tokio = { workspace = true, features = ["io-std", "io-util", "sync", "time"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "net", "sync", "time"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

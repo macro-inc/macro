@@ -16,6 +16,22 @@ use std::collections::BTreeMap;
 pub struct PromptBody {
     /// The prompt text.
     pub text: String,
+    /// Raster images. Omitted when empty so a text prompt is unchanged.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<PromptImage>,
+}
+
+/// One `prompt.images` entry: base64 bytes and the type Cursor requires with them.
+///
+/// `url` is the other shape Cursor documents. We send bytes because the link
+/// was already fetched to learn that it is an image.
+#[derive(Debug, Serialize)]
+pub struct PromptImage {
+    /// Standard base64, no `data:` prefix.
+    pub data: String,
+    /// `image/png`, `image/jpeg`, `image/gif`, or `image/webp`.
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
 }
 
 /// One repository for a new agent to clone.
