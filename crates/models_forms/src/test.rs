@@ -438,3 +438,25 @@ fn table_source_openapi_uses_the_serialized_field_names() {
     assert!(required.contains(&json!("databaseId")));
     assert!(required.contains(&json!("tableId")));
 }
+
+#[test]
+fn error_schema_requires_nullable_fields_that_are_always_serialized() {
+    use utoipa::PartialSchema;
+
+    let response = FormErrorResponse {
+        code: FormErrorCode::Closed,
+        message: "This form is closed.".into(),
+        question: None,
+        problem: None,
+    };
+    let wire = serde_json::to_value(response).unwrap();
+    let schema = serde_json::to_value(FormErrorResponse::schema()).unwrap();
+    let required = schema["required"].as_array().unwrap();
+    for field in ["code", "message", "question", "problem"] {
+        assert!(wire.get(field).is_some());
+        assert!(
+            required.contains(&json!(field)),
+            "missing required field {field}"
+        );
+    }
+}

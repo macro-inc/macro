@@ -180,7 +180,7 @@ Flow (mock: the second artifact):
   and "Message the owner". The rules are never shown.
 - Submit posts the whole answer set. Success renders the confirmation: a
   check, the confirmation message (default "Your response is saved."), a
-  receipt of the answers, "Edit my response" (members, while open), and the
+  receipt of the answers, "Edit my response" (signed in, while open), and the
   line "Stored as a row in a database the form owner controls. Your answers
   are visible to the form's editors."
 - A signed-in respondent who already submitted lands on their receipt with

@@ -17,9 +17,10 @@ pub struct FormErrorResponse {
     /// What went wrong, in words.
     pub message: String,
     /// The question it is about, if one.
-    #[schema(value_type = Option<Uuid>)]
+    #[schema(value_type = Option<Uuid>, required = true)]
     pub question: Option<FormQuestionId>,
     /// What is wrong with a refused layout.
+    #[schema(required = true)]
     pub problem: Option<LayoutProblem>,
 }
 
