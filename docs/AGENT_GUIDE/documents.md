@@ -1415,6 +1415,42 @@ colors, or absent glows. Wait for the tiles to sharpen after zooming. The
 fixture preserves imported text outlines, but
 its substitute fonts do not verify the appearance of newly edited text.
 
+## Photoshop and Illustrator documents
+
+Uploaded `.psd` and `.psb` files are Photoshop documents (file types `psd`
+and `psb`, the second Photoshop's large document format) and `.ai` files are
+Illustrator documents (`ai`). All three are design files in the `vector`
+association, beside Figma designs, so a Photoshop document is never handled
+as a picture, despite its `image/vnd.adobe.photoshop` media type: the image
+block and image attachments for the agent skip it. The backend reads these
+documents with the Rust `psd_engine` and `ai_engine`, the same engines the
+browser editors run as WebAssembly.
+
+Macro AI reads them with `ReadPhotoshopDocument` and
+`ReadIllustratorDocument` (`ReadContent` returns the same description, and
+attaching one points the agent at its tool):
+
+- Photoshop: the canvas size, color mode, bit depth, and resolution, then
+  the layer tree from top to bottom with each layer's kind (pixels, group,
+  text, shape, fill, adjustment, or smart object), name, id, visibility,
+  opacity, blend mode, position, and size, and the text of text layers with
+  their font, size, and color (`psd_engine::describe::outline`).
+- Illustrator: the artboards with their names, positions, and sizes in
+  points, then the layer tree from top to bottom with each object's kind,
+  name, id, position, size, fill, and stroke, and the text of text objects
+  with their fonts (`ai_engine::describe::outline`).
+
+Descriptions stop at about 60,000 characters. The tools open files up to
+300 MB; a Photoshop document whose layers decode to more than 512 MB of
+pixels is reported as too large to read, and Illustrator files saved by
+version 8 or earlier (PostScript rather than PDF) as unreadable. The tools
+read the stored file and cannot edit these documents.
+
+Search indexes a document's layer and object names and the text of its text
+layers as one chunk, so content search finds a poster by its headline.
+Documents the engines cannot read (old or damaged files, or Photoshop
+documents beyond 256 MB of decoded pixels) are indexed by name only.
+
 ## Create and type
 
 Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
