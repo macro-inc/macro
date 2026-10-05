@@ -569,7 +569,7 @@ fn turned_lines_fill_like_flat_ones() {
 }
 
 #[test]
-fn turned_layers_stretched_across_keep_their_size_in_the_middle() {
+fn turned_layers_stretch_along_their_own_axis_and_centre() {
     let mut doc = Document::open(&blank("x")).unwrap();
     let mut h = History::default();
     let column = make(
@@ -584,7 +584,7 @@ fn turned_layers_stretched_across_keep_their_size_in_the_middle() {
         &column,
         r#"{"type":"RECTANGLE","x":0,"y":0,"width":100,"height":20}"#,
     );
-    set(&mut doc, &mut h, &tile, r#"{"rotation":45}"#);
+    set(&mut doc, &mut h, &tile, r#"{"rotation":30}"#);
     set(
         &mut doc,
         &mut h,
@@ -593,7 +593,8 @@ fn turned_layers_stretched_across_keep_their_size_in_the_middle() {
     );
     set(&mut doc, &mut h, &tile, r#"{"sizingHorizontal":"FILL"}"#);
     let p = doc.props(idx(&doc, &tile));
-    assert_eq!(p.size(), Vec2::new(100.0, 20.0));
+    // Its own width takes the frame's; its turned bounds sit in the middle.
+    assert_eq!(p.size(), Vec2::new(200.0, 20.0));
     let s = p.size();
     let b = p
         .transform()
@@ -691,6 +692,26 @@ fn fill_children_share_what_limited_ones_leave() {
     assert_eq!(bounds(&doc, &kids[1]), (364.0, 10.0, 70.0, 30.0));
     assert_eq!(bounds(&doc, &kids[2]).0, 434.0);
     assert_eq!(bounds(&doc, &kids[2]).2, 100.0);
+}
+
+#[test]
+fn sizes_within_float_rounding_are_left_alone() {
+    let mut doc = Document::open(&blank("x")).unwrap();
+    let mut h = History::default();
+    let (frame, kids) = stack(&mut doc, &mut h);
+    set(
+        &mut doc,
+        &mut h,
+        &frame,
+        r#"{"itemSpacing":0,"paddingLeft":0,"paddingRight":0,"sizingHorizontal":"FIXED","width":300}"#,
+    );
+    set(&mut doc, &mut h, &kids[0], r#"{"sizingHorizontal":"FILL"}"#);
+    assert_eq!(bounds(&doc, &kids[0]).2, 220.0);
+    // As a file stores it, a hair off what the layout computes.
+    let k = idx(&doc, &kids[0]) as usize;
+    doc.nodes[k].props.size = Some(Vec2::new(220.0002, 20.0));
+    set(&mut doc, &mut h, &kids[2], r#"{"height":25}"#);
+    assert_eq!(bounds(&doc, &kids[0]).2, 220.0002);
 }
 
 #[test]

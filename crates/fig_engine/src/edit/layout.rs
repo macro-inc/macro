@@ -370,6 +370,9 @@ impl Txn<'_> {
                     };
                     self.size_child(i, w, ht);
                     item.bounds = self.flow_box(i, al.strokes_in_layout).0;
+                    if self.turned(i) {
+                        item.slot = Some(length + extra);
+                    }
                 }
             }
         }
@@ -447,7 +450,10 @@ impl Txn<'_> {
                     Some(a @ ("MIN" | "CENTER" | "MAX")) => Some(a),
                     // A line or a turned layer stretched across sits in the
                     // middle.
-                    Some("STRETCH") if self.keeps_size(it.i, cross - split(it.extra, h).1) => {
+                    Some("STRETCH")
+                        if self.turned(it.i)
+                            || self.keeps_size(it.i, cross - split(it.extra, h).1) =>
+                    {
                         Some("CENTER")
                     }
                     _ => al.counter_align.as_deref(),
@@ -491,10 +497,15 @@ impl Txn<'_> {
         // Turned lines keep a trace of width from rounding in their
         // rotation.
         const THIN: f64 = 1e-3;
-        let p = self.doc.props(i);
-        let t = p.node_type();
-        let thin = extent.abs() < THIN && !t.is_frame_like() && t != NodeType::Text;
-        thin || quarter_turns(&p.transform()).is_none()
+        let t = self.doc.props(i).node_type();
+        extent.abs() < THIN && !t.is_frame_like() && t != NodeType::Text
+    }
+
+    /// Whether a layer is turned at an angle other than quarter turns: it
+    /// fills or stretches along its own nearer axis, and its bounds are
+    /// centred in the space.
+    fn turned(&self, i: NodeIdx) -> bool {
+        quarter_turns(&self.doc.props(i).transform()).is_none()
     }
 
     /// A layer's first baseline, from its top: a text layer's first line,
@@ -587,12 +598,24 @@ impl Txn<'_> {
     /// itself a stack lays out its own children.
     fn size_child(&mut self, i: NodeIdx, width: Option<f64>, height: Option<f64>) {
         // The sizes are in the frame's space: a quarter-turned child swaps
-        // them, and one at another angle keeps its size.
-        let (width, height) = match quarter_turns(&self.doc.props(i).transform()) {
-            Some(false) => (width, height),
-            Some(true) => (height, width),
-            None => return,
+        // them, and one at another angle takes them along its nearer axes.
+        let t = self.doc.props(i).transform();
+        let swap = quarter_turns(&t).unwrap_or(t.m01.abs() > t.m00.abs());
+        let (width, height) = if swap {
+            (height, width)
+        } else {
+            (width, height)
         };
+        // Files store sizes as 32-bit floats: what differs from them by
+        // less than this is the same size, and resizing (an instance laid
+        // out again, outlines rescaled) would only add noise.
+        const SAME: f64 = 1e-3;
+        let size = self.doc.props(i).size();
+        let width = width.filter(|w| (w - size.x).abs() > SAME);
+        let height = height.filter(|h| (h - size.y).abs() > SAME);
+        if width.is_none() && height.is_none() {
+            return;
+        }
         let patch = Patch {
             width,
             height,
